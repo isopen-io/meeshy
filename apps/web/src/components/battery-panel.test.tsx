@@ -5,6 +5,7 @@ import { act } from 'react';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { receiveBatteryState } from '@/lib/battery/battery-live';
 import { loadBatteryCatalog } from '@/lib/i18n-battery-catalog';
+import type { SafeStorage } from '@/lib/storage';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -52,13 +53,18 @@ function gateway({ level, settings = { shared: false, receive: 'all' }, sharingE
   return { deps: { source: 'gateway' as const, transport }, calls };
 }
 
+function memoryStorage(): SafeStorage {
+  const memory = new Map<string, string>();
+  return { getItem: (key) => memory.get(key) ?? null, setItem: (key, value) => void memory.set(key, value), removeItem: (key) => void memory.delete(key) };
+}
+
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
 
 const critical = (client: QueryClient) =>
   receiveBatteryState(client, { userId: ADA, phase: 'critical', level: 4, charging: false, lowPower: true, estimatedMinutes: 25, measuredAt: new Date().toISOString() }, Date.now());
 
 describe('la fiche d’un direct', () => {
-  test('un Sang en épisode : le détail, le relevé à la demande et ce que je reçois', async () => {
+  test('un Sang en épisode : le détail et ce que je reçois ; le relevé à la demande vit dans son profil, comme sur iOS', async () => {
     const client = new QueryClient();
     critical(client);
     const { deps } = gateway({ level: 'BLOOD' });
@@ -66,8 +72,20 @@ describe('la fiche d’un direct', () => {
     await settle();
     expect(host.querySelector('[data-battery-detail="critical"]')?.textContent).toContain('Batterie critique');
     expect(host.textContent).toContain('Mode économie d’énergie activé');
-    expect(host.querySelector('[data-battery-pull]')).not.toBeNull();
+    expect(host.querySelector('[data-battery-pull]')).toBeNull();
     expect(host.querySelector('[data-battery-receive="all"]')).not.toBeNull();
+    expect(host.textContent).toContain('Sa batterie');
+  });
+
+  test('les modes disent ce que le serveur fait : en « Tout », les paliers bas ne notifient pas hors conversation', async () => {
+    const client = new QueryClient();
+    const { deps } = gateway({ level: 'CLOSE' });
+    const host = await mount(<ConversationBatterySection userId={ADA} name="Ada" language="fr" deps={deps} client={client} />);
+    await settle();
+    expect(host.textContent).toContain('Tout en notification');
+    expect(host.textContent).toContain('les paliers bas s’annoncent dans la pastille pendant la conversation');
+    expect(host.textContent).toContain('Seule l’entrée en zone critique notifie');
+    expect(host.textContent).not.toContain('Une notification quand vous n’êtes pas dans la conversation');
   });
 
   test('un Proche : ni relevé à la demande ; hors épisode, aucun détail', async () => {
@@ -102,19 +120,6 @@ describe('la fiche d’un direct', () => {
     expect(host.textContent).toContain('Hors ligne : le réglage n’a pas été enregistré.');
   });
 
-  test('le relevé demandé trop tôt le dit par son nom', async () => {
-    const client = new QueryClient();
-    const { deps } = gateway({
-      level: 'BLOOD',
-      extra: (request) => (request.path.endsWith('/battery/pull') ? { ok: false, status: 429, code: 'BATTERY_PULL_TOO_SOON', error: 'trop tôt' } : undefined),
-    });
-    const host = await mount(<ConversationBatterySection userId={ADA} name="Ada" language="fr" deps={deps} client={client} />);
-    await settle();
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-battery-pull]')?.click());
-    await settle();
-    expect(host.querySelector('[data-battery-pull-notice]')?.getAttribute('data-battery-pull-notice')).toBe('too-soon');
-    expect(host.textContent).toContain('moins de 5 minutes');
-  });
 });
 
 describe('le profil d’une personne', () => {
@@ -142,6 +147,69 @@ describe('le profil d’une personne', () => {
     await settle();
     expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({ shared: false });
     expect(host.querySelector('[data-battery-share]')?.getAttribute('aria-checked')).toBe('false');
+  });
+  test('le relevé demandé trop tôt le dit par son nom', async () => {
+    const client = new QueryClient();
+    const { deps } = gateway({
+      level: 'BLOOD',
+      extra: (request) => (request.path.endsWith('/battery/pull') ? { ok: false, status: 429, code: 'BATTERY_PULL_TOO_SOON', error: 'trop tôt' } : undefined),
+    });
+    const host = await mount(<ProfileBatteryRow language="fr" person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={client} />);
+    await settle();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-battery-pull]')?.click());
+    await settle();
+    expect(host.querySelector('[data-battery-pull-notice]')?.getAttribute('data-battery-pull-notice')).toBe('too-soon');
+    expect(host.textContent).toContain('moins de 5 minutes');
+  });
+
+  test('un Sang hors épisode : « Demander un relevé » est là, sans détail', async () => {
+    const client = new QueryClient();
+    const { deps } = gateway({ level: 'BLOOD', settings: { shared: true, receive: 'all' } });
+    const host = await mount(<ProfileBatteryRow language="fr" person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={client} />);
+    await settle();
+    expect(host.querySelector('[data-battery-detail]')).toBeNull();
+    expect(host.querySelector('[data-battery-pull]')).not.toBeNull();
+  });
+
+  test('un Proche non partagé : la proposition arrive UNE fois, case non cochée, à la place de l’interrupteur', async () => {
+    const storage = memoryStorage();
+    const client = new QueryClient();
+    const { deps, calls } = gateway({ level: 'CLOSE', extra: (request) => (request.method === 'PUT' ? { ok: true, data: { shared: true, receive: 'all' } } : undefined) });
+    const host = await mount(<ProfileBatteryRow language="fr" viewerId="me" storage={storage} person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={client} />);
+    await settle();
+    expect(host.textContent).toContain('Ada est maintenant un Proche');
+    expect(host.querySelector('[data-battery-share]')).toBeNull();
+    const box = host.querySelector<HTMLInputElement>('[data-battery-consent-checkbox]');
+    expect(box?.checked).toBe(false);
+    await act(async () => box?.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-battery-consent-confirm]')?.click());
+    await settle();
+    expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({ shared: true });
+    expect(host.querySelector('[data-battery-consent]')).toBeNull();
+    expect(host.querySelector('[data-battery-share]')?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('la proposition laissée sans case ne partage rien, et ne revient plus', async () => {
+    const storage = memoryStorage();
+    const { deps, calls } = gateway({ level: 'CLOSE' });
+    const first = await mount(<ProfileBatteryRow language="fr" viewerId="me" storage={storage} person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={new QueryClient()} />);
+    await settle();
+    await act(async () => first.querySelector<HTMLButtonElement>('[data-battery-consent-confirm]')?.click());
+    await settle();
+    expect(calls.some((call) => call.method === 'PUT')).toBe(false);
+    expect(first.querySelector('[data-battery-share]')?.getAttribute('aria-checked')).toBe('false');
+    unmountAll();
+    const again = await mount(<ProfileBatteryRow language="fr" viewerId="me" storage={storage} person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={new QueryClient()} />);
+    await settle();
+    expect(again.querySelector('[data-battery-consent]')).toBeNull();
+    expect(again.querySelector('[data-battery-share]')).not.toBeNull();
+  });
+
+  test('le partage global coupé : aucune proposition', async () => {
+    const { deps } = gateway({ level: 'CLOSE', sharingEnabled: false });
+    const host = await mount(<ProfileBatteryRow language="fr" viewerId="me" storage={memoryStorage()} person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={new QueryClient()} />);
+    await settle();
+    expect(host.querySelector('[data-battery-consent]')).toBeNull();
   });
 });
 

@@ -24,6 +24,7 @@ import { useBatteryEntry } from '@/lib/battery/use-battery';
 import { batteryDetailOf, type BatteryDetail } from '@/lib/battery/battery-view';
 import { translateBattery, useBatteryCatalog, type BatteryCatalogKey } from '@/lib/i18n-battery-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 import { BatteryGlyph } from './battery-glyph';
 import { SwitchRow } from './conversation-settings-section';
@@ -38,7 +39,10 @@ import { GroupedSection, SECTION_INK, SECTION_INK_2 } from './grouped-section';
  * - **Ce que je reçois** (fiche d'un direct) : tout · notification si critique · pastille seulement · rien.
  * - **Ce que je partage** (profil de la personne) : proposé à un Proche, jamais pré-coché ; chez un Sang, partagé
  *   par défaut et retirable. Le serveur décide de l'état servi ; l'interface ne le présume pas.
- * - **« Demander un relevé »** n'existe que pour un Sang ; le serveur borne la cadence et le dit.
+ * - **« Demander un relevé »** n'existe que pour un Sang, dans son PROFIL — comme sur iOS, la fiche d'un direct
+ *   porte le détail et ce que je reçois, pas le relevé ; le serveur borne la cadence et le dit.
+ * - **La proposition au Proche** arrive UNE fois par compte et par personne, case non cochée, à la place de
+ *   l'interrupteur, et seulement quand mon partage global est actif ; la réponse la retire pour de bon.
  * - **Mon partage global** (`/me`) : la coupure pour tous.
  *
  * Le niveau de la relation vient du MÊME cache que la ligne du cercle (`GET /relations`). Chaque réglage est
@@ -250,12 +254,64 @@ export function ConversationBatterySection({
   if (!offered || !ready) return null;
   return (
     <div className="px-4 pb-6" data-conversation-battery={level ?? ''}>
-      <GroupedSection id="conversation-battery" title={translateBattery(language, 'battery.receive.title', { name })} icon={<BatteryGlyph level={60} tone="low" charging={false} width={18} ink="currentColor" />}>
+      <GroupedSection id="conversation-battery" title={translateBattery(language, 'battery.receive.title')} icon={<BatteryGlyph level={60} tone="low" charging={false} width={18} ink="currentColor" />}>
         <DetailOf userId={userId} language={language} client={client} />
-        {level === 'BLOOD' ? <PullButton language={language} name={name} userId={userId} deps={deps} /> : null}
         {settings === null ? null : <BatteryReceiveChoices language={language} name={name} value={settings.receive} onChange={(receive) => void save({ receive })} />}
         <SettingsProblem language={language} problem={problem} />
       </GroupedSection>
+    </div>
+  );
+}
+
+const consentKey = (viewerId: string, peerId: string): string => `meeshy.battery.consentOffered.${viewerId}.${peerId}`;
+
+function useConsentMemory(viewerId: string | null | undefined, peerId: string, storage: SafeStorage) {
+  const read = (): boolean => {
+    if (viewerId == null) return true;
+    try {
+      return storage.getItem(consentKey(viewerId, peerId)) === '1';
+    } catch {
+      return true;
+    }
+  };
+  const [offered, setOffered] = useState(read);
+  const markOffered = (): void => {
+    setOffered(true);
+    if (viewerId == null) return;
+    try {
+      storage.setItem(consentKey(viewerId, peerId), '1');
+    } catch {
+      /* la proposition ne reviendra pas pendant cette visite */
+    }
+  };
+  return { offered, markOffered };
+}
+
+function ConsentOffer({ language, name, onAnswer }: { readonly language: InterfaceLanguage; readonly name: string; readonly onAnswer: (shared: boolean) => void }) {
+  const [checked, setChecked] = useState(false);
+  return (
+    <div data-battery-consent="" role="group" aria-label={translateBattery(language, 'battery.consent.title', { name })} className="m-2 grid gap-2 rounded-card px-3 py-3" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 8%, transparent)' }}>
+      <span className="text-body font-semibold" style={{ color: SECTION_INK }}>
+        {translateBattery(language, 'battery.consent.title', { name })}
+      </span>
+      <span className="text-caption" style={{ color: SECTION_INK_2 }}>
+        {translateBattery(language, 'battery.consent.body')}
+      </span>
+      <label className="flex cursor-pointer items-center gap-3" style={{ minHeight: 44 }}>
+        <input type="checkbox" data-battery-consent-checkbox="" checked={checked} onChange={(event) => setChecked(event.currentTarget.checked)} className="size-5 shrink-0 accent-[var(--color-ios-brand)]" />
+        <span className="text-body" style={{ color: SECTION_INK }}>
+          {translateBattery(language, 'battery.share.title', { name })}
+        </span>
+      </label>
+      <button
+        type="button"
+        data-battery-consent-confirm=""
+        onClick={() => onAnswer(checked)}
+        className="grid place-items-center rounded-chip px-3 text-body font-semibold transition-transform focus-visible:outline-2 active:scale-[0.98]"
+        style={{ minHeight: 44, color: 'var(--color-ios-on-brand, #fff)', backgroundColor: 'var(--color-ios-brand)' }}
+      >
+        {translateBattery(language, 'battery.consent.confirm')}
+      </button>
     </div>
   );
 }
@@ -267,21 +323,35 @@ export function ConversationBatterySection({
 export function ProfileBatteryRow({
   language,
   person,
+  viewerId,
+  storage = safeLocalStorage(),
   deps = apiDeps,
   client = appQueryClient,
-}: { readonly language: InterfaceLanguage; readonly person: { readonly id: string; readonly username: string; readonly displayName?: string | null } } & PanelDeps) {
+}: {
+  readonly language: InterfaceLanguage;
+  readonly person: { readonly id: string; readonly username: string; readonly displayName?: string | null };
+  readonly viewerId?: string | null;
+  readonly storage?: SafeStorage;
+} & PanelDeps) {
   const level = useRelationLevel(person.id, deps, client);
   const offered = batteryOfferedAt(level);
   const ready = useBatteryCatalog(language, offered);
   const { settings, problem, save } = usePersonSettings(person.id, deps, client, offered);
   const emitter = useEmitterSettings(deps, client);
+  const consent = useConsentMemory(viewerId, person.id, storage);
   if (!offered || !ready) return null;
   const name = person.displayName ?? person.username;
+  const proposes = level === 'CLOSE' && settings !== null && !settings.shared && emitter.settings?.sharingEnabled === true && !consent.offered;
+  const answerConsent = (shared: boolean): void => {
+    consent.markOffered();
+    if (shared) void save({ shared: true });
+  };
   return (
     <div data-profile-battery={level ?? ''} className="grid gap-1 rounded-card" style={{ backgroundColor: 'var(--color-ios-card)' }}>
       <DetailOf userId={person.id} language={language} client={client} />
       {level === 'BLOOD' ? <PullButton language={language} name={name} userId={person.id} deps={deps} /> : null}
-      {settings === null ? null : (
+      {proposes ? <ConsentOffer language={language} name={name} onAnswer={answerConsent} /> : null}
+      {settings === null || proposes ? null : (
         <SwitchRow
           label={translateBattery(language, 'battery.share.title', { name })}
           hint={level === 'BLOOD' ? translateBattery(language, 'battery.share.explainBlood') : translateBattery(language, 'battery.share.explainClose', { name })}

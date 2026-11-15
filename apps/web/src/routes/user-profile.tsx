@@ -326,7 +326,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                       person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
                                       onNotice={(message, failed) => announce(message, failed ? 'error' : 'neutral')}
                                     />
-                                    <ProfileBatteryRow language={language} person={{ id: person.id, username: person.username, displayName: person.displayName }} />
+                                    <ProfileBatteryRow language={language} viewerId={viewerId} person={{ id: person.id, username: person.username, displayName: person.displayName }} />
                                   </>
                                 ) : null}
                                 <ProfileShareLocationRow
