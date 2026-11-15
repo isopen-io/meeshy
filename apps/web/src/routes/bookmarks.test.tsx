@@ -96,7 +96,7 @@ describe('le sélecteur de nature — la règle d’iOS, pas une variante', () =
     expect(visibleBookmarks(corpus, 'all').map((p) => p.id)).toEqual(['a', 'b']);
   });
 
-  test('« Postes » et « Réels » partagent le corpus sans le perdre', () => {
+  test('« Publications » et « Réels » partagent le corpus sans le perdre', () => {
     const corpus = [post('a', 'POST'), post('b', 'REEL'), post('c', 'POST')];
     expect(visibleBookmarks(corpus, 'posts').map((p) => p.id)).toEqual(['a', 'c']);
     expect(visibleBookmarks(corpus, 'reels').map((p) => p.id)).toEqual(['b']);
@@ -128,7 +128,7 @@ describe('le sélecteur de nature — la règle d’iOS, pas une variante', () =
     );
     expect(html).toContain('aria-label="Filtrer les enregistrements"');
     expect(html).toContain('Tout');
-    expect(html).toContain('Postes');
+    expect(html).toContain('Publications');
     expect(html).toContain('Réels');
     expect(html).toContain('aria-pressed="true"');
     expect(html.match(/min-height:44px/g)?.length).toBe(BOOKMARK_FILTERS.length);

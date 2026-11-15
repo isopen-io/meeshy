@@ -278,6 +278,11 @@
     <string name="kit_anchored_sheet_height_expanded">vergrößert</string>
     <string name="kit_anchored_sheet_height_reduced">verkleinert</string>
     <string name="kit_color_dots_position">Farbe %1$s von %2$s</string>
+    <string name="kit_field_busy">In Bearbeitung</string>
+    <string name="kit_field_clear">Löschen</string>
+    <string name="kit_field_count">%1$s von %2$s Zeichen</string>
+    <string name="kit_field_limit_reached">Zeichenlimit erreicht</string>
+    <string name="kit_progress_ring_busy">In Bearbeitung</string>
     <string name="language_strip_more">Weitere Sprachen</string>
     <string name="lentille_mode_menu_selected">ausgewählt</string>
     <string name="live_location_duration_title">Freigabedauer</string>

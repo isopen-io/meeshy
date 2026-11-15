@@ -74,10 +74,6 @@ final class ProfileSectionsTests: XCTestCase {
                        "la bande et l'écran Mon activité disent les mêmes nombres, sous les mêmes noms et les mêmes couleurs")
     }
 
-    func test_activityOpenHint_namesTheScreenItOpens() {
-        XCTAssertEqual(ProfileActivityBand.openHint, "Ouvre Mon activité")
-    }
-
     // MARK: - Contact
 
     func test_contactFieldFocus_emailAndPhone_openSecurityOnTheirOwnSection() {

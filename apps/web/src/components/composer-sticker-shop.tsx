@@ -5,6 +5,8 @@ import { Suspense, lazy, useState } from 'react';
 import { stickerPackText } from '@meeshy/shared/types/sticker-pack';
 import type { StickerPackDetail, StickerPackSummary } from '@meeshy/shared/types/sticker-pack';
 
+import { SETTINGS_GLYPHS } from './glyphs-settings';
+import type { InfoHint } from './info-hint';
 import type { PackShopAdapter } from './pack-shop';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
@@ -79,6 +81,13 @@ const writeInstalled = (queryClient: QueryClient, slug: string, entry: StickerPa
   });
 
 /** L'adaptateur des stickers pour la boutique générique — adresses `/sticker-packs`, clés de cache historiques. */
+/** Ce que la phrase de la boutique ne dit pas au repos : le sort des stickers déjà envoyés (épure #17584). */
+export const stickerShopHintNote = (language: InterfaceLanguage): InfoHint => ({
+  label: translateStickerPacks(language, 'stickerPacks.shop.hint.question'),
+  text: translateStickerPacks(language, 'stickerPacks.shop.hint.more'),
+  glyph: SETTINGS_GLYPHS.info,
+});
+
 export const stickerShopAdapter = (language: InterfaceLanguage, deps: ConversationsDeps = apiDeps): PackShopAdapter<StickerPackSummary> => ({
   domain: 'sticker',
   catalogueKey: PACK_CATALOGUE_QUERY_KEY,
@@ -160,6 +169,7 @@ export function StickerShop({ language, focusSlug }: { readonly language: Interf
           language={language}
           focusSlug={focusSlug}
           hint={translateStickerPacks(language, 'stickerPacks.shop.hint')}
+          hintNote={stickerShopHintNote(language)}
           footer={<SubmissionsFooter language={language} mine={mine} onSubmit={() => setSubmitting(true)} />}
         />
       </Suspense>

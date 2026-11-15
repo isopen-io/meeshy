@@ -90,7 +90,7 @@ export function SignupIdentityCard({
                 onClick={onValidateNow}
                 disabled={!canValidate || isValidating}
                 aria-busy={isValidating}
-                className="grid place-items-center rounded-card px-4 font-semibold transition-opacity"
+                className="btn-press grid place-items-center rounded-card px-4 font-semibold transition-opacity"
                 style={{
                   minHeight: 48,
                   color: 'var(--color-ios-ink)',

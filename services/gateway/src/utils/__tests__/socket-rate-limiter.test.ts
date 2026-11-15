@@ -15,6 +15,7 @@ jest.mock('../logger.js', () => ({
 
 import { SocketRateLimiter, checkSocketRateLimit, getSocketRateLimiter, callSignalBudgetId, SOCKET_RATE_LIMITS } from '../socket-rate-limiter';
 import type { Socket } from 'socket.io';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -221,16 +222,16 @@ describe('checkSocketRateLimit', () => {
     const socket = makeSocket();
     const config = makeConfig({ maxRequests: 1 });
 
-    await checkSocketRateLimit(socket, 'user-block', config, limiter, 'custom:error');
-    const result = await checkSocketRateLimit(socket, 'user-block', config, limiter, 'custom:error');
+    await checkSocketRateLimit(socket, 'user-block', config, limiter, SERVER_EVENTS.CALL_ERROR);
+    const result = await checkSocketRateLimit(socket, 'user-block', config, limiter, SERVER_EVENTS.CALL_ERROR);
 
     expect(result).toBe(false);
     expect(socket.emit).toHaveBeenCalledWith(
-      'custom:error',
+      SERVER_EVENTS.CALL_ERROR,
       expect.objectContaining({
         code: 'RATE_LIMIT_EXCEEDED',
         message: expect.stringContaining('seconds'),
-        retryAfter: expect.any(Number),
+        details: { retryAfter: expect.any(Number) },
       })
     );
   });

@@ -149,6 +149,14 @@ final class LocalizationConsistencyTests: XCTestCase {
         // à raison : le catalogue est ce qui S'AFFICHE, donc un `defaultValue`
         // divergent est du texte mort qui ment au lecteur (#4308).
         "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",  // 87
+        // #18592 — les Réglages en deux strates : les rangées, les blocs, le pli
+        // « Annexes », le thème et la langue de l'interface ont quitté
+        // `SettingsView.swift` avec leurs clés. Le cliquet suit le CODE (leçon 578).
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsLayout.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsRowContent.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsAnnexFold.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsThemePicker.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsInterfaceLanguageMenu.swift",
         "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
         "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift",  // 47
         // #8103 — l'aperçu des épinglés a quitté la fiche (extraction de taille),
@@ -165,6 +173,18 @@ final class LocalizationConsistencyTests: XCTestCase {
         // #14056 — les règles pures de l'éditeur (refus d'identité compris) ont
         // quitté `ProfileView.swift` pour la taille : leurs clés suivent.
         "apps/ios/Meeshy/Features/Profile/Views/MeeshyUser+ProfileEdits.swift",
+        // #18592 — la fiche de profil réorganisée : ses sections ont quitté
+        // `ProfileView.swift` avec leurs clés. `ProfileCirclesSection.swift` n'y
+        // est PAS : ses deux compteurs sont PLURIELS (`profile.circles.pill.a11y`,
+        // `profile.circles.requests`), sans `stringUnit` plat égal au littéral,
+        // et la règle B ne peut pas les satisfaire — même exclusion que
+        // `StatsTimelineChart` (268i).
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileActivityBand.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileSavedContentRows.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileContactSection.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileIdentitySection.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileLanguageRow.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileMembershipLine.swift",
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",  // 32
         // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour
@@ -578,6 +598,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift",  // 10
         "apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift",  // 10
         "apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift",  // 10
+        // #18592 — les trois cartes Messages · Conversations · Traductions ont
+        // quitté `UserStatsView.swift` avec leurs clés (leçon 578).
+        "apps/ios/Meeshy/Features/Profile/Views/UserActivityCards.swift",
         "apps/ios/Meeshy/Features/Contacts/ContactsListTab.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReportDetailView.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/BookmarksView.swift",  // 9
