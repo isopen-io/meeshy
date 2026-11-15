@@ -197,6 +197,34 @@ Le résolveur dépouille désormais `.js`, et l'import du lot suit la convention
 locale (`'./types'` sans extension, comme son voisin). Mutation : remis en
 `.js`, le cliquet passe — l'arête est bien vue.
 
+## Deux faux ROUGES après le rapprochement, et comment les lire
+
+Le merge de `dev` (86 commits, dont la feature batterie #14147) a fait passer
+`tsc --noEmit` de `EXIT=0` à `EXIT=2`, sur des fichiers que ce lot ne touche
+pas (`services/battery/*`). **Aucun des deux n'était un défaut** — ce sont des
+ARTEFACTS périmés, et ils se succèdent dans cet ordre :
+
+| symptôme | cause | remède |
+|---|---|---|
+| `"device.battery"` n'est pas assignable à l'union des features | `packages/shared/dist` détruit par les passes complètes de la suite gateway | `cd packages/shared && bun run build` |
+| `batterySharingDisabledAt` n'existe pas sur `UserSelect` | client Prisma GÉNÉRÉ antérieur au champ que `dev` vient d'ajouter au schéma | `npx prisma generate --generator client` |
+
+La première moitié était **annoncée** : l'audit adversarial du cycle 171 l'avait
+mesurée et laissée en note pour la session suivante (« faire tourner la suite
+gateway complète détruit `packages/shared/dist` … c'est un faux rouge qu'il faut
+savoir lire »). La seconde ne l'était pas, et elle est plus piégeuse : le hook de
+démarrage de session LANCE `prisma generate`, donc le client est juste **au
+début** de la session et périme silencieusement au premier merge qui touche le
+schéma.
+
+> **Un gate qui rougit juste après un rapprochement accuse d'abord les
+> ARTEFACTS, pas le code.** La question à poser n'est pas « qu'ai-je cassé ? »
+> mais **« ce que ce gate LIT est-il à jour avec ce que je viens de recevoir ? »**
+> — un `dist` compilé, un client généré, un cache de build. Le discriminant est
+> gratuit : les fichiers accusés sont ceux de l'autre, et la source du dépôt,
+> elle, porte bien ce qu'ils réclament (`RELATION_FEATURES` contient
+> `'device.battery'`, `schema.prisma:200` déclare `batterySharingDisabledAt`).
+
 ## Ce que le cycle n'a pas pris
 
 | # | ce que c'est | pourquoi pas ce lot |
