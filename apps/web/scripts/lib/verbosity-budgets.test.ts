@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { budgetsFromMeasure, socleProblems, verbosityProblems, type VerbosityBudgets } from './verbosity-budgets.mjs';
+import { budgetsFromMeasure, socleProblems, verbosityProblems, type VerbosityBudgets, type VerbosityReleve } from './verbosity-budgets.mjs';
 
 const expectOne = (problems: readonly string[], fragment: string): void => {
   expect(problems).toHaveLength(1);
@@ -145,7 +145,7 @@ describe('le relèvement motivé d’un budget', () => {
   test('un relèvement du plafond sans motif, sans issue, ou qui ne part pas du plafond de la base est refusé', () => {
     const de = { total: 86, firstScreen: 86 };
     const a = { total: 90, firstScreen: 88 };
-    const withReleve = (releve: object) => ({ ...measure({ links: a }), releves: { links: releve } });
+    const withReleve = (releve: VerbosityReleve) => ({ ...measure({ links: a }), releves: { links: releve } });
     expectOne(socleProblems({ socle: withReleve({ de, a, motif: ' ', issue: 17584 }), previousSocle: socle }), 'sans motif');
     expectOne(socleProblems({ socle: withReleve({ de, a, motif: 'L’écran se nomme', issue: 0 }), previousSocle: socle }), 'sans issue');
     expectOne(socleProblems({ socle: withReleve({ de: { total: 80, firstScreen: 80 }, a, motif: 'L’écran se nomme', issue: 17584 }), previousSocle: socle }), 'part de');
