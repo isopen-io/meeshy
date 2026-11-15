@@ -52,7 +52,7 @@ normal.
 | **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ✅ mergé |
 | **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ✅ mergé |
 | **87w** | 2026-11-14 | `claude/practical-fermat-vayul2` | → `dev` | ✅ mergé |
-| **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | → `dev` | ⏳ ouverte |
+| **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | [#18635](https://github.com/isopen-io/meeshy/pull/18635) → `dev` | ⏳ ouverte |
 
 **88w** — cohérence de thème / maintenabilité : la barre de composition d'un
 commentaire d'export (`routes/comment-compose-bar.tsx:100`) peignait le ▶
