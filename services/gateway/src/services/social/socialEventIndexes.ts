@@ -102,7 +102,7 @@ export async function ensureSocialEventIndexes(
   return outcomes;
 }
 
-type RawCommandRunner = { $runCommandRaw(command: Record<string, unknown>): Promise<unknown> };
+export type RawCommandRunner = { $runCommandRaw(command: Record<string, unknown>): Promise<unknown> };
 
 /** Le document d'index que `createIndexes` reçoit — sans clé indéfinie. */
 export function createIndexSpec(spec: IndexSpec): Record<string, unknown> {
@@ -144,8 +144,28 @@ type CreateIndexesReply = { readonly numIndexesBefore?: unknown; readonly numInd
 export async function ensureSocialEventIndexesByCommand(
   prisma: RawCommandRunner,
 ): Promise<Readonly<Record<string, BootIndexOutcome>>> {
+  return ensureIndexesByCommand(prisma, SOCIAL_EVENT_INDEXES);
+}
+
+/**
+ * Le MOTEUR du chemin de démarrage, séparé de la liste qu'il pose (#18621).
+ *
+ * `ensureSocialEventIndexesByCommand` en est désormais une projection. Il a été
+ * extrait parce qu'un SECOND ensemble d'index en avait besoin — celui du dedup
+ * d'envoi (`messaging/messageDedupIndex.ts`) — et que recopier la boucle aurait
+ * recopié avec elle ce qu'elle a appris : ne jamais lire `listIndexes` par
+ * `$runCommandRaw` (Prisma lève sur un `$type` textuel), lire « créé » au
+ * compte d'index, et SIGNALER un conflit 85/86 au lieu de droper.
+ *
+ * Deux listes qui partagent la règle sans partager le code divergent au premier
+ * défaut corrigé d'un seul côté.
+ */
+export async function ensureIndexesByCommand(
+  prisma: RawCommandRunner,
+  specs: readonly IndexSpec[],
+): Promise<Readonly<Record<string, BootIndexOutcome>>> {
   const outcomes: Record<string, BootIndexOutcome> = {};
-  for (const spec of SOCIAL_EVENT_INDEXES) {
+  for (const spec of specs) {
     try {
       const reply = await prisma.$runCommandRaw({ createIndexes: spec.collection, indexes: [createIndexSpec(spec)] }) as CreateIndexesReply;
       outcomes[spec.name] = { outcome: Number(reply.numIndexesAfter) > Number(reply.numIndexesBefore) ? 'created' : 'present' };

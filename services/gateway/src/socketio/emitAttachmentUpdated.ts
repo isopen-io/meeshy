@@ -1,5 +1,6 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { PLAN_UNAVAILABLE } from './planOutcome';
+import { offlineSignedAttachment } from './offlineSignedPayload';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { blockedReaderKeys, messageReadership } from './editedAudience';
@@ -185,6 +186,29 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
   const atRest = await attachmentEventSealsAtRest(prisma, messageId);
   if (atRest === 'unknown') return;
 
+  // #18619 — chaque destinataire HORS LIGNE reçoit la pièce signée pour SA
+  // ligne `Participant`, comme en direct depuis #9646. L'enfilement déposait
+  // jusqu'ici la charge générique : l'adresse NUE d'une pièce liée au lecteur,
+  // écrite dans Redis pour 48 h et rejouée telle quelle.
+  const offlineSigned = offlineSignedAttachment({ plan, payload });
+  // Le refus sur plan INCONNU est posé pour la forme que les deux autres
+  // émetteurs ont — et il est, SUR CE SITE, inatteignable aujourd'hui. Mesuré
+  // à la mutation : le retirer ne fait rougir aucun témoin, et la raison est
+  // structurelle, pas un trou de couverture.
+  //
+  //  · une lecture de PROTECTION tombée ne rend pas `PLAN_UNAVAILABLE` : elle
+  //    est récupérée fail-CLOSED à l'intérieur du plan (`{}` ⇒ la pièce est
+  //    tenue pour protégée et signée, #16965) ;
+  //  · seule la lecture des lecteurs ADMIS peut le produire — et c'est la MÊME
+  //    requête que celle de la loi d'audience, dont le verdict `'unknown'`
+  //    fait sortir cette fonction vingt lignes plus haut, avant toute émission
+  //    comme avant tout enfilage.
+  //
+  // Il reste parce qu'il est la seule chose qui tiendrait si la garde
+  // d'audience changeait de forme : sans lui, elle rouvrirait ce chemin en
+  // silence. Ce qu'on ne fait PAS, c'est prétendre qu'un témoin le prouve.
+  if (offlineSigned.kind === 'withhold') return;
+
   await enqueueForOfflineParticipants(
     { deliveryQueue, prisma, connectedUsers },
     {
@@ -201,6 +225,9 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
       // rejouait à sa reconnexion : la fuite survivait à la déconnexion qui
       // l'avait empêchée en direct (#18613).
       excludedQueueKeys: blocked,
+      // Chaque destinataire hors ligne reçoit la pièce signée pour SA ligne
+      // `Participant`, comme en direct (#18619).
+      ...(offlineSigned.kind === 'per-reader' ? { resolvePayloadForReader: offlineSigned.resolve } : {}),
       // The default (messageId, eventType) identity would let a second
       // attachment's enrichment supersede the first's on a two-audio message.
       ...(attachmentId ? { dedupKey: attachmentId } : {}),

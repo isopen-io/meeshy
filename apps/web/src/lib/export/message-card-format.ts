@@ -20,6 +20,7 @@ import {
   type CardMediaLayout,
 } from './message-card-arrangement';
 import { CARD_AUDIO_STYLES, DEFAULT_AUDIO_STYLE, type CardAudioStyle } from './message-card-media';
+import { CARD_DECOR_ALIGNMENTS, CARD_DECOR_FRAMES, CARD_DECOR_ORNAMENTS, NO_DECOR, isValidModelId, type CardDecor } from './message-card-models';
 import { DEFAULT_TEMPLATE_ID, parseTemplateId, type MessageCardTemplateId } from './message-card-templates';
 
 /**
@@ -67,6 +68,9 @@ export type MessageCardFormat = {
   readonly mediaArrangement: CardMediaArrangement;
   readonly showsMediaAuthor: boolean;
   readonly audioStyle: CardAudioStyle;
+  /** La maquette dont le format est habillé (#18673) — `null` : une combinaison libre. */
+  readonly model: string | null;
+  readonly decor: CardDecor;
 };
 
 export type MessageCardToggle = 'showConversationTitle' | 'showAuthors' | 'showDate' | 'showTimes' | 'anonymizeQuoted' | 'anonymizeReply' | 'usePseudonyms' | 'showsMediaAuthor';
@@ -92,6 +96,8 @@ export const INITIAL_MESSAGE_CARD_FORMAT: MessageCardFormat = {
   mediaArrangement: DEFAULT_MEDIA_ARRANGEMENT,
   showsMediaAuthor: false,
   audioStyle: DEFAULT_AUDIO_STYLE,
+  model: null,
+  decor: NO_DECOR,
 };
 
 export const MESSAGE_CARD_FORMAT_KEY = 'meeshy.export.message-card.default-format';
@@ -128,10 +134,22 @@ export function parseMessageCardFormat(raw: string | null): MessageCardFormat | 
       mediaLayout: oneOf(CARD_MEDIA_LAYOUTS, record['mediaLayout'], initial.mediaLayout),
       mediaArrangement: oneOf(CARD_MEDIA_ARRANGEMENTS, record['mediaArrangement'], iosLegacyMosaic ? 'mosaic' : (legacyArrangement ?? initial.mediaArrangement)),
       audioStyle: oneOf(CARD_AUDIO_STYLES, record['audioStyle'], initial.audioStyle),
+      model: typeof record['model'] === 'string' && isValidModelId(record['model']) ? record['model'] : null,
+      decor: decorOf(record['decor']),
     };
   } catch {
     return null;
   }
+}
+
+function decorOf(value: unknown): CardDecor {
+  if (typeof value !== 'object' || value === null) return NO_DECOR;
+  const record = value as Record<string, unknown>;
+  return {
+    alignment: oneOf(CARD_DECOR_ALIGNMENTS, record['alignment'], NO_DECOR.alignment),
+    frame: oneOf(CARD_DECOR_FRAMES, record['frame'], NO_DECOR.frame),
+    ornament: oneOf(CARD_DECOR_ORNAMENTS, record['ornament'], NO_DECOR.ornament),
+  };
 }
 
 export function readDefaultMessageCardFormat(storage: Pick<SafeStorage, 'getItem'>): MessageCardFormat | null {
@@ -145,4 +163,11 @@ export function writeDefaultMessageCardFormat(storage: Pick<SafeStorage, 'setIte
 const CHOICES = ['aspect', 'header', 'authorsAt', 'tilt', 'mediaLayout', 'mediaArrangement', 'audioStyle'] as const;
 
 export const sameMessageCardFormat = (a: MessageCardFormat, b: MessageCardFormat | null): boolean =>
-  b !== null && a.template === b.template && TOGGLES.every((toggle) => a[toggle] === b[toggle]) && CHOICES.every((choice) => a[choice] === b[choice]);
+  b !== null &&
+  a.template === b.template &&
+  a.model === b.model &&
+  TOGGLES.every((toggle) => a[toggle] === b[toggle]) &&
+  CHOICES.every((choice) => a[choice] === b[choice]) &&
+  a.decor.alignment === b.decor.alignment &&
+  a.decor.frame === b.decor.frame &&
+  a.decor.ornament === b.decor.ornament;
