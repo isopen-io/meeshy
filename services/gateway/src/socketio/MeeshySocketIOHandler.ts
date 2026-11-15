@@ -25,7 +25,9 @@ import type { LocalMediaRenderer } from '../services/attachments/media-processin
 import { mediaReadyPorts } from '../services/attachments/media-processing/ready-listener';
 import { MessageAttachmentAltTranslationService } from '../services/attachments/MessageAttachmentAltTranslationService';
 import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
-import { mediaPipelineDeps } from './mediaPipelineDeps';
+import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
+import { gatewayDeliveryQueueSealer } from '../services/deliveryQueueSealing';
+import { getCacheStore } from '../services/CacheStore';
 
 /** Le bloc `game` tel que `GET /me/engagement` le compose : la lecture ne crédite rien (`READ_ONLY_CREDIT`). */
 function gameBlockBuilder(prisma: PrismaClient): (userId: string) => Promise<GameBlock | null> {
@@ -116,10 +118,14 @@ export class MeeshySocketIOHandler {
     const zmqClient = this.translationService.getZmqClient();
     if (!listenerRedisUrl && !sweepOn && !zmqClient) return;
 
-    // #18616 — la composition vit chez elle, pour qu'un témoin l'exécute : la
-    // file remise ici est celle du PROCESSUS, jamais une seconde instance dont
-    // la tranche mémoire ne serait ni drainée, ni purgée, ni nettoyée.
-    const mediaDeps = mediaPipelineDeps(this.prisma, manager as never);
+    const mediaDeps = {
+      prisma: this.prisma,
+      io: manager.getIO() as never,
+      deliveryQueue: new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma)),
+      connectedUsers: () => manager.getReachability(),
+      socialEvents: () => manager.getSocialEventsHandler(),
+      leaseStore: getCacheStore(),
+    };
     if (listenerRedisUrl) {
       this.mediaReadyListener = startMediaReadyListener(mediaDeps, listenerRedisUrl);
       // #13984 — sans worker qui bat, la porte tus rend ici, après sa réponse.

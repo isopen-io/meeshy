@@ -107,30 +107,6 @@ export function getSharedDeliveryQueue(): QueuedMessagePurger | undefined {
  * `is not a function` sur un chemin best-effort.
  */
 export function getSharedPersonalMarkEnqueuer(): QueuedPersonalMarkEnqueuer | undefined {
-  return getSharedQueueEnqueuer();
-}
-
-/**
- * La MÊME capacité, sous le nom de ce qu'elle est (#18616).
- *
- * `getSharedPersonalMarkEnqueuer` en est désormais une projection : son nom
- * dit l'USAGE qui l'a fait naître (les marques personnelles d'un lecteur), pas
- * ce qu'elle rend. Un second appelant est arrivé — le pipeline MÉDIA, qui
- * alimente `emitAttachmentUpdated` — et il n'enfile aucune marque personnelle ;
- * l'appeler sous ce nom aurait fait de la prochaine lecture un contresens.
- *
- * Ce que ce second appelant règle est plus lourd qu'un nom : il construisait
- * sa PROPRE `RedisDeliveryQueue`, dont la tranche mémoire n'était jamais
- * drainée, jamais purgée, jamais nettoyée — pendant que deux doc-comments
- * affirmaient l'unicité de l'instance. `delivery-queue-single-instance.test.ts`
- * tient désormais cet inventaire.
- *
- * L'ORDRE le permet, et c'est ce qui rend la résolution par registre juste
- * plutôt que fragile : `server.ts` enregistre la file (`setSharedDeliveryQueue`)
- * bien avant `setupSocketIO()`, donc avant que le pipeline média ne démarre. Une
- * résolution à la CONSTRUCTION du handler, elle, serait arrivée trop tôt.
- */
-export function getSharedQueueEnqueuer(): QueuedPersonalMarkEnqueuer | undefined {
   const queue = sharedDeliveryQueue;
   return queue && typeof queue.enqueue === 'function' ? (queue as QueuedPersonalMarkEnqueuer) : undefined;
 }
