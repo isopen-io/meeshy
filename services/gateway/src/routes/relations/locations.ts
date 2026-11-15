@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { SHARED_LOCATION_CIRCLES } from '@meeshy/shared/types/shared-location';
 import { sharedLocationRelayDepsOf } from '../../services/sharedLocation/sharedLocationDeps';
-import { sharedLocationSnapshotFor, type SharedLocationBbox } from '../../services/sharedLocation/sharedLocationRelay';
+import { ownSharedLocationFor, sharedLocationSnapshotFor, type SharedLocationBbox } from '../../services/sharedLocation/sharedLocationRelay';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
 import { errorResponses, relationLimiter } from './shared';
@@ -22,6 +22,24 @@ export const sharedLocationItemSchema = {
     circle: { type: 'string', enum: [...SHARED_LOCATION_CIRCLES] },
     updatedAt: { type: 'string' },
     expiresAt: { type: 'string' },
+  },
+} as const;
+
+/**
+ * MON partage, relu par chacun de mes appareils (#18389) : à qui, à quelle précision, jusqu'à
+ * quand. Déclaré champ par champ : aucune position, aucune maille ne peut partir à côté.
+ */
+export const ownSharedLocationSchema = {
+  type: 'object',
+  properties: {
+    recipients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { userId: { type: 'string' }, precision: { type: 'string' }, expiresAt: { type: 'string' } },
+      },
+    },
+    expiresAt: { type: ['string', 'null'] },
   },
 } as const;
 
@@ -68,6 +86,42 @@ export function registerRelationLocations(fastify: FastifyInstance): void {
       return sendSuccess(reply, snapshot);
     } catch (error) {
       logError(fastify.log, 'Shared locations snapshot error:', error);
+      return sendInternalError(reply, 'Erreur interne du serveur');
+    }
+  });
+
+  registerOwnSharedLocation(fastify);
+}
+
+/**
+ * `GET /relations/locations/mine` : MON partage en cours, que chacun de mes appareils relit à la
+ * connexion et à chaque `location:share-own-changed` (#18389). Le partage d'un compte est
+ * unique côté passerelle : un appareil s'y recale au lieu de republier une liste périmée.
+ * `private, no-store` : la liste ne survit dans aucun cache.
+ */
+export function registerOwnSharedLocation(fastify: FastifyInstance): void {
+  const reads = relationLimiter(fastify, 'rel:locations-mine:u', 120);
+
+  fastify.get('/locations/mine', {
+    onRequest: [fastify.authenticate],
+    preHandler: [reads.middleware()],
+    schema: {
+      description: 'My own shared location, as the gateway serves it: who, at which precision and until when — never a position.',
+      tags: ['relations'],
+      summary: 'My own shared location',
+      response: {
+        200: { type: 'object', properties: { success: { type: 'boolean' }, data: ownSharedLocationSchema } },
+        ...errorResponses,
+      },
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    try {
+      const own = await ownSharedLocationFor(sharedLocationRelayDepsOf({ prisma: fastify.prisma, io: undefined }), request.user!.userId);
+      reply.header('Cache-Control', 'private, no-store');
+      return sendSuccess(reply, own);
+    } catch (error) {
+      logError(fastify.log, 'Own shared location error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

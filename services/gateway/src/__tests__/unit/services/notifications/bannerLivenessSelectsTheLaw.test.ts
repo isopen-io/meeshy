@@ -254,17 +254,56 @@ describe('cliquet — tout appelant de la loi de vivacité référence son selec
     expect(callers.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('aucun appelant ne retape les colonnes de la loi', () => {
+  /**
+   * La propriété gardée est « personne ne RETAPE les colonnes de la loi », et
+   * sa première rédaction la mesurait par un proxy : *tout appelant du verdict
+   * cite la constante du select*. Le proxy supposait qu'un appelant du verdict
+   * POSSÈDE sa lecture — vrai de tous les appelants d'alors.
+   *
+   * #18615 a séparé les deux : `queuedMessageLiveness` rend le verdict et ne
+   * lit plus rien, sa ligne `Message` étant lue une fois pour lui ET pour le
+   * gate de plancher (`queuedMessageFacts`, qui porte le select). Sous le
+   * proxy d'origine il devenait un contrevenant — alors qu'il ne peut
+   * précisément PLUS retaper quoi que ce soit : il n'a plus de requête.
+   *
+   * La règle est donc énoncée sur ce qu'elle veut dire : **un appelant du
+   * verdict cite le select, ou il ne lit pas `Message` du tout.** La seconde
+   * branche est vérifiée, pas déclarée — un fichier qui DÉLÈGUE sa lecture ne
+   * porte aucun `prisma.message.find…`. Un appelant qui lirait à la main sans
+   * citer la constante reste un contrevenant, dans les deux rédactions.
+   */
+  it('aucun appelant ne retape les colonnes de la loi — il la cite, ou il ne lit pas', () => {
     const offenders = productionFiles(SRC)
       .filter((f) => {
         const source = fs.readFileSync(f, 'utf8');
         if (!source.includes('messageLivenessOf(')) return false;
         // La loi est son propre site de définition : elle DÉCLARE la constante.
         if (source.includes('export const MESSAGE_LIVENESS_SELECT')) return false;
-        return !source.includes('MESSAGE_LIVENESS_SELECT');
+        if (source.includes('MESSAGE_LIVENESS_SELECT')) return false;
+        // Il ne cite pas le select : il n'est en règle que s'il ne lit rien.
+        return /prisma\.message\.find/.test(source) || /\bmessage\.find(Many|Unique|First)\(/.test(source);
       })
       .map((f) => path.relative(SRC, f));
 
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * La garde ci-dessus a une seconde branche qui ACQUITTE (« il ne lit pas »),
+   * donc elle a besoin qu'on prouve qu'elle peut encore accuser : sans ça, une
+   * rédaction trop permissive rendrait `[]` pour la mauvaise raison. Le
+   * contre-exemple est construit, pas cherché dans l'arbre.
+   */
+  it('accuse bien un appelant qui lit `Message` sans citer le select', () => {
+    const faux = [
+      "import { messageLivenessOf } from './message-liveness';",
+      "const row = await prisma.message.findUnique({ where: { id }, select: { deletedAt: true, expiresAt: true } });",
+      'messageLivenessOf(row, new Date());',
+    ].join('\n');
+
+    const citeLeSelect = faux.includes('MESSAGE_LIVENESS_SELECT');
+    const lit = /prisma\.message\.find/.test(faux);
+    expect(citeLeSelect).toBe(false);
+    expect(lit).toBe(true);
   });
 });

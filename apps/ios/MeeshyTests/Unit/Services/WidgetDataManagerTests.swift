@@ -629,17 +629,24 @@ final class WidgetDataManagerTests: XCTestCase {
 /// Motifs cherchés APRÈS retrait des commentaires (piège connu du dépôt).
 final class MeeshyWidgetsSourceGuardTests: XCTestCase {
 
-    private var widgetsSourceURL: URL {
+    private var widgetsFolderURL: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // Services
             .deletingLastPathComponent()  // Unit
             .deletingLastPathComponent()  // MeeshyTests
             .deletingLastPathComponent()  // ios
-            .appendingPathComponent("MeeshyWidgets/MeeshyWidgets.swift")
+            .appendingPathComponent("MeeshyWidgets", isDirectory: true)
     }
 
     private func strippedSource() throws -> String {
-        strippingComments(try String(contentsOf: widgetsSourceURL, encoding: .utf8))
+        let files = try FileManager.default.contentsOfDirectory(atPath: widgetsFolderURL.path)
+            .filter { $0.hasSuffix(".swift") }
+            .sorted()
+        let joined = try files
+            .map { try String(contentsOf: widgetsFolderURL.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
+        XCTAssertFalse(joined.isEmpty, "No Swift source found in apps/ios/MeeshyWidgets/")
+        return strippingComments(joined)
     }
 
     /// Corps d'une fonction : de son en-tête jusqu'à l'ancre structurelle
@@ -657,7 +664,7 @@ final class MeeshyWidgetsSourceGuardTests: XCTestCase {
             until: "private func",
             in: source
         ) else {
-            XCTFail("Could not locate loadConversations body in MeeshyWidgets.swift")
+            XCTFail("Could not locate loadConversations body in MeeshyWidgets/")
             return
         }
         XCTAssertFalse(
@@ -674,7 +681,7 @@ final class MeeshyWidgetsSourceGuardTests: XCTestCase {
             until: "\nstruct ",
             in: source
         ) else {
-            XCTFail("Could not locate loadFavorites body in MeeshyWidgets.swift")
+            XCTFail("Could not locate loadFavorites body in MeeshyWidgets/")
             return
         }
         XCTAssertFalse(
@@ -746,14 +753,14 @@ final class MeeshyWidgetsSourceGuardTests: XCTestCase {
 
 /// Fiche appgroup-05 — test de contrat app↔widget : `WidgetConversation`
 /// (côté app, encodé par `WidgetDataManager`) et `Conversation` (miroir
-/// dupliqué dans MeeshyWidgets.swift, non compilable dans ce bundle) doivent
+/// dupliqué dans MeeshyWidgets/WidgetModels.swift, non compilable dans ce bundle) doivent
 /// rester décodables l'un depuis l'autre. Le miroir STRICT local reproduit le
 /// struct widget champ à champ ; toute dérive du contrat JSON casse ce test
 /// au lieu de rendre le widget silencieusement vide (pattern
 /// `SharePendingSendContractTests`).
 final class WidgetConversationContractTests: XCTestCase {
 
-    /// Miroir exact du struct `Conversation` de MeeshyWidgets.swift.
+    /// Miroir exact du struct `Conversation` de MeeshyWidgets/WidgetModels.swift.
     private struct WidgetMirrorConversation: Decodable {
         let id: String
         let contactName: String
