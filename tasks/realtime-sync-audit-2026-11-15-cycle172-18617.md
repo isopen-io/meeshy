@@ -253,10 +253,42 @@ pas déterministe non plus.
 
 Ce qui reste établi, et qu'il faut garder : la règle de concurrence existe, elle
 suffit à expliquer les annulations que J'AI causées en relançant, et le verdict
-agrégé reste trompeur (il nomme ce qui n'a pas RÉUSSI). Ce qui n'est PAS établi :
-la cause des annulations sans dispatch postérieur. Elle demande une visibilité
-que cette session n'a pas — limites Actions du compte, politique d'organisation,
-réclamation de runner.
+agrégé reste trompeur (il nomme ce qui n'a pas RÉUSSI).
+
+### Et chercher la cause a rendu un défaut RÉEL, qui n'est pas celui-là — #18760
+
+En cherchant plus loin, le relevé des runs `push` de `dev` de ce soir rend ceci :
+**neuf annulés consécutivement** entre 22:03 et 22:15, chacun quelques dizaines
+de secondes après sa création — et les deux runs **isolés** (22:30, 22:49)
+concluent normalement. C'est trait pour trait le comportement de
+`cancel-in-progress: true` : une rafale s'auto-annule, un push isolé n'a rien à
+annuler.
+
+Or `ci.yml` déclare l'inverse pour `dev`, et son commentaire raconte au PASSÉ
+l'incident que cette forme existe pour empêcher (« ONZE runs consécutifs de
+`dev` annulés … près de deux heures pendant lesquelles personne ne pouvait dire
+si `dev` était vert », #4395). **La protection ne tient pas, et le dépôt la croit
+acquise** — y compris la directive #9226, qui fait de la CI verte de `dev` la
+condition de la fusion automatique.
+
+L'inférence — que l'expression `${{ }}` est évaluée **truthy**, le résultat
+arrivant sous forme de chaîne et `"false"` étant une chaîne non vide — est
+PLAUSIBLE et prédit exactement la table, mais elle n'est pas prouvée ici ; elle
+est écrite comme telle dans #18760, séparée de la mesure.
+
+> **Un commentaire qui raconte un incident RÉSOLU est une affirmation, et
+> celle-ci dit faux.** C'est la forme de la leçon de ce cycle (un commentaire qui
+> exempte en nommant un mécanisme), appliquée non plus à du code mais à de
+> l'outillage — et trouvée en cherchant pourquoi ma propre preuve n'aboutissait
+> pas. Chercher la cause d'un blocage d'outillage est rentable même quand on ne
+> la trouve pas : ce n'est pas le blocage qui a été expliqué, c'est un défaut
+> voisin qui coûtait plus cher.
+
+**Ce qui reste NON expliqué** : mes trois dispatches annulés sans aucun run
+postérieur dans leur groupe. #18760 n'en rend pas compte, le groupe d'une
+branche de travail ne contenant que ses propres dispatches. Reporté une fois sur
+la PR, et je n'ai pas relancé davantage — chaque relance étant elle-même une
+annulation garantie de la précédente.
 
 ## Ce que le cycle n'a pas pris
 
