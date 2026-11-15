@@ -169,9 +169,14 @@ canal, consentement par défaut) et les listes littérales de `relation-levels.t
 
 ## 7. Lots
 
-1. **Socle partagé** (ce lot) : matrice, types + Zod, constantes, `batteryEpisodeStep`,
-   `batteryReaderChannel`, `batteryEstimatedMinutes`, `resolveEmitterConsent`, fixtures,
-   colonne Prisma.
+1. **Socle partagé** (ce lot) : matrice (`utils/relation-levels.ts`), types + Zod
+   (`types/battery-constants.ts`, `types/battery.ts`), noms (`types/socketio-events/battery-event-names.ts`,
+   non répandus), `utils/battery-episode.ts` (`batteryEpisodeStep`, `batteryReaderChannel`,
+   `batteryReaderInConversation`, `batteryEstimatedMinutes`, `batteryReaderState`),
+   `utils/relation-emitter-consent.ts` (`resolveEmitterConsent`,
+   `resolveRelationAccessWithStoredConsent`), fixtures (`fixtures/battery-episode-cases.json`,
+   cas ajoutés à `fixtures/relation-access-cases.json`), colonnes Prisma `batteryShared` /
+   `batteryWithdrawnAt`.
 2. Passerelle : `batteryStore` + `batteryRelay` (modèle `nowPlaying`), route snapshot,
    consentement tri-état dans `relationConsent.ts`, détection d'extinction, contexte de
    conversation, répandre les noms d'événements dans les cartes, type de push.
