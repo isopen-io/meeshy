@@ -65,9 +65,9 @@ const escapeListeners = (): readonly string[] =>
  * `reaction-rail` (des barreaux, sans couche) et `shortcut-scope` (une liste de
  * sélecteurs) pour des couches. 21 et 18 depuis que le menu « ⋯ » des
  * visionneuses, la rangée des teintes et la carte de la série entrent dans la
- * pile (#18326).
+ * pile (#18326) ; 20 et 18 depuis que la sonnerie du Bring y entre (#18320).
  */
-const LAYERS_BASE = 21;
+const LAYERS_BASE = 20;
 const ESCAPE_BASE = 18;
 
 describe('aucune couche nouvelle n’échappe à la pile du retour', () => {

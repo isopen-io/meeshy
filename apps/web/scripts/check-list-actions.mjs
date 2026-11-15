@@ -314,7 +314,9 @@ await page.keyboard.press('Escape');
 await page.waitForTimeout(120);
 const back = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
 check(back === 'Actions de conversation', `Échap referme et rend le focus au bouton (« ${back} »)`);
-check((await page.$('[role="menu"]')) === null, 'Échap referme réellement le menu');
+check((await page.$('[role="menu"]:not([data-leaving])')) === null, 'Échap referme réellement le menu');
+const removed = await page.waitForSelector('[role="menu"]', { state: 'detached', timeout: 1000 }).then(() => true, () => false);
+check(removed, 'le menu refermé sort en fondu puis quitte le document (#18327)');
 
 // ------------------------------------------------------- 4. chaque action a un effet
 /** Ouvre le menu de `row` au CLAVIER — le pointeur ne peut pas atteindre un

@@ -5,6 +5,7 @@ import type { HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import { createBringStore, type BringStoreApi } from '@/lib/bring/bring-live';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -100,8 +101,39 @@ describe('l’écran de sonnerie', () => {
     store.getState().receive(ring());
     const node = await mount(host(store, tones, deps));
     await click(node.querySelector<HTMLButtonElement>('[data-bring-stop]'));
-    expect(node.querySelector('[data-bring-ring]')).toBeNull();
+    expect(node.querySelector('[data-bring-ring]:not([data-leaving])')).toBeNull();
     expect(tones.calls).toEqual(['start:ring', 'stop']);
+    expect(requests.map((req) => `${req.method} ${req.path}`)).toEqual(['DELETE /api/v1/bring/b1']);
+  });
+
+  test('l’alerte entre en fondu, et « Arrêter » la laisse partir en fondu, inerte, sans la refaire sonner', async () => {
+    const store = createBringStore();
+    const tones = fakeTones();
+    store.getState().receive(ring());
+    const node = await mount(host(store, tones));
+    expect(node.querySelector('[data-bring-ring]')?.hasAttribute('data-layer-motion')).toBe(true);
+    await click(node.querySelector<HTMLButtonElement>('[data-bring-stop]'));
+    const leaving = node.querySelector('[data-bring-ring]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(tones.calls).toEqual(['start:ring', 'stop']);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(node.querySelector('[data-bring-ring]')).toBeNull();
+  });
+
+  test('le retour (Android, Précédent) et Échap visent l’alerte, pas l’écran dessous : ils l’arrêtent', async () => {
+    const store = createBringStore();
+    const tones = fakeTones();
+    const { deps, requests } = fakeDeps();
+    store.getState().receive(ring());
+    const node = await mount(host(store, tones, deps));
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(store.getState().incoming).toEqual([]);
+    expect(node.querySelector('[data-bring-ring]')?.hasAttribute('data-leaving')).toBe(true);
     expect(requests.map((req) => `${req.method} ${req.path}`)).toEqual(['DELETE /api/v1/bring/b1']);
   });
 
@@ -112,7 +144,7 @@ describe('l’écran de sonnerie', () => {
     const node = await mount(host(store, tones));
     await act(async () => store.getState().stop('b1'));
     await settle();
-    expect(node.querySelector('[data-bring-ring]')).toBeNull();
+    expect(node.querySelector('[data-bring-ring]:not([data-leaving])')).toBeNull();
     expect(tones.calls).toEqual(['start:ring', 'stop']);
   });
 
@@ -125,7 +157,7 @@ describe('l’écran de sonnerie', () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
     });
     await settle();
-    expect(node.querySelector('[data-bring-ring]')).toBeNull();
+    expect(node.querySelector('[data-bring-ring]:not([data-leaving])')).toBeNull();
     expect(tones.calls).toEqual(['start:ring', 'stop']);
   });
 

@@ -6,6 +6,7 @@ import { EMOJI_SKIN_TONE_KEY } from '@/lib/emoji/emoji-skin-tone';
 import { EMOJI_RECENTS_KEY } from '@/lib/emoji-recents';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadEmojiPickerCatalog } from '@/lib/i18n-emoji-picker-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { EXTENDED_REACTIONS } from '@/lib/view/message-actions';
 import { createActMounter } from '@/test-support/act-mount';
@@ -284,8 +285,9 @@ describe('la feuille d’emojis — les teintes de peau', () => {
     await mounter.settle();
     return host;
   };
-  const menu = (host: HTMLElement) => host.querySelector<HTMLElement>('[data-emoji-tones]');
-  const tones = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('[data-emoji-tones] [role="menuitemradio"]')];
+  /* La rangée ouverte : celle qui SORT (`data-leaving`, le temps du fondu — #18327) n'en est plus une. */
+  const menu = (host: HTMLElement) => host.querySelector<HTMLElement>('[data-emoji-tones]:not([data-leaving])');
+  const tones = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('[data-emoji-tones]:not([data-leaving]) [role="menuitemradio"]')];
   const tone = (host: HTMLElement, name: string) => {
     const found = host.querySelector<HTMLButtonElement>(`[data-emoji-tone="${name}"]`);
     if (found === null) throw new Error(`teinte absente : ${name}`);
@@ -386,6 +388,19 @@ describe('la feuille d’emojis — les teintes de peau', () => {
 
     expect(picked).toEqual(['👍']);
     expect(menu(host)).toBeNull();
+  });
+
+  test('refermée, la rangée des teintes SORT en fondu : encore peinte, inerte, puis retirée (#18327)', async () => {
+    const host = await ready(await open(() => undefined));
+    await shiftF10(cell(host, '👍'));
+    await mounter.click(tone(host, 'medium'));
+    const leaving = host.querySelector('[data-emoji-tones]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(host.querySelector('[data-emoji-tones]')).toBeNull();
   });
 
   test('choisir une teinte rend la variante à l’hôte, la retient, et la range dans les récents', async () => {
