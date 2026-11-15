@@ -41,7 +41,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "battery_detail_title",
+          "androidName": "battery_card_title",
           "status": "android-only"
         },
         {
@@ -149,7 +149,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "battery_share_global_hint",
+          "androidName": "battery_share_global_scope",
           "status": "android-only"
         },
         {
@@ -161,7 +161,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "battery_share_person_hint",
+          "androidName": "battery_share_person_scope",
           "status": "android-only"
         },
         {

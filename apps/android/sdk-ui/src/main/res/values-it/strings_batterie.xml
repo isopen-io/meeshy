@@ -12,7 +12,7 @@
     <string name="battery_pill_recharged">%1$s · batteria ricaricata</string>
     <string name="battery_pill_ended">%1$s · batteria tornata normale</string>
     <string name="battery_pill_generic">%1$s · novità sulla batteria</string>
-    <string name="battery_detail_title">Batteria</string>
+    <string name="battery_card_title">Batteria</string>
     <string name="battery_level">%1$d %%</string>
     <string name="battery_charging">In carica</string>
     <string name="battery_low_power">Modalità risparmio energetico</string>
@@ -29,11 +29,11 @@
     <string name="battery_a11y">Batteria di %1$s: %2$d %%</string>
     <string name="battery_a11y_charging">Batteria di %1$s: %2$d %%, in carica</string>
     <string name="battery_share_global_title">Condividi la mia batteria</string>
-    <string name="battery_share_global_hint">Le persone vicine e il Sangue vedono il tuo livello solo quando diventa basso. Android lo misura mentre Meeshy è aperto, ogni 15 minuti in background e quando un Sangue lo chiede, mai più spesso.</string>
+    <string name="battery_share_global_scope">Le persone vicine e il Sangue vedono il tuo livello solo quando è basso.</string>
     <string name="battery_share_person">Condividi la mia batteria con %1$s</string>
-    <string name="battery_share_person_hint">%1$s vede il tuo livello solo quando diventa basso.</string>
+    <string name="battery_share_person_scope">%1$s vede il tuo livello solo quando diventa basso.</string>
     <string name="battery_consent_title">Condividere la tua batteria con %1$s?</string>
-    <string name="battery_consent_body">Se la tua batteria diventa bassa, %1$s lo saprà. Puoi cambiare idea quando vuoi dalla sua scheda.</string>
+    <string name="battery_consent_body">Se la batteria diventa bassa, %1$s lo saprà. Puoi cambiarlo dalla sua scheda.</string>
     <string name="battery_consent_checkbox">Condividi la mia batteria con %1$s</string>
     <string name="battery_consent_confirm">Conferma</string>
     <string name="battery_consent_later">Non ora</string>

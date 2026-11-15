@@ -12,7 +12,7 @@
     <string name="battery_pill_recharged">%1$s · batterie rechargée</string>
     <string name="battery_pill_ended">%1$s · batterie revenue à la normale</string>
     <string name="battery_pill_generic">%1$s · nouvelles de la batterie</string>
-    <string name="battery_detail_title">Batterie</string>
+    <string name="battery_card_title">Batterie</string>
     <string name="battery_level">%1$d %%</string>
     <string name="battery_charging">En charge</string>
     <string name="battery_low_power">Mode économie d\'énergie</string>
@@ -29,11 +29,11 @@
     <string name="battery_a11y">Batterie de %1$s : %2$d %%</string>
     <string name="battery_a11y_charging">Batterie de %1$s : %2$d %%, en charge</string>
     <string name="battery_share_global_title">Partager ma batterie</string>
-    <string name="battery_share_global_hint">Vos Proches et vos Sangs ne voient votre niveau que lorsqu\'il devient faible. Android le mesure quand Meeshy est ouvert, toutes les 15 minutes en arrière-plan et quand un Sang le demande — jamais plus souvent.</string>
+    <string name="battery_share_global_scope">Vos Proches et vos Sangs ne voient votre niveau que lorsqu\'il devient faible.</string>
     <string name="battery_share_person">Partager ma batterie avec %1$s</string>
-    <string name="battery_share_person_hint">%1$s ne voit votre niveau que lorsqu\'il devient faible.</string>
+    <string name="battery_share_person_scope">%1$s ne voit votre niveau que lorsqu\'il devient faible.</string>
     <string name="battery_consent_title">Partager votre batterie avec %1$s ?</string>
-    <string name="battery_consent_body">Si votre batterie devient faible, %1$s le saura. Vous pourrez changer d\'avis à tout moment depuis sa fiche.</string>
+    <string name="battery_consent_body">Si votre batterie devient faible, %1$s le saura. Modifiable sur sa fiche.</string>
     <string name="battery_consent_checkbox">Partager ma batterie avec %1$s</string>
     <string name="battery_consent_confirm">Confirmer</string>
     <string name="battery_consent_later">Pas maintenant</string>

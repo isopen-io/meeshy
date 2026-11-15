@@ -12,7 +12,7 @@
     <string name="battery_pill_recharged">%1$s · battery recharged</string>
     <string name="battery_pill_ended">%1$s · battery back to normal</string>
     <string name="battery_pill_generic">%1$s · battery update</string>
-    <string name="battery_detail_title">Battery</string>
+    <string name="battery_card_title">Battery</string>
     <string name="battery_level">%1$d %%</string>
     <string name="battery_charging">Charging</string>
     <string name="battery_low_power">Power saving mode</string>
@@ -29,11 +29,11 @@
     <string name="battery_a11y">%1$s battery: %2$d %%</string>
     <string name="battery_a11y_charging">%1$s battery: %2$d %%, charging</string>
     <string name="battery_share_global_title">Share my battery</string>
-    <string name="battery_share_global_hint">Close ones and Blood see your level only when it gets low. Android measures it while Meeshy is open, every 15 minutes in the background, and when Blood asks — never more often.</string>
+    <string name="battery_share_global_scope">Close ones and Blood see your level only when it gets low.</string>
     <string name="battery_share_person">Share my battery with %1$s</string>
-    <string name="battery_share_person_hint">%1$s sees your level only when it gets low.</string>
+    <string name="battery_share_person_scope">%1$s sees your level only when it gets low.</string>
     <string name="battery_consent_title">Share your battery with %1$s?</string>
-    <string name="battery_consent_body">If your battery gets low, %1$s will know. You can change this at any time in their profile.</string>
+    <string name="battery_consent_body">If your battery gets low, %1$s will know. Change it on their profile.</string>
     <string name="battery_consent_checkbox">Share my battery with %1$s</string>
     <string name="battery_consent_confirm">Confirm</string>
     <string name="battery_consent_later">Not now</string>

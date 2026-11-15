@@ -134,7 +134,7 @@ private fun SharePart(
     }
     BatterySwitchRow(
         title = stringResource(R.string.battery_share_person, name),
-        hint = stringResource(if (sharingEnabled) R.string.battery_share_person_hint else R.string.battery_share_global_hint, name),
+        hint = stringResource(if (sharingEnabled) R.string.battery_share_person_scope else R.string.battery_share_global_scope, name),
         checked = settings.shared && sharingEnabled,
         enabled = sharingEnabled,
         onChange = onShare,
@@ -188,7 +188,7 @@ fun BatterySharingSwitch(modifier: Modifier = Modifier) {
     val known = enabled ?: return
     BatterySwitchRow(
         title = stringResource(R.string.battery_share_global_title),
-        hint = stringResource(R.string.battery_share_global_hint),
+        hint = stringResource(R.string.battery_share_global_scope),
         checked = known,
         enabled = true,
         onChange = { next -> scope.launch { gateway.setSharing(next) } },

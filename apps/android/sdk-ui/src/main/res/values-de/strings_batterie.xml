@@ -12,7 +12,7 @@
     <string name="battery_pill_recharged">%1$s · Akku aufgeladen</string>
     <string name="battery_pill_ended">%1$s · Akku wieder normal</string>
     <string name="battery_pill_generic">%1$s · Neues vom Akku</string>
-    <string name="battery_detail_title">Akku</string>
+    <string name="battery_card_title">Akku</string>
     <string name="battery_level">%1$d %%</string>
     <string name="battery_charging">Lädt</string>
     <string name="battery_low_power">Energiesparmodus</string>
@@ -29,11 +29,11 @@
     <string name="battery_a11y">Akku von %1$s: %2$d %%</string>
     <string name="battery_a11y_charging">Akku von %1$s: %2$d %%, lädt</string>
     <string name="battery_share_global_title">Meinen Akku teilen</string>
-    <string name="battery_share_global_hint">Nahestehende und Blut sehen deinen Stand nur, wenn er niedrig wird. Android misst ihn, solange Meeshy offen ist, alle 15 Minuten im Hintergrund und wenn Blut danach fragt – nie öfter.</string>
+    <string name="battery_share_global_scope">Nahestehende und Blut sehen deinen Stand nur, wenn er niedrig wird.</string>
     <string name="battery_share_person">Meinen Akku mit %1$s teilen</string>
-    <string name="battery_share_person_hint">%1$s sieht deinen Stand nur, wenn er niedrig wird.</string>
+    <string name="battery_share_person_scope">%1$s sieht deinen Stand nur, wenn er niedrig wird.</string>
     <string name="battery_consent_title">Deinen Akku mit %1$s teilen?</string>
-    <string name="battery_consent_body">Wenn dein Akku niedrig wird, erfährt %1$s es. Du kannst das jederzeit in der Personenkarte ändern.</string>
+    <string name="battery_consent_body">Wird dein Akku niedrig, erfährt %1$s es. Änderbar in der Personenkarte.</string>
     <string name="battery_consent_checkbox">Meinen Akku mit %1$s teilen</string>
     <string name="battery_consent_confirm">Bestätigen</string>
     <string name="battery_consent_later">Nicht jetzt</string>

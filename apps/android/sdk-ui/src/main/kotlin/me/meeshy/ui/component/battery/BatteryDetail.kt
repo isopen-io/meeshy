@@ -43,7 +43,7 @@ fun BatteryDetailCard(
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BatteryGlyph(BatteryGlyphModel.of(state), width = 24.dp)
-            Text(stringResource(R.string.battery_detail_title), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.battery_card_title), style = MaterialTheme.typography.titleSmall)
             Text(stringResource(R.string.battery_level, state.level), style = MaterialTheme.typography.titleSmall)
         }
         batteryFacts(state, nowMs).forEach { fact ->

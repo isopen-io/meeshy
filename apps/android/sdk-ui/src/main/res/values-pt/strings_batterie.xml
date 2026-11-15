@@ -12,7 +12,7 @@
     <string name="battery_pill_recharged">%1$s · bateria recarregada</string>
     <string name="battery_pill_ended">%1$s · bateria voltou ao normal</string>
     <string name="battery_pill_generic">%1$s · novidades da bateria</string>
-    <string name="battery_detail_title">Bateria</string>
+    <string name="battery_card_title">Bateria</string>
     <string name="battery_level">%1$d %%</string>
     <string name="battery_charging">Carregando</string>
     <string name="battery_low_power">Modo de economia de energia</string>
@@ -29,11 +29,11 @@
     <string name="battery_a11y">Bateria de %1$s: %2$d %%</string>
     <string name="battery_a11y_charging">Bateria de %1$s: %2$d %%, carregando</string>
     <string name="battery_share_global_title">Compartilhar minha bateria</string>
-    <string name="battery_share_global_hint">Pessoas próximas e Sangue só veem seu nível quando ele fica baixo. O Android mede quando o Meeshy está aberto, a cada 15 minutos em segundo plano e quando um Sangue pede, nunca com mais frequência.</string>
+    <string name="battery_share_global_scope">Pessoas próximas e Sangue só veem seu nível quando ele fica baixo.</string>
     <string name="battery_share_person">Compartilhar minha bateria com %1$s</string>
-    <string name="battery_share_person_hint">%1$s só vê seu nível quando ele fica baixo.</string>
+    <string name="battery_share_person_scope">%1$s só vê seu nível quando ele fica baixo.</string>
     <string name="battery_consent_title">Compartilhar sua bateria com %1$s?</string>
-    <string name="battery_consent_body">Se sua bateria ficar baixa, %1$s vai saber. Você pode mudar isso quando quiser na ficha da pessoa.</string>
+    <string name="battery_consent_body">Se sua bateria ficar baixa, %1$s vai saber. Mude isso na ficha da pessoa.</string>
     <string name="battery_consent_checkbox">Compartilhar minha bateria com %1$s</string>
     <string name="battery_consent_confirm">Confirmar</string>
     <string name="battery_consent_later">Agora não</string>
