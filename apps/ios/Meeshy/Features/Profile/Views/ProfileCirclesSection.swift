@@ -75,14 +75,14 @@ struct ProfileCirclesSection: View {
     /// « Ami, 3 personnes » : le cercle d'abord, puis qui l'habite.
     static func pillAccessibilityLabel(title: String, count: Int) -> String {
         let format = String(localized: "profile.circles.pill.a11y", defaultValue: "%@, %lld personnes", bundle: .main)
-        return String(format: format, title, count)
+        return String.localizedStringWithFormat(format, title, count)
     }
 
     /// `nil` quand rien n'attend : la rangée n'existe pas plutôt que de dire « 0 ».
     static func requestsText(count: Int) -> String? {
         guard count > 0 else { return nil }
         let format = String(localized: "profile.circles.requests", defaultValue: "%lld demandes à répondre", bundle: .main)
-        return String(format: format, count)
+        return String.localizedStringWithFormat(format, count)
     }
 
     /// La phrase ne se dit que si AUCUN cercle n'a personne, et seulement une fois les liens servis : elle explique les
@@ -126,7 +126,7 @@ private struct ProfileCirclePill: View {
             VStack(spacing: MeeshySpacing.xxs) {
                 Text(CircleLevelNames.icon(of: entry.level))
                     .font(MeeshyFont.relative(MeeshyFont.subtitleSize))
-                Text("\(entry.count)")
+                Text(entry.count, format: .number)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold, design: .rounded))
                     .foregroundStyle(textPrimary)
                     .contentTransition(.numericText())
