@@ -14,9 +14,8 @@ import MeeshySDK
 /// câblage à faire. Ce que la bascule ne fait PAS, c'est donner une place :
 /// elle laisse `x` / `y` où ils étaient. Un fond n'a pas de position utile (il
 /// occupe toute la scène), donc deux sons promus l'un après l'autre se
-/// poseraient au même point — le défaut exact que `StoryObjectPlacement`
-/// existe pour empêcher, et que l'auteur ne verrait pas : deux objets, une
-/// seule puce à l'œil.
+/// gardaient leur ancienne place de fond ; la promotion les pose au centre,
+/// comme tout objet neuf (`StoryObjectPlacement`, #18719).
 ///
 /// ## Pourquoi ce n'est pas offert sur tout fond
 ///
@@ -43,14 +42,8 @@ nonisolated enum ComposerSoundPromotion {
                                                         audioObjects: audioObjects)
     }
 
-    /// Où la puce atterrit — le centre s'il est libre, sinon la place suivante
-    /// de la cascade.
-    ///
-    /// Le fond qu'on promeut est EXCLU des positions à éviter : il n'a pas de
-    /// place sur la scène tant qu'il est un fond, et s'éviter soi-même ferait
-    /// sauter la première place libre sans raison.
+    /// Où la puce atterrit : au centre, comme tout objet neuf (#18719).
     static func landing(on slide: StorySlide, promoting id: String) -> CGPoint {
-        StoryObjectPlacement.next(
-            avoiding: ComposerScenePosedObjects.positions(on: slide, excluding: id))
+        StoryObjectPlacement.center
     }
 }
