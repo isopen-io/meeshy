@@ -8,6 +8,7 @@ import { isContextMenuKey } from '@/lib/view/long-press';
 import { initialDetent, peekSheetFrame, type PeekDetent, type PeekOrigin, type PeekSheetFrame } from '@/lib/view/peek-sheet';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import {
@@ -372,9 +373,10 @@ export function RowActions({
    * attrape le défilement du conteneur de liste, qui ne remonte pas jusqu'à
    * `window`.
    */
-  const { open, setOpen, closeAndFocusButton, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, handleKey } = useRovingMenu({
+  const { open, leaving, setOpen, closeAndFocusButton, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, handleKey } = useRovingMenu({
     itemCount: entries.length,
     layer: false,
+    exitMs: mode === 'peek' ? 0 : LAYER_MOTION_MS,
     onScroll: () => setOpen(false),
     onResize: () => setOpen(false),
   });
@@ -383,8 +385,8 @@ export function RowActions({
   const openRef = useRef(false);
   openRef.current = open;
   useEffect(() => {
-    if (!open) setSubmenu(null);
-  }, [open]);
+    if (!open && !leaving) setSubmenu(null);
+  }, [open, leaving]);
 
   /**
    * ENTRER DANS UN SOUS-MENU, EN SORTIR (#10593) — le panneau se remplace et
@@ -663,9 +665,9 @@ export function RowActions({
         <Glyph name="dotsThreeVertical" size={18} />
       </button>
 
-      {open && typeof document !== 'undefined'
+      {(open || leaving) && typeof document !== 'undefined'
         ? createPortal(
-            mode === 'peek' && peek !== undefined && peekLayout !== null ? (
+            open && mode === 'peek' && peek !== undefined && peekLayout !== null ? (
               /**
                * LA GRAPPE EST UNE COUCHE MODALE, VOILE COMPRIS (revue #11211).
                * Le voile vit DANS `menuRef` : l'appui sur lui n'est plus un
@@ -708,7 +710,7 @@ export function RowActions({
                 aria-label={menuLabel}
                 onKeyDown={onMenuKeyDown}
                 className="fixed overflow-hidden rounded-card py-1 shadow-cast"
-                style={{
+                {...layerMotion(leaving, {
                   /* Au-dessus du chrome fixe de la coquille (bandeau du joueur, z-40) :
                      le panneau peut monter jusqu'en haut de l'écran, et une action
                      recouverte par la bannière ne se toucherait pas (#17243). Même
@@ -721,9 +723,9 @@ export function RowActions({
                   overflowY: 'auto',
                   backgroundColor: 'var(--color-ios-card)',
                   border: '1px solid var(--color-edge)',
-                }}
+                })}
               >
-                <RowMenuBackDismiss onClose={() => setOpen(false)} />
+                {leaving ? null : <RowMenuBackDismiss onClose={() => setOpen(false)} />}
                 {panelEntries}
               </div>
             ),

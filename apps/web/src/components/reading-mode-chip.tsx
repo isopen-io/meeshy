@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 import { Glyph } from './glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { placePopover } from '@/lib/view/popover';
 import { findFocusableIndex, useRovingMenu } from '@/lib/view/roving-menu';
 
@@ -82,8 +83,9 @@ export function ReadingModeChip({
   const total = rows.length + 1;
   const isDisabledAt = (index: number): boolean => (index < rows.length ? !rows[index]!.isAvailable : false);
 
-  const { open, setOpen, closeAndFocusButton, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } =
+  const { open, mounted, leaving, setOpen, closeAndFocusButton, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } =
     useRovingMenu({
+      exitMs: LAYER_MOTION_MS,
       itemCount: total,
       isDisabledAt,
       /**
@@ -162,19 +164,20 @@ export function ReadingModeChip({
         </span>
       </button>
 
-      {open ? (
+      {mounted ? (
         <div
           ref={menuRef}
           role="menu"
           aria-label={translate(currentInterfaceLanguage(), 'readingMode.menu')}
           onKeyDown={onMenuKeyDown}
           className="absolute top-full z-20 mt-1 overflow-hidden rounded-card py-1 shadow-cast"
-          style={{
+          {...layerMotion(leaving, {
             right: box.right,
             width: box.width,
             backgroundColor: 'var(--color-ios-card)',
             border: '1px solid var(--color-edge)',
-          }}
+            '--layer-shift': '0 -4px',
+          } as CSSProperties)}
         >
           {rows.map((row, index) => {
             /* SEULE l'indisponibilité désactive une ligne (défaut #5566 §9) :
