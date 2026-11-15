@@ -113,6 +113,7 @@ struct ParticipantProfileSheet: View {
                 bundle: .main
             ))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar { closeToolbar }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -146,6 +147,21 @@ struct ParticipantProfileSheet: View {
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
             guard let repainted = Self.repaintedProfile(profile, with: event) else { return }
             Task { await loader.update { $0 = repainted } }
+        }
+    }
+
+    /// La croix de la fiche, que porte toute feuille de l'app : le glisser vers le bas ne se découvre pas, et une feuille
+    /// sans croix n'a pas de sortie pour qui ne voit pas la poignée.
+    @ToolbarContentBuilder
+    private var closeToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            MeeshyGlassButton(
+                systemImage: "xmark",
+                label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+                size: .s36
+            ) {
+                dismiss()
+            }
         }
     }
 

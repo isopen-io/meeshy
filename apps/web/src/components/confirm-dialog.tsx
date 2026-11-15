@@ -127,7 +127,7 @@ export function ConfirmDialog({
             type="button"
             data-confirm="cancel"
             onClick={leave}
-            className="grid flex-auto place-items-center rounded-chip px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press grid flex-auto place-items-center rounded-chip px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: 48,
               color: 'var(--color-ios-ink)',
@@ -143,7 +143,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={busy}
             aria-busy={busy}
-            className="grid flex-auto place-items-center rounded-chip px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+            className="btn-press grid flex-auto place-items-center rounded-chip px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
             style={{
               minHeight: 48,
               color: ink,

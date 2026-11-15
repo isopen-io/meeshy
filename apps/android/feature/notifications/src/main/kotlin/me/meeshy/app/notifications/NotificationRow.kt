@@ -1,6 +1,9 @@
 package me.meeshy.app.notifications
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -45,7 +49,9 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 
-private val UNREAD_FADE = tween<Color>(durationMillis = 250)
+/** Le passage à lu : le voile de la rangée et la pastille s'effacent ensemble, au pas de la liste (iOS 0,25 s). */
+private const val UNREAD_FADE_MILLIS = NotificationListMotion.ROW_MILLIS
+private val UNREAD_FADE = tween<Color>(durationMillis = UNREAD_FADE_MILLIS)
 
 /**
  * Une rangée de la cloche — miroir de `NotificationRowView` (iOS) posé sur le glissement persistant :
@@ -68,6 +74,7 @@ internal fun NotificationRow(
     onDelete: (ApiNotification) -> Unit,
     onQuickAction: (ApiNotification, NotificationQuickAction) -> Unit,
     modifier: Modifier = Modifier,
+    isWriteInFlight: Boolean = false,
 ) {
     val isUnread = !notification.state.isRead
     val accent = remember(notification.type) { hexColor(notificationTypeAccentHex(notification.type)) }
@@ -119,7 +126,7 @@ internal fun NotificationRow(
                 time?.let { RowTimestamp(it) }
             }
             if (quickActions.isNotEmpty()) {
-                QuickActionsRow(notification, quickActions, isConnectRequested, onQuickAction)
+                QuickActionsRow(notification, quickActions, isConnectRequested, isWriteInFlight, onQuickAction)
             }
         }
     }
@@ -138,14 +145,28 @@ private fun RowLeadingHead(leading: RowLeading, notification: ApiNotification, a
             is RowLeading.Milestone -> NotificationMilestoneMedallion(leading.milestone, accent)
             RowLeading.Signature -> NotificationSignatureMedallion(accent)
         }
-        if (isUnread) {
-            Box(
-                Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp).size(9.dp)
-                    .clip(CircleShape).background(accent),
-            )
-        }
+        NotificationUnreadDot(
+            visible = isUnread,
+            color = accent,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp),
+        )
     }
 }
+
+/** La pastille de non-lu posée sur l'avatar : elle s'efface au même pas que le voile de la rangée. */
+@Composable
+internal fun NotificationUnreadDot(visible: Boolean, color: Color, modifier: Modifier = Modifier) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = fadeIn(tween(UNREAD_FADE_MILLIS)),
+        exit = fadeOut(tween(UNREAD_FADE_MILLIS)),
+    ) {
+        Box(Modifier.testTag(UNREAD_DOT_TAG).size(9.dp).clip(CircleShape).background(color))
+    }
+}
+
+internal const val UNREAD_DOT_TAG = "notification.unread.dot"
 
 @Composable
 private fun RowText(row: NotificationRowPresentation, isUnread: Boolean, footerText: String?, modifier: Modifier) {
