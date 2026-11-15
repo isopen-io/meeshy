@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from services.task_privacy import cache_allowed, current_message_id, is_live_call_caption
+from utils.voice_cache_guard import guard_voice_cache_id
 
 logger = logging.getLogger(__name__)
 
@@ -901,7 +902,7 @@ class AudioCacheService:
 
     async def get_voice_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Récupère un profil vocal depuis le cache"""
-        key = self.key_voice_profile.format(user_id=user_id)
+        key = self.key_voice_profile.format(user_id=guard_voice_cache_id(user_id))
         data = await self.redis.get(key)
         if data:
             return json.loads(data)
@@ -909,13 +910,13 @@ class AudioCacheService:
 
     async def set_voice_profile(self, user_id: str, profile: Dict[str, Any], ttl: int = None) -> bool:
         """Sauvegarde un profil vocal dans le cache (TTL: 3 mois par défaut)"""
-        key = self.key_voice_profile.format(user_id=user_id)
+        key = self.key_voice_profile.format(user_id=guard_voice_cache_id(user_id))
         ttl = ttl or self.ttl_voice_profile
         return await self.redis.setex(key, ttl, json.dumps(profile))
 
     async def delete_voice_profile(self, user_id: str) -> bool:
         """Supprime un profil vocal du cache"""
-        key = self.key_voice_profile.format(user_id=user_id)
+        key = self.key_voice_profile.format(user_id=guard_voice_cache_id(user_id))
         return await self.redis.delete(key)
 
     def get_stats(self) -> Dict[str, Any]:

@@ -1193,3 +1193,46 @@ socket jusqu'au client.
 3. #18697, puis #18691. Avant d'écrire, mesurer sur le staging si le flux du profil vocal répond.
 4. #18629, avec l'agent `sre-infra`, puis #17133 et #18611, puis #18600.
 5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 36 — 2026-11-15
+
+- **Base** : `origin/dev` @ `70c7bf29`. Le lot du cycle 35 (#18667) était déjà fusionné, et aucune PR de la routine n'était ouverte.
+- **Branche** : `claude/determined-volta-8psi9c`.
+- **Objectif** : #18695. Le cache de modèles vocaux du traducteur ne crée de dossier, n'écrit de fichier et ne forme de clé Redis que depuis un identifiant validé, sous `voice_cache_dir`.
+- **Livré** (seul le traducteur change ; ni le protocole ZMQ, ni la passerelle, ni le format des clés pour un identifiant valide) :
+  - **Garde unique** `src/utils/voice_cache_guard.py` :
+    - `guard_voice_cache_id` impose `fullmatch(r'[A-Za-z0-9_-]{1,64}')` ;
+    - `voice_cache_user_dir` vérifie que le `resolve()` du dossier a pour parent la racine résolue, ce qui couvre les liens symboliques ;
+    - `VoiceCacheIdRejected` porte une raison fixe, jamais l'identifiant.
+  - **Sites gardés** :
+    - côté création : `get_or_create_voice_model` (avant la lecture du cache), `_create_voice_model`, `_improve_model` et le profil passerelle (`userId` et `profileId`) ;
+    - côté cache et fichiers : l'améliorateur, le nom de l'audio combiné, `load_cached_model`, les trois clés `voice:profile:*` ;
+    - côté pipeline : le multi-locuteur rend `{}` et retombe sur le mono-locuteur ;
+    - côté HTTP : `get_user_id` de la Voice API (10 routes), `DELETE /voice/profile`, et `/v1/tts`, `/v1/register-voice`, `/v1/voice-message` répondent 400 « Invalid user identifier ».
+  - **Défaut plus grave trouvé en chemin, corrigé** : `DELETE /voice/profile` avec `Bearer abc/../../x` effaçait par `rmtree` un dossier voisin du cache (rouge : 200 et dossier supprimé).
+- **Rétrocompatibilité** : la QA a vérifié que tous les identifiants réellement produits passent le garde :
+  - l'ObjectId de `senderId` ;
+  - les `vfp_`, `vp_` et `uuid.hex[:12]` de `profileId` ;
+  - les `s{n}` et `SPEAKER_00` de la diarisation ;
+  - les `temp_speaker_`+UUID.
+  
+  Aucun client n'appelle les routes HTTP vocales du traducteur, qui n'est pas exposé. Dans le pipeline, un refus saute le clonage sans faire tomber la traduction.
+- **Tests** : `tests/test_voice_cache_guard.py` (53) et `_qa.py` (36).
+  - **Rouge** sur la base : `46 failed, 4 passed`. Les 2 témoins HTTP ajoutés ensuite sont aussi rouges sur la base.
+  - **Vert** : `53 passed`, relancé par moi, puis `89 passed` avec le fichier QA.
+  - **Suites voisines** : la liste des échecs est identique avant et après. Un échec préexistant, `test_12::test_cache_behavior` (librosa absent). Les 41 suites importatrices donnent `10 failed, 42 errors` d'environnement, identiques avant et après.
+  - **Mutations QA** : 22 sur 24 tuées, dont les 2 qui survivaient d'abord (M10 DELETE, M18 `profileId`). Les deux survivantes sont redondantes entre elles, et leur retrait conjoint (M24) est tué.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - #18727 : `translation_stage` journalise le `senderId` brut avant le garde, ce qui permet de forger une ligne de journal. Il manque aussi une métrique des refus.
+  - #18728 : l'identité de la Voice API est faite des 8 derniers caractères de l'en-tête, et `/v1/tts` accepte le `voice_id` d'autrui. Ces surfaces sont internes et sans client.
+  - #18729 : des noms de fichiers temporaires sont faits d'identifiants ZMQ, et `translation_pipeline_service` n'a pas de repli mono-locuteur.
+  - Complément ajouté sur #18691 : `_load_cached_model` et `_save_model_to_cache` n'existent plus.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18727, petit, puis #18666 (SSRF par `audioUrl`) avec l'agent `auditeur-adversarial`.
+2. #18668 et #18692, les messages d'exception bruts, puis #18729.
+3. #18697, puis #18691 (mesurer d'abord sur le staging si le flux du profil vocal répond), puis #18728.
+4. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
+5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
