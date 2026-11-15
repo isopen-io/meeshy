@@ -1,7 +1,17 @@
-# Cycle 163 — la règle était écrite, mesurée nulle part, et fausse sur une plateforme sur trois
+# Cycle 166 — la règle était écrite, mesurée nulle part, et fausse sur une plateforme sur trois
 
 *2026-11-15. Branche `claude/exciting-planck-kfor5u`, partie de la tête de `dev`
 (`134848579`).*
+
+> **Note de numérotation.** Ce journal s'est d'abord appelé « cycle 163 », et ce
+> numéro était déjà pris : `claude/exciting-planck-ksw6yk` a publié SON cycle 163
+> le 2026-11-14, et il est dans `dev`. Une branche sœur
+> (`claude/exciting-planck-kexumt`) a constaté la double revendication et a cédé
+> la première, en prenant 165. **Celui qui n'a rien écrit cède** : ici c'est moi
+> qui cède, l'autre 163 ayant été publié avant le mien. 164 est laissé libre — la
+> sœur passée à 165 l'a sauté, et une revendication en vol ne se voit pas. C'est
+> le défaut d'espace de noms partagé de #5102 : *un identifiant qui ne s'alloue
+> pas collisionne.*
 
 **Livré** : #18602 — le cliquet du lockstep `_seq`, et les quatre doc-comments
 qui nommaient un consommateur sorti du dépôt. **Ouvert** : #18601, la lacune de
@@ -147,7 +157,7 @@ Et une fragilité de la première rédaction, trouvée en relisant : comparer
 `nombre de sites` à `nombre d'événements distincts` rougissait faussement dès
 que deux sites observent le MÊME événement. Le relevé unique porte l'événement
 par site, donc la question se pose site par site.
-# Cycle 163 — la porte était juste, et c'est l'argument qui la neutralisait
+# Cycle 166 — la porte était juste, et c'est l'argument qui la neutralisait
 
 *2026-11-15. Branche `claude/exciting-planck-hg95mt`, repartie de la tête de
 `dev` (`1348485794`).*
@@ -325,7 +335,9 @@ contrat), prise avant le défaut plutôt qu'après.
 | # | ce que c'est | état |
 |---|---|---|
 | #18601 | le web n'observe aucun curseur — seule plateforme sans détection de trou exacte | **ouverte** ; le verdict de produit reste à rendre, et l'inventaire du cliquet la cite |
-| #18605 | deux prémisses fausses sous le gap detector de `/sync` — trouvées en relisant les voisins de la mesure | **ouverte** (lead du cycle 164) |
+| #18605 | deux prémisses fausses sous le gap detector de `/sync` — trouvées en relisant les voisins de la mesure | **ouverte** (lead du cycle suivant) |
+| #18607 | la garde des puces d'ambiance tranchait sur l'arrondi du rendu | **fermée** par ce lot |
+| #18664 | la garde du studio comparait clair et sombre par égalité de CHAÎNE | **fermée** par ce lot |
 | #18499 | les 5 canaux montants sourds + les 3 noms hors contrat | inventoriés ; verdict de produit à rendre |
 | #18342 | la jumelle descendante (6 événements qu'aucun client ne déclare) | ouverte |
 | #18115 | les trois champs morts de `AttachmentUpdatedEvent` | ouverte |
@@ -371,3 +383,36 @@ autant GARDÉE — le seul instrument qui la verrait ne voit pas à travers le
 chokepoint, et aucun cliquet n'a été posé pour cette raison. Y revenir
 demanderait de gouverner `emitWithSeq` et `emitServerEvent` eux-mêmes, ce qui
 est un lot distinct.
+
+## Deux gardes qui mesuraient l'arrondi du moteur de rendu (#18607, #18664)
+
+Le lot a traversé **deux** rouges de `dev` dans la même tranche de CI, et c'est
+le même défaut deux fois :
+
+| garde | comparaison fautive | bruit mesuré |
+|---|---|---|
+| `check-calls-effects.mjs` | `chip.height >= 44` sur `min-h-11` = 2,75 rem = **44 px exactement** | 44.000030517578125 / 43.999969482421875 |
+| `check-story-studio.mjs` | `JSON.stringify(clair) === JSON.stringify(sombre)` sur des géométries | haut de `320.layoutMenu` : **52.58, 52.38, 52.23** selon la passe |
+
+**Les deux fichiers portaient DÉJÀ la tolérance de sous-pixel** — trois fois
+dans le premier, douze fois dans le second, dont trois lignes au-dessus du site
+fautif. Il ne manquait qu'au site qui rougissait.
+
+> **Un fichier qui applique une convention à trois sites sur onze ne documente
+> pas une règle : il documente que trois personnes l'ont rencontrée.** Chercher
+> l'idiome DANS le fichier avant de l'inventer est ce qui a rendu les deux
+> correctifs d'une ligne, sans décision à prendre.
+
+Et le diagnostic est le même dans les deux cas, posé en leçon le matin même :
+**deux accusations DIFFÉRENTES pour un arbre IDENTIQUE accusent le seuil, pas le
+diff.** La première garde accusait tantôt le clair tantôt le sombre ; la seconde
+a accusé `320.layoutMenu` en CI, `390.layoutMenu` en local, puis les deux — sur
+un code inchangé. Mesurer en local rend le NOMBRE là où un re-run ne rend qu'un
+bit, et aucune des deux n'a coûté de re-run de CI pour être comprise.
+
+Ce que le correctif NE relâche pas : l'invariant de produit. « Chaque puce fait
+44 » et « clair et sombre rendent la même géométrie » restent gardés — le
+comparateur du studio exige toujours les mêmes clés, les mêmes longueurs, les
+mêmes valeurs non numériques, et chaque nombre à moins d'un demi-pixel. Prouvé :
+il refuse un décalage d'1 px, une ligne de menu en moins, une clé manquante et
+une tuile de 45 px.

@@ -102,7 +102,7 @@ export interface NotificationEventData {
    * 2. pendant que **le web n'en avait aucun** — il nommait
    *    `notification-socketio.singleton.ts`, un fichier de l'application web
    *    LEGACY sortie du dépôt au #7668, et `apps/web` n'observe aucun curseur
-   *    (mesuré au cycle 163 ; suivi produit : #18601). Le chemin iOS cité était
+   *    (mesuré au cycle 166 ; suivi produit : #18601). Le chemin iOS cité était
    *    périmé lui aussi : l'observation vit dans
    *    `MeeshySDK/Sockets/MessageSocketRoutes+Notifications.swift`.
    *
