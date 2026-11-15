@@ -315,6 +315,14 @@ export function MeeshyChipRow({
   }, [selectionKey, isScrolling, revealsSelection]);
   useEdgeFade(row, track, isScrolling, chips.length);
 
+  const stop = chips.find((chip) => selection.includes(chip.id) && chip.disabled !== true) ?? chips.find((chip) => chip.disabled !== true);
+  const stopId = stop?.id;
+  useLayoutEffect(() => {
+    const element = row.current;
+    if (element === null) return;
+    for (const cell of cellsOf(element)) cell.tabIndex = cell.dataset['kitChip'] === stopId ? 0 : -1;
+  }, [stopId]);
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     const cells = cellsOf(event.currentTarget).filter((cell) => !cell.disabled);
     const index = cells.findIndex((cell) => cell === document.activeElement);
@@ -337,7 +345,6 @@ export function MeeshyChipRow({
 
   if (chips.length === 0) return null;
 
-  const stop = chips.find((chip) => selection.includes(chip.id) && chip.disabled !== true) ?? chips.find((chip) => chip.disabled !== true);
   const classes = ['kit-chip-row', ...(className === undefined ? [] : [className])].join(' ');
   return (
     <div
@@ -358,7 +365,7 @@ export function MeeshyChipRow({
             key={chip.id}
             chip={chip}
             isSelected={mode !== 'actions' && (chip.kind ?? 'choice') === 'choice' && selection.includes(chip.id)}
-            isTabStop={chip.id === stop?.id}
+            isTabStop={chip.id === stopId}
             isForcedPressed={previewPressed === chip.id}
             isEnabled={!disabled}
             mode={mode}

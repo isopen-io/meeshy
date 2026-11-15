@@ -36,14 +36,15 @@ export type MeeshyChipStyleInput = {
 };
 
 const STYLES = new Map<string, CSSProperties>();
+const ROW_STYLES = new Map<string, CSSProperties>();
 const STYLE_MEMORY = 96;
 
-const remember = (key: string, style: CSSProperties): CSSProperties => {
-  if (STYLES.size >= STYLE_MEMORY) {
-    const oldest = STYLES.keys().next();
-    if (oldest.done !== true) STYLES.delete(oldest.value);
+const remember = (memory: Map<string, CSSProperties>, key: string, style: CSSProperties): CSSProperties => {
+  if (memory.size >= STYLE_MEMORY) {
+    const oldest = memory.keys().next();
+    if (oldest.done !== true) memory.delete(oldest.value);
   }
-  STYLES.set(key, style);
+  memory.set(key, style);
   return style;
 };
 
@@ -65,10 +66,8 @@ const styleOf = ({ surface, isSelected, isEnabled, tint }: MeeshyChipStyleInput)
 
 export const meeshyChipStyle = (input: MeeshyChipStyleInput): CSSProperties => {
   const key = [input.surface, input.isSelected, input.isEnabled, input.tint ?? ''].join('|');
-  return STYLES.get(key) ?? remember(key, styleOf(input));
+  return STYLES.get(key) ?? remember(STYLES, key, styleOf(input));
 };
-
-const ROW_STYLES = new Map<string, CSSProperties>();
 
 export const meeshyChipRowStyle = ({ size, inset }: { readonly size: MeeshyChipRowSize; readonly inset: number }): CSSProperties => {
   const key = `${size}|${inset}`;
@@ -91,6 +90,5 @@ export const meeshyChipRowStyle = ({ size, inset }: { readonly size: MeeshyChipR
     '--kit-chip-edge-ms': `${edgeFadeMs}ms`,
     '--kit-chip-tone-ms': `${toneFadeMs}ms`,
   } as CSSProperties;
-  ROW_STYLES.set(key, style);
-  return style;
+  return remember(ROW_STYLES, key, style);
 };

@@ -259,6 +259,14 @@ describe('le clavier', () => {
     expect(cells(view).map((node) => node.tabIndex)).toEqual([0, -1, -1]);
   });
 
+  test('l’arrêt suit le focus, puis la courante quand la sélection change : jamais deux arrêts', () => {
+    const view = mount(<MeeshyChipRow {...harness({ mode: 'multiple', selection: ['a'] }).props} />);
+    act(() => cell(view, 'b').focus());
+    expect(cells(view).map((node) => node.tabIndex)).toEqual([-1, 0, -1]);
+    rerender(<MeeshyChipRow {...harness({ mode: 'multiple', selection: ['c'] }).props} />);
+    expect(cells(view).map((node) => node.tabIndex)).toEqual([-1, -1, 0]);
+  });
+
   test('une puce désactivée n’est jamais l’arrêt', () => {
     const view = mount(<MeeshyChipRow {...harness({ selection: [], chips: [{ id: 'a', title: 'A', disabled: true }, { id: 'b', title: 'B' }] }).props} />);
     expect(cells(view).map((node) => node.tabIndex)).toEqual([-1, 0]);
@@ -480,6 +488,16 @@ describe('la recette posée sur la puce', () => {
     expect(style['--kit-chip-inset']).toBe('1rem');
     expect(style['--kit-chip-fade']).toBe('2.75rem');
     expect((meeshyChipRowStyle({ size: 'compact', inset: 0 }) as Readonly<Record<string, string>>)['--kit-chip-h']).toBe('1.75rem');
+  });
+
+  test('les styles se réutilisent à valeurs égales, et la mémoire reste bornée', () => {
+    const first = meeshyChipRowStyle({ size: 'regular', inset: 1000 });
+    expect(meeshyChipRowStyle({ size: 'regular', inset: 1000 })).toBe(first);
+    Array.from({ length: 200 }, (_, index) => meeshyChipRowStyle({ size: 'compact', inset: 2000 + index }));
+    expect(meeshyChipRowStyle({ size: 'regular', inset: 1000 })).not.toBe(first);
+    const tinted = meeshyChipStyle({ surface: 'onMedia', isSelected: true, isEnabled: true, tint: 'var(--t-0)' });
+    Array.from({ length: 200 }, (_, index) => meeshyChipStyle({ surface: 'onMedia', isSelected: true, isEnabled: true, tint: `var(--t-${index + 1})` }));
+    expect(meeshyChipStyle({ surface: 'onMedia', isSelected: true, isEnabled: true, tint: 'var(--t-0)' })).not.toBe(tinted);
   });
 
   test('repos ≠ pressé, et la courante se pose en blanc à encre sombre', () => {
