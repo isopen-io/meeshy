@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
@@ -95,6 +95,9 @@ import { ProfilePostsPanel } from '@/routes/user-profile-posts';
 
 
 const actionDeps = appProfileActionDeps;
+
+/* MON PARTAGE DE BATTERIE (#14147) : son propre chunk — la coupure pour tous, et ce que ce navigateur ne fait pas. */
+const MeBatterySection = lazy(() => import('@/components/battery-panel').then((m) => ({ default: m.MeBatterySection })));
 
 const FIELD_LABELS = {
   displayName: 'profile.display_name',
@@ -381,6 +384,9 @@ export default function ProfileScreen() {
                     onClear={(rank) => void editPrism({ [rank]: '' })}
                   />
                 )}
+                <Suspense fallback={null}>
+                  <MeBatterySection language={language} />
+                </Suspense>
                 {profile === undefined ? null : <MemberSinceSection language={language} createdAt={profile.createdAt} />}
               </>
             )}
