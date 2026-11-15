@@ -98,6 +98,8 @@ const actionDeps = appProfileActionDeps;
 
 /* MON PARTAGE DE BATTERIE (#14147) : son propre chunk — la coupure pour tous, et ce que ce navigateur ne fait pas. */
 const MeBatterySection = lazy(() => import('@/components/battery-panel').then((m) => ({ default: m.MeBatterySection })));
+/* PRÉVENIR MES PROCHES SI MON TÉLÉPHONE EST INJOIGNABLE (#18737) : son propre chunk, le réglage global. */
+const MePhoneReachabilitySection = lazy(() => import('@/components/phone-reachability-panel').then((m) => ({ default: m.MePhoneReachabilitySection })));
 
 const FIELD_LABELS = {
   displayName: 'profile.display_name',
@@ -386,6 +388,7 @@ export default function ProfileScreen() {
                 )}
                 <Suspense fallback={null}>
                   <MeBatterySection language={language} />
+                  <MePhoneReachabilitySection language={language} />
                 </Suspense>
                 {profile === undefined ? null : <MemberSinceSection language={language} createdAt={profile.createdAt} />}
               </>

@@ -24,14 +24,21 @@ export const ANNOUNCEMENT_MAX_WAIT_MS = 30_000;
 /** `alert` : rouge ; `warn` : avertissement ; `good` : retour à la normale. */
 export type PillAnnouncementTone = 'alert' | 'warn' | 'good';
 
+export type PillAnnouncementIcon =
+  | { readonly kind: 'battery'; readonly level: number | null; readonly charging: boolean }
+  | { readonly kind: 'phone'; readonly reachable: boolean };
+
 export type PillAnnouncement = {
   readonly id: string;
   /** La SOURCE : une annonce de même clé remplace celle qui attend. */
   readonly key: string;
   readonly text: string;
   readonly tone: PillAnnouncementTone;
-  /** Le dessin de tête : une batterie, son niveau (nul : contour seul) et sa charge. */
-  readonly icon: { readonly kind: 'battery'; readonly level: number | null; readonly charging: boolean };
+  /**
+   * Le dessin de tête : une batterie, son niveau (nul : contour seul) et sa charge ; ou un téléphone, barré
+   * quand il est injoignable (#18737).
+   */
+  readonly icon: PillAnnouncementIcon;
   /** L'horloge locale de l'arrivée. */
   readonly at: number;
 };

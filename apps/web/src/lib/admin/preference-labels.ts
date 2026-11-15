@@ -184,6 +184,7 @@ const NOTIFICATION: Kinds<NotificationPreference> = {
   friendContentEnabled: 'flag',
   contactActivityEnabled: 'flag',
   deviceBatteryEnabled: 'flag',
+  deviceUnreachableEnabled: 'flag',
   gameEnabled: 'flag',
   gamePhotoEnabled: 'flag',
   bringEnabled: 'flag',

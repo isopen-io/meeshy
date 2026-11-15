@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le téléphone injoignable (#18737) : android-only tant que les clés phone.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="phone_reachability_someone">eine vertraute Person</string>
+    <string name="phone_reachability_pill_unreachable">Das Telefon von %1$s ist seit %2$s nicht erreichbar</string>
+    <string name="phone_reachability_pill_reachable">Das Telefon von %1$s antwortet wieder</string>
+    <string name="phone_reachability_card_since">Telefon seit %1$s nicht erreichbar</string>
+    <string name="phone_reachability_cause_battery">Akku leer, vermutlich</string>
+    <string name="phone_reachability_cause_network">Kein Netz oder Flugmodus, vermutlich</string>
+    <string name="phone_reachability_a11y">Das Telefon von %1$s ist nicht erreichbar</string>
+    <string name="phone_reachability_share_global_title">Meine Vertrauten benachrichtigen, wenn mein Telefon nicht erreichbar ist</string>
+    <string name="phone_reachability_share_global_scope">Deine Vertrauten und dein Blut wissen, seit wann dein Telefon nicht antwortet, nie, wo du bist.</string>
+    <string name="phone_reachability_share_person">%1$s benachrichtigen, wenn mein Telefon nicht erreichbar ist</string>
+    <string name="phone_reachability_share_person_scope">%1$s weiß, seit wann dein Telefon nicht antwortet, und die vermutliche Ursache.</string>
+    <string name="phone_reachability_consent_title">%1$s benachrichtigen, wenn dein Telefon nicht erreichbar ist?</string>
+    <string name="phone_reachability_consent_body">Wenn dein Telefon nicht mehr antwortet, weiß %1$s, seit wann. Auf der Seite der Person änderbar.</string>
+    <string name="phone_reachability_consent_checkbox">%1$s benachrichtigen, wenn mein Telefon nicht erreichbar ist</string>
+    <string name="phone_reachability_consent_confirm">Bestätigen</string>
+    <string name="phone_reachability_consent_later">Nicht jetzt</string>
+</resources>
