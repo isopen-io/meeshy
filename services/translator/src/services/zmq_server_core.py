@@ -247,10 +247,8 @@ class ZMQTranslationServer:
                         logger.error(f"Erreur ZMQ: {e}")
                     break
                 except Exception as e:
-                    logger.error(f"Erreur inattendue: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    
+                    logger.error(f"[TRANSLATOR] Requête non traitée par la boucle de réception: {type(e).__name__}")
+
         except KeyboardInterrupt:
             logger.info("Arrêt demandé par l'utilisateur")
         finally:
@@ -289,7 +287,7 @@ class ZMQTranslationServer:
             try:
                 exc = t.exception()
                 if exc:
-                    logger.error(f"❌ Erreur non catchée dans tâche {task_type}: {exc}")
+                    logger.error(f"❌ [TRANSLATOR] Erreur non catchée dans tâche {task_type}: {type(exc).__name__}")
             except asyncio.CancelledError:
                 pass
 
