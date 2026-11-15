@@ -19,6 +19,7 @@ import { requestBatteryPull, type BatteryPullDeps } from '../../services/battery
 import { markBatteryAlive, reportBattery, sweepBatteryOff, type BatteryRelayDeps } from '../../services/battery/batteryRelay';
 import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { guardedInterval } from '../../utils/guarded-timer';
 import { SOCKET_SESSION_ID } from '../disconnectSession';
 import type { ServerEmitIO } from '../serverEmit';
 
@@ -95,16 +96,19 @@ export async function runBatterySweep(relay: BatteryRelayDeps): Promise<number |
   return sweepBatteryOff(relay);
 }
 
-let sweep: ReturnType<typeof setInterval> | null = null;
+let sweep: NodeJS.Timeout | null = null;
 let processRelay: BatteryRelayDeps | null = null;
 
 /** Idempotent : la première socket arme la minuterie du processus, les suivantes ne font rien. */
 export function ensureBatterySweep(relay: BatteryRelayDeps): void {
   processRelay ??= relay;
   if (sweep !== null) return;
-  sweep = setInterval(() => {
-    runBatterySweep(relay).catch((error: unknown) => logger.error('[BATTERY_SWEEP] Error', { error: failureMessage(error) }));
-  }, BATTERY_SWEEP_INTERVAL_MS);
+  sweep = guardedInterval({
+    name: 'battery-sweep',
+    run: () => runBatterySweep(relay),
+    everyMs: BATTERY_SWEEP_INTERVAL_MS,
+    logger: { error: (message) => logger.error('[BATTERY_SWEEP] Error', { error: message }) },
+  });
   sweep.unref?.();
 }
 
