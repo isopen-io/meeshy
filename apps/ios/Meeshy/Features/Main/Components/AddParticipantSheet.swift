@@ -133,8 +133,10 @@ struct AddParticipantSheet: View {
                         .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
+                .transition(.opacity)
             }
         }
+        .meeshyAnimation(MeeshyAnimation.springFast, value: searchQuery.isEmpty)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
         .background(
@@ -162,16 +164,20 @@ struct AddParticipantSheet: View {
                 // announces the loading state once instead of stopping on 3 empty rows.
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(String(localized: "participants.add.searching", defaultValue: "Recherche en cours", bundle: .main))
+                .transition(.opacity)
             } else if searchQuery.count < 2 {
                 searchPrompt
+                    .transition(.opacity)
             } else if searchResults.isEmpty {
                 emptyResults
+                    .transition(.opacity)
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(searchResults) { user in
                         userRow(user)
                     }
                 }
+                .transition(.opacity)
             }
 
             if let error = errorMessage {
@@ -180,8 +186,13 @@ struct AddParticipantSheet: View {
                     .foregroundStyle(MeeshyColors.error)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.sm)
+                    .transition(.opacity)
             }
         }
+        .meeshyAnimation(MeeshyAnimation.springFast, value: isSearching)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: searchQuery.count < 2)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: searchResults.isEmpty)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: errorMessage)
     }
 
     // MARK: - User Row
@@ -228,10 +239,12 @@ struct AddParticipantSheet: View {
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle)))
+                    .transition(.opacity)
             } else if isAdding {
                 ProgressView()
                     .scaleEffect(0.8)
                     .tint(accent)
+                    .transition(.opacity)
             } else {
                 Button {
                     Task { await addParticipant(userId: user.id) }
@@ -244,8 +257,11 @@ struct AddParticipantSheet: View {
                         .background(Capsule().fill(accent))
                 }
                 .accessibilityLabel(String(format: String(localized: "participants.add.add-a11y", defaultValue: "Ajouter %@", bundle: .main), user.name))
+                .transition(.opacity)
             }
         }
+        .meeshyAnimation(MeeshyAnimation.springFast, value: isMember)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: isAdding)
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.smPlus)
         .opacity(isMember ? 0.5 : 1)
