@@ -39,6 +39,7 @@ final class SharedLocationSocketEventsTests: XCTestCase {
     func test_theWireNamesAreTheServerOnes() {
         XCTAssertEqual(SocketEvent.locationShareChanged.rawValue, "location:share-changed")
         XCTAssertEqual(SocketEvent.locationShareEnded.rawValue, "location:share-ended")
+        XCTAssertEqual(SocketEvent.locationShareOwnChanged.rawValue, "location:share-own-changed")
     }
 
     func test_aPositionBlurredToTheNeighborhood_isDeliveredAsServed() async {
@@ -59,6 +60,14 @@ final class SharedLocationSocketEventsTests: XCTestCase {
         let id = "u-\(UUID().uuidString)"
         await expectValue(of: SharedLocationEvents.ended, where: { $0.userId == id }) {
             registrar.deliver("location:share-ended", ["userId": id])
+        }
+    }
+
+    /// Plusieurs appareils d'un compte (#18389, #18578) : l'annonce, sans charge, réveille le recalage.
+    func test_ownChangedIsDelivered_withoutPayload() async {
+        let registrar = installed()
+        await expectValue(of: SharedLocationEvents.ownChanged, where: { true }) {
+            registrar.deliver("location:share-own-changed", [:])
         }
     }
 }

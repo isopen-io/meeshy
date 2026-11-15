@@ -155,8 +155,20 @@ export type OfflineParticipantQueueParams = QueuedEventVariant & {
    *
    * Reçoit la clé de file (le `User.id`, ou le `Participant.id` d'un anonyme) ;
    * rend le payload à déposer pour LUI. Absent, tout le monde reçoit `payload`.
+   *
+   * **Le SECOND paramètre est l'id de la ligne `Participant`** (#18619), et il
+   * n'est pas redondant avec le premier : la clé de file est `userId ?? id`,
+   * donc pour un INSCRIT elle ne dit pas quelle ligne `Participant` signe. Or
+   * c'est par cette ligne que les adresses d'une pièce liée au lecteur se
+   * signent (`ReaderSignedPlan.signFor`). Les deux cohabitent parce qu'elles
+   * répondent à deux questions : « à qui j'écris » et « au nom de quelle
+   * participation ».
+   *
+   * Ajouté en SECONDE position pour que les appelants d'avant — qui ne
+   * masquaient que par clé — continuent de compiler et de se comporter à
+   * l'identique.
    */
-  resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
+  resolvePayloadForReader?: (queueKey: string, participantId: string) => Record<string, unknown>;
   /**
    * Les clés de file qui ne reçoivent RIEN — un lecteur dont le plancher
    * d'historique est postérieur au message (`translationReaders`, #9709).
@@ -426,7 +438,7 @@ export async function enqueueForOfflineParticipants(
         const readable = readableLanguagesFor(p);
         if (readable.length > 0 && !readable.includes(restrictToLanguage)) continue;
       }
-      const body = resolvePayloadForReader ? resolvePayloadForReader(queueKey) : payload;
+      const body = resolvePayloadForReader ? resolvePayloadForReader(queueKey, p.id) : payload;
       const entry: QueuedMessagePayload = {
         messageId,
         conversationId,

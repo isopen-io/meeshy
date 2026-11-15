@@ -78,6 +78,14 @@ final class MockRelationsService: RelationsProviding, @unchecked Sendable {
         return try sharedLocationsResult.get()
     }
 
+    var ownSharedLocationResult: Result<SharedLocationOwnSnapshot, Error> = .success(SharedLocationOwnSnapshot(recipients: []))
+    var ownSharedLocationCallCount = 0
+
+    func ownSharedLocation() async throws -> SharedLocationOwnSnapshot {
+        ownSharedLocationCallCount += 1
+        return try ownSharedLocationResult.get()
+    }
+
     func ritual(
         userId: String,
         phase: RelationRitualPhase,

@@ -1,6 +1,7 @@
 import '@/styles/story-fonts.css';
 
 import { layoutMessageCard, type CardLayout, type CardOp, type CardRegion, type MessageCardInput } from './message-card-layout';
+import { opsBetween } from './message-card-scroll';
 import { measuredInput } from './message-card-sticker';
 import { MEESHY_PNG_METADATA, withPngMetadata } from './png-metadata';
 import { canvasFont, templateFonts, templateOf, type CardPalette, type MessageCardTemplate } from './message-card-templates';
@@ -75,6 +76,12 @@ export type PaintOptions = {
   readonly sources?: readonly (CardSource | null)[];
   readonly progress?: number | null;
   readonly strokeFloor?: number;
+  /**
+   * Une image d'une carte qui DÉFILE (#18671) : le décalage du contenu, en
+   * pixels de carte. Le fond, le voile, le cadre et le filigrane remplissent
+   * la FENÊTRE (`viewportHeight`) et restent fixes ; seul le contenu glisse.
+   */
+  readonly scrollOffset?: number;
 };
 
 type ResolvedOptions = { readonly sources: readonly (CardSource | null)[]; readonly progress: number | null; readonly strokeFloor: number };
@@ -290,10 +297,16 @@ function paintBackdrop(ctx: Paintable, layout: CardLayout, sources: readonly (Ca
 }
 
 export function paintMessageCard(ctx: Paintable, layout: CardLayout, template: MessageCardTemplate, options: PaintOptions = {}): void {
+  const viewport = layout.viewportHeight ?? null;
+  if (options.scrollOffset !== undefined && viewport !== null) {
+    paintScrollFrame(ctx, { ...layout, height: viewport }, layout, template, options);
+    return;
+  }
   paintBackground(ctx, layout, template.palette);
   paintBackdrop(ctx, layout, options.sources ?? []);
-  paintWatermark(ctx, layout, template.palette);
   const resolved: ResolvedOptions = { sources: options.sources ?? [], progress: options.progress ?? null, strokeFloor: options.strokeFloor ?? 0 };
+  for (const op of layout.fixed ?? []) paintOp(ctx, op, resolved);
+  paintWatermark(ctx, layout, template.palette);
   if (layout.tilt === 0) {
     for (const op of layout.ops) paintOp(ctx, op, resolved);
     return;
@@ -304,6 +317,46 @@ export function paintMessageCard(ctx: Paintable, layout: CardLayout, template: M
   ctx.translate(-layout.width / 2, -layout.height / 2);
   for (const op of layout.ops) paintOp(ctx, op, resolved);
   ctx.restore();
+}
+
+/** Une image de la vidéo qui défile : `frame` est la fenêtre, `layout` la carte entière ; seul ce que la fenêtre montre se peint. */
+function paintScrollFrame(ctx: Paintable, frame: CardLayout, layout: CardLayout, template: MessageCardTemplate, options: PaintOptions): void {
+  const offset = Math.max(0, Math.min(layout.height - frame.height, options.scrollOffset ?? 0));
+  const resolved: ResolvedOptions = { sources: options.sources ?? [], progress: options.progress ?? null, strokeFloor: options.strokeFloor ?? 0 };
+  paintBackground(ctx, frame, template.palette);
+  paintBackdrop(ctx, frame, resolved.sources);
+  for (const op of layout.fixed ?? []) paintOp(ctx, op, resolved);
+  paintWatermark(ctx, frame, template.palette);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(0, 0, frame.width, frame.height, 0);
+  ctx.clip();
+  ctx.translate(0, -offset);
+  if (layout.tilt !== 0) {
+    const middle = offset + frame.height / 2;
+    ctx.translate(layout.width / 2, middle);
+    ctx.rotate(layout.tilt);
+    ctx.translate(-layout.width / 2, -middle);
+  }
+  for (const op of opsBetween(layout, offset - frame.height / 4, offset + frame.height * 1.25)) paintOp(ctx, op, resolved);
+  ctx.restore();
+}
+
+/** Les hauteurs d'une carte qui défile, mesurées avec le vrai contexte — `null` quand elle tient dans son format (ou que le canvas est refusé). */
+export async function measureCardScroll(
+  input: MessageCardInput,
+  doc: Document = document,
+  sources: readonly (CardSource | null)[] = [],
+): Promise<{ readonly contentHeight: number; readonly viewportHeight: number } | null> {
+  await loadCardFonts(templateOf(input.template), doc.fonts);
+  const ctx = doc.createElement('canvas').getContext('2d');
+  if (ctx === null) return null;
+  const layout = layoutMessageCard(measuredInput({ ...input, unbounded: true }, sources), (text, font) => {
+    ctx.font = font;
+    return ctx.measureText(text).width;
+  });
+  const viewport = layout.viewportHeight ?? null;
+  return viewport === null ? null : { contentHeight: layout.height, viewportHeight: viewport };
 }
 
 export type RenderedMessageCard = {
