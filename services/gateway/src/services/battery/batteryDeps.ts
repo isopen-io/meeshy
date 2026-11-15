@@ -170,6 +170,14 @@ export function batteryPullDepsOf(params: { readonly prisma: PrismaClient; reado
   };
 }
 
+/**
+ * Les relais de l'ÉTAT DU TÉLÉPHONE d'un compte — batterie (#14147) et injoignabilité (#18737) —
+ * pour les gestes qui les rejouent ensemble (fin d'un rôle d'équipe, `revokeTeamSharesOf`).
+ */
+export function deviceStateRelaysOf(params: { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined }) {
+  return { battery: batteryRelayDepsOf(params), phoneReachability: phoneReachabilityRelayDepsOf(params) };
+}
+
 type RefreshParams = { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined; readonly report: (error: unknown) => void };
 
 /**

@@ -70,6 +70,11 @@ jest.mock('../../../../routes/me/device-battery', () => ({
   default: jest.fn(async () => {}),
 }));
 
+jest.mock('../../../../routes/me/device-reachability', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+
 jest.mock('../../../../routes/me/profile-decor', () => ({
   __esModule: true,
   default: jest.fn(async () => {}),
