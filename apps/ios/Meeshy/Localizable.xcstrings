@@ -7811,43 +7811,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل مرحلة تصل كإشعار؛ والتطبيق مفتوح، تعلنها الكبسولة."
+            "value": "يصل المستوى الحرج والانطفاء وإعادة التشغيل واكتمال الشحن كإشعار؛ وتعلن الكبسولة المراحل المنخفضة أثناء المحادثة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jede Stufe kommt als Mitteilung; bei offener App zeigt sie die Pille."
+            "value": "Kritischer Bereich, Ausschalten, Wiedereinschalten und Aufladen kommen als Mitteilung; niedrige Stufen zeigt die Pille während der Unterhaltung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Each step arrives as a notification; with the app open, the pill announces it."
+            "value": "Critical level, shutdown, power-on and recharge arrive as notifications; lower steps show in the pill during the conversation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada nivel llega como notificación; con la app abierta, la píldora lo anuncia."
+            "value": "Lo crítico, el apagado, el reencendido y la recarga llegan como notificación; los niveles bajos se anuncian en la píldora durante la conversación."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque palier arrive en notification ; app ouverte, la pastille l'annonce."
+            "value": "Le critique, l'extinction, le rallumage et la recharge arrivent en notification ; les paliers bas s'annoncent dans la pastille pendant la conversation."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni soglia arriva come notifica; con l'app aperta, la pillola la annuncia."
+            "value": "Il critico, lo spegnimento, la riaccensione e la ricarica arrivano come notifica; le soglie basse le annuncia la pillola durante la conversazione."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada nível chega como notificação; com o app aberto, a pílula avisa."
+            "value": "O crítico, o desligamento, o religamento e a recarga chegam como notificação; os níveis baixos aparecem na pílula durante a conversa."
           }
         }
       }
@@ -7905,43 +7905,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يُشعر إلا المستوى الحرج والانطفاء المحتمل؛ والباقي يظهر في الكبسولة."
+            "value": "لا يُشعر إلا دخول المنطقة الحرجة؛ والباقي يظهر في الكبسولة عندما يكون التطبيق مفتوحًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur der kritische Bereich und ein vermutliches Ausschalten melden sich; der Rest geht in die Pille."
+            "value": "Nur der Eintritt in den kritischen Bereich meldet sich; der Rest geht bei offener App in die Pille."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only the critical zone and a likely shutdown notify; the rest goes to the pill."
+            "value": "Only entering the critical zone notifies; the rest goes to the pill while the app is open."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo la zona crítica y el apagado probable notifican; lo demás va a la píldora."
+            "value": "Solo la entrada en zona crítica notifica; lo demás va a la píldora con la app abierta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seuls la zone critique et l'extinction probable notifient ; le reste passe dans la pastille."
+            "value": "Seule l'entrée en zone critique notifie ; le reste passe dans la pastille, app ouverte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo la zona critica e lo spegnimento probabile notificano; il resto va nella pillola."
+            "value": "Solo l'ingresso nella zona critica notifica; il resto va nella pillola con l'app aperta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Só a zona crítica e o provável desligamento notificam; o resto vai para a pílula."
+            "value": "Só a entrada na zona crítica notifica; o resto vai para a pílula com o app aberto."
           }
         }
       }

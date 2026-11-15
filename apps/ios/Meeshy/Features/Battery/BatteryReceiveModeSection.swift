@@ -3,8 +3,9 @@ import MeeshySDK
 import MeeshyUI
 
 /// Ce que JE reçois de la batterie d'une personne (#14147) : tout en push, le critique seulement, la SyncPill seule,
-/// ou rien. Réglage par personne, servi par la passerelle ; sans lien d'au moins Proche, elle refuse et rien ne
-/// s'affiche.
+/// ou rien. Réglage par personne, servi par la passerelle. Il n'existe qu'à partir de Proche (`device.battery`), par
+/// le lien ou par le verdict servi (l'équipe, #16623) : la route des réglages répond à n'importe qui, c'est donc le
+/// niveau lu ici qui décide si la section s'affiche — sous Proche, rien, comme le web et Android.
 @MainActor
 final class BatteryReceiveModeViewModel: ObservableObject {
     let userId: String
@@ -12,16 +13,32 @@ final class BatteryReceiveModeViewModel: ObservableObject {
     @Published var notice: String?
 
     private let service: BatteryServiceProviding
+    private let relations: RelationsProviding
 
     nonisolated deinit {}
 
-    init(userId: String, service: BatteryServiceProviding = BatteryService.shared) {
+    init(
+        userId: String,
+        service: BatteryServiceProviding = BatteryService.shared,
+        relations: RelationsProviding = RelationsService.shared
+    ) {
         self.userId = userId
         self.service = service
+        self.relations = relations
     }
 
     func load() async {
+        guard await offersBattery() else {
+            settings = nil
+            return
+        }
         settings = try? await service.personSettings(userId: userId)
+    }
+
+    private func offersBattery() async -> Bool {
+        guard let link = try? await relations.link(userId: userId),
+              link.userId.lowercased() == userId.lowercased() else { return false }
+        return max(link.effectiveLevel, link.toolLevel) >= RelationFeature.deviceBattery.minimumLevel
     }
 
     /// Posé tout de suite, rendu à l'échec.
@@ -100,8 +117,8 @@ enum BatteryReceiveModeWording {
 
     static func explain(_ mode: BatteryReceiveMode) -> String {
         switch mode {
-        case .all: return String(localized: "battery.receive.allExplain", defaultValue: "Chaque palier arrive en notification ; app ouverte, la pastille l'annonce.", bundle: .main)
-        case .critical: return String(localized: "battery.receive.criticalExplain", defaultValue: "Seuls la zone critique et l'extinction probable notifient ; le reste passe dans la pastille.", bundle: .main)
+        case .all: return String(localized: "battery.receive.allExplain", defaultValue: "Le critique, l'extinction, le rallumage et la recharge arrivent en notification ; les paliers bas s'annoncent dans la pastille pendant la conversation.", bundle: .main)
+        case .critical: return String(localized: "battery.receive.criticalExplain", defaultValue: "Seule l'entrée en zone critique notifie ; le reste passe dans la pastille, app ouverte.", bundle: .main)
         case .pill: return String(localized: "battery.receive.pillExplain", defaultValue: "Aucune notification : la pastille l'annonce quand l'app est ouverte.", bundle: .main)
         case .none: return String(localized: "battery.receive.noneExplain", defaultValue: "Ni annonce, ni icône d'état.", bundle: .main)
         }
