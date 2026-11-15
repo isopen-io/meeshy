@@ -218,6 +218,22 @@ enum MessageCardExportText {
         }
     }
 
+    static func frameLabel(_ frame: MessageCardDecor.Frame) -> String {
+        switch frame {
+        case .none: return text("export.card.decor.frame.none", "Sans cadre")
+        case .panel: return text("export.card.decor.frame.panel", "Panneau")
+        case .border: return text("export.card.decor.frame.border", "Cadre")
+        }
+    }
+
+    static func ornamentLabel(_ ornament: MessageCardDecor.Ornament) -> String {
+        switch ornament {
+        case .none: return text("export.card.decor.ornament.none", "Sans ornement")
+        case .quoteMark: return text("export.card.decor.ornament.quoteMark", "Guillemet")
+        case .accentRule: return text("export.card.decor.ornament.accentRule", "Trait")
+        }
+    }
+
     static func outputLabel(_ output: MessageCardOutput) -> String {
         switch output {
         case .image: return text("export.card.output.image", "Image")

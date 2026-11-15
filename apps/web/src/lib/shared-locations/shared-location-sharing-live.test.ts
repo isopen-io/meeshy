@@ -29,7 +29,7 @@ function fakeSocket({ connected = true, reply }: { readonly connected?: boolean;
       return reply(event, payload);
     },
   };
-  return { socket, emitted, fire: (event: string) => (handlers.get(event) ?? []).forEach((h) => h(undefined)) };
+  return { socket, emitted, fire: (event: string, payload: unknown = undefined) => (handlers.get(event) ?? []).forEach((h) => h(payload)) };
 }
 
 describe('le fil', () => {
@@ -121,6 +121,7 @@ describe('un centre par compte connecté', () => {
       storage,
       fixes: { isGranted: async () => false, currentFix: async () => ({ kind: 'denied' }), follow: () => () => undefined },
       schedule: () => () => undefined,
+      served: async () => null,
     });
     holder();
     const { socket, emitted } = fakeSocket({ reply: async () => ({ success: true }) });
@@ -128,5 +129,67 @@ describe('un centre par compte connecté', () => {
     for (let i = 0; i < 10; i += 1) await Promise.resolve();
     expect(emitted.map((e) => e.event)).toEqual(['location:share-stop']);
     expect(storage.getItem(`meeshy.shared-location.roster.u_${AMI}`)).toBeNull();
+  });
+});
+
+describe('plusieurs appareils, un partage (#18389)', () => {
+  const memory = () => {
+    const map = new Map<string, string>();
+    return { getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, v), removeItem: (k: string) => void map.delete(k) };
+  };
+  const PROCHE = 'b'.repeat(24);
+  const AJOUTE_AILLEURS = 'd'.repeat(24);
+  const rosterKey = `meeshy.shared-location.roster.u_${AMI}`;
+  const later = (ms: number) => new Date(Date.now() + ms).toISOString();
+
+  const holderWith = ({ storage, served }: { readonly storage: ReturnType<typeof memory>; readonly served: () => Promise<unknown> }) => {
+    const session = createSessionStore({ storage: memory() });
+    session.getState().establish({ user: { id: AMI, username: AMI, displayName: null, avatar: null } as never, token: 't', sessionToken: 's', expiresIn: 3600 });
+    let watcher: LiveSocketWatcher | null = null;
+    const holder = createSharedLocationSharingHolder({
+      session,
+      watch: (w) => ((watcher = w), () => undefined),
+      storage,
+      fixes: { isGranted: async () => true, currentFix: async () => ({ kind: 'fix', fix: PARIS }), follow: () => () => undefined },
+      schedule: () => () => undefined,
+      served: served as never,
+    });
+    return { center: holder(), attach: (socket: SocketClient) => (watcher as LiveSocketWatcher | null)?.(socket) };
+  };
+  const settle = async () => {
+    for (let i = 0; i < 30; i += 1) await Promise.resolve();
+  };
+
+  test('à la connexion, l’onglet se recale AVANT de rejouer son retrait : l’ajout fait ailleurs n’est pas effacé', async () => {
+    const storage = memory();
+    storage.setItem(`${rosterKey}.withdrawals`, JSON.stringify({ [PROCHE]: Date.now() + 8 * 3_600_000 }));
+    const served = async () => ({
+      recipients: [{ userId: PROCHE, precision: 'city', expiresAt: later(3_600_000) }, { userId: AJOUTE_AILLEURS, precision: 'exact', expiresAt: later(3_600_000) }],
+      expiresAt: later(3_600_000),
+    });
+    const { attach } = holderWith({ storage, served });
+    const { socket, emitted } = fakeSocket({ reply: async () => ({ success: true, data: { expiresAt: later(3_600_000) } }) });
+    attach(socket);
+    await settle();
+    expect(emitted.map((e) => e.event)).toEqual(['location:share-start']);
+    expect((emitted[0]?.payload as { recipients: { userId: string }[] }).recipients.map((r) => r.userId)).toEqual([AJOUTE_AILLEURS]);
+  });
+
+  test('location:share-own-changed recale l’onglet : une personne retirée sur un autre appareil sort d’ici', async () => {
+    const storage = memory();
+    storage.setItem(rosterKey, JSON.stringify({ [PROCHE]: { precision: 'city', until: Date.now() + 3_600_000 } }));
+    let truth: unknown = { recipients: [{ userId: PROCHE, precision: 'city', expiresAt: later(3_600_000) }], expiresAt: later(3_600_000) };
+    const { center, attach } = holderWith({ storage, served: async () => truth });
+    const { socket, emitted, fire } = fakeSocket({ reply: async () => ({ success: true }) });
+    attach(socket);
+    await settle();
+    expect(center?.entry(PROCHE)).not.toBeNull();
+
+    truth = { recipients: [], expiresAt: null };
+    fire('location:share-own-changed', {});
+    await settle();
+    expect(center?.entry(PROCHE)).toBeNull();
+    expect(storage.getItem(rosterKey)).toBeNull();
+    expect(emitted).toEqual([]);
   });
 });

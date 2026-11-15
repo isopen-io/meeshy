@@ -4,12 +4,16 @@
  * projection : `services/sharedLocation/`. Le partage DANS une conversation garde
  * `LocationHandler`.
  *
+ * Un démarrage ou un arrêt ACCEPTÉ s'annonce à tous les appareils du compte
+ * (`location:share-own-changed`, sans charge, room `user:<émetteur>`) : chacun relit son
+ * partage et se recale (#18389). Une mise à jour de position ne change pas la liste.
+ *
  * Un compte INSCRIT seulement : un invité de lien n'a pas de cercle. Le débit est borné
  * par un limiteur Redis partagé, au rythme du partage en conversation. Le journal ne
  * porte jamais la charge (coordonnées, destinataires) : seulement l'erreur.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { SHARED_LOCATION_ERROR_CODES, type SharedLocationAck, type SharedLocationStopAck } from '@meeshy/shared/types/shared-location';
 import { getCacheStore } from '../../services/CacheStore';
 import {
@@ -53,6 +57,18 @@ export function listenSharedLocation(socket: SharedLocationSocket, deps: SharedL
   };
 
   type Reply = SharedLocationAck | SharedLocationStopAck;
+  const announceOwnChange = (userId: string): void => {
+    try {
+      deps.relay.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED, {});
+    } catch (error: unknown) {
+      logger.error('[share-own-changed] Error', { error: error instanceof Error ? error.message : 'unknown' });
+    }
+  };
+  const announcing = (act: (userId: string, data: unknown) => Promise<Reply>) => async (userId: string, data: unknown): Promise<Reply> => {
+    const reply = await act(userId, data);
+    if (reply.success) announceOwnChange(userId);
+    return reply;
+  };
   const gate = (event: string, act: (userId: string, data: unknown) => Promise<Reply>, options: { readonly limited: boolean } = { limited: true }) => {
     socket.on(event, (data: unknown, ack?: unknown) => {
       const reply = replier<Reply>(ack);
@@ -68,10 +84,10 @@ export function listenSharedLocation(socket: SharedLocationSocket, deps: SharedL
     });
   };
 
-  gate(CLIENT_EVENTS.SHARED_LOCATION_START, (userId, data) => startSharedLocation(deps.relay, userId, data));
+  gate(CLIENT_EVENTS.SHARED_LOCATION_START, announcing((userId, data) => startSharedLocation(deps.relay, userId, data)));
   gate(CLIENT_EVENTS.SHARED_LOCATION_UPDATE, (userId, data) => updateSharedLocation(deps.relay, userId, data));
   // Arrêter n'est jamais limité : après une rafale de positions, on doit encore pouvoir se taire.
-  gate(CLIENT_EVENTS.SHARED_LOCATION_STOP, (userId) => stopSharedLocation(deps.relay, userId), { limited: false });
+  gate(CLIENT_EVENTS.SHARED_LOCATION_STOP, announcing((userId) => stopSharedLocation(deps.relay, userId)), { limited: false });
 }
 
 let limiter: { readonly client: unknown; readonly limiter: RateLimiter } | null = null;

@@ -39,6 +39,7 @@ import {
   type SharedLocationChangedEventData,
   type SharedLocationCircle,
   type SharedLocationErrorCode,
+  type SharedLocationOwnSnapshot,
   type SharedLocationPrecision,
   type SharedLocationSnapshot,
   type SharedLocationStopAck,
@@ -534,6 +535,21 @@ export async function endSharedLocationOfAccount(
     return UNAVAILABLE;
   }
   return stopped;
+}
+
+/**
+ * MON partage, tel que mes appareils le relisent (#18389) : la passerelle ne connaît qu'un
+ * partage par compte, et c'est lui qui fait foi. La liste CHOISIE, sans verdict de loi (le
+ * filtrer par cercle ou blocage trahirait qu'un destinataire a bloqué), sans les personnes
+ * échues, et sans rien de la position : chaque appareil a la sienne.
+ */
+export async function ownSharedLocationFor(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationOwnSnapshot> {
+  const state = await readSharedLocation(deps.cache, emitterId, deps.now());
+  if (!state) return { recipients: [], expiresAt: null };
+  const recipients = liveRecipients(state, deps.now())
+    .map((recipient) => ({ userId: recipient.userId.toLowerCase(), precision: recipient.precision, expiresAt: deadlineOf(state, recipient.userId) }))
+    .sort((a, b) => a.userId.localeCompare(b.userId));
+  return { recipients, expiresAt: recipients.length === 0 ? null : state.expiresAt };
 }
 
 /** Les émetteurs à lire : les liens du lecteur dès Ami, et les collègues de l'équipe (la loi les ouvre sans lien). */
