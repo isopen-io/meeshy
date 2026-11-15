@@ -55,36 +55,36 @@ final class ComposerViewfinderSceneTests: XCTestCase {
     // MARK: - Quand la scène se montre sur le viseur
 
     func test_showsSceneObjects_armedWithObjectsAndNoBackground_showsThem() {
-        XCTAssertTrue(ComposerViewfinderScene.showsSceneObjects(stage: .armed, editing: false,
+        XCTAssertTrue(ComposerViewfinderScene.showsSceneObjects(stage: .armed, cropFrames: false,
                                                                 effects: effects(texts: 1, stickers: 1),
                                                                 replacesBackground: false))
-        XCTAssertTrue(ComposerViewfinderScene.showsSceneObjects(stage: .recording, editing: false,
+        XCTAssertTrue(ComposerViewfinderScene.showsSceneObjects(stage: .recording, cropFrames: false,
                                                                 effects: effects(stickers: 1),
                                                                 replacesBackground: false),
                       "on filme sous ce qu'on a posé")
     }
 
-    func test_showsSceneObjects_offOrRetouching_hidesThem() {
+    func test_showsSceneObjects_offOrCropping_hidesThem() {
         let posee = effects(texts: 1)
-        XCTAssertFalse(ComposerViewfinderScene.showsSceneObjects(stage: .off, editing: false, effects: posee,
+        XCTAssertFalse(ComposerViewfinderScene.showsSceneObjects(stage: .off, cropFrames: false, effects: posee,
                                                                  replacesBackground: false))
-        XCTAssertFalse(ComposerViewfinderScene.showsSceneObjects(stage: .armed, editing: true, effects: posee,
+        XCTAssertFalse(ComposerViewfinderScene.showsSceneObjects(stage: .armed, cropFrames: true, effects: posee,
                                                                  replacesBackground: false),
-                       "la retouche est plein écran : elle cadre la prise seule")
+                       "le recadrage pose la prise dans un cadre : les objets n'y sont plus à leur place")
     }
 
     func test_showsSceneObjects_emptyScene_mountsNothing() {
-        XCTAssertFalse(ComposerViewfinderScene.showsSceneObjects(stage: .armed, editing: false, effects: effects(),
+        XCTAssertFalse(ComposerViewfinderScene.showsSceneObjects(stage: .armed, cropFrames: false, effects: effects(),
                                                                  replacesBackground: false),
                        "rien à poser : aucun second canvas")
     }
 
     func test_showsSceneObjects_existingBackgroundKept_hidesThem_butReplacedBackground_showsThem() {
         let avecFond = effects(texts: 1, background: true)
-        XCTAssertFalse(ComposerViewfinderScene.showsSceneObjects(stage: .armed, editing: false, effects: avecFond,
+        XCTAssertFalse(ComposerViewfinderScene.showsSceneObjects(stage: .armed, cropFrames: false, effects: avecFond,
                                                                  replacesBackground: false),
                        "la prise ne sera pas le fond : la montrer sous les objets mentirait")
-        XCTAssertTrue(ComposerViewfinderScene.showsSceneObjects(stage: .armed, editing: false, effects: avecFond,
+        XCTAssertTrue(ComposerViewfinderScene.showsSceneObjects(stage: .armed, cropFrames: false, effects: avecFond,
                                                                 replacesBackground: true),
                       "« Reprendre une photo » : le viseur remplace le fond")
     }
@@ -103,6 +103,14 @@ final class ComposerViewfinderSceneTests: XCTestCase {
         XCTAssertEqual(ComposerViewfinderScene.route(onChrome: false, onSceneObject: false, objectsTakeTouches: true), .capture,
                        "une zone vide garde le toucher-photo, l'appui long-vidéo et le zoom")
         XCTAssertEqual(ComposerViewfinderScene.route(onChrome: false, onSceneObject: true, objectsTakeTouches: false), .capture)
+    }
+
+    /// #18654 : le sticker posé depuis la colonne de retouche se voit sur la prise, sans prendre le doigt.
+    func test_retouching_showsSceneObjects_withoutGivingThemTheFinger() {
+        XCTAssertTrue(ComposerViewfinderScene.showsSceneObjects(stage: .armed, cropFrames: false,
+                                                                effects: effects(stickers: 1), replacesBackground: false))
+        XCTAssertFalse(ComposerViewfinderScene.objectsTakeTouches(stage: .armed, holding: false, editing: true),
+                       "en retouche le doigt cadre la prise et ses outils")
     }
 
     func test_objectsTakeTouches_onlyArmedAndNotHolding() {
@@ -259,7 +267,7 @@ final class ComposerViewfinderSceneTests: XCTestCase {
         XCTAssertFalse(rangee.contains("ComposerEditRailFit("))
         let debut = try XCTUnwrap(rangee.range(of: "private var editRail"))
         let fin = try XCTUnwrap(rangee.range(of: "private var familyRow", range: debut.upperBound..<rangee.endIndex))
-        XCTAssertTrue(rangee[debut.upperBound..<fin.lowerBound].contains("ComposerLookRail(open: session.openFamily != nil, editTools:"),
+        XCTAssertTrue(rangee[debut.upperBound..<fin.lowerBound].contains("items: ComposerRetouchRail.items(composesScene: sceneEntry != nil, tools: session.editTools)"),
                       "les outils de retouche prennent la colonne du viseur")
         XCTAssertTrue(rangee[debut.upperBound..<fin.lowerBound].contains("alignment: .leading"))
         XCTAssertTrue(rangee.contains("ComposerEditRailGate(board: session.retouchTexts) { editRail }"),

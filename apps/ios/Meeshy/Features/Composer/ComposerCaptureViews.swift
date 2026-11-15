@@ -280,6 +280,7 @@ struct ComposerCaptureChrome: View {
                 topRow.opacity(showsTopRow ? chromeRest : 0)
                     .allowsHitTesting(showsTopRow)
                     .accessibilityHidden(!showsTopRow)
+                    .overlay(alignment: .topTrailing) { ComposerCropCancelButton(session: session) }
                 Spacer(minLength: 0)
                 bottomRow
             }
@@ -338,7 +339,7 @@ struct ComposerCaptureChrome: View {
     /// traverse vers la capture.
     @ViewBuilder
     private var sceneObjectsLayer: some View {
-        if let sceneObjects, let cadre = sceneObjectsFrame, !session.phase.isEditing {
+        if let sceneObjects, let cadre = sceneObjectsFrame, !session.editFramesScene {
             ComposerViewfinderObjectsLayer(canvas: sceneObjects, frame: cadre)
                 .transition(.opacity)
         }

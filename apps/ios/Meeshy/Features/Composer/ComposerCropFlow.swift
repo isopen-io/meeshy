@@ -11,6 +11,20 @@ enum ComposerCropFlow {
         session.setEditAspect(preset.aspect(source: session.editExtent?.size ?? .zero))
     }
 
+    /// Le format et le cadrage de l'instant : ce que « Annuler » rendra (#18654).
+    static func snapshot(of session: ComposerCaptureSession) -> ComposerCropSnapshot {
+        ComposerCropSnapshot(aspect: session.editAspect, framing: session.framing)
+    }
+
+    /// **« Annuler » rend le recadrage d'avant l'outil, et le range** (porteur 2026-11-15, #18654).
+    static func cancel(_ before: ComposerCropSnapshot?, in session: ComposerCaptureSession) {
+        guard session.phase.isEditing, !session.isRenderingLook, let before else { return }
+        session.editAspect = before.aspect
+        session.framing = before.framing
+        session.activeEditTools.remove(.crop)
+        HapticFeedback.light()
+    }
+
     /// Le preset que la scène réalise ; `nil` pour un recadrage libre.
     static func preset(of session: ComposerCaptureSession) -> ComposerCropPreset? {
         session.editAspect.flatMap { ComposerCropPreset.matching($0, source: session.editExtent?.size ?? .zero) }

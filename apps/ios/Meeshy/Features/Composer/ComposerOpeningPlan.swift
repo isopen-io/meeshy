@@ -61,11 +61,13 @@ nonisolated struct ComposerOpeningPlan: Equatable, Sendable {
 
     /// **Choisir dans la photothèque d'ouverture rend la scène** : la caméra armée
     /// à l'ouverture se retire, sans quoi elle couvrirait les scènes fondées. Elle
-    /// reste si l'auteur a déjà filmé, filme ou retouche : rien ne part en silence.
+    /// reste si l'auteur filme ou a des segments en attente : rien ne part en silence.
+    /// **En retouche, l'élément choisi REMPLACE la prise** (porteur 2026-11-15, #18654) :
+    /// la Galerie de la colonne est le geste qui la change.
     static func disarmsCameraOnLibraryPick(openingPick: Bool,
                                            stage: ComposerSceneCameraStage,
                                            pendingSegments: Int,
                                            editing: Bool) -> Bool {
-        openingPick && stage == .armed && pendingSegments == 0 && !editing
+        openingPick && (editing || (stage == .armed && pendingSegments == 0))
     }
 }

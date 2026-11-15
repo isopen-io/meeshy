@@ -141,6 +141,48 @@ nonisolated enum ComposerEditTools {
     }
 }
 
+/// **Le recadrage qu'on avait en ouvrant l'outil** (porteur 2026-11-15, #18654) : fermer
+/// « Recadrer » garde le format ; « Annuler », à la place de « Terminé », rend celui-ci.
+nonisolated struct ComposerCropSnapshot: Equatable, Sendable {
+    var aspect: CGFloat?
+    var framing: ComposerFraming
+
+    /// Le cliché tenu : pris à l'ouverture de l'outil, gardé tant qu'il est actif, lâché ensuite.
+    static func held(_ held: ComposerCropSnapshot?, cropActive: Bool,
+                     current: ComposerCropSnapshot) -> ComposerCropSnapshot? {
+        cropActive ? held ?? current : nil
+    }
+
+    /// « Annuler » ne paraît qu'avec les crochets à l'écran.
+    static func offersCancel(shownTools: Set<ComposerEditTool>) -> Bool {
+        shownTools.contains(.crop)
+    }
+}
+
+/// Une entrée de la colonne de la retouche.
+nonisolated enum ComposerRetouchRailItem: Hashable, Sendable {
+    /// Une entrée de scène, la même qu'au viseur.
+    case scene(ComposerViewfinderEntry)
+    case tool(ComposerEditTool)
+    case looks
+    case separator
+}
+
+/// **La colonne de la retouche est celle du viseur** (porteur 2026-11-15, #18654) :
+/// Galerie · Texte · Stickers · Son, un trait, puis Effets · Recadrer · Couper. Sans « Fond » :
+/// la prise est là. Le son d'une prise qui en porte un se règle ; sinon « Son » en pose un sur
+/// la scène. Hors du composer, aucune entrée de scène : la colonne garde ses seuls outils.
+nonisolated enum ComposerRetouchRail {
+    static func items(composesScene: Bool, tools: [ComposerEditTool]) -> [ComposerRetouchRailItem] {
+        var poses: [ComposerRetouchRailItem] = composesScene ? [.scene(.gallery)] : []
+        if tools.contains(.text) { poses.append(.tool(.text)) }
+        if composesScene { poses.append(.scene(.sticker)) }
+        if tools.contains(.sound) { poses.append(.tool(.sound)) } else if composesScene { poses.append(.scene(.sound)) }
+        let reglages: [ComposerRetouchRailItem] = [.looks] + [ComposerEditTool.crop, .trim].filter(tools.contains).map { .tool($0) }
+        return poses.isEmpty ? reglages : poses + [.separator] + reglages
+    }
+}
+
 /// **Le son de la prise** (#9754) : un gain réglé à la ligne de volume, et un
 /// muet qui le coupe tout à fait sans l'oublier — réactiver rend le gain d'avant.
 /// L'aperçu l'entend et le rendu final le grave (`videoRender`, une seule recette).
