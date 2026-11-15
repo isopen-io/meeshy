@@ -451,6 +451,7 @@ import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
 import { SERVER_EVENTS, CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { filterMessagePayloadForLanguages as filterMessagePayloadForLanguagesSpy } from '../utils/message-payload-filter';
 import { LAST_MESSAGE_PREVIEW_MAX_LENGTH } from '../../routes/conversations/utils/last-message-preview';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT } from '../../services/historyFloor';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -3724,7 +3725,21 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-anon' });
     });
 
-    it('scopes the membership read to the drained conversations only', async () => {
+    /**
+     * La PROJECTION autant que la portée, et c'est le seul témoin qui puisse
+     * la voir : un double Prisma rend ce qu'on lui dit quel que soit le
+     * `select`, donc un témoin de VERDICT passe au vert sur une requête qui ne
+     * ramène pas les colonnes dont la règle a besoin.
+     *
+     * Depuis #18615 cette lecture sert DEUX gates d'autorisation —
+     * l'appartenance (`bannedAt`) et le PLANCHER D'HISTOIRE
+     * (`HISTORY_FLOOR_PARTICIPANT_SELECT`) — et c'est tout l'intérêt : le drain
+     * est le chemin de la tempête de reconnexions, et la seconde question ne
+     * coûte aucune requête de plus. Le `select` est donc assert en ÉGALITÉ
+     * contre la constante partagée, jamais recopié à la main : une liste
+     * retapée ici divergerait de la loi au premier champ qu'elle gagne.
+     */
+    it('scopes the membership read to the drained conversations only, and projects what BOTH authorization gates need', async () => {
       membership([{ conversationId: convId('a') }, { conversationId: convId('b') }]);
       manager.setDeliveryQueue(queueOf([
         { payload: { id: 'm1' }, conversationId: convId('a'), messageId: 'm1' },
@@ -3741,7 +3756,7 @@ describe('MeeshySocketIOManager', () => {
             isActive: true,
             conversationId: { in: [convId('a'), convId('b')] },
           }),
-          select: { conversationId: true, bannedAt: true },
+          select: { conversationId: true, bannedAt: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
         })
       );
     });
@@ -3893,7 +3908,7 @@ describe('MeeshySocketIOManager', () => {
 
     // Le cœur du défaut. La clé de connexion d'un invité est un
     // `Participant.id` : la ligne se retrouve sous `id`, jamais sous `userId`.
-    // Même convention exacte que `_dropEndedMemberships`,
+    // Même convention exacte que `authorizeDrainedEntries`,
     // `_emitDeliveryForDrainedMessages` et l'instantané de présence d'à côté.
     it('resolves an anonymous reader by participant id, the key its connection carries', async () => {
       prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-link' }]);
@@ -4801,7 +4816,7 @@ describe('MeeshySocketIOManager', () => {
 
     // Zéro conversation active n'éteint pas la queue de méthode : la file
     // hors-ligne est indexée par LECTEUR, pas par appartenance courante, et
-    // `_dropEndedMemberships` écarte déjà en amont ce qui n'a plus lieu d'être
+    // `authorizeDrainedEntries` écarte déjà en amont ce qui n'a plus lieu d'être
     // rejoué. Un `return` posé dans la branche « pas de participant » couperait
     // le rejeu d'un lecteur dont la lecture de participants a simplement échoué
     // à rendre ses lignes.
@@ -7183,7 +7198,7 @@ describe('MeeshySocketIOManager', () => {
      * qui vient de recevoir, et dont la réception fait avancer la coche de
      * l'auteur. La clé de file est alors son `Participant.id` — la convention
      * exacte qu'`enqueueForOfflineParticipants` applique en enfilant
-     * (`p.userId ?? p.id`) et que `_dropEndedMemberships` lit déjà.
+     * (`p.userId ?? p.id`) et que `authorizeDrainedEntries` lit déjà.
      */
     it('resolves an anonymous reader OWN row by participant id, not by userId', async () => {
       const participantId = 'part-anon-reader';

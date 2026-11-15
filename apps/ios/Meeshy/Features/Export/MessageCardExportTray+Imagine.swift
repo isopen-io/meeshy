@@ -160,6 +160,7 @@ extension MessageCardExportTray {
                     }
                 }
             }
+            decorRow
             row {
                 ForEach(format.frameToggles(hasHandles: hasHandles), id: \.self) { toggle in
                     pill(MessageCardExportText.toggleLabel(toggle), selected: format[toggle]) {
@@ -173,6 +174,27 @@ extension MessageCardExportTray {
                 }
             }
         }
+    }
+
+    /// Le décor de la maquette (#18673) : centré, le cadre, l'ornement.
+    private var decorRow: some View {
+        row {
+            pill(MessageCardExportText.text("export.card.decor.center", "Centré"), selected: format.disposition.decor.alignment == .center) {
+                format.disposition.decor.alignment = format.disposition.decor.alignment == .center ? .start : .center
+            }
+            ForEach(MessageCardDecor.Frame.allCases, id: \.self) { frame in
+                pill(MessageCardExportText.frameLabel(frame), selected: frame == format.disposition.decor.frame) {
+                    format.disposition.decor.frame = frame
+                }
+            }
+            ForEach(MessageCardDecor.Ornament.allCases, id: \.self) { ornament in
+                pill(MessageCardExportText.ornamentLabel(ornament), selected: ornament == format.disposition.decor.ornament) {
+                    format.disposition.decor.ornament = ornament
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(MessageCardExportText.text("export.card.decor.label", "Décor"))
     }
 
     /// « Médias » — où se posent les images, comment elles s'agencent, laquelle

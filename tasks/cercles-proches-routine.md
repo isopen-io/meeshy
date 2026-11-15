@@ -1173,3 +1173,54 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   commit précédent, même code du lot).
 - Fusionnée dans `dev` (41ba0a2a5). #18467 et #18205 fermées.
 - Prochain lot recommandé : #18389 (multi-appareils), puis #18431, puis #18351 une fois tranchée.
+
+## 2026-11-14 — réveil de fin de soirée : un retrait fait sur un appareil vaut pour tous les appareils du compte (#18389)
+
+- Reprise : aucune PR cercles ouverte ; #18520 fusionnée. Aucune branche n'écrit `services/sharedLocation/` ni
+  `apps/web/src/lib/shared-locations/` : lot réservé avant toute écriture.
+- Constat : un retrait fait sur un appareil hors ligne ne PEUT pas atteindre la passerelle tant qu'aucun appareil qui le
+  connaît n'est en ligne ; ce qui se répare, c'est qu'un autre appareil ne le défasse pas (il republiait sa liste
+  périmée au prochain ajout) et qu'il l'apprenne dès que la passerelle le reçoit.
+- Lot : la passerelle fait foi. Après chaque démarrage ou arrêt accepté, `location:share-own-changed` (sans charge) part
+  vers tous les appareils du compte ; `GET /relations/locations/mine` rend la liste CHOISIE (personnes, précisions,
+  échéances ; ni position, ni verdict de cercle ou de blocage, `private, no-store`). Le web relit à chaque socket
+  accrochée (avant de rejouer ses retraits) et à chaque annonce, et adopte la liste servie (`rosterOps.withServed`) :
+  ses retraits en attente gagnent, l'échéance servie l'emporte. Une liste REÇUE d'un autre appareil ne fait jamais
+  partir la position d'ici (marque `<clé>.received` : ni suivi, ni rechargement, échéances soldées sans envoi).
+- Audit adversarial avant PR : un bloquant corrigé (l'appareil qui recevait la liste publiait sa propre position à la
+  première échéance ou au rechargement), une prolongation faite ailleurs n'est plus défaite, un ajout non confirmé que
+  le serveur ne sert pas sort de la liste (témoin). Assumés : un arrêt de compte côté serveur (suppression) ne s'annonce
+  pas ; un « Arrêter » fait sur un appareil qui n'a pas démarré envoie SA position une fois (#18580).
+- Suivis ouverts : iOS et Android (#18578), un seul appareil publie (#18580). #18389 reste ouverte jusqu'à #18578.
+
+## 2026-11-15 — réveil de 1 h : la PR #18581 menée à la fusion (#18389, serveur + web)
+
+- Reprise : la PR #18581 (un partage, plusieurs appareils) était ouverte ; le run consiste à la fusionner, pas à en
+  ouvrir une autre. Dernier commit de la session précédente à 23 h 51, aucune autre session ne l'écrivait.
+- Rouge de la PR : Android `:feature:game:testDebugUnitTest`, un seul témoin (`GameRulesScreenComposeTest` « toucher le
+  i de la frappe déplie le calcul », ligne 109). Étranger au lot (épure du jeu #17584) ; il n'apparaît que parce que la
+  session précédente a fait recompiler ces témoins. La PR #18595 reprend déjà `:feature:game` : on lui cède.
+- `origin/dev` fusionné à la main : aucun conflit.
+- Gates locaux après la fusion : gateway `jest` `sharedLocation` + handler + `routes/relations` 13 suites, 243 verts ;
+  `tsc` gateway vert ; web `bun test` du lot 90/90, `tsc --noEmit` vert.
+- Rouge du lot trouvé par la CI : `Tests · shared` (garde de parité des événements, #18342) comptait Android comme
+  lecteur de `location:share-own-changed` parce qu'un commentaire du cliquet des routes Android citait le nom de
+  l'événement. Commentaire reformulé : l'inventaire (Android et iOS en retard) redevient juste ; `vitest` shared
+  409 fichiers, 9 727 verts.
+- CI du dernier commit (`4b80a97a5`) : passerelle (3 tranches + couverture), shared, web, agent, builds (bun, SDK,
+  app) verts. Rouges étrangers : Android `:feature:game` (ci-dessus) et Playwright tranche 3 (une puce d'appel sous
+  44 pt en sombre 320×568, verte sur le commit précédent au même code web).
+- **Fusion BLOQUÉE** : `dev` est verrouillée (`lock_branch` activé, aucun commit sur `dev` depuis le 2026-11-14 à
+  23 h 08 UTC) ; la fusion rend `405 Cannot change this locked branch`. Le verrou ne se lève que par un administrateur :
+  la routine ne le contourne pas. La PR est prête à fusionner dès qu'il est levé.
+- Prochain lot recommandé : #18578 (iOS + Android se recalent sur la passerelle), puis #18580, puis #18431.
+
+## 2026-11-15 — réveil de 15 h : `dev` déverrouillée, la PR #18581 repart vers la fusion (#18389)
+
+- Reprise : `dev` n'est plus verrouillée (`lock_branch` désactivé, commits sur `dev` depuis 13 h UTC). La branche avait
+  déjà reçu `dev` à 13 h 37 UTC ; `dev` ayant encore avancé, `origin/dev` y est refusionné à la main : aucun conflit.
+- Gates locaux sur le résultat fusionné : gateway `jest` `sharedLocation` + handler + `relation-locations` 8 suites,
+  120 verts ; `tsc` gateway et web verts ; web `bun test` du lot 140/140 ; garde shared de parité des événements 5/5.
+- Rouge vu sur le commit précédent, étranger au lot : `Gardes iOS (texte)` — cliquet des couleurs `Color(hex:)` à 468
+  pour une référence de 466 ; la PR ne touche aucune couleur iOS (seul Swift : deux lignes de `RelationsEndpoint`).
+- Prochain lot recommandé : #18578 (iOS + Android se recalent sur la passerelle), puis #18580, puis #18431.

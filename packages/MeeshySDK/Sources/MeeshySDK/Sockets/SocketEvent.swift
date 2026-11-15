@@ -89,6 +89,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case commentTranslationUpdated = "comment:translation-updated"
     case commentUnliked = "comment:unliked"
     case commentUpdated = "comment:updated"
+    /// L'identité d'une communauté vient d'être écrite (#18435) — iOS l'applique depuis #18439.
+    case communityUpdated = "community:updated"
     case conversationClosed = "conversation:closed"
     /// Le régime de chiffrement a basculé (#12522) — vers la room personnelle de chaque membre.
     case conversationEncryptionChanged = "conversation:encryption-changed"

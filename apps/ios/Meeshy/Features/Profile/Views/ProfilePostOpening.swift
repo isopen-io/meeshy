@@ -8,12 +8,12 @@ import MeeshyUI
 // MARK: - Profile posts opener (shared host-side navigation)
 //
 // Centralizes how a host (any sheet presenting `ProfileUserPostsList`) opens a
-// tapped post or reel: dismiss the profile sheet first, then navigate at the
-// root. Reels present the immersive overlay — which lives behind the sheet, so
-// it must come up AFTER the dismiss settles (hence the small delay). Posts open
-// their detail SHEET the same way, after the same delay (#16676), via RootView's
-// existing `pushNavigateToRoute` listener, so
-// hosts without a `Router` in scope (audio fullscreen, comments sheet) work too.
+// tapped post or reel: the profile sheet leaves first, then the content opens
+// at the root. `postsContent` hands the list its way out (`leavingHost`) and
+// the list opens the content itself once its sheet has LEFT
+// (`ProfileSheetDeparture`) — through the Router for a post, the immersive
+// viewer for a reel. `openReel(_:in:dismiss:)` stays for the hosts that build
+// the list themselves.
 @MainActor
 enum ProfilePostsOpener {
     static func openReel(_ reel: FeedPost, in reels: [FeedPost], dismiss: @escaping () -> Void) {
@@ -24,27 +24,42 @@ enum ProfilePostsOpener {
         }
     }
 
-    /// Le détail est une FEUILLE (#16676) : elle ne monte qu'une fois la fiche
-    /// de profil partie, comme le lecteur des réels ci-dessus.
-    static func openPost(_ post: FeedPost, dismiss: @escaping () -> Void) {
+    static func postsContent(dismiss: @escaping () -> Void) -> (String) -> AnyView {
+        { uid in AnyView(ProfileUserPostsList(userId: uid, leavingHost: dismiss)) }
+    }
+}
+
+/// **Ce qui attend que la feuille de profil soit partie** (#18590). Une
+/// feuille présentée pendant que la fiche descend encore est avalée ; on
+/// attendait donc un temps fixe. La fiche referme désormais, et l'ouverture
+/// part à la DISPARITION de la liste — ni trop tôt sur un appareil lent, ni
+/// pour rien sur un appareil rapide. Une seule ouverture attend à la fois.
+@MainActor
+final class ProfileSheetDeparture {
+    nonisolated deinit {}
+
+    private var waiting: (@MainActor () -> Void)?
+
+    func leave(dismissing dismiss: () -> Void, then open: @escaping @MainActor () -> Void) {
+        waiting = open
         dismiss()
-        Task { @MainActor in
-            guard await cancellableSleep(for: .milliseconds(350)) else { return }
-            NotificationCenter.default.post(
-                name: Notification.Name("pushNavigateToRoute"),
-                object: "postDetail:\(post.id)"
-            )
-        }
     }
 
-    static func postsContent(dismiss: @escaping () -> Void) -> (String) -> AnyView {
-        { uid in
-            AnyView(ProfileUserPostsList(
-                userId: uid,
-                onOpenPost: { post in openPost(post, dismiss: dismiss) },
-                onOpenReel: { reel, reels in openReel(reel, in: reels, dismiss: dismiss) }
-            ))
-        }
+    func sheetDidLeave() {
+        guard let open = waiting else { return }
+        waiting = nil
+        open()
+    }
+}
+
+/// **L'auteur touché sur une carte de la liste d'un profil** (#18590) : celui
+/// d'un réel republié ouvre SA fiche, à la place de celle-ci ; l'auteur de la
+/// liste elle-même n'ouvre rien — sa fiche est déjà là.
+enum ProfileAuthorTap {
+    static func profile(of authorId: String, in post: FeedPost, listedUserId: String) -> ProfileSheetUser? {
+        guard !authorId.isEmpty, authorId != listedUserId else { return nil }
+        let username = post.repost?.authorId == authorId ? post.repost?.authorUsername : post.authorUsername
+        return ProfileSheetUser(userId: authorId, username: username ?? authorId)
     }
 }
 

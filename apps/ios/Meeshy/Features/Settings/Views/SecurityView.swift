@@ -165,7 +165,7 @@ struct SecurityView: View {
         guard let target = SettingsFocus.securityLanding(initial: initialFocus, requested: requested) else { return }
         landing = target
         let reduce = reduceMotion
-        Task { await DelayedUI.perform(after: .milliseconds(350)) {
+        Task { await DelayedUI.perform(after: MeeshyMotion.pushSettle) {
             meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduce) { proxy.scrollTo(target.rawValue, anchor: .center) }
         } }
     }
