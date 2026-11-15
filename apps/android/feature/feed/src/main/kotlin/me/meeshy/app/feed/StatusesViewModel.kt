@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -474,6 +475,9 @@ class StatusesViewModel @Inject constructor(
         }
     }
 
+    /** L'humeur en cours d'envoi : un second Publier pendant qu'elle part est ignoré (#18271). */
+    private var publishing: Job? = null
+
     /**
      * Publish a mood status: create it, then hoist the mapped entry to the front of
      * the bar. Port of iOS `setStatus` (online path). On failure the list is left
@@ -490,9 +494,10 @@ class StatusesViewModel @Inject constructor(
         visibilityUserIds: List<String>? = null,
         mentions: List<PostMentionInput>? = null,
     ) {
+        if (publishing?.isActive == true) return
         status.update { it.copy(error = null) }
         val ticket = statusBarCacheRepository.ticket()
-        viewModelScope.launch {
+        publishing = viewModelScope.launch {
             try {
                 val result = statusRepository.create(
                     moodEmoji = emoji,
