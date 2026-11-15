@@ -16,6 +16,10 @@ extension ComposerCaptureCopy {
         }
     }
 
+    /// L'unique entrée de looks du rail (#18639) : le mot et le pictogramme des effets de l'appel.
+    static var looksName: String { familyName(ComposerLookStripRule.railFamily) }
+    static var looksSymbol: String { familySymbol(ComposerLookStripRule.railFamily) }
+
     /// « Effets » porte le pictogramme des effets de l'appel (#10311).
     static func familySymbol(_ family: ComposerLookFamily) -> String {
         switch family {
@@ -82,50 +86,39 @@ extension View {
 
 // MARK: - Le rail
 
-/// **Le rail vertical, en bas à gauche** (#9351) : Filtres, Cadres. Toucher une
-/// famille ouvre sa bande ; la retoucher la replie. En retouche il se couche
-/// sous la scène et gagne « Recadrer » (#9567). Ni verre ni cadre : le
-/// pictogramme et le nom, ombrés pour rester lisibles (porteur 2026-10-07,
-/// #9566) — « Cadres » porte le pictogramme du cadre de l'appel vidéo.
+/// **Le rail vertical, en bas à gauche** (#9351) : UNE entrée, « Effets »
+/// (#18639) — la toucher ouvre la bande mêlée que les puces trient, la
+/// retoucher la replie. En retouche il garde sa colonne et gagne les outils de la
+/// prise (#18638). Ni verre ni cadre : le pictogramme et le nom, ombrés pour rester
+/// lisibles (porteur 2026-10-07, #9566).
 struct ComposerLookRail: View {
-    let open: ComposerLookFamily?
-    /// Vertical pendant la capture ; en rangée sous la scène de retouche (#9567).
-    var axis: Axis = .vertical
-    /// Les outils de la retouche, après les familles (#9754) — vide pendant la
-    /// capture : ils n'existent qu'en retouche.
-    var editTools: [ComposerEditTool] = []
+    let open: Bool
+    /// Ce que la colonne porte, de haut en bas — « Effets » seul pendant la capture ; en
+    /// retouche, les entrées du viseur puis les outils (`ComposerRetouchRail`, #18654).
+    var items: [ComposerRetouchRailItem] = [.looks]
     /// Les outils dont la surface est à l'écran : ils s'allument, ensemble.
     var shownTools: Set<ComposerEditTool> = []
     var onTool: (ComposerEditTool) -> Void = { _ in }
-    /// Les libellés gardent leur largeur entière : le rail défile plutôt que de
-    /// les rétrécir ou les couper (porteur 2026-10-20).
-    var fitsLabels = false
-    /// **Posée à côté des cases** (#10339) : la colonne prend leur hauteur exacte
-    /// et leur espacement — chaque entrée en ligne, pictogramme puis nom.
-    var alignedWithCells = false
-    let onSelect: (ComposerLookFamily) -> Void
+    var onScene: (ComposerViewfinderEntry) -> Void = { _ in }
+    let onToggle: () -> Void
 
     var body: some View {
-        let disposition = axis == .vertical
-            ? AnyLayout(VStackLayout(alignment: .leading,
-                                     spacing: alignedWithCells ? ComposerLookStripRule.spacing : MeeshySpacing.sm))
-            : AnyLayout(HStackLayout(spacing: editTools.isEmpty ? MeeshySpacing.xl : MeeshySpacing.md))
-        // Les entrées se construisent ICI, sur le fil principal : en retouche, le
-        // rail est un candidat de `ViewThatFits` (`ComposerEditRailFit`), que le
-        // rendu asynchrone d'iOS 26 mesure hors du main (#9135, #11411).
-        let familles = ComposerLookFamily.allCases.map { famille in
-            AsyncRenderRow(id: famille, content: tool(symbol: ComposerCaptureCopy.familySymbol(famille),
-                                                      name: ComposerCaptureCopy.familyName(famille),
-                                                      selected: open == famille) { onSelect(famille) })
-        }
-        let outils = editTools.map { outil in
-            AsyncRenderRow(id: outil, content: tool(symbol: ComposerCaptureCopy.editToolSymbol(outil),
-                                                    name: ComposerCaptureCopy.editToolName(outil),
-                                                    selected: shownTools.contains(outil)) { onTool(outil) })
-        }
-        disposition {
-            ForEach(familles, content: asyncRenderRowContent)
-            ForEach(outils, content: asyncRenderRowContent)
+        VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
+            ForEach(items, id: \.self) { entree in
+                switch entree {
+                case .looks:
+                    tool(symbol: ComposerCaptureCopy.looksSymbol, name: ComposerCaptureCopy.looksName, selected: open,
+                         action: onToggle)
+                case .tool(let outil):
+                    tool(symbol: ComposerCaptureCopy.editToolSymbol(outil), name: ComposerCaptureCopy.editToolName(outil),
+                         selected: shownTools.contains(outil)) { onTool(outil) }
+                case .scene(let scene):
+                    tool(symbol: scene.symbol, name: ComposerViewfinderColumn.label(scene), selected: false) { onScene(scene) }
+                        .accessibilityIdentifier(scene.accessibilityIdentifier)
+                case .separator:
+                    ComposerViewfinderRailSeparator()
+                }
+            }
         }
     }
 
@@ -142,31 +135,18 @@ struct ComposerLookRail: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    @ViewBuilder
+    /// Chaque entrée en ligne, pictogramme puis nom, sur une cible de 44 pt.
     private func label(symbol: String, name: String) -> some View {
-        if alignedWithCells {
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: symbol)
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                Text(name)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(minWidth: MeeshyControlSize.tapTarget, alignment: .leading)
-            .frame(height: ComposerLookStripRule.railEntryHeight)
-        } else {
-            VStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: symbol)
-                    .font(MeeshyFont.relative(17, weight: .semibold))
-                Text(name)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(fitsLabels ? 1 : 0.7)
-                    .fixedSize(horizontal: fitsLabels, vertical: false)
-            }
-            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: symbol)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+            Text(name)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
+        .frame(minWidth: MeeshyControlSize.tapTarget, alignment: .leading)
+        .frame(height: ComposerLookStripRule.railEntryHeight)
     }
 }
 
@@ -174,9 +154,10 @@ struct ComposerLookRail: View {
 
 /// **La bande — et, repliée, la miniature-déclencheur** (#9351, spec § 3.1 / § 3.2).
 ///
-/// Ouverte, toutes les cases de la famille : celle du CENTRE est la choisie
+/// Ouverte, toutes les cases de la liste mêlée : celle du CENTRE est la choisie
 /// (#9566) — le défilement s'accroche case par case et choisit en passant —,
-/// encadrée, et son nom s'écrit seul, en grand, sous la bande. Repliée, la
+/// encadrée. Chaque case porte son nom sous elle, la choisie en gras et un peu
+/// plus grand (#18639). Repliée, la
 /// seule miniature choisie (la paire complète), qui continue d'afficher le
 /// direct. Les cases peintes sont les visibles ±1, au plus le budget thermique ;
 /// leurs images vivent dans UN atlas Metal (`ComposerLookStripSurface`). Chaque
@@ -241,12 +222,6 @@ struct ComposerLookStrip: View {
         ComposerCaptureGesture.action(zone: .otherThumbnail, gesture: .tap, context: context) == .select
     }
 
-    /// Le nom de la case choisie dans la famille ouverte — le seul écrit.
-    private var chosenItemName: String {
-        let cases = items
-        return chosenIndex(in: cases).map { ComposerCaptureCopy.itemName(cases[$0]) } ?? ""
-    }
-
     /// Le déclencheur porte UN nom, seul ou dans la bande ouverte.
     private var chosenLabel: String {
         recording
@@ -272,41 +247,28 @@ struct ComposerLookStrip: View {
                 case .hidden: Color.clear.accessibilityHidden(true)
                 }
             } else {
-                VStack(spacing: 0) {
-                    // Le cadre de la choisie déborde de la case (#10309) : la
-                    // bande lui garde sa place, sans quoi le défilement le rognerait.
-                    band.frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset)
-                        .overlay(alignment: .top) { if !recording { tuning } }
-                    Text(chosenItemName)
-                        .font(MeeshyFont.relative(ComposerLookStripRule.chosenNameSize, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .padding(.horizontal, MeeshySpacing.mdPlus)
-                        .frame(height: ComposerLookStripRule.chosenNameHeight, alignment: .bottom)
-                        .opacity(recording ? 0 : 1)
-                        .accessibilityHidden(true)
-                }
+                // Le cadre de la choisie déborde de la case (#10309) : la bande lui
+                // garde sa place, sans quoi le défilement le rognerait ; les noms dessous.
+                band.overlay(alignment: .top) { if !recording { tuning } }
             }
         }
-        .frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset + ComposerLookStripRule.chosenNameHeight)
+        .frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset + ComposerLookStripRule.nameHeight)
         .adaptiveOnChange(of: pressing) { _, tenu in
             guard !tenu else { return }
             session.releaseStaleHold()
         }
         .environment(\.composerCaptureProgress, captureProgress)
         .modifier(ComposerCameraAmbianceFollow(session: session))
-        .adaptiveOnChange(of: session.openFamily) { _, famille in
-            guard let famille else { return }
-            focus = ComposerLookStripFilterRule.focus(opening: famille, look: session.look)
+        .adaptiveOnChange(of: session.openFamily) { _, _ in
+            focus = nil
         }
     }
 
     // MARK: - Le réglage de l'ambiance (OPUS-2)
 
     /// Au-dessus de la bande, jamais sur la miniature : elle déclenche, et son
-    /// appui long filme. Le bouton ouvre la dose et le pavé chaleur × contraste.
+    /// appui long filme. Le bouton ouvre la dose et le pavé chaleur × contraste,
+    /// à droite de la colonne du rail, qu'il ne couvre jamais (#18639).
     private var tuning: some View {
         VStack(alignment: .trailing, spacing: MeeshySpacing.xs) {
             if tuningOpen {
@@ -321,7 +283,8 @@ struct ComposerLookStrip: View {
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { tuningOpen.toggle() }
             }
         }
-        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.leading, ComposerEditScene.railColumnWidth)
+        .padding(.trailing, MeeshySpacing.md)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .alignmentGuide(.top) { dimensions in dimensions[.bottom] }
     }
@@ -507,11 +470,34 @@ struct ComposerLookStrip: View {
                 }
             }
             .modifier(ComposerLookStripTargets())
+            names(of: cases, chosen: choisie)
         }
-        .padding(.vertical, ComposerTriggerOutline.outset)
+        .padding(.top, ComposerTriggerOutline.outset)
     }
 
-    /// Une case : son contour, rien d'écrit — seul le choix se nomme, sous la bande.
+    /// **Le nom de chaque case, sous elle, avant tout choix** (#18639) : la choisie en gras et deux points plus grand, rien d'autre.
+    /// Un nom peut mordre sur l'espacement voisin sans décaler les cases.
+    private func names(of cases: [ComposerLookStripItem], chosen: Int?) -> some View {
+        HStack(spacing: ComposerLookStripRule.spacing) {
+            ForEach(Array(cases.enumerated()), id: \.offset) { index, item in
+                Text(ComposerCaptureCopy.itemName(item))
+                    .font(MeeshyFont.relative(ComposerLookStripRule.nameSize(chosen: index == chosen),
+                                              weight: index == chosen ? .bold : .medium))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(width: ComposerLookStripRule.pitch - 2)
+                    .frame(width: ComposerLookStripRule.cellSize.width, height: ComposerLookStripRule.nameHeight)
+            }
+        }
+        .padding(.top, ComposerLookStripRule.cellSize.height + ComposerTriggerOutline.outset)
+        .opacity(recording ? 0 : 1)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// Une case : son contour ; son nom s'écrit dessous (`names`).
     /// La choisie porte son cadre HORS du flux (#10309) ; les autres, un filet.
     @ViewBuilder
     private func cell(item: ComposerLookStripItem, chosen: Bool) -> some View {

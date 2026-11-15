@@ -178,8 +178,10 @@ final class ComposerTrimTrackTests: XCTestCase {
         let retouche = try XCTUnwrap(bas.range(of: "private var editTools: some View {"))
         let piste = try XCTUnwrap(bas.range(of: "ComposerTrimTrack(", range: retouche.upperBound..<bas.endIndex),
                                   "la piste se monte avec les outils de la retouche")
-        let rail = try XCTUnwrap(bas.range(of: "ComposerLookRail(", range: retouche.upperBound..<bas.endIndex))
-        XCTAssertLessThan(piste.lowerBound, rail.lowerBound, "la piste se pose AU-DESSUS du rail, donc de la bande")
+        let panneaux = try XCTUnwrap(bas.range(of: "private var editPanelsAndTools: some View {"))
+        let colonne = try XCTUnwrap(bas.range(of: "{ editRail }", range: panneaux.upperBound..<bas.endIndex))
+        XCTAssertLessThan(colonne.lowerBound, piste.lowerBound,
+                          "la colonne des outils se pose à gauche, AU-DESSUS de la piste, qui garde le bas (#18638)")
         XCTAssertTrue(bas.contains("case .editing(.video(let url)) = session.phase"),
                       "elle n'existe qu'en retouche d'une vidéo")
         let vue = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerTrimTrack.swift")
