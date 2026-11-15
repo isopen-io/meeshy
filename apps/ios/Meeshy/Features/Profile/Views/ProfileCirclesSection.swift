@@ -26,11 +26,11 @@ struct ProfileCirclesSection: View {
                     emptyLine(phrase).meeshyTransition(.opacity)
                 }
                 if let requests = Self.requestsText(count: summary.pendingCount) {
-                    ProfileNavigationRow(icon: "person.badge.plus", title: requests, hint: Self.requestsHint,
+                    ProfileNavigationRow(icon: "person.badge.plus", title: requests, hint: nil,
                                          identifier: "profile.circles.requests", accentHex: accentHex) { onOpen(.requests) }
                         .meeshyTransition(.opacity)
                 }
-                ProfileNavigationRow(icon: "person.crop.circle.badge.plus", title: Self.inviteTitle, hint: Self.inviteHint,
+                ProfileNavigationRow(icon: "person.crop.circle.badge.plus", title: Self.inviteTitle, hint: nil,
                                      identifier: "profile.circles.invite", accentHex: accentHex) { onOpen(.invite) }
             }
             .background(ProfileSectionCard(tintHex: accentHex))
@@ -38,16 +38,31 @@ struct ProfileCirclesSection: View {
         }
     }
 
+    /// Une rangée seulement si chaque nom y tient ENTIER ; sinon deux rangées, jamais des noms rétrécis et collés.
     private var pills: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xs),
-                            count: Self.pillColumns(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize))
-        return LazyVGrid(columns: columns, spacing: MeeshySpacing.xs) {
-            ForEach(summary.entries) { entry in
-                ProfileCirclePill(entry: entry, textPrimary: theme.textPrimary, textMuted: theme.textMuted) { onOpen(.circles) }
-            }
+        let layouts = Self.pillLayouts(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize)
+        return ViewThatFits(in: .horizontal) {
+            pillRows(columns: layouts.first ?? 3)
+            pillRows(columns: layouts.last ?? 3)
         }
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, MeeshySpacing.sm)
+    }
+
+    @ViewBuilder
+    private func pillRows(columns: Int) -> some View {
+        if columns >= summary.entries.count {
+            HStack(spacing: Self.pillSpacing) { pillViews }
+        } else {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.pillSpacing), count: columns),
+                      spacing: Self.pillSpacing) { pillViews }
+        }
+    }
+
+    private var pillViews: some View {
+        ForEach(summary.entries) { entry in
+            ProfileCirclePill(entry: entry, textPrimary: theme.textPrimary, textMuted: theme.textMuted) { onOpen(.circles) }
+        }
     }
 
     private func emptyLine(_ phrase: String) -> some View {
@@ -71,6 +86,15 @@ struct ProfileCirclesSection: View {
     static func pillColumns(isAccessibilitySize: Bool) -> Int {
         isAccessibilitySize ? 3 : 5
     }
+
+    /// Les dispositions essayées dans l'ordre : la rangée de cinq d'abord, sinon deux rangées. Aux tailles
+    /// d'accessibilité, les deux rangées d'emblée.
+    static func pillLayouts(isAccessibilitySize: Bool) -> [Int] {
+        isAccessibilitySize ? [pillColumns(isAccessibilitySize: true)] : [pillColumns(isAccessibilitySize: false), 3]
+    }
+
+    /// L'air entre deux pastilles : assez pour que deux noms voisins ne se touchent pas.
+    static let pillSpacing = MeeshySpacing.sm
 
     /// « Ami, 3 personnes » : le cercle d'abord, puis qui l'habite.
     static func pillAccessibilityLabel(title: String, count: Int) -> String {
@@ -96,16 +120,8 @@ struct ProfileCirclesSection: View {
         String(localized: "profile.circles.open.hint", defaultValue: "Ouvre Mes cercles", bundle: .main)
     }
 
-    private static var requestsHint: String {
-        String(localized: "profile.circles.requests.hint", defaultValue: "Ouvre les demandes qui attendent ta réponse", bundle: .main)
-    }
-
     private static var inviteTitle: String {
         String(localized: "profile.circles.invite", defaultValue: "Inviter", bundle: .main)
-    }
-
-    private static var inviteHint: String {
-        String(localized: "profile.circles.invite.hint", defaultValue: "Ouvre le parrainage pour inviter quelqu'un sur Meeshy", bundle: .main)
     }
 }
 
@@ -134,13 +150,13 @@ private struct ProfileCirclePill: View {
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundStyle(textMuted)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.85)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, MeeshySpacing.xs)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ProfileCirclesSection.pillAccessibilityLabel(title: title, count: entry.count))
         .accessibilityHint(ProfileCirclesSection.pillHint)

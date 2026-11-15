@@ -263,7 +263,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// la sortie d'édition couperait net.
     private func setInlineEditScrimVisible(_ visible: Bool) {
         inlineEditScrimLayer.frame = bounds
-        guard visible else {
+        guard visible, !backgroundLayer.isHidden else { // sans fond peint, l'hôte voile l'image entière (#18640)
             CATransaction.begin()
             CATransaction.setCompletionBlock { [weak self] in
                 guard let self, self.inlineEditingTextId == nil else { return }

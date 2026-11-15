@@ -64,8 +64,6 @@ const ASYMETRIES: readonly {
       "chantier 2.0 : `apps/web` suit l'interface iOS (directive porteur 2026-09-07) et ces signaux temps réel "
       + "ne sont pas encore portés. Aucun n'est un défaut en soi ; la liste ne doit que rétrécir.",
     events: [
-      'audio:transcription-failed',
-      'audio:translation-failed',
       'audio:translation-ready',
       'audio:translations-completed',
       'audio:translations-progressive',
@@ -124,6 +122,13 @@ const ASYMETRIES: readonly {
       'media:alt-translation-updated',
       'sticker:library-updated',
     ],
+  },
+  {
+    absents: ['android', 'ios'],
+    raison:
+      "plusieurs appareils d'un compte, un partage de position (#18389) : le web se recale sur le partage servi ; "
+      + 'iOS et Android le porteront avec leur centre de partage (#18578).',
+    events: ['location:share-own-changed'],
   },
   {
     absents: ['web', 'ios'],

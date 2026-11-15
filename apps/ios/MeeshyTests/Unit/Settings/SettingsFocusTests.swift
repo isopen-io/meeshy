@@ -1,4 +1,5 @@
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// #16339 — une invite de réglage mène AU réglage : la demande désigne sa
@@ -88,5 +89,19 @@ final class SettingsFocusTests: XCTestCase {
         XCTAssertTrue(consent.contains("VoiceSetupLauncher.open(.voice)"), "#16418 — la note passe par la loi de destination")
         let pin = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift")
         XCTAssertTrue(pin.contains("SettingsFocusRequest.shared.request(.masterPin)"))
+    }
+
+    // MARK: - Les temps de la mise au point sont nommés (contre-audit #18589)
+
+    func test_focusTimings_areNamedAndOrdered_scrollThenSheetThenSecurity() {
+        XCTAssertLessThan(MeeshyMotion.pushSettle, MeeshyMotion.sheetAfterPush)
+        XCTAssertLessThan(MeeshyMotion.sheetAfterPush, MeeshyMotion.sheetAfterFocusScroll)
+    }
+
+    func test_settingsAndSecurity_writeNoLiteralDelay() throws {
+        for path in ["Meeshy/Features/Settings/Views/SettingsView.swift", "Meeshy/Features/Settings/Views/SecurityView.swift"] {
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+            XCTAssertFalse(source.contains("DelayedUI.perform(after: .milliseconds("), path)
+        }
     }
 }

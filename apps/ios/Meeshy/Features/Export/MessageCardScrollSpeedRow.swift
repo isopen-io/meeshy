@@ -1,0 +1,56 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// **LA VITESSE DU DÉFILEMENT** (#18671) — neuf pastilles, de ×0,5 à ×3, et la
+/// durée de la vidéo qu'elles donnent : on voit ce qu'on choisit avant d'enregistrer.
+struct MessageCardScrollSpeedRow: View {
+    @Binding var speed: MessageCardScrollSpeed
+    let duration: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            HStack {
+                Label(MessageCardExportText.text("export.card.scroll.title", "Vidéo qui défile"), systemImage: "text.line.first.and.arrowtriangle.forward")
+                    .font(.footnote.weight(.semibold))
+                Spacer(minLength: 0)
+                Text(Self.durationLabel(duration))
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(MessageCardExportText.text("export.card.scroll.duration", "Durée de la vidéo"))
+                    .accessibilityValue(Self.durationLabel(duration))
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    ForEach(MessageCardScrollSpeed.allCases, id: \.self) { item in
+                        let selected = item == speed
+                        Button {
+                            HapticFeedback.light()
+                            speed = item
+                        } label: {
+                            Text(verbatim: item.label())
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                .padding(.horizontal, MeeshySpacing.md)
+                                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                                .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.primary)
+                                .background(Capsule().fill(selected ? Color.primary : Color.primary.opacity(0.07)))
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(MessageCardPressStyle())
+                        .accessibilityAddTraits(selected ? [.isSelected] : [])
+                    }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(MessageCardExportText.text("export.card.scroll.speed", "Vitesse du défilement"))
+        }
+    }
+
+    /// « 1 min 12 s », « 38 s » — la durée à la seconde près.
+    static func durationLabel(_ seconds: Double) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = seconds >= 60 ? [.minute, .second] : [.second]
+        formatter.unitsStyle = .abbreviated
+        return formatter.string(from: seconds.rounded()) ?? "\(Int(seconds.rounded())) s"
+    }
+}

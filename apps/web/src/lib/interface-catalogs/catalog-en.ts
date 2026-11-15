@@ -459,8 +459,9 @@ const en = {
   'settings.delete_account': 'Delete account',
   'settings.privacy.title': 'Privacy',
   'settings.privacy.online_status': 'Online status',
-  'settings.privacy.online_status.info':
-    "The green dot on your avatar means you're active. Turned off, nobody sees it — but typing in a conversation still proves you're around.",
+  'settings.privacy.online_status.info': "The green dot on your avatar means you're active.",
+  'settings.privacy.online_status.question': 'What happens if I turn it off?',
+  'settings.privacy.online_status.more': "Nobody sees the dot anymore. But typing in a conversation still proves you're around.",
   'settings.privacy.last_seen': 'Last sign-in',
   'settings.privacy.read_receipts': 'Read receipts',
   'settings.privacy.read_receipts.info':
@@ -474,6 +475,7 @@ const en = {
   'settings.interface_language': 'Interface language',
   'settings.interface_language.automatic': 'Automatic',
   'settings.content_languages': 'Translation languages',
+  'settings.content_languages.info': 'Everything reads in your language, translated automatically.',
   'settings.section.notifications': 'Notifications',
   'settings.notifications.title': 'Notifications',
   'settings.notif.sounds': 'Sounds',

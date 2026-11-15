@@ -1,6 +1,6 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
@@ -10,6 +10,7 @@ import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
 /**
  * **LES PIÈCES VISUELLES DE L'ACCUEIL** (#7729) — le miroir web de
@@ -48,9 +49,55 @@ export function PointsPill({
   );
 }
 
+/** Le temps que met un segment à rejoindre sa nouvelle boîte, sur le ressort de l'accueil (`--onb-spring`). */
+export const ONB_PROGRESS_MS = 500;
+
+type SegmentBox = { readonly left: number; readonly width: number };
+type BarLayout = { readonly width: number; readonly segments: readonly SegmentBox[] };
+
+const boxOf = (node: Element): SegmentBox => {
+  const { left, width } = node.getBoundingClientRect();
+  return { left, width };
+};
+
+/**
+ * La barre change de mise en page d'un coup, une fois par étape ; chaque segment déplacé part ensuite
+ * de son ancienne boîte par `translate` et `scale` (FLIP), sans jamais animer sa largeur (#18322, M6).
+ * Une barre redimensionnée entre deux étapes, ou « Réduire les animations », ne joue rien.
+ */
+function useSegmentsFlip(position: number, count: number) {
+  const bar = useRef<HTMLDivElement>(null);
+  const previous = useRef<BarLayout | null>(null);
+  useLayoutEffect(() => {
+    const node = bar.current;
+    if (node === null) return;
+    const segments = [...node.children];
+    const layout: BarLayout = { width: node.getBoundingClientRect().width, segments: segments.map(boxOf) };
+    const before = previous.current;
+    previous.current = layout;
+    if (before === null || before.width !== layout.width || before.segments.length !== layout.segments.length || prefersReducedMotion()) return;
+    const easing = getComputedStyle(node).getPropertyValue('--onb-spring').trim() || 'ease-out';
+    segments.forEach((segment, index) => {
+      const from = before.segments[index];
+      const to = layout.segments[index];
+      if (from === undefined || to === undefined || to.width === 0 || typeof segment.animate !== 'function') return;
+      if (from.left === to.left && from.width === to.width) return;
+      segment.animate(
+        [
+          { translate: `${from.left - to.left}px 0`, scale: `${from.width / to.width} 1` },
+          { translate: '0 0', scale: '1 1' },
+        ],
+        { duration: ONB_PROGRESS_MS, easing },
+      );
+    });
+  }, [position, count]);
+  return bar;
+}
+
 export function ProgressSegments({ position, count, label }: { readonly position: number; readonly count: number; readonly label: string }) {
+  const bar = useSegmentsFlip(position, count);
   return (
-    <div className="onb-progress" role="progressbar" aria-label={label} aria-valuemin={1} aria-valuemax={count} aria-valuenow={position}>
+    <div ref={bar} className="onb-progress" role="progressbar" aria-label={label} aria-valuemin={1} aria-valuemax={count} aria-valuenow={position}>
       {Array.from({ length: count }, (_, index) => (
         <span
           key={index}

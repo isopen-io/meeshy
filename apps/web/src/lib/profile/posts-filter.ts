@@ -4,7 +4,7 @@ import type { FeedPost } from '@/lib/api/feed-pages';
  * **LE FILTRE DU BANDEAU DE COMPTEURS** (#7083) — miroir de `ProfilePostsFilter`
  * (`apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift:90-99`).
  *
- * Les tuiles « Postes » et « Réels » ne sont pas des étiquettes : elles
+ * Les tuiles « Publications » et « Réels » ne sont pas des étiquettes : elles
  * FILTRENT le listing, et re-toucher celle qui est active rétablit tout
  * (`toggled`). Un contrôle qui n'aurait pas cet effet serait un contrôle qui
  * ment (loi 4) — c'est pourquoi la loi vit ici, pure et mesurée, plutôt que

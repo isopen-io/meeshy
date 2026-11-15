@@ -6,11 +6,20 @@ import MeeshyUI
 /// Les feuilles ne changent pas : seule leur porte bouge. Une feuille n'hérite
 /// pas des `EnvironmentObject` de son présentateur, d'où `authManager` remis à
 /// celles qui le lisent (Sécurité, Changer de compte).
+///
+/// La feuille se déclare au registre des surfaces : une conversation ouverte
+/// depuis une notification la referme, et « Réduire les animations » y vaut
+/// (racine du mouvement) jusque dans les sous-écrans de Sécurité.
 struct SettingsSheetContent: View {
     let sheet: SettingsSheet
     let authManager: AuthManager
 
     var body: some View {
+        content.closesForConversationOpening(.sheet)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch sheet {
         case .privacy: PrivacySettingsView()
         case .security: SecurityView().environmentObject(authManager)

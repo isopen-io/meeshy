@@ -26,6 +26,14 @@ extension ComposerCaptureCopy {
         }
     }
 
+    static var cancelCrop: String {
+        String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)
+    }
+
+    static var cancelCropLabel: String {
+        String(localized: "composer.capture.crop.cancel.a11y", defaultValue: "Annuler le recadrage", bundle: .main)
+    }
+
     static var addText: String {
         String(localized: "composer.capture.text.add", defaultValue: "Ajouter un texte", bundle: .main)
     }

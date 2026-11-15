@@ -242,7 +242,7 @@ extension MeeshyComposerHost {
             writesPostBody: editsPostContent,
             inlinePanel: sceneInlinePanel, propertiesSheet: sceneSelectionRelay.propertiesSheet,
             trailingFootFollowsOptions: sceneTrailingFootFollowsOptions,
-            editingTextId: viewModel.textEditingMode.activeTextId,
+            editingTextId: ComposerViewfinderTyping.sceneTextId(self),
             // **Le canvas reçoit de nouveau la frappe** (2026-09-28) : la porte
             // TEXTE y ouvre la saisie en ligne. La requête `@` reste nourrie
             // par l’éditeur plein écran seul (#8680 : la saisie sur scène ne
@@ -269,7 +269,7 @@ extension MeeshyComposerHost {
             // > tant que l'écran plein est monté, c'est lui, et la surface du
             // > dessous n'a pas à conclure quoi que ce soit.
             onInlineTextEditEnded: { _ in sceneInlineTextEnded() },
-            inlineEditInputLink: sceneTypesInline ? keyboardDock.link : nil,
+            inlineEditInputLink: sceneTypesInline && ComposerViewfinderTyping.textId(self) == nil ? keyboardDock.link : nil,
             descriptionPanel: sceneDescriptionPanel.map { volet in
                 AnyView(volet.opacity(sceneLegendIsVisible ? 1 : 0)
                     .allowsHitTesting(sceneLegendIsVisible)

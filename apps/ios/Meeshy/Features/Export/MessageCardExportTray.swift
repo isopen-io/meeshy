@@ -41,6 +41,8 @@ struct MessageCardExportTray: View {
     /// Le passage glissé sur l'onde : son nouveau point de départ, en secondes.
     let onExcerptStart: (Double) -> Void
     var contentPanel: MessageCardCompositionBar? = nil
+    /// Une photo ou une vidéo de la photothèque en fond, au-dessus des palettes (#18672).
+    var backdropPanel: MessageCardBackdropPanel? = nil
 
     /// Le plateau prend sa hauteur IDÉALE : ses rangées défilent à l'horizontale,
     /// donc se laisseraient écraser à la verticale, et un panneau haut (un vocal
@@ -133,6 +135,13 @@ struct MessageCardExportTray: View {
     }
 
     private var palettePanel: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            backdropPanel
+            palettes
+        }
+    }
+
+    private var palettes: some View {
         row {
             ForEach(MessageCardPaletteID.allCases, id: \.self) { palette in
                 tile(palette.palette.name, selected: palette == format.template.palette) {
