@@ -129,29 +129,7 @@ struct ConversationMessageSheets: ViewModifier {
                 }
             }
             .sheet(item: $overlayState.fullReactionPickerMessage) { msg in
-                // Picker CATÉGORISÉ (Reactions/Visages/Gestes/Cœurs/Animaux/Objets),
-                // titre « Reactions », SANS Close ni recherche, chrome Liquid Glass —
-                // le « + » de la barre de réactions ouvre ce picker, pas le clavier
-                // emoji standard.
-                CategorizedEmojiPickerSheet(
-                    style: isDark ? .dark : .light,
-                    onReact: { emoji in
-                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                        overlayState.fullReactionPickerMessage = nil
-                    }
-                )
-                .overlay(alignment: .topTrailing) {
-                    MeeshyGlassButton(
-                        systemImage: "xmark",
-                        label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
-                        size: .s36
-                    ) {
-                        overlayState.fullReactionPickerMessage = nil
-                    }
-                    .padding(MeeshySpacing.md)
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                fullReactionPicker(for: msg)
             }
             .sheet(item: $overlayState.shareMessage) { msg in
                 ShareSheet(activityItems: [UnencryptedMessageGate.preferredTranslation(of: msg, in: viewModel)?.translatedContent ?? msg.content])
@@ -164,5 +142,29 @@ struct ConversationMessageSheets: ViewModifier {
                         .environmentObject(statusViewModel)
                 }
             }
+    }
+
+    /// Le picker CATÉGORISÉ du « + » de la barre de réactions, et non le
+    /// clavier emoji standard. Il se quitte par son ✕ ou par le glissement.
+    private func fullReactionPicker(for msg: Message) -> some View {
+        CategorizedEmojiPickerSheet(
+            style: isDark ? .dark : .light,
+            onReact: { emoji in
+                viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                overlayState.fullReactionPickerMessage = nil
+            }
+        )
+        .overlay(alignment: .topTrailing) {
+            MeeshyGlassButton(
+                systemImage: "xmark",
+                label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+                size: .s36
+            ) {
+                overlayState.fullReactionPickerMessage = nil
+            }
+            .padding(MeeshySpacing.md)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
