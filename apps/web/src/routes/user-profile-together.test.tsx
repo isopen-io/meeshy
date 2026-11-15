@@ -208,6 +208,24 @@ describe('ProfileTogetherRow', () => {
     expect(notices).toEqual([{ message: 'Ce média ne peut pas se lire ensemble.', failed: true }]);
   });
 
+  test('la liste s’ouvre en fondu et, refermée, reste le temps de sa sortie, inerte (#18320)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    seedDirect();
+    const node = await mount(harness({ success: true }).row);
+    await settle();
+    await settle();
+    const open = node.querySelector<HTMLButtonElement>('[data-together-open]');
+    await click(open);
+    const list = () => node.querySelector('[data-together-list]');
+    expect(list()?.hasAttribute('data-layer-motion')).toBe(true);
+    expect(list()?.hasAttribute('data-leaving')).toBe(false);
+    await click(open);
+    expect(open?.getAttribute('aria-expanded')).toBe('false');
+    expect(list()?.hasAttribute('data-leaving')).toBe(true);
+    expect(list()?.hasAttribute('inert')).toBe(true);
+    expect(list()?.querySelector('[data-together-piece="film"]')).not.toBeNull();
+  });
+
   test('sans conversation directe connue, une phrase invite à envoyer un média', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
     const node = await mount(harness({ success: true }).row);

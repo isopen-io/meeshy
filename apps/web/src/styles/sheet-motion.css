@@ -102,6 +102,24 @@
       animation: dialog-fade-out var(--dialog-rise-ms) linear forwards;
     }
   }
+
+  /* La fiche de contact, sur un téléphone (#18320) : sa CARTE monte du bas et y redescend, son voile
+     plein écran, qui vit dans le même dialogue, ne fait que fondre. Le fondu prend la durée de la montée,
+     pour que le fantôme ne parte pas avant que la carte soit descendue. */
+  @media (width < 48rem) {
+    dialog[data-contact-sheet][open],
+    [data-dialog-ghost]:has([data-contact-sheet-card]) {
+      animation-duration: var(--dialog-rise-ms);
+    }
+
+    dialog[data-contact-sheet][open] [data-contact-sheet-card] {
+      animation: dialog-rise var(--dialog-rise-ms) var(--dialog-motion-curve) both;
+    }
+
+    [data-dialog-ghost] [data-contact-sheet-card] {
+      animation: dialog-sink var(--dialog-rise-ms) var(--dialog-motion-curve) forwards;
+    }
+  }
 }
 
 @keyframes dialog-rise {

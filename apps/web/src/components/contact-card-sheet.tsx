@@ -112,6 +112,7 @@ export function ContactCardSheet({
         style={{ position: 'relative', zIndex: 41, pointerEvents: 'none' }}
       >
         <section
+          data-contact-sheet-card=""
           className="glass-prominent flex w-full flex-col gap-4 rounded-card p-4"
           style={{
             maxWidth: 440,
