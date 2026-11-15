@@ -227,6 +227,68 @@ describe('InitService.ensurePostGeoIndex', () => {
   });
 });
 
+// ─── ensureMessageDedupIndexes (#18621) ──────────────────────────────────────
+//
+// L'index unique PARTIEL `(conversationId, clientMessageId)` est la seule chose
+// qui ferme la fenêtre de concurrence du dedup d'envoi. Il vivait dans une
+// migration `.mongodb.js` qu'aucun déploiement ne joue — il a manqué DEUX MOIS
+// en production sans que rien ne le détecte. La méthode ci-dessous le pose au
+// même titre que ses voisins, et ce témoin mesure le CÂBLAGE : que la commande
+// part bien vers la base de CE service, pas seulement que la spec est juste.
+
+describe('InitService.ensureMessageDedupIndexes', () => {
+  it('demande l’index de dedup sur une base DÉJÀ initialisée — c’est elle qui porte les messages', async () => {
+    delete process.env.FORCE_DB_RESET;
+    const prisma = makePrisma();
+    (prisma.$runCommandRaw as jest.Mock<any>).mockResolvedValue({ numIndexesBefore: 1, numIndexesAfter: 2 });
+    const sut = new InitService(prisma as any);
+    expect(await sut.shouldInitialize()).toBe(false);
+
+    await sut.ensureMessageDedupIndexes();
+
+    expect(prisma.$runCommandRaw).toHaveBeenCalledWith({
+      createIndexes: 'Message',
+      indexes: [{
+        key: { conversationId: 1, clientMessageId: 1 },
+        name: 'messages_conversationId_clientMessageId_unique',
+        unique: true,
+        partialFilterExpression: { clientMessageId: { $exists: true, $type: 'string', $gt: '' } },
+      }],
+    });
+  });
+
+  /**
+   * Un `E11000` dit que des doublons existent DÉJÀ — exactement ce que l'index
+   * devait empêcher. Le taire ferait du démarrage le complice du défaut qu'il
+   * vient mesurer, et personne ne regarderait plus jamais.
+   */
+  it('remonte une erreur qui n’est pas un conflit d’index — le boot ne continue pas sur un dedup inexistant', async () => {
+    const prisma = makePrisma();
+    (prisma.$runCommandRaw as jest.Mock<any>).mockRejectedValue(new Error('E11000 duplicate key'));
+    const sut = new InitService(prisma as any);
+
+    await expect(sut.ensureMessageDedupIndexes()).rejects.toThrow('E11000');
+  });
+
+  /**
+   * Un conflit 85/86 est l'autre moitié, et il ne se traite PAS pareil : un
+   * index du même nom avec une autre spec existe, et le droper sous une base
+   * vivante est l'affaire d'une migration nommée. Le démarrage le SIGNALE et
+   * continue — refuser de servir laisserait en prime personne pour diagnostiquer.
+   */
+  it('n’arrête pas le boot sur un conflit de spec — il le SIGNALE', async () => {
+    const prisma = makePrisma();
+    (prisma.$runCommandRaw as jest.Mock<any>).mockRejectedValue(
+      Object.assign(new Error('Error code 85 (IndexOptionsConflict)'), {
+        meta: { message: 'Error code 85 (IndexOptionsConflict): different options' },
+      }),
+    );
+    const sut = new InitService(prisma as any);
+
+    await expect(sut.ensureMessageDedupIndexes()).resolves.toBeUndefined();
+  });
+});
+
 // #10000 — World Wide se sème à CHAQUE boot. Son échec ne doit pas arrêter la
 // passerelle : la messagerie entière ne tombe pas parce que la porte publique
 // n'a pas pu être posée — l'erreur est journalisée, le boot suivant réessaie.
