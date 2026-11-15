@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -65,7 +66,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * (`previewPressed` d'iOS).
  *
  * La disposition se calcule une fois par largeur (un [BoxWithConstraints] lit la largeur proposée, aucune mesure par
- * pastille). Un `Row` qui déborde défile et s'estompe au bord de fin de sa fenêtre ; il se cale sur la courante, sans
+ * pastille). L'encombrement est celui des disques ; chaque cellule de 48 dp s'y mesure sans borne et déborde de sa marge
+ * (une ligne de disques de 28 n'a que 28 de haut : bornée, la cellule y serait réduite au disque et décalée). Un `Row` qui déborde défile et s'estompe au bord de fin de sa fenêtre ; il se cale sur la courante, sans
  * animation à l'apparition, au ressort ensuite, immédiatement sous « réduire les animations ». Le cercle, le filet et
  * l'anneau de focus se lisent en phase de DESSIN : un choix ne recompose que les deux pastilles qui changent, et aucune
  * image de la transition ne recompose.
@@ -146,7 +148,10 @@ public fun MeeshyColorDots(
                 trailing?.let { action ->
                     val origin = recipe.cellOrigin(dots.size)
                     Box(
-                        modifier = Modifier.offset(x = origin.first.toFloat().dp, y = origin.second.toFloat().dp).size(recipe.cell.toFloat().dp),
+                        modifier = Modifier
+                            .offset(x = origin.first.toFloat().dp, y = origin.second.toFloat().dp)
+                            .wrapContentSize(Alignment.TopStart, unbounded = true)
+                            .size(recipe.cell.toFloat().dp),
                         contentAlignment = Alignment.Center,
                     ) { action() }
                 }
@@ -249,6 +254,7 @@ private fun MeeshyColorDotButton(
     Box(
         modifier = Modifier
             .offset(x = origin.first.toFloat().dp, y = origin.second.toFloat().dp)
+            .wrapContentSize(Alignment.TopStart, unbounded = true)
             .size(recipe.cell.toFloat().dp)
             .alpha(if (enabled) 1f else MeeshyColorDotsRecipe.DISABLED_OPACITY.toFloat())
             .hoverable(source)
