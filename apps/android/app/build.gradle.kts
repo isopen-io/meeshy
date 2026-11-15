@@ -142,6 +142,7 @@ android {
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(project(":sdk-core"))
+    implementation(project(":core:common"))
     implementation(project(":core:datastore"))
     implementation(project(":sdk-ui"))
     implementation(project(":feature:auth"))

@@ -100,3 +100,12 @@ export async function otherEndToEndDirectOf(
   } as never) as ReadonlyArray<{ readonly id: string; readonly encryptionMode: string | null }>;
   return others.find((other) => !serverReadsMode(other.encryptionMode))?.id ?? null;
 }
+
+/** Tous les tête-à-tête actifs de la paire (le chiffré et le lisible, au plus deux), par leur identifiant. */
+export async function directConversationIdsOf(prisma: Pick<PrismaClient, 'conversation'>, pair: DirectPair): Promise<readonly string[]> {
+  const rows = await prisma.conversation.findMany({
+    where: { type: 'direct', AND: [...bothActive(pair)] },
+    select: { id: true },
+  } as never) as ReadonlyArray<{ readonly id: string }>;
+  return rows.map((row) => row.id);
+}

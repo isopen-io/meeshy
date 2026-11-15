@@ -211,6 +211,7 @@ describe('NotificationPreferenceSchema', () => {
       commentLikeEnabled: false,
       friendContentEnabled: false,
       contactActivityEnabled: false,
+      deviceBatteryEnabled: false,
       gameEnabled: false,
       gamePhotoEnabled: false,
       bringEnabled: false,

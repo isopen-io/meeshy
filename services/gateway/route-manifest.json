@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 810,
+  "routeCount": 818,
   "routes": [
     {
       "method": "DELETE",
@@ -4087,6 +4087,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/device/battery/settings",
+      "module": "deviceBatteryMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/me/engagement",
       "module": "meEngagementRoutes",
       "mountPrefix": "/api/v1/me",
@@ -5494,6 +5508,34 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/relations/:userId/battery",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/:userId/battery/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/relations/:userId/location/history",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
@@ -5509,6 +5551,20 @@
     {
       "method": "GET",
       "path": "/api/v1/relations/:userId/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/battery",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
@@ -9260,6 +9316,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/me/device/battery",
+      "module": "deviceBatteryMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/me/game/chest/claim",
       "module": "meGameRoutes",
       "mountPrefix": "/api/v1/me",
@@ -10107,6 +10177,20 @@
       "path": "/api/v1/reactions",
       "module": "reactionRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/relations/:userId/battery/pull",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -11020,6 +11104,20 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/me/device/battery/settings",
+      "module": "deviceBatteryMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/me/game/frames/atmosphere",
       "module": "meGamePhotoRoutes",
       "mountPrefix": "/api/v1/me",
@@ -11373,6 +11471,20 @@
       "path": "/api/v1/posts/:postId",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/relations/:userId/battery/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

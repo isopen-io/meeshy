@@ -108,6 +108,26 @@ class NotificationTypeCatalogTest {
     }
 
     @Test
+    fun sections_deviceBatteryFollowsContactActivityInGroups() {
+        val groups = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.GROUPS }
+            .items.map { it.type }
+
+        assertThat(groups.take(3)).containsExactly(
+            NotificationType.CONTACT_REQUEST,
+            NotificationType.CONTACT_ACTIVITY,
+            NotificationType.DEVICE_BATTERY,
+        ).inOrder()
+    }
+
+    @Test
+    fun toggle_deviceBatteryLensReadsAndWritesItsOwnField() {
+        val off = NotificationTypeCatalog.toggle(UserNotificationPreferences(), NotificationType.DEVICE_BATTERY, enabled = false)
+        assertThat(off.deviceBatteryEnabled).isFalse()
+        assertThat(off.contactActivityEnabled).isTrue()
+    }
+
+    @Test
     fun toggle_gameAndContactActivityLensesReadAndWriteTheirOwnField() {
         val off = NotificationTypeCatalog.toggle(UserNotificationPreferences(), NotificationType.GAME, enabled = false)
         assertThat(off.gameEnabled).isFalse()

@@ -52,6 +52,12 @@ public enum class RelationFeature(
      * (`RELATION_TEAM_MINOR_APART_FEATURES`, #16623) : le viewer y est le lecteur ou le destinataire.
      */
     public val isMinorApartForTeam: Boolean = false,
+    /**
+     * Le niveau à partir duquel le consentement de l'ÉMETTEUR est accordé PAR DÉFAUT
+     * (`RELATION_EMITTER_CONSENT_DEFAULT_LEVEL`, #14147) : la batterie part entre Sangs sans confirmation, retirable ;
+     * entre Proches elle attend un accord. `null` = seul un accord stocké ouvre.
+     */
+    public val emitterConsentDefaultLevel: RelationLevel? = null,
 ) {
     PRESENCE_ONLINE("presence.online", RelationLevel.FRIEND, isPresence = true),
     PRESENCE_DETAILED("presence.detailed", RelationLevel.CLOSE, isPresence = true),
@@ -79,6 +85,14 @@ public enum class RelationFeature(
     LOCATION_TEMPORARY("location.temporary", RelationLevel.FRIEND, requiresConsent = true),
     LOCATION_HISTORY("location.history", RelationLevel.BLOOD, requiresConsent = true),
     LOCATION_PROXIMITY("location.proximity", RelationLevel.BLOOD, requiresConsent = true),
+    DEVICE_BATTERY("device.battery", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
+    DEVICE_BATTERY_PULL(
+        "device.battery.pull",
+        RelationLevel.BLOOD,
+        requiresConsent = true,
+        isDirected = true,
+        emitterConsentDefaultLevel = RelationLevel.BLOOD,
+    ),
     ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true, isClosedToTeam = true),
     ;
 

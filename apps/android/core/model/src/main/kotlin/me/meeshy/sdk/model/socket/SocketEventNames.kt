@@ -18,6 +18,13 @@ object SocketEventNames {
     const val AUTH_SESSION_REVOKED = "auth:session-revoked"
     const val AUTH_TOKEN_EXPIRED = "auth:token-expired"
 
+    // batterie des Proches (#14147) : relevé et demande (client -> serveur), état et réveil (serveur -> client, `user:<id>`)
+    const val BATTERY_CHANGED = "battery:changed"
+    const val BATTERY_CLEARED = "battery:cleared"
+    const val BATTERY_PULL = "battery:pull"
+    const val BATTERY_PULL_REQUESTED = "battery:pull-requested"
+    const val BATTERY_REPORT = "battery:report"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -290,6 +297,11 @@ object SocketEventNames {
 
     /** Tous les noms du catalogue, dans l'ordre de déclaration. */
     val all: List<String> = listOf(
+        BATTERY_CHANGED,
+        BATTERY_CLEARED,
+        BATTERY_PULL,
+        BATTERY_PULL_REQUESTED,
+        BATTERY_REPORT,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,

@@ -269,6 +269,8 @@ data class UserNotificationPreferences(
     val contactActivityEnabled: Boolean = true,
     // #9490 — « Jeu » (`game_duo_invited`, `game_duo_accepted`, `game_league_result`, `game_season_step`).
     val gameEnabled: Boolean = true,
+    // #14147 — « La batterie de mes Proches et de mes Sangs » (`device_battery`).
+    val deviceBatteryEnabled: Boolean = true,
     val dndEnabled: Boolean = false,
     val dndStartTime: String = "22:00",
     val dndEndTime: String = "08:00",

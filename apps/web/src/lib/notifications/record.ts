@@ -83,7 +83,8 @@ type MetadataField =
   | 'axisKey'
   | 'achievementKey'
   | 'gameSection'
-  | 'reason';
+  | 'reason'
+  | 'batteryKind';
 
 const METADATA_FIELDS: readonly MetadataField[] = [
   'postType',
@@ -100,6 +101,7 @@ const METADATA_FIELDS: readonly MetadataField[] = [
   'achievementKey',
   'gameSection',
   'reason',
+  'batteryKind',
 ];
 
 /** `tierRank` (#10298) : présent ⇒ le palier est composé par le serveur, titre et corps compris. */

@@ -186,10 +186,14 @@ describe('DELETE /delete-account — a returning account keeps no ritual share (
     const { app } = await buildApp({ prisma });
     await app.inject({ method: 'DELETE', url: '/delete-account', payload: { confirmationPhrase: VALID_PHRASE } });
 
-    expect(order).toEqual(['shares', 'return']);
+    expect(order).toEqual(['shares', 'shares', 'return']);
     expect(prisma.relationFeatureSetting.updateMany).toHaveBeenCalledWith({
       where: { OR: [{ ownerId: USER_ID }, { otherId: USER_ID }] },
       data: { listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false },
+    });
+    expect(prisma.relationFeatureSetting.updateMany).toHaveBeenCalledWith({
+      where: { OR: [{ ownerId: USER_ID }, { otherId: USER_ID }], batteryShared: true },
+      data: { batteryShared: null },
     });
     await app.close();
   });

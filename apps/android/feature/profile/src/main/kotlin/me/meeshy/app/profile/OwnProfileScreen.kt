@@ -71,6 +71,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.R as UiR
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
+import me.meeshy.ui.component.battery.BatterySharingSwitch
 import me.meeshy.ui.component.retouch.EntityImageRetouchHost
 import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
 import me.meeshy.ui.component.retouch.rememberEntityImagePicker
@@ -319,6 +320,8 @@ internal fun OwnProfileBody(
                 onPickLanguage = onPickLanguage,
                 onEvent = onEvent,
             )
+            // Partager ma batterie, pour tous (#14147) : la coupure globale, côté émetteur, dans MON profil.
+            BatterySharingSwitch()
         }
         Spacer(Modifier.height(MeeshySpacing.xxxl + MeeshySpacing.sm))
     }

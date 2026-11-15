@@ -157,6 +157,18 @@ class RelationAccessCasesTest {
     }
 
     @Test
+    fun `the emitter consent default is the one of the TypeScript table`() {
+        val table = blockAfter("export const RELATION_EMITTER_CONSENT_DEFAULT_LEVEL", "};", levelsSource)
+        val declared = Regex("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'").findAll(table)
+            .associate { row -> (row.groupValues[1].ifEmpty { row.groupValues[2] }) to row.groupValues[3] }
+        val mirrored = RelationFeature.entries
+            .mapNotNull { feature -> feature.emitterConsentDefaultLevel?.let { feature.wire to it.wire } }
+            .toMap()
+        assertThat(declared).isNotEmpty()
+        assertThat(mirrored).isEqualTo(declared)
+    }
+
+    @Test
     fun `the minor shield is the one of the TypeScript table`() {
         val table = blockAfter("export const RELATION_MINOR_TARGET_MIN_LEVEL", "};", levelsSource)
         val declared = Regex("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'").findAll(table)
