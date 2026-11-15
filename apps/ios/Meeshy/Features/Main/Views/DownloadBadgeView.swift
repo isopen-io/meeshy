@@ -111,9 +111,6 @@ struct DownloadBadgeView: View {
     private var centredIdleBadge: some View {
         VStack(spacing: 6) {
             ZStack {
-                Color.clear
-                    .frame(width: 56, height: 56)
-                    .meeshyGlass(in: Circle(), isInteractive: true)
                 Circle()
                     .fill(accent.opacity(MeeshyOpacity.intense))
                     .frame(width: 48, height: 48)
@@ -121,6 +118,8 @@ struct DownloadBadgeView: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .bold))
                     .foregroundStyle(Color.white)
             }
+            .frame(width: 56, height: 56)
+            .meeshyGlass(in: Circle(), isInteractive: true)
             .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
 
             if !totalSizeText.isEmpty {
@@ -139,9 +138,6 @@ struct DownloadBadgeView: View {
     /// dans le coin d'une case de grille sans toucher au « +N » du centre.
     private var compactIdleBadge: some View {
         ZStack {
-            Color.clear
-                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
-                .meeshyGlass(in: Circle(), isInteractive: true)
             Circle()
                 .fill(accent.opacity(MeeshyOpacity.intense))
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
@@ -149,6 +145,8 @@ struct DownloadBadgeView: View {
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                 .foregroundStyle(Color.white)
         }
+        .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+        .meeshyGlass(in: Circle(), isInteractive: true)
         .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
         .frame(width: MediaTileDownloadPlacement.compactHitTarget,
                height: MediaTileDownloadPlacement.compactHitTarget)

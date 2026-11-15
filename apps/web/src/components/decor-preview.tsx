@@ -14,6 +14,8 @@ import { isZoomed, MIN_ZOOM, toggleZoom, wheelZoom, zoomBy } from '@/lib/packs/p
 import { decorItemName, useAppearanceNames, usePackItems, useProposals, type PackRef } from '@/lib/packs/use-pack-items';
 import { equipProfileDecor } from '@/lib/profile-decor/equip';
 import { useDecorDesigns } from '@/lib/profile-decor/use-decor-designs';
+import '@/styles/sheet-motion.css';
+import { DIALOG_MOTION_STYLE, useDialogExit } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 import { DecorStage, DecorThumb } from './decor-stage';
@@ -41,6 +43,9 @@ import { useScheme } from './profile-banner-design';
  */
 
 const SWIPE_DISTANCE = 48;
+
+/** Le zoom de l'aperçu glisse d'un cran à l'autre ; au doigt, la scène suit sans retard (#18327). */
+export const DECOR_ZOOM_MS = 150;
 
 export type DecorPreviewProps = {
   readonly language: InterfaceLanguage;
@@ -79,8 +84,10 @@ export function DecorPreview(props: DecorPreviewProps) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [equipFailed, setEquipFailed] = useState(false);
   const pointer = useRef<{ readonly x: number; readonly y: number; readonly id: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   useBackDismiss(onClose);
+  useDialogExit(ref, { kind: 'confirm' });
 
   useEffect(() => {
     const dialog = ref.current;
@@ -143,6 +150,7 @@ export function DecorPreview(props: DecorPreviewProps) {
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
     pointer.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    setDragging(true);
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>): void => {
     const start = pointer.current;
@@ -153,6 +161,7 @@ export function DecorPreview(props: DecorPreviewProps) {
   const onPointerUp = (event: PointerEvent<HTMLDivElement>): void => {
     const start = pointer.current;
     pointer.current = null;
+    setDragging(false);
     if (start === null || zoomed) return;
     const dx = event.clientX - start.x;
     if (Math.abs(dx) < SWIPE_DISTANCE) return;
@@ -182,13 +191,14 @@ export function DecorPreview(props: DecorPreviewProps) {
       ref={ref}
       aria-labelledby={titleId}
       data-decor-preview={`${pack.domain}:${pack.slug}`}
+      data-dialog-fade=""
       onKeyDown={onKeyDown}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
       className="m-0 h-dvh max-h-none w-screen max-w-none p-0"
-      style={{ border: 0, backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}
+      style={{ ...DIALOG_MOTION_STYLE, border: 0, backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}
     >
       <div className="flex h-full flex-col pt-safe pb-safe">
         <header className="flex shrink-0 items-center gap-2 px-3 py-2">
@@ -224,14 +234,16 @@ export function DecorPreview(props: DecorPreviewProps) {
             onPointerUp={onPointerUp}
             onPointerCancel={() => {
               pointer.current = null;
+              setDragging(false);
             }}
             onDoubleClick={() => setScale(toggleZoom(zoom))}
             className="flex size-full touch-none select-none items-center justify-center"
           >
             {item !== undefined ? (
               <div
-                className="flex w-full items-center justify-center transition-transform duration-150 motion-reduce:transition-none"
-                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+                data-dragging={dragging ? '' : undefined}
+                className="flex w-full items-center justify-center transition-transform motion-reduce:transition-none"
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transitionDuration: dragging ? '0ms' : `${DECOR_ZOOM_MS}ms` }}
               >
                 <DecorStage item={item} profile={profile.data} mine={mine} accent={accent} scheme={scheme} language={language} />
               </div>

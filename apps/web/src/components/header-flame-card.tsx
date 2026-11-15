@@ -24,6 +24,7 @@ export function FlameCard({
   language,
   onClose,
   onHide,
+  leaving = false,
 }: {
   readonly id: string;
   readonly snapshot: ConversationEngagementSnapshot | undefined;
@@ -32,10 +33,12 @@ export function FlameCard({
   readonly onClose: () => void;
   /** Absent : la carte ne propose pas « Masquer la flamme ». */
   readonly onHide?: () => void;
+  /** Refermée, la carte reste peinte le temps de sa sortie (#18327), hors de la pile du retour. */
+  readonly leaving?: boolean;
 }) {
   const model = flameCardModel(snapshot, day, language);
   if (model === null) return null;
-  return <FlameCardLayer id={id} model={model} language={language} onClose={onClose} {...(onHide === undefined ? {} : { onHide })} />;
+  return <FlameCardLayer id={id} model={model} language={language} onClose={onClose} leaving={leaving} {...(onHide === undefined ? {} : { onHide })} />;
 }
 
 function FlameCardLayer({
@@ -44,17 +47,19 @@ function FlameCardLayer({
   language,
   onClose,
   onHide,
+  leaving,
 }: {
   readonly id: string;
   readonly model: FlameCardModel;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
   readonly onHide?: () => void;
+  readonly leaving: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
-  useBackDismiss(onClose, { escape: true });
+  useBackDismiss(onClose, { escape: true, active: !leaving });
 
   useEffect(() => {
     const onPointer = (event: PointerEvent) => {
@@ -71,10 +76,12 @@ function FlameCardLayer({
   return (
     <div
       ref={ref}
-      id={id}
+      id={leaving ? undefined : id}
       role="dialog"
       aria-label={translate(language, 'engagement.card.title')}
       data-flame-card=""
+      data-leaving={leaving ? '' : undefined}
+      inert={leaving || undefined}
       className="header-flame-card pointer-events-auto"
     >
       <div className="flex items-baseline gap-2">

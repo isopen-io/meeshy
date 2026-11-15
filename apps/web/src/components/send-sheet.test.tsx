@@ -10,6 +10,7 @@ import type { SendPayload } from '@/lib/send/send-sheet-plan';
 import type { SendSheetPorts } from '@/lib/send/send-sheet-run';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
 import { takeStudioSeed } from '@/lib/stories/studio-seed';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { href } from '@/routes/route-table';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -271,6 +272,15 @@ describe('SendSheet — choisir à qui', () => {
     expect(community?.getAttribute('aria-expanded')).toBe('false');
     await mounter.click(community);
     expect(host.querySelector('[data-send-community="k1"] [data-send-target="conversation:k-general"]')).not.toBe(null);
+  });
+
+  test('ses canaux entrent en fondu, et le chevron tourne au fondu de K13 (#18327)', async () => {
+    const channel = { ...group('k-general', '#général'), communityId: 'k1' };
+    const host = await mount({ directory: directoryOf({ conversations: [channel], friends: [], communities: { k1: { name: 'Lyon Polyglotte' } } }) });
+    const community = host.querySelector<HTMLElement>('[data-send-community="k1"] button');
+    expect(community?.querySelector<HTMLElement>('svg')?.style.transition).toContain(`${LAYER_MOTION_MS}ms`);
+    await mounter.click(community);
+    expect(host.querySelector('[data-send-community="k1"] ul')?.hasAttribute('data-layer-motion')).toBe(true);
   });
 });
 
