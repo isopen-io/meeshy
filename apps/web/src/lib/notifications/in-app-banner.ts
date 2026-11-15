@@ -1,7 +1,5 @@
 import { createStore } from 'zustand/vanilla';
 
-
-
 import { conversationPreviewStore } from './conversation-preview';
 import type { NotificationRecord } from './record';
 
@@ -48,13 +46,25 @@ export const inAppBannerStore = createStore<BannerState>((set) => ({
 /**
  * Le type que la passerelle sert pour la batterie d'un Proche (`BATTERY_NOTIFICATION_TYPE`), écrit en LITTÉRAL :
  * ce module est dans la première peinture, et le contrat de la batterie n'a rien à y faire. Un témoin tient les
- * deux égaux ; la pastille se charge à la première batterie reçue, jamais au démarrage.
+ * deux égaux. La pastille n'est pas importée d'ici : l'hôte de la batterie, chargé après la première peinture,
+ * confie son annonceur (`handBatteryAnnouncer`) ; avant lui, la notification se tait, elle ne descend pas en bannière.
  */
 export const IN_APP_BATTERY_TYPE = 'device_battery';
 
+type BatteryAnnouncer = (notification: NotificationRecord) => void;
+
+let batteryAnnouncer: BatteryAnnouncer | null = null;
+
+export function handBatteryAnnouncer(announcer: BatteryAnnouncer): () => void {
+  batteryAnnouncer = announcer;
+  return () => {
+    if (batteryAnnouncer === announcer) batteryAnnouncer = null;
+  };
+}
+
 export function offerInAppBanner(notification: NotificationRecord, location: { readonly pathname: string }): void {
   if (notification.type === IN_APP_BATTERY_TYPE) {
-    void import('@/lib/battery/battery-pill').then((pill) => pill.announceBatteryNotification(notification));
+    batteryAnnouncer?.(notification);
     return;
   }
   if (!shouldShowBanner(notification, location)) return;

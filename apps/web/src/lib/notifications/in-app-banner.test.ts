@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { closeConversationPreview, conversationPreviewStore, openConversationPreview } from './conversation-preview';
 import { BATTERY_NOTIFICATION_TYPE } from '@meeshy/shared/types/battery-constants';
 
-import { IN_APP_BATTERY_TYPE, inAppBannerStore, offerInAppBanner, shouldShowBanner } from './in-app-banner';
+import { handBatteryAnnouncer, IN_APP_BATTERY_TYPE, inAppBannerStore, offerInAppBanner, shouldShowBanner } from './in-app-banner';
+import { announceBatteryNotification } from '@/lib/battery/battery-pill';
 import { bannerPresentation, bannerSwipeOutcome } from './in-app-banner-view';
 import type { NotificationRecord } from './record';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
@@ -146,16 +147,25 @@ describe('la batterie d’un Proche, onglet ouvert (#14147)', () => {
     expect(IN_APP_BATTERY_TYPE).toBe(BATTERY_NOTIFICATION_TYPE);
   });
 
-  test('ne descend jamais en bannière : la pastille la dit à sa place, une seule fois', async () => {
+  const battery = () =>
+    record({ type: 'device_battery', title: 'Ada n’a presque plus de batterie', content: 'Batterie à 4 %', context: {}, metadata: { batteryKind: 'critical' } });
+
+  test('ne descend jamais en bannière : la pastille la dit à sa place, une seule fois', () => {
     inAppBannerStore.getState().dismiss();
     pillAnnouncementStore.setState({ queue: [] });
-    offerInAppBanner(
-      record({ type: 'device_battery', title: 'Ada n’a presque plus de batterie', content: 'Batterie à 4 %', context: {}, metadata: { batteryKind: 'critical' } }),
-      { pathname: '/c' },
-    );
+    const release = handBatteryAnnouncer((notification) => void announceBatteryNotification(notification));
+    offerInAppBanner(battery(), { pathname: '/c' });
+    release();
     expect(inAppBannerStore.getState().current).toBeNull();
-    for (let tick = 0; tick < 50 && pillAnnouncementStore.getState().queue.length === 0; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0));
     expect(pillAnnouncementStore.getState().queue.map((entry) => entry.text)).toEqual(['Ada n’a presque plus de batterie · Batterie à 4 %']);
     pillAnnouncementStore.setState({ queue: [] });
+  });
+
+  test('avant que l’hôte de la batterie ne confie son annonceur, la notification se tait sans bannière', () => {
+    inAppBannerStore.getState().dismiss();
+    pillAnnouncementStore.setState({ queue: [] });
+    offerInAppBanner(battery(), { pathname: '/c' });
+    expect(inAppBannerStore.getState().current).toBeNull();
+    expect(pillAnnouncementStore.getState().queue).toEqual([]);
   });
 });

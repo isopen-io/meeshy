@@ -11,9 +11,10 @@ import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
 import { batteryStateOf, bindBatteryLive } from '@/lib/battery/battery-live';
-import { announceBatteryOnPill } from '@/lib/battery/battery-pill';
+import { announceBatteryNotification, announceBatteryOnPill } from '@/lib/battery/battery-pill';
 import { batteryAnnouncementText } from '@/lib/battery/battery-view';
 import { loadBatteryCatalog } from '@/lib/i18n-battery-catalog';
+import { handBatteryAnnouncer } from '@/lib/notifications/in-app-banner';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { knownPersonByIdInConversations } from '@/lib/profile/known-people-cache';
 import { pillAnnouncementStore, type PillAnnouncementStoreApi } from '@/lib/view/sync-pill-announcements';
@@ -92,5 +93,6 @@ export function BatteryHost({
       ),
     [watch, client, store, snapshot, language],
   );
+  useEffect(() => handBatteryAnnouncer((notification) => void announceBatteryNotification(notification, { store })), [store]);
   return null;
 }
