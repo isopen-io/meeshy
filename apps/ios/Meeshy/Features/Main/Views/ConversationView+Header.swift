@@ -264,22 +264,49 @@ extension ConversationView {
             return
         }
 
-        // P4.1: the network call lives in `ConversationCreator` so the
-        // view doesn't have to know about APIClient.shared, the body
-        // encoding, or the conversion to the local `Conversation` model.
-        // Errors are intentionally swallowed here (preserved behaviour) —
-        // the call is fire-and-forget from a user gesture; if it fails
-        // the user can re-tap.
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        do {
-            let newConv = try await ConversationCreator().createDirectConversation(
-                with: userId,
-                currentUserId: currentUserId
-            )
+        switch await directMessageOpener.open(with: userId, currentUserId: currentUserId) {
+        case .busy:
+            return
+        case .opened(let newConv):
             await conversationListViewModel?.refresh()
             router.navigateToConversation(newConv)
+        case .failed:
+            FeedbackToastManager.shared.showError(
+                String(localized: "conversation.create.error", defaultValue: "Impossible de créer la conversation", bundle: .main)
+            )
+        }
+    }
+}
+
+// MARK: - Ouvrir le direct d'un membre (#18297)
+
+@MainActor
+final class DirectMessageOpener {
+    enum Outcome: Equatable {
+        case busy
+        case opened(Conversation)
+        case failed
+    }
+
+    nonisolated deinit {}
+
+    private let creator: ConversationCreating
+    private(set) var isOpening = false
+
+    init(creator: ConversationCreating = ConversationCreator()) {
+        self.creator = creator
+    }
+
+    func open(with userId: String, currentUserId: String) async -> Outcome {
+        guard !isOpening else { return .busy }
+        isOpening = true
+        defer { isOpening = false }
+        do {
+            return .opened(try await creator.createDirectConversation(with: userId, currentUserId: currentUserId))
         } catch {
             Logger.network.error("createDirectConversation failed: \(error.localizedDescription)")
+            return .failed
         }
     }
 }

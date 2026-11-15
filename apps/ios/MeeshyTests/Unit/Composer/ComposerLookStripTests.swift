@@ -188,20 +188,43 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertTrue(bande.contains(".scrollTargetLayout()"))
     }
 
-    func test_band_writesOneName_theChosenOne_largeUnderTheCells() throws {
+    // MARK: - #18639 — chaque case se nomme sous elle, avant d'être choisie
+
+    func test_nameSize_theChosenIsAFewPointsLarger_neverMore() {
+        let choisie = ComposerLookStripRule.nameSize(chosen: true)
+        let autre = ComposerLookStripRule.nameSize(chosen: false)
+        XCTAssertGreaterThan(choisie, autre)
+        XCTAssertLessThanOrEqual(choisie - autre, 4, "quelques points, pas un titre")
+        XCTAssertGreaterThanOrEqual(autre, 9, "lisible sous la case")
+    }
+
+    func test_band_namesEveryCell_underIt_theChosenInBold() throws {
         let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
-        let debut = try XCTUnwrap(bande.range(of: "private func cell(item: ComposerLookStripItem, chosen: Bool)"))
-        let fin = try XCTUnwrap(bande.range(of: "private func glyph(", range: debut.upperBound..<bande.endIndex))
-        let cellule = String(bande[debut.upperBound..<fin.lowerBound])
-        XCTAssertFalse(cellule.contains("Text("), "aucune case n'écrit son nom : seul le choix se nomme")
-        XCTAssertEqual(bande.components(separatedBy: "Text(chosenItemName)").count - 1, 1, "UN nom, celui du choix")
-        XCTAssertTrue(bande.contains("MeeshyFont.relative(ComposerLookStripRule.chosenNameSize, weight: .bold)"))
-        XCTAssertEqual(ComposerLookStripRule.chosenNameSize, 10, "deux fois plus petit que les 20 pt d'avant (porteur 2026-10-12)")
+        XCTAssertFalse(bande.contains("chosenItemName"), "plus un seul nom en grand sous la bande")
+        let debut = try XCTUnwrap(bande.range(of: "private func names(of cases: [ComposerLookStripItem], chosen: Int?)"))
+        let fin = try XCTUnwrap(bande.range(of: "private func cell(", range: debut.upperBound..<bande.endIndex))
+        let noms = String(bande[debut.upperBound..<fin.lowerBound])
+        XCTAssertTrue(noms.contains("ForEach(Array(cases.enumerated())"), "un nom par case")
+        XCTAssertTrue(noms.contains("Text(ComposerCaptureCopy.itemName(item))"))
+        XCTAssertTrue(noms.contains("weight: index == chosen ? .bold : .medium"), "la choisie en gras")
+        XCTAssertTrue(noms.contains("ComposerLookStripRule.nameSize(chosen: index == chosen)"))
+        XCTAssertTrue(bande.contains("names(of: cases, chosen: choisie)"), "posés dans la bande, sous les cases")
+    }
+
+    func test_tuningPanel_hasAnOpaqueBackdrop_andNeverCoversTheRail() throws {
+        XCTAssertGreaterThanOrEqual(ComposerLookTuningPanel.backdropOpacity, 0.9,
+                                    "ni la bande ni l'image ne transparaissent sous ses mots")
+        let panneau = try Self.code("Meeshy/Features/Composer/ComposerLookTuningPanel.swift")
+        XCTAssertTrue(panneau.contains(".fill(Color.black.opacity(Self.backdropOpacity))"))
+        XCTAssertFalse(panneau.contains(".fill(Color.black.opacity(0.5))"))
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains(".padding(.leading, ComposerEditScene.railColumnWidth)"),
+                      "le réglage s'ouvre à droite de la colonne, jamais par-dessus")
     }
 
     func test_rail_sitsAtTheLevelOfTheBand_itsBottomOnTheCellsBottom() throws {
         XCTAssertEqual(ComposerLookStripRule.railBottomInset,
-                       ComposerLookStripRule.chosenNameHeight + ComposerTriggerOutline.outset,
+                       ComposerLookStripRule.nameHeight + ComposerTriggerOutline.outset,
                        "le bas de Filtres · Effets · Cadres s'aligne sur le bas des cases (porteur 2026-10-12)")
         let rangee = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(rangee.contains(".padding(.bottom, ComposerLookStripRule.railBottomInset)"))

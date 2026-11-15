@@ -5,8 +5,10 @@
  * or Redis-backed token bucket algorithm
  */
 
-import { Socket } from 'socket.io';
-import { REACTION_SYNC_BUDGET } from '@meeshy/shared/types/socketio-events';
+import type { MeeshySocket as Socket } from '../socketio/typed-socket';
+import { REACTION_SYNC_BUDGET, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CALL_ERROR_CODES } from '@meeshy/shared/types/call-error-codes';
+import type { CallError } from '@meeshy/shared/types/video-call';
 import { logger } from './logger.js';
 import { guardedInterval } from './guarded-timer.js';
 
@@ -495,23 +497,41 @@ export function callSignalBudgetId(userId: string, socketId: string): string {
  * @param rateLimiter - Rate limiter instance
  * @param errorEvent - Event to emit on rate limit exceeded
  * @returns True if allowed, false if rate limited
+ *
+ * ## Le canal et la charge sont tenus au CONTRAT (#18655)
+ *
+ * Ce site a longtemps pris le `Socket` NU de socket.io (`DefaultEventsMap`,
+ * donc `emit(ev: string, ...args: any[])`) avec `errorEvent: string` — c'est
+ * exactement la famille que `typed-socket.ts` existe pour fermer, et que
+ * `sweepRawServerEmitters` ne voyait pas : son discriminant ne cherche que
+ * `Server`.
+ *
+ * Ce que l'absence de porte laissait passer : un `retryAfter` à la RACINE de la
+ * charge, qu'aucun contrat ne déclare et qu'aucun des trois clients ne lit. Il
+ * vit désormais dans `details`, le champ que `CallError` porte pour cela —
+ * rétrocompatible, puisque personne ne le lisait d'un côté comme de l'autre.
+ *
+ * Les sept appelants passent tous `CALL_EVENTS.ERROR` : le paramètre nomme donc
+ * ce seul canal plutôt qu'une union, et le couple est vérifié au site d'appel.
  */
 export async function checkSocketRateLimit(
   socket: Socket,
   userId: string,
   config: RateLimitConfig,
   rateLimiter: SocketRateLimiter,
-  errorEvent: string = 'call:error'
+  errorEvent: typeof SERVER_EVENTS.CALL_ERROR = SERVER_EVENTS.CALL_ERROR
 ): Promise<boolean> {
   const allowed = await rateLimiter.checkLimit(userId, config);
 
   if (!allowed) {
     const info = rateLimiter.getRateLimitInfo(userId, config);
-    socket.emit(errorEvent, {
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: `Too many requests. Please try again in ${Math.ceil(info.resetIn / 1000)} seconds`,
-      retryAfter: Math.ceil(info.resetIn / 1000)
-    });
+    const retryAfterSeconds = Math.ceil(info.resetIn / 1000);
+    const refusal: CallError = {
+      code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED,
+      message: `Too many requests. Please try again in ${retryAfterSeconds} seconds`,
+      details: { retryAfter: retryAfterSeconds },
+    };
+    socket.emit(errorEvent, refusal);
   }
 
   return allowed;

@@ -222,6 +222,9 @@ export function SettingsSecurityScreen({
             </p>
           )}
           <GroupedSection id="security-e2ee" title={t('e2eeDevices.section').toLocaleUpperCase(language)} icon={<Glyph name="lock" size={12} />}>
+            <p data-settings-e2ee-lead className="px-3.5 pt-2.5 text-caption" style={{ color: SECTION_INK_2 }}>
+              {t('e2eeDevices.section.lead')}
+            </p>
             <Link
               to="settings"
               search={{ [SECURITY_PANEL_PARAM]: E2EE_DEVICES_PANEL }}

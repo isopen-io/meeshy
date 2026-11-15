@@ -124,6 +124,15 @@ describe('la rangée d’un lien de partage montre de quoi le reconnaître', () 
     expect(host.querySelector('a')?.getAttribute('aria-label')).toContain('Créé le 10 sept. 2026');
   });
 
+  test('la conversation cible a sa propre ligne, jamais coupée à un mot', async () => {
+    const host = await mountRow(shareLink({ isActive: false, inactiveReason: 'REVOKED' }));
+    const conversation = host.querySelector('[data-share-link-conversation]');
+    expect(conversation?.textContent).toBe('Salle sécurité du réseau');
+    expect(conversation?.className ?? '').not.toContain('truncate');
+    expect(conversation?.className ?? '').toContain('line-clamp-2');
+    expect(host.querySelector('[data-share-link-joined]')?.parentElement?.contains(conversation ?? null)).toBe(false);
+  });
+
   test('l’expiration s’ajoute à la date de création', async () => {
     const text = seen(await mountRow(shareLink({ expiresAt: '2999-01-05T09:00:00.000Z' }))).join(' ');
     expect(text).toContain('10/09/2026');
@@ -135,7 +144,7 @@ describe('la rangée d’un lien de partage montre de quoi le reconnaître', () 
   });
 });
 
-const trackingLink = (): MyTrackingLink => ({
+const trackingLink = (overrides: Partial<MyTrackingLink> = {}): MyTrackingLink => ({
     token: 'rentree26',
     name: 'Campagne de rentrée',
     originalUrl: 'https://exemple.com/page',
@@ -148,6 +157,7 @@ const trackingLink = (): MyTrackingLink => ({
     expiresAt: null,
     createdAt: '2026-09-10T09:00:00.000Z',
     lastClickedAt: null,
+    ...overrides,
 });
 
 const token = (): AffiliateToken => ({
@@ -173,6 +183,26 @@ describe('les rangées de suivi et de parrainage portent leur date de création'
     expect(text).toContain('12 clics');
     expect(text).toContain('10/09/2026');
     expect(host.querySelector('a')?.getAttribute('aria-label')).toContain('Créé le 10 sept. 2026');
+  });
+
+  test('suivi : le dernier clic se lit sur la rangée et s’entend dans son libellé', async () => {
+    const host = await mount(
+      <ul>
+        <TrackingLinkRow language="fr" link={trackingLink({ lastClickedAt: '2026-10-03T19:12:00.000Z' })} copied={false} onCopy={noop} />
+      </ul>,
+    );
+    expect(seenIn(host, '[data-tracking-last-click]')).toBe('Dernier clic : 3 oct. 2026');
+    expect(host.querySelector('a')?.getAttribute('aria-label')).toContain('Dernier clic : 3 oct. 2026');
+  });
+
+  test('suivi : un lien jamais cliqué n’invente pas de dernier clic', async () => {
+    const host = await mount(
+      <ul>
+        <TrackingLinkRow language="fr" link={trackingLink()} copied={false} onCopy={noop} />
+      </ul>,
+    );
+    expect(host.querySelector('[data-tracking-last-click]')).toBeNull();
+    expect(host.querySelector('a')?.getAttribute('aria-label')).not.toContain('Dernier clic');
   });
 
   test('parrainage : la jauge et date de création', async () => {
@@ -219,10 +249,17 @@ describe('« Nouveau lien de partage » oriente et dit l’effet de chaque autor
     const host = await mount(<ShareLinkNewScreen />);
     const text = seen(host);
     expect(text).toContain('Ce que les invités anonymes peuvent faire');
-    expect(seenIn(host, '[data-link-rule-row="allowAnonymousMessages"]')).toBe('Messages | Les invités peuvent écrire dans la conversation');
-    expect(seenIn(host, '[data-link-rule-row="allowAnonymousImages"]')).toBe('Images | Les invités peuvent partager des photos');
-    expect(seenIn(host, '[data-link-rule-row="allowAnonymousFiles"]')).toBe('Fichiers | Les invités peuvent envoyer des documents');
-    expect(seenIn(host, '[data-link-rule-row="allowViewHistory"]')).toBe('Historique | Les invités voient les messages précédents');
+    expect(seenIn(host, '[data-link-rule-row="allowAnonymousMessages"]')).toBe('Messages | Écrire dans la conversation');
+    expect(seenIn(host, '[data-link-rule-row="allowAnonymousImages"]')).toBe('Images | Partager des photos');
+    expect(seenIn(host, '[data-link-rule-row="allowAnonymousFiles"]')).toBe('Fichiers | Envoyer des documents');
+    expect(seenIn(host, '[data-link-rule-row="allowViewHistory"]')).toBe('Historique | Lire les messages précédents');
+  });
+
+  test('le titre de section dit « les invités » une fois : aucune rangée ne le répète', async () => {
+    const host = await mount(<ShareLinkNewScreen />);
+    const section = host.querySelector('[data-link-rule-row="allowAnonymousMessages"]')?.closest('section') ?? host;
+    const said = seen(section).join(' ').match(/invités/giu) ?? [];
+    expect(said).toHaveLength(1);
   });
 
   test('les exigences non évidentes disent leur effet ; pseudo et e-mail, usuels, restent nus', async () => {
@@ -237,7 +274,7 @@ describe('« Nouveau lien de partage » oriente et dit l’effet de chaque autor
     const host = await mount(<ShareLinkNewScreen />);
     const toggle = host.querySelector('[data-link-rule="allowViewHistory"]');
     const described = toggle?.getAttribute('aria-describedby') ?? '?';
-    expect(host.querySelector(`[id="${described}"]`)?.textContent).toBe('Les invités voient les messages précédents');
+    expect(host.querySelector(`[id="${described}"]`)?.textContent).toBe('Lire les messages précédents');
   });
 
   test('« Limiter » dit ce que bornent ses réglages', async () => {
@@ -268,7 +305,7 @@ describe('« Modifier le lien » garde les mêmes repères', () => {
     const host = await mountForm();
     const text = seen(host);
     expect(text).toContain('Ce que les invités anonymes peuvent faire');
-    expect(text).toContain('Les invités voient les messages précédents');
+    expect(text).toContain('Lire les messages précédents');
     expect(text).toContain('Contrôlez l’audience et la durée de vie du lien');
     expect(text).toContain('Désactive « Toutes les langues » pour choisir.');
   });

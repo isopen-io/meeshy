@@ -40,6 +40,7 @@ import { join } from 'path';
 import {
   sweepErasingEmitArgumentCasts,
   sweepRawServerEmitters,
+  sweepRawSocketEmitters,
   sweepUntypedEmitDoors,
 } from './server-emit-door-sweep';
 
@@ -152,5 +153,35 @@ describe('portes d’émission Socket.IO — aucun couple (événement, charge) 
     expect(
       sweepErasingEmitArgumentCasts(join(__dirname, 'fixtures', 'correlated-emit-argument'))
     ).toEqual([]);
+  });
+});
+
+/**
+ * ## Le jumeau du `Server` nu : le `Socket` nu (#18655)
+ *
+ * Même cause, même effet — sans paramètres de type, socket.io retombe sur
+ * `DefaultEventsMap` (`emit(ev: string, ...args: any[])`). `sweepRawServerEmitters`
+ * ne cherche que `Server`, et `utils/socket-rate-limiter.ts` a poussé pendant
+ * tout ce temps un `retryAfter` à la racine de `call:error`, qu'aucun contrat
+ * ne déclare et qu'aucun client ne lit.
+ */
+describe('portes d’émission Socket.IO — aucun `Socket` NU détenu pour émettre', () => {
+  it('aucun émetteur de production ne prend le type nu de socket.io', () => {
+    expect(sweepRawSocketEmitters(SRC_DIR)).toEqual([]);
+  });
+
+  it('le balayage VOIT les DEUX formes d’import, `type` et VALEUR', () => {
+    const holders = sweepRawSocketEmitters(join(__dirname, 'fixtures', 'raw-socket-emitter'));
+
+    // La forme VALEUR est celle du site réel : le discriminant de `Server`,
+    // qui n'accepte que `import type`, l'aurait manquée.
+    expect(holders.map((h) => h.declaration)).toEqual([
+      'export function refuse(socket: Socket): void {',
+      'export function refuseAliased(socket: BareSocket): void {',
+    ]);
+  });
+
+  it('le balayage ne signale ni la DÉRIVATION, ni la simple DÉTENTION, ni la porte dérivée', () => {
+    expect(sweepRawSocketEmitters(join(__dirname, 'fixtures', 'derived-socket-emitter'))).toEqual([]);
   });
 });

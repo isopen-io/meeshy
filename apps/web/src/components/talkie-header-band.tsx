@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import {
   createTalkieWaveTrail,
@@ -64,6 +65,12 @@ export function talkieAnnouncement(language: InterfaceLanguage, live: ThreadTalk
 // #ef4444) — le jeton `error` schématisé tombe à un rouge foncé illisible sur du
 // verre sombre en thème clair.
 const RECORDING_RED = 'var(--ios-error-strong)';
+
+/** Les deux halos de la bande, l'un en direct, l'autre relayé : on fond leur opacité, jamais l'ombre (contrat M6). */
+const HALOS = [
+  { name: 'live', blur: 10, strength: 55 },
+  { name: 'quiet', blur: 4, strength: 20 },
+] as const;
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const REDUCED_MOTION_PERIOD_MS = 100;
 
@@ -206,12 +213,21 @@ export function TalkieHeaderBand({
   const realtime = isRealtimeDelivery(live.delivery);
   return (
     <div data-talkie-band="" data-talkie-delivery={live.delivery} aria-hidden="true" className="pointer-events-none absolute inset-x-3 inset-y-1.5 z-10">
+      {HALOS.map((halo) => (
+        <span
+          key={halo.name}
+          data-talkie-halo={halo.name}
+          className="absolute inset-0 rounded-full"
+          style={{
+            boxShadow: `0 0 ${halo.blur}px color-mix(in srgb, ${accent} ${halo.strength}%, transparent)`,
+            opacity: (halo.name === 'live') === realtime ? 1 : 0,
+            transition: `opacity ${LAYER_MOTION_MS}ms`,
+          }}
+        />
+      ))}
       <div
-        className="relative flex size-full items-center gap-2 overflow-hidden rounded-full px-3 transition-[box-shadow] duration-300"
-        style={{
-          background: `linear-gradient(to right, ${accent}, ${secondary})`,
-          boxShadow: `0 0 ${realtime ? 10 : 4}px color-mix(in srgb, ${accent} ${realtime ? 55 : 20}%, transparent)`,
-        }}
+        className="relative flex size-full items-center gap-2 overflow-hidden rounded-full px-3"
+        style={{ background: `linear-gradient(to right, ${accent}, ${secondary})` }}
       >
         {realtime ? null : <span className="absolute inset-0" style={{ backgroundColor: 'var(--color-scrim-soft)' }} />}
         <span className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, color-mix(in srgb, var(--color-on-media) 28%, transparent), transparent 50%)' }} />

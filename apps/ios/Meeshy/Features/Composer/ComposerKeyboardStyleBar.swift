@@ -48,6 +48,24 @@ nonisolated enum ComposerKeyboardStyleFamily: String, CaseIterable, Equatable, S
         }
     }
 
+    /// L'outil que le toucher fait tourner (#18640) : le premier de la famille.
+    var quickTool: TextEditTool {
+        switch self {
+        case .typography: return .style
+        case .color:      return .color
+        case .alignment:  return .align
+        case .surface:    return .background
+        }
+    }
+
+    /// Le panneau, moins les outils que l'hôte ne sert pas (un texte cuit n'a pas de « Langue »).
+    func panel(serving tools: [TextEditTool]) -> [ComposerKeyboardPanelSection] {
+        panel.filter { section in
+            if case .tool(let outil, _) = section { return tools.contains(outil) }
+            return true
+        }
+    }
+
     var symbol: String {
         switch self {
         case .typography: return "textformat"
@@ -109,6 +127,8 @@ nonisolated enum ComposerKeyboardStyleBar {
     /// Une cible de 44 pt : la barre ne grandit pas avec Dynamic Type — ses
     /// glyphes se lisent par VoiceOver.
     static let height: CGFloat = 44
+    /// L'appui qui ouvre toutes les options d'une commande.
+    static let optionsPress: Double = 0.4
 }
 
 nonisolated enum ComposerKeyboardStyleCopy {
@@ -121,6 +141,11 @@ nonisolated enum ComposerKeyboardStyleCopy {
     static var doneHint: String {
         String(localized: "composer.keyboard.done.hint",
                defaultValue: "Termine l'écriture et rend la scène", bundle: .main)
+    }
+
+    @MainActor
+    static var allOptions: String {
+        String(localized: "composer.keyboard.allOptions", defaultValue: "Toutes les options", bundle: .main)
     }
 
     /// La palette du ▣ colore le liseré du cadre : sous les formes du cadre,
@@ -154,7 +179,8 @@ extension ComposerLanguageFlag {
 /// **Aa · ● · ≡ · ▣ · OK**, collée au clavier du champ en place.
 struct ComposerKeyboardStyleBarView: View {
     let openFamily: ComposerKeyboardStyleFamily?
-    let onFamily: (ComposerKeyboardStyleFamily) -> Void
+    /// Toucher : la valeur suivante. Appui long : toutes les options (#18640).
+    let onFamily: (ComposerKeyboardStyleFamily, ComposerKeyboardOrOptions.Gesture) -> Void
     let onDone: () -> Void
 
     var body: some View {
@@ -190,18 +216,23 @@ struct ComposerKeyboardStyleBarView: View {
 
     private func familyButton(_ famille: ComposerKeyboardStyleFamily) -> some View {
         let ouverte = openFamily == famille
-        return Button { onFamily(famille) } label: {
-            Image(systemName: famille.symbol)
-                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(ouverte ? MeeshyColors.brandPrimary : Color.clear))
-                .frame(width: MeeshyControlSize.tapTarget + 8, height: MeeshyControlSize.tapTarget)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(famille.label))
-        .accessibilityAddTraits(ouverte ? [.isButton, .isSelected] : .isButton)
+        return Image(systemName: famille.symbol)
+            .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 36, height: 36)
+            .background(Circle().fill(ouverte ? MeeshyColors.brandPrimary : Color.clear))
+            .frame(width: MeeshyControlSize.tapTarget + 8, height: MeeshyControlSize.tapTarget)
+            .contentShape(Rectangle())
+            .onTapGesture { onFamily(famille, .tap) }
+            .onLongPressGesture(minimumDuration: ComposerKeyboardStyleBar.optionsPress) {
+                HapticFeedback.medium()
+                onFamily(famille, .longPress)
+            }
+            .accessibilityElement()
+            .accessibilityLabel(Text(famille.label))
+            .accessibilityAddTraits(ouverte ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { onFamily(famille, .tap) }
+            .accessibilityAction(named: Text(ComposerKeyboardStyleCopy.allOptions)) { onFamily(famille, .longPress) }
     }
 }
 
@@ -212,11 +243,12 @@ struct ComposerKeyboardStyleBarView: View {
 struct ComposerKeyboardStylePanel: View {
     let family: ComposerKeyboardStyleFamily
     @Binding var textObject: StoryTextObject
+    var profile: StoryTextEditProfile = .composer
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                ForEach(Array(family.panel.enumerated()), id: \.offset) { _, section in
+                ForEach(Array(family.panel(serving: profile.tools).enumerated()), id: \.offset) { _, section in
                     sectionView(section)
                 }
             }
@@ -240,7 +272,7 @@ struct ComposerKeyboardStylePanel: View {
                 .accessibilityAddTraits(.isHeader)
             switch section {
             case .tool(let outil, let omis):
-                TextEditToolOptions(tool: outil, textObject: $textObject, omitting: omis)
+                TextEditToolOptions(tool: outil, textObject: $textObject, profile: profile, omitting: omis)
             case .palette(let cibles):
                 ComposerSharedPalette(targets: cibles, textObject: $textObject)
             }

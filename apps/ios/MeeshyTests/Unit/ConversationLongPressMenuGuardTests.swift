@@ -431,4 +431,33 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         XCTAssertTrue(cell.contains("actions.onPlayAudio = onPlayAudio"))
         XCTAssertTrue(cell.contains(".allowsHitTesting(interactive)"))
     }
+
+    // MARK: - Le menu n'agit qu'une fois pendant sa sortie (#18297)
+
+    /// La sortie dure 260 ms avant que l'overlay ne parte : un second toucher
+    /// dans ce délai rebasculait la réaction (ajoutée puis retirée) ou rappelait
+    /// Répondre, Supprimer, Transférer. Les trois entrées tombent dès que le
+    /// menu n'est plus visible, et le menu comme la bande ne prennent plus le
+    /// doigt pendant qu'ils s'effacent.
+    func test_overlayMenu_actsOnce_whileItLeaves() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        for anchor in ["private func handlePrimaryAction(", "private func reagirDepuisLaBande(", "private func dismiss()"] {
+            guard let fn = body(of: anchor, in: menu) else {
+                return XCTFail("`\(anchor)` introuvable : la garde ne mesurerait rien.")
+            }
+            let firstStatement = fn.drop(while: { $0 != "{" }).dropFirst()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            XCTAssertTrue(firstStatement.hasPrefix("guard isVisible else { return }"),
+                          "`\(anchor)` agit encore pendant la sortie : un second toucher rejoue l'action.")
+        }
+        XCTAssertFalse(menu.contains(".allowsHitTesting(true)"),
+                       "La bande d'emojis prend le doigt pendant qu'elle s'efface.")
+        XCTAssertEqual(menu.components(separatedBy: ".modifier(ShownAndTouchable(isShown: isVisible))").count - 1, 2,
+                       "Le menu d'actions et la bande d'emojis ne prennent le doigt que visibles.")
+        guard let law = body(of: "private struct ShownAndTouchable", in: menu) else {
+            return XCTFail("`ShownAndTouchable` introuvable : la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(law.contains("opacity(isShown ? 1 : 0)") && law.contains(".allowsHitTesting(isShown)"),
+                      "Une couche qui s'efface cesse de prendre le doigt en même temps.")
+    }
 }

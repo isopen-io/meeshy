@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 
 import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { TogetherSession } from '@/lib/together/together-live';
 import { useTogetherSync } from '@/lib/together/use-together-sync';
+import { layerMotion } from '@/lib/view/dialog-exit';
 
 /**
  * **LE LECTEUR « ENSEMBLE »** (#17055) — flottant, en bas de l'écran, sur toutes les
@@ -23,6 +24,7 @@ export function TogetherPlayerView({
   now,
   onSync,
   onLeave,
+  leaving = false,
 }: {
   readonly language: InterfaceLanguage;
   readonly session: TogetherSession;
@@ -32,10 +34,14 @@ export function TogetherPlayerView({
   readonly now: () => number;
   readonly onSync: (state: { readonly playing: boolean; readonly positionMs: number }) => void;
   readonly onLeave: () => void;
+  readonly leaving?: boolean;
 }) {
   const [element, setElement] = useState<HTMLMediaElement | null>(null);
   const bind = useCallback((media: HTMLMediaElement | null) => setElement(media), []);
   useTogetherSync({ element, playback: session.playback, clockOffsetMs, now, onSync });
+  useEffect(() => {
+    if (leaving) element?.pause();
+  }, [leaving, element]);
   const title = translateCircles(language, 'together.with', { name: partnerName });
 
   return (
@@ -43,7 +49,7 @@ export function TogetherPlayerView({
       aria-label={title}
       data-together-player={session.sessionId}
       className="fixed inset-x-0 bottom-0 z-[80] flex justify-center px-4 sm:inset-x-auto sm:end-4"
-      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)', pointerEvents: 'none' }}
+      {...layerMotion(leaving, { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)', pointerEvents: 'none', '--layer-shift': '0 8px' } as CSSProperties)}
     >
       <div
         className="grid w-full max-w-sm gap-2 overflow-hidden rounded-card p-2 shadow-lg"
@@ -58,7 +64,7 @@ export function TogetherPlayerView({
             type="button"
             data-together-leave=""
             onClick={onLeave}
-            className="rounded-full px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press rounded-full px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 44, color: 'var(--color-error)', outlineColor: 'var(--color-brand)' }}
           >
             {translateCircles(language, 'together.leave')}

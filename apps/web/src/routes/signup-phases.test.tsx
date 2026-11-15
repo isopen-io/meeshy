@@ -171,6 +171,20 @@ describe('phase 1 — le téléphone d’abord, en verre liquide', () => {
     type(el, '#signup-phone', '061');
     expect(waves.length).toBe(2);
   });
+
+  test('le focus allume l’anneau en fondu, sans repeindre l’ombre du verre (#18322)', () => {
+    const { el } = mount();
+    const glass = el.querySelector('[data-signup-phone-glass]') as HTMLElement;
+    const ring = () => el.querySelector('[data-signup-phone-ring]') as HTMLElement;
+    const shadowAtRest = glass.style.boxShadow;
+    expect(ring().style.opacity).toBe('0');
+    act(() => {
+      (el.querySelector('#signup-phone') as HTMLInputElement).focus();
+    });
+    expect(ring().style.opacity).toBe('1');
+    expect(glass.style.boxShadow).toBe(shadowAtRest);
+    expect(glass.style.transition).not.toContain('box-shadow');
+  });
 });
 
 describe('phase 2 — l’adresse paraît', () => {
@@ -470,6 +484,13 @@ describe('l’inscription ne dit rien deux fois', () => {
     expect(has(el, '#signup-password-why')).toBe(false);
     expect(has(block, 'button[aria-expanded]')).toBe(false);
     expect(el.textContent).not.toMatch(/Pourquoi mettre un mot de passe/u);
+  });
+
+  test('le champ mot de passe paraît dans la carte par le ressort des barreaux, comme sur iOS (#18322)', () => {
+    const { el } = mount();
+    toCard(el);
+    const block = el.querySelector('[data-signup-password-block]') as HTMLElement;
+    expect(block.closest('[data-rung-reveal="open"]')?.classList.contains('signup-spring')).toBe(true);
   });
 
   test('un mot de passe valable se DIT, pas seulement par la couleur du bord (règle 17) — et la phrase « sans mot de passe » se retire', () => {

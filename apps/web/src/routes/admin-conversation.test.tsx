@@ -226,12 +226,12 @@ describe('les métadonnées, interprétées', () => {
     expect(meta(host, 'encryption')).not.toBeNull();
   });
 
-  test('chiffrée de bout en bout : la conséquence est dite — le serveur ne lit pas, donc pas de traduction', async () => {
+  test('chiffrée de bout en bout : la conséquence est dite — le serveur ne lit pas, l’appareil traduit, et le mode ne se retire jamais', async () => {
     const { deps } = setup(fiche({ settings: servedSettings({ encryptionMode: 'e2ee', autoTranslateEnabled: true }) }), members(MEMBERS));
     const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'encryption')?.textContent).toContain('Chiffrée de bout en bout');
-    expect(meta(host, 'encryption')?.textContent).toContain('Le serveur ne lit pas les messages');
+    expect(meta(host, 'encryption')?.textContent).toContain('Le serveur ne lit ni ne traduit les messages : chaque appareil les traduit, et ce chiffrement ne se retire jamais.');
     expect(meta(host, 'autoTranslate')?.textContent).toContain('Inactive : le serveur ne peut pas lire');
   });
 

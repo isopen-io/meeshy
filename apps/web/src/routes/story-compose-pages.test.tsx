@@ -37,7 +37,8 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
   const pageDelete = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-studio-page-delete]');
   const kindChoice = (kind: string) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-choice="${kind}"]`);
   const layoutChoices = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-publish-layout-choice]'));
-  const layoutChoice = (mode: string) => document.querySelector<HTMLButtonElement>(`[data-publish-layout-choice="${mode}"]`);
+  /* Les choix du menu OUVERT : celui qui SORT (`data-leaving`, le temps du fondu — #18327) n'en offre plus. */
+  const layoutChoice = (mode: string) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-menu]:not([data-leaving]) [data-publish-layout-choice="${mode}"]`);
   const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
   const kindMenu = () => document.querySelector<HTMLDivElement>('[data-publish-kind-menu]');
   const stage = (host: ParentNode) => host.querySelector<HTMLElement>('[data-scene-stage]');
@@ -154,6 +155,20 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     expect(bench.posts).toHaveLength(0);
   });
 
+  test('refermé puis rouvert pendant sa sortie, le menu repart REPLIÉ : aucun agencement de la fois d’avant (#18327)', async () => {
+    const el = await twoTypedPages(harness({}));
+    act(() => kindToggle(el)!.click());
+    act(() => kindChoice('POST')!.click());
+    await flush();
+    expect(layoutChoice('carousel')).not.toBeNull();
+    act(() => kindToggle(el)!.click());
+    expect(kindMenu()?.hasAttribute('data-leaving')).toBe(true);
+    act(() => kindToggle(el)!.click());
+    expect(kindMenu()?.hasAttribute('data-leaving')).toBe(false);
+    expect(kindChoice('POST')?.getAttribute('aria-expanded')).toBe('false');
+    expect(layoutChoice('carousel')).toBeNull();
+  });
+
   test('une seconde page VIDE ne déplie rien — une disposition sans seconde scène serait un contrôle sans effet', async () => {
     const el = mount(harness({}).deps, 'POST');
     typeText(el, 'Page une');
@@ -172,6 +187,7 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     act(() => layoutChoice('hero')!.click());
     await flush();
     expect(bench.posts).toHaveLength(0);
+    expect(kindMenu()?.hasAttribute('data-leaving')).toBe(true);
     expect(layoutChoice('hero')).toBeNull();
     expect(publishButton(el)?.textContent).toBe('Publier le post');
     act(() => publishButton(el)!.click());

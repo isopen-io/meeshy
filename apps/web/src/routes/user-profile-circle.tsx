@@ -107,7 +107,7 @@ export const ProfileCircleRowView = memo(function ProfileCircleRowView({
             data-profile-circle-raise={offer.target}
             aria-label={translateCircles(language, promote.detail, { name })}
             onClick={() => onRaise(offer.target)}
-            className={`grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-ios-on-brand ${FOCUS}`}
+            className={`btn-press grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-ios-on-brand ${FOCUS}`}
             style={{ minHeight: 44, backgroundColor: BRAND_FILL, outlineColor: BRAND }}
           >
             {translateCircles(language, promote.label)}
@@ -122,7 +122,7 @@ export const ProfileCircleRowView = memo(function ProfileCircleRowView({
           type="button"
           data-profile-circle-lower={demotion.kind}
           onClick={() => onLower(demotion)}
-          className={`grid w-full place-items-center rounded-card px-4 text-body font-semibold ${FOCUS}`}
+          className={`btn-press grid w-full place-items-center rounded-card px-4 text-body font-semibold ${FOCUS}`}
           style={{
             minHeight: 48,
             color: DANGER,

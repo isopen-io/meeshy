@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { installHapticsDriver, type HapticCue } from '@/lib/view/haptics';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 
 import { RowActions } from './row-actions';
 
@@ -74,8 +75,9 @@ function mountRowActions(): { readonly actions: string[] } {
 
 /** Un BOOLÉEN, jamais le nœud : un `expect(node).toBeNull()` en échec imprime
  * tout l'objet global de happy-dom (mesuré : 20 s, test tué à 5 s). */
+/* Le menu OUVERT : celui qui SORT (`data-leaving`, le temps du fondu — #18327) n'en est plus un. */
 const menuIsOpen = (): boolean =>
-  document.body.querySelector('[role="menu"][aria-label="Actions de conversation"]') !== null;
+  document.body.querySelector('[role="menu"][aria-label="Actions de conversation"]:not([data-leaving])') !== null;
 
 function openMenu(): void {
   const button = container.querySelector<HTMLButtonElement>('button[aria-label="Actions de conversation"]');
@@ -110,6 +112,21 @@ describe('RowActions — le retour matériel consomme le menu, jamais la liste (
     });
 
     expect(menuIsOpen()).toBe(false);
+  });
+
+  test('refermé, le panneau SORT en fondu : encore peint, inerte, hors de la pile du retour, puis retiré (#18327)', async () => {
+    mountRowActions();
+    openMenu();
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    const leaving = document.body.querySelector('[role="menu"][aria-label="Actions de conversation"]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(document.body.querySelector('[role="menu"][aria-label="Actions de conversation"]')).toBeNull();
   });
 
   test('menu fermé, un popstate ne touche à rien : aucune entrée n’est posée tant que le menu n’est pas ouvert', () => {

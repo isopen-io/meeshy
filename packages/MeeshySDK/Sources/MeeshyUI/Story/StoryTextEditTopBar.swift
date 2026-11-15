@@ -5,7 +5,7 @@ import MeeshySDK
 /// plus que la sortie.
 ///
 /// Les attributs qui l'occupaient sont redescendus sur la rangée unique
-/// (`TextEditFloatingBubbles`), avec le même geste pour tous — tap pour la
+/// (retirées par #18640 : la barre collée au clavier de l'app les remplace), avec le même geste pour tous — tap pour la
 /// valeur suivante, appui long pour le panneau. La séparation en deux rangées
 /// répondait à un débordement de largeur ; retirer taille et graisse, devenues
 /// des curseurs, l'a rendue inutile.
@@ -22,7 +22,7 @@ struct StoryTextEditTopBar: View {
     }
 
     /// Rang de contour (0…4) traduit en poids de trait — la bulle montre
-    /// ainsi l'épaisseur qu'elle pose. Consommé par `TextEditFloatingBubbles`.
+    /// ainsi l'épaisseur qu'elle pose. Consommé par les rangées d'options.
     static func strokeWeight(_ emphasis: Int) -> Font.Weight {
         switch emphasis {
         case ...0: return .regular

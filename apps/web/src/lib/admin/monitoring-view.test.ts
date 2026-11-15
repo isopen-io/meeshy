@@ -60,7 +60,7 @@ describe('ce qui ne va pas — dit dans l’ordre où on le traite', () => {
     expect(issues).toEqual([
       { id: 'translator', tone: 'warning', text: 'Le service de traduction est injoignable.' },
       { id: 'breakersOpen', tone: 'danger', text: 'Coupe-circuits ouverts : 1. Les appels vers ces services sont refusés.' },
-      { id: 'breakersHalfOpen', tone: 'warning', text: 'Coupe-circuits en essai : 1. Ils laissent passer quelques appels pour vérifier que le service est rétabli.' },
+      { id: 'breakersHalfOpen', tone: 'warning', text: 'Coupe-circuits en essai : 1' },
     ]);
   });
 

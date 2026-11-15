@@ -151,6 +151,8 @@ const es = {
   'together.unavailable': 'Este contenido no se reproduce en este dispositivo.',
   'together.someone': 'Alguien',
   'together.gone': 'La invitación ya no es válida.',
+  'together.join.offline': 'Sin conexión: la sesión no se abrió.',
+  'together.join.failed': 'La sesión no se abrió. Inténtalo de nuevo.',
   'together.ended': 'La sesión juntos ha terminado.',
   'together.row.title': 'Ver o escuchar juntos',
   'together.row.explain': 'Elige un vídeo o un audio de vuestra conversación: {name} lo reproduce a la vez que tú.',

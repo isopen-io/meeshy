@@ -1,10 +1,16 @@
 package me.meeshy.app.feed
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -23,9 +29,12 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.CommentMenuAction
 import me.meeshy.sdk.model.CommentMenuPolicy
 import me.meeshy.sdk.model.ContentRemovalReason
+import me.meeshy.ui.component.presentation.MeeshyModalSheet
+import me.meeshy.ui.component.presentation.MeeshySheetPresence
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshySpacing
 
 /**
  * Ce que l'hôte (la feuille ou le détail — UN seul moteur) met derrière le « … » d'un commentaire : qui regarde, si le
@@ -155,33 +164,44 @@ internal fun ProvideCommentMenu(state: PostCommentsUiState, viewModel: PostComme
             titleRes = R.string.comment_menu_report_title,
         )
     }
-    removing?.let { id ->
+    MeeshySheetPresence(removing) { id ->
         RemoveCommentDialog(onDismiss = { removing = null }, onConfirm = { reason -> removing = null; viewModel.removeComment(id, reason) })
     }
     CompositionLocalProvider(LocalCommentMenuHost provides host, content = content)
 }
 
-/** Le retrait par la modération : le motif est exigé (3 à 500 caractères), sans quoi rien ne part. */
+/**
+ * Le retrait par la modération : le motif est exigé (3 à 500 caractères), sans quoi rien ne part. Il se saisit dans une
+ * feuille à poignée, aux détentes moyenne et grande, comme `ContentRemovalReasonSheet` sur iOS (`.pageSheet`). Le
+ * motif part au premier toucher sur Retirer, une seule fois ; l'hôte ([MeeshySheetPresence]) joue ensuite la descente.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RemoveCommentDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var reason by remember { mutableStateOf("") }
-    val valid = ContentRemovalReason.normalized(reason) != null
-    AlertDialog(
+    var sent by remember { mutableStateOf(false) }
+    val valid = ContentRemovalReason.normalized(reason) != null && !sent
+    MeeshyModalSheet(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.comment_menu_remove_title)) },
-        text = {
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg).padding(bottom = MeeshySpacing.xl),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+        ) {
+            Text(stringResource(R.string.comment_menu_remove_title), style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
                 value = reason,
                 onValueChange = { reason = it.take(ContentRemovalReason.MAX_LENGTH) },
                 placeholder = { Text(stringResource(R.string.comment_menu_remove_hint)) },
                 modifier = Modifier.fillMaxWidth(),
             )
-        },
-        confirmButton = {
-            TextButton(enabled = valid, onClick = { onConfirm(reason) }) {
-                Text(stringResource(R.string.comment_menu_remove), color = MeeshyPalette.Error)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { this@MeeshyModalSheet.dismiss() }) { Text(stringResource(R.string.feed_delete_cancel)) }
+                TextButton(enabled = valid, onClick = { if (!sent) { sent = true; onConfirm(reason) } }) {
+                    Text(stringResource(R.string.comment_menu_remove), color = MeeshyPalette.Error)
+                }
             }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.feed_delete_cancel)) } },
-    )
+        }
+    }
 }

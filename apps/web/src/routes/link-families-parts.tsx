@@ -242,6 +242,7 @@ export function FamilyRow({
   disc,
   title,
   meta,
+  extra,
   actions,
 }: {
   readonly rowId: string;
@@ -250,6 +251,8 @@ export function FamilyRow({
   readonly disc: ReactNode;
   readonly title: string;
   readonly meta: ReactNode;
+  /** Une ligne de plus sous `meta`, hors de sa borne de deux lignes — le dernier usage d'un lien (épure #17584, règle 7). */
+  readonly extra?: ReactNode;
   readonly actions: ReactNode;
 }) {
   const body = (
@@ -262,6 +265,7 @@ export function FamilyRow({
         <span className="line-clamp-2 min-w-0 text-caption" style={{ color: INK_2 }}>
           {meta}
         </span>
+        {extra}
       </span>
     </>
   );
