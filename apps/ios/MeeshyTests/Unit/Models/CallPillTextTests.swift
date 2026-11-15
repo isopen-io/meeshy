@@ -356,7 +356,7 @@ final class CallAudioStageLayoutTests: XCTestCase {
         let stage = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallAudioStage<", in: connected))
         XCTAssertTrue(stage.contains("AnyLayout(HStackLayout(spacing: MeeshySpacing.md))"), "l'en-tête compact : l'avatar puis le nom et la durée")
         XCTAssertTrue(stage.contains("AnyLayout(VStackLayout(spacing: MeeshySpacing.lg))"), "le repos : l'avatar au-dessus du nom")
-        XCTAssertTrue(stage.contains("compact.transition(.opacity)"), "le nom et la durée rejoignent l'avatar en fondu")
+        XCTAssertTrue(stage.contains("compact(form.showsStatuses).transition(.opacity)"), "le nom et la durée rejoignent l'avatar en fondu")
         XCTAssertTrue(stage.contains("rest.transition(.opacity)"))
         XCTAssertTrue(stage.contains(".id(CallAudioStageLayout.identity(form: form, reduceMotion: reduceMotion))"))
         XCTAssertTrue(stage.contains(".animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: form.isCompact)"), "≈ 200 ms, pas le ressort du (…)")

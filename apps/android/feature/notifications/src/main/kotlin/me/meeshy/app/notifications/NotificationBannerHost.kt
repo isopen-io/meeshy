@@ -53,6 +53,8 @@ fun NotificationBannerHost(
     onOpenConversation: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
     onOpenGame: (GameTarget) -> Unit = {},
+    /** « Ajouté à la communauté Y » : le détail de Y, comme la ligne de la cloche et le push (#18670). */
+    onOpenCommunity: (String) -> Unit = {},
     /** Appui long ou tirage vers le bas : l'aperçu de la conversation (hébergé par :app). */
     onPreviewConversation: (String) -> Unit = {},
     /** Heure de la dernière présentation modale : le tap qui la suit de peu lui appartient (iOS `suppressToastTap`). */
@@ -126,12 +128,18 @@ fun NotificationBannerHost(
                     if (!suppressed) {
                         // Consommée AVANT la navigation, comme une ligne de la cloche (iOS #6999).
                         viewModel.onTapped()
-                        shown.game?.let { game ->
-                            // Toucher le palier annoncé : il se célèbre PAR-DESSUS l'écran du jeu que le toucher ouvre.
-                            revealTap.onOpened(game)
-                            (NotificationDestinationResolver.resolve(game) as? NotificationDestination.Game)?.let { onOpenGame(it.target) }
-                        } ?: shown.conversationId?.let(onOpenConversation)
-                            ?: shown.postId?.let(onOpenPost)
+                        when (val target = shown.tapTarget()) {
+                            is BannerTap.Game -> {
+                                // Toucher le palier annoncé : il se célèbre PAR-DESSUS l'écran du jeu que le toucher ouvre.
+                                revealTap.onOpened(target.notification)
+                                (NotificationDestinationResolver.resolve(target.notification) as? NotificationDestination.Game)
+                                    ?.let { onOpenGame(it.target) }
+                            }
+                            is BannerTap.Community -> onOpenCommunity(target.communityId)
+                            is BannerTap.Conversation -> onOpenConversation(target.conversationId)
+                            is BannerTap.Post -> onOpenPost(target.postId)
+                            BannerTap.None -> Unit
+                        }
                     }
                 },
             )

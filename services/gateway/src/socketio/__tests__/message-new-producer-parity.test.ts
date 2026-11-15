@@ -214,8 +214,14 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
   const SOCKET_ATTACHMENT_WIRE_KEYS = [
     // `message` : la protection du porteur, chargée pour `servedDescription`, jamais servie (#12333).
     ...Object.keys(attachmentSocketSelect).filter((k) => k !== 'reactions' && k !== 'message'),
+    // L'agrégat PARTAGÉ voyage : c'est un compte, pas une appartenance.
     'reactionSummary',
-    'currentUserReactions',
+    // `currentUserReactions` N'EST PAS dans cet inventaire, et son absence est
+    // la garde (#18622) : c'est le seul champ PAR LECTEUR de la forme, et ces
+    // deux transports diffusent vers une room entière. Servi `[]`, il disait
+    // « il n'y en a pas » — le client qui fusionne effaçait alors les réactions
+    // du lecteur sur sa propre pièce. Le voir réapparaître ici est exactement
+    // le défaut à rattraper.
   ].sort();
 
   it('les pièces jointes voyagent à l’IDENTIQUE par les DEUX transports', async () => {
@@ -241,6 +247,11 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
       // Egalité d'ENSEMBLE — le message d'échec nomme la clé en trop plutôt
       // que de laisser un `toEqual` partiel la laisser passer en silence.
       expect({ transport, servedKeys }).toEqual({ transport, servedKeys: SOCKET_ATTACHMENT_WIRE_KEYS });
+
+      // Le champ PAR LECTEUR, nommé à part de l'inventaire : une égalité
+      // d'ensemble le signalerait, mais sans dire POURQUOI il n'a rien à faire
+      // dans une charge que toute une room reçoit (#18622).
+      expect('currentUserReactions' in attachments[0]).toBe(false);
 
       // Nommées explicitement : ce sont les secrets de serveur que #7070 ferme.
       expect(attachments[0]).toEqual(
