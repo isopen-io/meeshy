@@ -140,17 +140,14 @@ struct VisitorContentView: View {
     }
 
     private var closeButton: some View {
-        Button(action: onClose) {
-            Image(systemName: "xmark")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(surface == .neutralBackdrop ? AnyShapeStyle(MeeshyColors.mediaChromeForeground) : AnyShapeStyle(.primary))
-                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                .background(.ultraThinMaterial, in: Circle())
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        MeeshyGlassButton(
+            systemImage: "xmark",
+            label: VisitorInvitationCopy.close,
+            size: .s44,
+            tone: surface == .neutralBackdrop ? .deep : .theme,
+            action: onClose
+        )
         .padding(.horizontal, MeeshySpacing.lg)
-        .accessibilityLabel(VisitorInvitationCopy.close)
     }
 
     private var card: some View {
