@@ -10,6 +10,7 @@ final class VideoThumbnailGeneratorSourceGuardTests: XCTestCase {
         "packages/MeeshySDK/Sources/MeeshySDK/Media/VideoThumbnailGenerator.swift": "le générateur",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryForegroundVideoFrameSource.swift": "export : une image par trame de rendu",
         "apps/ios/Meeshy/Features/Export/MessageCardMotionExporter.swift": "export animé : une image par trame",
+        "apps/ios/Meeshy/Features/Export/MessageCardScrollExporter.swift": "export « vidéo qui défile » : une image par trame de chaque vidéo bouclée",
         "apps/ios/Meeshy/Features/Vitrine/VitrineReel.swift": "affiche pleine définition écrite une fois sur disque, jamais réaffichée",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExportStill.swift": "export « Imager » : l'image pleine définition du MP4 rendu, écrite en JPEG",
     ]
