@@ -1047,6 +1047,19 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        à la reconnexion. */
     void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY, exact: true });
     void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+    /* ET LES CATEGORIES DE CONVERSATION (#18641) — `['conversation-categories']`
+       est une RACINE A PART, jamais couverte par le prefixe `['conversations']`
+       ci-dessus : TanStack compare les cles ELEMENT PAR ELEMENT, et le premier
+       differe deja. Les quatre `category:*` que cette connexion ecoute
+       n'ecrivent que cette cle, et les onglets qu'elle sert vivent sur l'ecran
+       de la liste — donc MONTES pendant la coupure, comme le fil et le rail.
+       iOS la rehydrate sur le meme signal (`didReconnect` →
+       `categoryStore.hydrate()`, « to resync server-side deletions »).
+
+       Ces deux cles voisines sont le piege que ce lot a failli rejouer : une
+       enumeration affirme AUSSI qu'elle est complete, et celle-ci s'etait
+       arretee a ce qui RESSEMBLAIT au defaut (des caisses de cartes). */
+    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATION_CATEGORIES_QUERY_KEY });
   };
 
   /** `conversation:encryption-changed` — pour fermer, jamais pour rouvrir le clair (#12949). */

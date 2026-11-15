@@ -8,7 +8,7 @@ import { conversationStore } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 
-import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, CONVERSATION_CATEGORIES_QUERY_KEY, conversationQueryKey } from './conversations';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
 import { attachmentStatusDetailsQueryKey } from './attachments';
@@ -514,6 +514,33 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(FEED_NEW_COUNT_KEY)?.isInvalidated).toBe(false);
+  });
+
+  /**
+   * **ET LES CATÉGORIES DE CONVERSATION** (#18641) — la TROISIÈME famille, et
+   * elle n'a pas été trouvée en cherchant « quelles caisses de cartes
+   * manquent ? » : `['conversation-categories']` est une RACINE À PART que le
+   * préfixe `['conversations']` du rejeu ne couvre pas (TanStack compare les
+   * clés élément par élément). Les onglets qu'elle sert vivent sur l'écran de
+   * la liste, donc MONTÉS pendant la coupure — le discriminant exact de ce lot.
+   *
+   * Ce témoin fixe aussi ce que le lot a failli rejouer : son énumération
+   * s'était arrêtée à ce qui RESSEMBLAIT au défaut. iOS rehydrate les trois sur
+   * le même signal — `FeedViewModel+Socket` (rts-01), `StoryViewModel` (rts-02)
+   * et `categoryStore.hydrate()` (`ConversationStoreSocketBridgeTests`
+   * § `test_didReconnect_rehydratesCategoryStore`).
+   */
+  test('une RE-authentification périme les catégories de conversation — une racine à part du préfixe `[conversations]`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(CONVERSATION_CATEGORIES_QUERY_KEY, []);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    expect(queryClient.getQueryState(CONVERSATION_CATEGORIES_QUERY_KEY)?.isInvalidated).toBe(false);
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(queryClient.getQueryState(CONVERSATION_CATEGORIES_QUERY_KEY)?.isInvalidated).toBe(true);
   });
 
   test('`post:liked` d’un AUTRE lecteur remplace le compte par le compte servi, sans remplir mon cœur', () => {
