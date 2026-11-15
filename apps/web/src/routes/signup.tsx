@@ -543,7 +543,7 @@ export default function SignupScreen({
             data-signup-primary={primary.kind}
             disabled={primary.kind === 'signup' && (!primary.enabled || busy)}
             aria-busy={isSubmitting}
-            className="grid place-items-center rounded-field font-bold text-ios-on-brand transition-opacity"
+            className="btn-press grid place-items-center rounded-field font-bold text-ios-on-brand transition-opacity"
             style={{
               minHeight: 52,
               background: 'linear-gradient(90deg, var(--ios-indigo-500), var(--ios-indigo-700))',
