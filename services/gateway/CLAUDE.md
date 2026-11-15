@@ -2227,6 +2227,63 @@ rend vérifiable ce qui ne l'était pas, et le `tsc` vert APRÈS retrait des cas
 est le résultat, pas l'absence de résultat. Le ROUGE est prouvé dans les trois
 sens (champ inconnu `TS2561`, couple décorrélé `TS2353`, canal étranger `TS2345`).
 
+### La CINQUIÈME forme : le `Socket` NU, jumeau du `Server` NU
+
+Le cycle 108 a fermé le `Server` nu. Son jumeau a la même cause et le même
+effet — sans paramètres de type, socket.io retombe sur `DefaultEventsMap`, donc
+`emit(ev: string, ...args: any[])` — et `sweepRawServerEmitters` ne cherche que
+`Server`. Mesuré le 2026-11-15 (#18655, cycle 164), **un fichier de production**
+tenait le `Socket` nu pour émettre :
+
+```ts
+import { Socket } from 'socket.io';                       // ← nu
+export async function checkSocketRateLimit(socket: Socket, …, errorEvent: string = 'call:error') {
+  socket.emit(errorEvent, { code, message, retryAfter });  // ← `retryAfter` : AUCUN contrat
+}
+```
+
+`CallError` déclare `code`, `message`, `details?`, `callId?`. `retryAfter`
+voyageait à la RACINE, et **aucun des trois clients ne le lit** (toutes les
+occurrences du dépôt sont des chemins HTTP 429). Il vit désormais dans `details`,
+le champ que le contrat porte pour cela — rétrocompatible, personne ne le lisant
+d'un côté comme de l'autre.
+
+> **Le discriminant du jumeau ne se RECOPIE pas.** Celui de `Server` exige un
+> `import type`, parce que `MeeshySocketIOManager` importe `Server` en VALEUR
+> pour le CONSTRUIRE. **Personne ne construit un `Socket`** — socket.io le remet
+> à un handler — donc les deux formes d'import comptent, et ce n'est pas une
+> généralisation gratuite : le site fautif écrivait `import { Socket }` (valeur),
+> et le discriminant de `Server` recopié tel quel **l'aurait manqué**. C'est la
+> règle du cycle 91, une fois de plus : la forme juste d'à côté s'ouvre contre le
+> cas présent, elle ne se copie pas.
+
+La seconde condition est REPRISE sans changement : **détenir n'est pas ÉMETTRE.**
+`typed-socket.ts` importe `Socket` pour en DÉRIVER `MeeshySocket` ;
+`midSessionRoomAdmission`, `join-user-conversations` et `socket-helpers` le
+déclarent pour lire des rooms ou résoudre un utilisateur. Aucun n'émet, et tous
+sortent par CONSTRUCTION — pas par exemption.
+
+**Le grain est le FICHIER, et c'est une décision** : dans un fichier qui ÉMET,
+toute déclaration `: Socket` nue est relevée, même d'une fonction qui n'émet pas
+— c'est le même socket, et le gouverner de bout en bout est strictement meilleur.
+Trouvé en écrivant la fixture NÉGATIVE, qui mélangeait les deux motifs et
+rougissait : une erreur commise en écrivant un cliquet est le meilleur cas de
+test qu'il aura jamais.
+
+Cliquet : `sweepRawSocketEmitters` (`socketio/__tests__/server-emit-door-sweep.ts`),
+inventaire **VIDE**. Réparation : `MeeshySocket`, jamais une ligne d'inventaire.
+
+**Et ce site était INVISIBLE au balayage du cycle 163**, qui a conclu « 262 sites
+réels, zéro champ non déclaré » : celui-ci exigeait un nom d'événement LITTÉRAL
+pour résoudre le type, et a écarté 9 sites « nom non résolu » sans les ouvrir —
+le nom est ici une variable `string`.
+
+> **« Zéro trouvé » et « zéro existe » ne sont pas la même affirmation.** Un
+> balayage qui écarte ce qu'il ne sait pas résoudre doit PUBLIER ce qu'il écarte,
+> et quelqu'un doit l'ouvrir — sans quoi le chiffre qu'il publie se lit comme une
+> propriété du dépôt alors qu'il n'est qu'une propriété de l'instrument. Même
+> famille que la leçon 261.
+
 ### Un lot peut rendre un contournement INUTILE sans le faire disparaître
 
 Variante douce de « le lot qui rend une chose possible doit relire les

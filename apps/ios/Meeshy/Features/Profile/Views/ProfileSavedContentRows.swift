@@ -17,7 +17,7 @@ struct ProfileSavedContentRows: View {
             ProfileSectionHeader(icon: "tray.full.fill", title: Self.title, color: MeeshyColors.warning)
             VStack(spacing: 0) {
                 ForEach(Item.allCases, id: \.self) { item in
-                    ProfileNavigationRow(icon: item.icon, title: item.title, hint: item.hint,
+                    ProfileNavigationRow(icon: item.icon, title: item.title, hint: nil,
                                          identifier: item.identifier, accentHex: accentHex) { onOpen(item.door) }
                 }
             }
@@ -55,17 +55,6 @@ struct ProfileSavedContentRows: View {
             case .starredMessages: return String(localized: "settings.tools.starred", defaultValue: "Messages favoris", bundle: .main)
             case .bookmarks: return String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main)
             case .myPacks: return String(localized: "profile.packs.mine", defaultValue: "Mes packs", bundle: .main)
-            }
-        }
-
-        var hint: String {
-            switch self {
-            case .starredMessages:
-                return String(localized: "profile.content.starred.hint", defaultValue: "Ouvre les messages que tu as mis en favori", bundle: .main)
-            case .bookmarks:
-                return String(localized: "profile.content.bookmarks.hint", defaultValue: "Ouvre les publications que tu as enregistrées", bundle: .main)
-            case .myPacks:
-                return String(localized: "profile.packs.mine.hint", defaultValue: "Ouvre les packs que tu as installés", bundle: .main)
             }
         }
 

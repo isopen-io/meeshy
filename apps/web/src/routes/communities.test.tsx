@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { CommunityConversation, CommunitySummary } from '@/lib/api/communities';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { communityCardBlurb } from '@/lib/communities/card-blurb';
 import { compile, match } from '@/lib/router';
 
 import {
@@ -189,5 +190,26 @@ describe('la création', () => {
     const html = renderToStaticMarkup(<SubmitButton language="fr" submitting disabled />);
     expect(html).toContain('Création…');
     expect(html).toMatch(/<button[^>]*disabled/);
+  });
+});
+
+/**
+ * LA DESCRIPTION D'UNE CARTE NE SE COUPE PAS AU MILIEU D'UNE PHRASE (épure
+ * #17584, règle 7) : elle sert à reconnaître la communauté. Courte, elle se lit
+ * entière ; longue, elle s'arrête à la fin d'une proposition, jamais sur « … ».
+ */
+describe('la description d’une carte de communauté', () => {
+  test('courte : entière', () => {
+    expect(communityCardBlurb('Les canaux de l’équipe qui livre Meeshy.')).toBe('Les canaux de l’équipe qui livre Meeshy.');
+  });
+
+  test('longue : coupée à la fin d’une proposition, sans ponctuation pendante', () => {
+    expect(communityCardBlurb('Échanges linguistiques du jeudi soir, en wolof, français et anglais.')).toBe('Échanges linguistiques du jeudi soir');
+    expect(communityCardBlurb('On y parle cuisine. Chaque dimanche, une recette venue d’un autre pays.')).toBe('On y parle cuisine.');
+  });
+
+  test('longue et sans aucune pause : rendue entière, la carte la borne à deux lignes', () => {
+    const flat = 'Un très long texte sans la moindre pause qui continue encore et encore';
+    expect(communityCardBlurb(flat)).toBe(flat);
   });
 });

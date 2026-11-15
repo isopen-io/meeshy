@@ -4,12 +4,13 @@ import MeeshySDK
 import MeeshyUI
 import SwiftUI
 
-/// **Le chrome du viseur reste lisible sur un cadre clair** (#9777) — la croix, le flash, la
-/// bascule, les zooms, « Filtres / Cadres » et le nom du cadre sont BLANCS : posés sur un
-/// Photomaton, une Carte postale ou un Faire-part, ils disparaissaient. Sous un cadre, un voile
-/// sombre passe derrière la rangée haute et le bas de la capture, juste assez dense pour que le
-/// blanc garde 4,5:1 (WCAG AA) sur la bande du cadre qu'il couvre, mesurée : nul sur un cadre
-/// sombre, 55 % au plus sur un fond blanc pur. Sans cadre, rien ne change.
+/// **La rangée haute du viseur reste lisible sur un cadre clair** (#9777) — la croix, le flash
+/// et la bascule sont BLANCS : posés sur un Photomaton, une Carte postale ou un Faire-part, ils
+/// disparaissaient. Sous un cadre, un voile sombre passe derrière la rangée haute, juste assez
+/// dense pour que le blanc garde 4,5:1 (WCAG AA) sur la bande du cadre qu'il couvre, mesurée :
+/// nul sur un cadre sombre, 55 % au plus sur un fond blanc pur. Sans cadre, rien ne change.
+/// **Le bas n'a plus de voile** (#18639, porteur : « plus de fond gris derrière les
+/// outils de sélection ») : le rail, la bande et ses noms se tiennent par leur ombre portée.
 nonisolated enum ComposerCaptureChromeLegibility {
     static let minimumContrast: Double = 4.5
     static let veilOpacity: Double = 0.55
@@ -33,10 +34,8 @@ nonisolated enum ComposerCaptureChromeLegibility {
 
     // MARK: - Le voile mesuré sur la bande (#9777, recette #9755)
 
-    /// Les parts de la hauteur que le chrome couvre : la rangée haute, puis le bas
-    /// (zooms, « Filtres / Cadres », nom du cadre, déclencheur).
+    /// La part de la hauteur que la rangée haute couvre.
     static let topBand: CGFloat = 0.16
-    static let bottomBand: CGFloat = 0.32
     /// La moyenne LOCALE qu'on mesure : une étincelle isolée ne noircit pas le viseur.
     static let sampleRadius: Double = 12
     private static let margin = 0.01
@@ -63,7 +62,7 @@ nonisolated enum ComposerCaptureChromeLegibility {
         return bandLuminance.map(veilOpacity(bandLuminance:)) ?? veilOpacity
     }
 
-    /// La luminance relative des zones les plus claires des deux bandes du cadre
+    /// La luminance relative des zones les plus claires de la bande haute du cadre
     /// peint (moyennes locales). Une case vide (la caméra) compte pour du noir :
     /// sans cadre, le viseur n'a jamais eu de voile. À appeler HORS du fil principal.
     static func bands(of scene: CallLiveFrameScene, context: CIContext = ComposerLookGPU.context) -> ComposerCaptureChromeBands? {
@@ -71,10 +70,8 @@ nonisolated enum ComposerCaptureChromeLegibility {
         let largeur = scene.size.width
         let peint = scene.overlay.composited(over: scene.backdrop)
         let haut = CGRect(x: 0, y: hauteur * (1 - topBand), width: largeur, height: hauteur * topBand)
-        let bas = CGRect(x: 0, y: 0, width: largeur, height: hauteur * bottomBand)
-        guard let clairHaut = brightest(peint, in: haut, context: context),
-              let clairBas = brightest(peint, in: bas, context: context) else { return nil }
-        return ComposerCaptureChromeBands(top: clairHaut, bottom: clairBas)
+        guard let clairHaut = brightest(peint, in: haut, context: context) else { return nil }
+        return ComposerCaptureChromeBands(top: clairHaut)
     }
 
     private static func brightest(_ image: CIImage, in band: CGRect, context: CIContext) -> Double? {
@@ -93,11 +90,10 @@ nonisolated enum ComposerCaptureChromeLegibility {
     }
 }
 
-/// La luminance relative (0…1) des bandes du cadre que le chrome du viseur couvre,
+/// La luminance relative (0…1) de la bande du cadre que la rangée haute couvre,
 /// et le cadre qu'elle mesure : une mesure ne règle jamais le voile d'un AUTRE cadre.
 nonisolated struct ComposerCaptureChromeBands: Equatable, Sendable {
     let top: Double
-    let bottom: Double
     var frame: String = ""
 
     func measuring(_ frame: ComposerPhotoFrame) -> ComposerCaptureChromeBands? {
@@ -105,24 +101,19 @@ nonisolated struct ComposerCaptureChromeBands: Equatable, Sendable {
     }
 }
 
-/// Le voile derrière un bord du chrome : plein sous les contrôles, fondu au-delà.
+/// Le voile derrière la rangée haute : plein sous les contrôles, fondu au-delà.
 struct ComposerCaptureChromeVeil: View {
-    let edge: VerticalEdge
     let opacity: Double
 
     var body: some View {
         let dense = Color.black.opacity(opacity)
-        let fade = LinearGradient(colors: [dense, .clear],
-                                  startPoint: edge == .top ? .top : .bottom,
-                                  endPoint: edge == .top ? .bottom : .top)
-            .frame(height: ComposerCaptureChromeLegibility.feather)
         VStack(spacing: 0) {
-            if edge == .bottom { fade }
             dense
-            if edge == .top { fade }
+            LinearGradient(colors: [dense, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: ComposerCaptureChromeLegibility.feather)
         }
-        .padding(edge == .top ? Edge.Set.bottom : Edge.Set.top, -ComposerCaptureChromeLegibility.feather)
-        .ignoresSafeArea(edges: edge == .top ? Edge.Set.top : Edge.Set.bottom)
+        .padding(.bottom, -ComposerCaptureChromeLegibility.feather)
+        .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -164,8 +155,7 @@ struct ComposerCaptureChromeBandWatch: ViewModifier {
                 guard let scene = await ComposerCaptureChromeLegibility.scene(for: key),
                       let mesure = await ComposerCaptureChromeLegibility.measuredBands(of: scene),
                       !Task.isCancelled else { return }
-                bands = ComposerCaptureChromeBands(top: mesure.top, bottom: mesure.bottom,
-                                                   frame: ComposerLookSceneKey.token(key.look.frame))
+                bands = ComposerCaptureChromeBands(top: mesure.top, frame: ComposerLookSceneKey.token(key.look.frame))
             }
     }
 }

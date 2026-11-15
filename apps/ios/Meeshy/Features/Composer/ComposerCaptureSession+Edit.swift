@@ -243,7 +243,6 @@ extension ComposerCaptureSession {
         framing = .identity
         editAspect = nil
         openingAspect = nil
-        cropEntry = nil
         activeEditTools = []
         editChromeShown = false
         takeSound = ComposerTakeSound()
@@ -439,10 +438,7 @@ extension ComposerCaptureSession {
     /// « Terminé » plus rien ne bouge.
     func toggleEditTool(_ tool: ComposerEditTool) {
         guard phase.isEditing, !isRenderingLook, editTools.contains(tool) else { return }
-        let avant = activeEditTools
         activeEditTools = ComposerEditTools.toggled(activeEditTools, tapping: tool, familyOpen: openFamily != nil)
-        cropEntry = ComposerCropEntry.after(cropEntry, before: avant, after: activeEditTools,
-                                            current: ComposerCropEntry(aspect: editAspect, framing: framing))
         if activeEditTools.contains(tool) { openFamily = nil }
         if tool == .text { activeEditTools.contains(.text) ? retouchTexts.begin() : retouchTexts.endTyping() }
         HapticFeedback.light()

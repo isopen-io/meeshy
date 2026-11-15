@@ -78,7 +78,7 @@ describe('ProfileStatsBand — ce qui est servi, et rien de plus', () => {
     expect(el.querySelector('[data-profile-tile="postsCount"]')).not.toBeNull();
   });
 
-  test('« Postes » et « Réels » sont des BOUTONS ; « Stories » n’en est PAS un', () => {
+  test('« Publications » et « Réels » sont des BOUTONS ; « Stories » n’en est PAS un', () => {
     const el = band(THIRD_PARTY);
     expect(el.querySelector('[data-profile-tile="postsCount"] button')).not.toBeNull();
     expect(el.querySelector('[data-profile-tile="reelsCount"] button')).not.toBeNull();

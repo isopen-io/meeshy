@@ -452,7 +452,12 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         }
         XCTAssertFalse(menu.contains(".allowsHitTesting(true)"),
                        "La bande d'emojis prend le doigt pendant qu'elle s'efface.")
-        XCTAssertEqual(menu.components(separatedBy: ".allowsHitTesting(isVisible)").count - 1, 2,
+        XCTAssertEqual(menu.components(separatedBy: ".modifier(ShownAndTouchable(isShown: isVisible))").count - 1, 2,
                        "Le menu d'actions et la bande d'emojis ne prennent le doigt que visibles.")
+        guard let law = body(of: "private struct ShownAndTouchable", in: menu) else {
+            return XCTFail("`ShownAndTouchable` introuvable : la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(law.contains("opacity(isShown ? 1 : 0)") && law.contains(".allowsHitTesting(isShown)"),
+                      "Une couche qui s'efface cesse de prendre le doigt en même temps.")
     }
 }
