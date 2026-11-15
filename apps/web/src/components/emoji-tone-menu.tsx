@@ -2,6 +2,7 @@ import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import { isGridKey, nextGridIndex } from '@/lib/emoji/emoji-grid-keys';
 import { skinToneVariants, type EmojiSkinTone } from '@/lib/emoji/emoji-skin-tone';
+import { layerMotion } from '@/lib/view/layer-presence';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
@@ -20,6 +21,7 @@ export function EmojiToneMenu({
   rtl,
   onChoose,
   onDismiss,
+  leaving = false,
 }: {
   readonly base: string;
   readonly tone: EmojiSkinTone;
@@ -28,9 +30,11 @@ export function EmojiToneMenu({
   readonly rtl: boolean;
   readonly onChoose: (tone: EmojiSkinTone) => void;
   readonly onDismiss: () => void;
+  /** Refermée, la rangée reste peinte le temps de son fondu (#18327), hors de la pile du retour. */
+  readonly leaving?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useBackDismiss(onDismiss);
+  useBackDismiss(onDismiss, { active: !leaving });
 
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
@@ -61,10 +65,10 @@ export function EmojiToneMenu({
         aria-orientation="horizontal"
         data-emoji-tones={base}
         className="pointer-events-auto flex max-w-full gap-0.5 rounded-card p-1"
-        style={{
+        {...layerMotion(leaving, {
           backgroundColor: 'var(--color-ios-card)',
           boxShadow: '0 8px 24px color-mix(in srgb, var(--color-media-backdrop) 24%, transparent)',
-        }}
+        })}
         onKeyDown={onKeyDown}
       >
         {skinToneVariants(base).map((variant) => {

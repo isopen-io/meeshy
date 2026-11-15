@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { useStore } from 'zustand/react';
 
 import { appUpdateStore } from '@/lib/app-update/pending-store';
@@ -5,6 +6,7 @@ import { appUpdateController, type RegistrationLike } from '@/lib/app-update/ser
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { layerMotion, useLayerPresence } from '@/lib/view/layer-presence';
 
 import { Glyph } from './glyph';
 
@@ -50,7 +52,8 @@ export function AppUpdateBanner({
   /* LA COUPURE PASSE D'ABORD (legacy, `SystemStatusBanner` § « Priorité 1 ») —
      et elle n'est pas qu'une question de hiérarchie : un rechargement hors
      ligne rendrait la coquille du cache, pas la version neuve. */
-  if (!online || (pending === null && store === null) || dismissed) return null;
+  const shown = useLayerPresence(!online || (pending === null && store === null) || dismissed ? null : true);
+  if (shown.value === null) return null;
 
   const onApply = (): void => {
     if (applying || pending === null) return;
@@ -68,7 +71,7 @@ export function AppUpdateBanner({
   return (
     <div
       className="fixed inset-x-0 z-50 flex justify-center px-4"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
+      {...layerMotion(shown.leaving, { top: 'calc(env(safe-area-inset-top, 0px) + 8px)', '--layer-shift': '0 -12px' } as CSSProperties)}
     >
       <div
         role="status"

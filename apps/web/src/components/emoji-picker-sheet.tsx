@@ -23,6 +23,7 @@ import { readEmojiRecents, recordEmojiRecent } from '@/lib/emoji-recents';
 import { emojiPickerText, loadEmojiPickerCatalog, type EmojiPickerCatalogKey } from '@/lib/i18n-emoji-picker-catalog';
 import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useLayerPresence } from '@/lib/view/layer-presence';
 import { useLongPress } from '@/lib/view/long-press';
 import { EXTENDED_REACTIONS } from '@/lib/view/message-actions';
 
@@ -318,6 +319,7 @@ export function EmojiPickerSheet({
   const [recents] = useState(() => readEmojiRecents());
   const [tone, setTone] = useState(() => readEmojiSkinTone());
   const [toning, setToning] = useState<{ readonly base: string; readonly opener: HTMLElement } | null>(null);
+  const tones = useLayerPresence(toning);
   const searching = query.trim().length > 0;
 
   const index = useOnDemand(true, loadedEmojiIndex, loadEmojiIndex);
@@ -479,15 +481,18 @@ export function EmojiPickerSheet({
         }}
       >
         {body}
-        {toning === null ? null : (
+        {tones.value === null ? null : (
           <Suspense fallback={null}>
             <EmojiToneMenu
-              base={toning.base}
-              tone={skinToneOf(toning.opener.dataset.emoji ?? '')}
+              base={tones.value.base}
+              tone={skinToneOf(tones.value.opener.dataset.emoji ?? '')}
+              leaving={tones.leaving}
               label={text('emojiPicker.tones')}
               toneLabel={(candidate) => text(`emojiPicker.tone.${candidate}`)}
               rtl={rtl}
-              onChoose={(chosen) => pickTone(toning.base, chosen)}
+              onChoose={(chosen) => {
+                if (toning !== null) pickTone(toning.base, chosen);
+              }}
               onDismiss={dismissTones}
             />
           </Suspense>
