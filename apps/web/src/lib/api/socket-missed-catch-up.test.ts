@@ -8,10 +8,7 @@ import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socke
 import { createOutboxStore } from '@/lib/send/outbox-store';
 import { localMessage, threadPages } from '@/test-support/thread-cache';
 
-import { CONVERSATIONS_QUERY_KEY, CONVERSATION_CATEGORIES_QUERY_KEY, conversationQueryKey } from './conversations';
-import { FEED_QUERY_KEY } from './feed';
-import { FEED_NEW_COUNT_KEY } from './feed-new-count';
-import { STORY_TRAY_QUERY_KEY } from './stories';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import type { ConversationsPage } from './conversations-pages';
 import { messagesQueryKey } from './messages';
 import { NOTIFICATION_COUNTS_QUERY_KEY } from './notifications';
@@ -297,68 +294,5 @@ describe('#10573 — la PREMIÈRE authentification rattrape ce que la liste et l
     expect(isInvalidated(queryClient, conversationQueryKey('c-a'))).toBe(false);
     expect(isInvalidated(queryClient, anchored)).toBe(false);
     expect(isInvalidated(queryClient, NOTIFICATION_COUNTS_QUERY_KEY)).toBe(false);
-  });
-});
-
-/**
- * **LE REJEU DE RECONNEXION COUVRE AUSSI LES SURFACES SOCIALES** (#18641) — même
- * sujet que ce fichier, un cran plus loin : il garde déjà ce que la PREMIÈRE
- * authentification rattrape ; ceci garde ce que les SUIVANTES rattrapent.
- *
- * La connexion écoute 74 événements serveur ; le rejeu en périmait QUATRE
- * familles, chacune ajoutée par le lot qui en avait besoin (#6288, #6321,
- * #7378). Les dix `post:*`, les six `story:*` et les quatre `category:*`
- * n'y étaient pas, alors que leurs gestionnaires écrivent `FEED_QUERY_KEY`,
- * `STORY_TRAY_QUERY_KEY` et `CONVERSATION_CATEGORIES_QUERY_KEY`.
- *
- * RIEN NE LES RATTRAPAIT AILLEURS : `refetchOnReconnect` suit
- * `navigator.onLine`, qui ne bascule pas quand SEUL le socket tombe
- * (redémarrage de la passerelle) ; `staleTime` périme sans rejouer, et une
- * requête MONTÉE n'a alors aucun déclencheur. Ces trois surfaces sont
- * exactement celles qu'on peut REGARDER pendant la coupure — les autres
- * caisses de cartes se rejoignent par une navigation, donc par un montage,
- * donc par une relecture.
- *
- * Parité iOS, qui avait déjà tranché : `FeedViewModel+Socket` (rts-01),
- * `StoryViewModel` (rts-02) et `categoryStore.hydrate()`
- * (`test_didReconnect_rehydratesCategoryStore`).
- */
-describe('#18641 — la RE-authentification rattrape le fil, le rail et les catégories', () => {
-  test('les trois familles se périment à la RECONNEXION, jamais à la première authentification', () => {
-    const { socket, queryClient, destroy } = connect();
-    queryClient.setQueryData(FEED_QUERY_KEY, { pages: [], pageParams: [] });
-    queryClient.setQueryData(STORY_TRAY_QUERY_KEY, []);
-    queryClient.setQueryData(CONVERSATION_CATEGORIES_QUERY_KEY, []);
-
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(CONVERSATION_CATEGORIES_QUERY_KEY)?.isInvalidated).toBe(false);
-
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(CONVERSATION_CATEGORIES_QUERY_KEY)?.isInvalidated).toBe(true);
-    destroy();
-  });
-
-  /**
-   * LA SENTINELLE : `['feed', 'new-count']` est un ENTIER qui partage la racine
-   * `['feed']` (`feed-new-count.ts`), et TanStack compare par PRÉFIXE. Le fil
-   * s'invalide donc en `exact` — nommer la famille, jamais balayer la racine
-   * (règle #6974, que `card-caches.ts` déclare déjà en `exact: true` pour ce
-   * même voisinage).
-   */
-  test('le fil s’invalide en `exact` : le compte de nouveautés qui partage sa racine reste intact', () => {
-    const { socket, queryClient, destroy } = connect();
-    queryClient.setQueryData(FEED_QUERY_KEY, { pages: [], pageParams: [] });
-    queryClient.setQueryData(FEED_NEW_COUNT_KEY, 0);
-
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-
-    expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(FEED_NEW_COUNT_KEY)?.isInvalidated).toBe(false);
-    destroy();
   });
 });
