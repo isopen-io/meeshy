@@ -58,10 +58,13 @@ const GLYPH: Record<SummaryEntryAction, (typeof THREAD_MENU_GLYPHS)[keyof typeof
 function SummaryEntryMenuPanel({
   entry,
   onChoose,
+  onLeave,
   onClose,
 }: {
   readonly entry: OpenEntry;
   readonly onChoose: (action: SummaryEntryAction) => void;
+  /** Refermé : le menu n'est plus ouvert, même s'il reste peint le temps de son fondu. */
+  readonly onLeave: () => void;
   readonly onClose: () => void;
 }) {
   const language = currentInterfaceLanguage();
@@ -77,6 +80,9 @@ function SummaryEntryMenuPanel({
 
   /* Refermé, le menu SORT en fondu (#18327) : l'hôte ne le retire qu'une fois la sortie jouée. */
   const wasMounted = useRef(false);
+  useEffect(() => {
+    if (!roving.open) onLeave();
+  }, [roving.open, onLeave]);
   useEffect(() => {
     if (roving.mounted) {
       wasMounted.current = true;
@@ -186,6 +192,10 @@ export function useSummaryEntryMenu(menu: SummaryEntryMenu | undefined): {
     },
   });
 
+  /* Un menu qui SORT n'est plus ouvert : le relâcher d'un toucher qui le referme reste un toucher. */
+  const leave = useRef(() => {
+    openRef.current = false;
+  }).current;
   const close = useRef(() => {
     openRef.current = false;
     setOpen(null);
@@ -215,7 +225,7 @@ export function useSummaryEntryMenu(menu: SummaryEntryMenu | undefined): {
 
   const panel =
     open === null || menu === undefined ? null : (
-      <SummaryEntryMenuPanel key={opening.current} entry={open} onClose={close} onChoose={(action) => menu.run(action, open.messageId)} />
+      <SummaryEntryMenuPanel key={opening.current} entry={open} onLeave={leave} onClose={close} onChoose={(action) => menu.run(action, open.messageId)} />
     );
 
   return { press: menu === undefined ? undefined : press, guard, panel };

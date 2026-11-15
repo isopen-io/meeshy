@@ -222,6 +222,21 @@ describe('Résumé — le menu d’un VISAGE (#11225)', () => {
     expect(items()).toEqual(['goToMessage', 'reply']);
   });
 
+  test('menu ouvert, toucher un AUTRE visage le referme et garde sa sortie, pendant que le menu sort en fondu (#18327)', () => {
+    const journal = mount();
+    contextMenuOn(faceButton('u-amina'));
+    const target = faceButton('u-karim');
+    act(() => {
+      target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+    });
+    expect(document.querySelector('[data-summary-entry-menu]')?.hasAttribute('data-leaving')).toBe(true);
+    act(() => {
+      target.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(journal).toEqual(['tap-face:u-karim']);
+  });
+
   test('un simple toucher garde sa sortie : script + saut + citation (le menu ne la retire pas)', () => {
     const journal = mount();
     act(() => {

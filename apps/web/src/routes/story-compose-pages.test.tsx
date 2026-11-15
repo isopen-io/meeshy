@@ -155,6 +155,20 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     expect(bench.posts).toHaveLength(0);
   });
 
+  test('refermé puis rouvert pendant sa sortie, le menu repart REPLIÉ : aucun agencement de la fois d’avant (#18327)', async () => {
+    const el = await twoTypedPages(harness({}));
+    act(() => kindToggle(el)!.click());
+    act(() => kindChoice('POST')!.click());
+    await flush();
+    expect(layoutChoice('carousel')).not.toBeNull();
+    act(() => kindToggle(el)!.click());
+    expect(kindMenu()?.hasAttribute('data-leaving')).toBe(true);
+    act(() => kindToggle(el)!.click());
+    expect(kindMenu()?.hasAttribute('data-leaving')).toBe(false);
+    expect(kindChoice('POST')?.getAttribute('aria-expanded')).toBe('false');
+    expect(layoutChoice('carousel')).toBeNull();
+  });
+
   test('une seconde page VIDE ne déplie rien — une disposition sans seconde scène serait un contrôle sans effet', async () => {
     const el = mount(harness({}).deps, 'POST');
     typeText(el, 'Page une');

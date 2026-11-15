@@ -343,7 +343,10 @@ export function PublishSplitButton({
         aria-expanded={open}
         disabled={menuDisabled}
         onClick={() => {
-          if (!open) measure();
+          if (!open) {
+            setExpanded(null);
+            measure();
+          }
           setOpen((value) => !value);
         }}
         className="btn-press grid place-items-center focus-visible:outline-2 disabled:opacity-60"
