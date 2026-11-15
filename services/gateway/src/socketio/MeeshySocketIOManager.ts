@@ -120,6 +120,8 @@ import type { MessageMutationQueueParams } from './broadcastMessageMutation';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
+import { readQueuedMessageFacts } from './queuedMessageFacts';
+import { authorizeDrainedEntries } from './drainAuthorization';
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
@@ -654,90 +656,6 @@ export class MeeshySocketIOManager {
     this.attachmentReactionHandler.setDeliveryQueue(queue);
   }
 
-  /**
-   * Retire du rejeu les entrées des conversations dont l'appartenance a pris
-   * fin PENDANT l'absence.
-   *
-   * L'audience de la file est décidée à la MISE EN FILE, par
-   * `enqueueForOfflineParticipants`, sur l'appartenance de cet instant-là.
-   * Entre cet instant et la LIVRAISON il y a précisément l'absence — c'est-à-dire
-   * la fenêtre pendant laquelle on quitte un groupe, s'en fait retirer, s'y fait
-   * bannir, ou le supprime pour soi. Les quatre routes qui écrivent ces
-   * transitions (`leave.ts`, `participants.ts`, `ban.ts`, `delete-for-me.ts`)
-   * sortent toutes les sockets de la cible de `conversation:<id>` : le canal
-   * VIVANT est fermé à l'instant même. Aucune ne touche cette file, qui garde
-   * jusqu'à `DELIVERY_QUEUE_TTL_SECONDS` (48 h) d'événements de cette même
-   * conversation — messages, éditions, réactions, traductions — et les rejouait
-   * intégralement à la reconnexion suivante : du contenu livré APRÈS la fin de
-   * l'autorisation qui le justifiait, et une conversation ressuscitée dans une
-   * liste dont ces mêmes routes viennent de la retirer.
-   *
-   * Une autorisation se lit donc contre l'autorité au dernier instant possible,
-   * jamais contre une copie prise à l'enfilement. C'est ce qui rend cette garde
-   * unique et non quadruple : elle vaut pour les quatre routes et pour toute
-   * transition future, sans qu'aucune ait à s'en souvenir.
-   *
-   * Échec OUVERT sur une PANNE, FERMÉ sur une RÉPONSE. Le drain est destructif —
-   * les entrées ont déjà quitté la file quand cette garde s'exécute. Une réponse
-   * « plus membre » fait autorité et l'entrée est jetée. Une absence de réponse
-   * n'autorise rien à conclure : jeter l'arriéré parce que la base n'a pas
-   * répondu échangerait une fuite rare (panne ET retrait ET arriéré simultanés)
-   * contre une perte de données probable, une tempête de reconnexions étant
-   * exactement le moment où la base est sous pression.
-   *
-   * `bannedAt` est filtré en JS, pas dans le `where` : sous MongoDB un
-   * `bannedAt: null` ne matche pas les documents où le champ est ABSENT (jamais
-   * écrit), et exclurait donc les lignes historiques — le piège que `ban.ts`
-   * documente déjà pour `leftAt` (audit C5).
-   *
-   * **PRÉCONDITION, tenue par l'appelant** : chaque entrée porte un
-   * `conversationId` de forme ObjectId (`isAddressableConversationId`). Elle
-   * n'est pas cosmétique — les ids sont AGRÉGÉS en un seul `in`, donc une seule
-   * entrée illisible fait lever la requête pour le lot ENTIER, et l'échec
-   * atterrit dans le `catch` ci-dessous, qui rejoue tout SANS FILTRE. Le
-   * fail-open y est délibéré et juste pour ce qu'il vise (une base qui ne répond
-   * pas) ; il ne peut simplement pas distinguer ce cas de « nous n'avons jamais
-   * posé de question valide », et sur ce second cas il transforme une entrée
-   * corrompue en désactivation du gate d'autorisation. La garde vit donc chez
-   * l'appelant, AVANT la requête : c'est le seul endroit où l'entrée fautive est
-   * encore nommable une par une.
-   */
-  private async _dropEndedMemberships(
-    userId: string,
-    isAnonymous: boolean,
-    drained: QueuedMessagePayload[]
-  ): Promise<QueuedMessagePayload[]> {
-    const conversationIds = [...new Set(drained.map(entry => entry.conversationId))];
-    try {
-      // Clé de file = `userId` pour un inscrit, `Participant.id` pour un invité
-      // de lien partagé — la convention exacte que `enqueueForOfflineParticipants`
-      // applique en enfilant (`p.userId ?? p.id`).
-      const rows = await this.prisma.participant.findMany({
-        where: isAnonymous
-          ? { id: userId, conversationId: { in: conversationIds }, isActive: true }
-          : { userId, conversationId: { in: conversationIds }, isActive: true },
-        select: { conversationId: true, bannedAt: true },
-      });
-      const live = new Set(
-        rows.filter(row => row.bannedAt == null).map(row => row.conversationId)
-      );
-      if (live.size === conversationIds.length) return drained;
-
-      const kept = drained.filter(entry => live.has(entry.conversationId));
-      logger.info('Dropped queued events for conversations the reader has left', {
-        userId,
-        dropped: drained.length - kept.length,
-        conversationIds: conversationIds.filter(id => !live.has(id)),
-      });
-      return kept;
-    } catch (error) {
-      logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
-        userId,
-        error,
-      });
-      return drained;
-    }
-  }
 
   private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {
     if (!this.deliveryQueue) return;
@@ -777,7 +695,7 @@ export class MeeshySocketIOManager {
       };
 
       // PREMIER refus, et il est en amont du gate d'autorisation par nécessité,
-      // pas par goût de l'ordre : `_dropEndedMemberships` AGRÈGE les
+      // pas par goût de l'ordre : `authorizeDrainedEntries` AGRÈGE les
       // `conversationId` du lot en un seul `conversationId: { in: [...] }`. Une
       // entrée dont l'id n'est pas interrogeable ne se contente donc pas de se
       // perdre elle-même — elle fait lever la requête pour TOUT le lot, et
@@ -803,13 +721,54 @@ export class MeeshySocketIOManager {
       // fabrique pas un signal de récupération qui ne désigne rien.
       if (addressable.length === 0) return;
 
+      // La lecture des lignes `Message` du lot, faite UNE fois pour les deux
+      // gardes qui les interrogent — le PLANCHER (autorisation, juste en
+      // dessous) et la VIVACITÉ (le monde, plus bas). Elle ne décide RIEN de ce
+      // qu'il faut faire d'un échec : les deux consommateurs arbitrent la même
+      // absence à l'OPPOSÉ, et un `catch` commun aurait imposé au second la
+      // posture du premier écrit (#18615).
+      const facts = await readQueuedMessageFacts(this.prisma, addressable);
+
       // Gate d'autorisation, avant toute émission : une entrée dont
-      // l'appartenance a pris fin n'est pas rejouée, et ne compte donc dans
-      // aucun des trois signaux ci-dessous (émission, `pending-messages:delivered`,
-      // accusé de réception). Un accusé affirme « ce message est arrivé chez son
-      // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
-      // mentirait à son auteur.
-      const authorized = await this._dropEndedMemberships(userId, isAnonymous, addressable);
+      // l'appartenance a pris fin — ou dont le message est passé sous le
+      // PLANCHER D'HISTOIRE du lecteur — n'est pas rejouée, et ne compte donc
+      // dans aucun des trois signaux ci-dessous (émission,
+      // `pending-messages:delivered`, accusé de réception). Un accusé affirme
+      // « ce message est arrivé chez son destinataire » — l'affirmer d'un
+      // message qu'on vient de refuser de livrer mentirait à son auteur.
+      //
+      // Les DEUX questions se lisent sur la même ligne `Participant`, et
+      // `authorizeDrainedEntries` existe pour qu'elle ne soit lue qu'une fois.
+      const authorization = await authorizeDrainedEntries({
+        prisma: this.prisma,
+        reader: { key: userId, isAnonymous },
+        entries: addressable,
+        facts,
+        onParticipationReadFailure: (error) =>
+          logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
+            userId,
+            error,
+          }),
+      });
+      if (authorization.endedConversationIds.length > 0) {
+        logger.info('Dropped queued events for conversations the reader has left', {
+          userId,
+          dropped: authorization.endedEntryCount,
+          conversationIds: authorization.endedConversationIds,
+        });
+      }
+      // Refus DÉLIBÉRÉ, donc hors de `dropEntry` : il n'y a rien à faire relire
+      // au client — aucune porte REST ne sert ce message à ce lecteur.
+      for (const { entry, reason } of authorization.flooredRefusals) {
+        logger.info('Dropped a queued entry the reader may no longer read', {
+          userId,
+          reason,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+        });
+      }
+      const authorized = authorization.kept;
       if (authorized.length === 0) return;
 
       // QUATRIÈME refus, et il vient APRÈS l'autorisation pour deux raisons qui
@@ -832,9 +791,9 @@ export class MeeshySocketIOManager {
       // relire. Ici il n'y a RIEN à relire — le serveur a détruit le contenu, et
       // le client n'en a jamais rien reçu : la convergence est déjà atteinte.
       // C'est la forme du gate d'appartenance, pas celle d'un échec d'émission.
-      const { kept: pending, refused } = await dropQueuedEntriesWhoseMessageDied({
-        prisma: this.prisma,
+      const { kept: pending, refused } = dropQueuedEntriesWhoseMessageDied({
         entries: authorized,
+        facts,
         onReadFailure: (error) =>
           logger.warn('Message liveness re-read failed on drain — replaying the backlog unfiltered', {
             userId,
@@ -1013,7 +972,7 @@ export class MeeshySocketIOManager {
    * `readerKey` porte la CLÉ DE FILE, pas un `User.id` : c'est `userId` pour un
    * inscrit et `Participant.id` pour un invité de lien partagé — la convention
    * exacte qu'`enqueueForOfflineParticipants` applique en enfilant
-   * (`p.userId ?? p.id`), et que `_dropEndedMemberships` lit déjà sous les deux
+   * (`p.userId ?? p.id`), et que `authorizeDrainedEntries` lit déjà sous les deux
    * colonnes. Le paramètre porte ce nom-là parce que le supposer utilisateur
    * est PRÉCISÉMENT ce qui a fait sauter l'accusé pour la moitié anonyme.
    */
@@ -1610,7 +1569,7 @@ export class MeeshySocketIOManager {
    * `readerKey` porte la CLÉ DE CONNEXION, pas un `User.id` : c'est `userId`
    * pour un inscrit et `Participant.id` pour un invité de lien partagé — même
    * convention que la file (`enqueueForOfflineParticipants` enfile sous
-   * `p.userId ?? p.id`), que `_dropEndedMemberships` et que
+   * `p.userId ?? p.id`), que `authorizeDrainedEntries` et que
    * `_emitDeliveryForDrainedMessages`. La résolution lisait auparavant la seule
    * colonne `userId`, donc rendait ZÉRO ligne pour un invité, donc sortait en
    * silence ; le site d'appel enterrait le trou sous un `if (!isAnonymous)` qui

@@ -85,8 +85,8 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
   let manager: any;
   let prisma: any;
   let ioState: ReturnType<typeof getIoState>;
-  /** Les `Message.id` que la lecture de dates a demandés — pour la garde de coût. */
-  let askedMessageIds: unknown[];
+  /** Combien de fois la ligne `Message` a été lue — pour la garde de lecture PARTAGÉE. */
+  let messageReads: number;
   /** Combien de fois la ligne du lecteur a été lue — pour la garde de lecture PARTAGÉE. */
   let participantReads: number;
 
@@ -137,7 +137,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
     prisma.message.findMany = jest.fn(async (args: any) => {
       const ids: unknown[] = args?.where?.id?.in ?? [];
       assertObjectIds(ids);
-      askedMessageIds.push(...ids);
+      messageReads += 1;
       return rows
         .filter((row) => ids.includes(row.id))
         .map((row) => ({ id: row.id, createdAt: row.createdAt, deletedAt: null, expiresAt: null }));
@@ -178,15 +178,22 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
     ioState.sockets.sockets.clear();
     ioState.sockets.adapter.rooms.clear();
 
-    askedMessageIds = [];
+    messageReads = 0;
     participantReads = 0;
     prisma = makePrisma();
-    seedReader([{ historyVisibleFrom: GRANT_FROM }]);
+    // Le lecteur de ce fichier est un INVITÉ DE LIEN dont le lien ferme
+    // l'historique, et à qui un administrateur a accordé la vue depuis une
+    // date. C'est la seule forme qui porte la question : un membre ordinaire
+    // entré sans lien n'a AUCUN plancher (rang iv de `historyFloorFor`,
+    // « rien ne borne qui n'est entré par aucun lien »), donc révoquer son
+    // octroi ne lui retire rien. Le premier jet de ce fichier mettait en scène
+    // un membre nu — la garde ne pouvait pas tomber.
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: GRANT_FROM }]);
     seedMessageDates([
       { id: GRANTED, createdAt: GRANTED_AT },
       { id: AFTER_JOIN, createdAt: AFTER_JOIN_AT },
     ]);
-    seedLinks([]);
+    seedLinks([{ id: LINK, allowViewHistory: false }]);
     manager = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
     await manager.initialize();
   });
@@ -201,7 +208,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
    * `conversation:updated` lui refusent tous repartait pourtant sur le fil.
    */
   it('ne rejoue PAS le texte d’un message passé sous plancher par une révocation d’octroi', async () => {
-    seedReader([{ historyVisibleFrom: null }]);
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: null }]);
     manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
 
     await manager._drainPendingMessages('reader', false);
@@ -220,7 +227,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
     ['translation', SERVER_EVENTS.MESSAGE_TRANSLATION],
     ['attachment-updated', SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED],
   ])('ne rejoue PAS une entrée %s dont le message est sous plancher', async (eventType, event) => {
-    seedReader([{ historyVisibleFrom: null }]);
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: null }]);
     manager.setDeliveryQueue(queueOf([entry(GRANTED, CONV, eventType as string)]));
 
     await manager._drainPendingMessages('reader', false);
@@ -234,7 +241,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
    * interdit d'écrire la garde comme « l'octroi existe-t-il ? ».
    */
   it('ne rejoue PAS le texte d’un message passé sous un octroi DÉPLACÉ vers une date plus récente', async () => {
-    seedReader([{ historyVisibleFrom: new Date('2026-05-01T00:00:00Z') }]);
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: new Date('2026-05-01T00:00:00Z') }]);
     manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
 
     await manager._drainPendingMessages('reader', false);
@@ -253,6 +260,26 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
     prisma.message.findMany = jest.fn(async () => {
       throw new Error('replica lagging');
     }) as any;
+    manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
+
+    await manager._drainPendingMessages('reader', false);
+
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toEqual([]);
+  });
+
+  /**
+   * FAIL-CLOSED sur une LIGNE ABSENTE, qui est un échec DISTINCT de la lecture
+   * tombée juste au-dessus : la requête a abouti et n'a rien rendu pour ce
+   * message. Un plancher existe, et on ne sait pas de quel côté l'entrée
+   * tombe.
+   *
+   * C'est l'arbitrage OPPOSÉ à celui de la garde de VIVACITÉ sur la même
+   * absence — là il manque la preuve d'une MORT, donc on livre ; ici la preuve
+   * d'un DROIT, donc on se taît. Deux gardes, une seule lecture, deux
+   * postures.
+   */
+  it('ne rejoue PAS une entrée dont le message n’a aucune ligne, quand un plancher existe', async () => {
+    seedMessageDates([]);
     manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
 
     await manager._drainPendingMessages('reader', false);
@@ -288,7 +315,6 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
    */
   it('ne rejoue PAS un message antérieur à l’arrivée d’un invité dont le lien ferme l’historique', async () => {
     seedReader([{ shareLinkId: LINK, conversationId: CONV }]);
-    seedLinks([{ id: LINK, allowViewHistory: false }]);
     manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
 
     await manager._drainPendingMessages('reader', false);
@@ -296,16 +322,32 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
     expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toEqual([]);
   });
 
-  /** Un refus de plancher ne fait avancer AUCUN des trois signaux de livraison. */
-  it('n’accuse pas la remise d’une entrée refusée par le plancher', async () => {
-    seedReader([{ historyVisibleFrom: null }]);
+  /**
+   * Un refus de plancher ne fait avancer AUCUN des trois signaux de livraison :
+   * ni l'émission, ni `pending-messages:delivered`, ni l'accusé de réception
+   * qui fait passer la coche de l'expéditeur de « envoyé » à « remis ».
+   *
+   * « Un accusé affirme *ce message est arrivé chez son destinataire* —
+   * l'affirmer d'un message qu'on vient de refuser de livrer mentirait à son
+   * auteur. » C'est la règle que le gate d'appartenance énonce, et la coche est
+   * MONOTONE (`_advanceCursor` ne recule jamais) : un accusé émis à tort ne se
+   * retire pas.
+   *
+   * Et le silence sur `pending-messages:delivered` est le comportement JUSTE,
+   * pas une omission : ce signal envoie le client RELIRE les conversations
+   * qu'il nomme, et aucune porte REST ne servira ce message à ce lecteur. Un
+   * signal de récupération qui ne désigne rien vaut moins que le silence.
+   */
+  it('ne fait avancer aucun signal de livraison pour une entrée refusée par le plancher', async () => {
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: null }]);
     manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
 
     await manager._drainPendingMessages('reader', false);
 
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toEqual([]);
+    expect(emittedWith(SERVER_EVENTS.READ_STATUS_UPDATED)).toEqual([]);
     const announced = emittedWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED) as Array<{ count: number }>;
-    expect(announced).toHaveLength(1);
-    expect(announced[0].count).toBe(0);
+    expect(announced.filter((a) => a.count > 0)).toEqual([]);
   });
 
   // ─── Les NON-RÉGRESSIONS : ce que la garde ne doit pas retirer ────────────
@@ -316,7 +358,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
    * prouver que la garde n'a pas fermé la porte en bloc.
    */
   it('rejoue le texte d’un message postérieur à l’arrivée du lecteur, même après révocation', async () => {
-    seedReader([{ historyVisibleFrom: null }]);
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: null }]);
     manager.setDeliveryQueue(queueOf([entry(AFTER_JOIN)]));
 
     await manager._drainPendingMessages('reader', false);
@@ -334,6 +376,24 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
   });
 
   /**
+   * La borne est INCLUSIVE, et ce n'est pas un détail de goût : la porte REST
+   * qu'on double sert `createdAt: { gte: floor }` (`historyFloorClause`). Une
+   * garde plus stricte d'une milliseconde refuserait en temps réel le message
+   * exact que `GET …/messages` sert — un écart qu'aucun client ne peut
+   * rattraper, et que personne ne remarquerait.
+   */
+  it('rejoue le message écrit EXACTEMENT à l’instant du plancher', async () => {
+    const onFloor = oid('m-on-floor');
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: GRANT_FROM }]);
+    seedMessageDates([{ id: onFloor, createdAt: GRANT_FROM }]);
+    manager.setDeliveryQueue(queueOf([entry(onFloor)]));
+
+    await manager._drainPendingMessages('reader', false);
+
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toHaveLength(1);
+  });
+
+  /**
    * L'ANNONCE DE LA MORT d'un message doit passer, même sous plancher — même
    * arbitrage que la garde de vivacité (#16685), et pour la même raison : la
    * refuser laisserait le client afficher indéfiniment un message détruit.
@@ -343,7 +403,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
     ['deleted', SERVER_EVENTS.MESSAGE_DELETED],
     ['expired', SERVER_EVENTS.MESSAGE_EXPIRED],
   ])('rejoue l’annonce %s d’un message sous plancher', async (eventType, event) => {
-    seedReader([{ historyVisibleFrom: null }]);
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: null }]);
     manager.setDeliveryQueue(queueOf([
       {
         payload: { messageId: GRANTED, conversationId: CONV },
@@ -359,6 +419,38 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
   });
 
   /**
+   * Le lot MIXTE — et c'est le cas NORMAL : un message édité puis supprimé
+   * pendant l'absence du lecteur enfile les deux. L'entrée porteuse de texte
+   * est refusée, l'annonce de la mort du MÊME message passe.
+   *
+   * Ce témoin est né d'une mutation : retirer le cadrage `carriesMessageText`
+   * de l'arbitrage PAR ENTRÉE ne faisait tomber aucun témoin, parce qu'un lot
+   * fait UNIQUEMENT d'annonces de mort sort au court-circuit du dessus et
+   * n'atteint jamais cet arbitrage. Les deux cadrages ont l'air de se doubler ;
+   * ils gardent deux choses — le court-circuit garde le COÛT (pas une requête
+   * de lien pour un lot sans texte), celui-ci garde le VERDICT. Sans ce témoin,
+   * un lot mixte aurait fait disparaître la suppression d'un message sous
+   * plancher, pour toujours.
+   */
+  it('refuse le texte et laisse passer la mort du MÊME message dans un lot mixte', async () => {
+    seedReader([{ shareLinkId: LINK, historyVisibleFrom: null }]);
+    manager.setDeliveryQueue(queueOf([
+      entry(GRANTED, CONV, 'edited'),
+      {
+        payload: { messageId: GRANTED, conversationId: CONV },
+        conversationId: CONV,
+        messageId: GRANTED,
+        eventType: 'deleted',
+      },
+    ]));
+
+    await manager._drainPendingMessages('reader', false);
+
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_EDITED)).toEqual([]);
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_DELETED)).toHaveLength(1);
+  });
+
+  /**
    * Un ADMIN de la conversation n'a aucun plancher (rang i de
    * `historyFloorFor`) : son arriéré repart entier. La garde s'adosse à la loi
    * partagée plutôt que de comparer `joinedAt` elle-même — sans quoi elle
@@ -366,7 +458,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
    * privilégiés.
    */
   it('rejoue tout l’arriéré d’un administrateur de la conversation', async () => {
-    seedReader([{ role: 'admin', historyVisibleFrom: null }]);
+    seedReader([{ shareLinkId: LINK, role: 'admin', historyVisibleFrom: null }]);
     manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
 
     await manager._drainPendingMessages('reader', false);
@@ -375,18 +467,24 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
   });
 
   /**
-   * Un lecteur SANS plancher ne coûte AUCUNE lecture de dates : le cas
-   * dominant reste gratuit. C'est la condition qui rend le fail-closed
-   * ci-dessus payable — il n'est payé que par les lecteurs qui ont un
-   * plancher.
+   * La garde ne coûte AUCUNE lecture de plus : la ligne `Message` est lue UNE
+   * fois pour les deux gardes qui l'interrogent — le plancher et la vivacité
+   * (`queuedMessageFacts`). « Avant de conclure qu'une garde coûterait une
+   * requête, regarder ce que le site lit déjà » — ici elle ne coûte qu'une
+   * colonne de plus (`createdAt`) sur une requête qui existait.
+   *
+   * Le premier jet de ce témoin assertait `askedMessageIds === []` pour un
+   * lecteur sans plancher. Il ne pouvait pas tomber de la bonne façon : la
+   * lecture est partagée, donc elle a lieu pour la vivacité quoi qu'il arrive,
+   * et le témoin aurait mesuré l'absence d'une requête que la garde ne fait
+   * pas — pas l'absence d'une requête en TROP.
    */
-  it('ne lit AUCUNE date de message quand le lecteur n’a aucun plancher', async () => {
-    seedReader([{ role: 'admin' }]);
-    manager.setDeliveryQueue(queueOf([entry(AFTER_JOIN)]));
+  it('ne lit la ligne `Message` qu’UNE fois pour le plancher ET la vivacité', async () => {
+    manager.setDeliveryQueue(queueOf([entry(GRANTED), entry(AFTER_JOIN)]));
 
     await manager._drainPendingMessages('reader', false);
 
-    expect(askedMessageIds).toEqual([]);
+    expect(messageReads).toBe(1);
   });
 
   /**
@@ -395,7 +493,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
    */
   it('ne retire que les entrées de la conversation BORNÉE', async () => {
     seedReader([
-      { conversationId: CONV, historyVisibleFrom: null },
+      { conversationId: CONV, shareLinkId: LINK, historyVisibleFrom: null },
       { conversationId: OTHER, role: 'admin' },
     ]);
     manager.setDeliveryQueue(queueOf([entry(GRANTED, CONV), entry(GRANTED, OTHER)]));
@@ -437,7 +535,7 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
         bannedAt: null,
         role: 'member',
         joinedAt: JOINED_AT,
-        shareLinkId: null,
+        shareLinkId: LINK,
         historyVisibleFrom: null,
         permissions: null,
         anonymousSession: null,

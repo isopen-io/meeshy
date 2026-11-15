@@ -156,7 +156,7 @@ export function isDeliverableQueuedPayload(payload: unknown): payload is Record<
  * l'AGRÈGE — un seul `conversationId: { in: [...] }` porte la totalité du lot —
  * pour deux requêtes qui décident du sort de tous :
  *
- * 1. `_dropEndedMemberships`, le gate d'AUTORISATION du rejeu ;
+ * 1. `authorizeDrainedEntries`, le gate d'AUTORISATION du rejeu ;
  * 2. la résolution des participants qui porte les accusés de remise.
  *
  * **Le plancher est la forme ObjectId, pas « une chaîne ».** Mesuré contre le
@@ -170,7 +170,7 @@ export function isDeliverableQueuedPayload(payload: unknown): payload is Record<
  * traduit un identifiant lisible en ObjectId).
  *
  * Ce que la garde vaut, et c'est le point : le `catch` de
- * `_dropEndedMemberships` échoue OUVERT **par décision** — « une absence de
+ * `authorizeDrainedEntries` échoue OUVERT **par décision** — « une absence de
  * réponse n'autorise rien à conclure », écrite pour une base indisponible. Il ne
  * peut pas distinguer « la base n'a pas répondu » de « nous ne lui avons jamais
  * posé de question valide », et la seconde rend le gate d'autorisation
