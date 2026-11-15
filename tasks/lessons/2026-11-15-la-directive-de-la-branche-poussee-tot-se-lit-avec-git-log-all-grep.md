@@ -44,3 +44,26 @@ celui qu'il faut pour muter ses gardes une par une. Ici le lot fusionné a tenu
 mien sur un point que mon journal défendait explicitement : un refus par
 IGNORANCE est une PERTE, pas un refus prouvé, et il doit nommer sa conversation
 pour envoyer le client relire. Mon lot les taisait tous les deux.
+
+**Suite, le même jour : la vérification a servi, ET elle n'a pas suffi.** Lancée
+sur l'arriéré, elle a correctement montré #18614 pris et #18616 libre. Une heure
+plus tard, une autre session avait ouvert une PR sur #18616 — démarrée APRÈS ma
+vérification. Le relevé réduit la FENÊTRE ; il ne la ferme pas, et la doctrine du
+dépôt le dit déjà (« elle ne prétend pas supprimer la collision »).
+
+Ce qui reste est la cause de fond, inchangée : **un numéro d'issue est un espace
+de noms que personne n'alloue.** La réponse n'est pas un relevé plus fin, c'est
+une ALLOCATION — et le dépôt en a déjà la primitive, atomique, visible de toute
+session en un appel : **commenter l'issue avant d'écrire la première ligne.**
+C'est la pratique que j'adopte, en plus du relevé : un commentaire « je prends,
+session X » coûte un appel, se lit sans cloner, et transforme une course en
+constat.
+
+Et quand la collision survient quand même, l'arbitrage reste le même : **comparer
+les deux lots, garder le meilleur, et céder sans négocier.** Les deux fois ici,
+le lot d'en face était meilleur sur un point précis que mon propre journal
+défendait — la seconde fois, sa projection de capacité déclarait la signature
+RÉELLE (`{ sealAtRest }` compris) là où la mienne en perdait le troisième
+paramètre : assignable au compilateur, donc un piège armé qu'aucun témoin
+n'aurait fait rougir. Céder n'est pas perdre le lot : c'est l'échanger contre la
+lecture adverse de son propre défaut.
