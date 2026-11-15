@@ -119,7 +119,7 @@ describe('Le statut SERVI ne retombe plus sur une horloge murale (#18701)', () =
     arrangeDrainedWithoutEmission(new Date('2026-10-01T10:00:00.000Z'));
     const service = new MessageReadStatusService(mockPrisma as any);
 
-    const status = await service.getMessageReadStatus(MESSAGE_ID);
+    const status = await service.getMessageReadStatus(MESSAGE_ID, CONVERSATION_ID);
 
     expect(status.receivedBy).toEqual([]);
   });
