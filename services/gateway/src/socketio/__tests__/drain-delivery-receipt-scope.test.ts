@@ -38,8 +38,28 @@
  * jamais l'EFFET — c'est la leçon du cycle 122 : « la question n'est pas
  * seulement *élit-il le bon rang ?* mais *qui AFFICHE ce qu'il élit ?* ».
  *
- * Ce fichier traverse donc la chaîne entière, jusqu'au `where` que
- * `freezeMessageStatus` remet à Prisma.
+ * **Et ce fichier a d'abord rejoué cette coupure d'un cran plus bas.** Son
+ * doc-comment affirmait « traverse la chaîne entière jusqu'au `where` remis à
+ * Prisma » alors que ses quatre premiers témoins MOCKENT
+ * `markMessagesAsReceived` et n'assertent que les ARGUMENTS — exactement le
+ * reproche fait au témoin précédent, une couche plus loin (audit adversarial).
+ * La coupure est LÉGITIME pour la question que ces quatre-là posent —
+ * *l'appelant nomme-t-il ce qu'il a livré ?* — et le doc-comment, lui, ne
+ * l'était pas.
+ *
+ * **La couture est donc DITE, au lieu d'être niée.** Ce fichier répond à « le
+ * drain nomme-t-il ce qu'il a livré ? » ; son voisin
+ * (`markMessagesAsReceived-scope.test.ts`) répond à « le service honore-t-il ce
+ * qu'on lui nomme ? », en laissant tourner le VRAI service jusqu'au `where`
+ * remis à Prisma. Ce qui les relie reste une HYPOTHÈSE — que l'objet passé ici
+ * est celui reçu là-bas — et une hypothèse ne tombe jamais.
+ *
+ * Elle est ÉTROITE (un objet littéral, un paramètre, aucune transformation
+ * entre les deux) et elle est nommée ici parce qu'un lot qui reproche une
+ * couture à son prédécesseur doit déclarer la sienne. Ce qu'aucun des deux
+ * fichiers ne mesure, en revanche, est ce qu'un lecteur VOIT : le statut servi
+ * retombe sur le curseur en l'absence d'entrée figée — c'est #18701, et c'est
+ * la moitié de la chaîne que ce lot ne ferme pas.
  *
  * @jest-environment node
  */
@@ -127,7 +147,7 @@ describe('rejeu hors ligne — l’accusé de remise ne nomme que ce qui est par
    * passerait — ou tomberait — pour une raison qui n'est pas la sienne.
    */
   const flush = async (): Promise<void> => {
-    for (let i = 0; i < 6; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 40; i += 1) await new Promise((resolve) => setImmediate(resolve));
   };
 
   /**
@@ -209,4 +229,32 @@ describe('rejeu hors ligne — l’accusé de remise ne nomme que ce qui est par
     const [, , , options] = received.mock.calls[0] as any[];
     expect(options?.messageIds).toEqual([M2]);
   });
+
+  /**
+   * F7 — une entrée au `messageId` corrompu ne prive que LUI-MÊME de son gel.
+   * `QueuedMessagePayload` sort d'un `JSON.parse(…) as …` NON validé sur des
+   * octets vieux de 48 h, et rien ne garde `messageId` sur ce chemin.
+   *
+   * Le témoin a trouvé une seconde moitié en tombant : la garde posée APRÈS
+   * `convLatest.set` laissait l'entrée corrompue devenir le « plus récent » id
+   * de sa conversation — `latestMessageId` sortait `undefined` et le `return`
+   * qui suit privait d'accusé TOUTES les entrées saines du lot. L'ordre dans la
+   * boucle est la garde, pas le filtre seul.
+   */
+  it('une entrée au messageId corrompu ne prive pas les SAINES de leur accusé', async () => {
+    const received = jest.fn<any>().mockResolvedValue(0);
+    manager.readStatusService.markMessagesAsReceived = received;
+    manager.setDeliveryQueue(queueOf([
+      { payload: { id: M2, conversationId: CONV }, conversationId: CONV, messageId: M2 },
+      { payload: { conversationId: CONV }, conversationId: CONV, messageId: undefined },
+    ]));
+
+    await manager._drainPendingMessages('reader', false);
+    await flush();
+
+    expect(received).toHaveBeenCalledTimes(1);
+    const [, , , options] = received.mock.calls[0] as any[];
+    expect(options?.messageIds).toEqual([M2]);
+  });
+
 });

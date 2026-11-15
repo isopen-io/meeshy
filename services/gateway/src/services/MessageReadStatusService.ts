@@ -13,6 +13,7 @@
  * - AttachmentStatusEntry est conservé pour le suivi granulaire des médias (audio écouté, vidéo vue).
  */
 
+import { createHash } from 'crypto';
 import { PrismaClient } from "@meeshy/shared/prisma/client";
 import { MessageMediaConsumptionService, type MediaConsumptionServed } from './MessageMediaConsumptionService';
 // `withRetry` a suivi ses cinq appelants dans le module de consommation média
@@ -157,6 +158,19 @@ export function buildCursorFreshnessGuard(params: {
 export type MarkReceivedScope = {
   readonly messageIds?: readonly string[];
 };
+
+/**
+ * Le discriminant de PÉRIMÈTRE dans la clé de déduplication.
+ *
+ * `'window'` quand l'appelant ne nomme rien — le comportement d'origine, et
+ * celui des quatre appelants en ligne. Sinon le digest de la liste NOMMÉE :
+ * deux rejeux qui livrent des ensembles différents sous le même message le
+ * plus récent sont deux travaux distincts, et aucun ne doit avaler l'autre.
+ */
+function markReceivedScopeKey(options?: MarkReceivedScope): string {
+  if (!options?.messageIds) return 'window';
+  return `ids:${createHash('sha1').update([...options.messageIds].sort().join(',')).digest('hex').slice(0, 12)}`;
+}
 
 export class MessageReadStatusService {
   /**
@@ -539,7 +553,23 @@ export class MessageReadStatusService {
       // Keyed by the RESOLVED messageId so a genuinely newer message always
       // produces a distinct key and is never swallowed by the TTL gate — only
       // identical repeats (same message within the TTL) are deduped.
-      dedupKey = `${participantId}:${conversationId}:received:${messageId}`;
+      // #18614 (audit) — la clé porte aussi le PÉRIMÈTRE, et c'est le lot qui
+      // l'a rendu nécessaire. Avant lui, deux appels de même `messageId`
+      // faisaient le MÊME travail (toujours la fenêtre) : les confondre était
+      // sans conséquence. Depuis, le rejeu fige une LISTE et les quatre autres
+      // appelants figent une FENÊTRE — deux travaux DIFFÉRENTS sous la même
+      // clé.
+      //
+      // Et la séquence qui les met côte à côte est le chemin NOMINAL de
+      // reconnexion : le drain, puis `GET /conversations/:id/messages`, dont le
+      // fire-and-forget appelle cette méthode SANS id (`messages-list.ts`). Le
+      // service résout alors le même message le plus récent, donc la même clé,
+      // à quelques dizaines de millisecondes — et la fenêtre, plus LARGE, était
+      // avalée par la liste, plus ÉTROITE, qui l'avait précédée.
+      //
+      // Un digest, pas la liste : une clé de cache ne porte pas un identifiant
+      // par message livré.
+      dedupKey = `${participantId}:${conversationId}:received:${messageId}:${markReceivedScopeKey(options)}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 

@@ -110,10 +110,14 @@ describe('markMessagesAsReceived — le périmètre du gel', () => {
     await service().markMessagesAsReceived(PARTICIPANT, conv, M2, { messageIds: [] });
 
     const freeze = messageWheres.find((w) => w?.conversationId === conv && w?.senderId);
-    if (freeze) {
-      expect(freeze.createdAt).toBeUndefined();
-      expect(freeze.id).toEqual({ in: [] });
-    }
+    // INCONDITIONNEL. Sous un `if (freeze)`, une mutation qui fait SAUTER le
+    // gel au lieu de le rouvrir — `if (messageIds.length === 0) return 0;` en
+    // tête de `freezeMessageStatus` — laissait `freeze` indéfini et le témoin
+    // VERT, zéro assertion exécutée. Il gardait la clause que le lot met le
+    // plus en avant, et ne pouvait pas tomber sur la moitié de son espace.
+    expect(freeze).toBeDefined();
+    expect(freeze.createdAt).toBeUndefined();
+    expect(freeze.id).toEqual({ in: [] });
   });
 
   /**
