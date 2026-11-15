@@ -453,7 +453,11 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // 467 -> 466 (2026-11-14, #18209) : `BubbleCallJournalUnderCard.swift` lit l'accent de la conversation UNE fois
 // (`accent`) pour la bascule, Réessayer et le journal, au lieu de deux `Color(hex: accentHex)`. Valeur MESURÉE le
 // 2026-11-14 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 466;
+// 466 -> 461 (2026-11-15, #18590, #18591) : les sections de ma fiche de profil ont quitté `ProfileView` pour leurs
+// fichiers (`ProfileSectionChrome`, `ProfileIdentitySection`…). Le titre d'une section reçoit un jeton `Color`
+// (`MeeshyColors.error`, `.warning`, `.indigo300`, `.brandPrimary`) au lieu d'un hex recomposé, et la pastille d'icône
+// relaie l'accent de la fiche sous son nom de règle (`accentColor`). Valeur MESURÉE le 2026-11-15 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 461;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

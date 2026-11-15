@@ -96,7 +96,7 @@ export const ProfileBringRowView = memo(function ProfileBringRowView({
             type="button"
             data-bring-cancel=""
             onClick={onCancel}
-            className={`grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold ${FOCUS}`}
+            className={`btn-press grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold ${FOCUS}`}
             style={{ minHeight: 44, color: DANGER, border: `1.5px solid color-mix(in srgb, ${DANGER} 45%, transparent)`, outlineColor: DANGER }}
           >
             {translateCircles(language, 'bring.cancel')}
@@ -117,7 +117,7 @@ export const ProfileBringRowView = memo(function ProfileBringRowView({
             disabled={busy}
             aria-busy={busy}
             onClick={onBring}
-            className={`grid shrink-0 place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
+            className={`btn-press grid shrink-0 place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
             style={{ minHeight: 44, color: 'var(--color-on-state)', backgroundColor: DANGER, outlineColor: DANGER, opacity: busy ? 0.6 : 1 }}
           >
             <span>

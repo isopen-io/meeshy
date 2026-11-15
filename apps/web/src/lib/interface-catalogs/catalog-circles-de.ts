@@ -151,6 +151,8 @@ const de = {
   'together.unavailable': 'Dieses Medium lässt sich auf diesem Gerät nicht abspielen.',
   'together.someone': 'Jemand',
   'together.gone': 'Die Einladung ist nicht mehr gültig.',
+  'together.join.offline': 'Offline: Die Sitzung wurde nicht geöffnet.',
+  'together.join.failed': 'Die Sitzung wurde nicht geöffnet. Versuche es erneut.',
   'together.ended': 'Die gemeinsame Sitzung ist beendet.',
   'together.row.title': 'Gemeinsam ansehen oder anhören',
   'together.row.explain': 'Wähle ein Video oder Audio aus eurem Chat: {name} spielt es gleichzeitig mit dir ab.',

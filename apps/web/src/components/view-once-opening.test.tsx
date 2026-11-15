@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 
 import type { Attachment } from '@/lib/api/types';
 import { RevealPhaseChannel } from '@/lib/reading-mode/reveal-phase-channel';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -121,6 +123,16 @@ describe('un MÉDIA à vue unique s’ouvre en plein écran', () => {
     expect(stage?.textContent).toContain('SECRET-VU');
 
     await mounter.click(document.body.querySelector<HTMLButtonElement>('.view-once-stage-close'));
+    await mounter.settle();
+
+    /* La sortie est gardée AVANT la fermeture (#18327) : la scène s'efface, inerte, puis se ferme. */
+    const leaving = document.body.querySelector('[data-view-once-stage]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(deleted).toEqual([]);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
     await mounter.settle();
 
     expect(document.body.querySelector('[data-view-once-stage]')).toBe(null);

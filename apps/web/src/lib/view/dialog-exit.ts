@@ -1,5 +1,9 @@
 import { useCallback, useLayoutEffect, useRef, type CSSProperties, type RefObject } from 'react';
 
+import { LAYER_MOTION_CURVE, LAYER_MOTION_MS } from './layer-presence';
+
+export { LAYER_MOTION_MS, layerMotion, useLayerPresence, type LayerPresence } from './layer-presence';
+
 /**
  * **LA SORTIE D'UNE MODALE EST JOUÉE PAR UN FANTÔME ; LE VRAI DIALOGUE SE FERME TOUT DE SUITE** (#18362).
  *
@@ -18,9 +22,9 @@ import { useCallback, useLayoutEffect, useRef, type CSSProperties, type RefObjec
 /** K15, colonne web : la feuille monte et descend en 280 ms. */
 export const SHEET_MOTION_MS = 280;
 /** Le fondu de K01, K02 et K13 : celui des fenêtres centrées et de la confirmation. */
-export const DIALOG_FADE_MS = 200;
+export const DIALOG_FADE_MS = LAYER_MOTION_MS;
 /** La courbe que `send-sheet.css` et la feuille du jeu écrivaient déjà, promue en constante. */
-export const SHEET_MOTION_CURVE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+export const SHEET_MOTION_CURVE = LAYER_MOTION_CURVE;
 /** Au-delà, le clone coûterait plus que la sortie qu'il joue : la fermeture reste sèche. */
 export const DIALOG_GHOST_MAX_NODES = 1500;
 
@@ -167,7 +171,10 @@ export function useDialogExit(ref: RefObject<HTMLDialogElement | null>, { kind }
   useLayoutEffect(() => {
     const dialog = ref.current;
     if (dialog === null) return undefined;
-    const onCancel = () => {
+    /* Un Échap que le dialogue refuse (son `onCancel` pose `preventDefault`, posé avant cet écouteur) le
+       laisse ouvert : un fantôme se peindrait à côté de lui. */
+    const onCancel = (event: Event) => {
+      if (event.defaultPrevented) return;
       leaveDialogAsGhost(dialog, kindRef.current);
     };
     dialog.addEventListener('cancel', onCancel);

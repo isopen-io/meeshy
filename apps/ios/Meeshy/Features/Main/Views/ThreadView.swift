@@ -43,15 +43,13 @@ struct ThreadView: View {
 
     private var header: some View {
         HStack {
-            Button {
-                HapticFeedback.light()
+            MeeshyGlassButton(
+                systemImage: "xmark",
+                label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+                size: .s36
+            ) {
                 dismiss()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(Color(hex: accentColor))
             }
-            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 
