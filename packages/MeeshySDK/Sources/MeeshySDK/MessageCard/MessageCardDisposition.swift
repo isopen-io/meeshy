@@ -238,6 +238,8 @@ public struct MessageCardDisposition: Equatable, Sendable {
     public var clipLength: MessageCardClipLength
     /// L'échelle de chaque partie, réglée au pincement (#8979).
     public var scales: MessageCardScales
+    /// Le décor de la maquette : alignement, cadre, ornement (#18673).
+    public var decor: MessageCardDecor
 
     public init(
         aspect: MessageCardAspect = .auto,
@@ -254,7 +256,8 @@ public struct MessageCardDisposition: Equatable, Sendable {
         showsTimer: Bool = true,
         transcriptTypeface: MessageCardTypefaceID? = nil,
         clipLength: MessageCardClipLength = .oneMinute,
-        scales: MessageCardScales = .identity
+        scales: MessageCardScales = .identity,
+        decor: MessageCardDecor = .none
     ) {
         self.aspect = aspect
         self.headerOrientation = headerOrientation
@@ -271,6 +274,7 @@ public struct MessageCardDisposition: Equatable, Sendable {
         self.transcriptTypeface = transcriptTypeface
         self.clipLength = clipLength
         self.scales = scales
+        self.decor = decor
     }
 
     /// La carte d'avant #8692 : adaptative, en-tête en ligne, noms au-dessus, droite.

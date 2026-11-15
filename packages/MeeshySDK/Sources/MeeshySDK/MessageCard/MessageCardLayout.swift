@@ -264,7 +264,7 @@ public struct MessageCardLayout: Equatable, Sendable {
     }
 
     public static func make(_ input: MessageCardInput, measure: @escaping MessageCardMeasure) -> MessageCardLayout {
-        MessageCardLayoutEngine(input: input, measure: measure).layout()
+        MessageCardDecorator(input: input).decorated(MessageCardLayoutEngine(input: input, measure: measure).layout())
     }
 
     /// **La même carte, LISIBLE à petite échelle** — la vignette d'un template

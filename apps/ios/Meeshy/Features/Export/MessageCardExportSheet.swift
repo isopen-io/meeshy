@@ -52,7 +52,6 @@ struct MessageCardExportSheet: View {
 
     @State var savedDefault: MessageCardFormat?
     @State var format: MessageCardFormat = .initial
-    @State var popular: [MessageCardTemplateID] = []
     @State var usage: [MessageCardTemplateID: Int] = [:]
     @State var exportLanguage: String?
     @State var rendered: Rendered?
@@ -111,8 +110,6 @@ struct MessageCardExportSheet: View {
         var scrollContent: Double = 0
         var viewport: Double = 0
     }
-
-    private static let popularCount = 8
 
     var accent: Color { Color(hex: request.accentColor) }
 
@@ -248,6 +245,7 @@ struct MessageCardExportSheet: View {
                 source: thumbSource,
                 onPick: { id in
                     format.template = id
+                    if let model = currentModel, !model.accepts(id.link) { format.model = nil }
                     galleryOpen = false
                 },
                 onClose: { galleryOpen = false }
@@ -274,7 +272,11 @@ struct MessageCardExportSheet: View {
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 HapticFeedback.light()
-                format.template = MessageCardTemplates.random()
+                var next = MessageCardTemplates.random()
+                if let model = currentModel, !model.accepts(next.link) {
+                    next = MessageCardTemplateID(palette: next.palette, typeface: next.typeface, link: model.link)
+                }
+                format.template = next
             } label: {
                 Image(systemName: "shuffle")
             }
@@ -377,7 +379,8 @@ struct MessageCardExportSheet: View {
             tab: tab,
             focus: focus,
             format: $format,
-            popular: popular,
+            stylesRow: stylesRow,
+            links: currentModel?.offeredLinks ?? MessageCardLinkID.allCases,
             hasQuote: subject.quoted != nil,
             hasTitle: title != nil,
             hasHandles: subject.hasHandles,
@@ -391,7 +394,6 @@ struct MessageCardExportSheet: View {
             exportLanguage: $exportLanguage,
             thumbs: thumbSource,
             onTab: openTab,
-            onGallery: { galleryOpen = true },
             onExcerptStart: { clipStart = $0 },
             contentPanel: contentPanel,
             backdropPanel: backdropPanel
@@ -457,6 +459,32 @@ struct MessageCardExportSheet: View {
         )
     }
 
+    /// La maquette du format — celle par défaut tant qu'aucune n'est choisie.
+    var currentModel: MessageCardModel? {
+        MessageCardModels.model(id: format.model ?? MessageCardModels.defaultID)
+    }
+
+    /// Les maquettes, chacune peinte sur le message (#18673).
+    var stylesRow: MessageCardModelRow {
+        let neutral = MessageCardModels.model(id: MessageCardModels.defaultID)?.applied(to: format) ?? format
+        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")"
+        let format = format
+        return MessageCardModelRow(
+            models: MessageCardModels.builtIn,
+            selectedID: format.model ?? MessageCardModels.defaultID,
+            source: MessageCardModelThumbSource(
+                store: thumbnails,
+                keyOf: { "model:\($0.id)|\(state)" },
+                inputOf: { input(for: $0.applied(to: format)) },
+                pictures: paintedPictures
+            ),
+            onPick: { model in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self.format = model.applied(to: self.format) }
+            },
+            onCombinations: { galleryOpen = true }
+        )
+    }
+
     /// La carte telle qu'elle partira — animée, sur l'extrait que la vidéo emportera (#8979).
     func input(for format: MessageCardFormat) -> MessageCardInput {
         var card = MessageCardInput.of(
@@ -482,7 +510,6 @@ struct MessageCardExportSheet: View {
         savedDefault = stored
         format = stored ?? .initial
         usage = MessageCardUsage.read(from: store)
-        popular = MessageCardUsage.popular(usage, count: Self.popularCount)
         if request.composition?.showsBar == true { tab = .content }
         if let composition = request.composition, let first = composition.modes.first {
             compositionMode = first

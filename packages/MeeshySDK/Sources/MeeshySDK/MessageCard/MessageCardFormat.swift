@@ -25,10 +25,13 @@ public struct MessageCardFormat: Equatable, Sendable {
     public var useHandles: Bool
     /// Le format de l'image, l'en-tête, la place des noms, l'inclinaison, les médias (#8692).
     public var disposition: MessageCardDisposition
+    /// La maquette dont le format est parti (#18673) — `nil` : un format d'avant les maquettes.
+    public var model: String?
 
     public init(template: MessageCardTemplateID, showConversationTitle: Bool = false, showAuthors: Bool = true,
                 showDate: Bool = false, anonymizeQuoted: Bool = false, anonymizeReply: Bool = false,
-                showTimes: Bool = false, useHandles: Bool = false, disposition: MessageCardDisposition = .standard) {
+                showTimes: Bool = false, useHandles: Bool = false, disposition: MessageCardDisposition = .standard,
+                model: String? = nil) {
         self.template = template
         self.showConversationTitle = showConversationTitle
         self.showAuthors = showAuthors
@@ -38,6 +41,7 @@ public struct MessageCardFormat: Equatable, Sendable {
         self.showTimes = showTimes
         self.useHandles = useHandles
         self.disposition = disposition
+        self.model = model
     }
 
     public static let initial = MessageCardFormat(template: MessageCardTemplates.defaultID)
@@ -118,6 +122,10 @@ public struct MessageCardFormat: Equatable, Sendable {
         let transcriptTypeface: String?
         let clipLength: Int?
         let scales: [String: Double]?
+        let model: String?
+        let alignment: String?
+        let frame: String?
+        let ornament: String?
     }
 
     public static func parse(_ raw: String?) -> MessageCardFormat? {
@@ -150,8 +158,14 @@ public struct MessageCardFormat: Equatable, Sendable {
                 showsTimer: stored.showsTimer ?? standard.showsTimer,
                 transcriptTypeface: stored.transcriptTypeface.flatMap(MessageCardTypefaceID.init(rawValue:)),
                 clipLength: stored.clipLength.flatMap(MessageCardClipLength.init(rawValue:)) ?? standard.clipLength,
-                scales: MessageCardScales(stored: stored.scales)
-            )
+                scales: MessageCardScales(stored: stored.scales),
+                decor: MessageCardDecor(
+                    alignment: stored.alignment.flatMap(MessageCardDecor.Alignment.init(rawValue:)) ?? .start,
+                    frame: stored.frame.flatMap(MessageCardDecor.Frame.init(rawValue:)) ?? .none,
+                    ornament: stored.ornament.flatMap(MessageCardDecor.Ornament.init(rawValue:)) ?? .none
+                )
+            ),
+            model: stored.model.flatMap { MessageCardModels.isValidID($0) ? $0 : nil }
         )
     }
 
@@ -177,7 +191,11 @@ public struct MessageCardFormat: Equatable, Sendable {
             showsTimer: disposition.showsTimer,
             transcriptTypeface: disposition.transcriptTypeface?.rawValue,
             clipLength: disposition.clipLength.rawValue,
-            scales: disposition.scales.isIdentity ? nil : disposition.scales.stored
+            scales: disposition.scales.isIdentity ? nil : disposition.scales.stored,
+            model: model,
+            alignment: disposition.decor.isNone ? nil : disposition.decor.alignment.rawValue,
+            frame: disposition.decor.isNone ? nil : disposition.decor.frame.rawValue,
+            ornament: disposition.decor.isNone ? nil : disposition.decor.ornament.rawValue
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
