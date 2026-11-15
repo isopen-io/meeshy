@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -105,7 +106,7 @@ class GameRulesScreenComposeTest {
     @Config(qualifiers = "fr")
     fun `toucher le i de la frappe deplie le calcul de la part de lumiere`() {
         show(focused = null)
-        compose.onNodeWithContentDescription(context.getString(R.string.game_rules_3_question)).performClick()
+        compose.onNodeWithContentDescription(context.getString(R.string.game_rules_3_question)).performScrollTo().performClick()
         compose.onNodeWithText(context.getString(R.string.game_rules_3_more)).assertExists()
     }
 

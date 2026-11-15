@@ -8,6 +8,11 @@ struct SecurityEmailSection: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var authManager: AuthManager
     private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     @State private var isEditingEmail = false
     @State private var newEmail = ""
@@ -85,7 +90,7 @@ struct SecurityEmailSection: View {
         HStack(spacing: 0) {
             Button {
                 HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                animate {
                     isEditingEmail = true
                 }
             } label: {
@@ -107,8 +112,7 @@ struct SecurityEmailSection: View {
                     submitEmailChange()
                 } label: {
                     HStack(spacing: MeeshySpacing.sm) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption.weight(.semibold))
+                        SecurityVerifyGlyph(isSending: emailLoading)
                         Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                             .font(.footnote.weight(.semibold))
                     }
@@ -116,6 +120,7 @@ struct SecurityEmailSection: View {
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.sm)
                 }
+                .disabled(emailLoading)
             }
 
             Spacer()
@@ -143,7 +148,7 @@ struct SecurityEmailSection: View {
             HStack(spacing: MeeshySpacing.smPlus) {
                 Button {
                     HapticFeedback.light()
-                    withAnimation { isEditingEmail = false; newEmail = ""; emailError = nil }
+                    animate { isEditingEmail = false; newEmail = ""; emailError = nil }
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.footnote.weight(.semibold))
@@ -214,7 +219,15 @@ struct SecurityEmailSection: View {
 
     // MARK: - Actions
 
+    /// Un changement d'étape se fond ; sous « Réduire les animations », un
+    /// fondu court remplace le ressort.
+    private func animate(_ change: () -> Void) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion, change)
+    }
+
+    /// Un second toucher pendant l'envoi n'envoie pas un second e-mail.
     private func submitEmailChange() {
+        guard !emailLoading else { return }
         emailLoading = true
         emailError = nil
 
@@ -222,7 +235,7 @@ struct SecurityEmailSection: View {
             do {
                 _ = try await UserService.shared.changeEmail(ChangeEmailRequest(newEmail: newEmail))
                 HapticFeedback.success()
-                withAnimation {
+                animate {
                     emailSent = true
                     isEditingEmail = false
                 }

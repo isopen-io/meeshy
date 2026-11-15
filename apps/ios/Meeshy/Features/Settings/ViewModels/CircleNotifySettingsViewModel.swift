@@ -53,7 +53,11 @@ final class CircleNotifySettingsViewModel: ObservableObject {
         }
     }
 
+    /// Une relecture après un échec repasse par le chargement : « Réessayer »
+    /// se voit, et son bouton cède la place à la progression le temps de la
+    /// lecture. Des crans déjà lus restent affichés pendant qu'on les relit.
     func load() async {
+        if loadState == .unavailable { loadState = .loading }
         do {
             let served = try await service.load()
             preferences = pending.reduce(served) { $0.setting($1.value, for: $1.key) }

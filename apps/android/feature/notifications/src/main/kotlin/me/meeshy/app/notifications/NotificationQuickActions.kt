@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationQuickAction
+import me.meeshy.ui.component.kit.MeeshyChipRecipe
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -52,6 +53,7 @@ internal fun QuickActionsRow(
     notification: ApiNotification,
     actions: List<NotificationQuickAction>,
     isConnectRequested: Boolean,
+    isWriteInFlight: Boolean = false,
     onQuickAction: (ApiNotification, NotificationQuickAction) -> Unit,
 ) {
     Row(
@@ -62,12 +64,13 @@ internal fun QuickActionsRow(
     ) {
         actions.forEach { action ->
             val sent = action is NotificationQuickAction.Connect && isConnectRequested
+            val resolving = action is NotificationQuickAction.Write && isWriteInFlight
             QuickActionChip(
                 tag = quickActionTestTag(action, notification.id),
                 label = stringResource(action.labelRes(sent)),
                 icon = action.icon(sent),
                 isPrimary = action is NotificationQuickAction.Connect && !sent,
-                enabled = !sent,
+                enabled = !sent && !resolving,
                 onClick = { onQuickAction(notification, action) },
             )
         }
@@ -78,7 +81,7 @@ internal fun QuickActionsRow(
 private fun QuickActionChip(tag: String, label: String, icon: ImageVector, isPrimary: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val container by animateColorAsState(
         if (isPrimary) MeeshyPalette.Indigo600 else MeeshyPalette.Indigo500.copy(alpha = 0.12f),
-        tween(200),
+        tween(MeeshyChipRecipe.TONE_FADE_MILLIS),
         label = "quick-action-container",
     )
     val content = if (isPrimary) Color.White else if (MeeshyTheme.isDark) MeeshyPalette.Indigo300 else MeeshyPalette.Indigo600

@@ -34,7 +34,7 @@ export function AgeBlocked({ language, onConfirm }: { readonly language: Interfa
         type="button"
         data-age-blocked-confirm
         onClick={onConfirm}
-        className="grid place-items-center rounded-field font-bold text-ios-on-brand"
+        className="btn-press grid place-items-center rounded-field font-bold text-ios-on-brand"
         style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }}
       >
         {translate(language, 'age.blocked.confirm')}

@@ -94,13 +94,17 @@ struct EncryptedDeviceSheet: View {
         ) {
             if let shown {
                 EncryptedDeviceCodeView(shown: shown)
+                    .transition(.opacity)
             } else {
                 actionButton(String(localized: "e2ee.devices.step.show.action", defaultValue: "Montrer mon code", bundle: .main), systemImage: "qrcode", prominent: false) {
                     Task { await model.showCode(towards: current) }
                 }
                 .disabled(model.busyDeviceId != nil)
+                .transition(.opacity)
             }
         }
+        // Le code se fond à la place du bouton au lieu de surgir d'un coup.
+        .meeshyAnimation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), reduced: MeeshyMotion.reducedFade, value: shown != nil)
     }
 
     private func step<Actions: View>(number: Int, title: String, text: String, @ViewBuilder actions: () -> Actions) -> some View {

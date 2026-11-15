@@ -344,6 +344,29 @@ describe("la pastille d'action d'en-tête — l'encre blanche sur aplat saturé 
   });
 });
 
+describe("le ▶ d'une vignette vidéo — l'encre sur média se LIT dans la charte", () => {
+  // La barre de composition d'un commentaire export (`routes/comment-compose-bar
+  // .tsx`) peignait le ▶ posé SUR la vignette vidéo (`<img object-cover>`) en
+  // `text-white` brut. La charte nomme déjà cette encre : un glyphe blanc POSÉ
+  // SUR un média est `text-on-media` (= `--color-on-media` = `--ios-on-media` =
+  // `#ffffff`, byte-identique, CONSTANT clair/sombre car un média reste un
+  // média) — le même jeton que son voisin `comment-media.tsx` sur le même motif
+  // (glyphe en surimpression de vignette). Le littéral quitte la surface sans
+  // rien changer au rendu ; pas une exemption, un jeton partagé.
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), 'utf8');
+  const bar = read('routes/comment-compose-bar.tsx');
+
+  test('la barre de composition ne porte plus de littéral de couleur', () => {
+    expect(scanSource(bar)).toEqual([]);
+    expect(exemptionOf('routes/comment-compose-bar.tsx')).toBe(null);
+  });
+
+  test("le ▶ sur vignette porte le jeton text-on-media, jamais text-white", () => {
+    expect(bar).toContain('text-on-media');
+    expect(bar).not.toContain('text-white');
+  });
+});
+
 describe('auditSources — le rapport', () => {
   test('compte par fichier, ignore les exemptés et le hors-périmètre', () => {
     const [first] = EXEMPT_PATHS as readonly { prefix: string }[];

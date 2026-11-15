@@ -1,7 +1,6 @@
 package me.meeshy.app.notifications
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,11 +38,15 @@ import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.refresh.MeeshyRefreshableBox
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.kit.MeeshyGlassRecipe
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshySpacing
 
+/** Squelette, erreur, vide et liste se relaient au fondu d'état du kit (200 ms). */
+private const val PANE_CROSSFADE_MILLIS = MeeshyGlassRecipe.TONE_FADE_MILLIS
+
 private const val PREFETCH_DISTANCE = 4
-private const val LIST_ANIMATION_MS = 250
 
 /**
  * @param onOpenConversation Navigate to a conversation ([NotificationDestination.Conversation]) — also
@@ -204,6 +207,7 @@ private fun NotificationPanes(
     listState: androidx.compose.foundation.lazy.LazyListState,
 ) {
     val rows = remember(state.selectedCategory, state.notifications, state.categoryRows) { state.filteredNotifications }
+    val reduceMotion = LocalReduceMotion.current
     val pane = NotificationListStateReducer.pane(
         hasRows = rows.isNotEmpty(),
         isLoading = state.isLoading || state.isCategoryLoading,
@@ -212,7 +216,8 @@ private fun NotificationPanes(
 
     LaunchedEffect(state.selectedCategory) { listState.scrollToItem(0) }
     LaunchedEffect(rows.firstOrNull()?.id) {
-        if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
+        if (listState.firstVisibleItemIndex > 1) return@LaunchedEffect
+        if (NotificationListMotion.animatesScrollToTop(reduceMotion)) listState.animateScrollToItem(0) else listState.scrollToItem(0)
     }
     val nearEnd by remember(listState) {
         derivedStateOf {
@@ -223,7 +228,7 @@ private fun NotificationPanes(
     }
     LaunchedEffect(nearEnd, state.canLoadMore, rows.size) { if (nearEnd && state.canLoadMore) onLoadMore() }
 
-    Crossfade(targetState = pane, animationSpec = tween(200), label = "notification-pane", modifier = Modifier.fillMaxSize()) { target ->
+    Crossfade(targetState = pane, animationSpec = tween(PANE_CROSSFADE_MILLIS), label = "notification-pane", modifier = Modifier.fillMaxSize()) { target ->
         when (target) {
             NotificationListPane.Skeleton -> NotificationListSkeleton()
             NotificationListPane.Error -> NotificationListErrorState(onRetry = onRetry)
@@ -237,14 +242,15 @@ private fun NotificationPanes(
                         notification = notification,
                         isFriend = notification.actor?.id in state.friendIds,
                         isConnectRequested = notification.actor?.id in state.connectRequestedIds,
+                        isWriteInFlight = notification.actor?.id in state.writeInFlightIds,
                         onOpen = onOpen,
                         onMarkRead = onMarkRead,
                         onDelete = onDelete,
                         onQuickAction = onQuickAction,
                         modifier = Modifier.animateItem(
-                            fadeInSpec = tween(LIST_ANIMATION_MS, easing = EaseInOut),
-                            placementSpec = tween(LIST_ANIMATION_MS, easing = EaseInOut),
-                            fadeOutSpec = tween(LIST_ANIMATION_MS, easing = EaseInOut),
+                            fadeInSpec = NotificationListMotion.rowFade(),
+                            placementSpec = NotificationListMotion.rowPlacement(reduceMotion),
+                            fadeOutSpec = NotificationListMotion.rowFade(),
                         ),
                     )
                 }

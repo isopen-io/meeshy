@@ -52,7 +52,9 @@ struct VoiceProfileManageView: View {
         .sheet(isPresented: $showAddSamples) {
             addSamplesSheet
         }
-        .sheet(isPresented: $showWizard) {
+        // L'assistant a son propre modèle : sans relecture à sa fermeture, le
+        // profil qu'il vient de créer restait invisible derrière l'état vide.
+        .sheet(isPresented: $showWizard, onDismiss: { Task { await viewModel.loadProfile() } }) {
             VoiceProfileWizardView(accentColor: accentColor)
         }
     }

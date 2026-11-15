@@ -406,9 +406,7 @@ class AudioHandler:
                 audio_fetcher.cleanup_temp_file(local_audio_path)
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur audio process: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur audio process: {type(e).__name__}")
             self._forget_tracks(locals().get('progressive_tracks') or [])
 
             # Nettoyer le fichier temporaire en cas d'erreur
@@ -424,7 +422,7 @@ class AudioHandler:
                 task_id=task_id,
                 message_id=request_data.get('messageId', ''),
                 attachment_id=request_data.get('attachmentId', ''),
-                error=str(e),
+                error="Audio processing failed",
                 error_code="processing_failed"
             )
 
@@ -520,7 +518,7 @@ class AudioHandler:
                         audio_data_base64=t.audio_data_base64,
                     )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture audio {t.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {t.language}: {type(e).__name__}")
 
                 if audio_bytes:
                     binary_frames.append(audio_bytes)
@@ -590,7 +588,7 @@ class AudioHandler:
 
                     logger.debug(f"[MULTIPART] Frame {frame_index-1}: embedding vocal ({len(embedding_bytes)} bytes)")
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur décodage embedding: {e}")
+                    logger.warning(f"[MULTIPART] Erreur décodage embedding: {type(e).__name__}")
 
                 # Metadata sans embedding base64 (envoyé en binaire via binaryFrames)
                 new_voice_profile_metadata = {
@@ -707,9 +705,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio result")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {type(e).__name__}")
 
     async def _publish_transcription_result(self, task_id: str, transcription_data: dict):
         """
@@ -780,9 +776,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription: {type(e).__name__}")
 
     async def _publish_translation_ready(self, task_id: str, translation_data: dict):
         """
@@ -819,7 +813,7 @@ class AudioHandler:
                         audio_data_base64=translation.audio_data_base64,
                     )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {type(e).__name__}")
 
             # Préparer le metadata JSON (Frame 0)
             translated_audio_dict = {
@@ -913,9 +907,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour translation ready")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication translation ready: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication translation ready: {type(e).__name__}")
 
     async def _publish_audio_error(
         self,
@@ -944,7 +936,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio error")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {type(e).__name__}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # TRANSCRIPTION ONLY - Transcription sans traduction ni TTS
