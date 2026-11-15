@@ -479,7 +479,7 @@ struct MessageCardExportSheet: View {
                 pictures: paintedPictures
             ),
             onPick: { model in
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { self.format = model.applied(to: self.format) }
+                self.format = model.applied(to: self.format)
             },
             onCombinations: { galleryOpen = true }
         )
