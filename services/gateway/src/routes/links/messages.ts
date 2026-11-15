@@ -4,7 +4,7 @@ import { guestShareLinkId } from '../../services/shareLinkReadGate';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
-import { writeLinkMessageIdempotently } from './messageIdempotency.js';
+import { writeLinkMessageIdempotently } from './messageIdempotency';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';

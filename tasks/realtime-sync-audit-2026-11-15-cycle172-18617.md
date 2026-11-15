@@ -143,6 +143,60 @@ dès que la branche `isDuplicate` disparaît.
 > « 6 témoins verts » ferait passer trois gardes de non-régression pour trois
 > démonstrations.
 
+## Ce que les cliquets du dépôt ont attrapé, et que je n'avais pas vu
+
+La suite complète a rendu **deux rouges** qui ne venaient pas des témoins du
+lot. Les deux sont instructifs, et le premier est un vrai défaut.
+
+### 1. La projection locale avait laissé derrière une PROTECTION
+
+`orphaned-sender-repair-surface-guard` (#6516) dénombre les fichiers qui lisent
+`Message` en chargeant `sender`. Mon `findFirst` en est un NOUVEAU — un `create`
+n'est pas une lecture, donc la surface n'existait pas avant ce lot.
+
+`Message.sender` est une relation **REQUISE** : une lecture qui la charge et
+rencontre un seul message dont le `Participant` expéditeur a disparu ne filtre
+pas la ligne, elle fait **rejeter toute la lecture** par Prisma (#6501). Un
+renvoi retombait donc en 500 pour une raison étrangère au renvoi — sur le seul
+chemin dont dispose un invité anonyme, et précisément ce que le lot corrige.
+
+Ce qui l'a produit est le choix que j'avais pourtant instruit : relire par la
+projection PARTAGÉE (`findExistingMessage`) aurait apporté
+`withOrphanedSenderRepair` **gratuitement** ; la projection locale, retenue pour
+garder `sender.language`, l'a laissée derrière.
+
+> **Un choix de projection emporte ce que la projection écartée faisait AUTOUR
+> de la lecture, pas seulement ses colonnes.** J'avais comparé les deux sur leur
+> jeu de champs — la bonne question, posée trop étroitement. La question
+> complète est : *que fait l'unité que je n'utilise pas, en plus de lire ?*
+
+Corrigé en gardant les deux : projection locale **et** réparation branchée à la
+main, déclarée dans la table du cliquet. Mutation : retirer la réparation fait
+tomber le cliquet.
+
+### 2. Le cliquet d'atteignabilité ne voyait pas les arêtes en `.js`
+
+`route-file-reachability` (#4284) a déclaré `links/messageIdempotency.ts`
+ORPHELIN alors qu'il est importé et servi. Son résolveur n'essayait que
+`${base}.ts` et `${base}/index.ts` : un spécificateur `'./x.js'` — la convention
+TS/ESM, portée par **175 fichiers de `routes/`** — était invisible au graphe.
+
+Elle n'avait jamais rougi parce que **toutes** les arêtes en `.js` du dépôt
+pointaient HORS de `routes/` (vers `validation/`, `utils/`, `services/`), et ce
+cliquet ne juge que l'atteignabilité des fichiers de `routes/`. Mon frère
+importé en `.js` à l'intérieur de `routes/` était le premier.
+
+> **Le SENS de l'erreur valait d'être mesuré avant de corriger.** Une arête
+> manquante ne peut que RÉTRÉCIR le graphe, donc ce défaut ne produisait que des
+> faux POSITIFS — un fichier vivant déclaré mort — jamais l'inverse. Le cliquet
+> n'a donc jamais manqué un orphelin réel ; il pouvait seulement accuser à tort.
+> Sans cette mesure, « le cliquet était aveugle » se lirait comme « des
+> orphelins ont pu passer », ce qui est faux et aurait lancé une revue inutile.
+
+Le résolveur dépouille désormais `.js`, et l'import du lot suit la convention
+locale (`'./types'` sans extension, comme son voisin). Mutation : remis en
+`.js`, le cliquet passe — l'arête est bien vue.
+
 ## Ce que le cycle n'a pas pris
 
 | # | ce que c'est | pourquoi pas ce lot |

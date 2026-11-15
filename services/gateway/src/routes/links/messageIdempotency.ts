@@ -39,6 +39,7 @@
  */
 
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair.js';
 
 /**
  * La projection que les DEUX chemins servent — l'écriture neuve et la
@@ -133,10 +134,27 @@ export async function writeLinkMessageIdempotently(params: {
   } catch (error) {
     if (!isUniqueViolation(error) || !clientMessageId) throw error;
 
-    const existing = await prisma.message.findFirst({
-      where: { conversationId, clientMessageId },
-      include: LINK_MESSAGE_WRITE_INCLUDE,
-    });
+    // `withOrphanedSenderRepair` n'est pas décoratif ici : `Message.sender` est
+    // une relation REQUISE, donc UN SEUL message de la conversation dont le
+    // `Participant` expéditeur a disparu ne filtre pas sa ligne — il fait
+    // rejeter TOUTE la lecture par Prisma (#6501). Un renvoi tomberait alors en
+    // 500 pour une raison qui n'a rien à voir avec lui, et sur le seul chemin
+    // dont dispose un invité anonyme.
+    //
+    // C'est le cliquet de dénombrement (#6516) qui l'a réclamé, et il avait
+    // raison : relire par la projection PARTAGÉE du dépôt
+    // (`findExistingMessage`) aurait apporté cette réparation gratuitement, et
+    // la projection locale — retenue pour garder `sender.language`, que la
+    // partagée ne porte pas — l'a laissée derrière. **Un choix de projection
+    // emporte ce que la projection qu'on écarte faisait AUTOUR de la lecture**,
+    // pas seulement ses colonnes.
+    const existing = await withOrphanedSenderRepair(
+      { prisma: prisma as PrismaClient, conversationIds: [conversationId] },
+      () => prisma.message.findFirst({
+        where: { conversationId, clientMessageId },
+        include: LINK_MESSAGE_WRITE_INCLUDE,
+      })
+    );
     if (!existing) throw error;
 
     return { row: existing, isDuplicate: true };
