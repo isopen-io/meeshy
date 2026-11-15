@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -16,18 +15,12 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.Measurable
-import androidx.compose.ui.layout.Placeable
-import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
 /**
@@ -40,7 +33,9 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
  * valent Quitter ; Ctrl ou Méta + Entrée vaut la validation.
  *
  * Quand il ne tient plus, la loi [MeeshyModeHeaderFit] réduit dans l'ordre : le centre en glyphe, la validation en coche,
- * puis les libellés à 80 % et leur troncature, Quitter en dernier. Un emplacement vide se passe à `null`.
+ * puis les libellés à 80 % et leur troncature, Quitter en dernier. Un emplacement vide se passe à `null`. Le pas se décide
+ * sans rien dupliquer pour le lecteur d'écran ; en contrepartie un [center] garni est composé une fois de plus, en sonde
+ * sans sémantique, pour que sa largeur réduite soit connue : c'est une capsule, qu'il ne faut pas charger d'effets.
  *
  * Il ne se recompose pas à paramètres égaux : les actions se comparent sur leurs valeurs, jamais sur leur fermeture ; un
  * hôte qui passe `center` ou `accessory` en ligne les mémorise. Pendant iOS : `MeeshyModeHeader`.
@@ -213,113 +208,5 @@ internal fun Modifier.meeshyModeShortcuts(
         null -> false
     }
 }
-
-// endregion
-
-// region La disposition
-
-private enum class Role {
-    Exit,
-    Center,
-    Accessory,
-    Confirm,
-}
-
-private data class SlotKey(val step: MeeshyModeHeaderFit.Step, val role: Role)
-
-/**
- * La rangée de l'en-tête : Quitter au bord de début, l'accessoire puis la validation au bord de fin, le centre au milieu
- * DU CADRE (pas de la place restante). Les largeurs viennent de [MeeshyModeHeaderFit] ; les positions sont miroitées en
- * RTL par `placeRelative`. Les quatre pas se composent dans l'ordre jusqu'à ce que l'un tienne : ses largeurs naturelles
- * se lisent par les mesures intrinsèques (jamais deux mesures d'un même enfant), et seul le pas retenu est mesuré.
- */
-@Composable
-private fun MeeshyModeHeaderRow(
-    exit: MeeshyModeActionValues,
-    onExit: () -> Unit,
-    confirm: MeeshyModeActionValues?,
-    onConfirm: () -> Unit,
-    center: (@Composable () -> Unit)?,
-    accessory: (@Composable () -> Unit)?,
-) {
-    val density = LocalDensity.current
-    val gap = remember(density) { with(density) { MeeshyModeChromeRecipe.itemGap.dp.toPx() } }
-    SubcomposeLayout { constraints ->
-        fun slots(step: MeeshyModeHeaderFit.Step): Map<Role, Measurable> = buildMap {
-            put(Role.Exit, subcompose(SlotKey(step, Role.Exit)) {
-                Slot(MeeshyModeCapsuleFit(reducesToGlyph = false, labelScale = step.labelScale)) {
-                    MeeshyModeCapsuleContent(values = exit, kind = MeeshyModeCapsuleKind.Glass, onClick = onExit)
-                }
-            }.first())
-            if (center != null) {
-                put(Role.Center, subcompose(SlotKey(step, Role.Center)) {
-                    Slot(MeeshyModeCapsuleFit(reducesToGlyph = step.reducesCenter, labelScale = step.labelScale), center)
-                }.first())
-            }
-            if (accessory != null) {
-                put(Role.Accessory, subcompose(SlotKey(step, Role.Accessory)) {
-                    Slot(MeeshyModeCapsuleFit(reducesToGlyph = false, labelScale = step.labelScale), accessory)
-                }.first())
-            }
-            if (confirm != null) {
-                put(Role.Confirm, subcompose(SlotKey(step, Role.Confirm)) {
-                    Slot(MeeshyModeCapsuleFit(reducesToGlyph = step.reducesConfirm, labelScale = step.labelScale)) {
-                        MeeshyModeCapsuleContent(values = confirm, kind = MeeshyModeCapsuleKind.Solid, onClick = onConfirm)
-                    }
-                }.first())
-            }
-        }
-
-        val available = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.MAX_VALUE
-        var chosen = slots(MeeshyModeHeaderFit.Step.Full)
-        var natural = chosen.naturalWidths()
-        for (step in MeeshyModeHeaderFit.Step.entries.drop(1)) {
-            if (natural.required(gap) <= available) break
-            chosen = slots(step)
-            natural = chosen.naturalWidths()
-        }
-
-        val shares = MeeshyModeHeaderFit.allocate(
-            available = available, exit = natural.getValue(Role.Exit), center = natural[Role.Center],
-            accessory = natural[Role.Accessory], confirm = natural[Role.Confirm], gap = gap,
-        )
-        fun placeable(role: Role, share: Float?): Placeable? =
-            chosen[role]?.measure(Constraints(maxWidth = (share ?: 0f).roundToInt().coerceAtLeast(0)))
-
-        val exitPlaceable = placeable(Role.Exit, shares.exit)!!
-        val centerPlaceable = placeable(Role.Center, shares.center)
-        val accessoryPlaceable = placeable(Role.Accessory, shares.accessory)
-        val confirmPlaceable = placeable(Role.Confirm, shares.confirm)
-
-        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else natural.required(gap).roundToInt()
-        val height = listOfNotNull(exitPlaceable, centerPlaceable, accessoryPlaceable, confirmPlaceable).maxOf { it.height }
-        val gapPx = gap.roundToInt()
-        layout(width, height) {
-            fun y(placeable: Placeable) = (height - placeable.height) / 2
-            exitPlaceable.placeRelative(0, y(exitPlaceable))
-            confirmPlaceable?.placeRelative(width - confirmPlaceable.width, y(confirmPlaceable))
-            accessoryPlaceable?.let {
-                val confirmSpan = confirmPlaceable?.let { confirmed -> confirmed.width + gapPx } ?: 0
-                it.placeRelative(width - confirmSpan - it.width, y(it))
-            }
-            centerPlaceable?.placeRelative((width - centerPlaceable.width) / 2, y(centerPlaceable))
-        }
-    }
-}
-
-/** Un emplacement du pas courant : la réduction qu'il subit est dite à ses capsules, et il n'émet qu'UNE racine. */
-@Composable
-private fun Slot(fit: MeeshyModeCapsuleFit, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalMeeshyModeFit provides fit) {
-        Box { content() }
-    }
-}
-
-private fun Map<Role, Measurable>.naturalWidths(): Map<Role, Float> =
-    mapValues { (_, measurable) -> measurable.maxIntrinsicWidth(0).toFloat() }
-
-private fun Map<Role, Float>.required(gap: Float): Float = MeeshyModeHeaderFit.requiredWidth(
-    exit = getValue(Role.Exit), center = this[Role.Center], accessory = this[Role.Accessory], confirm = this[Role.Confirm], gap = gap,
-)
 
 // endregion
