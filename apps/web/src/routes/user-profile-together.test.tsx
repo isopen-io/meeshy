@@ -169,6 +169,32 @@ describe('ProfileTogetherRow', () => {
     expect(store.getState().outgoing?.toUserId).toBe(PROCHE);
   });
 
+  test('un second toucher pendant l’accusé n’envoie pas une seconde invitation, et la pièce dit qu’elle attend', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    seedDirect();
+    const answer: { release: (value: unknown) => void } = { release: noop };
+    const pending = new Promise((resolve) => {
+      answer.release = resolve;
+    });
+    const { row, emitted, notices } = harness(pending);
+    const node = await mount(row);
+    await settle();
+    await settle();
+    await click(node.querySelector<HTMLButtonElement>('[data-together-open]'));
+    const film = node.querySelector<HTMLButtonElement>('[data-together-piece="film"]');
+    await click(film);
+    await click(film);
+    expect(emitted.filter((sent) => sent.event === TOGETHER_CLIENT_EVENTS.TOGETHER_INVITE)).toHaveLength(1);
+    expect(film?.disabled).toBe(true);
+    expect(film?.getAttribute('aria-busy')).toBe('true');
+    await act(async () => {
+      answer.release({ success: false, error: 'x', code: 'TOGETHER_NOT_ALLOWED' });
+    });
+    await settle();
+    expect(notices).toHaveLength(1);
+    expect(node.querySelector<HTMLButtonElement>('[data-together-piece="film"]')?.disabled).toBe(false);
+  });
+
   test('un refus se dit d’une phrase neutre, sans raison', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('BLOOD')]);
     seedDirect();
