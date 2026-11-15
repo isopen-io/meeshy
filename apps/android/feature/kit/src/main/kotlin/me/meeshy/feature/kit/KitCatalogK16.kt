@@ -58,7 +58,7 @@ private const val STATE_LIGHT = "clair"
 private const val STATE_WIDE = "large"
 
 /** Les noms de l'échantillon : des identifiants de développement, pas des textes publiés (fiche K00 §1). */
-private object SampleNames {
+private object ModeSampleNames {
     const val DRAWING = "Dessin"
     const val CAMERA = "Caméra"
     const val RETOUCH = "Retouche"
@@ -137,27 +137,27 @@ private fun HostBlock() {
 
 @Composable
 private fun Frame(stateId: String) {
-    val exit = remember { MeeshyModeAction(title = SampleNames.EXIT, onClick = {}, hint = SampleNames.EXIT_HINT) }
+    val exit = remember { MeeshyModeAction(title = ModeSampleNames.EXIT, onClick = {}, hint = ModeSampleNames.EXIT_HINT) }
     when (stateId) {
-        STATE_TEXT -> Chrome(SampleNames.DRAWING, exit, confirmTitle(SampleNames.CONFIRM), plate = { Tools() })
+        STATE_TEXT -> Chrome(ModeSampleNames.DRAWING, exit, confirmTitle(ModeSampleNames.CONFIRM), plate = { Tools() })
         STATE_PLATE -> Chrome(
-            SampleNames.DRAWING, exit, confirmTitle(SampleNames.CONFIRM),
+            ModeSampleNames.DRAWING, exit, confirmTitle(ModeSampleNames.CONFIRM),
             plate = {
                 Tools()
                 Actions()
             },
         )
-        STATE_CHECK -> Chrome(SampleNames.CAMERA, exit, confirmCheck())
-        STATE_THREE -> Chrome(SampleNames.RETOUCH, exit, confirmTitle(SampleNames.DONE), center = { PhotosCapsule() })
-        STATE_ACCESSORY -> Chrome(SampleNames.CAMERA, exit, confirmCheck(), accessory = { DropTake() })
+        STATE_CHECK -> Chrome(ModeSampleNames.CAMERA, exit, confirmCheck())
+        STATE_THREE -> Chrome(ModeSampleNames.RETOUCH, exit, confirmTitle(ModeSampleNames.DONE), center = { PhotosCapsule() })
+        STATE_ACCESSORY -> Chrome(ModeSampleNames.CAMERA, exit, confirmCheck(), accessory = { DropTake() })
         STATE_LONG_PLATE -> Chrome(
-            SampleNames.DRAWING, exit, confirmTitle(SampleNames.CONFIRM),
-            plate = { repeat(LONG_PLATE_ROWS) { index -> SettingRow("${SampleNames.SETTING} ${index + 1}") } },
+            ModeSampleNames.DRAWING, exit, confirmTitle(ModeSampleNames.CONFIRM),
+            plate = { repeat(LONG_PLATE_ROWS) { index -> SettingRow("${ModeSampleNames.SETTING} ${index + 1}") } },
         )
-        STATE_NO_PLATE -> Chrome(SampleNames.TIMELINE, exit, confirmTitle(SampleNames.CONFIRM))
-        STATE_BUSY -> Chrome(SampleNames.RETOUCH, exit, confirmTitle(SampleNames.DONE, busy = true))
-        STATE_DISABLED -> Chrome(SampleNames.TIMELINE, exit, confirmTitle(SampleNames.CONFIRM, enabled = false))
-        STATE_LIGHT -> Chrome(SampleNames.DRAWING, exit, confirmTitle(SampleNames.CONFIRM), tone = MeeshyGlassTone.OnLight, plate = { Tools() })
+        STATE_NO_PLATE -> Chrome(ModeSampleNames.TIMELINE, exit, confirmTitle(ModeSampleNames.CONFIRM))
+        STATE_BUSY -> Chrome(ModeSampleNames.RETOUCH, exit, confirmTitle(ModeSampleNames.DONE, busy = true))
+        STATE_DISABLED -> Chrome(ModeSampleNames.TIMELINE, exit, confirmTitle(ModeSampleNames.CONFIRM, enabled = false))
+        STATE_LIGHT -> Chrome(ModeSampleNames.DRAWING, exit, confirmTitle(ModeSampleNames.CONFIRM), tone = MeeshyGlassTone.OnLight, plate = { Tools() })
         else -> Wide(exit)
     }
 }
@@ -177,7 +177,7 @@ private fun Chrome(
         exit = exit,
         confirm = confirm,
         tone = tone,
-        plateLabel = if (plate != null) SampleNames.PLATE else null,
+        plateLabel = if (plate != null) ModeSampleNames.PLATE else null,
         plateWindowHeight = BoardWindowHeight,
         safeBottom = 0.dp,
         center = center,
@@ -191,15 +191,15 @@ private fun Chrome(
 private fun Wide(exit: MeeshyModeAction) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
         MeeshyModeHeader(
-            label = SampleNames.DRAWING,
+            label = ModeSampleNames.DRAWING,
             exit = exit,
-            confirm = confirmTitle(SampleNames.CONFIRM),
+            confirm = confirmTitle(ModeSampleNames.CONFIRM),
             tone = MeeshyGlassTone.Plain,
             headerInset = MeeshyModeChromeRecipe.wideHeaderInset.dp,
         )
         Spacer(Modifier.weight(1f))
         MeeshyModePlate(
-            label = SampleNames.PLATE,
+            label = ModeSampleNames.PLATE,
             modifier = Modifier.padding(bottom = MeeshyModePlateMetrics.bottomMargin(0f).dp),
             maxWidth = WidePlateWidth,
             tone = MeeshyGlassTone.Plain,
@@ -213,13 +213,13 @@ private fun confirmTitle(title: String, busy: Boolean = false, enabled: Boolean 
 
 @Composable
 private fun confirmCheck(): MeeshyModeAction = remember {
-    MeeshyModeAction(title = SampleNames.CONFIRM, onClick = {}, icon = MeeshyIcons.Check, display = MeeshyModeCapsuleDisplay.Glyph)
+    MeeshyModeAction(title = ModeSampleNames.CONFIRM, onClick = {}, icon = MeeshyIcons.Check, display = MeeshyModeCapsuleDisplay.Glyph)
 }
 
 @Composable
 private fun PhotosCapsule() {
     MeeshyModeCapsule(
-        title = SampleNames.PHOTOS,
+        title = ModeSampleNames.PHOTOS,
         onClick = {},
         icon = MeeshyIcons.Download,
         display = MeeshyModeCapsuleDisplay.GlyphAndTitle,
@@ -228,21 +228,21 @@ private fun PhotosCapsule() {
 
 @Composable
 private fun DropTake() {
-    MeeshyGlassButton(icon = MeeshyIcons.Backspace, label = SampleNames.DROP_TAKE, onClick = {})
+    MeeshyGlassButton(icon = MeeshyIcons.Backspace, label = ModeSampleNames.DROP_TAKE, onClick = {})
 }
 
 @Composable
 private fun Tools() {
     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        SampleNames.TOOLS.forEach { name -> MeeshyGlassButton(icon = MeeshyIcons.Scribble, label = name, onClick = {}) }
+        ModeSampleNames.TOOLS.forEach { name -> MeeshyGlassButton(icon = MeeshyIcons.Scribble, label = name, onClick = {}) }
     }
 }
 
 @Composable
 private fun Actions() {
     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        MeeshyGlassButton(icon = MeeshyIcons.Copy, label = SampleNames.DUPLICATE, onClick = {})
-        MeeshyGlassButton(icon = MeeshyIcons.Delete, label = SampleNames.DELETE, onClick = {}, kind = MeeshyGlassButtonKind.Destructive)
+        MeeshyGlassButton(icon = MeeshyIcons.Copy, label = ModeSampleNames.DUPLICATE, onClick = {})
+        MeeshyGlassButton(icon = MeeshyIcons.Delete, label = ModeSampleNames.DELETE, onClick = {}, kind = MeeshyGlassButtonKind.Destructive)
     }
 }
 
