@@ -1,14 +1,24 @@
 package me.meeshy.ui.component.kit
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.feedback.HapticKind
 import me.meeshy.sdk.feedback.HapticSink
@@ -200,6 +210,47 @@ class MeeshyStatusCapsuleHostTest {
         step(10)
 
         assertThat(scene.recorder.received).hasSize(2)
+    }
+
+    @Test
+    fun `l'apparition ne prend jamais le focus`() {
+        val scene = Scene()
+        host(scene)
+
+        present(scene, item(action = MeeshyStatusCapsuleAction("Réessayer") { }, closeLabel = "Fermer", onDismiss = { }))
+        step(100)
+
+        compose.onNodeWithText("Réessayer").assertExists()
+        compose.onAllNodes(isFocused()).assertCountEquals(0)
+    }
+
+    @Test
+    fun `l'hote ne prend aucun doigt hors de la capsule, le toucher traverse jusqu'a la scene`() {
+        var below = 0
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.matchParentSize().testTag("scene").clickable { below++ })
+                    MeeshyStatusCapsuleHostImpl(
+                        item = item(action = MeeshyStatusCapsuleAction("Réessayer") { }),
+                        onDismiss = { },
+                        modifier = Modifier,
+                        edge = MeeshyStatusCapsuleEdge.Bottom,
+                        haptic = MeeshyStatusCapsuleHostHaptic.None,
+                        haptics = MeeshyHaptics(HapticSurfacing(Recorder(), 35)),
+                        environment = MeeshyStatusCapsuleEnvironment(
+                            nowMillis = { 0L },
+                            isScreenReaderOn = { false },
+                            recommendedMillis = { original, _, _ -> original },
+                        ),
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithTag("scene").performTouchInput { click(Offset(centerX, top + 4f)) }
+
+        assertThat(below).isEqualTo(1)
     }
 
     // endregion

@@ -1,5 +1,8 @@
 package me.meeshy.ui.component.kit
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -13,11 +16,13 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -139,21 +144,61 @@ class MeeshyStatusCapsuleTest {
     }
 
     @Test
-    fun `une capsule qui se ferme porte l'action Fermer du lecteur d'ecran`() {
-        show { MeeshyStatusCapsule(message = "Brouillon", onDismiss = { }, modifier = Modifier.testTag(TAG)) }
+    fun `une capsule qui se ferme porte l'action Fermer sur le texte, le noeud que le lecteur d'ecran atteint, et elle ferme`() {
+        var closed = 0
+        show { MeeshyStatusCapsule(message = "Brouillon", onDismiss = { closed++ }) }
 
-        val actions = compose.onNodeWithTag(TAG).fetchSemanticsNode().config.getOrNull(SemanticsActions.CustomActions)
+        val actions = compose.onNodeWithContentDescription("Brouillon").fetchSemanticsNode().config.getOrNull(SemanticsActions.CustomActions)
         assertThat(actions).hasSize(1)
         assertThat(actions!!.single().label).isEqualTo("Close")
+
+        compose.runOnUiThread { actions.single().action() }
+        assertThat(closed).isEqualTo(1)
     }
 
     @Test
     fun `sans fermeture, aucune action personnalisee`() {
         show { MeeshyStatusCapsule(message = "Brouillon", modifier = Modifier.testTag(TAG)) }
 
-        val actions = compose.onNodeWithTag(TAG).fetchSemanticsNode().config.getOrNull(SemanticsActions.CustomActions)
+        val onText = compose.onNodeWithContentDescription("Brouillon").fetchSemanticsNode().config.getOrNull(SemanticsActions.CustomActions)
+        val onCapsule = compose.onNodeWithTag(TAG).fetchSemanticsNode().config.getOrNull(SemanticsActions.CustomActions)
 
-        assertThat(actions).isNull()
+        assertThat(onText).isNull()
+        assertThat(onCapsule).isNull()
+    }
+
+    @Test
+    fun `sans action ni fermeture, un toucher sur la capsule traverse jusqu'a la scene`() {
+        var below = 0
+        show {
+            Box(Modifier.size(SCENE)) {
+                Box(Modifier.matchParentSize().clickable { below++ })
+                MeeshyStatusCapsule(message = "Limite atteinte", modifier = Modifier.testTag(TAG))
+            }
+        }
+
+        compose.onNodeWithTag(TAG).performTouchInput { click(centerLeft + Offset(TEXT_INSET.toPx(), 0f)) }
+
+        assertThat(below).isEqualTo(1)
+    }
+
+    @Test
+    fun `avec une action, le verre prend le doigt, un toucher a cote de l'action ne traverse pas`() {
+        var below = 0
+        show {
+            Box(Modifier.size(SCENE)) {
+                Box(Modifier.matchParentSize().clickable { below++ })
+                MeeshyStatusCapsule(
+                    message = "Non publié",
+                    action = MeeshyStatusCapsuleAction("Réessayer") { },
+                    modifier = Modifier.testTag(TAG),
+                )
+            }
+        }
+
+        compose.onNodeWithTag(TAG).performTouchInput { click(centerLeft + Offset(TEXT_INSET.toPx(), 0f)) }
+
+        assertThat(below).isEqualTo(0)
     }
 
     // endregion
@@ -300,6 +345,28 @@ class MeeshyStatusCapsuleTest {
     }
 
     @Test
+    fun `l'ordre de lecture est le texte, l'action puis la croix, meme quand la grande police pose l'action dessous`() {
+        show(fontScale = 2f) {
+            MeeshyStatusCapsule(
+                message = "Non publié",
+                action = MeeshyStatusCapsuleAction("Réessayer") { },
+                closeLabel = "Fermer",
+                onDismiss = { },
+                modifier = Modifier.testTag(TAG),
+            )
+        }
+
+        fun indexOf(node: SemanticsNodeInteraction): Float? =
+            node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.TraversalIndex)
+        val text = indexOf(compose.onNodeWithContentDescription("Non publié"))
+        val action = indexOf(compose.onNodeWithText("Réessayer"))
+        val close = indexOf(compose.onNodeWithContentDescription("Fermer"))
+
+        compose.onNodeWithTag(TAG).assert(SemanticsMatcher.expectValue(SemanticsProperties.IsTraversalGroup, true))
+        assertThat(listOf(text, action, close)).containsExactly(0f, 1f, 2f).inOrder()
+    }
+
+    @Test
     fun `en RTL, l'action est a la fin, donc a gauche du texte`() {
         show(direction = LayoutDirection.Rtl) { MeeshyStatusCapsule(message = "Non publié", action = MeeshyStatusCapsuleAction("Réessayer") { }) }
 
@@ -313,5 +380,7 @@ class MeeshyStatusCapsuleTest {
 
     private companion object {
         const val TAG = "capsule"
+        val SCENE = 400.dp
+        val TEXT_INSET = 20.dp
     }
 }

@@ -44,8 +44,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -75,9 +77,11 @@ import me.meeshy.ui.theme.MeeshyTheme
  * - [leading] prend la place de l'icône (anneau, drapeau, point d'état).
  * - ✕ n'est dessiné que si [closeLabel] ET [onDismiss] sont passés ; avec [onDismiss], glisser de 24 dp vers [edge] ferme
  *   aussi, comme Échap quand le focus est dedans et l'action « Fermer » du lecteur d'écran.
- * - Sans action ni [onDismiss], elle ne prend aucun doigt : le toucher traverse jusqu'à la scène.
+ * - Sans action ni [onDismiss], elle ne prend aucun doigt : le toucher traverse jusqu'à la scène ; avec l'une ou l'autre,
+ *   le verre prend le doigt, comme iOS.
  * - [pressed] fige l'action pressée (catalogue). Le retour léger du doigt sur l'action est joué par [haptics].
- * - Lue tant qu'elle est visible : le texte (« message, détail », région vivante, assertive pour un échec), l'action, ✕.
+ * - Lue tant qu'elle est visible, dans cet ordre quelle que soit la disposition : le texte (« message, détail », région
+ *   vivante, assertive pour un échec, porteur de l'action « Fermer » quand elle se ferme), l'action, ✕.
  * - Grande police : le message passe à quatre lignes et l'action sous le texte, alignée à la fin ; RTL : l'icône au début,
  *   l'action à la fin.
  *
@@ -110,22 +114,16 @@ public fun MeeshyStatusCapsule(
     val closeName = stringResource(R.string.common_close)
     val latestDismiss = rememberUpdatedState(onDismiss)
     val drag = rememberDismissDrag(edge = edge, isDismissible = onDismiss != null) { latestDismiss.value?.invoke() }
+    val takesTouches = MeeshyStatusCapsuleRecipe.takesTouches(hasAction = action != null, hasDismiss = onDismiss != null)
 
     Box(
         modifier = modifier
             .widthIn(max = MeeshyStatusCapsuleRecipe.maxWidth)
+            .then(if (takesTouches) Modifier.holdsTouches() else Modifier)
             .then(drag.gesture)
             .graphicsLayer { translationY = drag.offset.value }
             .then(if (onDismiss != null) Modifier.dismissOnEscapeKey { latestDismiss.value?.invoke() } else Modifier)
-            .then(
-                if (onDismiss != null) {
-                    Modifier.semantics {
-                        customActions = listOf(CustomAccessibilityAction(closeName) { latestDismiss.value?.invoke(); true })
-                    }
-                } else {
-                    Modifier
-                },
-            ),
+            .semantics { isTraversalGroup = true },
     ) {
         MeeshyGlass(
             shape = RoundedCornerShape(MeeshyStatusCapsuleRecipe.radius),
@@ -147,7 +145,7 @@ public fun MeeshyStatusCapsule(
                         kind = kind,
                         trailingAction = trailing,
                         closeLabel = closeLabel,
-                        isDismissible = onDismiss != null,
+                        dismissActionName = if (onDismiss != null) closeName else null,
                         onClose = { latestDismiss.value?.invoke() },
                         fillWidth = fill,
                         ink = ink,
@@ -182,7 +180,7 @@ private fun CapsuleRow(
     kind: MeeshyStatusCapsuleKind,
     trailingAction: MeeshyStatusCapsuleAction?,
     closeLabel: String?,
-    isDismissible: Boolean,
+    dismissActionName: String?,
     onClose: () -> Unit,
     fillWidth: Boolean,
     ink: Color,
@@ -214,10 +212,12 @@ private fun CapsuleRow(
             ink = ink,
             detailInk = detailInk,
             lines = MeeshyStatusCapsuleRecipe.messageLines(fontScale),
+            dismissActionName = dismissActionName,
+            onClose = onClose,
             modifier = Modifier.weight(1f, fill = false),
         )
         if (trailingAction != null) ActionCapsule(action = trailingAction, pressed = pressed, haptics = haptics)
-        if (closeLabel != null && isDismissible) CloseButton(label = closeLabel, ink = ink, onClose = onClose)
+        if (closeLabel != null && dismissActionName != null) CloseButton(label = closeLabel, ink = ink, onClose = onClose)
     }
 }
 
@@ -229,6 +229,8 @@ private fun CapsuleTexts(
     ink: Color,
     detailInk: Color,
     lines: Int,
+    dismissActionName: String?,
+    onClose: () -> Unit,
     modifier: Modifier,
 ) {
     val shownDetail = MeeshyStatusCapsuleRecipe.visibleDetail(detail)
@@ -238,6 +240,10 @@ private fun CapsuleTexts(
         modifier = modifier.clearAndSetSemantics {
             contentDescription = spoken
             liveRegion = if (urgent) LiveRegionMode.Assertive else LiveRegionMode.Polite
+            traversalIndex = MeeshyStatusCapsuleRecipe.readingOrder(MeeshyStatusCapsulePart.Text).toFloat()
+            if (dismissActionName != null) {
+                customActions = listOf(CustomAccessibilityAction(dismissActionName) { onClose(); true })
+            }
         },
     ) {
         Text(
@@ -289,6 +295,7 @@ private fun ActionCapsule(action: MeeshyStatusCapsuleAction, pressed: Boolean?, 
                 haptics.light()
                 latest.value.onClick()
             }
+            .semantics { traversalIndex = MeeshyStatusCapsuleRecipe.readingOrder(MeeshyStatusCapsulePart.Action).toFloat() }
             .padding(horizontal = MeeshyStatusCapsuleRecipe.actionPaddingHorizontal),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshyStatusCapsuleRecipe.actionGap, Alignment.CenterHorizontally),
@@ -317,7 +324,10 @@ private fun CloseButton(label: String, ink: Color, onClose: () -> Unit) {
             .size(MeeshyStatusCapsuleRecipe.closeSize)
             .clip(CircleShape)
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClose)
-            .semantics { contentDescription = label },
+            .semantics {
+                contentDescription = label
+                traversalIndex = MeeshyStatusCapsuleRecipe.readingOrder(MeeshyStatusCapsulePart.Close).toFloat()
+            },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -326,6 +336,16 @@ private fun CloseButton(label: String, ink: Color, onClose: () -> Unit) {
             tint = ink,
             modifier = Modifier.size(MeeshyStatusCapsuleRecipe.closeGlyphSize),
         )
+    }
+}
+
+/**
+ * Avec une action ou une fermeture, le verre prend le doigt (pendant iOS : `allowsHitTesting`) : un toucher à côté de
+ * l'action ne traverse pas jusqu'à la scène dessous. Rien n'est consommé ; seule la frappe du doigt s'arrête ici.
+ */
+private fun Modifier.holdsTouches(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent()
     }
 }
 

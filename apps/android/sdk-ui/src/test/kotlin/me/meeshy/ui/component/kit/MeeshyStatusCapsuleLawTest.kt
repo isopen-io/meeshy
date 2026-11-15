@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.kit
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -236,6 +237,42 @@ class MeeshyStatusCapsuleLawTest {
     fun `une action est egale par ses mots`() {
         assertThat(MeeshyStatusCapsuleAction("Réessayer") { }).isEqualTo(MeeshyStatusCapsuleAction("Réessayer") { })
         assertThat(MeeshyStatusCapsuleAction("Réessayer") { }).isNotEqualTo(MeeshyStatusCapsuleAction("Annuler") { })
+    }
+
+    // endregion
+
+    // region Les gardes de source
+
+    @Test
+    fun `aucun verre dessine, aucune couleur en dur, aucun retour haptique maison ni singleton dans les fichiers de K14`() {
+        val forbidden = listOf(
+            "MeeshyGlassSurface", "meeshyComposerGlass", "composerInnerGlass", "liquidGlass", "RenderEffect", "BlurEffect", ".blur(",
+            "Color(0x", "Color.White", "Color.Black", "performHapticFeedback", "LocalHapticFeedback", "HapticFeedbackType",
+            "getInstance(", ".shared",
+        )
+        val sources = k14Sources()
+
+        assertThat(sources.map { it.name }).containsExactly(
+            "MeeshyStatusCapsule.kt", "MeeshyStatusCapsuleHost.kt", "MeeshyStatusCapsuleRecipe.kt",
+        )
+        sources.forEach { file ->
+            val code = withoutComments(file.readText())
+            forbidden.forEach { word -> assertWithMessage("${file.name} contient $word").that(code.contains(word)).isFalse() }
+        }
+    }
+
+    private fun withoutComments(source: String): String =
+        source
+            .replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("""//[^\n]*"""), "")
+
+    private fun k14Sources(): List<File> {
+        val root = generateSequence(File("").absoluteFile) { it.parentFile }
+            .first { File(it, "docs/product/kit/K14-MeeshyStatusCapsule.vectors.json").exists() }
+        return File(root, "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit")
+            .listFiles { file -> file.name.startsWith("MeeshyStatusCapsule") && file.extension == "kt" }
+            .orEmpty()
+            .toList()
     }
 
     // endregion
