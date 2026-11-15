@@ -72,7 +72,7 @@ describe('l’hôte du téléphone injoignable', () => {
     await settle();
     expect(phoneReachabilityStateOf(client, ADA, Date.now())?.cause).toBe('battery');
     const [said] = store.getState().queue;
-    expect(said?.text.startsWith('Le téléphone de Ada est injoignable depuis ')).toBe(true);
+    expect(said?.text.startsWith('Ada a un téléphone injoignable depuis ')).toBe(true);
     expect(said?.icon).toEqual({ kind: 'phone', reachable: false });
   });
 
@@ -86,7 +86,7 @@ describe('l’hôte du téléphone injoignable', () => {
     await act(async () => fire(PHONE_REACHABILITY_SERVER_EVENTS.PHONE_REACHABLE, { userId: ADA, announcement: { kind: 'reachable', at } }));
     await settle();
     expect(phoneReachabilityStateOf(client, ADA, Date.now())).toBeNull();
-    expect(store.getState().queue.map((entry) => entry.text)).toEqual(['Le téléphone de Ada répond de nouveau']);
+    expect(store.getState().queue.map((entry) => entry.text)).toEqual(['Ada est de nouveau joignable']);
   });
 
   test('sans annonce, rien ne s’affiche dans la pastille', async () => {

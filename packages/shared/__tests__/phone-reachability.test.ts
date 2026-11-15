@@ -160,7 +160,31 @@ describe('phoneReachabilityStep — deux sondes sans réponse font un téléphon
     expect(phoneReachabilityStep(third.state, { kind: 'tick', now: at(20 + config.reprobeAfterMinutes - 1), batteryLow: false }).probe).toBe(false);
     const retry = phoneReachabilityStep(third.state, { kind: 'tick', now: at(20 + config.reprobeAfterMinutes), batteryLow: false });
     expect(retry.probe).toBe(true);
-    expect(retry.state.probesSent).toBe(1);
+    const after = phoneReachabilityStep(retry.state, { kind: 'tick', now: at(20 + config.reprobeAfterMinutes + config.probeTimeoutMinutes), batteryLow: false });
+    expect(after.probe).toBe(false);
+    expect(after.announcement).toBeUndefined();
+  });
+
+  it('un téléphone jamais prouvé est sondé UNE fois par fenêtre, pas deux', () => {
+    let state = seenAt(0);
+    let probes = 0;
+    for (let minute = 1; minute <= 24 * 60; minute += 1) {
+      const step = phoneReachabilityStep(state, { kind: 'tick', now: at(minute), batteryLow: false });
+      probes += step.probe ? 1 : 0;
+      state = step.state;
+    }
+    expect(probes).toBeLessThanOrEqual(26);
+  });
+
+  it('la preuve appartient à la session suivie : un autre téléphone qui devient le suivi repart non prouvé', () => {
+    const proven = phoneReachabilityStep(null, { kind: 'alive', at: at(-120), answer: true, sessionId: 'iphone' }).state;
+    const switched = phoneReachabilityStep(proven, { kind: 'alive', at: at(0), sessionId: 'vieil-android' }).state;
+    expect(switched.lastAnsweredAt).toBeNull();
+    const one = phoneReachabilityStep(switched, { kind: 'tick', now: at(10), batteryLow: false }).state;
+    const two = phoneReachabilityStep(one, { kind: 'tick', now: at(20), batteryLow: false }).state;
+    expect(phoneReachabilityStep(two, { kind: 'tick', now: at(30), batteryLow: false }).announcement).toBeUndefined();
+    const same = phoneReachabilityStep(proven, { kind: 'alive', at: at(0), sessionId: 'iphone' }).state;
+    expect(same.lastAnsweredAt).toBe(at(-120));
   });
 
   it('sans aucun signe de vie connu, un balayage ne fait rien', () => {

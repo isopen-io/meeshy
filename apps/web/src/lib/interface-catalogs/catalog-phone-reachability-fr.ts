@@ -4,10 +4,10 @@
  * (prévenir une personne, prévenir mes Proches). Chargée à la demande (`lib/i18n-phone-reachability-catalog.ts`).
  */
 const fr = {
-  'phone.announce.unreachable': 'Le téléphone de {name} est injoignable depuis {time}',
-  'phone.announce.unreachableSomeone': 'Le téléphone d’un proche est injoignable depuis {time}',
-  'phone.announce.reachable': 'Le téléphone de {name} répond de nouveau',
-  'phone.announce.reachableSomeone': 'Le téléphone d’un proche répond de nouveau',
+  'phone.announce.unreachable': '{name} a un téléphone injoignable depuis {time}',
+  'phone.announce.unreachableSomeone': 'Un proche a un téléphone injoignable depuis {time}',
+  'phone.announce.reachable': '{name} est de nouveau joignable',
+  'phone.announce.reachableSomeone': 'Un proche est de nouveau joignable',
   'phone.a11y.unreachable': 'téléphone injoignable depuis {time}',
   'phone.detail.title': 'Téléphone',
   'phone.detail.since': 'Téléphone injoignable depuis {time}',

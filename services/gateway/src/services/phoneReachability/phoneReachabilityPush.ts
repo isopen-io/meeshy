@@ -6,8 +6,9 @@
  * est rendue par l'app depuis l'état. Le pipeline existant décide du reste (préférence
  * `deviceUnreachableEnabled`, blocage, sourdine).
  *
- * AUCUN HISTORIQUE : la ligne `Notification` expire avec l'état, le retour la remplace
- * (`collapseId` commun), et elle se retire chez qui perd l'accès.
+ * AUCUN HISTORIQUE : chaque annonce RETIRE d'abord la précédente de la même paire (`replacePrevious`),
+ * si bien qu'un lecteur garde au plus une ligne par émetteur ; elle expire avec l'état, le push la
+ * remplace sur l'appareil (`collapseId` commun), et elle se retire chez qui perd l'accès.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PHONE_REACHABILITY_CONFIG } from '@meeshy/shared/types/phone-reachability';
@@ -15,7 +16,7 @@ import type { DeviceUnreachableNotificationMetadata } from '@meeshy/shared/types
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import type { NotificationService } from '../notifications/NotificationService';
-import type { PhoneReachabilityPush, PhoneReachabilityPusher } from './phoneReachabilityRelay';
+import type { PhoneReachabilityPair, PhoneReachabilityPush, PhoneReachabilityPusher } from './phoneReachabilityRelay';
 
 export type PhoneReachabilityPushDb = Pick<PrismaClient, 'user'>;
 export type PhoneReachabilityNotifier = Pick<NotificationService, 'createNotification'>;
@@ -39,6 +40,8 @@ const causeOf = (push: PhoneReachabilityPush): Pick<DeviceUnreachableNotificatio
 export function phoneReachabilityPusherOf(params: {
   readonly prisma: PhoneReachabilityPushDb;
   readonly notifications: PhoneReachabilityNotifier | null;
+  /** Retire la notification précédente de la paire : un lecteur ne garde jamais l'historique des pannes. */
+  readonly replacePrevious?: (pair: PhoneReachabilityPair) => Promise<void>;
   readonly now?: () => number;
 }): PhoneReachabilityPusher {
   const now = params.now ?? Date.now;
@@ -58,6 +61,7 @@ export function phoneReachabilityPusherOf(params: {
       reachabilityKind: push.announcement.kind,
       ...(unreachable ? causeOf(push) : {}),
     };
+    await params.replacePrevious?.({ emitterId: emitter.id, readerId: push.readerId }).catch(() => undefined);
     const created = await params.notifications.createNotification({
       userId: push.readerId,
       type: 'device_unreachable',

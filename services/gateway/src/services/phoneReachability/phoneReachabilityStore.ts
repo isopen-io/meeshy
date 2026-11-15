@@ -42,6 +42,7 @@ function parse(raw: string): StoredReachability | null {
     probesSent: typeof value.probesSent === 'number' ? value.probesSent : 0,
     lastProbeAt: text(value.lastProbeAt),
     lastAnsweredAt: text(value.lastAnsweredAt),
+    sessionId: text(value.sessionId),
     unreachableSince: text(value.unreachableSince),
     cause: cause(value.cause),
     servedTo: Array.isArray(value.servedTo) ? value.servedTo.filter((v): v is string => text(v) !== null) : [],

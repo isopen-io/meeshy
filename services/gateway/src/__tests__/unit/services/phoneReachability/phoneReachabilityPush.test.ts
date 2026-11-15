@@ -14,9 +14,11 @@ const DEPUIS = '2026-11-15T14:10:00.000Z';
 const AT = '2026-11-15T14:35:00.000Z';
 
 function monde(readerLang: Record<string, string | null> = { systemLanguage: 'fr' }) {
+  const ordre: string[] = [];
   const created: Array<Parameters<PhoneReachabilityNotifier['createNotification']>[0]> = [];
   const notifications: PhoneReachabilityNotifier = {
     createNotification: async (params) => {
+      ordre.push('create');
       created.push(params);
       return { id: 'n1' } as never;
     },
@@ -27,7 +29,12 @@ function monde(readerLang: Record<string, string | null> = { systemLanguage: 'fr
       { id: LECTEUR, username: 'lecteur', displayName: null, avatar: null, regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null, ...readerLang },
     ]),
   };
-  return { push: phoneReachabilityPusherOf({ prisma: prisma as never, notifications, now: () => Date.parse(AT) }), created };
+  const replaced: Array<{ emitterId: string; readerId: string }> = [];
+  const replacePrevious = async (pair: { emitterId: string; readerId: string }) => {
+    ordre.push('replace');
+    replaced.push(pair);
+  };
+  return { push: phoneReachabilityPusherOf({ prisma: prisma as never, notifications, replacePrevious, now: () => Date.parse(AT) }), created, replaced, ordre };
 }
 
 const injoignable = (cause: 'battery' | 'network') => ({
@@ -77,6 +84,14 @@ describe('le push du téléphone injoignable', () => {
     const m = monde();
     await m.push(injoignable('network'));
     expect(m.created[0]?.expiresAt).toEqual(new Date(Date.parse(AT) + 259_200_000));
+  });
+
+  it('aucun historique par paire : l\'annonce précédente est retirée avant la nouvelle', async () => {
+    const m = monde();
+    await m.push(injoignable('network'));
+    await m.push({ readerId: LECTEUR, emitterId: EMETTEUR, announcement: { kind: 'reachable', at: AT } });
+    expect(m.replaced).toEqual([{ emitterId: EMETTEUR, readerId: LECTEUR }, { emitterId: EMETTEUR, readerId: LECTEUR }]);
+    expect(m.ordre).toEqual(['replace', 'create', 'replace', 'create']);
   });
 
   it('sans service de notification ou sans lecteur, rien ne part', async () => {

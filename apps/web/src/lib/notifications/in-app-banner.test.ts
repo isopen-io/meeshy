@@ -178,7 +178,7 @@ describe('le téléphone injoignable d’un Proche, onglet ouvert (#18737)', () 
   });
 
   const unreachable = () =>
-    record({ type: 'device_unreachable', title: 'Téléphone injoignable', content: 'Le téléphone de Ada est injoignable depuis 14:10', context: {}, metadata: { reachabilityKind: 'unreachable' } });
+    record({ type: 'device_unreachable', title: 'Téléphone injoignable', content: 'Ada a un téléphone injoignable depuis 14:10', context: {}, metadata: { reachabilityKind: 'unreachable' } });
 
   test('ne descend jamais en bannière : la pastille le dit à sa place', () => {
     inAppBannerStore.getState().dismiss();
@@ -187,7 +187,7 @@ describe('le téléphone injoignable d’un Proche, onglet ouvert (#18737)', () 
     offerInAppBanner(unreachable(), { pathname: '/c' });
     release();
     expect(inAppBannerStore.getState().current).toBeNull();
-    expect(pillAnnouncementStore.getState().queue.map((entry) => entry.text)).toEqual(['Téléphone injoignable · Le téléphone de Ada est injoignable depuis 14:10']);
+    expect(pillAnnouncementStore.getState().queue.map((entry) => entry.text)).toEqual(['Téléphone injoignable · Ada a un téléphone injoignable depuis 14:10']);
     pillAnnouncementStore.setState({ queue: [] });
   });
 

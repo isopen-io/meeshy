@@ -18,7 +18,7 @@ const record = (overrides: Partial<NotificationRecord> = {}): NotificationRecord
   id: 'n1',
   type: 'device_unreachable',
   title: 'Téléphone injoignable',
-  content: 'Le téléphone de Ada est injoignable depuis 14:10',
+  content: 'Ada a un téléphone injoignable depuis 14:10',
   actor: { id: ADA, username: 'ada', displayName: 'Ada', avatar: null },
   context: {},
   metadata: { reachabilityKind: 'unreachable' },
@@ -36,17 +36,17 @@ describe('la teinte d’une annonce', () => {
 describe('les annonces d’une même personne se remplacent', () => {
   test('la pastille dit le dernier pas, un téléphone barré puis entier', () => {
     const store = createPillAnnouncementStore();
-    announcePhoneReachabilityOnPill({ store, userId: ADA, text: 'Le téléphone de Ada est injoignable depuis 14:10', kind: 'unreachable', now: T0 });
+    announcePhoneReachabilityOnPill({ store, userId: ADA, text: 'Ada a un téléphone injoignable depuis 14:10', kind: 'unreachable', now: T0 });
     expect(store.getState().queue[0]?.icon).toEqual({ kind: 'phone', reachable: false });
-    announcePhoneReachabilityOnPill({ store, userId: ADA, text: 'Le téléphone de Ada répond de nouveau', kind: 'reachable', now: T0 + 1 });
-    expect(store.getState().queue.map((entry) => entry.text)).toEqual(['Le téléphone de Ada répond de nouveau']);
+    announcePhoneReachabilityOnPill({ store, userId: ADA, text: 'Ada est de nouveau joignable', kind: 'reachable', now: T0 + 1 });
+    expect(store.getState().queue.map((entry) => entry.text)).toEqual(['Ada est de nouveau joignable']);
     expect(store.getState().queue[0]).toMatchObject({ key: `phone:${ADA}`, tone: 'good', icon: { kind: 'phone', reachable: true } });
   });
 
   test('ne remplace pas l’annonce de batterie de la même personne : deux sources, deux clés', () => {
     const store = createPillAnnouncementStore();
     store.getState().announce({ id: 'b1', key: `battery:${ADA}`, text: 'Ada : batterie critique', tone: 'alert', icon: { kind: 'battery', level: 2, charging: false }, at: T0 });
-    announcePhoneReachabilityOnPill({ store, userId: ADA, text: 'Le téléphone de Ada est injoignable depuis 14:10', kind: 'unreachable', now: T0 + 1 });
+    announcePhoneReachabilityOnPill({ store, userId: ADA, text: 'Ada a un téléphone injoignable depuis 14:10', kind: 'unreachable', now: T0 + 1 });
     expect(store.getState().queue).toHaveLength(2);
   });
 });
@@ -55,13 +55,13 @@ describe('la notification reçue onglet ouvert', () => {
   test('devient une annonce de la pastille, au texte composé par le serveur', () => {
     const store = createPillAnnouncementStore();
     expect(announcePhoneReachabilityNotification(record(), { store, now: T0 })).toBe(true);
-    expect(store.getState().queue[0]).toMatchObject({ key: `phone:${ADA}`, text: 'Téléphone injoignable · Le téléphone de Ada est injoignable depuis 14:10', tone: 'alert' });
+    expect(store.getState().queue[0]).toMatchObject({ key: `phone:${ADA}`, text: 'Téléphone injoignable · Ada a un téléphone injoignable depuis 14:10', tone: 'alert' });
   });
 
   test('le retour se dit en teinte rassurante', () => {
     const store = createPillAnnouncementStore();
-    announcePhoneReachabilityNotification(record({ metadata: { reachabilityKind: 'reachable' }, title: null, content: 'Le téléphone de Ada répond de nouveau' }), { store, now: T0 });
-    expect(store.getState().queue[0]).toMatchObject({ text: 'Le téléphone de Ada répond de nouveau', tone: 'good' });
+    announcePhoneReachabilityNotification(record({ metadata: { reachabilityKind: 'reachable' }, title: null, content: 'Ada est de nouveau joignable' }), { store, now: T0 });
+    expect(store.getState().queue[0]).toMatchObject({ text: 'Ada est de nouveau joignable', tone: 'good' });
   });
 
   test('une notification déjà lue, ou d’un autre type, ne dit rien', () => {

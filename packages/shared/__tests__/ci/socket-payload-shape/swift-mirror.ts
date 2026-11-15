@@ -56,7 +56,7 @@ export const SWIFT_ROOTS = ['packages/MeeshySDK/Sources/MeeshySDK', 'apps/ios/Me
 export const SOCKET_EVENT_SWIFT = 'packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketEvent.swift';
 
 /**
- * Mesuré à 159 couples le 2026-11-14. Seuil volontairement BAS, pour la raison
+ * Mesuré à 159 couples le 2026-11-14, 161 avec `phone:unreachable` et `phone:reachable` (#18737). Seuil volontairement BAS, pour la raison
  * qu'écrit déjà `MINIMUM_ROUTES` côté Kotlin : il ne mesure pas la couverture,
  * il détecte le balayage VIDE — le seul mode de panne silencieux d'une garde
  * qui déduit sa table.
@@ -68,7 +68,7 @@ export const MINIMUM_SWIFT_ROUTES = 120;
  * `ServerToClientEvents` déclare, et aux 110 que la garde Kotlin atteint. Le chiffre vit ICI pour
  * qu'une extension de la lecture ait un endroit où se voir monter, plutôt qu'une prose à vieillir.
  */
-export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 159;
+export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 161;
 
 export type SwiftProperty = {
   /** La clé du FIL : le `CodingKeys` s'il existe, sinon le nom Swift. */

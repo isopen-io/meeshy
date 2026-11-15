@@ -11,14 +11,14 @@ enum PhoneReachabilityWording {
         case .unreachable:
             let time = since.map { sinceTime($0, now: now) } ?? sinceTime(now, now: now)
             guard let name else {
-                return String(format: String(localized: "phoneReachability.pill.unreachableSomeone", defaultValue: "Le téléphone d'un proche est injoignable depuis %@", bundle: .main), time)
+                return String(format: String(localized: "phoneReachability.pill.unreachableSomeone", defaultValue: "Un proche a un téléphone injoignable depuis %@", bundle: .main), time)
             }
-            return String(format: String(localized: "phoneReachability.pill.unreachable", defaultValue: "Le téléphone de %1$@ est injoignable depuis %2$@", bundle: .main), name, time)
+            return String(format: String(localized: "phoneReachability.pill.unreachable", defaultValue: "%1$@ a un téléphone injoignable depuis %2$@", bundle: .main), name, time)
         case .reachable:
             guard let name else {
-                return String(localized: "phoneReachability.pill.reachableSomeone", defaultValue: "Le téléphone d'un proche répond de nouveau", bundle: .main)
+                return String(localized: "phoneReachability.pill.reachableSomeone", defaultValue: "Un proche est de nouveau joignable", bundle: .main)
             }
-            return String(format: String(localized: "phoneReachability.pill.reachable", defaultValue: "Le téléphone de %@ répond de nouveau", bundle: .main), name)
+            return String(format: String(localized: "phoneReachability.pill.reachable", defaultValue: "%@ est de nouveau joignable", bundle: .main), name)
         }
     }
 

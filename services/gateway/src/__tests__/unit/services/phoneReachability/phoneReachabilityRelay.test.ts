@@ -84,8 +84,21 @@ function monde(options: {
   const conversing = new Set(options.enConversation ?? []);
   let now = T0 - 70 * MIN;
   let connecte = options.connecte ?? false;
+  const lectures = { count: 0 };
+  const compter = <T extends object>(target: T): T =>
+    new Proxy(target, {
+      get: (obj, key) => {
+        const value = Reflect.get(obj, key);
+        if (typeof value === 'object' && value !== null) return compter(value);
+        if (typeof value === 'function') return (...args: unknown[]) => {
+          lectures.count += 1;
+          return (value as (...a: unknown[]) => unknown).apply(obj, args);
+        };
+        return value;
+      },
+    });
   const deps: PhoneReachabilityRelayDeps = {
-    prisma: { ...world.prisma, relationFeatureSetting: settings } as unknown as PrismaClient,
+    prisma: compter({ ...world.prisma, relationFeatureSetting: settings }) as unknown as PrismaClient,
     cache: batteryCacheInMemory(),
     io: { to: (room: string) => ({ emit: (event: string, data: Record<string, unknown>) => emissions.push({ room, event, data }) }) } as unknown as PhoneReachabilityRelayDeps['io'],
     now: () => now,
@@ -142,6 +155,11 @@ function monde(options: {
     avancer,
     perdre,
     prouver,
+    lectures,
+    desactiver: (userId: string) => {
+      const row = world.users.rows.find((r) => r.id === userId);
+      if (row) row.deactivatedAt = new Date(T0);
+    },
     poser: (otherId: string, unreachableShared: boolean) => {
       const row = settings.rows.find((r) => r.ownerId === EMETTEUR && r.otherId === otherId);
       if (row) row.unreachableShared = unreachableShared;
@@ -325,6 +343,45 @@ describe('le rattrapage et la lecture', () => {
     const m = monde();
     await m.prouver();
     expect(await phoneReachabilitySnapshotFor(m.deps, SANG)).toEqual({ items: [] });
+  });
+});
+
+describe('aucun oracle : la lecture coûte le même travail, que le téléphone réponde ou non', () => {
+  const travail = async (m: ReturnType<typeof monde>, lire: () => Promise<unknown>): Promise<number> => {
+    const avant = m.lectures.count;
+    await lire();
+    return m.lectures.count - avant;
+  };
+
+  it('un inconnu qui lit l\'état, le rattrapage ou la capture d\'une paire fait le même travail dans les deux cas', async () => {
+    const joignable = monde();
+    await joignable.prouver();
+    const perdu = monde();
+    await perdu.perdre();
+    const lectures = async (m: ReturnType<typeof monde>) => [
+      await travail(m, () => phoneReachabilityStateFor(m.deps, { readerId: AMI, emitterId: EMETTEUR })),
+      await travail(m, () => capturePhoneReachabilityAccess(m.deps, { userA: EMETTEUR, userB: AMI })),
+      await travail(m, () => phoneReachabilitySnapshotFor(m.deps, PROCHE)),
+    ];
+    expect(await lectures(perdu)).toEqual(await lectures(joignable));
+    expect(await phoneReachabilityStateFor(perdu.deps, { readerId: AMI, emitterId: EMETTEUR })).toBeNull();
+  });
+});
+
+describe('qui perd l\'accès pendant la panne le perd tout de suite, pas au retour', () => {
+  it('un Sang désactivé pendant la panne reçoit l\'effacement au balayage suivant, et rien au retour', async () => {
+    const m = monde();
+    await m.perdre();
+    m.desactiver(SANG);
+    m.avancer(MIN);
+    await m.balayer();
+    expect(m.vers(SANG).at(-1)).toEqual({ room: ROOMS.user(SANG), event: SERVER_EVENTS.PHONE_REACHABLE, data: { userId: EMETTEUR } });
+    expect(m.retraits).toContainEqual({ emitterId: EMETTEUR, readerId: SANG });
+    const avant = m.vers(SANG).length;
+    m.avancer(10 * MIN);
+    await m.vivant();
+    expect(m.vers(SANG)).toHaveLength(avant);
+    expect(m.pousses(SANG)).toEqual(['unreachable']);
   });
 });
 

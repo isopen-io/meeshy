@@ -41,17 +41,17 @@ describe('l’heure « depuis »', () => {
 describe('la phrase de la pastille', () => {
   test('injoignable : le nom et l’heure', () => {
     const announcement = { kind: 'unreachable', at: '2026-11-15T14:59:00.000Z' } as const;
-    expect(phoneReachabilityAnnouncementText('fr', { name: 'Ada', announcement, since: '2026-11-15T13:10:00.000Z', now: NOW, ...PARIS })).toBe('Le téléphone de Ada est injoignable depuis 14:10');
+    expect(phoneReachabilityAnnouncementText('fr', { name: 'Ada', announcement, since: '2026-11-15T13:10:00.000Z', now: NOW, ...PARIS })).toBe('Ada a un téléphone injoignable depuis 14:10');
   });
 
   test('de nouveau joignable', () => {
     const announcement = { kind: 'reachable', at: '2026-11-15T14:59:00.000Z' } as const;
-    expect(phoneReachabilityAnnouncementText('fr', { name: 'Ada', announcement, since: null, now: NOW, ...PARIS })).toBe('Le téléphone de Ada répond de nouveau');
+    expect(phoneReachabilityAnnouncementText('fr', { name: 'Ada', announcement, since: null, now: NOW, ...PARIS })).toBe('Ada est de nouveau joignable');
   });
 
   test('sans nom connu, « un proche »', () => {
     const announcement = { kind: 'unreachable', at: '2026-11-15T13:10:00.000Z' } as const;
-    expect(phoneReachabilityAnnouncementText('fr', { name: null, announcement, since: null, now: NOW, ...PARIS })).toBe('Le téléphone d’un proche est injoignable depuis 14:10');
+    expect(phoneReachabilityAnnouncementText('fr', { name: null, announcement, since: null, now: NOW, ...PARIS })).toBe('Un proche a un téléphone injoignable depuis 14:10');
     expect(phoneReachabilityAnnouncementText('en', { name: null, announcement: { kind: 'reachable', at: announcement.at }, since: null, now: NOW, ...PARIS })).toBe('A close one’s phone is responding again');
   });
 });

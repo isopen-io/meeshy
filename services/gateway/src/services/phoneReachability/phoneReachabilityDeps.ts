@@ -26,16 +26,34 @@ export async function probePhone(prisma: PrismaClient, emitterId: string, reques
   });
 }
 
-/** Les notifications d'injoignabilité d'un émetteur chez un lecteur qui ne le voit plus : retirées. */
-export async function retractPhoneReachabilityNotifications(prisma: Pick<PrismaClient, '$runCommandRaw'>, pairs: readonly PhoneReachabilityPair[]): Promise<void> {
+type RawId = { readonly $oid?: string } | string | null | undefined;
+const idOf = (value: RawId): string | null => (typeof value === 'string' ? value : value?.$oid ?? null);
+
+export type RetractionAnnouncer = { readonly announceNotificationsRetracted: (rows: readonly { readonly id: string; readonly userId: string }[]) => Promise<void> };
+
+/**
+ * Les notifications d'injoignabilité d'un émetteur chez un lecteur : SUPPRIMÉES, puis ANNONCÉES par
+ * le service de notification (`notification:deleted` sur les appareils connectés, push de révocation
+ * `notification_revoked` sur les autres) — la bannière déjà affichée et la cloche s'effacent aussi.
+ */
+export async function retractPhoneReachabilityNotifications(
+  prisma: Pick<PrismaClient, 'notification'>,
+  announcer: RetractionAnnouncer | null,
+  pairs: readonly PhoneReachabilityPair[],
+): Promise<void> {
   if (pairs.length === 0) return;
-  await prisma.$runCommandRaw({
-    delete: 'Notification',
-    deletes: [{
-      q: { type: PHONE_REACHABILITY_NOTIFICATION_TYPE, $or: pairs.map((pair) => ({ userId: { $oid: pair.readerId }, 'actor.id': pair.emitterId })) },
-      limit: 0,
-    }],
+  const raw = (await prisma.notification.findRaw({
+    filter: { type: PHONE_REACHABILITY_NOTIFICATION_TYPE, $or: pairs.map((pair) => ({ userId: { $oid: pair.readerId }, 'actor.id': pair.emitterId })) },
+    options: { projection: { _id: 1, userId: 1 } },
+  })) as unknown as ReadonlyArray<{ readonly _id?: RawId; readonly userId?: RawId }>;
+  const rows = raw.flatMap((row) => {
+    const id = idOf(row._id);
+    const userId = idOf(row.userId);
+    return id && userId ? [{ id, userId }] : [];
   });
+  if (rows.length === 0) return;
+  await prisma.notification.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
+  await announcer?.announceNotificationsRetracted(rows).catch(() => undefined);
 }
 
 /**
@@ -57,11 +75,15 @@ export function phoneReachabilityRelayDepsOf(params: { readonly prisma: PrismaCl
     io: params.io,
     now: () => Date.now(),
     context: batteryContextReaderOf({ prisma: params.prisma, isViewing: isViewingConversation }),
-    push: phoneReachabilityPusherOf({ prisma: params.prisma, notifications: getSharedNotificationService() ?? null }),
+    push: phoneReachabilityPusherOf({
+      prisma: params.prisma,
+      notifications: getSharedNotificationService() ?? null,
+      replacePrevious: (pair) => retractPhoneReachabilityNotifications(params.prisma, getSharedNotificationService() ?? null, [pair]),
+    }),
     probe: (emitterId) => probePhone(params.prisma, emitterId, new Date().toISOString()),
     isTrackedDevice: ({ userId, sessionId }) => isTrackedPhone(params.prisma, { userId, sessionId, now: new Date() }),
     trackedDeviceConnected: (userId) => isTrackedBatteryDeviceConnected({ prisma: params.prisma, io: params.io, userId, now: new Date() }),
     batteryLow: async (userId) => LOW_PHASES.has((await readBatteryRecord(battery.cache, userId))?.episode.phase ?? 'normal'),
-    retractPushes: (pairs) => retractPhoneReachabilityNotifications(params.prisma, pairs),
+    retractPushes: (pairs) => retractPhoneReachabilityNotifications(params.prisma, getSharedNotificationService() ?? null, pairs),
   };
 }

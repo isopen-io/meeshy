@@ -189,16 +189,17 @@ const PHONE_PREFIX = 'phone:';
 
 /** À appeler AVANT une baisse, un blocage ou un retrait ; une lecture ratée rend une capture vide. */
 export async function captureBatteryBefore(params: RefreshParams, pair: { readonly userA: string; readonly userB: string }): Promise<BatteryPairAccess> {
-  const [battery, phone] = await Promise.all([
-    captureBatteryAccess(batteryRelayDepsOf(params), pair).catch((error: unknown) => {
+  const guarded = async (capture: () => Promise<BatteryPairAccess>): Promise<BatteryPairAccess> => {
+    try {
+      return await capture();
+    } catch (error) {
       params.report(error);
       return new Map<string, boolean>();
-    }),
-    capturePhoneReachabilityAccess(phoneReachabilityRelayDepsOf(params), pair)
-      .catch((error: unknown) => {
-        params.report(error);
-        return new Map<string, boolean>();
-      }),
+    }
+  };
+  const [battery, phone] = await Promise.all([
+    guarded(() => captureBatteryAccess(batteryRelayDepsOf(params), pair)),
+    guarded(() => capturePhoneReachabilityAccess(phoneReachabilityRelayDepsOf(params), pair)),
   ]);
   return new Map([...battery, ...[...phone].map(([key, seen]) => [`${PHONE_PREFIX}${key}`, seen] as const)]);
 }

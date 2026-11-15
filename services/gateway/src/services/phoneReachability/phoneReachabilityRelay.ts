@@ -158,6 +158,7 @@ async function sharingDisabled(deps: PhoneReachabilityRelayDeps, emitterId: stri
 
 async function stepAlive(deps: PhoneReachabilityRelayDeps, userId: string, input: Extract<PhoneReachabilityInput, { kind: 'alive' }>): Promise<void> {
   const back = await withReachabilityLock(deps.cache, userId, async () => {
+    if (await sharingDisabled(deps, userId)) return null;
     const previous = await readReachability(deps.cache, userId);
     const { state, announcement } = phoneReachabilityStep(previous, input);
     await storeReachability(deps.cache, userId, record(previous, state, announcement ? [] : undefined));
@@ -177,8 +178,7 @@ export async function notePhoneAlive(
   params: { readonly userId: string; readonly sessionId: string | null; readonly answer?: boolean },
 ): Promise<boolean> {
   if (!(await deps.isTrackedDevice(params))) return false;
-  if (await sharingDisabled(deps, params.userId)) return true;
-  await stepAlive(deps, params.userId, { kind: 'alive', at: iso(deps), answer: params.answer === true });
+  await stepAlive(deps, params.userId, { kind: 'alive', at: iso(deps), answer: params.answer === true, sessionId: params.sessionId });
   return true;
 }
 
@@ -191,12 +191,33 @@ async function dropWatch(deps: PhoneReachabilityRelayDeps, emitterId: string): P
 
 type TickOutcome = 'idle' | 'alive' | 'probed' | 'unreachable' | 'dropped';
 
+/**
+ * PENDANT la panne, l'audience se relit à chaque passe : qui a perdu l'accès par un chemin qu'aucun
+ * crochet ne suit (suppression de compte, baisse future) reçoit l'effacement maintenant, et ses
+ * notifications se retirent — il n'apprendra pas l'heure du retour.
+ */
+async function reconcileOutageLocked(deps: PhoneReachabilityRelayDeps, emitterId: string, previous: StoredReachability): Promise<{ readonly outcome: TickOutcome; readonly fanOut?: () => Promise<void> }> {
+  if (previous.servedTo.length === 0) return { outcome: 'idle' };
+  const audience = await audienceOf(deps, emitterId);
+  const departed = previous.servedTo.filter((id) => !audience.has(id));
+  if (departed.length === 0) return { outcome: 'idle' };
+  await storeReachability(deps.cache, emitterId, { ...previous, servedTo: previous.servedTo.filter((id) => audience.has(id)) });
+  return {
+    outcome: 'idle',
+    fanOut: async () => {
+      departed.forEach((readerId) => emitReachable(deps, readerId, emitterId));
+      await retract(deps, departed.map((readerId) => ({ emitterId, readerId })));
+    },
+  };
+}
+
 async function tickLocked(deps: PhoneReachabilityRelayDeps, emitterId: string): Promise<{ readonly outcome: TickOutcome; readonly fanOut?: () => Promise<void> }> {
   const previous = await readReachability(deps.cache, emitterId);
   if (!previous) {
     await watchReachability(deps.cache, emitterId, false);
     return { outcome: 'idle' };
   }
+  if (previous.unreachableSince !== null) return reconcileOutageLocked(deps, emitterId, previous);
   const now = iso(deps);
   const blind = phoneReachabilityStep(previous, { kind: 'tick', now, batteryLow: false });
   if (!blind.probe && !blind.announcement) return { outcome: 'idle' };
@@ -222,10 +243,17 @@ async function tickLocked(deps: PhoneReachabilityRelayDeps, emitterId: string): 
   return {
     outcome: 'unreachable',
     fanOut: async () => {
+      if (!(await stillDeclared(deps, served))) return;
       await forgetPushedReaders(deps.cache, emitterId);
-      await rememberPushedReaders(deps.cache, emitterId, await fanOutUnreachable(deps, served, announcement, readers));
+      const pushed = await fanOutUnreachable(deps, served, announcement, readers);
+      if (await stillDeclared(deps, served)) await rememberPushedReaders(deps.cache, emitterId, pushed);
     },
   };
+}
+
+/** Un retour arrivé entre la déclaration et l'éventail l'annule : rien de périmé ne part. */
+async function stillDeclared(deps: PhoneReachabilityRelayDeps, served: PhoneReachabilityState): Promise<boolean> {
+  return servedPhoneReachability(served.userId, await readReachability(deps.cache, served.userId))?.unreachableSince === served.unreachableSince;
 }
 
 /**
@@ -244,13 +272,17 @@ export async function sweepPhoneReachability(deps: PhoneReachabilityRelayDeps): 
 }
 
 /** Ce que `readerId` voit, à la connexion : les téléphones injoignables de ceux qui le lui partagent. */
+/**
+ * Ce que `readerId` voit, à la connexion : les téléphones injoignables de ceux qui le lui partagent.
+ * La loi est jugée sur TOUS les candidats avant toute lecture d'état : le travail ne dit pas si un
+ * lien est injoignable (aucun oracle de durée).
+ */
 export async function phoneReachabilitySnapshotFor(deps: PhoneReachabilityRelayDeps, readerId: string): Promise<PhoneReachabilitySnapshot> {
   const candidates = await batteryCandidatesOf(deps.prisma, readerId);
-  const states = (await Promise.all(candidates.map(async (id) => servedPhoneReachability(id, await readReachability(deps.cache, id)))))
-    .filter((state): state is PhoneReachabilityState => state !== null);
-  if (states.length === 0) return { items: [] };
-  const allowed = await phoneReachabilityAllowedAmong(deps.prisma, { subjectId: readerId, otherIds: states.map((s) => s.userId), subjectIs: 'viewer', now: new Date(deps.now()) });
-  return { items: states.filter((state) => allowed.has(state.userId)) };
+  if (candidates.length === 0) return { items: [] };
+  const allowed = await phoneReachabilityAllowedAmong(deps.prisma, { subjectId: readerId, otherIds: candidates, subjectIs: 'viewer', now: new Date(deps.now()) });
+  const states = await Promise.all([...allowed].map(async (id) => servedPhoneReachability(id, await readReachability(deps.cache, id))));
+  return { items: states.filter((state): state is PhoneReachabilityState => state !== null) };
 }
 
 async function sees(deps: PhoneReachabilityRelayDeps, emitterId: string, readerId: string): Promise<boolean> {
@@ -258,9 +290,10 @@ async function sees(deps: PhoneReachabilityRelayDeps, emitterId: string, readerI
 }
 
 /** L'état de `emitterId` tel que `readerId` le voit — `null` quand il est joignable ou que la loi refuse. */
+/** La loi est jugée AVANT la lecture de l'état, toujours : la durée ne dit rien de l'état. */
 export async function phoneReachabilityStateFor(deps: PhoneReachabilityRelayDeps, params: { readonly readerId: string; readonly emitterId: string }): Promise<PhoneReachabilityState | null> {
-  const state = servedPhoneReachability(params.emitterId, await readReachability(deps.cache, params.emitterId));
-  return state && (await sees(deps, params.emitterId, params.readerId)) ? state : null;
+  if (!(await sees(deps, params.emitterId, params.readerId))) return null;
+  return servedPhoneReachability(params.emitterId, await readReachability(deps.cache, params.emitterId));
 }
 
 /** Ce que chaque sens d'une paire voit MAINTENANT (`émetteur>lecteur`), pour les seuls téléphones injoignables. */
@@ -273,8 +306,8 @@ const directionKey = (emitterId: string, readerId: string): string => `${emitter
 export async function capturePhoneReachabilityAccess(deps: PhoneReachabilityRelayDeps, pair: { readonly userA: string; readonly userB: string }): Promise<PhoneReachabilityPairAccess> {
   const seen = new Map<string, boolean>();
   for (const [emitterId, readerId] of directions(pair.userA, pair.userB)) {
-    if (!servedPhoneReachability(emitterId, await readReachability(deps.cache, emitterId))) continue;
-    seen.set(directionKey(emitterId, readerId), await sees(deps, emitterId, readerId));
+    const [allowed, stored] = await Promise.all([sees(deps, emitterId, readerId), readReachability(deps.cache, emitterId)]);
+    if (servedPhoneReachability(emitterId, stored)) seen.set(directionKey(emitterId, readerId), allowed);
   }
   return seen;
 }
@@ -301,17 +334,19 @@ export async function refreshPhoneReachabilityBetween(
   for (const [emitterId, readerId] of directions(params.userA, params.userB)) {
     const after = await sees(deps, emitterId, readerId);
     if (!after) await retract(deps, [{ emitterId, readerId }]);
-    const stored = await readReachability(deps.cache, emitterId);
-    const state = servedPhoneReachability(emitterId, stored);
-    if (!state || !stored) continue;
-    const before = (params.before?.get(directionKey(emitterId, readerId)) ?? false) || stored.servedTo.includes(readerId);
-    if (after && !before) {
-      emitUnreachable(deps, readerId, state);
-      await adjustServed(deps, emitterId, { add: [readerId] });
-    } else if (!after && before) {
-      emitReachable(deps, readerId, emitterId);
-      await adjustServed(deps, emitterId, { remove: [readerId] });
-    }
+    await withReachabilityLock(deps.cache, emitterId, async () => {
+      const stored = await readReachability(deps.cache, emitterId);
+      const state = servedPhoneReachability(emitterId, stored);
+      if (!state || !stored) return;
+      const before = (params.before?.get(directionKey(emitterId, readerId)) ?? false) || stored.servedTo.includes(readerId);
+      if (after && !before) {
+        emitUnreachable(deps, readerId, state);
+        await storeReachability(deps.cache, emitterId, { ...stored, servedTo: [...new Set([...stored.servedTo, readerId])] });
+      } else if (!after && before) {
+        emitReachable(deps, readerId, emitterId);
+        await storeReachability(deps.cache, emitterId, { ...stored, servedTo: stored.servedTo.filter((id) => id !== readerId) });
+      }
+    });
   }
 }
 
@@ -321,18 +356,20 @@ export async function capturePhoneReachabilityAudience(deps: PhoneReachabilityRe
   return audienceOf(deps, emitterId);
 }
 
-/** Rejoue l'audience ENTIÈRE d'un émetteur après sa coupure ou sa reprise globale. */
+/** Rejoue l'audience ENTIÈRE d'un émetteur après sa coupure ou sa reprise globale, sous son verrou. */
 export async function refreshPhoneReachabilityAudience(deps: PhoneReachabilityRelayDeps, params: { readonly emitterId: string; readonly before: ReadonlySet<string> }): Promise<void> {
   const after = await audienceOf(deps, params.emitterId);
   const candidates = await batteryCandidatesOf(deps.prisma, params.emitterId);
   await retract(deps, candidates.filter((id) => !after.has(id)).map((readerId) => ({ emitterId: params.emitterId, readerId })));
-  const stored = await readReachability(deps.cache, params.emitterId);
-  const state = servedPhoneReachability(params.emitterId, stored);
-  if (!state || !stored) return;
-  const seen = new Set([...params.before, ...stored.servedTo]);
-  [...after].filter((id) => !seen.has(id)).forEach((id) => emitUnreachable(deps, id, state));
-  [...seen].filter((id) => !after.has(id)).forEach((id) => emitReachable(deps, id, params.emitterId));
-  await adjustServed(deps, params.emitterId, { add: [...after], remove: [...seen].filter((id) => !after.has(id)) });
+  await withReachabilityLock(deps.cache, params.emitterId, async () => {
+    const stored = await readReachability(deps.cache, params.emitterId);
+    const state = servedPhoneReachability(params.emitterId, stored);
+    if (!state || !stored) return;
+    const seen = new Set([...params.before, ...stored.servedTo]);
+    [...after].filter((id) => !seen.has(id)).forEach((id) => emitUnreachable(deps, id, state));
+    [...seen].filter((id) => !after.has(id)).forEach((id) => emitReachable(deps, id, params.emitterId));
+    await storeReachability(deps.cache, params.emitterId, { ...stored, servedTo: [...after] });
+  });
 }
 
 /** La COUPURE GLOBALE (le fantôme) ferme aussi ce qui est rangé : l'horloge, la mémoire des pushs, la surveillance. */
