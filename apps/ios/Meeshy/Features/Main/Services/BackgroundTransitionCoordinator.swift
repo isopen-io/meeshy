@@ -109,8 +109,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         // for guests would burn quota and fail at execution time.
         if AuthManager.shared.authToken != nil {
             await withBudget("bgtasks.schedule") {
-                BackgroundTaskManager.shared.scheduleConversationSync()
-                BackgroundTaskManager.shared.scheduleMessagePrefetch()
+                BackgroundTaskManager.shared.scheduleBackgroundWork()
             }
         }
         await withBudget("notifications.syncNow") {

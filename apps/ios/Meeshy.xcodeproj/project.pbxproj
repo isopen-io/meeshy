@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		616C0BE53A427327DC97579D /* MockBatteryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3861AE5AAE701EA9AD8630B /* MockBatteryService.swift */; };
+		6E3584BFC3A0718C97A5B76B /* BatteryCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F313A6380AFDD7648FAE1BA8 /* BatteryCenterTests.swift */; };
+		2B1AA5D97F9414CF7A7CDC02 /* ProfileBatteryViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E577BB4D8EBF112F29BCC474 /* ProfileBatteryViewModelTests.swift */; };
 		00073C670926284DD45E1271 /* StoryViewerEngagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7417FA813FF1BE163808BFC4 /* StoryViewerEngagement.swift */; };
 		0008D7D5B479D759E7DBC760 /* MediaSaveDeduplicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2624CEAC671EFD3549C7B59C /* MediaSaveDeduplicationTests.swift */; };
 		000948901E548E0CAC33E529 /* StatusBubbleControllerReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ABF76B8551B950BB417F705 /* StatusBubbleControllerReplyTests.swift */; };
@@ -4756,6 +4759,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A3861AE5AAE701EA9AD8630B /* MockBatteryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBatteryService.swift; sourceTree = "<group>"; };
+		F313A6380AFDD7648FAE1BA8 /* BatteryCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryCenterTests.swift; sourceTree = "<group>"; };
+		E577BB4D8EBF112F29BCC474 /* ProfileBatteryViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBatteryViewModelTests.swift; sourceTree = "<group>"; };
 		00008A0920B7ACBE2AAB8727 /* CallMontageRiseAndFadeGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMontageRiseAndFadeGuardTests.swift; sourceTree = "<group>"; };
 		000EBA9963DBF574F94AE01B /* ConversationAudioCoordinator+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationAudioCoordinator+NowPlaying.swift"; sourceTree = "<group>"; };
 		0016995061E3B6CB76B0738A /* SessionTransitionPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransitionPlan.swift; sourceTree = "<group>"; };
@@ -9419,6 +9425,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		96EECAEA77809E8FF2FAAB1E /* Battery */ = {
+			isa = PBXGroup;
+			children = (
+				F313A6380AFDD7648FAE1BA8 /* BatteryCenterTests.swift */,
+				E577BB4D8EBF112F29BCC474 /* ProfileBatteryViewModelTests.swift */,
+			);
+			path = Battery;
+			sourceTree = "<group>";
+		};
 		00B61685604373ED5FF975B5 /* MeeshyWidgets */ = {
 			isa = PBXGroup;
 			children = (
@@ -10950,6 +10965,7 @@
 				3F46705F4A94669214E98F24 /* MockAudioPlaybackEngine.swift */,
 				248A4CD91F884CC1887542B0 /* MockAuthManager.swift */,
 				839495EDBE7000CFDE795561 /* MockAuthServiceSDK.swift */,
+				A3861AE5AAE701EA9AD8630B /* MockBatteryService.swift */,
 				7329AC38BD49AF3870B3546D /* MockBirthDateService.swift */,
 				3771B9F3633D6B2DA85EFB2C /* MockBlockService.swift */,
 				07DD689BEA58C08AA8EE7714 /* MockBringAlarmScheduler.swift */,
@@ -11055,6 +11071,7 @@
 				0358CA9CB7843774FF99454C /* AppRelativeTimeSourceGuardTests.swift */,
 				808B2F2397BD6ED2CCAC9698 /* AppWireDateSourceGuardTests.swift */,
 				133732EF0DCD487FB5483DBB /* BadgeCountTests.swift */,
+				96EECAEA77809E8FF2FAAB1E /* Battery */,
 				6CC6E19DCBD680D6FBE863E4 /* CatalogFormatSpecifierGuardTests.swift */,
 				1189CE77AA93B858A88F233D /* CommentQuotedMediaTests.swift */,
 				2C774BC7D059BD4848EE22CD /* CommunityDetailViewModelTests.swift */,
@@ -18466,6 +18483,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				616C0BE53A427327DC97579D /* MockBatteryService.swift in Sources */,
+				6E3584BFC3A0718C97A5B76B /* BatteryCenterTests.swift in Sources */,
+				2B1AA5D97F9414CF7A7CDC02 /* ProfileBatteryViewModelTests.swift in Sources */,
 				0BE2D0F2157FFBFE635BD16B /* A11yLabelComposerTests.swift in Sources */,
 				7E5598AA054C8B56651FD6B2 /* APIServiceTests.swift in Sources */,
 				52961029A27459F8791DF2FA /* AccentVectorTests.swift in Sources */,
