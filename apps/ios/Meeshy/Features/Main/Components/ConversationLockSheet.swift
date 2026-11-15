@@ -61,6 +61,16 @@ struct ConversationLockSheet: View {
             numpad
             Spacer()
         }
+        .overlay(alignment: .topTrailing) {
+            MeeshyGlassButton(
+                systemImage: "xmark",
+                label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+                size: .s36
+            ) {
+                dismiss()
+            }
+            .padding(MeeshySpacing.lg)
+        }
         .presentationDetents([.height(500)])
         .presentationDragIndicator(.visible)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: errorMessage)

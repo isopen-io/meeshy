@@ -916,6 +916,20 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertEqual(ConversationLockSheet.resumedStep(afterRefusalAt: 0, in: .removeMasterPin), 0)
     }
 
+    /// #18297 — la feuille du code porte sa sortie VISIBLE : un ✕ de verre du
+    /// kit qui la ferme. Renoncer à ouvrir une conversation verrouillée ne
+    /// demande plus de deviner le glissement vers le bas ; dans la porte du
+    /// routeur, fermer la feuille abandonne l'ouverture retenue.
+    func test_theLockSheet_offersAVisibleClose() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Components/ConversationLockSheet.swift")
+        ).components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertNotNil(code.range(of: #"MeeshyGlassButton\(systemImage:"xmark",[^{]*\)\{dismiss\(\)\}"#, options: .regularExpression),
+                        "la feuille du code n'a aucune sortie visible qui la ferme : seul le glissement le fait")
+        XCTAssertTrue(code.contains("router.abandonLockedOpening()"),
+                      "fermer la feuille de la porte abandonne l'ouverture retenue")
+    }
+
     /// Garde de SOURCE : les Réglages comptent le jeu de verrous (liste, et
     /// codes du trousseau tant qu'elle est inconnue) et ne proposent de
     /// supprimer le PIN maître que sur la décision du gestionnaire.

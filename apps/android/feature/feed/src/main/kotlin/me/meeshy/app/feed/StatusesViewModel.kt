@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -475,8 +474,12 @@ class StatusesViewModel @Inject constructor(
         }
     }
 
-    /** L'humeur en cours d'envoi : un second Publier pendant qu'elle part est ignoré (#18271). */
-    private var publishing: Job? = null
+    /**
+     * Les humeurs en cours d'envoi. Un second Publier de la MÊME humeur pendant qu'elle part est ignoré ; une AUTRE
+     * humeur part, même si la première n'est pas arrivée (#18271) : le ViewModel est partagé par toutes les ouvertures du
+     * composeur, et l'humeur suivante serait perdue sans un mot.
+     */
+    private val publishing = mutableSetOf<StatusPublishRequest>()
 
     /**
      * Publish a mood status: create it, then hoist the mapped entry to the front of
@@ -494,10 +497,11 @@ class StatusesViewModel @Inject constructor(
         visibilityUserIds: List<String>? = null,
         mentions: List<PostMentionInput>? = null,
     ) {
-        if (publishing?.isActive == true) return
+        val mood = StatusPublishRequest(emoji, content, visibility, audioUrl, repostOfId, viaUsername, visibilityUserIds, mentions)
+        if (!publishing.add(mood)) return
         status.update { it.copy(error = null) }
         val ticket = statusBarCacheRepository.ticket()
-        publishing = viewModelScope.launch {
+        viewModelScope.launch {
             try {
                 val result = statusRepository.create(
                     moodEmoji = emoji,
@@ -527,6 +531,8 @@ class StatusesViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 status.update { it.copy(error = e.message) }
+            } finally {
+                publishing.remove(mood)
             }
         }
     }
