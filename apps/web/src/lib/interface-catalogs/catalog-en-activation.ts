@@ -27,6 +27,8 @@ const enActivation = {
   'activation.phone.failed': 'This number couldn’t be saved. Please try again.',
   'activation.phone.codeInvalid': 'Invalid or expired code',
   'activation.phone.done': 'Number verified ✓',
+  'activation.phone.edit': 'Change the number',
+  'activation.phone.resend': 'Resend the code',
   'activation.complete': 'Your account is verified. Thank you!',
   'activation.later': 'Later',
   'activation.close': 'Close',

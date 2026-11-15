@@ -76,4 +76,28 @@ describe('la proposition d’ajouter son numéro (#8843)', () => {
     expect(dismissed).toEqual(['later']);
     expect(calls).toEqual([]);
   });
+  test('à l’étape du code, « Modifier le numéro » rend le numéro saisi à corriger, sans quitter l’invite', async () => {
+    const { calls, deps } = recorder();
+    const host = await mounter.mount(<PhoneAddPrompt language="fr" deps={deps} onDismiss={() => undefined} onVerified={() => undefined} />);
+    await mounter.click(buttonNamed(host, 'Ajouter mon numéro'));
+    mounter.type(host, '#activation-phone', '+33 6 12 34 56 7');
+    await mounter.click(buttonNamed(host, 'Envoyer le code'));
+    await mounter.click(buttonNamed(host, 'Modifier le numéro'));
+    expect(host.querySelector<HTMLInputElement>('#activation-phone')?.value).toBe('+33 6 12 34 56 7');
+    mounter.type(host, '#activation-phone', '+33 6 12 34 56 78');
+    await mounter.click(buttonNamed(host, 'Envoyer le code'));
+    expect(calls).toEqual(['phone:+33 6 12 34 56 7', 'phone:+33 6 12 34 56 78']);
+    expect(host.querySelector('#activation-phone-code')).not.toBeNull();
+  });
+
+  test('à l’étape du code, « Renvoyer le code » redemande un SMS au même numéro et garde l’étape', async () => {
+    const { calls, deps } = recorder();
+    const host = await mounter.mount(<PhoneAddPrompt language="fr" deps={deps} onDismiss={() => undefined} onVerified={() => undefined} />);
+    await mounter.click(buttonNamed(host, 'Ajouter mon numéro'));
+    mounter.type(host, '#activation-phone', '+33 6 12 34 56 78');
+    await mounter.click(buttonNamed(host, 'Envoyer le code'));
+    await mounter.click(buttonNamed(host, 'Renvoyer le code'));
+    expect(calls).toEqual(['phone:+33 6 12 34 56 78', 'phone:+33 6 12 34 56 78']);
+    expect(host.querySelector('#activation-phone-code')).not.toBeNull();
+  });
 });

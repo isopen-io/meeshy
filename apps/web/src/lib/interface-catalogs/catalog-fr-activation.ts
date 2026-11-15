@@ -27,6 +27,8 @@ const frActivation = {
   'activation.phone.failed': 'Ce numéro n’a pas pu être enregistré. Réessayez.',
   'activation.phone.codeInvalid': 'Code invalide ou expiré',
   'activation.phone.done': 'Numéro vérifié ✓',
+  'activation.phone.edit': 'Modifier le numéro',
+  'activation.phone.resend': 'Renvoyer le code',
   'activation.complete': 'Votre compte est validé. Merci !',
   'activation.later': 'Plus tard',
   'activation.close': 'Fermer',
