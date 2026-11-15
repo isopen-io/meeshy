@@ -618,6 +618,8 @@ public final class StoryCanvasUIView: UIView {
     var inlineEditor: StoryInlineTextEditor?
     /// Id du texte en cours d'édition en place (nil hors édition).
     public internal(set) var inlineEditingTextId: String?
+    /// La saisie demandée avant sa calque : la reconstruction qui pose la calque l'ouvre (#18735).
+    var pendingInlineEditTextId: String?
     /// Voir `StoryCanvasUIView+InlineEditYield.swift`.
     public var inlineEditYieldsToManipulation = false
     public internal(set) var suspendedInlineEditId: String?

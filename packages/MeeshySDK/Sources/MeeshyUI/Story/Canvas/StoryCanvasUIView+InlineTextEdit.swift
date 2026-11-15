@@ -57,9 +57,9 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// fermeture, le texte retrouve sa position réelle et le canvas sa
     /// luminosité.
     public func beginInlineTextEdit(textId: String) {
-        guard inlineEditingTextId != textId,
-              let textLayer = textLayer(forId: textId),
-              let textObject = textLayer.textObject else { return }
+        guard inlineEditingTextId != textId else { return }
+        guard let textLayer = textLayer(forId: textId), let textObject = textLayer.textObject else { return pendingInlineEditTextId = textId }
+        pendingInlineEditTextId = nil
 
         // Bascule directe d'un texte A vers un texte B (tap sur un autre texte
         // pendant l'édition) : A doit retrouver ses glyphes ET sa position
@@ -107,6 +107,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// commencé sur lui serait annulé si sa vue quittait la hiérarchie sous le
     /// doigt. `releaseParkedInlineEditor()` le retire à la fin du geste.
     func endInlineTextEdit(parkingEditor: Bool) {
+        pendingInlineEditTextId = nil
         guard let id = inlineEditingTextId else { return }
         if let layer = textLayer(forId: id) {
             layer.setGlyphsHidden(false)
@@ -138,8 +139,8 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// la géométrie du champ (SANS réécrire la chaîne : le `UITextView`
     /// est la source de vérité du texte pendant l'édition).
     func reapplyInlineEditingIfNeeded() {
-        guard let id = inlineEditingTextId,
-              let textLayer = textLayer(forId: id) else { return }
+        if inlineEditingTextId == nil, let attendu = pendingInlineEditTextId { return beginInlineTextEdit(textId: attendu) }
+        guard let id = inlineEditingTextId, let textLayer = textLayer(forId: id) else { return }
         textLayer.setGlyphsHidden(true)
         centerLayerForEditing(textLayer)
         if let editor = inlineEditor, let textObject = textLayer.textObject {

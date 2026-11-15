@@ -332,8 +332,10 @@ final class ComposerViewfinderSceneTests: XCTestCase {
         let toile = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerViewfinderSceneCanvas.swift")
         XCTAssertTrue(toile.contains("ComposerViewfinderColumn.typesOnViewfinder("))
         XCTAssertTrue(toile.contains("inlineEditInputLink: typing?.inputLink"), "la barre s'accroche au canvas du viseur")
-        XCTAssertTrue(toile.contains("typing?.textId == mountedTextId ? mountedTextId : nil"),
-                      "la saisie attend que le canvas soit monté")
+        XCTAssertTrue(toile.contains("editingTextId: typing?.textId,"),
+                      "la saisie part au toucher : le canvas l'ouvre dès que la calque du texte existe")
+        XCTAssertFalse(toile.contains("mountedTextId"),
+                       "aucune passe d'attente entre le toucher sur Texte et le clavier (#18735)")
     }
 
     func test_chrome_whileTyping_retiresTheCaptureControls_andCatchesTheEmptyTouch() throws {
