@@ -41,17 +41,27 @@ import me.meeshy.ui.theme.MeeshyTheme
 @Composable
 internal fun CommentAudioChip(item: CommentMediaPreview) {
     val url = item.url ?: return
-    var playing by remember(url) { mutableStateOf(false) }
+    var phase by remember(url) { mutableStateOf(CommentAudioPhase.IDLE) }
     var player by remember(url) { mutableStateOf<MediaPlayer?>(null) }
     DisposableEffect(url) { onDispose { player?.release() } }
+    val playing = phase == CommentAudioPhase.PLAYING
     val label = stringResource(R.string.post_comments_media_audio)
     val action = stringResource(if (playing) R.string.post_comments_media_pause_audio else R.string.post_comments_media_play_audio)
     val toggle: () -> Unit = {
-        val current = player
-        when {
-            current != null && playing -> current.pause().also { playing = false }
-            current != null -> current.start().also { playing = true }
-            else -> player = commentAudioPlayer(url, onPrepared = { playing = true }, onDone = { playing = false })
+        when (CommentAudioPlayback.onTap(phase)) {
+            CommentAudioTap.IGNORE -> Unit
+            CommentAudioTap.PAUSE -> { player?.pause(); phase = CommentAudioPhase.PAUSED }
+            CommentAudioTap.RESUME -> { player?.start(); phase = CommentAudioPhase.PLAYING }
+            CommentAudioTap.PREPARE -> {
+                player?.release()
+                player = commentAudioPlayer(
+                    url,
+                    onPrepared = { phase = CommentAudioPhase.PLAYING },
+                    onDone = { phase = CommentAudioPhase.PAUSED },
+                    onError = { failed -> failed.release(); player = null; phase = CommentAudioPhase.FAILED },
+                )
+                phase = if (player == null) CommentAudioPhase.FAILED else CommentAudioPhase.PREPARING
+            }
         }
     }
     Row(
@@ -79,13 +89,18 @@ internal fun commentAudioDuration(millis: Int): String {
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }
 
-private fun commentAudioPlayer(url: String, onPrepared: () -> Unit, onDone: () -> Unit): MediaPlayer? = runCatching {
+private fun commentAudioPlayer(
+    url: String,
+    onPrepared: () -> Unit,
+    onDone: () -> Unit,
+    onError: (MediaPlayer) -> Unit,
+): MediaPlayer? = runCatching {
     MediaPlayer().apply {
         setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         setDataSource(url)
         setOnPreparedListener { it.start(); onPrepared() }
         setOnCompletionListener { onDone() }
-        setOnErrorListener { _, _, _ -> onDone(); true }
+        setOnErrorListener { failed, _, _ -> onError(failed); true }
         prepareAsync()
     }
 }.getOrNull()

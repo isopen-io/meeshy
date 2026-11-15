@@ -7,15 +7,11 @@ import MeeshyUI
 /// cercles ».
 ///
 /// Toute la bande est UN bouton, donc UN élément VoiceOver : sans regroupement, valeurs et intitulés se lisaient en
-/// fragments épars et rien ne disait que le toucher ouvre les statistiques détaillées.
+/// fragments épars et rien ne disait que le toucher ouvre Mon activité.
+///
+/// Les trois nombres SONT les cartes de Mon activité (`UserActivityCards`) : mêmes noms, mêmes couleurs, une seule
+/// source — la bande ne les recopie pas.
 struct ProfileActivityBand: View {
-
-    struct Value: Identifiable, Equatable {
-        let id: String
-        let value: Int
-        let label: String
-        let colorHex: String
-    }
 
     let stats: UserStats?
     let onOpen: () -> Void
@@ -34,14 +30,13 @@ struct ProfileActivityBand: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(stats: stats))
-        .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("profile.activity")
     }
 
-    private func card(_ item: Value) -> some View {
+    private func card(_ item: UserActivityCards.Card) -> some View {
         VStack(spacing: MeeshySpacing.xsPlus) {
-            Text("\(item.value)")
+            Text(item.value, format: .number)
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundStyle(Color(hex: item.colorHex))
                 .lineLimit(1)
@@ -69,15 +64,8 @@ struct ProfileActivityBand: View {
     }
 
     /// Avant la réponse du serveur, la bande dit zéro : elle ne garde ni n'estime rien.
-    static func values(of stats: UserStats?) -> [Value] {
-        [
-            Value(id: "messages", value: stats?.totalMessages ?? 0,
-                  label: String(localized: "profile.stats.messages", defaultValue: "Messages", bundle: .main), colorHex: MeeshyColors.errorHex),
-            Value(id: "conversations", value: stats?.totalConversations ?? 0,
-                  label: String(localized: "profile.stats.conversations", defaultValue: "Conversations", bundle: .main), colorHex: MeeshyColors.indigo300Hex),
-            Value(id: "translations", value: stats?.totalTranslations ?? 0,
-                  label: String(localized: "user.stats.translations", defaultValue: "Traductions", bundle: .main), colorHex: MeeshyColors.indigo600Hex),
-        ]
+    static func values(of stats: UserStats?) -> [UserActivityCards.Card] {
+        UserActivityCards.make(stats: stats)
     }
 
     /// Le titre de la section, puis chaque valeur avec son nom : « MON ACTIVITÉ: 12 Messages, 3 Conversations, … ».

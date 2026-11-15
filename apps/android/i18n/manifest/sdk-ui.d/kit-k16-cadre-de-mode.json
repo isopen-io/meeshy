@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "ui", "iosKey": "kit.progress_ring.busy", "androidName": "kit_progress_ring_busy", "status": "adopted" }
+      ]
+    }
+  }
+}

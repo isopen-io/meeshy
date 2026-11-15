@@ -131,3 +131,33 @@ describe('les séries par acte et la fidélité partent dans le PUT, sans plafon
     expect(input(host, '[data-scale-streak-days="0"]').value).toBe('7');
   });
 });
+
+const visibleText = (root: Element): string => {
+  const copy = root.cloneNode(true) as Element;
+  copy.querySelectorAll('.sr-only').forEach((node) => node.remove());
+  return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+};
+
+describe('épure (#18486) — l’orientation reste lisible, le cas limite passe derrière un (i)', () => {
+  test('Fidélité : la phrase d’orientation est visible, les 100 000 points sont dans la note du (i)', async () => {
+    const host = await mountPanel(scaleTransport());
+    const block = host.querySelector('[data-admin-fiche-section="scale-loyalty"]') as Element;
+
+    expect(visibleText(block)).toContain('Jours civils depuis la création du compte ; chaque palier rapporte une fois.');
+    expect(visibleText(block)).not.toContain('un an peut valoir');
+    const button = block.querySelector<HTMLButtonElement>('button[aria-label="Pourquoi un palier peut-il valoir 100 000 points ?"]');
+    expect(button).not.toBeNull();
+    const note = block.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`);
+    expect(note?.textContent).toContain('un an peut valoir 100 000 points');
+    expect(note?.classList.contains('sr-only')).toBe(true);
+  });
+
+  test('Séries par acte : une phrase courte, la définition du jour consécutif n’est pas répétée', async () => {
+    const host = await mountPanel(scaleTransport());
+    const panel = host.querySelector('[data-scale-tab-panel="streaks"]') as Element;
+
+    expect(visibleText(panel)).toContain('Chaque acte a sa propre série et ses paliers.');
+    expect(visibleText(panel)).not.toContain('CE geste');
+    expect(visibleText(panel)).not.toContain('jours consécutifs');
+  });
+});

@@ -301,9 +301,10 @@ final class ComposerCaptureEditTests: XCTestCase {
     }
 
     func test_editPanels_stackTheirHeights_andTheBandFoldsThem() {
-        XCTAssertEqual(ComposerEditScene.bottomReserve([]), ComposerEditScene.toolsRow + ComposerEditScene.gap * 2)
+        XCTAssertEqual(ComposerEditScene.bottomReserve([]), ComposerEditScene.gap * 2,
+                       "la colonne des outils se pose sur la prise : elle ne retient rien (#18638)")
         let montes: [ComposerEditPanel] = [.sound, .trim]
-        let attendu = ComposerEditScene.toolsRow + ComposerEditScene.gap * 2
+        let attendu = ComposerEditScene.gap * 2
             + montes.map { ComposerEditScene.panelHeight($0) + ComposerEditScene.gap }.reduce(0, +)
         XCTAssertEqual(ComposerEditScene.bottomReserve(montes), attendu, "chaque panneau montré prend sa place")
         XCTAssertEqual(ComposerEditScene.bottomReserve([.presets] + montes), attendu,

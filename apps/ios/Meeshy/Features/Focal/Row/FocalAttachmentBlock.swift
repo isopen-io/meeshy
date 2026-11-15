@@ -80,6 +80,13 @@ nonisolated enum FocalMediaGridLayout {
         return min(gridMaxWidth, max(0, column).rounded(.down))
     }
 
+    /// Emplacement d'une image SEULE : la MÊME loi que la bulle
+    /// (`BubbleSoloImageFrame`), entière à ses proportions (#18678).
+    static func soloImageSlot(width: Int?, height: Int?, maxWidth: CGFloat = gridMaxWidth) -> FocalMediaSlot {
+        let size = BubbleSoloImageFrame.size(width: width, height: height, maxWidth: maxWidth)
+        return FocalMediaSlot(width: size.width, height: size.height)
+    }
+
     static func slots(for count: Int, maxWidth: CGFloat = gridMaxWidth) -> [FocalMediaSlot] {
         guard count > 0 else { return [] }
         let halfW = (maxWidth - gridSpacing) / 2
@@ -259,6 +266,8 @@ struct FocalGridCell: View {
 
     @State private var isRevealed = false
     @State private var showReactionPicker = false
+    /// L'image affichée est arrivée — relayé au badge (#10370, #18678).
+    @State private var displayedImageLanded = false
     @Environment(\.focalMessageRevealed) private var messageRevealed
 
     /// La MÊME garde que la tuile de bulle (`AttachmentReactionOffer`).
@@ -302,6 +311,8 @@ struct FocalGridCell: View {
                     attachment: attachment,
                     accentColor: accentHex,
                     messageDeliveryStatus: messageDeliveryStatus,
+                    displayedURL: displayedImageURL,
+                    displayedImageLanded: displayedImageLanded,
                     form: downloadPlacement.form,
                     tileHostsVideoPlayer: videoPresentation.hostsPlayer
                 )
@@ -361,23 +372,29 @@ struct FocalGridCell: View {
         }
     }
 
+    /// L'URL que la case charge, relue par le badge (#18678).
+    private var displayedImageURL: String? {
+        attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
+    }
+
     @ViewBuilder
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
             let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-            let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
             OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
                 ProgressiveCachedImage(
                     thumbHash: attachment.thumbHash,
                     thumbnailUrl: thumbUrl,
-                    fullUrl: fullUrl,
+                    fullUrl: displayedImageURL,
                     targetSize: CGSize(width: slot.width, height: slot.height),
-                    reloadToken: originalLanded
+                    onFullImageLoaded: { displayedImageLanded = true },
+                    reloadToken: originalLanded,
+                    byteSize: attachment.fileSize
                 ) {
                     Color(hex: attachment.thumbnailColor).shimmer()
                 }
-                .aspectRatio(contentMode: .fill)
+                .aspectRatio(contentMode: isSolo ? .fit : .fill)
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 .clipped()
             }
@@ -544,7 +561,9 @@ struct FocalAttachmentBlock: View, Equatable {
             if visibleItems[0].type == .video {
                 cell(visibleItems[0], FocalMediaGridLayout.soloVideoSlot(aspectRatio: visibleItems[0].videoAspectRatio, maxWidth: maxWidth))
             } else {
-                cell(visibleItems[0], slots[0])
+                cell(visibleItems[0], FocalMediaGridLayout.soloImageSlot(width: visibleItems[0].width,
+                                                                        height: visibleItems[0].height,
+                                                                        maxWidth: maxWidth))
             }
         case 2:
             HStack(spacing: FocalMediaGridLayout.gridSpacing) {

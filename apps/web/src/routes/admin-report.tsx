@@ -135,7 +135,6 @@ export function AdminReportPanel({ language, reportId, deps = apiDeps, now = def
         <AdminEmptyState
           glyph="flag"
           title={translateAdmin(language, 'admin.moderation.fiche.notFound')}
-          hint={translateAdmin(language, 'admin.moderation.fiche.notFoundHint')}
           action={
             <AdminLink
               target={listTarget}

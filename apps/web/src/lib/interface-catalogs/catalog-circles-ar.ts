@@ -151,6 +151,8 @@ const ar = {
   'together.unavailable': 'لا يمكن تشغيل هذه الوسائط على هذا الجهاز.',
   'together.someone': 'شخص ما',
   'together.gone': 'لم تعد الدعوة صالحة.',
+  'together.join.offline': 'غير متصل: لم تُفتح الجلسة.',
+  'together.join.failed': 'لم تُفتح الجلسة. أعد المحاولة.',
   'together.ended': 'انتهت الجلسة المشتركة.',
   'together.row.title': 'المشاهدة أو الاستماع معًا',
   'together.row.explain': 'اختر فيديو أو مقطعًا صوتيًا من محادثتكما: يشغّله {name} في الوقت نفسه معك.',

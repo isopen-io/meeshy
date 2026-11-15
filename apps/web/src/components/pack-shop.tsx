@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { InfoNoted, type InfoHint } from '@/components/info-hint';
 import { PackDetailsSheet } from '@/components/pack-details-sheet';
 import { ApiError } from '@/lib/api/client';
 import type { ApiResult } from '@/lib/api/http';
@@ -122,6 +123,7 @@ export function PackShop<P extends ShopPack>({
   adapter,
   language,
   hint,
+  hintNote,
   empty,
   footer,
   focusSlug,
@@ -130,6 +132,8 @@ export function PackShop<P extends ShopPack>({
   readonly language: InterfaceLanguage;
   /** Ce qu'installer et retirer changent : la phrase d'orientation de la boutique, lue au repos (règle 7 de l'épure, #17594). */
   readonly hint?: string;
+  /** Le détail secondaire de cette phrase, derrière un (i) nommé par sa question (épure #17584). */
+  readonly hintNote?: InfoHint;
   /** Ce que dit une boutique sans pack — un ancien serveur compris. */
   readonly empty?: string;
   readonly footer?: ReactNode;
@@ -270,9 +274,11 @@ export function PackShop<P extends ShopPack>({
   return (
     <div data-pack-shop={adapter.domain} className="flex flex-col gap-4">
       {hint === undefined ? null : (
-        <p data-shop-hint className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {hint}
-        </p>
+        <InfoNoted note={hintNote}>
+          <span data-shop-hint className="block text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {hint}
+          </span>
+        </InfoNoted>
       )}
       <p className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: kept ? 'var(--color-ios-ink-2)' : 'var(--ios-error)' }}>
         {notice}

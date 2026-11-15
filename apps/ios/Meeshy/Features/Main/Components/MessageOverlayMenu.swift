@@ -227,6 +227,7 @@ struct MessageOverlayMenu: View {
     }
 
     private func handlePrimaryAction(_ action: PrimaryAction) {
+        guard isVisible else { return }
         switch action {
         case .reply:
             onReply?()
@@ -377,7 +378,7 @@ struct MessageOverlayMenu: View {
                     y: settled ? nlMenuY : (sourceRect.maxY + 8)
                 )
                 .offset(y: clusterDragOffset - menuRise)
-                .opacity(isVisible ? 1 : 0)
+                .modifier(ShownAndTouchable(isShown: isVisible))
                 .scaleEffect(settled ? 1.0 : 0.85, anchor: .top)
                 // highPriorityGesture : en `.gesture` simple, les Button
                 // des rows gagnent les drags lents (vérifié simulateur —
@@ -415,9 +416,8 @@ struct MessageOverlayMenu: View {
                             y: settled ? nlEmojiY : sourceRect.minY
                         )
                         .offset(y: clusterDragOffset)
-                        .opacity(isVisible ? 1 : 0)
+                        .modifier(ShownAndTouchable(isShown: isVisible))
                         .scaleEffect(settled ? 1.0 : 0.7, anchor: .center)
-                        .allowsHitTesting(true)
                 }
             }
             // #9043 — le glissement vaut sur TOUTE la vue (le voile, l'aperçu
@@ -647,6 +647,7 @@ struct MessageOverlayMenu: View {
     }
 
     private func reagirDepuisLaBande(_ emoji: String) {
+        guard isVisible else { return }
         EmojiUsageTracker.recordUsage(emoji: emoji)
         onReact?(emoji)
         dismiss()
@@ -730,6 +731,7 @@ struct MessageOverlayMenu: View {
     // MARK: - Dismiss
 
     private func dismiss() {
+        guard isVisible else { return }
         HapticFeedback.light()
         // Sortie : l'overlay se retracte vers le coin natif de la bulle ;
         // un fondu sous « Réduire les animations ». La cascade d'entree des
@@ -745,6 +747,14 @@ struct MessageOverlayMenu: View {
         }
     }
 
+}
+
+private struct ShownAndTouchable: ViewModifier {
+    let isShown: Bool
+
+    func body(content: Content) -> some View {
+        content.opacity(isShown ? 1 : 0).allowsHitTesting(isShown)
+    }
 }
 
 // MARK: - Ce que le fil sert pour ce message
