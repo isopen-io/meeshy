@@ -28,7 +28,7 @@ import timber.log.Timber
 /**
  * `community:updated` (#18439, iOS `CommunityUpdateChannel`) : une communauté renommée ou réglée par
  * son créateur se met à jour chez chaque membre, écran ouvert ou non. L'événement réécrit le cache
- * des communautés ([CommunityCacheRepository.apply]) ; la liste et le détail, qui lisent ce cache,
+ * des communautés ([CommunityCacheRepository.applyUpdate]) ; la liste et le détail, qui lisent ce cache,
  * se ré-émettent d'eux-mêmes — aucune relance réseau.
  *
  * La passerelle ne l'envoie qu'aux membres actifs et au créateur (room personnelle) : rien ici
@@ -49,7 +49,7 @@ class CommunityUpdateBinding internal constructor(
         json: Json,
         @IoDispatcher io: CoroutineDispatcher,
         cache: CommunityCacheRepository,
-    ) : this(router, json, io, cache::apply)
+    ) : this(router, json, io, cache::applyUpdate)
 
     private val scope = CoroutineScope(SupervisorJob() + io)
     private val subject = SocketInboundRoute.subject<CommunityUpdatedEvent>()

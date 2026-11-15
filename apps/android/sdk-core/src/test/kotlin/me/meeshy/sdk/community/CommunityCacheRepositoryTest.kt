@@ -146,7 +146,7 @@ class CommunityCacheRepositoryTest {
         cache().put("community:detail", "c1", community("c1").copy(members = members), ApiCommunity.serializer(), null)
         cache().put("community:list", "page0", listOf(community("c0"), community("c1")), ListSerializer(ApiCommunity.serializer()), null)
 
-        repository().apply(updated("c1", "Renommee"))
+        repository().applyUpdate(updated("c1", "Renommee"))
 
         val detail = cache().get("community:detail", "c1", ApiCommunity.serializer())!!.value
         assertThat(detail.name).isEqualTo("Renommee")
@@ -158,7 +158,7 @@ class CommunityCacheRepositoryTest {
     }
 
     @Test fun `community updated ne cree rien quand l appareil ne tient pas la communaute`() = runTest {
-        repository().apply(updated("c9", "Inconnue"))
+        repository().applyUpdate(updated("c9", "Inconnue"))
 
         assertThat(cache().get("community:detail", "c9", ApiCommunity.serializer())).isNull()
         assertThat(cache().get("community:list", "page0", ListSerializer(ApiCommunity.serializer()))).isNull()
@@ -169,7 +169,7 @@ class CommunityCacheRepositoryTest {
         val fetchedAt = cache().get("community:detail", "c1", ApiCommunity.serializer())!!.fetchedAt
         clock.now += 60_000
 
-        repository().apply(updated("c1", "Renommee"))
+        repository().applyUpdate(updated("c1", "Renommee"))
 
         assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())!!.fetchedAt).isEqualTo(fetchedAt)
     }

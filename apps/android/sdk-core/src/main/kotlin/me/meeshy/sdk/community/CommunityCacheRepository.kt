@@ -69,7 +69,7 @@ class CommunityCacheRepository(
      * se ré-émettent d'eux-mêmes. Une communauté que l'appareil ne tient pas n'est pas créée, et un
      * événement plus ancien que la copie ne la recule pas ([applying]).
      */
-    suspend fun apply(event: CommunityUpdatedEvent) {
+    suspend fun applyUpdate(event: CommunityUpdatedEvent) {
         val ticket = cache.ticket()
         val detail = ApiCommunity.serializer()
         cache.get(DETAIL_NAMESPACE, event.communityId, detail)?.value?.applying(event)?.let { next ->

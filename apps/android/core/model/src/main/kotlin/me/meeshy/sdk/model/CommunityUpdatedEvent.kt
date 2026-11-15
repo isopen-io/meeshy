@@ -61,8 +61,5 @@ fun ApiCommunity.applying(event: CommunityUpdatedEvent): ApiCommunity? {
 }
 
 /** Une page tenue, réécrite sur la seule ligne visée ; `null` quand aucune ne change. */
-fun List<ApiCommunity>.applying(event: CommunityUpdatedEvent): List<ApiCommunity>? {
-    var changed = false
-    val next = map { held -> held.applying(event)?.also { changed = true } ?: held }
-    return next.takeIf { changed }
-}
+fun List<ApiCommunity>.applying(event: CommunityUpdatedEvent): List<ApiCommunity>? =
+    map { held -> held.applying(event) ?: held }.takeIf { it != this }
