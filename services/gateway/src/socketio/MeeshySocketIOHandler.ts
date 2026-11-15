@@ -25,8 +25,7 @@ import type { LocalMediaRenderer } from '../services/attachments/media-processin
 import { mediaReadyPorts } from '../services/attachments/media-processing/ready-listener';
 import { MessageAttachmentAltTranslationService } from '../services/attachments/MessageAttachmentAltTranslationService';
 import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
-import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
-import { gatewayDeliveryQueueSealer } from '../services/deliveryQueueSealing';
+import { getSharedOfflineEnqueuer } from '../services/delivery-queue-registry';
 import { getCacheStore } from '../services/CacheStore';
 
 /** Le bloc `game` tel que `GET /me/engagement` le compose : la lecture ne crédite rien (`READ_ONLY_CREDIT`). */
@@ -121,7 +120,23 @@ export class MeeshySocketIOHandler {
     const mediaDeps = {
       prisma: this.prisma,
       io: manager.getIO() as never,
-      deliveryQueue: new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma)),
+      // #18616 — la file se RÉSOUT, elle ne se construit pas. Une seconde
+      // instance partage la tranche Redis (donc le cas nominal marche) et
+      // possède sa PROPRE tranche mémoire — celle qu'emprunte toute entrée
+      // écrite pendant un hoquet Redis. Sur cette tranche-là, ni le drain
+      // (`this.deliveryQueue` du manager), ni la purge d'un message détruit
+      // (`getSharedDeliveryQueue`), ni le balayage de TTL n'arrivaient jamais :
+      // la transcription d'un message brûlé y survivait, et l'enrichissement
+      // d'un vocal pour un destinataire hors ligne n'en sortait jamais.
+      //
+      // Résolue par un ACCESSEUR et non une fois pour toutes : l'enregistrement
+      // (`setSharedDeliveryQueue`, constructeur de `server.ts`) précède bien ce
+      // câblage, mais un ordre d'initialisation n'est pas une garantie qu'on
+      // puisse relire ici — et un `undefined` capturé figerait le pipeline
+      // média hors de la file pour toute la vie du processus.
+      get deliveryQueue() {
+        return getSharedOfflineEnqueuer() ?? null;
+      },
       connectedUsers: () => manager.getReachability(),
       socialEvents: () => manager.getSocialEventsHandler(),
       leaseStore: getCacheStore(),
