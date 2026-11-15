@@ -254,6 +254,8 @@ data class NotificationActor(
 @Serializable
 data class NotificationContext(
     val conversationId: String? = null,
+    /** La communauté que la notification nomme (#18052, « ajouté à la communauté ») : son détail s'ouvre au toucher. */
+    val communityId: String? = null,
     val conversationTitle: String? = null,
     val conversationType: String? = null,
     val messageId: String? = null,
