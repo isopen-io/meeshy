@@ -60,9 +60,11 @@ struct ProfileCirclesSection: View {
     }
 
     private var pillViews: some View {
-        ForEach(summary.entries) { entry in
-            ProfileCirclePill(entry: entry, textPrimary: theme.textPrimary, textMuted: theme.textMuted) { onOpen(.circles) }
-        }
+        ForEach(summary.entries.map { entry in
+            AsyncRenderRow(id: entry.id,
+                           content: ProfileCirclePill(entry: entry, textPrimary: theme.textPrimary,
+                                                      textMuted: theme.textMuted) { onOpen(.circles) })
+        }, content: asyncRenderRowContent)
     }
 
     private func emptyLine(_ phrase: String) -> some View {
