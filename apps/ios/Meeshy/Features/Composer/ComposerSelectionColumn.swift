@@ -30,7 +30,9 @@ struct ComposerSelectionColumn: View {
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    static let itemWidth: CGFloat = 72
+    /// Deux fois l'écart entre le centre de ↶ ↷ et le bord de l'écran : une
+    /// entrée centrée sur leur axe tient alors dans l'écran (#14500, #18651).
+    static let itemWidth: CGFloat = 2 * (MeeshySpacing.smPlus + ComposerRestChrome.toolColumnInnerMargin) + ComposerSceneRoundGlyph.size
     /// Ce que l'entrée déborde son glyphe de chaque côté : la colonne s'en
     /// décale vers le bord pour que ses glyphes tombent sur l'axe de ↶ ↷
     /// (#18651).

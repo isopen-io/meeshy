@@ -100,7 +100,8 @@ struct MessageCardBackdropPanel: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            PhotosPicker(selection: $item, matching: .any(of: [.images, .videos]), photoLibrary: .shared()) {
+            PhotosPicker(selection: $item, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current,
+                         photoLibrary: .shared()) {
                 thumb
             }
             .buttonStyle(MessageCardPressStyle())
