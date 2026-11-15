@@ -80,11 +80,18 @@ final class ProfileBatteryViewModelTests: XCTestCase {
 
 /// Ce que je reçois de la batterie d'une personne : posé tout de suite, rendu à l'échec.
 @MainActor
-final class BatteryReceiveModeViewModelTests: XCTestCase {
+final class BatteryReceiveModeChoiceTests: XCTestCase {
+
+    /// Un Proche : le réglage n'existe qu'à partir de ce niveau (#14147).
+    private func closeRelations() -> MockRelationsService {
+        let relations = MockRelationsService()
+        relations.linkResult = .success(RelationLink(userId: "peer", effectiveLevel: .close, grantedByMe: .close, accessLevel: nil))
+        return relations
+    }
 
     func test_setReceive_appliesAndSends() async {
         let service = MockBatteryService()
-        let sut = BatteryReceiveModeViewModel(userId: "peer", service: service)
+        let sut = BatteryReceiveModeViewModel(userId: "peer", service: service, relations: closeRelations())
         await sut.load()
         await sut.setReceive(.pill)
         XCTAssertEqual(sut.settings?.receive, .pill)
@@ -94,7 +101,7 @@ final class BatteryReceiveModeViewModelTests: XCTestCase {
     func test_setReceive_failure_restores() async {
         let service = MockBatteryService()
         service.updatePersonSettingsResult = .failure(URLError(.timedOut))
-        let sut = BatteryReceiveModeViewModel(userId: "peer", service: service)
+        let sut = BatteryReceiveModeViewModel(userId: "peer", service: service, relations: closeRelations())
         await sut.load()
         await sut.setReceive(.none)
         XCTAssertEqual(sut.settings?.receive, .all)
@@ -104,7 +111,7 @@ final class BatteryReceiveModeViewModelTests: XCTestCase {
     func test_load_refused_showsNothing() async {
         let service = MockBatteryService()
         service.personSettingsResult = .failure(URLError(.userAuthenticationRequired))
-        let sut = BatteryReceiveModeViewModel(userId: "peer", service: service)
+        let sut = BatteryReceiveModeViewModel(userId: "peer", service: service, relations: closeRelations())
         await sut.load()
         XCTAssertNil(sut.settings)
     }

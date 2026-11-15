@@ -58,10 +58,14 @@ nonisolated enum ComposerViewfinderScene {
         case capture
         /// Une zone vide pendant qu'on écrit : la saisie se termine, rien n'est pris.
         case endTyping
+        /// La galerie ouverte par-dessus (#18709) : le toucher la referme, sans prise ni zoom.
+        case closeLibrary
     }
 
-    static func route(onChrome: Bool, onSceneObject: Bool, objectsTakeTouches: Bool, typing: Bool = false) -> Touch {
+    static func route(onChrome: Bool, onSceneObject: Bool, objectsTakeTouches: Bool, typing: Bool = false,
+                      libraryOpen: Bool = false) -> Touch {
         if onChrome { return .chrome }
+        if libraryOpen { return .closeLibrary }
         if onSceneObject && objectsTakeTouches { return .sceneObject }
         return typing ? .endTyping : .capture
     }
@@ -94,8 +98,9 @@ nonisolated enum ComposerViewfinderScene {
     }
 
     /// Les objets prennent le doigt viseur armé seulement : une tenue ou une prise garde le sien.
-    /// En retouche ils se montrent sans le prendre : le doigt y cadre la prise et ses outils.
-    static func objectsTakeTouches(stage: ComposerSceneCameraStage, holding: Bool, editing: Bool = false) -> Bool {
-        stage == .armed && !holding && !editing
+    /// En retouche aussi (#18712) : chaque objet posé sur la prise se déplace au doigt, un toucher
+    /// à vide y cadre toujours la prise.
+    static func objectsTakeTouches(stage: ComposerSceneCameraStage, holding: Bool) -> Bool {
+        stage == .armed && !holding
     }
 }

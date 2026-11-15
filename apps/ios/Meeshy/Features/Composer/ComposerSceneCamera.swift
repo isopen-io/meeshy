@@ -259,8 +259,10 @@ nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Senda
         }
     }
 
+    /// « Son » porte le glyphe de la retouche, au viseur comme après la prise (#18711).
     var symbol: String {
-        door?.symbolName ?? "photo.on.rectangle"
+        if self == .sound { return ComposerCaptureCopy.editToolSymbol(.sound) }
+        return door?.symbolName ?? "photo.on.rectangle"
     }
 
     var accessibilityIdentifier: String { "composer.viewfinder.\(rawValue)" }
