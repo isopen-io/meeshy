@@ -95,6 +95,36 @@ public nonisolated enum MessageCardRenderer {
         }.cgImage
     }
 
+    /// **La carte qui DÉFILE** (#18671) : sa mise en page sans plafond, calculée
+    /// une fois pour toute la vidéo — le texte à sa taille naturelle.
+    public static func scrollLayout(_ input: MessageCardInput) -> MessageCardLayout {
+        layout(input.unboundedCard(), fonts: FontBook())
+    }
+
+    /// Une image de la vidéo qui défile : le fond, le fond choisi, son voile et
+    /// le filigrane restent FIXES à la taille du format ; la carte glisse
+    /// dessous, décalée de `offset` pixels vers le haut.
+    public static func scrollFrame(
+        _ layout: MessageCardLayout, input: MessageCardInput, pictures: MessageCardPictures,
+        offset: Double, pixelWidth: Int, pixelHeight: Int
+    ) -> CGImage? {
+        let fonts = FontBook()
+        let viewport = CGSize(width: layout.width, height: layout.viewportHeight ?? layout.height)
+        let palette = input.template.palette.palette
+        let sx = Double(pixelWidth) / Double(viewport.width)
+        let sy = Double(pixelHeight) / Double(viewport.height)
+        return renderer(CGSize(width: pixelWidth, height: pixelHeight), scale: 1).image { context in
+            let cg = context.cgContext
+            cg.scaleBy(x: CGFloat(sx), y: CGFloat(sy))
+            paintBackground(cg, size: viewport, palette: palette)
+            for op in layout.backdrop { paint(op, pictures: pictures, in: cg, fonts: fonts) }
+            paintWatermark(cg, size: viewport, text: layout.watermark, palette: palette, fonts: fonts)
+            cg.clip(to: CGRect(origin: .zero, size: viewport))
+            cg.translateBy(x: 0, y: CGFloat(-offset))
+            for op in layout.ops(between: offset, and: offset + Double(viewport.height)) { paint(op, pictures: pictures, in: cg, fonts: fonts) }
+        }.cgImage
+    }
+
     /// La taille de la carte, sans la peindre — le plan d'une animation en a besoin d'abord.
     public static func size(of input: MessageCardInput) -> CGSize {
         let layout = layout(input, fonts: FontBook())

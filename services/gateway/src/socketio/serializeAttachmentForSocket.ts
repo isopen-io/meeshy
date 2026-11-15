@@ -119,8 +119,29 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly altTranslations: unknown;
   /** BUG2 A' — réactions par-image agrégées (emoji→count). */
   readonly reactionSummary: Readonly<Record<string, number>>;
-  /** BUG2 A' — emojis posés par le destinataire (vide si destinataire inconnu, ex broadcast). */
-  readonly currentUserReactions: readonly string[];
+  /**
+   * BUG2 A' — emojis posés par CE destinataire. **FACULTATIF, et son absence
+   * est la réponse** (#18622).
+   *
+   * Ce champ est le seul de cette forme à être PAR LECTEUR. Une diffusion n'en
+   * a pas de valeur à servir : elle part vers toute une room. Il valait `[]`
+   * dans ce cas, et `[]` ne dit pas « je n'ai pas calculé » — il dit « il n'y
+   * en a pas », ce que le client lit comme tel. Le web FUSIONNE
+   * (`realtime-apply.ts`, `{ ...cached, ...incoming }`) et ne préserve que
+   * `transcription` et `translations`, et seulement quand ils valent `null` :
+   * un `[]` servi EFFAÇAIT les réactions du lecteur sur sa propre pièce dès
+   * qu'un worker enrichissait le vocal.
+   *
+   * **La clé ABSENTE est la seule forme qui dit « cet événement ne parle pas de
+   * ça »**, et la seule qui survive à ce `spread`. Les trois clients la
+   * déclarent facultative (`[String]?`, `List<String>? = null`, `?? []`), et
+   * deux des trois tenaient déjà l'événement pour muet là-dessus — Android le
+   * PROTÈGE explicitement d'une diffusion, iOS ne le lit pas.
+   *
+   * La diffusion par destinataire ne le sauverait pas : les transports chaînés
+   * partagent UNE charge, par décision écrite chez eux.
+   */
+  readonly currentUserReactions?: readonly string[];
 
   // ===========================================================================
   // #7070 — les familles qu'`attachmentSocketSelect` charge en plus de la
@@ -160,7 +181,12 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
 /**
  * BUG2 A' — agrège les rows `attachmentReactions` ({emoji, participantId}) en
  * `reactionSummary` (emoji→count) + `currentUserReactions` (emojis du participant
- * courant). `currentParticipantId` absent (broadcast) → currentUserReactions vide.
+ * courant). `currentParticipantId` absent → `currentUserReactions` vide.
+ *
+ * La forme reste TOTALE à dessein : l'agrégateur répond à une question (« qui a
+ * réagi, et moi ? »), et c'est le SÉRIALISEUR qui décide ce qui part sur le fil
+ * (#18622). Les confondre obligerait chaque appelant à retraduire « absent » en
+ * « vide ».
  */
 export function aggregateAttachmentReactions(
   rows: ReadonlyArray<{ emoji: string; participantId: string }> | null | undefined,
@@ -227,7 +253,10 @@ export function serializeAttachmentForSocket(
     translations: raw.translations ?? null,
     ...servedDescription(raw as Parameters<typeof servedDescription>[0]),
     reactionSummary,
-    currentUserReactions,
+    // La clé n'existe que si un lecteur était NOMMÉ — voir le champ. En
+    // diffusion elle est absente, pas vide : c'est ce qui la distingue d'une
+    // réponse, et ce qui la laisse traverser le `spread` du client.
+    ...(currentParticipantId ? { currentUserReactions } : {}),
     // #7070 — les défauts reflètent les colonnes `@default(...)` du schéma
     // (`false` / `0`), jamais `undefined` : un appelant qui a chargé
     // `attachmentSocketSelect` reçoit toujours une valeur exploitable, un

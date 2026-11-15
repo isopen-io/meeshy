@@ -106,6 +106,66 @@ describe('applyMessageAttachmentUpdated (#7017) — la transcription arrive SANS
     expect(calls.count).toBe(0);
   });
 
+  /**
+   * #18622 — **ce que la charge ne dit PAS ne doit rien effacer.**
+   *
+   * `currentUserReactions` est le seul champ PAR LECTEUR de la forme, et cet
+   * évènement est une DIFFUSION : la passerelle n'a pas de lecteur à nommer, et
+   * servait donc `[]`. Ce puits fusionne (`{ ...cached, ...incoming }`) et ne
+   * préserve que `transcription` et `translations`, et seulement sur `null` —
+   * `[]` n'est pas `null`, donc il écrasait.
+   *
+   * Observable : Bob réagit 🔥 à un vocal, la piste TTS de la langue suivante
+   * arrive, et son badge cesse d'être rendu comme le SIEN
+   * (`view/attachment-reactions.ts`) pendant que le menu lui propose
+   * « ajouter » un emoji qu'il a déjà posé (`view/use-piece-menu.ts`).
+   *
+   * Le correctif est côté passerelle — la clé ne part plus du tout — et ce
+   * témoin mesure ce qui compte ici : que ce puits, INCHANGÉ, garde ce que le
+   * lecteur avait. Une clé absente traverse le `spread` ; une clé à `[]` non.
+   */
+  test('l’enrichissement n’EFFACE pas les réactions du lecteur sur sa propre pièce', () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([cachedAudioMessage(socketAttachment({ reactionSummary: { '🔥': 1 }, currentUserReactions: ['🔥'] }))]),
+    );
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      // La charge de DIFFUSION, telle que la passerelle la sert : l'agrégat
+      // partagé voyage, le champ par lecteur n'est pas là.
+      attachment: socketAttachment({
+        reactionSummary: { '🔥': 1 },
+        translations: { en: { url: 'https://cdn.example/en.mp3' } },
+      }),
+    });
+
+    expect(attachmentOf(client, 'c-a', 'm-audio').currentUserReactions).toEqual(['🔥']);
+  });
+
+  /**
+   * L'autre moitié, et elle garde contre le correctif trop large : une charge
+   * qui NOMME le lecteur — la page, `/sync` — reste autoritaire. La préserver
+   * elle aussi figerait les réactions du lecteur au premier rendu.
+   */
+  test('une charge qui NOMME le lecteur reste autoritaire sur ses réactions', () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([cachedAudioMessage(socketAttachment({ reactionSummary: { '🔥': 1 }, currentUserReactions: ['🔥'] }))]),
+    );
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: socketAttachment({ reactionSummary: {}, currentUserReactions: [] }),
+    });
+
+    expect(attachmentOf(client, 'c-a', 'm-audio').currentUserReactions).toEqual([]);
+  });
+
   test('un SECOND évènement greffe les traductions NLLB sans perdre la transcription', () => {
     const client = new QueryClient();
     client.setQueryData(messagesQueryKey('c-a'), threadPages([cachedAudioMessage(socketAttachment({}))]));

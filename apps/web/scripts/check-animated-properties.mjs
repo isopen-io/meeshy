@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
 
 const GEOMETRY =
-  /^(?:(?:min-|max-)?(?:width|height)|top|right|bottom|left|inset(?:-(?:block|inline))?(?:-(?:start|end))?|(?:margin|padding)(?:-(?:top|right|bottom|left|block|inline))?(?:-(?:start|end))?|(?:row-|column-)?gap|grid-template(?:-rows|-columns)?|flex-basis|font-size|line-height|border(?:-[a-z]+)?-width|(?:min-|max-)?(?:block|inline)-size)$/;
+  /^(?:(?:min-|max-)?(?:width|height)|top|right|bottom|left|inset(?:-(?:block|inline))?(?:-(?:start|end))?|(?:margin|padding)(?:-(?:top|right|bottom|left|block|inline))?(?:-(?:start|end))?|(?:row-|column-)?gap|grid-template(?:-rows|-columns)?|flex(?:-(?:grow|shrink|basis))?|font-size|line-height|border(?:-[a-z]+)?-width|(?:min-|max-)?(?:block|inline)-size)$/;
 
 /**
  * Les sites tolérés, par fichier (relatif à `src/`), une entrée par occurrence.
