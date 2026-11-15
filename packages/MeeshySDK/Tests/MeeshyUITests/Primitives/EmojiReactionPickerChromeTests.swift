@@ -169,4 +169,31 @@ final class EmojiReactionPickerChromeTests: XCTestCase {
             .replacingOccurrences(of: "\n", with: "")
             .replacingOccurrences(of: "\t", with: "")
     }
+
+    // MARK: - La tuile supplémentaire de l'hôte, à droite du « + » (#16162)
+
+    /// Le composant reste agnostique : il rend un glyphe et appelle une action
+    /// qu'on lui nomme, APRÈS le « + », avec le même disque et un cran de vague
+    /// plus tard. Sans tuile, rien ne change pour les hôtes existants.
+    func test_extraTile_isRenderedAfterTheExpandButton_andIsOptional() throws {
+        let code = try source()
+        let strip = try XCTUnwrap(code.range(of: "private var quickEmojiStrip"))
+        let afterStrip = String(code[strip.lowerBound...])
+        let expand = try XCTUnwrap(afterStrip.range(of: "expandButton"))
+        let extra = try XCTUnwrap(afterStrip.range(of: "extraTileButton"))
+        XCTAssertTrue(expand.lowerBound < extra.lowerBound, "la tuile vient APRÈS le « + »")
+        XCTAssertTrue(code.contains("extraTile: ExtraTile? = nil"), "optionnelle : les hôtes existants ne passent rien")
+        XCTAssertTrue(code.contains("WaveTileModifier(index: quickEmojis.count + 1"), "un cran de vague après le « + »")
+        XCTAssertTrue(code.contains(".buttonStyle(PressableButtonStyle())"), "elle répond à l'appui par le style du kit")
+    }
+
+    func test_extraTile_carriesSymbolLabelAndAction() {
+        var fired = 0
+        let tile = EmojiReactionPicker.ExtraTile(symbol: "wand.and.stars", accessibilityLabel: "Imager") { fired += 1 }
+        tile.action()
+        XCTAssertEqual(tile.symbol, "wand.and.stars")
+        XCTAssertEqual(tile.accessibilityLabel, "Imager")
+        XCTAssertNil(tile.accessibilityIdentifier)
+        XCTAssertEqual(fired, 1)
+    }
 }
