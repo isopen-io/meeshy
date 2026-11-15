@@ -489,9 +489,10 @@ struct MeeshyComposerHost: View {
     @State var showsOpeningLibrary = false
     /// Les médias choisis EN SÉRIE : chacun fonde sa scène (`ComposerScenePicking`).
     @State var sceneSeriesMediaURLs: Set<URL> = []
-    /// Le sélecteur ouvert À L'OUVERTURE du composer : même un seul média y
-    /// fonde la première scène.
+    /// Le sélecteur ouvert À L'OUVERTURE du composer : même un seul média y fonde la première scène.
     @State var openingPickFoundsScenes = false
+    /// La galerie ouverte par la colonne de la caméra, et si son choix se pose par-dessus (#18710).
+    @State var viewfinderLibrary = ComposerViewfinderLibrary.closed
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
     @State var showsFileImporter = false
     /// Les sources que l'appui long sur la photothèque propose ;

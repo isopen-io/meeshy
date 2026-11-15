@@ -59,15 +59,24 @@ nonisolated struct ComposerOpeningPlan: Equatable, Sendable {
                                    library: preferences.opensLibrary ? presentation : nil)
     }
 
-    /// **Choisir dans la photothèque d'ouverture rend la scène** : la caméra armée
-    /// à l'ouverture se retire, sans quoi elle couvrirait les scènes fondées. Elle
-    /// reste si l'auteur filme ou a des segments en attente : rien ne part en silence.
-    /// **En retouche, l'élément choisi REMPLACE la prise** (#18654) :
-    /// la Galerie de la colonne est le geste qui la change.
-    static func disarmsCameraOnLibraryPick(openingPick: Bool,
-                                           stage: ComposerSceneCameraStage,
-                                           pendingSegments: Int,
-                                           editing: Bool) -> Bool {
-        openingPick && (editing || (stage == .armed && pendingSegments == 0))
+    /// **Ce que fait un choix dans la photothèque** (#17269, #18710).
+    nonisolated enum LibraryPick: Equatable, Sendable {
+        /// Les médias fondent la scène ; la caméra s'arrête si `disarms`.
+        case foundsScenes(disarms: Bool)
+        /// Les médias se posent PAR-DESSUS — la prise ou le viseur vivant —, en objets de premier
+        /// plan, caméra armée : ce que prendra le viseur passera dessous.
+        case overlay
+    }
+
+    /// **Choisir dans la photothèque d'ouverture rend la scène** : la caméra armée à l'ouverture
+    /// se retire, sans quoi elle couvrirait les scènes fondées. Elle reste si l'auteur filme ou a
+    /// des segments en attente : rien ne part en silence.
+    /// **La Galerie de la caméra pose PAR-DESSUS** (#18710) : en retouche, les
+    /// images choisies se posent sur la prise, qu'elles ne remplacent plus ; au viseur, UNE image
+    /// devient le fond, PLUSIEURS se posent sur le viseur vivant.
+    static func libraryPick(count: Int, fromViewfinder: Bool, openingPick: Bool,
+                            stage: ComposerSceneCameraStage, pendingSegments: Int, editing: Bool) -> LibraryPick {
+        if fromViewfinder && (editing || (stage == .armed && count >= 2)) { return .overlay }
+        return .foundsScenes(disarms: openingPick && !editing && stage == .armed && pendingSegments == 0)
     }
 }

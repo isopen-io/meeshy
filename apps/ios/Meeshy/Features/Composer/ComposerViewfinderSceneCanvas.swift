@@ -160,3 +160,34 @@ enum ComposerViewfinderTyping {
         if textId(host) != nil { host.dismissTextEditing() }
     }
 }
+
+/// **La galerie ouverte par la colonne de la caméra** (#18710) : `closed` hors d'elle, `opened`
+/// pendant qu'elle se montre, `overlays` quand son choix se pose par-dessus.
+nonisolated enum ComposerViewfinderLibrary: Equatable, Sendable {
+    case closed
+    case opened
+    case overlays
+}
+
+/// **Ce que la Galerie de la caméra pose PAR-DESSUS** (#18710) : sur la prise en retouche, ou sur
+/// le viseur vivant quand plusieurs images sont choisies. Chaque média devient un objet de premier
+/// plan de la scène courante — jamais son fond, que la prise prendra en passant dessous.
+@MainActor
+enum ComposerViewfinderOverlay {
+    static func pose(_ medias: [ComposerDocumentMedia], on host: MeeshyComposerHost) {
+        let sources = Set(medias.map(\.url))
+        for media in medias { host.mediaRoleByURL[media.url] = .foreground }
+        // Le rôle posé AVANT l'écriture : `syncPostMediaIntoSlides` ne les place pas, et le rail
+        // reste armé pour la prise.
+        host.ecrireDansLaListeDuDocument(medias, rail: .roleDejaPose)
+        let contenus = host.documentContentMedia.filter { sources.contains($0.sourceURL) && $0.kind != .audio }
+        let fondAvant = host.viewModel.currentSlide.effects.resolvedBackgroundMedia?.id
+        let poses = host.viewModel.applyContentMedia(contenus, intoSlideId: host.viewModel.currentSlide.id)
+        host.documentMediaObjectIdBySource.merge(poses) { _, neuf in neuf }
+        // Une scène sans fond fait du premier média posé son fond : il redevient un objet posé.
+        if let fond = host.viewModel.currentSlide.effects.resolvedBackgroundMedia?.id, fond != fondAvant {
+            host.viewModel.toggleBackground(id: fond)
+        }
+        HapticFeedback.light()
+    }
+}
