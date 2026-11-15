@@ -108,3 +108,26 @@ describe('useLayerPresence', () => {
     expect(readFileSync(new URL('./layer-presence.ts', import.meta.url), 'utf8')).toContain("import '@/styles/layer-motion.css'");
   });
 });
+
+describe('les couches du kit qui sortent en mouvement (#18327)', () => {
+  const SITES = [
+    'components/app-update-banner.tsx',
+    'components/send-toast-host.tsx',
+    'components/mention-suggestions.tsx',
+    'components/rail-title-slot.tsx',
+    'components/emoji-tone-menu.tsx',
+    'components/protected-content.tsx',
+    'components/collapsible-section.tsx',
+    'components/viewer-chrome-menu.tsx',
+    'components/publication-menu-panel.tsx',
+    'components/reading-mode-chip.tsx',
+    'components/row-actions.tsx',
+    'components/publish-split-button.tsx',
+    'components/summary/summary-entry-menu.tsx',
+  ] as const;
+
+  test('chaque site pose le mouvement de couche sur ce qu’il monte', () => {
+    const muets = SITES.filter((site) => !/\blayerMotion\(/.test(readFileSync(new URL(`../../${site}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')));
+    expect(muets).toEqual([]);
+  });
+});

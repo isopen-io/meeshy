@@ -10,6 +10,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { translateSceneExport } from '@/lib/i18n-scene-export-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
+import { layerMotion } from '@/lib/view/layer-presence';
 import { href, navigate } from '@/routes/route-table';
 
 import { ContentRemovalSheet } from './content-removal-sheet';
@@ -42,6 +43,8 @@ const DESTRUCTIVE: ReadonlySet<PostMenuEntry> = new Set(['delete', 'remove', 're
 
 export type PostMenuPanelProps = {
   readonly open: boolean;
+  /** Refermé, le panneau reste peint le temps de son fondu (#18327) : inerte, il ne prend plus rien. */
+  readonly leaving?: boolean;
   readonly entries: readonly PostMenuEntry[];
   readonly postId: string;
   readonly authorName: string;
@@ -81,6 +84,7 @@ export type PostMenuPanelProps = {
 export function PostMenuPanel(props: PostMenuPanelProps) {
   const {
     open,
+    leaving = false,
     entries,
     postId,
     authorName,
@@ -181,7 +185,7 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
               aria-label={label}
               onKeyDown={onMenuKeyDown}
               className="fixed z-30 overflow-hidden rounded-card py-1 shadow-cast"
-              style={{ top: box.top, right: box.right, width: box.width, backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)' }}
+              {...layerMotion(leaving, { top: box.top, right: box.right, width: box.width, backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)' })}
             >
               {items.map((item, index) => {
                 const destructive = DESTRUCTIVE.has(item.id);

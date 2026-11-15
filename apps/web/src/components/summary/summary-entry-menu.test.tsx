@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { ConversationEpisode, DeterministicConversationDigest, FaceRampEntry } from '@/lib/summary/types';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { summaryExits } from '@/lib/view/summary-exits';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -130,8 +131,11 @@ const episodeButton = (episodeId: string): HTMLElement => {
   return node;
 };
 
+/* Les actions du menu OUVERT : celui qui SORT (`data-leaving`, le temps du fondu — #18327) n'en offre plus. */
 const items = (): string[] =>
-  [...document.querySelectorAll<HTMLElement>('[data-summary-entry-action]')].map((node) => node.dataset.summaryEntryAction ?? '');
+  [...document.querySelectorAll<HTMLElement>('[data-summary-entry-menu]:not([data-leaving]) [data-summary-entry-action]')].map(
+    (node) => node.dataset.summaryEntryAction ?? '',
+  );
 
 const contextMenuOn = (target: Element) =>
   act(() => {
@@ -165,6 +169,19 @@ describe('Résumé — le menu d’un VISAGE (#11225)', () => {
     choose('goToMessage');
     expect(journal).toEqual(['mode:script', 'jump:m-1']);
     expect(items()).toEqual([]);
+  });
+
+  test('refermé, le menu SORT en fondu : encore peint, inerte, puis retiré (#18327)', async () => {
+    mount();
+    contextMenuOn(faceButton('u-amina'));
+    choose('goToMessage');
+    const leaving = document.querySelector('[data-summary-entry-menu]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(document.querySelector('[data-summary-entry-menu]')).toBeNull();
   });
 
   test('« Répondre » ⇒ script + saut + citation de la première preuve', () => {
