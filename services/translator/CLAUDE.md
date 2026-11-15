@@ -63,6 +63,8 @@ src/
 
 **Un chemin de fichier reçu par ZMQ (`audioPath`, `audioPath_1/_2`) n'est lu que via `utils/audio_path_guard.py`** (#18628) : le PULL n'est pas authentifié, donc un chemin hors des racines `TRANSLATOR_AUDIO_PATH_ROOTS` (défaut : la seule racine d'uploads `UPLOAD_PATH`/`/app/uploads`, jamais `/tmp`, où vit l'audio en cours d'autrui ; entrées relatives ou `/` ignorées) est refusé en `AUDIO_PATH_REJECTED`, sans jamais journaliser le chemin.
 
+**Un identifiant qui nomme le cache vocal (dossier `voice_cache_dir / id`, fichier, clé Redis `voice:profile:{id}`) passe par `utils/voice_cache_guard.py`** (#18695) : seule la forme `[A-Za-z0-9_-]{1,64}` est admise, et le dossier rendu doit être, liens résolus, un enfant direct de la racine. Refus `VoiceCacheIdRejected` (raison fixe, jamais l'identifiant) : le pipeline audio saute alors le clonage sans tomber, les API HTTP répondent 400 « Invalid user identifier ».
+
 ## Audio Pipeline (3 stages)
 ```
 Audio → Transcription (Faster-Whisper) → Translation (NLLB) → TTS (Chatterbox)

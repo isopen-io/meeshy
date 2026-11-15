@@ -478,3 +478,62 @@ class TestAudioApiFlows:
         assert response.status_code == 400
         assert "escape" not in response.text
         service.get_or_create_voice_model.assert_not_called()
+
+
+class TestHttpTranslationEntryPoints:
+    def test_voice_translate_with_a_traversing_token_is_refused(self, layout, monkeypatch):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.voice_api import create_voice_api_router
+
+        monkeypatch.setenv("UPLOAD_DIR", str(layout.parent.parent / "uploads"))
+        monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(layout.parent.parent / "out"))
+        pipeline = MagicMock()
+        pipeline.submit_job = AsyncMock()
+        app = FastAPI()
+        app.include_router(create_voice_api_router(translation_pipeline=pipeline))
+        response = TestClient(app).post(
+            "/api/v1/voice/translate",
+            files={"audio": ("a.wav", b"RIFF0000WAVE", "audio/wav")},
+            data={"target_languages": "en"},
+            headers={"Authorization": "Bearer abc/../../x"},
+        )
+        assert response.status_code == 400
+        assert ".." not in response.text
+        pipeline.submit_job.assert_not_called()
+
+    def test_voice_message_with_a_hostile_user_id_is_refused(self, layout, monkeypatch):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.audio_api import create_audio_router
+
+        monkeypatch.setenv("UPLOAD_DIR", str(layout.parent.parent / "uploads"))
+        monkeypatch.setenv("OUTPUT_DIR", str(layout.parent.parent / "out"))
+        pipeline = MagicMock()
+        pipeline.process_audio_message = AsyncMock()
+        app = FastAPI()
+        app.include_router(create_audio_router(audio_pipeline=pipeline))
+        response = TestClient(app).post(
+            "/v1/voice-message",
+            files={"audio": ("a.wav", b"RIFF0000WAVE", "audio/wav")},
+            data={"user_id": "../../escape", "target_language": "en"},
+        )
+        assert response.status_code == 400
+        assert "escape" not in response.text
+        pipeline.process_audio_message.assert_not_called()
+
+
+class TestGatewayProfileCompatibility:
+    async def test_a_null_profile_id_from_the_gateway_still_builds_the_model(self, layout):
+        creator = _creator(layout)
+        profile = {
+            "userId": "507f1f77bcf86cd799439011",
+            "profileId": None,
+            "embedding": base64.b64encode(np.ones(4, dtype=np.float32).tobytes()).decode(),
+        }
+        model = await creator.create_voice_model_from_gateway_profile(profile, "507f1f77bcf86cd799439011")
+        assert model is not None
+        assert model.profile_id == "vfp_507f1f77"
+        assert Path(model.embedding_path).parent == layout / "507f1f77bcf86cd799439011"
