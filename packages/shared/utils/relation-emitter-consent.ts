@@ -15,7 +15,7 @@
  * le lit, un second juge avec le consentement résolu. La loi étant pure, l'appel
  * double ne coûte rien et garde UNE seule boucle de niveaux.
  */
-import { compareRelationLevel, type RelationLevel } from '../types/relation.js';
+import { relationLevelIfAtLeast, type RelationLevel } from '../types/relation.js';
 import { resolveRelationAccess, type RelationAccess, type RelationAccessInput, type RelationConsent } from './relation-access.js';
 import { RELATION_EMITTER_CONSENT_DEFAULT_LEVEL, type RelationFeature } from './relation-levels.js';
 
@@ -30,7 +30,7 @@ export const resolveEmitterConsent = (params: {
   if (params.globallyDisabled === true || params.stored === false) return 'refused';
   if (params.stored === true) return 'granted';
   const floor = RELATION_EMITTER_CONSENT_DEFAULT_LEVEL[params.feature];
-  return floor !== undefined && compareRelationLevel(params.effectiveLevel, floor) >= 0 ? 'granted' : 'refused';
+  return floor !== undefined && relationLevelIfAtLeast(params.effectiveLevel, floor) !== null ? 'granted' : 'refused';
 };
 
 export type RelationAccessWithStoredConsentInput = Omit<RelationAccessInput, 'consent'> & {
