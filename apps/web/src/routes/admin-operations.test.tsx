@@ -160,7 +160,7 @@ describe('l’hôte en direct', () => {
     expect(host.querySelector('[data-admin-stat="ops-disk"]')?.textContent).toContain('75');
     expect(host.querySelector('[data-admin-stat="ops-docker"]')?.textContent).toContain('20');
     expect(host.querySelector('[data-admin-stat="ops-gpu"]')?.textContent).toContain('Aucun GPU de calcul');
-    expect(host.querySelector('[data-admin-ops-shared]')?.textContent).toContain('staging et la production');
+    expect(host.querySelector('[data-admin-ops-shared]')?.textContent).toContain('staging et production');
   });
 
   test('quatre graphes d’une heure : processeur, charge 1/5/15, mémoire et swap, disque', async () => {

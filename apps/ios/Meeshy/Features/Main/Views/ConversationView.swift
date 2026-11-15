@@ -135,6 +135,7 @@ struct ConversationView: View {
 
     @State var composerState = ConversationComposerState()
     @State var headerState = ConversationHeaderState()
+    @State var directMessageOpener = DirectMessageOpener()
 
     // Overlay & Detail state
     @State var overlayState = ConversationOverlayState()

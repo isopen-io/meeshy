@@ -252,6 +252,20 @@ final class FocalRichBlockEquatableTests: XCTestCase {
         XCTAssertFalse(stripped.contains("AttachmentBlurOverlayView("), "réimplémentation native attendue, pas un accès élargi au type fileprivate")
     }
 
+    /// #18678 — le badge « télécharger » de la case du Fil (en bas à droite)
+    /// restait au-dessus d'une image nette : la case ne lui relayait ni
+    /// l'arrivée de l'image affichée, ni l'URL qu'elle affiche. Même relais
+    /// que la tuile de bulle (#10370).
+    func test_focalGridCell_relaysTheDisplayedImageToTheDownloadBadge() throws {
+        let stripped = AppSourceGuard.stripComments(try source("FocalAttachmentBlock.swift"))
+        XCTAssertTrue(stripped.contains("onFullImageLoaded: { displayedImageLanded = true }"),
+                      "la case doit noter l'arrivée de l'image affichée")
+        XCTAssertTrue(stripped.contains("displayedImageLanded: displayedImageLanded"),
+                      "le badge doit se taire dès que l'image affichée est arrivée")
+        XCTAssertTrue(stripped.contains("displayedURL: displayedImageURL"),
+                      "le badge doit lire l'URL que la case affiche")
+    }
+
     func test_focalAttachmentBlock_equatable_blurredVsNot_isNotEqual() {
         var blurred = imageAttachment(id: "a1")
         blurred.isBlurred = true

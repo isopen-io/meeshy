@@ -7,6 +7,7 @@ import type { ApiResult } from '@/lib/api/http';
 import { daysLeft } from '@/lib/activation/invite';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { DIALOG_MOTION_STYLE, useDialogExit } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 import { EmailCodeForm, withStrongEmail } from './email-code-form';
@@ -83,6 +84,7 @@ export function ActivationInviteDialog({
   const titleId = useId();
   const leadId = useId();
   useBackDismiss(onClose);
+  const { leave } = useDialogExit(ref, { kind: 'bottom' });
 
   const [missing, setMissing] = useState<readonly ActivationChannel[]>(activation.missing);
   const [proven, setProven] = useState<readonly ActivationChannel[]>([]);
@@ -127,11 +129,12 @@ export function ActivationInviteDialog({
     <dialog
       ref={ref}
       data-activation-invite
+      data-sheet-presentation="bottom"
       aria-labelledby={titleId}
       aria-describedby={leadId}
       onClose={onClose}
-      className="m-auto w-[min(28rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-veil"
-      style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
+      className="mx-auto mb-0 mt-auto w-full max-w-full rounded-t-card sm:m-auto sm:w-[min(32rem,calc(100%-2rem))] sm:rounded-card max-h-[min(88dvh,calc(100%-1rem))] overflow-y-auto p-0 backdrop:bg-veil"
+      style={{ ...DIALOG_MOTION_STYLE, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
     >
       <div className="grid gap-4 p-5">
         <h2 id={titleId} className="text-thread font-extrabold">
@@ -206,7 +209,7 @@ export function ActivationInviteDialog({
 
         <button
           type="button"
-          onClick={onClose}
+          onClick={leave}
           className="grid place-items-center rounded-chip px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
           style={secondaryButton}
         >

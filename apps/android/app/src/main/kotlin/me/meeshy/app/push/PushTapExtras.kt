@@ -13,6 +13,7 @@ object PushTapExtras {
     private val KEYS = listOf(
         "type", "conversationId", "messageId", "postId", "postType",
         "commentId", "parentCommentId", "senderId", "route", "notificationId", "recipientUserId",
+        "communityId",
     )
 
     fun put(intent: Intent, data: Map<String, String>) {

@@ -10,17 +10,18 @@ import MeeshyUI
 struct ProfileSectionHeader: View {
     let icon: String
     let title: String
-    let colorHex: String
+    /// La couleur sémantique de la section (un jeton `MeeshyColors`), jamais un hex recomposé ici.
+    let color: Color
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundStyle(Color(hex: colorHex))
+                .foregroundStyle(color)
                 .accessibilityHidden(true)
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: colorHex))
+                .foregroundColor(color)
                 .tracking(1.2)
         }
         .padding(.leading, MeeshySpacing.xs)
@@ -48,16 +49,17 @@ struct ProfileSectionCard: View {
 /// La pastille carrée qui porte l'icône d'une rangée.
 struct ProfileFieldIcon: View {
     let name: String
-    let accentHex: String
+    /// L'accent de la fiche (hex), relayé sous son nom de règle : c'est l'accent du contexte, pas une couleur en dur.
+    let accentColor: String
 
     var body: some View {
         Image(systemName: name)
             .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-            .foregroundStyle(Color(hex: accentHex))
+            .foregroundStyle(Color(hex: accentColor))
             .frame(width: 28, height: 28)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
-                    .fill(Color(hex: accentHex).opacity(0.12))
+                    .fill(Color(hex: accentColor).opacity(0.12))
             )
             .accessibilityHidden(true)
     }
@@ -68,7 +70,8 @@ struct ProfileFieldIcon: View {
 struct ProfileNavigationRow: View {
     let icon: String
     let title: String
-    let hint: String
+    /// Indice VoiceOver, seulement quand le titre ne dit pas déjà où la rangée mène (épure : un « Ouvre X » sous « X » est du bruit).
+    let hint: String?
     let identifier: String
     let accentHex: String
     let action: () -> Void
@@ -81,7 +84,7 @@ struct ProfileNavigationRow: View {
             action()
         } label: {
             HStack(spacing: MeeshySpacing.md) {
-                ProfileFieldIcon(name: icon, accentHex: accentHex)
+                ProfileFieldIcon(name: icon, accentColor: accentHex)
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     .foregroundStyle(theme.textPrimary)
@@ -99,7 +102,7 @@ struct ProfileNavigationRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
-        .accessibilityHint(hint)
+        .accessibilityHint(hint ?? "")
         .accessibilityIdentifier(identifier)
     }
 }

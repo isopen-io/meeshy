@@ -55,7 +55,7 @@ export function AdminEntityList<Row, S extends string, F extends string, I exten
   readonly rowTarget: (row: Row) => AdminTarget | null;
   readonly caption: string;
   readonly toolbar?: ReactNode;
-  readonly empty: { readonly title: string; readonly hint?: string };
+  readonly empty: { readonly title: string; readonly hint?: string; readonly action?: ReactNode };
   readonly filteredEmpty: { readonly title: string };
   readonly pageSizes?: readonly number[];
   /** Des tris que la passerelle sert et qu'aucune colonne ne porte (« Prénom », « Nom ») : ils n'existent que dans le « Trier par » des cartes. */
@@ -130,7 +130,7 @@ export function AdminEntityList<Row, S extends string, F extends string, I exten
       return filtered ? (
         <AdminEmptyState title={filteredEmpty.title} glyph="funnel" action={reset} />
       ) : (
-        <AdminEmptyState title={empty.title} {...(empty.hint === undefined ? {} : { hint: empty.hint })} glyph="list" />
+        <AdminEmptyState title={empty.title} {...(empty.hint === undefined ? {} : { hint: empty.hint })} {...(empty.action === undefined ? {} : { action: empty.action })} glyph="list" />
       );
     }
 
