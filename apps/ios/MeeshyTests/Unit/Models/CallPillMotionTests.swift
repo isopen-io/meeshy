@@ -209,7 +209,7 @@ final class CallPillMotionTests: XCTestCase {
         XCTAssertLessThan(morph.lowerBound, glass.lowerBound, "le verre de la pilule est celui que dessine le morphisme")
         XCTAssertTrue(pill.contains(".modifier(CallGlassSpace())"), "ce qui suit le verre se mesure depuis son bord du bas")
         XCTAssertTrue(pill.contains(".transition(AnyTransition.opacity.animation(disclosureAnimation))"), "les sous-titres entrent en fondu, sans attendre la mise en page")
-        let transitions = try block("private var unfoldTransition: AnyTransition {", until: "/// UN bloc de verre", in: source)
+        let transitions = try block("private var unfoldTransition: AnyTransition {", until: "var callControlsPill: some View {", in: source)
         XCTAssertTrue(transitions.contains(".animation(disclosureAnimation)"), "la transition porte son mouvement : la mise en page ne s'anime plus")
     }
 

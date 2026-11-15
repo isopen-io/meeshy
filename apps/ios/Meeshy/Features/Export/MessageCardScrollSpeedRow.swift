@@ -18,7 +18,7 @@ struct MessageCardScrollSpeedRow: View {
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .accessibilityLabel(MessageCardExportText.text("export.card.scroll.duration", "Durée de la vidéo"))
-                    .accessibilityValue(Self.durationLabel(duration))
+                    .accessibilityValue(MediaFormat.duration(duration, style: .spoken, rounding: .toNearestOrAwayFromZero))
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.xs) {
@@ -46,11 +46,8 @@ struct MessageCardScrollSpeedRow: View {
         }
     }
 
-    /// « 1 min 12 s », « 38 s » — la durée à la seconde près.
+    /// « 1:12 », « 0:38 » — la durée à la seconde près, par l'horloge des médias.
     static func durationLabel(_ seconds: Double) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = seconds >= 60 ? [.minute, .second] : [.second]
-        formatter.unitsStyle = .abbreviated
-        return formatter.string(from: seconds.rounded()) ?? "\(Int(seconds.rounded())) s"
+        MediaFormat.duration(seconds, style: .clock, rounding: .toNearestOrAwayFromZero)
     }
 }
