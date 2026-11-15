@@ -140,6 +140,16 @@ struct ConversationMessageSheets: ViewModifier {
                         overlayState.fullReactionPickerMessage = nil
                     }
                 )
+                .overlay(alignment: .topTrailing) {
+                    MeeshyGlassButton(
+                        systemImage: "xmark",
+                        label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+                        size: .s36
+                    ) {
+                        overlayState.fullReactionPickerMessage = nil
+                    }
+                    .padding(MeeshySpacing.md)
+                }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
