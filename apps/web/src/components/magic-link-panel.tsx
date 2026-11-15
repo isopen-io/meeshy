@@ -67,11 +67,13 @@ const SECTION_GAP = 'clamp(12px, calc(100dvh - 676px), 24px)';
 const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))';
 
 /**
- * LE (i) PORTE UNE QUESTION (épure #17584, règle 1 ; #17666) : « Comment se
- * connecter sans mot de passe ? », jamais « Comment ça marche ». Le titre et
- * « Recevoir le lien » disent déjà la porte ; le « comment » et la durée du
- * lien restent derrière le (i), comme #6626 l'a tranché — et l'écran ne passe
- * pas le budget d'avant l'épure (`verbosity-socle.json`).
+ * CE QUE « RECEVOIR LE LIEN » DÉCLENCHE SE LIT AU REPOS (épure #17584, règle 7,
+ * verdict du 2026-11-15) : `magicLink.lead` dit, sous le titre, qu'un lien part
+ * par e-mail et qu'il suffit de l'ouvrir. La connexion sans mot de passe est
+ * propre à cette porte — la laisser derrière le (i) faisait d'un bouton un
+ * geste sans explication. Le (i) ne garde que le détail secondaire, nommé par
+ * sa question : « Combien de temps le lien reste-t-il valable ? ». Le budget
+ * d'avant l'épure de `/login` est relevé, motivé (`verbosity-socle.json`).
  *
  * UNE LIGNE VISIBLE PAR ÉTAPE, LE « COMMENT » DERRIÈRE UN (i) (#6626).
  *
@@ -294,6 +296,9 @@ export function MagicLinkPanel({
           </h2>
           <InfoHintButton hint={hint} state={howItWorksState} style={{ display: 'inline-grid', verticalAlign: 'middle' }} />
         </div>
+        <p data-magic-link-lead className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(language, 'magicLink.lead')}
+        </p>
         <InfoHintText hint={hint} state={howItWorksState} />
       </div>
 

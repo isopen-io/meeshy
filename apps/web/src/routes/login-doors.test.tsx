@@ -80,16 +80,15 @@ describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', 
     expect(el.querySelector('#login-password')).toBeNull();
   });
 
-  test('le (i) porte la QUESTION, sa note dit le « comment » ET la durée du lien, et reste lue repliée (#6626, épure #17584)', () => {
+  test('le « comment » se lit au repos ; le (i) porte la QUESTION de la durée du lien, et sa note reste lue repliée (#6626, épure #17584)', () => {
     const el = mountAt('/login');
     expect(el.querySelector('button[aria-label="Comment ça marche"]')).toBeNull();
-    const info = el.querySelector('button[aria-label="Comment se connecter sans mot de passe ?"]') as HTMLButtonElement | null;
+    expect(el.querySelector('[data-magic-link-lead]')?.textContent).toBe('Nous vous envoyons un lien par e-mail : ouvrez-le, vous êtes connecté.');
+    const info = el.querySelector('button[aria-label="Combien de temps le lien reste-t-il valable ?"]') as HTMLButtonElement | null;
     expect(info).not.toBeNull();
     expect(info?.getAttribute('aria-expanded')).toBe('false');
     const note = controlledBy(info);
-    expect(note?.textContent).toBe(
-      'Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté. Le lien est valable 10 minutes et ne sert qu’une fois.',
-    );
+    expect(note?.textContent).toBe('Le lien est valable 10 minutes et ne sert qu’une fois.');
     expect(note?.classList.contains('sr-only')).toBe(true);
 
     act(() => {
@@ -136,9 +135,9 @@ describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', 
 const columnLines = (el: Element) => [...el.querySelectorAll('line')].filter((line) => line.closest('[data-auth-header]') === null);
 
 describe('/login — la porte par défaut n’a plus de blason', () => {
-  test('ni le blason « Meeshy », ni l’ancien titre de #6404', () => {
+  test('ni le blason « Meeshy », ni l’ancien titre de #6404 : le seul titre de premier niveau nomme l’écran', () => {
     const el = mountAt('/login');
-    expect(el.querySelector('h1')).toBeNull();
+    expect([...el.querySelectorAll('h1')].map((title) => text(title as HTMLElement))).toEqual(['Connexion']);
     expect(text(el)).not.toContain('Entrez votre adresse');
   });
 
