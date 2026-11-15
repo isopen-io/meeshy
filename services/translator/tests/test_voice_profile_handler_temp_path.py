@@ -252,3 +252,34 @@ async def test_resolved_path_guard_refuses_escape_even_if_list_is_widened(tmp_pa
     assert result['error'] == 'Unsupported audio format'
     assert written_paths(site, service, verified) == []
     assert [p for p in tmp_path.rglob('*') if p.is_file()] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('site', ['analyze', 'verify'])
+@pytest.mark.parametrize('user_id', [
+    123456789012345678901234,
+    '٠' * 24,
+    'ａ' * 24,
+    '65a1f0c2b3d4e5f6a7b8c9d\u0000',
+])
+async def test_user_id_that_only_looks_like_an_object_id_is_refused(tmp_path, monkeypatch, site, user_id):
+    handler, service, verified = make_handler(tmp_path, monkeypatch)
+    temp_dir = handler.temp_dir.resolve()
+
+    result = await run_site(handler, site, user_id)
+
+    assert_user_id_refused(result, site, service, verified, tmp_path, temp_dir)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('site', ['analyze', 'verify'])
+@pytest.mark.parametrize('audio_format', [None, 3, ['wav'], {'wav': 1}, 'ｗａｖ', 'wav ', ' wav', 'wav\n'])
+async def test_audio_format_that_is_not_a_listed_string_is_refused_without_echo(tmp_path, monkeypatch, site, audio_format):
+    handler, service, verified = make_handler(tmp_path, monkeypatch)
+
+    result = await run_site(handler, site, OBJECT_ID, audio_format)
+
+    assert result['success'] is False
+    assert result['error'] == 'Unsupported audio format'
+    assert written_paths(site, service, verified) == []
+    assert [p for p in tmp_path.rglob('*') if p.is_file()] == []
