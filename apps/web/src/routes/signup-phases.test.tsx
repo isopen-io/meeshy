@@ -171,6 +171,20 @@ describe('phase 1 — le téléphone d’abord, en verre liquide', () => {
     type(el, '#signup-phone', '061');
     expect(waves.length).toBe(2);
   });
+
+  test('le focus allume l’anneau en fondu, sans repeindre l’ombre du verre (#18322)', () => {
+    const { el } = mount();
+    const glass = el.querySelector('[data-signup-phone-glass]') as HTMLElement;
+    const ring = () => el.querySelector('[data-signup-phone-ring]') as HTMLElement;
+    const shadowAtRest = glass.style.boxShadow;
+    expect(ring().style.opacity).toBe('0');
+    act(() => {
+      (el.querySelector('#signup-phone') as HTMLInputElement).focus();
+    });
+    expect(ring().style.opacity).toBe('1');
+    expect(glass.style.boxShadow).toBe(shadowAtRest);
+    expect(glass.style.transition).not.toContain('box-shadow');
+  });
 });
 
 describe('phase 2 — l’adresse paraît', () => {
