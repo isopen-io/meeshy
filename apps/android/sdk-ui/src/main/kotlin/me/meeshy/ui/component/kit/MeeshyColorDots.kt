@@ -160,10 +160,16 @@ public fun MeeshyColorDots(
                 modifier = Modifier
                     .bleed(inset)
                     .drawWithContent {
-                        val window = Rect(0f, 0f, this.size.width, this.size.height)
+                        val overflow = recipe.cell.toFloat().dp.toPx()
+                        val window = Rect(0f, -overflow, this.size.width, this.size.height + overflow)
                         drawIntoCanvas { it.saveLayer(window, Paint()) }
                         drawContent()
-                        drawRect(brush = fade(this.size.width), blendMode = BlendMode.DstIn)
+                        drawRect(
+                            brush = fade(this.size.width),
+                            topLeft = window.topLeft,
+                            size = window.size,
+                            blendMode = BlendMode.DstIn,
+                        )
                         drawIntoCanvas { it.restore() }
                     }
                     .horizontalScroll(scrollState)
