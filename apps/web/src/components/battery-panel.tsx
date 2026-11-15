@@ -171,7 +171,7 @@ function PullButton({ language, name, userId, deps }: { readonly language: Inter
         disabled={busy}
         aria-busy={busy}
         onClick={() => void onPull()}
-        className="grid place-items-center rounded-chip px-3 text-body font-semibold focus-visible:outline-2"
+        className="grid place-items-center rounded-chip px-3 text-body font-semibold transition-transform focus-visible:outline-2 active:scale-[0.98]"
         style={{ minHeight: 44, color: 'var(--color-ios-brand)', backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 10%, transparent)', opacity: busy ? 0.6 : 1 }}
       >
         {translateBattery(language, 'battery.pull.action')}

@@ -1,8 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
-import { BATTERY_NOTIFICATION_TYPE } from '@meeshy/shared/types/battery-constants';
 
-import { announceBatteryNotification } from '@/lib/battery/battery-pill';
 
 import { conversationPreviewStore } from './conversation-preview';
 import type { NotificationRecord } from './record';
@@ -47,9 +45,16 @@ export const inAppBannerStore = createStore<BannerState>((set) => ({
   dismiss: () => set({ current: null }),
 }));
 
+/**
+ * Le type que la passerelle sert pour la batterie d'un Proche (`BATTERY_NOTIFICATION_TYPE`), écrit en LITTÉRAL :
+ * ce module est dans la première peinture, et le contrat de la batterie n'a rien à y faire. Un témoin tient les
+ * deux égaux ; la pastille se charge à la première batterie reçue, jamais au démarrage.
+ */
+export const IN_APP_BATTERY_TYPE = 'device_battery';
+
 export function offerInAppBanner(notification: NotificationRecord, location: { readonly pathname: string }): void {
-  if (notification.type === BATTERY_NOTIFICATION_TYPE) {
-    announceBatteryNotification(notification);
+  if (notification.type === IN_APP_BATTERY_TYPE) {
+    void import('@/lib/battery/battery-pill').then((pill) => pill.announceBatteryNotification(notification));
     return;
   }
   if (!shouldShowBanner(notification, location)) return;
