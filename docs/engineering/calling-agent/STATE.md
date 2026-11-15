@@ -1075,3 +1075,30 @@ socket jusqu'au client.
 2. #18599, puis #18600, à découper par répertoire.
 3. #18371, #18154 et #18497.
 4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 32 — 2026-11-15
+
+- **Base** : `claude/determined-volta-vn6lrc` @ `76ab6cc8`, la tête de la PR #18603 (cycle 31), elle-même sur `origin/dev` @ `13484857`.
+  - **`dev` est verrouillée** (« Lock branch ») depuis le 2026-11-14 vers 23:10 UTC. Toute fusion rend `405 Cannot change this locked branch`. #18603 (cycle 31, #18571) et #18612 (cycle 31 bis, #18535) attendent, CI verte et QA favorable. Le porteur a été prévenu. Le lot de ce cycle touche le même fichier que #18603, d'où l'empilement.
+- **Branche** : `claude/determined-volta-73ayv3`.
+- **Objectif** : #18599. Une transcription demandée par simple chemin (`audioPath` seul) aboutit au lieu de lever `UnboundLocalError`.
+- **Livré** (seul le traducteur change ; ni le protocole ni les événements) : les trois `from pathlib import Path` locaux de `_handle_transcription_only_request` sont retirés. Ils faisaient de `Path` une variable locale de toute la fonction.
+- **Tests** : `tests/test_transcription_audio_path_mode.py` (3).
+  - **Les témoins** : le mode `audioPath` ; les modes `_audioBinary` et base64, avec le nettoyage du fichier temporaire. Ces deux modes n'avaient jusqu'ici aucun témoin de succès.
+  - **Rouge** : `1 failed, 2 passed` sur la base. Je l'ai relancé, et la QA l'a reproduit.
+  - **Vert** : `3 passed`, relancé par moi.
+  - **Suites voisines** : `59 passed` avant comme après (`test_handlers_exception_logging`, `test_06`, `test_transcription_guards`, `test_audio_at_rest_and_forget`).
+  - **Mutations QA** : 3 sur 3 tuées (import local dans le `finally`, imports locaux dans les blocs binaire et base64, `unlink` retiré).
+- **Environnement** : le conteneur n'a pas de pytest. Le venv monté par l'agent installe depuis pypi.org avec `uv pip install --no-config --index-url https://pypi.org/simple`, parce que la configuration du dépôt passe par `download.pytorch.org`, refusé par le proxy.
+- **QA** : favorable avec réserves, toutes deux de sécurité et préexistantes.
+  - #18628 : le traducteur lit des chemins fournis par ZMQ sans confinement, dans `transcription_only`, `audio_process` (legacy) et `voice_api`. Le lot remet en service une porte de plus de cette famille. Le mode n'a aucun appelant légitime : la passerelle envoie toujours le binaire.
+  - #18629 : le socket PULL est lié sur `0.0.0.0:5555` sans CURVE ni ZAP, et il est publié sur l'hôte en dev et en local.
+  - #18630 : `test_transcription_translation_only.py` ne collecte aucun test.
+
+### Cycle suivant : par où reprendre
+
+0. Si `dev` est toujours verrouillée : ne pas ouvrir d'autre lot empilé. Prévenir le porteur, ou attendre. Une fois le verrou levé, fusionner dans l'ordre #18603, #18612 (garder les sections 31, 31 bis et 32 de ce fichier), puis la PR de ce cycle, rebasée sur `dev`.
+1. #18628, avec la revue de l'agent `auditeur-adversarial`, puis #17133 et #18611.
+2. #18600, à découper par répertoire, puis #18630.
+3. #18629, avec l'agent `sre-infra`, puis #18371, #18154 et #18497.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

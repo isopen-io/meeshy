@@ -139,7 +139,6 @@ class TranscriptionHandler:
             if audio_binary:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Mode: BINAIRE ZMQ multipart")
                 import tempfile
-                from pathlib import Path
 
                 # Créer un fichier temporaire directement depuis le binaire
                 temp_dir = Path(tempfile.gettempdir()) / "transcription_temp"
@@ -158,7 +157,6 @@ class TranscriptionHandler:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Mode: BASE64")
                 import base64
                 import tempfile
-                from pathlib import Path
 
                 try:
                     logger.info(f"🔍 [TRANSLATOR-TRACE] Décodage base64...")
@@ -272,7 +270,6 @@ class TranscriptionHandler:
             # Nettoyer le fichier temporaire si créé
             if temp_file_path is not None:
                 try:
-                    from pathlib import Path
                     temp_path = Path(temp_file_path) if not isinstance(temp_file_path, Path) else temp_file_path
                     if temp_path.exists():
                         temp_path.unlink()
