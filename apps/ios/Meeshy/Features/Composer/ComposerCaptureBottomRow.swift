@@ -190,12 +190,14 @@ struct ComposerCaptureBottomRow: View {
         }
     }
 
-    /// **La colonne du viseur, gardée après la prise** (#18638, porteur 2026-11-15) : « Effets »
-    /// puis les outils de la retouche, en bas à gauche, posés SUR la prise comme
-    /// le rail de la capture — plus de rangée en bas.
+    /// **La colonne du viseur, gardée après la prise** (#18638, #18654, porteur 2026-11-15) :
+    /// Galerie · Texte · Stickers · Son, un trait, Effets · Recadrer · Couper, en bas à gauche,
+    /// posés SUR la prise comme le rail de la capture — plus de rangée en bas.
     private var editRail: some View {
-        ComposerLookRail(open: session.openFamily != nil, editTools: session.editTools,
-                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) {
+        ComposerLookRail(open: session.openFamily != nil,
+                         items: ComposerRetouchRail.items(composesScene: sceneEntry != nil, tools: session.editTools),
+                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) },
+                         onScene: { sceneEntry?($0) }) {
             session.toggleFamily(ComposerLookStripRule.railFamily)
         }
         .padding(.leading, MeeshySpacing.mdPlus)
@@ -288,6 +290,47 @@ struct ComposerCaptureGestureHint: View {
         .animation(.easeOut(duration: 0.2), value: showsHint)
         .adaptiveOnChange(of: session.camera.shutterPresses) { _, _ in hintSeen = true }
         .adaptiveOnChange(of: recording) { _, enregistre in if enregistre { hintSeen = true } }
+    }
+}
+
+/// **« Annuler », à la place de « Terminé », pendant le recadrage** (porteur 2026-11-15, #18654) :
+/// il rend le format et le cadrage d'avant l'outil et le range. Fermer l'outil les garde.
+struct ComposerCropCancelButton: View {
+    @ObservedObject var session: ComposerCaptureSession
+    /// Le recadrage qu'on avait en ouvrant l'outil, tenu tant qu'il est actif.
+    @State private var before: ComposerCropSnapshot?
+
+    private var cropActive: Bool { session.activeEditTools.contains(.crop) }
+
+    var body: some View {
+        ZStack { button }
+            .onAppear { hold(cropActive) }
+            .adaptiveOnChange(of: cropActive) { _, actif in hold(actif) }
+    }
+
+    private func hold(_ active: Bool) {
+        before = ComposerCropSnapshot.held(before, cropActive: active, current: ComposerCropFlow.snapshot(of: session))
+    }
+
+    @ViewBuilder
+    private var button: some View {
+        if ComposerCropSnapshot.offersCancel(shownTools: session.shownEditTools), !session.isRenderingLook {
+            Button { ComposerCropFlow.cancel(before, in: session) } label: {
+                Text(ComposerCaptureCopy.cancelCrop)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .frame(minHeight: 40)
+                    .adaptiveLiquidGlass(in: Capsule())
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+            }
+            .buttonStyle(ComposerBounceButtonStyle())
+            .accessibilityLabel(ComposerCaptureCopy.cancelCropLabel)
+            .accessibilityIdentifier("composer.capture.crop.cancel")
+            .padding(.trailing, MeeshySpacing.mdPlus)
+            .padding(.top, MeeshySpacing.md)
+            .transition(.opacity)
+        }
     }
 }
 

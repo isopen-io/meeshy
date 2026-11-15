@@ -93,21 +93,31 @@ extension View {
 /// lisibles (porteur 2026-10-07, #9566).
 struct ComposerLookRail: View {
     let open: Bool
-    /// Les outils de la retouche, après les familles (#9754) — vide pendant la
-    /// capture : ils n'existent qu'en retouche.
-    var editTools: [ComposerEditTool] = []
+    /// Ce que la colonne porte, de haut en bas — « Effets » seul pendant la capture ; en
+    /// retouche, les entrées du viseur puis les outils (`ComposerRetouchRail`, #18654).
+    var items: [ComposerRetouchRailItem] = [.looks]
     /// Les outils dont la surface est à l'écran : ils s'allument, ensemble.
     var shownTools: Set<ComposerEditTool> = []
     var onTool: (ComposerEditTool) -> Void = { _ in }
+    var onScene: (ComposerViewfinderEntry) -> Void = { _ in }
     let onToggle: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
-            tool(symbol: ComposerCaptureCopy.looksSymbol, name: ComposerCaptureCopy.looksName, selected: open,
-                 action: onToggle)
-            ForEach(editTools, id: \.self) { outil in
-                tool(symbol: ComposerCaptureCopy.editToolSymbol(outil), name: ComposerCaptureCopy.editToolName(outil),
-                     selected: shownTools.contains(outil)) { onTool(outil) }
+            ForEach(items, id: \.self) { entree in
+                switch entree {
+                case .looks:
+                    tool(symbol: ComposerCaptureCopy.looksSymbol, name: ComposerCaptureCopy.looksName, selected: open,
+                         action: onToggle)
+                case .tool(let outil):
+                    tool(symbol: ComposerCaptureCopy.editToolSymbol(outil), name: ComposerCaptureCopy.editToolName(outil),
+                         selected: shownTools.contains(outil)) { onTool(outil) }
+                case .scene(let scene):
+                    tool(symbol: scene.symbol, name: ComposerViewfinderColumn.label(scene), selected: false) { onScene(scene) }
+                        .accessibilityIdentifier(scene.accessibilityIdentifier)
+                case .separator:
+                    ComposerViewfinderRailSeparator()
+                }
             }
         }
     }

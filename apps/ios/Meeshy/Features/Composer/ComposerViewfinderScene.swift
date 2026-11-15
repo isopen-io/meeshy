@@ -32,12 +32,13 @@ nonisolated enum ComposerViewfinderScene {
         replacesBackground || !effects.hasVisualBackgroundMedia
     }
 
-    /// Les objets se montrent-ils sur le viseur ? Armé ou filmant, hors retouche (plein écran,
-    /// elle cadre la prise seule), s'il y a quelque chose à montrer, et seulement si la prise en
+    /// Les objets se montrent-ils sur le viseur ? Armé, filmant ou en retouche (#18654 : le
+    /// sticker posé depuis la colonne s'y voit) — sauf pendant le recadrage, qui pose la prise
+    /// dans un cadre —, s'il y a quelque chose à montrer, et seulement si la prise en
     /// sera le fond : sinon l'aperçu mentirait sur ce qui passe dessous.
-    static func showsSceneObjects(stage: ComposerSceneCameraStage, editing: Bool,
+    static func showsSceneObjects(stage: ComposerSceneCameraStage, cropFrames: Bool,
                                   effects: StoryEffects, replacesBackground: Bool) -> Bool {
-        guard stage != .off, !editing, hasObjects(effects) else { return false }
+        guard stage != .off, !cropFrames, hasObjects(effects) else { return false }
         return captureFoundsBackground(effects: effects, replacesBackground: replacesBackground)
     }
 
@@ -93,7 +94,8 @@ nonisolated enum ComposerViewfinderScene {
     }
 
     /// Les objets prennent le doigt viseur armé seulement : une tenue ou une prise garde le sien.
-    static func objectsTakeTouches(stage: ComposerSceneCameraStage, holding: Bool) -> Bool {
-        stage == .armed && !holding
+    /// En retouche ils se montrent sans le prendre : le doigt y cadre la prise et ses outils.
+    static func objectsTakeTouches(stage: ComposerSceneCameraStage, holding: Bool, editing: Bool = false) -> Bool {
+        stage == .armed && !holding && !editing
     }
 }

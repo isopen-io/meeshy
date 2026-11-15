@@ -932,7 +932,7 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_theRail_listsTheTakeTools_andEveryEditControlBounces() throws {
         let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
-        XCTAssertTrue(bas.contains("editTools: session.editTools"))
+        XCTAssertTrue(bas.contains("ComposerRetouchRail.items(composesScene: sceneEntry != nil, tools: session.editTools)"))
         XCTAssertTrue(bas.contains("ForEach(session.editPanels, id: \\.self)"), "chaque outil actif a son panneau")
         XCTAssertTrue(bas.contains("ComposerSoundTrack("), "le spectre en couleur")
         let rail = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
@@ -986,5 +986,106 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertFalse(session.shownEditTools.contains(.text))
         XCTAssertNil(session.retouchTexts.typingId)
         XCTAssertTrue(session.retouchTexts.isEmpty, "une coquille vide disparaît")
+    }
+
+    // MARK: - La colonne de la retouche est celle du viseur (#18654)
+
+    func test_rail_photoInTheComposer_galleryTextStickersSound_thenLooksAndCrop() {
+        XCTAssertEqual(ComposerRetouchRail.items(composesScene: true, tools: ComposerEditTools.offered(.photo)),
+                       [.scene(.gallery), .tool(.text), .scene(.sticker), .scene(.sound), .separator, .looks, .tool(.crop)],
+                       "sans « Fond » : la prise est là ; « Son » pose un son sur la scène")
+    }
+
+    func test_rail_videoWithAudio_tunesItsOwnSound_andCuts() {
+        XCTAssertEqual(ComposerRetouchRail.items(composesScene: true, tools: ComposerEditTools.offered(.video(hasAudio: true))),
+                       [.scene(.gallery), .tool(.text), .scene(.sticker), .tool(.sound), .separator,
+                        .looks, .tool(.crop), .tool(.trim)])
+        XCTAssertEqual(ComposerRetouchRail.items(composesScene: true, tools: ComposerEditTools.offered(.video(hasAudio: false))),
+                       [.scene(.gallery), .tool(.text), .scene(.sticker), .scene(.sound), .separator,
+                        .looks, .tool(.crop), .tool(.trim)], "une vidéo muette reçoit un son de scène")
+    }
+
+    func test_rail_outsideTheComposer_keepsItsToolsOnly() {
+        XCTAssertEqual(ComposerRetouchRail.items(composesScene: false, tools: ComposerEditTools.offered(.photo)),
+                       [.tool(.text), .separator, .looks, .tool(.crop)], "la caméra de conversation n'a pas de scène")
+        XCTAssertEqual(ComposerRetouchRail.items(composesScene: false, tools: ComposerEditTools.offered(.photo, formatLocked: true)),
+                       [.tool(.text), .separator, .looks])
+        XCTAssertFalse(ComposerRetouchRail.items(composesScene: true, tools: ComposerEditTools.offered(.photo))
+            .contains(.scene(.background)))
+    }
+
+    // MARK: - « Annuler » rend le recadrage d'avant l'outil (#18654)
+
+    func test_cropSnapshot_takenWhenTheToolOpens_heldWhileActive_droppedWhenClosed() {
+        let ouverture = ComposerCropSnapshot(aspect: 0.5625, framing: .identity)
+        var rapproche = ComposerFraming.identity
+        rapproche.scale = 2
+        let apres = ComposerCropSnapshot(aspect: 1, framing: rapproche)
+        XCTAssertEqual(ComposerCropSnapshot.held(nil, cropActive: true, current: ouverture), ouverture)
+        XCTAssertEqual(ComposerCropSnapshot.held(ouverture, cropActive: true, current: apres), ouverture,
+                       "le cliché reste celui de l'ouverture, pas du dernier geste")
+        XCTAssertNil(ComposerCropSnapshot.held(ouverture, cropActive: false, current: apres),
+                     "fermer l'outil garde le format : plus rien à annuler")
+    }
+
+    func test_cropCancel_offeredOnlyWhileTheBracketsShow() {
+        XCTAssertTrue(ComposerCropSnapshot.offersCancel(shownTools: [.crop]))
+        XCTAssertTrue(ComposerCropSnapshot.offersCancel(shownTools: [.crop, .trim]))
+        XCTAssertFalse(ComposerCropSnapshot.offersCancel(shownTools: [.text]))
+        XCTAssertFalse(ComposerCropSnapshot.offersCancel(shownTools: []))
+    }
+
+    func test_cancelCrop_givesBackTheFormatAndFramingOfTheOpening_andPutsTheToolAway() {
+        let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        photo.toggleEditTool(.crop)
+        let ouverture = ComposerCropFlow.snapshot(of: photo)
+        ComposerCropFlow.apply(.square, to: photo)
+        photo.rezoom(from: photo.framing, scale: 2)
+        XCTAssertNotEqual(ComposerCropFlow.snapshot(of: photo), ouverture)
+        ComposerCropFlow.cancel(ouverture, in: photo)
+        XCTAssertEqual(ComposerCropFlow.snapshot(of: photo), ouverture, "le format et le cadrage d'avant l'outil reviennent")
+        XCTAssertFalse(photo.activeEditTools.contains(.crop), "« Annuler » range l'outil")
+    }
+
+    func test_cancelCrop_withoutASnapshot_changesNothing() {
+        let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        photo.toggleEditTool(.crop)
+        ComposerCropFlow.apply(.square, to: photo)
+        let carre = photo.editAspect
+        ComposerCropFlow.cancel(nil, in: photo)
+        XCTAssertEqual(photo.editAspect, carre)
+        XCTAssertTrue(photo.activeEditTools.contains(.crop))
+    }
+
+    /// Sur l'écran rendu : refermer « Recadrer » garde le format choisi.
+    func test_theRenderedChrome_closingCropKeepsTheChosenFormat() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        let ecran = RenderedScreen(ComposerCaptureChrome(session: session, size: .fullScreen,
+                                                         onDisarm: {}, onValidateSegments: {}))
+        defer { ecran.dismount() }
+        let ouverture = session.editAspect
+        session.toggleEditTool(.crop)
+        XCTAssertTrue(Self.settles { ecran.labels.contains(ComposerCaptureCopy.cancelCropLabel) })
+        ComposerCropFlow.apply(.square, to: session)
+        XCTAssertNotEqual(session.editAspect, ouverture)
+        session.toggleEditTool(.crop)
+        XCTAssertEqual(session.editAspect.map { ($0 * 1000).rounded() }, 1000, "fermer l'outil garde le format")
+    }
+
+    func test_theRenderedChrome_offersCancel_whereDoneWas_whileCropping() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        let ecran = RenderedScreen(ComposerCaptureChrome(session: session, size: .fullScreen,
+                                                         onDisarm: {}, onValidateSegments: {}))
+        defer { ecran.dismount() }
+        let annuler = ComposerCaptureCopy.cancelCropLabel
+        XCTAssertFalse(ecran.labels.contains(annuler), "à l'entrée : \(ecran.labels)")
+        session.toggleEditTool(.crop)
+        XCTAssertTrue(Self.settles { ecran.labels.contains(annuler) }, "Recadrer ouvert : \(ecran.labels)")
+        session.toggleEditTool(.text)
+        XCTAssertTrue(Self.settles { !ecran.labels.contains(annuler) }, "un autre outil : \(ecran.labels)")
     }
 }

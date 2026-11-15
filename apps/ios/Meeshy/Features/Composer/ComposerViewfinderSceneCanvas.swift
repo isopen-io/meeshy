@@ -40,12 +40,13 @@ struct ComposerViewfinderSceneCanvas: View {
     static func mounted(by host: MeeshyComposerHost) -> ComposerViewfinderSceneCanvas? {
         let capture = host.sceneCapture
         guard ComposerViewfinderScene.showsSceneObjects(
-            stage: capture.stage, editing: capture.phase.isEditing, effects: host.viewModel.currentSlide.effects,
+            stage: capture.stage, cropFrames: capture.editFramesScene, effects: host.viewModel.currentSlide.effects,
             replacesBackground: host.sceneCaptureReplacesBackgroundId != nil) else { return nil }
         let prendLeDoigt = ComposerViewfinderScene.route(
             onChrome: false, onSceneObject: true,
             objectsTakeTouches: ComposerViewfinderScene.objectsTakeTouches(
-                stage: capture.stage, holding: capture.holdStartedAt != nil)) == .sceneObject
+                stage: capture.stage, holding: capture.holdStartedAt != nil,
+                editing: capture.phase.isEditing)) == .sceneObject
         let relais = host.sceneSelectionRelay
         let saisie = ComposerViewfinderTyping.textId(host).map { id in
             Typing(textId: id, inputLink: host.keyboardDock.link,
@@ -127,7 +128,9 @@ enum ComposerViewfinderTyping {
     /// Ce que l'entrée fait du viseur : une feuille s'y pose, un texte s'y saisit, la bande du
     /// cadre prend la scène.
     static func yieldsToScene(_ host: MeeshyComposerHost, after entry: ComposerViewfinderEntry) -> Bool {
-        ComposerViewfinderColumn.yieldsToScene(
+        // En retouche, la prise garde l'écran : la feuille de l'entrée se pose dessus (#18654).
+        guard !host.sceneCapture.phase.isEditing else { return false }
+        return ComposerViewfinderColumn.yieldsToScene(
             toolPresentsSheet: host.presentedPortal != nil,
             typesOnViewfinder: ComposerViewfinderColumn.typesOnViewfinder(
                 entry: entry, captureFoundsBackground: captureFoundsBackground(host)))
@@ -140,7 +143,7 @@ enum ComposerViewfinderTyping {
             showsViewfinder: ComposerCaptureSurfaceRule.showsViewfinder(stage: prise.stage,
                                                                         yieldsToScene: host.viewfinderYieldsToScene),
             showsSceneObjects: ComposerViewfinderScene.showsSceneObjects(
-                stage: prise.stage, editing: prise.phase.isEditing, effects: host.viewModel.currentSlide.effects,
+                stage: prise.stage, cropFrames: prise.editFramesScene, effects: host.viewModel.currentSlide.effects,
                 replacesBackground: host.sceneCaptureReplacesBackgroundId != nil),
             editingTextId: host.sceneTextEditing ? host.viewModel.textEditingMode.activeTextId : nil)
     }
