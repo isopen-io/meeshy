@@ -153,7 +153,7 @@ describe('consumeAfterReadMessages', () => {
 
     const result = await consume(prisma, [PLAIN_EPHEMERAL, FOREIGN_FLAME, OWN_FLAME]);
 
-    expect(result).toEqual({ consumed: [], entries: [] });
+    expect(result).toEqual({ consumed: [], entries: [], fullyConsumed: [] });
     expect(entries).toEqual([]);
   });
 

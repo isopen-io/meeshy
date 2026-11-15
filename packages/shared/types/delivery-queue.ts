@@ -145,7 +145,9 @@ export type QueuedMessagePayload = {
     | 'translation'
     | 'starred'
     | 'hidden-for-me'
-    | 'restored-for-me';
+    | 'restored-for-me'
+    | 'consumed'
+    | 'view-once-purged';
   /** Overrides the identity used for enqueue-time dedup (default: messageId).
    * messageId+eventType alone is correct for edits/deletes/pins (at most one
    * relevant transition matters per message), but reactions need a finer key:

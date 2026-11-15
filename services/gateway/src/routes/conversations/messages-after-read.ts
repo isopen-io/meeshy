@@ -20,8 +20,7 @@ import {
   consumeAfterReadResponseDataSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
-import { consumeAfterReadMessages } from '../../services/messaging/consumeAfterReadMessages';
-import { EphemeralRecipientExpiryService } from '../../services/EphemeralRecipientExpiryService';
+import { consumeAfterReadAndAnnounce } from '../../services/messaging/afterReadConsumption';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { canAccessConversation, resolveCallerParticipant, refuserCommeIntrouvable } from './utils/access-control';
 import { sendSuccess, sendBadRequest, sendForbidden, sendInternalError } from '../../utils/response.js';
@@ -92,21 +91,16 @@ export function registerMessageAfterReadRoutes(
         return sendForbidden(reply, 'Not a participant');
       }
 
-      const now = new Date();
-      const { consumed, entries } = await consumeAfterReadMessages(prisma, {
+      const { consumed } = await consumeAfterReadAndAnnounce({
+        prisma,
+        manager: fastify.socketIOHandler?.getManager(),
         conversationId,
         participantId: caller.id,
+        readerKey: (authRequest.authContext.isAnonymous ? undefined : authRequest.authContext.userId) ?? caller.id,
         messageIds: body.data.messageIds,
-        now,
+        now: new Date(),
+        onError: (error) => logger.warn('after-read burn announce failed', error),
       });
-
-      if (entries.length > 0) {
-        const expiry = new EphemeralRecipientExpiryService(prisma, {
-          now: () => now,
-          resolveIO: () => fastify.socketIOHandler?.getManager()?.getIO(),
-        });
-        await expiry.expireNow(entries);
-      }
 
       return sendSuccess(reply, { consumed });
     } catch (error) {

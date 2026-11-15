@@ -56,6 +56,8 @@ export const DRAINED_EVENT = {
   starred: SERVER_EVENTS.MESSAGE_STARRED,
   'hidden-for-me': SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME,
   'restored-for-me': SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME,
+  consumed: SERVER_EVENTS.MESSAGE_CONSUMED,
+  'view-once-purged': SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED,
 } as const satisfies Record<QueuedEventType, ServerEventName>;
 
 /**
