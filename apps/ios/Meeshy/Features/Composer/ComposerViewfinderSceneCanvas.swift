@@ -127,8 +127,8 @@ enum ComposerViewfinderTyping {
 
     /// Ce que l'entrée fait du viseur : une feuille s'y pose, un texte s'y saisit, la bande du
     /// cadre prend la scène.
+    /// En retouche, la prise garde l'écran : la feuille de l'entrée se pose dessus (#18654).
     static func yieldsToScene(_ host: MeeshyComposerHost, after entry: ComposerViewfinderEntry) -> Bool {
-        // En retouche, la prise garde l'écran : la feuille de l'entrée se pose dessus (#18654).
         guard !host.sceneCapture.phase.isEditing else { return false }
         return ComposerViewfinderColumn.yieldsToScene(
             toolPresentsSheet: host.presentedPortal != nil,
