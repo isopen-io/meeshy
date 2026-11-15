@@ -373,7 +373,7 @@ enum ConceptText {
     static func use(_ concept: ProgressionConcept) -> String {
         switch concept {
         case .level: String(localized: "game.concept.level.use", defaultValue: "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100.", bundle: .main)
-        case .points: String(localized: "game.concept.points.use", defaultValue: "Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.", bundle: .main)
+        case .points: String(localized: "game.concept.points.use", defaultValue: "Frapper une Meesh en fige une part dans la pièce, gardée pour toujours dans ton Héritage ; ton niveau suit la lumière qui te reste.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.use", defaultValue: "Dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.use", defaultValue: "Ton rang se montre sur ton blason et sur ton profil.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.use", defaultValue: "Éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
@@ -394,7 +394,7 @@ enum ConceptText {
     /// cas (un seuil qui ne se referme pas, un plafond, une remise à zéro) passe derrière un (i) nommé par sa question.
     static func useCases(_ concept: ProgressionConcept) -> String? {
         switch concept {
-        case .level: String(localized: "game.concept.level.use_cases", defaultValue: "Une fois ouvertes, la joute et l’alliance le restent, même quand ton niveau baisse. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.", bundle: .main)
+        case .level: String(localized: "game.concept.level.use_cases", defaultValue: "Une fois ouvertes, la joute et l’alliance le restent, quoi que tu frappes. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.use_cases", defaultValue: "Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.use_cases", defaultValue: "L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.", bundle: .main)
         case .league: String(localized: "game.concept.league.use_cases", defaultValue: "Tout repart de zéro chaque lundi.", bundle: .main)

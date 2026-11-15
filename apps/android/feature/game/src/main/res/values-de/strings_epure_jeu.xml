@@ -14,7 +14,7 @@
     <string name="game2_settings_friends_league_body">Bestätigte Freunde und du seht euch in der Wochenwertung.</string>
     <string name="game_rules_section_rules">Regeln</string>
     <string name="game_rules_section_concepts">Begriffe</string>
-    <string name="game_rules_4_body">Dein Level sinkt um ebenso viel; Rang und Medaillen sinken nicht.</string>
+    <string name="game_rules_4_body">Dein Level folgt deinem Licht; Rang und Medaillen sinken nicht.</string>
     <string name="game_rules_5_body">Prägungen, neue Level und Heldentaten lassen deinen Ruhm wachsen, der dir deinen Rang gibt.</string>
     <string name="game_rules_6_body">Meeshes zu behalten lässt das Erbe wachsen; sie auszugeben wacht über die Flamme.</string>
     <string name="game_rules_7_body">Jede Nacht ein Traum, eine Gabe, eine Flamme, die wächst, solange du wiederkommst.</string>
@@ -28,7 +28,7 @@
     <string name="game_concept_missions_use">Öffne einen Akt, um zu sehen, wo du stehst. Einen pro Tag kannst du mit einer Meesh tauschen.</string>
     <string name="game2_prestige_confirm_access">Dein Turnier und dein Bündnis bleiben offen.</string>
     <string name="game2_league_pseudonym_drawn">Dein Turniername wird zugelost und wechselt mit jeder Reise.</string>
-    <string name="game2_league_snapshot">Rangliste täglich um 4 Uhr festgehalten: Niemand sieht, wer gerade spielt. Nur deine Zeile ist live.</string>
+    <string name="game2_league_snapshot">Die Plätze der anderen stehen täglich ab 4 Uhr fest: Niemand sieht, wer gerade spielt. Nur deine Zeile ist live.</string>
     <string name="game2_season_how">Akte und Bündnisse bringen dich ein paar Schritte voran. Die ganze Reise ist kostenlos.</string>
     <string name="game2_settings_celebrations_switch">Zeichen der Ahnen</string>
     <string name="game_guide_step_welcome_what">Das Spiel in sieben Karten</string>
