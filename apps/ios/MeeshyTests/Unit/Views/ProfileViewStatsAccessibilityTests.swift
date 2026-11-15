@@ -19,7 +19,7 @@ final class ProfileViewStatsAccessibilityTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_activityBand_collapsesButtonIntoOneElementWithHint() throws {
+    func test_activityBand_collapsesButtonIntoOneElementWithoutRedundantHint() throws {
         let band = try source("ProfileActivityBand.swift")
         XCTAssertTrue(
             band.contains(".accessibilityElement(children: .ignore)"),
@@ -29,9 +29,9 @@ final class ProfileViewStatsAccessibilityTests: XCTestCase {
             band.contains(".accessibilityLabel(Self.accessibilityLabel(stats: stats))"),
             "Le bouton doit exposer le libellé composé."
         )
-        XCTAssertTrue(
-            band.contains(".accessibilityHint(Self.openHint)"),
-            "Le bouton doit porter un indice : la bande a l'air statique mais ouvre Mon activité."
+        XCTAssertFalse(
+            band.contains(".accessibilityHint("),
+            "Pas d'indice : le libellé commence par « Mon activité » et le trait bouton dit déjà qu'un toucher l'ouvre (budget d'explication du profil, épure #17584)."
         )
     }
 
