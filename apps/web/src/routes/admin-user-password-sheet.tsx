@@ -260,6 +260,7 @@ export function AdminUserPasswordSheet({
         id="admin-password-notify"
         label={translateAdmin(language, 'admin.people.password.notify')}
         hint={translateAdmin(language, 'admin.people.password.notifyHint')}
+        hintQuestion={translateAdmin(language, 'admin.people.password.notifyQuestion')}
         checked={prevenir}
         onToggle={setPrevenir}
         data={{ 'data-admin-password-notify': '' }}

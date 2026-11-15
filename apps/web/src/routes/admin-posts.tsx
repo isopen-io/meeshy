@@ -189,7 +189,6 @@ export function AdminPostsPanel({
       <AdminPageHeader
         language={language}
         title={translateAdmin(language, 'admin.nav.posts')}
-        subtitle={translateAdmin(language, 'admin.posts.subtitle')}
         place={{ section: 'posts' }}
       />
       <AdminPostsStatsBand language={language} deps={deps} period={periodFilter === 'all' ? undefined : periodFilter} enabled={reach.opens('posts')} now={now} />
@@ -228,7 +227,7 @@ export function AdminPostsPanel({
           rowKey={(row) => row.id}
           rowTarget={(row) => ({ kind: 'entity', entity: 'post', id: row.id })}
           caption={translateAdmin(language, 'admin.posts.caption')}
-          empty={{ title: translateAdmin(language, 'admin.posts.empty'), hint: translateAdmin(language, 'admin.posts.empty.hint') }}
+          empty={{ title: translateAdmin(language, 'admin.posts.empty') }}
           filteredEmpty={{ title: translateAdmin(language, 'admin.posts.filtered') }}
           toolbar={
             <AdminListToolbar

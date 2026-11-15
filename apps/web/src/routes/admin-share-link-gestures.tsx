@@ -261,6 +261,7 @@ export function ShareLinkGestures({
           {...common(revealError)}
           title={t('admin.shareLink.confirm.reveal.title')}
           body={t('admin.shareLink.confirm.reveal.body')}
+          detail={{ question: t('admin.kit.info.secret'), text: t('admin.shareLink.confirm.reveal.detail') }}
           confirmLabel={t('admin.shareLink.gesture.reveal')}
           tone="danger"
           motive={{ label: t('admin.shareLink.confirm.reveal.motive'), minLength: 10, required: true }}

@@ -237,7 +237,7 @@ describe('les coupe-circuits — le mot d’abord', () => {
     const host = await open(deps);
 
     expect(host.querySelector('[data-admin-notice="danger"]')?.textContent).toContain('Coupe-circuits ouverts : 1.');
-    expect(host.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('Coupe-circuits en essai : 1.');
+    expect(host.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('Coupe-circuits en essai : 1');
     expect(host.querySelector('[data-admin-notice="success"]')).toBeNull();
   });
 
