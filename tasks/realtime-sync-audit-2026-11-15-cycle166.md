@@ -163,6 +163,74 @@ disparu pour toujours.
 > fait tomber personne nomme exactement l'ensemble qui n'atteint que la
 > première.
 
+## L'audit adversarial, et ce qu'il a changé
+
+Le lot est un lot de CONTRÔLE D'ACCÈS : il passe par `auditeur-adversarial`
+avant fusion (directive porteur du 2026-10-03). Verdict rendu : **À CORRIGER**,
+« non bloquant pour la confidentialité, bloquant pour la disponibilité ». Aucun
+chemin par lequel du texte sous plancher sort encore du drain n'a été trouvé —
+mais deux choses que le lot PERDAIT, et une affirmation fausse.
+
+### Le constat qui comptait : les trois raisons n'étaient pas de même nature
+
+Le lot faisait passer ses trois `reason` par la même branche, hors de
+`dropEntry`, sous la justification « il n'y a rien à faire relire au client ».
+
+| `reason` | ce que la garde SAIT | la phrase est-elle vraie ? |
+|---|---|---|
+| `below-history-floor` | le message EST sous le plancher | **oui** |
+| `floor-unreadable` | on ne sait pas quel est le plancher | **non** |
+| `message-date-unreadable` | on ne sait pas de quel côté il tombe | **non** |
+
+Les deux dernières sont des aveux d'IGNORANCE, donc des **pertes** — le drain
+est destructif, l'entrée a déjà quitté Redis. Leur conversation n'étant nommée
+nulle part, une panne transitoire (base sous pression, secondaire en retard)
+faisait perdre DÉFINITIVEMENT et en silence tout l'arriéré texte d'un lecteur
+borné. **C'est l'arbitrage que le gate d'appartenance a explicitement refusé
+d'avoir — « échangerait une fuite rare contre une perte probable » — que le lot
+réintroduisait un étage plus bas.**
+
+Et la correction ne coûte aucune confidentialité : la relecture REST passe par
+`historyFloorClause`, donc elle ne peut pas servir ce que la garde vient de
+refuser.
+
+> **Un refus et une perte se journalisent, se signalent et se récupèrent
+> différemment — et un code de raison qui les range ensemble les rend
+> indistinguables pour tout le code en aval.** La question à poser à une garde
+> fail-closed n'est pas seulement « refuse-t-elle au bon moment ? » mais
+> **« sait-elle POURQUOI elle refuse, et l'appelant peut-il encore le
+> savoir ? »**
+
+### Et mon témoin du troisième signal NE POUVAIT PAS TOMBER
+
+Il assertait `count > 0` vide dans une scène où `pending-messages:delivered`
+**n'est pas émis du tout** (`authorized.length === 0` ⇒ `return`). L'audit l'a
+mesuré en exécutant la mutation : pousser les refus dans `undelivered` — c'est
+l'inverse exact de ce que le témoin prétendait garder — **ne faisait tomber
+aucun des 1 396 témoins du sous-arbre.**
+
+C'est la leçon 261 dans sa forme la plus nue : *l'assertion passait pour une
+raison qui n'était pas celle qu'elle nommait.* La scène juste est un lot MIXTE
+sur DEUX conversations, où l'événement EST émis, avec `conversationIds` assert
+en ÉGALITÉ — et la propriété tombe désormais dans les **deux** sens (M8 : un
+refus prouvé qui nomme ; M9 : une ignorance qui se tait).
+
+### Les trois autres, corrigées dans la même passe
+
+| # | constat | correction |
+|---|---|---|
+| C2 | « ne compte dans AUCUN des trois signaux » est faux du troisième : `freezeMessageStatus` gèle `deliveredAt` par FENÊTRE DE TEMPS, donc un message refusé est marqué remis par l'avancée du curseur d'un VOISIN | c'est **#18614**, antérieur et hors périmètre — nommé sur place pour que le commentaire ne promette plus ce que `freezeMessageStatus` défait |
+| C4 | « elle n'en coûte AUCUNE requête » est faux : `HISTORY_FLOOR_PARTICIPANT_SELECT` porte `user`, une **RELATION** (pas un composite), que le connecteur Mongo charge par une requête de plus | l'affirmation est corrigée — une lecture `User` par drain, non retirable (rôle plateforme, rang ii), assumée et nommée |
+| C5 | la lecture des faits de message, posée AVANT le gate d'appartenance, remettait dans la requête les ids des conversations quittées ou bannies — l'inverse de ce que le commentaire d'ordre du drain revendique | elle vit désormais ENTRE les deux gates, et l'appelant REÇOIT les faits |
+| C6 | `participations.length === 0` : mort chez son appelant, mais fail-OPEN pour un second appelant d'une fonction EXPORTÉE | retiré (il était déjà redondant — `loadHistoryFloorsOrFail([])` rend vide sans requête) |
+
+Deux constats appellent un lot à eux et sont devenus des issues : **#18680**
+(une perte de rejeu n'est récupérable que sur le WEB — iOS et Android
+n'écoutent pas `pending-messages:delivered`, donc le mécanisme que ce lot vient
+de réparer ne profite qu'à un client sur trois) et **#18681** (le rejeu révèle
+l'EXISTENCE d'un message sous plancher par les familles sans texte, ce qui
+demande un verdict de produit et non un correctif).
+
 ## Ce que le cycle a CÉDÉ ou n'a pas pris
 
 | # | ce que c'est | pourquoi pas ce lot |
