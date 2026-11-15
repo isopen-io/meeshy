@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'bun:test';
 
-import { measurePress } from './press-ratchet.mjs';
+import { measurePress, PRESS_MARKS } from './press-ratchet.mjs';
 
 /**
  * **LES BOUTONS DU KIT RÉPONDENT À L'APPUI DANS L'IMAGE MÊME** (#18326) —
@@ -63,6 +63,12 @@ describe('la zone du kit répond à l’appui (#18326)', () => {
   test('aucun bouton muet dans les fichiers de la zone', () => {
     const mute = ZONE.map((name) => ({ name, mute: muteOf(name) })).filter((entry) => entry.mute > 0);
     expect(mute).toEqual([]);
+  });
+
+  test('la rangée d’une suggestion de mention répond à l’appui, comme un bouton', () => {
+    const text = readFileSync(`${APP}src/components/mention-suggestions.tsx`, 'utf8');
+    const option = text.slice(text.indexOf('role="option"'), text.indexOf('<PeerAvatar'));
+    expect(PRESS_MARKS.some((mark) => option.includes(mark))).toBe(true);
   });
 
   test('Publier et son chevron répondent : seules les deux rangées du menu restent muettes', () => {

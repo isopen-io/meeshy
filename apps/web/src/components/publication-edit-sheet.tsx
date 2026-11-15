@@ -187,8 +187,8 @@ export function PublicationEditSheet({
               persist(original);
               onClose();
             }}
-            className="btn-press rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ minHeight: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)', opacity: busy ? 0.5 : 1 }}
+            className="btn-press rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+            style={{ minHeight: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {translate(language, 'common.cancel')}
           </button>
@@ -197,11 +197,10 @@ export function PublicationEditSheet({
             data-publication-edit-save
             disabled={!submittable || busy}
             onClick={save}
-            className="btn-press rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
             style={{
               minHeight: 44,
               backgroundColor: 'var(--color-ios-brand)',
-              opacity: submittable && !busy ? 1 : 0.5,
               outlineColor: 'var(--color-ios-brand)',
             }}
           >
