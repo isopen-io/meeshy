@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.app.push.IncomingPush
 import me.meeshy.sdk.battery.BatteryForegroundNotice
@@ -24,6 +25,7 @@ class BatteryPushHandlerTest {
         val job = launch(UnconfinedTestDispatcher(testScheduler)) { received = notices.notices.first() }
 
         assertThat(handler.handle(announcement)).isTrue()
+        runCurrent()
         assertThat(received).isEqualTo(BatteryForegroundNotice("battery:push:n1", "Alice · 5 %"))
         job.cancel()
     }
