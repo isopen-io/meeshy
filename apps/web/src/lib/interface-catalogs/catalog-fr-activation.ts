@@ -16,7 +16,7 @@ const frActivation = {
   'activation.email.failed': 'Le code n’a pas pu être envoyé. Réessayez.',
   'activation.email.done': 'Adresse vérifiée ✓',
   'activation.phone.label': 'Ajoutez un numéro pour sécuriser et récupérer votre compte',
-  'activation.phone.add': 'Ajouter mon numéro',
+  'activation.phone.add': 'Ajouter',
   'activation.phone.field': 'Numéro de téléphone',
   'activation.phone.hint': 'Au format international, par exemple +33 6 12 34 56 78',
   'activation.phone.send': 'Envoyer le code',

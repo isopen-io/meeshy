@@ -16,7 +16,7 @@ const arActivation = {
   'activation.email.failed': 'تعذّر إرسال الرمز. حاول مرة أخرى.',
   'activation.email.done': 'تم تأكيد البريد الإلكتروني ✓',
   'activation.phone.label': 'أضف رقم هاتف لتأمين حسابك واستعادته',
-  'activation.phone.add': 'إضافة رقمي',
+  'activation.phone.add': 'إضافة',
   'activation.phone.field': 'رقم الهاتف',
   'activation.phone.hint': 'بالصيغة الدولية، مثلًا ‎+212 612 345 678',
   'activation.phone.send': 'إرسال الرمز',

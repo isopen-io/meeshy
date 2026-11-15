@@ -16,7 +16,7 @@ const itActivation = {
   'activation.email.failed': 'Impossibile inviare il codice. Riprova.',
   'activation.email.done': 'Email verificata ✓',
   'activation.phone.label': 'Aggiungi un numero per proteggere e recuperare il tuo account',
-  'activation.phone.add': 'Aggiungi il mio numero',
+  'activation.phone.add': 'Aggiungi',
   'activation.phone.field': 'Numero di telefono',
   'activation.phone.hint': 'In formato internazionale, per esempio +39 312 345 6789',
   'activation.phone.send': 'Invia il codice',
