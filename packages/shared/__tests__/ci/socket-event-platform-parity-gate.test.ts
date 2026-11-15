@@ -128,6 +128,13 @@ const ASYMETRIES: readonly {
     events: ['attachment:ready', 'user:preferences-community-reordered'],
   },
   {
+    absents: ['web', 'ios'],
+    raison:
+      "la batterie des Proches (#14147) : le lot Android livre son lecteur avant les lots iOS et web, qui "
+      + "porteront le leur dans le commit qui les livre — et feront sortir ces trois noms de l'inventaire.",
+    events: ['battery:changed', 'battery:cleared', 'battery:pull-requested'],
+  },
+  {
     absents: ['web', 'android'],
     raison:
       "le Jeu Meeshy est né sur iOS : ses missions sont un écran iOS, et le web comme Android n'en ont "
