@@ -365,6 +365,13 @@ describe('les statistiques, la progression, les demandes, l’ancienneté', () =
     expect(renderToStaticMarkup(<RequestsSection language="fr" pending={{ count: 0, more: false }} />)).not.toContain('>0<');
   });
 
+  test('la rangée des demandes ne répète pas son nom en titre de section (épure #18196)', () => {
+    const html = renderToStaticMarkup(<RequestsSection language="fr" pending={{ count: 3, more: false }} />);
+    expect(html).not.toContain('DEMANDES');
+    expect(html).not.toContain('<h2');
+    expect(html.match(/Demandes d&#x27;amis/g)?.length).toBe(2);
+  });
+
   test('membre depuis une date lisible dans la langue de l’interface', () => {
     expect(renderToStaticMarkup(<MemberSinceSection language="fr" createdAt="2025-03-14T09:00:00.000Z" />)).toContain('14 mars 2025');
     expect(renderToStaticMarkup(<MemberSinceSection language="fr" createdAt={null} />)).toContain('—');

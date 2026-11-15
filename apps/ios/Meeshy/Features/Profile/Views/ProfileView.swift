@@ -5,9 +5,14 @@ import MeeshySDK
 import MeeshyUI
 import os
 
+/// Ma propre fiche (#18590) : elle RENSEIGNE, les Réglages règlent. De haut en bas — la tête (bannière, avatar, nom,
+/// @pseudo, ancienneté), mes cercles, mon identité, mon contact, mes langues, mon activité, mes contenus. Chaque section
+/// neuve vit dans son fichier et reçoit des valeurs et des portes ; la fiche ne garde que l'édition et ses feuilles.
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.routerCommands) private var router
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var authManager: AuthManager
 
@@ -23,11 +28,12 @@ struct ProfileView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showStats = false
+    @State private var showSecurity = false
     @State private var stats: UserStats?
     @State private var showSystemLanguagePicker = false
     @State private var showRegionalLanguagePicker = false
     @State private var showCustomLanguagePicker = false
-    @State private var pendingRequestCount: Int = 0
+    @StateObject private var circles = ProfileCirclesViewModel()
     /// #16264 — mon décor d'un pack non embarqué se repeint dès son contrat arrivé.
     @StateObject private var servedAppearance = ServedAppearanceRefresh()
 
@@ -43,12 +49,24 @@ struct ProfileView: View {
     @State private var scrollRelay = ScrollOffsetRelay()
     /// #10093 — la bannière ou la photo ouverte en plein écran (son URL).
     @State private var fullscreenImage: IdentifiedString?
+    /// La vignette touchée et son plein écran sont liés : la photo s'agrandit depuis l'endroit touché (iOS 18+).
+    @Namespace private var photoZoom
 
     private let accentColor = MeeshyColors.purple500Hex
 
     private var user: MeeshyUser? { authManager.currentUser }
 
     private var isUploading: Bool { isUploadingAvatar || isUploadingBanner }
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    /// Sous « réduire les animations », système ou forcé dans Meeshy, la photo ne s'agrandit plus depuis la vignette :
+    /// le plein écran paraît par la transition standard.
+    private var photoZoomSpace: Namespace.ID? {
+        reduceMotion ? nil : photoZoom
+    }
 
     var body: some View {
         ZStack {
@@ -62,50 +80,26 @@ struct ProfileView: View {
             }
 
             if let errorMessage {
-                VStack {
-                    Spacer()
-                    Text(errorMessage)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, MeeshySpacing.lg)
-                        .padding(.vertical, MeeshySpacing.smPlus)
-                        .background(Capsule().fill(MeeshyColors.error.opacity(0.9)))
-                        .padding(.bottom, MeeshySpacing.xxl)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .task {
-                    _ = await cancellableSleep(for: .seconds(3))
-                    withAnimation { self.errorMessage = nil }
-                }
+                errorBanner(errorMessage)
             }
         }
+        .background(InteractivePopEnabler())
         .sheet(isPresented: $showStats) {
             UserStatsView()
         }
-        .onAppear { loadUserData() }
-        .task {
-            // #10093 — le cache se peint, puis la page se synchronise dès l'ouverture, cache frais compris ; un échec
-            // garde ce qui est affiché.
-            let userId = authManager.currentUser?.id ?? ""
-            switch await CacheCoordinator.shared.stats.load(for: userId) {
-            case .fresh(let cached, _), .stale(let cached, _):
-                stats = cached.first
-            case .expired, .empty:
-                break
-            }
-            pendingRequestCount = FriendshipCache.shared.pendingReceivedCount
-            Task { await authManager.refreshCurrentUserProfile() }
-            if let fresh = try? await StatsService.shared.fetchStats() {
-                stats = fresh
-                await bestEffort("profileView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([fresh], for: userId) }
-            }
+        .sheet(isPresented: $showSecurity) {
+            SecurityView().environmentObject(authManager)
         }
+        .onAppear { loadUserData() }
+        .task { await loadStats() }
+        .task { await circles.load() }
         .fullScreenCover(item: $fullscreenImage) { image in
             FullscreenImageView(
                 imageURL: image.value,
                 fallbackText: user?.displayName ?? user?.username ?? "",
                 accentColor: accentColor
-            ).closesForConversationOpening(.profilePhoto)
+            )
+            .zoomTransitionDestination(sourceID: image.value, in: photoZoomSpace).closesForConversationOpening(.profilePhoto)
         }
         .adaptiveOnChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
@@ -142,6 +136,42 @@ struct ProfileView: View {
         }
     }
 
+    /// Le bandeau d'erreur monte du bas ; sous « réduire les animations », il ne fait qu'apparaître en fondu.
+    private func errorBanner(_ message: String) -> some View {
+        VStack {
+            Spacer()
+            Text(message)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.smPlus)
+                .background(Capsule().fill(MeeshyColors.error.opacity(0.9)))
+                .padding(.bottom, MeeshySpacing.xxl)
+        }
+        .meeshyTransition(.move(edge: .bottom).combined(with: .opacity))
+        .task {
+            _ = await cancellableSleep(for: .seconds(3))
+            showError(nil)
+        }
+    }
+
+    /// #10093 — le cache se peint, puis la page se synchronise dès l'ouverture, cache frais compris ; un échec garde ce
+    /// qui est affiché.
+    private func loadStats() async {
+        let userId = authManager.currentUser?.id ?? ""
+        switch await CacheCoordinator.shared.stats.load(for: userId) {
+        case .fresh(let cached, _), .stale(let cached, _):
+            stats = cached.first
+        case .expired, .empty:
+            break
+        }
+        Task { await authManager.refreshCurrentUserProfile() }
+        if let fresh = try? await StatsService.shared.fetchStats() {
+            stats = fresh
+            await bestEffort("profileView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([fresh], for: userId) }
+        }
+    }
+
     // MARK: - Header
 
     private var header: some View {
@@ -153,7 +183,7 @@ struct ProfileView: View {
             scrollOffset: offset,
             onBack: {
                 if isEditing {
-                    isEditing = false
+                    setEditing(false)
                     loadUserData()
                 } else {
                     router.pop()
@@ -172,7 +202,7 @@ struct ProfileView: View {
                         if isEditing {
                             saveProfile()
                         } else {
-                            isEditing = true
+                            setEditing(true)
                         }
                     } label: {
                         Text(isEditing
@@ -214,15 +244,22 @@ struct ProfileView: View {
                         .transition(.opacity)
                 } else {
                     bannerAndAvatarSection
-                    if ProfilePackShortcuts.isShown(viewerId: authManager.currentUser?.id, profileUserId: user?.id) {
-                        ProfilePackShortcuts(onShop: { router.openPackShop(domain: nil) }, onMine: { router.openMyPacks() })
-                    }
-                    identitySection
-                    contactSection
+                    ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
+                                          accentHex: accentColor, onOpen: open)
+                    ProfileIdentitySection(
+                        isEditing: isEditing, firstName: $firstName, lastName: $lastName,
+                        displayName: $displayName, bio: $bio, username: user?.username, accentHex: accentColor
+                    )
+                    ProfileContactSection(
+                        email: user?.email, isEmailVerified: user?.emailVerifiedAt != nil,
+                        phoneNumber: user?.phoneNumber, isPhoneVerified: user?.phoneVerifiedAt != nil,
+                        accentHex: accentColor, onOpenSecurity: { showSecurity = true }
+                    )
                     languagesSection
-                    statsSection
-                    friendRequestsSection
-                    memberSinceSection
+                    activitySection
+                    if ProfilePackShortcuts.isShown(viewerId: authManager.currentUser?.id, profileUserId: user?.id) {
+                        ProfileSavedContentRows(accentHex: accentColor, onOpen: open)
+                    }
                 }
                 Spacer().frame(height: MeeshySpacing.xxxl + 8)
             }
@@ -234,101 +271,130 @@ struct ProfileView: View {
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
     }
 
+    private func open(_ door: ProfileDoor) {
+        door.open(with: router)
+    }
+
     // MARK: - Banner & Avatar Section
 
     private var bannerAndAvatarSection: some View {
         VStack(spacing: 0) {
-            // Banner
-            ZStack(alignment: .bottomTrailing) {
-                bannerImage
-                    .frame(height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                    .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                    .onTapGesture { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
-                    .accessibilityElement()
-                    .accessibilityLabel(ProfileImageCopy.bannerLabel)
-                    .accessibilityHint(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? ProfileImageCopy.openFullscreenHint : "")
-                    .accessibilityAddTraits(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? .isButton : [])
-                    .accessibilityAction { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
-                    .overlay {
-                        // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
-                        // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
-                        if !isEditing, let userId = user?.id {
-                            GameBannerBadge(userId: userId)
-                                .allowsHitTesting(false)
-                                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                        }
-                    }
-
-                if isEditing {
-                    PhotosPicker(selection: $bannerItem, matching: .images) {
-                        Label(String(localized: "profile.edit", bundle: .main), systemImage: "photo.fill")
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                            .foregroundStyle(Color.white)
-                            .padding(.horizontal, MeeshySpacing.smPlus)
-                            .padding(.vertical, MeeshySpacing.xsPlus)
-                            .background(Capsule().fill(Color.black.opacity(0.5)))
-                    }
-                    .padding(MeeshySpacing.sm)
-                }
-
-                if isUploadingBanner {
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                        .fill(Color.black.opacity(0.4))
-                        .frame(height: 120)
-                        .overlay(ProgressView().tint(.white))
-                }
-            }
-
-            // Avatar overlapping banner
-            ZStack(alignment: .bottomTrailing) {
-                ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)
-                .overlay(
-                    Circle()
-                        .stroke(theme.backgroundGradient, lineWidth: 4)
-                )
-                .onTapGesture { openFullscreen(user?.avatar) }
-                .accessibilityHint(opensFullscreen(user?.avatar) ? ProfileImageCopy.openFullscreenHint : "")
-                .accessibilityAddTraits(opensFullscreen(user?.avatar) ? .isButton : [])
-                .accessibilityAction { openFullscreen(user?.avatar) }
-
-                if isEditing {
-                    let textPrimary = theme.textPrimary
-                    PhotosPicker(selection: $avatarItem, matching: .images) {
-                        Image(systemName: "pencil.circle.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
-                            .foregroundStyle(Color(hex: accentColor))
-                            .background(Circle().fill(textPrimary.opacity(0.1)))
-                    }
-                    .accessibilityLabel(String(localized: "profile.avatar.edit", bundle: .main))
-                    .offset(x: 4, y: 4)
-                }
-
-                if isUploadingAvatar {
-                    Circle()
-                        .fill(Color.black.opacity(0.4))
-                        .frame(width: 90, height: 90)
-                        .overlay(ProgressView().tint(.white))
-                }
-            }
-            .offset(y: -45)
-            .padding(.bottom, -45 + ProfileOwnAvatar.reserveBelow(user))
-
+            bannerBlock
+            avatarBlock
+                .offset(y: -45)
+                .padding(.bottom, -45 + ProfileOwnAvatar.reserveBelow(user))
             if !isEditing {
-                VStack(spacing: MeeshySpacing.xs) {
-                    Text(user?.displayName ?? user?.username ?? String(localized: "profile.unknown_user", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
-                        .foregroundStyle(theme.textPrimary)
-
-                    if let username = user?.username {
-                        Text("@\(username)")
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundStyle(Color(hex: accentColor))
-                    }
-                }
-                .padding(.top, MeeshySpacing.sm)
+                nameBlock.transition(.opacity)
             }
         }
+    }
+
+    private var bannerBlock: some View {
+        ZStack(alignment: .bottomTrailing) {
+            bannerImage
+                .frame(height: 120)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                .zoomTransitionSource(id: ProfileOwnBanner.openablePhoto(of: user) ?? "", in: photoZoomSpace)
+                .onTapGesture { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
+                .accessibilityElement()
+                .accessibilityLabel(ProfileImageCopy.bannerLabel)
+                .accessibilityHint(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? ProfileImageCopy.openFullscreenHint : "")
+                .accessibilityAddTraits(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? .isButton : [])
+                .accessibilityAction { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
+                .overlay {
+                    // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
+                    // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
+                    if !isEditing, let userId = user?.id {
+                        GameBannerBadge(userId: userId)
+                            .allowsHitTesting(false)
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                            .transition(.opacity)
+                    }
+                }
+
+            if isEditing {
+                PhotosPicker(selection: $bannerItem, matching: .images) {
+                    Label(String(localized: "profile.edit", bundle: .main), systemImage: "photo.fill")
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
+                        .background(Capsule().fill(Color.black.opacity(0.5)))
+                }
+                .padding(MeeshySpacing.sm)
+                .transition(.opacity)
+            }
+
+            if isUploadingBanner {
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    .fill(Color.black.opacity(0.4))
+                    .frame(height: 120)
+                    .overlay(ProgressView().tint(.white))
+            }
+        }
+    }
+
+    private var avatarBlock: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)
+            .overlay(
+                Circle()
+                    .stroke(theme.backgroundGradient, lineWidth: 4)
+            )
+            .zoomTransitionSource(id: user?.avatar ?? "", in: photoZoomSpace)
+            .onTapGesture { openFullscreen(user?.avatar) }
+            .accessibilityHint(opensFullscreen(user?.avatar) ? ProfileImageCopy.openFullscreenHint : "")
+            .accessibilityAddTraits(opensFullscreen(user?.avatar) ? .isButton : [])
+            .accessibilityAction { openFullscreen(user?.avatar) }
+
+            if isEditing {
+                let textPrimary = theme.textPrimary
+                PhotosPicker(selection: $avatarItem, matching: .images) {
+                    Image(systemName: "pencil.circle.fill")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
+                        .foregroundStyle(Color(hex: accentColor))
+                        .background(Circle().fill(textPrimary.opacity(0.1)))
+                }
+                .accessibilityLabel(String(localized: "profile.avatar.edit", bundle: .main))
+                .offset(x: 4, y: 4)
+                .transition(.opacity)
+            }
+
+            if isUploadingAvatar {
+                Circle()
+                    .fill(Color.black.opacity(0.4))
+                    .frame(width: 90, height: 90)
+                    .overlay(ProgressView().tint(.white))
+            }
+        }
+    }
+
+    /// Nom, @pseudo et ancienneté : l'ancienneté se lit en un mot sous mon nom, plus dans une section à elle.
+    private var nameBlock: some View {
+        VStack(spacing: MeeshySpacing.xs) {
+            Text(user?.displayName ?? user?.username ?? String(localized: "profile.unknown_user", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
+
+            if let username = user?.username {
+                Text("@\(username)")
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                    .foregroundStyle(Color(hex: accentColor))
+            }
+
+            if let membership = ProfileMembershipLine.text(createdAt: user?.createdAt, locale: Self.interfaceLocale, now: Date()) {
+                Text(membership)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+            }
+        }
+        .padding(.top, MeeshySpacing.sm)
+    }
+
+    /// La langue dans laquelle l'app me parle : le mois de l'ancienneté se dit dans la même langue que sa phrase.
+    private static var interfaceLocale: Locale {
+        Locale(identifier: Bundle.main.preferredLocalizations.first ?? "fr")
     }
 
     private var bannerImage: some View {
@@ -336,88 +402,11 @@ struct ProfileView: View {
             .task(id: user?.profileDecor) { await servedAppearance.load(decor: user?.profileDecor) }
     }
 
-    // MARK: - Identity Section
-
-    private var identitySection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(icon: "person.text.rectangle.fill", title: String(localized: "profile.section.identity", bundle: .main), color: accentColor)
-
-            VStack(spacing: 0) {
-                profileField(icon: "person.fill", title: String(localized: "profile.first_name", bundle: .main), value: $firstName, placeholder: String(localized: "profile.first_name", bundle: .main))
-                profileField(icon: "person.fill", title: String(localized: "profile.last_name", bundle: .main), value: $lastName, placeholder: String(localized: "profile.last_name", bundle: .main))
-                profileInfoRow(icon: "at", title: String(localized: "profile.username", bundle: .main), value: "@\(user?.username ?? "—")")
-                profileField(icon: "person.crop.rectangle.fill", title: String(localized: "profile.display_name", bundle: .main), value: $displayName, placeholder: String(localized: "profile.display_name", bundle: .main))
-                profileField(icon: "text.quote", title: String(localized: "profile.bio", bundle: .main), value: $bio, placeholder: String(localized: "profile.bio.placeholder", bundle: .main), isMultiline: true)
-            }
-            .background(sectionBackground)
-        }
-    }
-
-    // MARK: - Contact Section
-
-    private var contactSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(icon: "envelope.fill", title: String(localized: "profile.section.contact", bundle: .main), color: MeeshyColors.indigo300Hex)
-
-            VStack(spacing: 0) {
-                HStack(spacing: MeeshySpacing.md) {
-                    fieldIcon("envelope.fill")
-                    
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        Text(String(localized: "profile.email", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundStyle(theme.textMuted)
-                        
-                        Text(user?.email ?? "—")
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundColor(user?.email != nil ? theme.textPrimary : theme.textMuted)
-                    }
-                    
-                    Spacer()
-                    
-                    if let email = user?.email, !email.isEmpty {
-                        verificationBadge(verified: user?.emailVerifiedAt != nil)
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.mdPlus)
-                .padding(.vertical, MeeshySpacing.smPlus)
-
-                HStack(spacing: MeeshySpacing.md) {
-                    fieldIcon("phone.fill")
-                    
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        Text(String(localized: "profile.phone", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundStyle(theme.textMuted)
-                        
-                        Text({
-                            if let phone = user?.phoneNumber, !phone.isEmpty {
-                                return "\(CountryPicker.flag(forPhoneNumber: phone)) \(phone)"
-                            }
-                            return "—"
-                        }())
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
-                    }
-                    
-                    Spacer()
-                    
-                    if let phone = user?.phoneNumber, !phone.isEmpty {
-                        verificationBadge(verified: user?.phoneVerifiedAt != nil)
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.mdPlus)
-                .padding(.vertical, MeeshySpacing.smPlus)
-            }
-            .background(sectionBackground)
-        }
-    }
-
     // MARK: - Languages Section
 
     private var languagesSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), color: MeeshyColors.errorHex)
+            ProfileSectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), colorHex: MeeshyColors.errorHex)
 
             Text(String(localized: "profile.language.intro", defaultValue: "Meeshy te montre tout dans ta langue principale, sinon dans la suivante.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
@@ -425,29 +414,16 @@ struct ProfileView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: 0) {
-                languagePickerRow(
-                    title: String(localized: "profile.language.primary", bundle: .main),
-                    subtitle: nil,
-                    code: systemLanguage,
-                    required: true,
-                    showPicker: $showSystemLanguagePicker
-                )
-                languagePickerRow(
-                    title: String(localized: "profile.language.regional", bundle: .main),
-                    subtitle: String(localized: "profile.language.regional.rank", defaultValue: "2e choix", bundle: .main),
-                    code: regionalLanguage,
-                    required: false,
-                    showPicker: $showRegionalLanguagePicker
-                )
-                languagePickerRow(
-                    title: String(localized: "profile.language.custom", bundle: .main),
-                    subtitle: String(localized: "profile.language.custom.rank", defaultValue: "3e choix", bundle: .main),
-                    code: customDestinationLanguage,
-                    required: false,
-                    showPicker: $showCustomLanguagePicker
-                )
+                languageRow(title: String(localized: "profile.language.primary", bundle: .main), subtitle: nil,
+                            code: systemLanguage, isRequired: true) { showSystemLanguagePicker = true }
+                languageRow(title: String(localized: "profile.language.regional", bundle: .main),
+                            subtitle: String(localized: "profile.language.regional.rank", defaultValue: "2e choix", bundle: .main),
+                            code: regionalLanguage, isRequired: false) { showRegionalLanguagePicker = true }
+                languageRow(title: String(localized: "profile.language.custom", bundle: .main),
+                            subtitle: String(localized: "profile.language.custom.rank", defaultValue: "3e choix", bundle: .main),
+                            code: customDestinationLanguage, isRequired: false) { showCustomLanguagePicker = true }
             }
-            .background(sectionBackground)
+            .background(ProfileSectionCard(tintHex: accentColor))
         }
         .sheet(isPresented: $showSystemLanguagePicker) {
             ProfileLanguagePickerSheet(
@@ -478,38 +454,31 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Stats Section
+    private func languageRow(title: String, subtitle: String?, code: String, isRequired: Bool,
+                             onPick: @escaping () -> Void) -> some View {
+        ProfileLanguageRow(title: title, subtitle: subtitle, code: code, isRequired: isRequired,
+                           isEditing: isEditing, accentHex: accentColor, onPick: onPick)
+    }
 
-    private var statsSection: some View {
+    // MARK: - Activity Section
+
+    /// Mon activité (ex-Statistiques) : la bande des trois nombres ouvre les statistiques détaillées ; dessous, ma
+    /// Légende et mon décor, là où je cherche « où j'en suis ».
+    private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(icon: "chart.bar.fill", title: String(localized: "profile.section.stats", bundle: .main), color: MeeshyColors.indigo300Hex)
-
-            Button {
-                HapticFeedback.light()
-                showStats = true
-            } label: {
-                HStack(spacing: MeeshySpacing.md) {
-                    statCard(value: "\(stats?.totalMessages ?? 0)", label: String(localized: "profile.stats.messages", bundle: .main), color: MeeshyColors.errorHex)
-                    statCard(value: "\(stats?.totalConversations ?? 0)", label: String(localized: "profile.stats.conversations", bundle: .main), color: MeeshyColors.indigo300Hex)
-                    statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: String(localized: "profile.stats.friends", bundle: .main), color: MeeshyColors.indigo600Hex)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(statsAccessibilityLabel)
-            .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
-
+            ProfileSectionHeader(icon: "chart.bar.fill", title: ProfileActivityBand.title, colorHex: MeeshyColors.indigo300Hex)
+            ProfileActivityBand(stats: stats, onOpen: openActivity)
             progressionEntry
             ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
         }
     }
 
-    /// L'entrée du tableau de bord des streaks & badges (#5698) — sous les
-    /// statistiques, là où l'utilisateur cherche « où j'en suis ». La vue vit
-    /// dans son propre fichier : `ProfileView` est déjà au-delà du seuil de
-    /// découpage (1 000 lignes) — on n'y ajoute que la
-    /// ligne qui la monte.
-    /// #10093 — plus de carte de jeu sur le profil : le niveau et le rang vivent sur la bannière.
+    private func openActivity() {
+        showStats = true
+    }
+
+    /// L'entrée du tableau de bord des streaks & badges (#5698) — sous mon activité, là où l'utilisateur cherche « où
+    /// j'en suis ». #10093 — plus de carte de jeu sur le profil : le niveau et le rang vivent sur la bannière.
     private var progressionEntry: some View {
         ProfileProgressionEntry { router.push(.progression) }
     }
@@ -523,261 +492,6 @@ struct ProfileView: View {
         guard opensFullscreen(url), let url else { return }
         HapticFeedback.light()
         fullscreenImage = IdentifiedString(url)
-    }
-
-    // Recompose le bouton de stats en UN seul élément VoiceOver cohérent : sans
-    // regroupement, la rangée était lue comme des fragments épars (valeurs et labels
-    // entremêlés) et rien n'indiquait que le tap ouvre l'écran de stats détaillées.
-    // Le label associe chaque valeur à son intitulé (mêmes clés que les cartes visibles),
-    // précédé du titre de section « Statistiques » — 0 clé i18n neuve pour le label.
-    private var statsAccessibilityLabel: String {
-        let title = String(localized: "profile.section.stats", bundle: .main)
-        let messages = "\(stats?.totalMessages ?? 0) \(String(localized: "profile.stats.messages", bundle: .main))"
-        let conversations = "\(stats?.totalConversations ?? 0) \(String(localized: "profile.stats.conversations", bundle: .main))"
-        let friends = "\(stats?.friendRequestsReceived ?? 0) \(String(localized: "profile.stats.friends", bundle: .main))"
-        return "\(title): \(messages), \(conversations), \(friends)"
-    }
-
-    // MARK: - Friend Requests Section
-
-    private var friendRequestsSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(icon: "person.badge.plus.fill", title: String(localized: "profile.section.requests", bundle: .main), color: MeeshyColors.brandPrimaryHex)
-
-            Button {
-                HapticFeedback.light()
-                router.push(.peopleDiscovery(.requests))
-            } label: {
-                HStack(spacing: MeeshySpacing.md) {
-                    fieldIcon("person.2.fill")
-
-                    Text(String(localized: "profile.friend_requests", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundStyle(theme.textPrimary)
-
-                    Spacer()
-
-                    if pendingRequestCount > 0 {
-                        Text("\(pendingRequestCount)")
-                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.white)
-                            .frame(minWidth: 22, minHeight: 22)
-                            .background(Circle().fill(MeeshyColors.indigo500))
-                    }
-
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-                .padding(.horizontal, MeeshySpacing.mdPlus)
-                .padding(.vertical, MeeshySpacing.md)
-                .background(sectionBackground)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    // MARK: - Member Since
-
-    private var memberSinceSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(icon: "calendar", title: String(localized: "profile.section.member_since", bundle: .main), color: MeeshyColors.indigo600Hex)
-
-            HStack {
-                Text(user?.createdAt.flatMap { parseAndFormatDate($0) } ?? "—")
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundStyle(theme.textPrimary)
-                Spacer()
-            }
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.md)
-            .background(sectionBackground)
-        }
-    }
-
-    // MARK: - Components
-
-    private func sectionHeader(icon: String, title: String, color: String) -> some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundStyle(Color(hex: color))
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: color))
-                .tracking(1.2)
-        }
-        .padding(.leading, MeeshySpacing.xs)
-    }
-
-    private var sectionBackground: some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: accentColor))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: accentColor), lineWidth: 1)
-            )
-    }
-
-    private func fieldIcon(_ name: String) -> some View {
-        Image(systemName: name)
-            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-            .foregroundStyle(Color(hex: accentColor))
-            .frame(width: 28, height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
-                    .fill(Color(hex: accentColor).opacity(0.12))
-            )
-    }
-
-    private func profileField(
-        icon: String,
-        title: String,
-        value: Binding<String>,
-        placeholder: String,
-        isMultiline: Bool = false
-    ) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            fieldIcon(icon)
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(title)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-
-                if isEditing {
-                    if isMultiline {
-                        TextField(placeholder, text: value, axis: .vertical)
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundStyle(theme.textPrimary)
-                            .lineLimit(3...6)
-                    } else {
-                        TextField(placeholder, text: value)
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundStyle(theme.textPrimary)
-                    }
-                } else {
-                    Text(value.wrappedValue.isEmpty ? placeholder : value.wrappedValue)
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundStyle(value.wrappedValue.isEmpty ? theme.textMuted : theme.textPrimary)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.vertical, MeeshySpacing.smPlus)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: "\(title): \(value.wrappedValue)"))
-    }
-
-    private func profileInfoRow(icon: String, title: String, value: String) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            fieldIcon(icon)
-
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundStyle(theme.textPrimary)
-
-            Spacer()
-
-            Text(value)
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.vertical, MeeshySpacing.smPlus)
-    }
-
-    private func languagePickerRow(
-        title: String,
-        subtitle: String?,
-        code: String,
-        required: Bool,
-        showPicker: Binding<Bool>
-    ) -> some View {
-        Button {
-            guard isEditing else { return }
-            HapticFeedback.light()
-            showPicker.wrappedValue = true
-        } label: {
-            HStack(spacing: MeeshySpacing.md) {
-                fieldIcon("globe")
-
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(title)
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundStyle(theme.textPrimary)
-
-                    if let subtitle, !code.isEmpty {
-                        Text(subtitle)
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                            .foregroundStyle(theme.textMuted)
-                    }
-                }
-
-                Spacer()
-
-                if let info = LanguageData.info(for: code) {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Text(info.flag)
-                            .font(MeeshyFont.relative(MeeshyFont.subtitleSize))
-                        Text(info.nativeName)
-                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                            .foregroundStyle(theme.textMuted)
-                    }
-                } else {
-                    Text(required
-                         ? String(localized: "profile.language.choose", bundle: .main)
-                         : String(localized: "profile.language.none", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                if isEditing {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.smPlus)
-        }
-        .disabled(!isEditing)
-    }
-
-    private func verificationBadge(verified: Bool) -> some View {
-        Text(verified
-             ? String(localized: "profile.verified", bundle: .main)
-             : String(localized: "profile.not_verified", bundle: .main))
-            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, MeeshySpacing.xsPlus)
-            .padding(.vertical, MeeshySpacing.xxs)
-            .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
-    }
-
-    private func statCard(value: String, label: String, color: String) -> some View {
-        VStack(spacing: MeeshySpacing.xsPlus) {
-            Text(value)
-                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(hex: color))
-
-            Text(label)
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.lg)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: color))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.border(tint: color), lineWidth: 1)
-                )
-        )
     }
 
     // MARK: - Helpers
@@ -801,6 +515,17 @@ struct ProfileView: View {
             }
             completion(image)
         }
+    }
+
+    /// Entrer en édition et en sortir font paraître et partir le nom, les sélecteurs d'image et les chevrons : la
+    /// bascule passe par une transaction animée, immédiate sous « réduire les animations ».
+    private func setEditing(_ editing: Bool) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) { isEditing = editing }
+    }
+
+    /// Le bandeau d'erreur paraît et part dans une transaction animée, immédiate sous « réduire les animations ».
+    private func showError(_ message: String?) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) { errorMessage = message }
     }
 
     // MARK: - Actions
@@ -833,11 +558,9 @@ struct ProfileView: View {
             // apply made by the caller must not be left standing as a silent lie.
             Logger.settings.error("Offline profile save failed to encode payload: \(error.localizedDescription, privacy: .public)")
             authManager.currentUser = original
-            isEditing = true
+            setEditing(true)
             HapticFeedback.error()
-            withAnimation {
-                errorMessage = String(localized: "profile.save.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main)
-            }
+            showError(String(localized: "profile.save.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
         }
     }
 
@@ -855,7 +578,7 @@ struct ProfileView: View {
             displayName: identityEdits.displayName
         ) {
             HapticFeedback.error()
-            withAnimation { errorMessage = refusal }
+            showError(refusal)
             return
         }
 
@@ -873,7 +596,7 @@ struct ProfileView: View {
             customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage)
         )
         authManager.currentUser = optimistic
-        isEditing = false
+        setEditing(false)
         HapticFeedback.success()
 
         let request = UpdateProfileRequest(
@@ -902,52 +625,54 @@ struct ProfileView: View {
             } catch {
                 // Rollback to the pre-edit snapshot so the user can fix the issue.
                 authManager.currentUser = original
-                isEditing = true
+                setEditing(true)
                 HapticFeedback.error()
-                withAnimation { errorMessage = error.localizedDescription }
+                showError(error.localizedDescription)
             }
             isSaving = false
         }
     }
 
     private func uploadAvatar(_ image: UIImage) {
-        isUploadingAvatar = true
-        Task {
-            do {
-                let updatedUser = try await ProfileImageUploader().upload(image, as: .avatar)
-                authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "profile.avatar.updated", bundle: .main))
-            } catch {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "profile.avatar.error", bundle: .main))
-                withAnimation { errorMessage = String(localized: "profile.avatar.error", bundle: .main) }
-            }
-            isUploadingAvatar = false
-            avatarItem = nil
-        }
+        upload(image, as: .avatar)
     }
 
     private func uploadBanner(_ image: UIImage) {
-        isUploadingBanner = true
+        upload(image, as: .banner)
+    }
+
+    /// La photo ou la bannière part, puis le compte servi se fond sur l'utilisateur courant ; un échec le dit deux
+    /// fois (toast et bandeau), comme avant.
+    private func upload(_ image: UIImage, as slot: ProfileImageSlot) {
+        setUploading(true, slot)
         Task {
             do {
-                let updatedUser = try await ProfileImageUploader().upload(image, as: .banner)
+                let updatedUser = try await ProfileImageUploader().upload(image, as: slot)
                 authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "profile.banner.updated", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(slot == .avatar
+                    ? String(localized: "profile.avatar.updated", bundle: .main)
+                    : String(localized: "profile.banner.updated", bundle: .main))
             } catch {
+                let failure = slot == .avatar
+                    ? String(localized: "profile.avatar.error", bundle: .main)
+                    : String(localized: "profile.banner.error", bundle: .main)
                 HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "profile.banner.error", bundle: .main))
-                withAnimation { errorMessage = String(localized: "profile.banner.error", bundle: .main) }
+                FeedbackToastManager.shared.showError(failure)
+                showError(failure)
             }
-            isUploadingBanner = false
-            bannerItem = nil
+            setUploading(false, slot)
         }
     }
 
-
-    private func parseAndFormatDate(_ dateString: String) -> String? {
-        WireDate.date(from: dateString)?.formatted(date: .abbreviated, time: .omitted)
+    private func setUploading(_ uploading: Bool, _ slot: ProfileImageSlot) {
+        switch slot {
+        case .avatar:
+            isUploadingAvatar = uploading
+            if !uploading { avatarItem = nil }
+        case .banner:
+            isUploadingBanner = uploading
+            if !uploading { bannerItem = nil }
+        }
     }
 }

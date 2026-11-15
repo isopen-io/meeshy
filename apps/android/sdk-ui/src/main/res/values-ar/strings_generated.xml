@@ -281,6 +281,10 @@
     <string name="identity_role_admin">مشرف</string>
     <string name="identity_role_creator">المنشئ</string>
     <string name="identity_role_moderator">مُنظّم</string>
+    <string name="kit_anchored_sheet_close">إغلاق</string>
+    <string name="kit_anchored_sheet_height">ارتفاع اللوحة</string>
+    <string name="kit_anchored_sheet_height_expanded">موسّعة</string>
+    <string name="kit_anchored_sheet_height_reduced">مصغّرة</string>
     <string name="kit_field_busy">قيد التنفيذ</string>
     <string name="kit_field_clear">مسح</string>
     <string name="kit_field_count">%1$s من %2$s حرف</string>

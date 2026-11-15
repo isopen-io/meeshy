@@ -88,7 +88,7 @@ export function PersonName({
           event.stopPropagation();
           worldCard.open(participantId);
         }}
-        className={`cursor-pointer border-0 bg-transparent p-0 text-start${className === undefined ? '' : ` ${className}`}`}
+        className={`active:opacity-80 cursor-pointer border-0 bg-transparent p-0 text-start${className === undefined ? '' : ` ${className}`}`}
         style={style}
         {...(redundant === true ? { tabIndex: -1 } : { 'aria-label': worldCard.labelFor(name) })}
       >
@@ -111,7 +111,7 @@ export function PersonName({
 
   if (cible.kind === 'story') {
     return (
-      <Link to="story" params={{ post: cible.post }} className={className} style={style} {...accessibilite}>
+      <Link to="story" params={{ post: cible.post }} className={className === undefined ? 'active:opacity-80' : `active:opacity-80 ${className}`} style={style} {...accessibilite}>
         {contenu}
       </Link>
     );
@@ -122,7 +122,7 @@ export function PersonName({
       to="userProfile"
       params={{ username: cible.username }}
       onClick={peekProfileOnClick(cible.username, { displayName: name, avatar: null })}
-      className={className} style={style} {...accessibilite}>
+      className={className === undefined ? 'active:opacity-80' : `active:opacity-80 ${className}`} style={style} {...accessibilite}>
       {contenu}
     </Link>
   );

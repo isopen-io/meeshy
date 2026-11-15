@@ -1047,3 +1047,58 @@ socket jusqu'au client.
 2. #17133 et #18535.
 3. #18371, #18154 et #18497.
 4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 31 — 2026-11-14
+
+- **Base** : `origin/dev` @ `13484857`. Le lot du cycle 30 (#18436, PR #18572) y est fusionné.
+- **Branche** : `claude/determined-volta-vn6lrc`.
+- **Objectif** : #18571. Les handlers audio, transcription et voix du traducteur ne journalisent plus que le type d'une exception, et les erreurs qu'ils publient à la passerelle ne portent plus le message brut.
+- **Livré** (seul le traducteur change ; ni la passerelle, ni le routage, ni les types d'événements) :
+  - **Logs** : 19 sites des trois handlers passent à `type(e).__name__`, et les `traceback.print_exc()` disparaissent. Le site oublié par l'issue, le nettoyage du fichier temporaire de transcription, a été trouvé par la QA et suit la même règle.
+  - **Charges publiées** : le champ `error` devient un libellé fixe et non vide. `voice_api_error` porte « Voice API request failed », `voice_profile_error` « Voice profile request failed » avec `errorCode: 'INTERNAL_ERROR'` ajouté, `audio_process_error` « Audio processing failed » et `transcription_error` « Transcription failed ». Rien ne compare ce texte, ni dans la passerelle ni dans les clients. Le SDK iOS déclare `TranscriptionFailedEvent.error` non optionnel, et il reste satisfait. Avant ce lot, le message brut partait vers les logs de la passerelle, vers les réponses HTTP des routes voice et vers les sockets de conversation (`audio:transcription-failed`).
+  - **Base64 invalide** : le `ValueError` levé n'embarque plus le message de l'exception d'origine (`from e`).
+  - **Sites gardés** : `zmq_audio_handler.py` l.43, 66 et 83. Ce sont des `ImportError` au chargement du module, sans donnée de requête ; le diagnostic de démarrage a été voulu après l'incident du 2026-07-03.
+- **Tests** : `tests/test_handlers_exception_logging.py` (15). Le helper refuse aussi tout `exc_info` dans les logs.
+  - **Rouge** : `14 failed` avec les sources de `origin/dev`, que la QA a reproduit, puis `1 failed, 14 passed` pour le témoin du nettoyage.
+  - **Vert** : relancé par moi, `32 passed` sur ce fichier et les deux témoins de logs des cycles 27 et 30.
+  - **Suites voisines** : 30 fichiers `test_*{zmq,handler,voice,transcription}*` lancés fichier par fichier, avant et après. Les listes d'échecs sont identiques. Les échecs d'environnement préexistants sont `test_12` (5), `test_27` (1), `test_28_voice_api` (9 F et 43 E, `python-multipart` absent), `test_35` (3), et les 5 erreurs connues de `TestRealTranslatorIntegration`.
+  - **Mutations QA** : 22 sur 24 tuées. Le survivant équivalent est le message du `ValueError` base64, que le handler englobant ne ressort plus. Le survivant réel était `exc_info=True`, et le témoin le tue désormais.
+- **QA** : favorable avec réserves. Les deux réserves de fond sont corrigées dans le lot. Hors périmètre, deux issues ont été ouvertes :
+  - #18599 : une transcription demandée par `audioPath` seul lève `UnboundLocalError` sur `Path`, à cause d'imports locaux. La passerelle actuelle envoie toujours le binaire, donc le défaut est latent.
+  - #18600 : le balayage du reste du traducteur (341 sites dans 70 fichiers, à trier) et son cliquet. La règle doit réécrire le § « `except Exception` large » de `services/translator/CLAUDE.md`, qui fait encore du message brut le seul indice d'une erreur de programmation.
+- **Effet de bord assumé** : un appelant HTTP des routes voice reçoit désormais un libellé générique au lieu du message brut. Le diagnostic d'une panne passe par le type dans les logs du traducteur et par `errorCode`.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #17133 et #18535.
+2. #18599, puis #18600, à découper par répertoire.
+3. #18371, #18154 et #18497.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 32 — 2026-11-15
+
+- **Base** : `claude/determined-volta-vn6lrc` @ `76ab6cc8`, la tête de la PR #18603 (cycle 31), elle-même sur `origin/dev` @ `13484857`.
+  - **`dev` est verrouillée** (« Lock branch ») depuis le 2026-11-14 vers 23:10 UTC. Toute fusion rend `405 Cannot change this locked branch`. #18603 (cycle 31, #18571) et #18612 (cycle 31 bis, #18535) attendent, CI verte et QA favorable. Le porteur a été prévenu. Le lot de ce cycle touche le même fichier que #18603, d'où l'empilement.
+- **Branche** : `claude/determined-volta-73ayv3`.
+- **Objectif** : #18599. Une transcription demandée par simple chemin (`audioPath` seul) aboutit au lieu de lever `UnboundLocalError`.
+- **Livré** (seul le traducteur change ; ni le protocole ni les événements) : les trois `from pathlib import Path` locaux de `_handle_transcription_only_request` sont retirés. Ils faisaient de `Path` une variable locale de toute la fonction.
+- **Tests** : `tests/test_transcription_audio_path_mode.py` (3).
+  - **Les témoins** : le mode `audioPath` ; les modes `_audioBinary` et base64, avec le nettoyage du fichier temporaire. Ces deux modes n'avaient jusqu'ici aucun témoin de succès.
+  - **Rouge** : `1 failed, 2 passed` sur la base. Je l'ai relancé, et la QA l'a reproduit.
+  - **Vert** : `3 passed`, relancé par moi.
+  - **Suites voisines** : `59 passed` avant comme après (`test_handlers_exception_logging`, `test_06`, `test_transcription_guards`, `test_audio_at_rest_and_forget`).
+  - **Mutations QA** : 3 sur 3 tuées (import local dans le `finally`, imports locaux dans les blocs binaire et base64, `unlink` retiré).
+- **Environnement** : le conteneur n'a pas de pytest. Le venv monté par l'agent installe depuis pypi.org avec `uv pip install --no-config --index-url https://pypi.org/simple`, parce que la configuration du dépôt passe par `download.pytorch.org`, refusé par le proxy.
+- **QA** : favorable avec réserves, toutes deux de sécurité et préexistantes.
+  - #18628 : le traducteur lit des chemins fournis par ZMQ sans confinement, dans `transcription_only`, `audio_process` (legacy) et `voice_api`. Le lot remet en service une porte de plus de cette famille. Le mode n'a aucun appelant légitime : la passerelle envoie toujours le binaire.
+  - #18629 : le socket PULL est lié sur `0.0.0.0:5555` sans CURVE ni ZAP, et il est publié sur l'hôte en dev et en local.
+  - #18630 : `test_transcription_translation_only.py` ne collecte aucun test.
+
+### Cycle suivant : par où reprendre
+
+0. Si `dev` est toujours verrouillée : ne pas ouvrir d'autre lot empilé. Prévenir le porteur, ou attendre. Une fois le verrou levé, fusionner dans l'ordre #18603, #18612 (garder les sections 31, 31 bis et 32 de ce fichier), puis la PR de ce cycle, rebasée sur `dev`.
+1. #18628, avec la revue de l'agent `auditeur-adversarial`, puis #17133 et #18611.
+2. #18600, à découper par répertoire, puis #18630.
+3. #18629, avec l'agent `sre-infra`, puis #18371, #18154 et #18497.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

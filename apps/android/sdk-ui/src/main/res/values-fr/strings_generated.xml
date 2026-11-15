@@ -275,6 +275,10 @@
     <string name="identity_role_admin">Admin</string>
     <string name="identity_role_creator">Créateur</string>
     <string name="identity_role_moderator">Modérateur</string>
+    <string name="kit_anchored_sheet_close">Fermer</string>
+    <string name="kit_anchored_sheet_height">Hauteur de la feuille</string>
+    <string name="kit_anchored_sheet_height_expanded">agrandie</string>
+    <string name="kit_anchored_sheet_height_reduced">réduite</string>
     <string name="kit_field_busy">En cours</string>
     <string name="kit_field_clear">Effacer</string>
     <string name="kit_field_count">%1$s caractères sur %2$s</string>
