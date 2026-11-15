@@ -14,6 +14,7 @@ import logging
 import tempfile
 import uuid
 import os
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict
@@ -42,6 +43,14 @@ ACCEPTED_AUDIO_FORMATS = frozenset({
 })
 
 UNSUPPORTED_AUDIO_FORMAT_ERROR = 'Unsupported audio format'
+
+INVALID_USER_ID_ERROR = 'Invalid user_id'
+
+OBJECT_ID_PATTERN = re.compile(r'[0-9a-fA-F]{24}')
+
+
+def is_object_id(user_id: Any) -> bool:
+    return isinstance(user_id, str) and OBJECT_ID_PATTERN.fullmatch(user_id) is not None
 
 
 def normalized_audio_extension(audio_format: Any) -> Optional[str]:
@@ -247,6 +256,13 @@ class VoiceProfileHandler:
                 success=False,
                 user_id='',
                 error='user_id is required'
+            ).to_dict()
+
+        if not is_object_id(user_id):
+            return VoiceProfileAnalysisResult(
+                success=False,
+                user_id='',
+                error=INVALID_USER_ID_ERROR
             ).to_dict()
 
         if not self.voice_clone_service:
@@ -481,6 +497,13 @@ class VoiceProfileHandler:
                 success=False,
                 user_id='',
                 error='user_id is required'
+            ).to_dict()
+
+        if not is_object_id(user_id):
+            return VoiceProfileVerifyResult(
+                success=False,
+                user_id='',
+                error=INVALID_USER_ID_ERROR
             ).to_dict()
 
         existing_fingerprint = request_data.get('existing_fingerprint')
