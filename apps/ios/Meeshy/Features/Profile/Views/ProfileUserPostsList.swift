@@ -120,46 +120,59 @@ private struct ProfilePostsStatsBand: View {
             chip(icon: "circle.dashed", value: counts.stories,
                  label: String(localized: "profile.posts.stat.stories", defaultValue: "Stories", bundle: .main),
                  isSelected: false,
-                 action: { onStoriesTap?() })
+                 action: onStoriesTap)
         }
     }
 
-    private func chip(icon: String, value: Int, label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    /// Une tuile qui agit est un bouton ; une tuile sans action (« Stories » sur le profil d'un autre, dont les
+    /// stories passées ne me sont pas ouvertes) n'est qu'une valeur : ni trait bouton, ni haptique, ni toucher inerte.
+    @ViewBuilder
+    private func chip(icon: String, value: Int, label: String, isSelected: Bool, action: (() -> Void)?) -> some View {
         let display = ProfilePostsCounts.displayValue(value, isApproximate: counts.isApproximate)
-        return Button {
-            action()
-            HapticFeedback.light()
-        } label: {
-            VStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: icon)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo500)
-                Text(display)
-                    .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(theme.textMuted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+        if let action {
+            Button {
+                action()
+                HapticFeedback.light()
+            } label: {
+                chipFace(icon: icon, display: display, label: label, isSelected: isSelected)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.md)
-            .background(theme.surfaceGradient(tint: accentHex))
-            .glassCard(cornerRadius: MeeshyRadius.md)
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(MeeshyColors.indigo500.opacity(isSelected ? 0.9 : 0), lineWidth: MeeshyBorder.emphasis)
-            )
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text("\(display) \(label)"))
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        } else {
+            chipFace(icon: icon, display: display, label: label, isSelected: isSelected)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("\(display) \(label)"))
         }
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(display) \(label)"))
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func chipFace(icon: String, display: String, label: String, isSelected: Bool) -> some View {
+        VStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(15, weight: .semibold))
+                .foregroundStyle(MeeshyColors.indigo500)
+            Text(display)
+                .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(theme.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.md)
+        .background(theme.surfaceGradient(tint: accentHex))
+        .glassCard(cornerRadius: MeeshyRadius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .stroke(MeeshyColors.indigo500.opacity(isSelected ? 0.9 : 0), lineWidth: MeeshyBorder.emphasis)
+        )
     }
 }
 
@@ -221,9 +234,7 @@ struct ProfileUserPostsList: View {
                     counts: viewModel.postsCounts,
                     selectedFilter: viewModel.filter,
                     onSelectFilter: selectFilter,
-                    onStoriesTap: {
-                        openStories()
-                    }
+                    onStoriesTap: opensMyStories ? { openStories() } : nil
                 )
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.bottom, MeeshySpacing.xs)
@@ -418,6 +429,11 @@ struct ProfileUserPostsList: View {
         opening.openReel(post, in: viewModel.reels)
     }
 
+    /// La tuile « Stories » n'ouvre que MES stories : sur le profil d'un autre, elle n'est qu'une valeur.
+    private var opensMyStories: Bool {
+        userId == AuthManager.shared.currentUser?.id
+    }
+
     /// Tap sur la tuile « Stories » : sur SON PROPRE profil, ouvre la page des
     /// stories en cours et passées (`MyStoriesView`, hébergée par la RACINE —
     /// RootView / iPadRootView écoutent `openMyStories`, donc la tuile marche
@@ -427,7 +443,7 @@ struct ProfileUserPostsList: View {
     /// de dismiss est avalée). Sur le profil d'un AUTRE utilisateur, la tuile
     /// reste informative (ses stories passées ne nous sont pas accessibles).
     private func openStories() {
-        guard userId == AuthManager.shared.currentUser?.id else { return }
+        guard opensMyStories else { return }
         dismissHost()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             NotificationCenter.default.post(name: .openMyStories, object: nil)

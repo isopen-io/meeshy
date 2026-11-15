@@ -77,7 +77,7 @@ export function CollapsibleSection({
           aria-expanded={open}
           aria-controls={panelId}
           onClick={() => setOpen((ouvert) => !ouvert)}
-          className={`flex w-full items-center gap-1.5 text-check font-bold tracking-wide ${SECTION_BRAND_INK}`}
+          className={`btn-press flex w-full items-center gap-1.5 text-check font-bold tracking-wide ${SECTION_BRAND_INK}`}
           style={{ minHeight: 44 }}
         >
           <Glyph

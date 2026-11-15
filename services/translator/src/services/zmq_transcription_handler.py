@@ -139,7 +139,6 @@ class TranscriptionHandler:
             if audio_binary:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Mode: BINAIRE ZMQ multipart")
                 import tempfile
-                from pathlib import Path
 
                 # Créer un fichier temporaire directement depuis le binaire
                 temp_dir = Path(tempfile.gettempdir()) / "transcription_temp"
@@ -158,15 +157,14 @@ class TranscriptionHandler:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Mode: BASE64")
                 import base64
                 import tempfile
-                from pathlib import Path
 
                 try:
                     logger.info(f"🔍 [TRANSLATOR-TRACE] Décodage base64...")
                     audio_bytes = base64.b64decode(audio_data)
                     logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Décodé: {len(audio_bytes)} bytes")
                 except Exception as e:
-                    logger.error(f"🔍 [TRANSLATOR-TRACE] ❌ Erreur décodage base64: {e}")
-                    raise ValueError(f"Données audio base64 invalides: {e}")
+                    logger.error(f"🔍 [TRANSLATOR-TRACE] ❌ Erreur décodage base64: {type(e).__name__}")
+                    raise ValueError("Données audio base64 invalides") from e
 
                 # Créer un fichier temporaire
                 temp_dir = Path(tempfile.gettempdir()) / "transcription_temp"
@@ -256,18 +254,14 @@ class TranscriptionHandler:
         except Exception as e:
             logger.error(f"🔍 [TRANSLATOR-TRACE] ❌ ERREUR TRANSCRIPTION:")
             logger.error(f"🔍 [TRANSLATOR-TRACE] Type: {type(e).__name__}")
-            logger.error(f"🔍 [TRANSLATOR-TRACE] Message: {str(e)}")
-            logger.error(f"❌ [TRANSLATOR] Erreur transcription only: {e}")
-            import traceback
-            logger.error(f"🔍 [TRANSLATOR-TRACE] Stack trace:")
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur transcription only: {type(e).__name__}")
 
             logger.info(f"🔍 [TRANSLATOR-TRACE] Publication erreur...")
             await self._publish_transcription_error(
                 task_id=task_id,
                 message_id=request_data.get('messageId', ''),
                 attachment_id=request_data.get('attachmentId', ''),
-                error=str(e),
+                error="Transcription failed",
                 error_code="transcription_failed"
             )
             logger.info(f"🔍 [TRANSLATOR-TRACE] ======== FIN TRANSCRIPTION (erreur) ========")
@@ -276,13 +270,12 @@ class TranscriptionHandler:
             # Nettoyer le fichier temporaire si créé
             if temp_file_path is not None:
                 try:
-                    from pathlib import Path
                     temp_path = Path(temp_file_path) if not isinstance(temp_file_path, Path) else temp_file_path
                     if temp_path.exists():
                         temp_path.unlink()
                         logger.debug(f"   🧹 Fichier temporaire supprimé: {temp_file_path}")
                 except Exception as cleanup_error:
-                    logger.warning(f"   ⚠️ Impossible de supprimer le fichier temp: {cleanup_error}")
+                    logger.warning(f"   ⚠️ Impossible de supprimer le fichier temp: {type(cleanup_error).__name__}")
 
     async def _publish_transcription_result(
         self,
@@ -351,7 +344,7 @@ class TranscriptionHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription result")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription result: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription result: {type(e).__name__}")
 
     async def _publish_transcription_error(
         self,
@@ -380,5 +373,5 @@ class TranscriptionHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription error")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription error: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription error: {type(e).__name__}")
 

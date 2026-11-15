@@ -2117,11 +2117,16 @@ export class MeeshySocketIOManager {
           void this.statusHandler.handleSocketDisconnecting(
             socket.id,
             (room, event, data, exceptSocketIds) => {
-              // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
+              // `broadcastFn` DÉCLARE son seul canal (`typing:stop`) et la charge
+              // qui lui correspond : le couple arrive ici CORRÉLÉ, et part par la
+              // porte sans qu'aucun cast ne le décorrèle. La version d'avant
+              // portait `event as keyof ServerToClientEvents, data as any` sous
+              // un commentaire qui AFFIRMAIT la même contrainte — une affirmation
+              // que seul le type peut tenir (#18649).
               const emitter = exceptSocketIds && exceptSocketIds.length > 0
                 ? this.io.to(room).except(exceptSocketIds)
                 : this.io.to(room);
-              emitter.emit(event as keyof ServerToClientEvents, data as any);
+              emitServerEvent(emitter, event, data);
             },
             otherSocketIds.size > 0 ? otherSocketIds : undefined
           ).catch((error) => {
