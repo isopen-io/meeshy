@@ -20,10 +20,12 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -57,6 +59,10 @@ class MeeshyAnchoredSheetBehaviorTest {
         }
         compose.waitForIdle()
     }
+
+    /** La hauteur de la fenêtre du test, en dp : les fractions de la feuille se comptent sur elle, quel que soit l'écran simulé. */
+    private val window: Float
+        get() = compose.onRoot().getUnclippedBoundsInRoot().height.value
 
     @Composable
     private fun Rows(count: Int = 4) {
@@ -233,8 +239,8 @@ class MeeshyAnchoredSheetBehaviorTest {
             MeeshyAnchoredSheet(onDismissRequest = {}, title = "Stickers", height = MeeshyAnchoredSheetHeight.Regular, state = state) { Rows() }
         }
 
-        assertThat(state.footprintPx).isWithin(1f).of(400f)
-        compose.onNodeWithTag(MeeshyAnchoredSheetTags.SHEET).assertHeightIsEqualTo(400.dp)
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.5f)
+        compose.onNodeWithTag(MeeshyAnchoredSheetTags.SHEET).assertHeightIsEqualTo((window * 0.5f).dp)
     }
 
     @Test
@@ -247,7 +253,7 @@ class MeeshyAnchoredSheetBehaviorTest {
             }
         }
 
-        assertThat(state.footprintPx).isWithin(1f).of(496f)
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.62f)
     }
 
     @Test
@@ -279,7 +285,7 @@ class MeeshyAnchoredSheetBehaviorTest {
         open = "b"
         compose.waitForIdle()
 
-        assertThat(state.footprintPx).isWithin(1f).of(400f)
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.5f)
     }
 
     @Test
@@ -290,7 +296,7 @@ class MeeshyAnchoredSheetBehaviorTest {
             MeeshyAnchoredSheetPlaceholder(height = MeeshyAnchoredSheetHeight.Regular, state = state)
         }
 
-        assertThat(state.footprintPx).isWithin(1f).of(400f)
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.5f)
         compose.onNodeWithTag(MeeshyAnchoredSheetTags.SHEET).assertDoesNotExist()
     }
 
@@ -323,14 +329,14 @@ class MeeshyAnchoredSheetBehaviorTest {
         handle.assertExists()
         assertThat(handle.fetchSemanticsNode().config[SemanticsProperties.ContentDescription]).containsExactly("Sheet height")
         assertThat(handle.fetchSemanticsNode().config[SemanticsProperties.StateDescription]).isEqualTo("collapsed")
-        assertThat(state.footprintPx).isWithin(1f).of(240f)
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.3f)
 
         val increase = handle.fetchSemanticsNode().config[SemanticsActions.CustomActions].first { it.label == "Increase" }
         compose.runOnUiThread { increase.action() }
         compose.waitForIdle()
 
         assertThat(state.detentIndex).isEqualTo(1)
-        assertThat(state.footprintPx).isWithin(1f).of(496f)
+        assertThat(state.footprintPx).isWithin(1f).of(window * 0.62f)
         assertThat(
             compose.onNodeWithTag(MeeshyAnchoredSheetTags.HANDLE).fetchSemanticsNode().config[SemanticsProperties.StateDescription],
         ).isEqualTo("expanded")

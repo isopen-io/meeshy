@@ -65,7 +65,9 @@ class MeeshyAnchoredSheetTest {
         rows("detents").forEach { row ->
             val fractions = row.getValue("fractions").jsonArray.map { it.jsonPrimitive.float }
             val rests = MeeshyAnchoredSheetMetrics.detentHeights(fractions, row.float("available"))
-            assertThat(rests).containsExactlyElementsIn(row.getValue("rests").jsonArray.map { it.jsonPrimitive.float }).inOrder()
+            val expected = row.getValue("rests").jsonArray.map { it.jsonPrimitive.float }
+            assertThat(rests).hasSize(expected.size)
+            rests.zip(expected).forEach { (rest, wanted) -> assertThat(rest).isWithin(EPSILON).of(wanted) }
         }
     }
 
@@ -191,9 +193,12 @@ class MeeshyAnchoredSheetTest {
         val low = MeeshyAnchoredSheetLayout.resolve(height, content = null, available = 800f, maximumFraction = 0.62f, detentIndex = 0)
         val high = MeeshyAnchoredSheetLayout.resolve(height, content = null, available = 800f, maximumFraction = 0.62f, detentIndex = 1)
 
-        assertThat(listOf(low.rest, high.rest)).containsExactly(240f, 480f).inOrder()
-        assertThat(listOf(low.layoutHeight, high.layoutHeight)).containsExactly(480f, 480f).inOrder()
-        assertThat(listOf(low.restOffset, high.restOffset)).containsExactly(240f, 0f).inOrder()
+        assertThat(low.rest).isWithin(EPSILON).of(240f)
+        assertThat(high.rest).isWithin(EPSILON).of(480f)
+        assertThat(low.layoutHeight).isWithin(EPSILON).of(480f)
+        assertThat(high.layoutHeight).isWithin(EPSILON).of(480f)
+        assertThat(low.restOffset).isWithin(EPSILON).of(240f)
+        assertThat(high.restOffset).isWithin(EPSILON).of(0f)
         assertThat(low.hasDetents && high.hasDetents).isTrue()
     }
 
