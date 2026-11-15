@@ -1246,3 +1246,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   périmée republiée avant la relecture, deux appareils qui publient, demande de permission sur un « Arrêter » iOS)
   sont ouverts en #18714.
 - Prochain lot recommandé : la moitié Android de #18578, puis #18714, puis #18580.
+- CI : la garde de forme des charges Swift a rougi comme prévu (iOS confronte un événement de plus) ; cliquet relevé à
+  156, gardes `packages/shared/__tests__/ci` 24 fichiers, 204 verts. Les runs de branche (CI, iOS, iOS SDK) ont été
+  annulés, comme ceux de toutes les branches ce soir (CI sur `dev` seulement) ; iOS se prouvera sur `dev`.
+- `origin/dev` refusionné à la main sans conflit ; gardes iOS texte et shared vertes sur le résultat.
+- **Fusion BLOQUÉE** : `dev` est verrouillée (`lock_branch`), la fusion rend `405 Cannot change this locked branch`. La
+  PR #18715 est prête dès que le verrou est levé.
