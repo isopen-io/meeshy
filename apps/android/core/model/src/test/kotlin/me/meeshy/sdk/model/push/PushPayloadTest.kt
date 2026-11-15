@@ -135,4 +135,11 @@ class PushPayloadTest {
         assertThat(decode("conversationId" to "c1").teachesEndToEndTo).isNull()
         assertThat(decode("conversationEncryptionMode" to "e2ee").teachesEndToEndTo).isNull()
     }
+
+    @Test
+    fun `la communaute que la carte nomme se lit, la chaine vide vaut absence`() {
+        assertThat(PushPayload.decode(mapOf("communityId" to "k1")).communityId).isEqualTo("k1")
+        assertThat(PushPayload.decode(mapOf("communityId" to "")).communityId).isNull()
+        assertThat(PushPayload.decode(emptyMap()).communityId).isNull()
+    }
 }
