@@ -46,7 +46,7 @@ def _core() -> ZMQTranslationServer:
     core.audio_handler = MagicMock()
     core.transcription_handler = MagicMock()
     core.voice_handler = None
-    core._create_tracked_task = MagicMock()
+    core._create_tracked_task = MagicMock(side_effect=lambda coro, _task_type: coro.close())
     core._inject_binary_frames = MagicMock()
     return core
 
