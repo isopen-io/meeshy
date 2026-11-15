@@ -322,3 +322,102 @@ export function sweepErasingEmitArgumentCasts(srcDir: string): ErasingEmitArgume
 
   return found;
 }
+
+/**
+ * Un `Socket` NU de socket.io détenu pour ÉMETTRE.
+ *
+ * ## Pourquoi `sweepRawServerEmitters` ne suffit pas
+ *
+ * Le cycle 108 a fermé le `Server` nu. Son jumeau — le `Socket` nu — a la MÊME
+ * cause et le MÊME effet : sans paramètres de type, socket.io retombe sur
+ * `DefaultEventsMap`, dont la signature est `emit(ev: string, ...args: any[])`.
+ * `typed-socket.ts` le dit depuis le cycle 99, et nomme même le défaut qui l'a
+ * motivé (`conversation:join-error` : huit sites d'émission, deux consommateurs,
+ * jamais au contrat).
+ *
+ * `sweepRawServerEmitters` ne cherche que `Server`. Mesuré le 2026-11-15
+ * (#18655) : `utils/socket-rate-limiter.ts` prenait le `Socket` nu avec
+ * `errorEvent: string`, et poussait sur `call:error` un `retryAfter` **à la
+ * racine** — qu'aucun contrat ne déclare et qu'aucun des trois clients ne lit.
+ *
+ * ## La différence avec le discriminant de `Server`, et elle est MESURÉE
+ *
+ * Celui de `Server` exige un `import type`, pour une raison écrite sur place :
+ * `MeeshySocketIOManager` importe `Server` en VALEUR parce qu'il le CONSTRUIT.
+ *
+ * **Cette exception n'a pas de jumelle ici : personne ne construit un `Socket`**
+ * — socket.io le remet à un handler. Les deux formes d'import comptent donc, et
+ * ce n'est pas une généralisation gratuite : le site fautif écrivait
+ * `import { Socket } from 'socket.io'` (valeur), et **recopier le discriminant
+ * de `Server` tel quel l'aurait manqué**. C'est la règle du cycle 91 — copier la
+ * forme juste d'à côté ne suffit pas, il faut l'ouvrir contre le cas présent.
+ *
+ * La seconde condition, elle, est REPRISE sans changement, parce qu'elle garde
+ * la même propriété : **détenir n'est pas ÉMETTRE.** `typed-socket.ts` importe
+ * `Socket` pour en DÉRIVER `MeeshySocket` ; `midSessionRoomAdmission`,
+ * `join-user-conversations` et `socket-helpers` le déclarent pour lire des
+ * rooms ou résoudre un utilisateur. Aucun n'émet, et tous sortent par
+ * CONSTRUCTION — l'inventaire n'a aucune liste d'exceptions, et ne doit jamais
+ * en acquérir.
+ *
+ * ## Le grain est le FICHIER, et c'est une décision
+ *
+ * Dans un fichier qui ÉMET, **toute** déclaration `: Socket` nue est relevée,
+ * même celle d'une fonction qui n'émet pas elle-même. Ce n'est pas une
+ * imprécision tolérée : c'est le même socket, et le typer en `MeeshySocket` de
+ * bout en bout est strictement meilleur. Le grain est hérité de
+ * `sweepRawServerEmitters`, dont c'est déjà la propriété.
+ *
+ * Ce point a été trouvé en écrivant la fixture NÉGATIVE, qui mélangeait d'abord
+ * les deux motifs dans un seul fichier et rougissait — une erreur commise en
+ * écrivant un cliquet est le meilleur cas de test qu'il aura jamais. Les deux
+ * motifs légitimes vivent donc dans deux fichiers, parce qu'ils sont deux
+ * choses : `holder.ts` ÉMET par la porte dérivée, `holder-only.ts` DÉTIENT sans
+ * émettre.
+ *
+ * **Quand il tombe** : la réparation est `MeeshySocket` (`socketio/typed-socket.ts`),
+ * jamais une ligne d'inventaire — il n'y a pas de `Socket` nu légitime pour émettre.
+ */
+export interface RawSocketEmitter {
+  readonly file: string;
+  readonly declaration: string;
+}
+
+const SOCKETIO_IMPORT = /import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]socket\.io['"]/g;
+
+function rawSocketAliases(source: string): string[] {
+  const aliases: string[] = [];
+  for (const match of source.matchAll(SOCKETIO_IMPORT)) {
+    for (const binding of match[1].split(',')) {
+      const trimmed = binding.trim();
+      if (!/^Socket\b/.test(trimmed)) continue;
+      const aliased = /^Socket\s+as\s+([A-Za-z_$][\w$]*)$/.exec(trimmed);
+      aliases.push(aliased ? aliased[1] : 'Socket');
+    }
+  }
+  return aliases;
+}
+
+export function sweepRawSocketEmitters(srcDir: string): RawSocketEmitter[] {
+  const found: RawSocketEmitter[] = [];
+
+  for (const file of walk(srcDir)) {
+    const relative = file.slice(srcDir.length + 1);
+    if (relative.includes('__tests__') || relative.endsWith('.test.ts')) continue;
+
+    const source = stripComments(readFileSync(file, 'utf8'));
+    const aliases = rawSocketAliases(source);
+    if (aliases.length === 0) continue;
+    if (!source.includes('.emit(')) continue;
+
+    for (const line of source.split('\n')) {
+      for (const alias of aliases) {
+        if (!new RegExp(`:\\s*${alias}\\b`).test(line)) continue;
+        found.push({ file: relative, declaration: line.trim() });
+        break;
+      }
+    }
+  }
+
+  return found;
+}
