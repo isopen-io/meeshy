@@ -17,7 +17,10 @@ struct MessageCardExportTray: View {
     let tab: MessageCardExportTab
     let focus: MessageCardPartID?
     @Binding var format: MessageCardFormat
-    let popular: [MessageCardTemplateID]
+    /// Les maquettes, peintes sur le message (#18673).
+    let stylesRow: MessageCardModelRow
+    /// Les liaisons que la maquette offre.
+    let links: [MessageCardLinkID]
     let hasQuote: Bool
     let hasTitle: Bool
     /// Le pseudo des auteurs est connu : « pseudo au lieu du nom » s'offre.
@@ -37,7 +40,6 @@ struct MessageCardExportTray: View {
     @Binding var exportLanguage: String?
     let thumbs: MessageCardThumbSource
     let onTab: (MessageCardExportTab) -> Void
-    let onGallery: () -> Void
     /// Le passage glissé sur l'onde : son nouveau point de départ, en secondes.
     let onExcerptStart: (Double) -> Void
     var contentPanel: MessageCardCompositionBar? = nil
@@ -109,30 +111,7 @@ struct MessageCardExportTray: View {
         }
     }
 
-    private var stylesPanel: some View {
-        row {
-            ForEach(popular, id: \.self) { id in
-                MessageCardThumb(id: id, source: thumbs, selected: id == format.template, width: 72) {
-                    format.template = id
-                }
-            }
-            Button {
-                HapticFeedback.light()
-                onGallery()
-            } label: {
-                VStack(spacing: MeeshySpacing.xs) {
-                    Image(systemName: "square.grid.3x3.fill").font(.title3)
-                    Text(verbatim: "\(MessageCardTemplates.all.count)").font(.caption.weight(.bold))
-                    Text(MessageCardExportText.text("export.card.gallery.open", "Tout voir")).font(.caption2)
-                }
-                .frame(width: 72, height: 76)
-                .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous).fill(Color.primary.opacity(0.07)))
-            }
-            .buttonStyle(MessageCardPressStyle())
-            .foregroundStyle(.primary)
-            .accessibilityLabel(MessageCardExportText.text("export.card.gallery.title", "Tous les styles"))
-        }
-    }
+    private var stylesPanel: some View { stylesRow }
 
     private var palettePanel: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
@@ -196,7 +175,7 @@ struct MessageCardExportTray: View {
 
     private var linkPanel: some View {
         row {
-            ForEach(MessageCardLinkID.allCases, id: \.self) { link in
+            ForEach(links, id: \.self) { link in
                 tile(MessageCardExportText.linkLabel(link), selected: link == format.template.link) {
                     format.template = format.template.with(link: link)
                 } content: {
