@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import MeeshySDK
 @testable import Meeshy
@@ -50,5 +51,48 @@ final class CommunityListViewModelTests: XCTestCase {
 
         XCTAssertTrue(sut.communities.isEmpty)
         XCTAssertFalse(sut.isLoading)
+    }
+
+    // MARK: - community:updated (#18439)
+
+    func test_communityUpdated_reecritLaLigneSansRelancerLeReseau() async {
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a"), CommunityStubs.community(id: "b", name: "Beta")]))
+        let updates = PassthroughSubject<CommunityUpdatedEvent, Never>()
+        let sut = CommunityListViewModel(service: service, communityUpdates: updates.eraseToAnyPublisher())
+        await sut.refresh()
+
+        sut.apply(CommunityStubs.communityUpdated(communityId: "a", name: "Alpha renommée", memberCount: 9))
+
+        XCTAssertEqual(sut.communities.map(\.name), ["Alpha renommée", "Beta"])
+        XCTAssertEqual(sut.communities.first?.memberCount, 9)
+        XCTAssertEqual(sut.communities.first?.isPrivate, true)
+        XCTAssertEqual(service.listCallCount, 1)
+    }
+
+    func test_communityUpdated_recuParLeFlux_atteintLaLigne() async {
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a")]))
+        let updates = PassthroughSubject<CommunityUpdatedEvent, Never>()
+        let sut = CommunityListViewModel(service: service, communityUpdates: updates.eraseToAnyPublisher())
+        await sut.refresh()
+        let renamed = expectation(description: "ligne renommée")
+        let watch = sut.$communities.dropFirst().sink { if $0.first?.name == "Par le flux" { renamed.fulfill() } }
+
+        updates.send(CommunityStubs.communityUpdated(communityId: "a", name: "Par le flux"))
+
+        await fulfillment(of: [renamed], timeout: 2)
+        watch.cancel()
+    }
+
+    func test_communityUpdated_communauteAbsente_neChangeRien() async {
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a")]))
+        let sut = CommunityListViewModel(service: service, communityUpdates: Empty().eraseToAnyPublisher())
+        await sut.refresh()
+
+        sut.apply(CommunityStubs.communityUpdated(communityId: "ghost", name: "Fantôme"))
+
+        XCTAssertEqual(sut.communities.map(\.name), ["Alpha"])
     }
 }

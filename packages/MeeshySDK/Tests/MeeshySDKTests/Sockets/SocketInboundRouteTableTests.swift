@@ -32,7 +32,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "call:preview-requested", "call:preview-signal", "call:quality-alert", "call:reaction-received",
         "call:recording-requested", "call:recording-started", "call:recording-stopped", "call:screen-capture-alert",
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
-        "category:created", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
+        "category:created", "community:updated", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
         "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:obsoleted",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
@@ -284,5 +284,19 @@ final class SocketInboundRouteTableTests: XCTestCase {
             "obsoletedAt": "2026-11-02T10:00:00.000Z",
             "purgeAfter": "2026-11-04T10:00:00.000Z",
         ]
+    }
+
+    func test_communityUpdated_reachesTheCommunityUpdatedChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: MessageSocketManager.shared.communityUpdated, where: {
+            $0.communityId == "c-renamed" && $0.name == "Nouveau nom" && $0.memberCount == 7 && $0.isPrivate
+        }) {
+            registrar.deliver("community:updated", [
+                "communityId": "c-renamed", "identifier": "mshy_c", "name": "Nouveau nom",
+                "description": NSNull(), "avatar": NSNull(), "banner": NSNull(),
+                "isPrivate": true, "memberCount": 7, "updatedAt": "2026-11-15T10:00:00.000Z",
+            ])
+        }
     }
 }
