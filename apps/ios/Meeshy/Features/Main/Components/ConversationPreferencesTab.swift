@@ -58,7 +58,7 @@ struct ConversationPreferencesTab: View {
                 organizationSection
                 notificationsSection
                 if let peer = ConversationRowListening.userId(for: conversation) {
-                    BatteryReceiveModeSection(userId: peer, tint: MeeshyColors.tileCoralHex)
+                    BatteryReceiveModeSection(userId: peer, accentColor: accentColor)
                 }
                 actionsSection
             }

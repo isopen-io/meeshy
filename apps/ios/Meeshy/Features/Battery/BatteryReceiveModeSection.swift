@@ -57,11 +57,11 @@ final class BatteryReceiveModeViewModel: ObservableObject {
 
 struct BatteryReceiveModeSection: View {
     @StateObject private var viewModel: BatteryReceiveModeViewModel
-    let tint: String
+    let accentColor: String
 
-    init(userId: String, tint: String) {
+    init(userId: String, accentColor: String) {
         _viewModel = StateObject(wrappedValue: BatteryReceiveModeViewModel(userId: userId))
-        self.tint = tint
+        self.accentColor = accentColor
     }
 
     var body: some View {
@@ -79,7 +79,7 @@ struct BatteryReceiveModeSection: View {
                         Label(BatteryReceiveModeWording.sectionTitle, systemImage: "battery.25")
                     }
                     .pickerStyle(.menu)
-                    .tint(Color(hex: tint))
+                    .tint(Color(hex: accentColor))
                     .frame(minHeight: MeeshyControlSize.tapTarget)
                     .accessibilityIdentifier("battery.receive.mode")
                     Text(BatteryReceiveModeWording.explain(settings.receive))
@@ -89,7 +89,7 @@ struct BatteryReceiveModeSection: View {
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.smPlus)
-                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(Color(hex: tint).opacity(MeeshyOpacity.subtle)))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(Color(hex: accentColor).opacity(MeeshyOpacity.subtle)))
             }
         }
         .task(id: viewModel.userId) { await viewModel.load() }
