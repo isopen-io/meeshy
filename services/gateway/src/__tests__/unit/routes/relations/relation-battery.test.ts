@@ -51,7 +51,7 @@ const appli = (options: BringAppOptions = { liens: [lien('BLOOD', 'BLOOD')] }): 
 const releve = (level: number) => ({ level, charging: false, lowPower: false, measuredAt: NOW.toISOString(), deviceLabel: 'iPhone' });
 
 function avecSessions(app: BringTestApp) {
-  app.prisma.userSession = { findFirst: jest.fn(async () => null) };
+  app.prisma.userSession = { findMany: jest.fn(async () => []) };
   app.prisma.conversation = { findMany: jest.fn(async () => []) };
   const egal = (value: unknown, condition: unknown) =>
     condition !== null && typeof condition === 'object' && 'in' in condition ? (condition as { in: unknown[] }).in.includes(value) : value === condition;
@@ -94,7 +94,7 @@ describe('le relevé à la demande', () => {
     const second = await app.call('POST', `/api/v1/relations/${MOI}/battery/pull`, {}, AUTRE);
     await app.close();
 
-    expect(premier.body).toEqual({ success: true, data: { requestedAt: NOW.toISOString() } });
+    expect(premier.body).toEqual({ success: true, data: { requestedAt: NOW.toISOString(), episodeOnly: true } });
     expect(app.emissions).toEqual([{ room: ROOMS.user(MOI), event: SERVER_EVENTS.BATTERY_PULL_REQUESTED, payload: { requestedAt: NOW.toISOString() } }]);
     expect(wakes).toEqual([expect.objectContaining({ userId: MOI, payload: { title: '', body: '', silent: true, data: { type: 'battery_pull', requestedAt: NOW.toISOString() } } })]);
     expect(JSON.stringify(wakes)).not.toContain(AUTRE);

@@ -6,49 +6,130 @@
  * paire par {@link refreshBatteryAfter} : un échec n'arrête jamais le geste.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { BATTERY_PULL_PUSH_TYPE } from '@meeshy/shared/types/battery';
+import { BATTERY_NOTIFICATION_TYPE, BATTERY_PULL_PUSH_TYPE } from '@meeshy/shared/types/battery';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { getCacheStore } from '../CacheStore';
 import { getPushNotificationService } from '../PushNotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { isViewingConversation } from '../../socketio/conversationViewingProbe';
+import { SOCKET_SESSION_ID } from '../../socketio/disconnectSession';
 import { batteryContextReaderOf } from './batteryContext';
 import { batteryPusherOf } from './batteryPush';
 import type { BatteryPullDeps } from './batteryPull';
-import { captureBatteryAccess, refreshBatteryBetween, type BatteryPairAccess, type BatteryRelayDeps } from './batteryRelay';
+import { captureBatteryAccess, refreshBatteryBetween, type BatteryPairAccess, type BatteryPushPair, type BatteryRelayDeps } from './batteryRelay';
 import type { BatteryCache } from './batteryStore';
+
+/** Sans Redis (développement, panne), l'ensemble des émetteurs surveillés vit dans le processus. */
+const localSets = new Map<string, Set<string>>();
+
+type SetClient = { sadd(key: string, member: string): Promise<unknown>; srem(key: string, member: string): Promise<unknown>; smembers(key: string): Promise<string[]> };
+
+const nativeSets = (): SetClient | null => {
+  const store = getCacheStore() as Partial<ReturnType<typeof getCacheStore>>;
+  return typeof store.getNativeClient === 'function' ? store.getNativeClient() : null;
+};
 
 const lazyCache: BatteryCache = {
   get: (key) => getCacheStore().get(key),
   set: (key, value, ttlSeconds) => getCacheStore().set(key, value, ttlSeconds),
   del: (key) => getCacheStore().del(key),
   setnx: (key, value, ttlSeconds) => getCacheStore().setnx(key, value, ttlSeconds),
-  keys: (pattern) => getCacheStore().keys(pattern),
+  addMember: async (key, member) => {
+    const redis = nativeSets();
+    if (redis === null) localSets.set(key, new Set([...(localSets.get(key) ?? []), member]));
+    else await redis.sadd(key, member);
+  },
+  removeMember: async (key, member) => {
+    const redis = nativeSets();
+    if (redis === null) localSets.get(key)?.delete(member);
+    else await redis.srem(key, member);
+  },
+  members: async (key) => {
+    const redis = nativeSets();
+    return redis === null ? [...(localSets.get(key) ?? [])] : redis.smembers(key);
+  },
 };
 
-const MOBILE_PLATFORMS = ['ios', 'android'];
+const MOBILE_PLATFORMS: ReadonlySet<string> = new Set(['ios', 'android']);
+const RECENT_SESSIONS = 20;
+
+type SessionShape = { readonly id: string; readonly deviceType: string | null; readonly platform: string | null; readonly deviceModel: string | null };
 
 /**
- * Le téléphone SUIVI d'un compte : sa session mobile vivante la plus récemment active. Un compte
- * sans session mobile reconnue relève depuis l'appareil qu'il a ; une session inconnue face à un
- * téléphone suivi ne relève pas (une tablette ne fait pas croire à une batterie à plat).
+ * Une session de TÉLÉPHONE (spec § 6) : `deviceType` mobile, ou une plateforme native sans type
+ * lu — jamais une tablette. L'app iOS déclare `ios` et la passerelle en déduit `mobile` pour un
+ * iPad aussi : son modèle (`iPad…`) le trahit.
+ */
+export const isPhoneSession = (session: Omit<SessionShape, 'id'>): boolean => {
+  if (session.deviceType === 'tablet' || session.deviceModel?.startsWith('iPad')) return false;
+  return session.deviceType === 'mobile' || (session.platform !== null && MOBILE_PLATFORMS.has(session.platform));
+};
+
+/**
+ * La session du téléphone SUIVI d'un compte : sa session de téléphone vivante la plus récemment
+ * active ; `null` quand le compte n'a aucun téléphone reconnu.
+ */
+export async function trackedBatterySession(
+  prisma: Pick<PrismaClient, 'userSession'>,
+  params: { readonly userId: string; readonly now: Date },
+): Promise<string | null> {
+  const recent = (await prisma.userSession.findMany({
+    where: { userId: params.userId, isValid: true, expiresAt: { gt: params.now } },
+    orderBy: { lastActivityAt: 'desc' },
+    select: { id: true, deviceType: true, platform: true, deviceModel: true },
+    take: RECENT_SESSIONS,
+  })) as readonly SessionShape[];
+  return recent.find(isPhoneSession)?.id ?? null;
+}
+
+/**
+ * Le téléphone SUIVI relève-t-il ? Un compte sans téléphone reconnu relève depuis l'appareil
+ * qu'il a ; une autre session face à un téléphone suivi ne relève pas (une tablette ne fait pas
+ * croire à une batterie à plat).
  */
 export async function isTrackedBatteryDevice(
   prisma: Pick<PrismaClient, 'userSession'>,
   params: { readonly userId: string; readonly sessionId: string | null; readonly now: Date },
 ): Promise<boolean> {
-  const tracked = await prisma.userSession.findFirst({
-    where: {
-      userId: params.userId,
-      isValid: true,
-      expiresAt: { gt: params.now },
-      OR: [{ deviceType: 'mobile' }, { platform: { in: MOBILE_PLATFORMS } }],
-    },
-    orderBy: { lastActivityAt: 'desc' },
-    select: { id: true },
+  const tracked = await trackedBatterySession(prisma, params);
+  return tracked === null || tracked === params.sessionId;
+}
+
+type SessionSocket = { readonly data?: unknown };
+type RoomReader = { in(room: string): { fetchSockets(): Promise<readonly SessionSocket[]> } };
+
+const roomReaderOf = (io: ServerEmitIO | undefined): RoomReader | null =>
+  io !== undefined && typeof (io as Partial<RoomReader>).in === 'function' ? (io as unknown as RoomReader) : null;
+
+/**
+ * La session du téléphone suivi a-t-elle une socket OUVERTE, sur n'importe quelle passerelle de
+ * la flotte ? Une connexion vivante est un signe de vie : un téléphone allumé n'est pas éteint.
+ */
+export async function isTrackedBatteryDeviceConnected(
+  params: { readonly prisma: Pick<PrismaClient, 'userSession'>; readonly io: ServerEmitIO | undefined; readonly userId: string; readonly now: Date },
+): Promise<boolean> {
+  const rooms = roomReaderOf(params.io);
+  if (rooms === null) return false;
+  const tracked = await trackedBatterySession(params.prisma, params);
+  const sockets = await rooms.in(ROOMS.user(params.userId)).fetchSockets();
+  return sockets.some((socket) => tracked === null || (socket.data as Record<string, unknown> | undefined)?.[SOCKET_SESSION_ID] === tracked);
+}
+
+/**
+ * Les notifications de batterie d'un émetteur chez un lecteur qui ne le voit plus : retirées
+ * (un retrait de consentement, un blocage, une baisse ou un départ ne laissent aucune trace de
+ * niveau). Elles expirent de toute façon en 24 h.
+ */
+export async function retractBatteryNotifications(prisma: Pick<PrismaClient, '$runCommandRaw'>, pairs: readonly BatteryPushPair[]): Promise<void> {
+  if (pairs.length === 0) return;
+  await prisma.$runCommandRaw({
+    delete: 'Notification',
+    deletes: [{
+      q: { type: BATTERY_NOTIFICATION_TYPE, $or: pairs.map((pair) => ({ userId: { $oid: pair.readerId }, 'actor.id': pair.emitterId })) },
+      limit: 0,
+    }],
   });
-  if (tracked === null) return true;
-  return tracked.id === params.sessionId;
 }
 
 export function batteryRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined }): BatteryRelayDeps {
@@ -60,6 +141,8 @@ export function batteryRelayDepsOf(params: { readonly prisma: PrismaClient; read
     context: batteryContextReaderOf({ prisma: params.prisma, isViewing: isViewingConversation }),
     push: batteryPusherOf({ prisma: params.prisma, notifications: getSharedNotificationService() ?? null }),
     isTrackedDevice: ({ userId, sessionId }) => isTrackedBatteryDevice(params.prisma, { userId, sessionId, now: new Date() }),
+    trackedDeviceConnected: (userId) => isTrackedBatteryDeviceConnected({ prisma: params.prisma, io: params.io, userId, now: new Date() }),
+    retractPushes: (pairs) => retractBatteryNotifications(params.prisma, pairs),
   };
 }
 

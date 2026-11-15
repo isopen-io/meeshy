@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { batteryEmitterSettingsUpdateSchema } from '@meeshy/shared/types/battery';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { batteryRelayDepsOf } from '../../services/battery/batteryDeps';
-import { captureBatteryAudience, refreshBatteryAudience, reportBattery } from '../../services/battery/batteryRelay';
+import { captureBatteryAudience, forgetBatteryOf, refreshBatteryAudience, reportBattery } from '../../services/battery/batteryRelay';
 import { readBatteryEmitterSettings, writeBatteryEmitterSettings } from '../../services/battery/batterySettings';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { logError } from '../../utils/logger';
@@ -19,7 +19,8 @@ const emitterSettingsSchema = { type: 'object', properties: { sharingEnabled: { 
  * La batterie côté ÉMETTEUR (#14147) : le relevé par REST — la MÊME charge et la MÊME porte que
  * `battery:report`, pour un téléphone réveillé sans socket — et la coupure globale du partage.
  * Seul le téléphone SUIVI (la session mobile la plus récemment active) fait avancer l'épisode :
- * un autre appareil reçoit `tracked: false` et rien ne change.
+ * un autre appareil reçoit `tracked: false` et rien ne change. La coupure globale ferme aussi la
+ * collecte : l'état rangé s'efface, et un relevé reçu pendant la coupure rend `tracked: false`.
  */
 export default async function deviceBatteryMeRoutes(fastify: FastifyInstance): Promise<void> {
   const reports = relationLimiter(fastify, 'me:battery:w', 12);
@@ -86,6 +87,9 @@ export default async function deviceBatteryMeRoutes(fastify: FastifyInstance): P
       const settings = await writeBatteryEmitterSettings(fastify.prisma, { userId, update: parsed.data, now: new Date() });
       await refreshBatteryAudience(relay, { emitterId: userId, before })
         .catch((error: unknown) => logError(fastify.log, 'Battery not refreshed after global setting:', error));
+      if (!settings.sharingEnabled) {
+        await forgetBatteryOf(relay, userId).catch((error: unknown) => logError(fastify.log, 'Battery state not forgotten after global cut:', error));
+      }
       return sendSuccess(reply, settings);
     } catch (error) {
       logError(fastify.log, 'Battery settings write error:', error);

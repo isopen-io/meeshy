@@ -38,8 +38,11 @@ import {
   type BatteryStepInput,
 } from '@meeshy/shared/utils/battery-episode';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
-import { batteryAccessAmong, batteryCandidatesOf, isServed, type BatteryDb, type BatteryReaderAccess } from './batteryAccess';
+import { comptesAuMoins } from '../friendship';
+import { teamAccountIds } from '../relations/teamPeers';
+import { BATTERY_AUDIENCE_LIMIT, batteryAccessAmong, batteryCandidatesOf, isServed, type BatteryDb, type BatteryReaderAccess } from './batteryAccess';
 import {
+  clearBatteryRecord,
   forgetCriticalReaders,
   readBatteryRecord,
   readCriticalReaders,
@@ -47,6 +50,7 @@ import {
   storeBatteryRecord,
   watchBatteryEmitter,
   watchedBatteryEmitters,
+  withBatteryLock,
   type BatteryCache,
   type BatteryRecord,
 } from './batteryStore';
@@ -69,6 +73,9 @@ export type BatteryPush = { readonly readerId: string; readonly emitterId: strin
 /** Rend `true` quand la notification a été créée (une préférence ou un blocage peuvent l'arrêter). */
 export type BatteryPusher = (push: BatteryPush) => Promise<boolean>;
 
+/** Un sens émetteur → lecteur dont la notification de batterie n'a plus lieu d'être. */
+export type BatteryPushPair = { readonly emitterId: string; readonly readerId: string };
+
 export type BatteryRelayDeps = {
   readonly prisma: BatteryDb;
   readonly cache: BatteryCache;
@@ -78,12 +85,26 @@ export type BatteryRelayDeps = {
   readonly push: BatteryPusher;
   /** Le téléphone suivi : la session qui relève est-elle l'appareil mobile le plus récemment actif ? */
   readonly isTrackedDevice: (params: { readonly userId: string; readonly sessionId: string | null }) => Promise<boolean>;
+  /** Le téléphone suivi a-t-il une socket OUVERTE ? Une connexion vivante est un signe de vie (§ 4). */
+  readonly trackedDeviceConnected?: (userId: string) => Promise<boolean>;
+  /** Retire chez chaque lecteur les notifications de batterie d'un émetteur qu'il ne voit plus. */
+  readonly retractPushes?: (pairs: readonly BatteryPushPair[]) => Promise<void>;
   readonly config?: BatteryConfig;
 };
 
 const configOf = (deps: BatteryRelayDeps): BatteryConfig => deps.config ?? BATTERY_CONFIG;
 
 const MINUTE_MS = 60_000;
+
+/**
+ * L'horloge du téléphone n'est pas celle du serveur : au-delà de cet écart, le relevé est daté
+ * à sa RÉCEPTION. Un téléphone en retard ne se fait plus présumer éteint juste après avoir
+ * parlé, et un téléphone en avance ne fait plus ignorer ses relevés suivants.
+ */
+export const BATTERY_CLOCK_TOLERANCE_MS = 2 * MINUTE_MS;
+
+const receivedAt = (measuredAt: string, now: number): string =>
+  Math.abs(Date.parse(measuredAt) - now) > BATTERY_CLOCK_TOLERANCE_MS ? new Date(now).toISOString() : measuredAt;
 
 /** Un lecteur injoignable n'arrête pas l'éventail. */
 const safely = (send: () => void): void => {
@@ -147,11 +168,18 @@ type Step = {
   readonly previous: BatteryEpisodeState | null;
   readonly record: BatteryRecord;
   readonly announcements: readonly BatteryAnnouncement[];
+  /** L'audience à servir, lue sous le verrou ; `null` quand ce pas ne sert personne. */
+  readonly audience: ReadonlyMap<string, BatteryReaderAccess> | null;
+  /** Qui voyait l'état et ne le voit plus (perte d'accès par n'importe quel chemin). */
+  readonly departed: readonly string[];
+  /** Qui avait reçu le push critique de l'épisode, lu avant qu'une clôture l'oublie. */
+  readonly critical: ReadonlySet<string>;
 };
 
 /** UN lecteur : ses annonces routées, puis l'état (ou l'effacement) et ses pushs. Rend `true` s'il a reçu le push critique. */
-async function serveReader(deps: BatteryRelayDeps, step: Step, readerId: string, access: BatteryReaderAccess, context: BatteryReaderContext | undefined, receivedCritical: boolean): Promise<boolean> {
+async function serveReader(deps: BatteryRelayDeps, step: Step, readerId: string, access: BatteryReaderAccess, context: BatteryReaderContext | undefined): Promise<boolean> {
   const config = configOf(deps);
+  const receivedCritical = step.critical.has(readerId);
   const inConversation = batteryReaderInConversation({
     now: new Date(deps.now()).toISOString(),
     roomOpen: context?.roomOpen ?? false,
@@ -179,45 +207,75 @@ async function serveReader(deps: BatteryRelayDeps, step: Step, readerId: string,
   return pushedCritical;
 }
 
+/** Les notifications de batterie de qui a perdu l'accès se retirent ; un échec n'arrête rien. */
+async function retract(deps: BatteryRelayDeps, pairs: readonly BatteryPushPair[]): Promise<void> {
+  if (pairs.length === 0 || !deps.retractPushes) return;
+  await deps.retractPushes(pairs).catch(() => undefined);
+}
+
+/** APRÈS l'écriture de l'état : les annonces partent seulement sur un état rangé. */
 async function fanOut(deps: BatteryRelayDeps, step: Step): Promise<void> {
-  const wasServed = step.previous !== null && step.previous.phase !== 'normal';
-  if (step.record.episode.phase === 'normal' && !wasServed) return;
-  const audience = await audienceOf(deps, step.emitterId);
-  if (audience.size === 0) return;
+  step.departed.forEach((readerId) => emitCleared(deps, readerId, step.emitterId));
+  await retract(deps, step.departed.map((readerId) => ({ emitterId: step.emitterId, readerId })));
+  const audience = step.audience;
+  if (audience === null || audience.size === 0) return;
   const readerIds = [...audience.keys()];
-  const [contexts, critical] = await Promise.all([
-    step.announcements.length > 0 ? deps.context({ emitterId: step.emitterId, readerIds, now: new Date(deps.now()) }) : Promise.resolve(new Map<string, BatteryReaderContext>()),
-    readCriticalReaders(deps.cache, step.emitterId),
-  ]);
+  const contexts = step.announcements.length > 0
+    ? await deps.context({ emitterId: step.emitterId, readerIds, now: new Date(deps.now()) })
+    : new Map<string, BatteryReaderContext>();
   const verdicts = await Promise.all(
-    readerIds.map(async (readerId) => [readerId, await serveReader(deps, step, readerId, audience.get(readerId)!, contexts.get(readerId), critical.has(readerId))] as const),
+    readerIds.map(async (readerId) => [readerId, await serveReader(deps, step, readerId, audience.get(readerId)!, contexts.get(readerId))] as const),
   );
+  if (step.record.episode.phase === 'normal') return;
   await rememberCriticalReaders(deps.cache, step.emitterId, verdicts.filter(([, pushed]) => pushed).map(([id]) => id));
 }
 
-/** Fait avancer l'épisode d'UN pas, le range, puis sert les lecteurs. LÈVE si l'état ne se range pas. */
-async function advance(deps: BatteryRelayDeps, emitterId: string, input: BatteryStepInput, deviceLabel?: string): Promise<Step> {
+/** Le pas lui-même, SOUS le verrou de l'émetteur : lecture, calcul, audience, écriture. */
+async function advanceLocked(deps: BatteryRelayDeps, emitterId: string, input: BatteryStepInput, deviceLabel?: string): Promise<Step> {
   const config = configOf(deps);
   const stored = await readBatteryRecord(deps.cache, emitterId);
   const previous = stored?.episode ?? null;
   const { state, announcements } = batteryEpisodeStep(previous, input, config);
   const reading = input.kind === 'reading' && state.lastReading?.measuredAt === input.measuredAt ? state.lastReading : null;
+  const wasServed = previous !== null && previous.phase !== 'normal';
+  const serves = (reading !== null || announcements.length > 0) && (state.phase !== 'normal' || wasServed);
+  const audience = serves ? await audienceOf(deps, emitterId) : null;
+  const shown = state.phase !== 'normal' && state.lastReading !== null;
+  const servedBefore = stored?.servedTo ?? [];
   const record: BatteryRecord = {
     episode: state,
     anchor: nextAnchor(stored, state, reading),
     deviceLabel: deviceLabel ?? stored?.deviceLabel ?? null,
+    servedTo: audience === null ? servedBefore : shown ? [...audience.keys()] : [],
   };
   const at = input.kind === 'tick' ? input.now : input.kind === 'alive' ? input.at : input.measuredAt;
   if (opensFreshEpisode(previous, state, at, config)) await forgetCriticalReaders(deps.cache, emitterId);
+  const critical = serves ? await readCriticalReaders(deps.cache, emitterId) : new Set<string>();
   await storeBatteryRecord(deps.cache, emitterId, record);
   await watchBatteryEmitter(deps.cache, emitterId, state.phase !== 'normal');
-  const step = { emitterId, previous, record, announcements };
-  if (reading !== null || announcements.length > 0) await fanOut(deps, step);
-  if (state.phase === 'normal' && previous !== null && previous.phase !== 'normal') await forgetCriticalReaders(deps.cache, emitterId);
+  if (state.phase === 'normal' && wasServed) await forgetCriticalReaders(deps.cache, emitterId);
+  const departed = audience === null ? [] : servedBefore.filter((id) => !audience.has(id));
+  return { emitterId, previous, record, announcements, audience, departed, critical };
+}
+
+/**
+ * Fait avancer l'épisode d'UN pas sous le verrou de l'émetteur (un relevé, un signe de vie et un
+ * balayage qui se croisent ne s'écrasent jamais), puis sert les lecteurs. LÈVE si l'état ne se
+ * range pas ou si le verrou reste pris.
+ */
+async function advance(deps: BatteryRelayDeps, emitterId: string, input: BatteryStepInput, deviceLabel?: string): Promise<Step> {
+  const step = await withBatteryLock(deps.cache, emitterId, () => advanceLocked(deps, emitterId, input, deviceLabel));
+  await fanOut(deps, step);
   return step;
 }
 
 const failed = (code: (typeof BATTERY_ERROR_CODES)[keyof typeof BATTERY_ERROR_CODES], error: string) => ({ success: false, error, code }) as const;
+
+/** La coupure globale ferme aussi la COLLECTE : rien n'est rangé de ce que l'émetteur ne partage plus. */
+async function sharingDisabled(deps: BatteryRelayDeps, emitterId: string): Promise<boolean> {
+  const row = await deps.prisma.user.findUnique({ where: { id: emitterId }, select: { batterySharingDisabledAt: true } });
+  return Boolean(row?.batterySharingDisabledAt);
+}
 
 /** `battery:report` et `POST /me/device/battery` : la MÊME charge, la MÊME porte. */
 export async function reportBattery(
@@ -227,9 +285,10 @@ export async function reportBattery(
   const parsed = batteryReportSchema.safeParse(params.payload);
   if (!parsed.success) return failed(BATTERY_ERROR_CODES.INVALID, 'Relevé illisible');
   if (!(await deps.isTrackedDevice({ userId: params.emitterId, sessionId: params.sessionId }))) return { success: true, data: { tracked: false } };
+  if (await sharingDisabled(deps, params.emitterId)) return { success: true, data: { tracked: false } };
   const { deviceLabel, ...reading } = parsed.data;
   try {
-    await advance(deps, params.emitterId, { kind: 'reading', ...reading }, deviceLabel);
+    await advance(deps, params.emitterId, { kind: 'reading', ...reading, measuredAt: receivedAt(reading.measuredAt, deps.now()) }, deviceLabel);
   } catch {
     return failed(BATTERY_ERROR_CODES.UNAVAILABLE, 'Batterie momentanément indisponible');
   }
@@ -244,15 +303,21 @@ export async function markBatteryAlive(deps: BatteryRelayDeps, userId: string): 
 
 /**
  * Le BALAYAGE d'extinction : chaque épisode en cours reçoit un `tick`. Idempotent — un émetteur
- * déjà présumé éteint ne ré-annonce rien, un émetteur sans épisode cesse d'être surveillé.
+ * déjà présumé éteint ne ré-annonce rien, un émetteur sans épisode cesse d'être surveillé. Un
+ * téléphone critique dont la socket est OUVERTE n'est pas éteint : sa connexion est un signe de vie.
  */
 export async function sweepBatteryOff(deps: BatteryRelayDeps): Promise<number> {
   const emitters = await watchedBatteryEmitters(deps.cache);
   const now = new Date(deps.now()).toISOString();
   const announced = await Promise.all(
     emitters.map(async (emitterId) => {
-      if (!(await readBatteryRecord(deps.cache, emitterId))) {
+      const record = await readBatteryRecord(deps.cache, emitterId);
+      if (!record) {
         await watchBatteryEmitter(deps.cache, emitterId, false);
+        return 0;
+      }
+      if (record.episode.phase === 'critical' && (await deps.trackedDeviceConnected?.(emitterId))) {
+        await advance(deps, emitterId, { kind: 'alive', at: now });
         return 0;
       }
       return (await advance(deps, emitterId, { kind: 'tick', now })).announcements.length;
@@ -300,23 +365,41 @@ export async function captureBatteryAccess(deps: BatteryRelayDeps, pair: { reado
   return seen;
 }
 
+/** Le registre « à qui l'état a été servi », retouché sous le verrou de l'émetteur. */
+async function adjustServed(deps: BatteryRelayDeps, emitterId: string, change: { readonly add?: readonly string[]; readonly remove?: readonly string[] }): Promise<void> {
+  await withBatteryLock(deps.cache, emitterId, async () => {
+    const record = await readBatteryRecord(deps.cache, emitterId);
+    if (!record) return;
+    const removed = new Set(change.remove ?? []);
+    const servedTo = [...new Set([...record.servedTo, ...(change.add ?? [])])].filter((id) => !removed.has(id));
+    await storeBatteryRecord(deps.cache, emitterId, { ...record, servedTo });
+  });
+}
+
 /**
  * Rejoue la projection d'une paire dans les DEUX sens après un changement de lien, de
  * consentement, de réglage de réception ou de blocage. `changed` part vers qui gagne l'accès ;
- * `cleared` SEULEMENT vers qui voyait AVANT (`before`) et ne voit plus. Sans `before`, rien
- * n'est jamais effacé.
+ * `cleared` vers qui voyait AVANT (`before`, ou le registre des lecteurs servis) et ne voit plus.
+ * Qui perd l'accès perd aussi les notifications de batterie de l'autre, épisode en cours ou non.
  */
 export async function refreshBatteryBetween(
   deps: BatteryRelayDeps,
   params: { readonly userA: string; readonly userB: string; readonly before?: BatteryPairAccess },
 ): Promise<void> {
   for (const [emitterId, readerId] of directions(params.userA, params.userB)) {
-    const state = servedBatteryState(emitterId, await readBatteryRecord(deps.cache, emitterId));
-    if (!state) continue;
     const after = await seesNow(deps, emitterId, readerId);
-    const before = params.before?.get(batteryDirectionKey(emitterId, readerId)) ?? false;
-    if (after && !before) emitChanged(deps, readerId, state);
-    else if (!after && before) emitCleared(deps, readerId, emitterId);
+    if (!after) await retract(deps, [{ emitterId, readerId }]);
+    const record = await readBatteryRecord(deps.cache, emitterId);
+    const state = servedBatteryState(emitterId, record);
+    if (!state || !record) continue;
+    const before = (params.before?.get(batteryDirectionKey(emitterId, readerId)) ?? false) || record.servedTo.includes(readerId);
+    if (after && !before) {
+      emitChanged(deps, readerId, state);
+      await adjustServed(deps, emitterId, { add: [readerId] });
+    } else if (!after && before) {
+      emitCleared(deps, readerId, emitterId);
+      await adjustServed(deps, emitterId, { remove: [readerId] });
+    }
   }
 }
 
@@ -328,12 +411,63 @@ export async function captureBatteryAudience(deps: BatteryRelayDeps, emitterId: 
 
 /**
  * Rejoue l'audience ENTIÈRE d'un émetteur après sa coupure ou sa reprise globale : `changed` vers
- * qui gagne l'accès, `cleared` vers qui voyait (`before`) et ne voit plus.
+ * qui gagne l'accès, `cleared` vers qui voyait (`before`) et ne voit plus. Chaque candidat qui ne
+ * voit plus perd les notifications de batterie de l'émetteur.
  */
 export async function refreshBatteryAudience(deps: BatteryRelayDeps, params: { readonly emitterId: string; readonly before: ReadonlySet<string> }): Promise<void> {
-  const state = servedBatteryState(params.emitterId, await readBatteryRecord(deps.cache, params.emitterId));
-  if (!state) return;
   const after = await audienceOf(deps, params.emitterId);
-  [...after.keys()].filter((id) => !params.before.has(id)).forEach((id) => emitChanged(deps, id, state));
-  [...params.before].filter((id) => !after.has(id)).forEach((id) => emitCleared(deps, id, params.emitterId));
+  const candidates = await batteryCandidatesOf(deps.prisma, params.emitterId);
+  await retract(deps, candidates.filter((id) => !after.has(id)).map((readerId) => ({ emitterId: params.emitterId, readerId })));
+  const record = await readBatteryRecord(deps.cache, params.emitterId);
+  const state = servedBatteryState(params.emitterId, record);
+  if (!state || !record) return;
+  const seen = new Set([...params.before, ...record.servedTo]);
+  [...after.keys()].filter((id) => !seen.has(id)).forEach((id) => emitChanged(deps, id, state));
+  [...seen].filter((id) => !after.has(id)).forEach((id) => emitCleared(deps, id, params.emitterId));
+  await adjustServed(deps, params.emitterId, { add: [...after.keys()], remove: [...seen].filter((id) => !after.has(id)) });
+}
+
+/**
+ * La COUPURE GLOBALE ferme aussi ce qui est rangé : l'épisode, la mémoire du critique et la
+ * surveillance s'effacent, si bien qu'une reprise ne sert rien de mesuré pendant la coupure.
+ */
+export async function forgetBatteryOf(deps: BatteryRelayDeps, emitterId: string): Promise<void> {
+  await withBatteryLock(deps.cache, emitterId, async () => {
+    await clearBatteryRecord(deps.cache, emitterId);
+    await forgetCriticalReaders(deps.cache, emitterId);
+    await watchBatteryEmitter(deps.cache, emitterId, false);
+  });
+}
+
+/**
+ * Un compte a perdu des accès HORS des routes de lien (rôle d'équipe retiré, compte désactivé,
+ * banni ou supprimé) : rien ne les avait capturés. Le registre des lecteurs servis le dit — dans
+ * les deux sens : comme émetteur, qui le voyait et ne le voit plus reçoit son effacement ; comme
+ * lecteur, chaque émetteur lié ou de l'équipe qui le lui servait le lui retire. Les notifications
+ * de batterie suivent.
+ */
+export async function reconcileBatteryOfAccount(deps: BatteryRelayDeps, userId: string): Promise<void> {
+  const own = await readBatteryRecord(deps.cache, userId);
+  if (own && own.servedTo.length > 0) {
+    const audience = await audienceOf(deps, userId);
+    const departed = own.servedTo.filter((id) => !audience.has(id));
+    departed.forEach((readerId) => emitCleared(deps, readerId, userId));
+    await retract(deps, departed.map((readerId) => ({ emitterId: userId, readerId })));
+    if (departed.length > 0) await adjustServed(deps, userId, { remove: departed });
+  }
+  const [linked, team] = await Promise.all([
+    comptesAuMoins(deps.prisma, userId, 'CLOSE', { limit: BATTERY_AUDIENCE_LIMIT }),
+    teamAccountIds(deps.prisma),
+  ]);
+  const emitters = [...new Set([...linked.map((link) => link.id), ...team])].filter((id) => id !== userId);
+  if (emitters.length === 0) return;
+  const access = await batteryAccessAmong(deps.prisma, { subjectId: userId, otherIds: emitters, subjectIs: 'viewer', now: new Date(deps.now()) });
+  const lost = emitters.filter((emitterId) => !isServed(access.get(emitterId)));
+  for (const emitterId of lost) {
+    const record = await readBatteryRecord(deps.cache, emitterId);
+    if (!record?.servedTo.includes(userId)) continue;
+    emitCleared(deps, userId, emitterId);
+    await adjustServed(deps, emitterId, { remove: [userId] });
+  }
+  await retract(deps, lost.map((emitterId) => ({ emitterId, readerId: userId })));
 }

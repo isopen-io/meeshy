@@ -22,12 +22,17 @@ import {
   reportBattery,
   sweepBatteryOff,
   markBatteryAlive,
+  forgetBatteryOf,
+  reconcileBatteryOfAccount,
   type BatteryPush,
+  type BatteryPushPair,
   type BatteryReaderContext,
   type BatteryRelayDeps,
 } from '../../../../services/battery/batteryRelay';
 import { ADULT_BIRTH, messagingWorld, table, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
 import { batteryCacheInMemory } from './batteryWorld';
+import { readBatteryRecord } from '../../../../services/battery/batteryStore';
+import { revokeTeamSharesOf } from '../../../../services/relations/teamShareGrant';
 
 const EMETTEUR = '6400000000000000000000e1';
 const SANG = '6400000000000000000000b1';
@@ -55,7 +60,7 @@ const LIENS: readonly CircleLink[] = [
   [EMETTEUR, DESACTIVE, 'BLOOD'],
 ];
 
-function monde(options: { readonly settings?: readonly Row[]; readonly enConversation?: readonly string[]; readonly suivi?: boolean } = {}) {
+function monde(options: { readonly settings?: readonly Row[]; readonly enConversation?: readonly string[]; readonly suivi?: boolean; readonly connecte?: boolean } = {}) {
   const world = messagingWorld({
     links: LIENS,
     users: [EMETTEUR, SANG, SANG_REFUSE, PROCHE, PROCHE_CONSENTI, AMI, BLOQUEUR, DESACTIVE, ANALYSTE, ADMIN].map((id) => ({
@@ -74,6 +79,7 @@ function monde(options: { readonly settings?: readonly Row[]; readonly enConvers
   ]);
   const emissions: Emission[] = [];
   const pushes: BatteryPush[] = [];
+  const retraits: BatteryPushPair[] = [];
   const conversing = new Set(options.enConversation ?? []);
   let now = T0;
   const deps: BatteryRelayDeps = {
@@ -88,6 +94,10 @@ function monde(options: { readonly settings?: readonly Row[]; readonly enConvers
       return true;
     },
     isTrackedDevice: async () => options.suivi ?? true,
+    trackedDeviceConnected: async () => options.connecte ?? false,
+    retractPushes: async (pairs) => {
+      retraits.push(...pairs);
+    },
   };
   const releve = (level: number, extra: Record<string, unknown> = {}) =>
     reportBattery(deps, { emitterId: EMETTEUR, sessionId: 's1', payload: { level, charging: false, lowPower: false, measuredAt: new Date(now).toISOString(), ...extra } });
@@ -97,6 +107,7 @@ function monde(options: { readonly settings?: readonly Row[]; readonly enConvers
     world,
     emissions,
     pushes,
+    retraits,
     conversing,
     releve,
     avancer: (ms: number) => {
@@ -301,26 +312,139 @@ describe('le rattrapage et le rafraîchissement quand le lien change', () => {
 });
 
 describe('la coupure globale de l\'émetteur', () => {
-  it('efface chez chaque lecteur qui voyait, et seulement chez lui ; la reprise fait remonter l\'état', async () => {
+  const coupe = (m: ReturnType<typeof monde>, at: Date | null) => {
+    const users = (m.world.prisma as unknown as { user: { rows: Row[] } }).user.rows;
+    users.find((row) => row.id === EMETTEUR)!.batterySharingDisabledAt = at;
+  };
+
+  it('efface chez chaque lecteur qui voyait, et seulement chez lui ; ses notifications de batterie se retirent', async () => {
     const m = monde();
     await m.releve(20);
     m.emissions.length = 0;
-    const users = (m.world.prisma as unknown as { user: { rows: Row[] } }).user.rows;
-    const emetteur = users.find((row) => row.id === EMETTEUR)!;
 
     const avant = await captureBatteryAudience(m.deps, EMETTEUR);
-    emetteur.batterySharingDisabledAt = new Date(T0);
+    coupe(m, new Date(T0));
     await refreshBatteryAudience(m.deps, { emitterId: EMETTEUR, before: avant });
     expect(m.emissions.map((e) => [e.room, e.event]).sort()).toEqual(
       [SANG, PROCHE_CONSENTI].map((id) => [ROOMS.user(id), SERVER_EVENTS.BATTERY_CLEARED]).sort(),
     );
+    expect(m.retraits.map((r) => r.readerId)).toEqual(expect.arrayContaining([SANG, PROCHE_CONSENTI]));
+  });
+
+  it('ferme aussi la collecte : un relevé pendant la coupure n\'est pas rangé, et la reprise ne sert rien de mesuré pendant la coupure', async () => {
+    const m = monde();
+    await m.releve(20);
+    coupe(m, new Date(T0));
+    await forgetBatteryOf(m.deps, EMETTEUR);
+    expect(await readBatteryRecord(m.deps.cache, EMETTEUR)).toBeNull();
+
+    m.avancer(MIN);
+    expect(await m.releve(4)).toEqual({ success: true, data: { tracked: false } });
+    expect(await readBatteryRecord(m.deps.cache, EMETTEUR)).toBeNull();
 
     m.emissions.length = 0;
-    const coupe = await captureBatteryAudience(m.deps, EMETTEUR);
-    emetteur.batterySharingDisabledAt = null;
-    await refreshBatteryAudience(m.deps, { emitterId: EMETTEUR, before: coupe });
-    expect(m.emissions.map((e) => [e.room, e.event]).sort()).toEqual(
-      [SANG, PROCHE_CONSENTI].map((id) => [ROOMS.user(id), SERVER_EVENTS.BATTERY_CHANGED]).sort(),
-    );
+    const avant = await captureBatteryAudience(m.deps, EMETTEUR);
+    coupe(m, null);
+    await refreshBatteryAudience(m.deps, { emitterId: EMETTEUR, before: avant });
+    expect(m.emissions).toEqual([]);
+  });
+});
+
+describe('une perte d\'accès hors des routes de lien', () => {
+  const users = (m: ReturnType<typeof monde>) => (m.world.prisma as unknown as { user: { rows: Row[] } }).user.rows;
+
+  it('le relevé suivant efface l\'état chez qui ne le voit plus, quelle que soit la cause', async () => {
+    const m = monde({ enConversation: [SANG] });
+    await m.releve(28);
+    users(m).find((row) => row.id === SANG)!.deactivatedAt = new Date(T0);
+    m.avancer(MIN);
+    await m.releve(27);
+
+    expect(m.vers(SANG).map((e) => e.event)).toEqual([SERVER_EVENTS.BATTERY_CHANGED, SERVER_EVENTS.BATTERY_CLEARED]);
+    expect(m.retraits).toContainEqual({ emitterId: EMETTEUR, readerId: SANG });
+  });
+
+  it('un rôle d\'équipe retiré : l\'ex-collègue reçoit son effacement tout de suite, dans les deux sens', async () => {
+    const m = monde();
+    await reportBattery(m.deps, { emitterId: ANALYSTE, sessionId: 's1', payload: { level: 28, charging: false, lowPower: false, measuredAt: new Date(T0).toISOString() } });
+    await reportBattery(m.deps, { emitterId: ADMIN, sessionId: 's1', payload: { level: 28, charging: false, lowPower: false, measuredAt: new Date(T0).toISOString() } });
+    expect(m.vers(ADMIN).map((e) => e.event)).toEqual([SERVER_EVENTS.BATTERY_CHANGED]);
+    expect(m.vers(ANALYSTE).map((e) => e.event)).toEqual([SERVER_EVENTS.BATTERY_CHANGED]);
+    m.emissions.length = 0;
+
+    users(m).find((row) => row.id === ANALYSTE)!.role = 'USER';
+    await reconcileBatteryOfAccount(m.deps, ANALYSTE);
+
+    expect(m.emissions.map((e) => [e.room, e.event, e.data.userId]).sort()).toEqual([
+      [ROOMS.user(ADMIN), SERVER_EVENTS.BATTERY_CLEARED, ANALYSTE],
+      [ROOMS.user(ANALYSTE), SERVER_EVENTS.BATTERY_CLEARED, ADMIN],
+    ].sort());
+    m.emissions.length = 0;
+    m.avancer(MIN);
+    await reportBattery(m.deps, { emitterId: ANALYSTE, sessionId: 's1', payload: { level: 90, charging: true, lowPower: false, measuredAt: new Date(T0 + MIN).toISOString() } });
+    expect(m.vers(ADMIN)).toEqual([]);
+  });
+
+  it('la fin de l\'équipe (`revokeTeamSharesOf`) rejoue la batterie, comme l\'écoute', async () => {
+    const m = monde();
+    await reportBattery(m.deps, { emitterId: ADMIN, sessionId: 's1', payload: { level: 4, charging: false, lowPower: false, measuredAt: new Date(T0).toISOString() } });
+    m.emissions.length = 0;
+    users(m).find((row) => row.id === ANALYSTE)!.isActive = false;
+    users(m).find((row) => row.id === ANALYSTE)!.deactivatedAt = new Date(T0);
+
+    await revokeTeamSharesOf(m.deps.prisma as never, { userId: ANALYSTE, now: new Date(T0), battery: m.deps });
+
+    expect(m.vers(ANALYSTE).map((e) => [e.event, e.data.userId])).toEqual([[SERVER_EVENTS.BATTERY_CLEARED, ADMIN]]);
+    expect(m.retraits).toContainEqual({ emitterId: ADMIN, readerId: ANALYSTE });
+  });
+
+  it('un lien retiré par une route efface et retire les notifications, épisode en cours ou non', async () => {
+    const m = monde();
+    const avant = await captureBatteryAccess(m.deps, { userA: EMETTEUR, userB: SANG });
+    m.settings.rows.push({ ownerId: EMETTEUR, otherId: SANG, batteryShared: false });
+    await refreshBatteryBetween(m.deps, { userA: EMETTEUR, userB: SANG, before: avant });
+    expect(m.retraits).toContainEqual({ emitterId: EMETTEUR, readerId: SANG });
+  });
+});
+
+describe('les pas qui se croisent', () => {
+  it('un relevé et un signe de vie simultanés ne perdent pas le plancher critique : un point perdu ne s\'annonce qu\'une fois', async () => {
+    const m = monde({ enConversation: [SANG] });
+    await m.releve(5);
+    m.avancer(MIN);
+    await Promise.all([m.releve(4), markBatteryAlive(m.deps, EMETTEUR)]);
+    m.avancer(MIN);
+    await m.releve(4);
+
+    expect(m.annonces(SANG)).toEqual(['critical', 'critical-drop']);
+  });
+});
+
+describe('le signe de vie et l\'horloge', () => {
+  it('un téléphone critique dont la socket est ouverte n\'est jamais présumé éteint', async () => {
+    const m = monde({ connecte: true });
+    await m.releve(5);
+    m.avancer(11 * MIN);
+    expect(await sweepBatteryOff(m.deps)).toBe(0);
+    m.avancer(11 * MIN);
+    expect(await sweepBatteryOff(m.deps)).toBe(0);
+    expect(m.pousses(SANG)).toEqual(['critical']);
+  });
+
+  it('un téléphone à l\'horloge en retard n\'est pas annoncé éteint juste après avoir parlé', async () => {
+    const m = monde();
+    await m.releve(5, { measuredAt: new Date(T0 - 12 * MIN).toISOString() });
+    m.avancer(MIN);
+    expect(await sweepBatteryOff(m.deps)).toBe(0);
+    expect(m.pousses(SANG)).toEqual(['critical']);
+  });
+
+  it('un téléphone à l\'horloge en avance ne fait pas ignorer ses relevés suivants', async () => {
+    const m = monde({ enConversation: [SANG] });
+    await m.releve(28, { measuredAt: new Date(T0 + 60 * MIN).toISOString() });
+    m.avancer(MIN);
+    await m.releve(20);
+
+    expect(m.annonces(SANG)).toEqual(['low', 'threshold']);
   });
 });

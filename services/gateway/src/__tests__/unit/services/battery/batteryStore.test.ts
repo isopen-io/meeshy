@@ -17,6 +17,7 @@ import {
   storeBatteryRecord,
   watchBatteryEmitter,
   watchedBatteryEmitters,
+  withBatteryLock,
   type BatteryRecord,
 } from '../../../../services/battery/batteryStore';
 import { batteryCacheInMemory } from './batteryWorld';
@@ -37,6 +38,7 @@ const record = (): BatteryRecord => ({
   },
   anchor: { level: 28, charging: false, lowPower: true, measuredAt: '2026-11-15T10:00:00.000Z' },
   deviceLabel: 'iPhone',
+  servedTo: [LECTEUR],
 });
 
 afterEach(() => {
@@ -98,13 +100,36 @@ describe('le relevé à la demande', () => {
   });
 });
 
-describe('le marqueur du balayage d\'extinction', () => {
-  it('liste les émetteurs surveillés, et se retire', async () => {
+describe('l\'ensemble du balayage d\'extinction', () => {
+  it('liste les émetteurs surveillés dans UN ensemble, jamais par motif de clés, et se retire', async () => {
     const cache = batteryCacheInMemory();
     await watchBatteryEmitter(cache, EMETTEUR, true);
     await watchBatteryEmitter(cache, AUTRE, true);
     await watchBatteryEmitter(cache, AUTRE, false);
 
     expect(await watchedBatteryEmitters(cache)).toEqual([EMETTEUR]);
+    expect([...cache.sets.keys()]).toEqual(['battery:watched']);
+    expect('keys' in cache).toBe(false);
+  });
+});
+
+describe('le verrou d\'un émetteur', () => {
+  it('sérialise deux pas qui se croisent, et se libère', async () => {
+    const cache = batteryCacheInMemory();
+    const ordre: string[] = [];
+    await Promise.all([
+      withBatteryLock(cache, EMETTEUR, async () => {
+        ordre.push('a:début');
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        ordre.push('a:fin');
+      }),
+      withBatteryLock(cache, EMETTEUR, async () => {
+        ordre.push('b:début');
+        ordre.push('b:fin');
+      }),
+    ]);
+
+    expect(ordre).toEqual(['a:début', 'a:fin', 'b:début', 'b:fin']);
+    expect(cache.entries.size).toBe(0);
   });
 });
