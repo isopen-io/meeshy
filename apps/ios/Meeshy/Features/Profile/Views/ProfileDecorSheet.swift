@@ -206,9 +206,11 @@ struct ProfileDecorSheet: View {
                         Text(errorMessage)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                             .foregroundStyle(MeeshyColors.error)
+                            .transition(.opacity)
                     }
                 }
                 .padding(MeeshySpacing.lg)
+                .meeshyAnimation(MeeshyAnimation.springFast, value: model.failed)
             }
             .background(theme.backgroundGradient.ignoresSafeArea())
             .navigationTitle(String(localized: "profile.decor.title", defaultValue: "Contour et bannière", bundle: .main))

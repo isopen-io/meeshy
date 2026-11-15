@@ -30,7 +30,7 @@ export function ArrivalGreetingInvite({ greeting, language }: { readonly greetin
       type="button"
       data-greet-arrival=""
       onClick={() => composerInsertStore.request(greetingInsertion(greeting))}
-      className="min-h-11 rounded-chip px-3 text-[12.5px] font-bold"
+      className="btn-press min-h-11 rounded-chip px-3 text-[12.5px] font-bold"
       style={{ color: 'var(--accent)' }}
     >
       {translate(language, greeting.plural ? 'message.join.greet.many' : 'message.join.greet.one')}

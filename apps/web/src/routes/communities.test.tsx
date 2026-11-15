@@ -78,7 +78,8 @@ describe('la liste', () => {
     const html = plain(renderToStaticMarkup(<CommunityCard language="fr" community={community()} />));
     expect(html).toContain('href="/communities/m-polyglottes"');
     expect(html).toContain('Les polyglottes');
-    expect(html).toContain('Échanges du jeudi soir');
+    expect(html).not.toContain('Échanges du jeudi soir');
+    expect(html).not.toContain('data-community-description');
     expect(html).toContain('Publique');
     expect(html).toContain('1,3 k membres');
     expect(html).toContain('1 conversation<');

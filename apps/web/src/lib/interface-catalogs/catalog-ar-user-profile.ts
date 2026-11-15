@@ -32,7 +32,7 @@ const arUserProfile = {
   'userProfile.stat.filterLabel': 'التصفية على {name}',
   'userProfile.stat.filterClear': 'عرض الكل',
   'userProfile.context.received': 'يريد {name} التواصل معك. اقبل لتبادل الرسائل.',
-  'userProfile.context.sent': 'أرسلت طلب اتصال إلى {name}. في انتظار الرد.',
+  'userProfile.context.sent': 'تم إرسال الطلب إلى {name}.',
   'userProfile.action.write': 'مراسلة',
   'userProfile.action.writeLabel': 'مراسلة {name}',
   'userProfile.action.block': 'حظر',

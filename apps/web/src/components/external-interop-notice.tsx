@@ -141,7 +141,7 @@ export function ExternalInteropNotice({
           <button
             type="button"
             onClick={onCancel}
-            className={`rounded-card px-5 text-body font-semibold ${FOCUS}`}
+            className={`btn-press rounded-card px-5 text-body font-semibold ${FOCUS}`}
             style={{ minHeight: 48, border: '1px solid var(--color-edge)', color: 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {t('externalInterop.notice.cancel')}
@@ -151,7 +151,7 @@ export function ExternalInteropNotice({
             disabled={busy}
             aria-busy={busy}
             onClick={() => void accept()}
-            className={`rounded-card px-5 text-body font-semibold text-ios-on-brand disabled:opacity-60 ${FOCUS}`}
+            className={`btn-press rounded-card px-5 text-body font-semibold text-ios-on-brand disabled:opacity-60 ${FOCUS}`}
             style={{ minHeight: 48, backgroundColor: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
             data-external-interop-accept=""
           >

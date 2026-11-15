@@ -97,6 +97,7 @@ struct BackgroundSoundBadge: View, Equatable {
                     .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
                 StoryHeaderAudioWaveform(paused: isMuted)
                     .opacity(isMuted ? MeeshyOpacity.strong : MeeshyOpacity.intense)
+                    .meeshyAnimation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), value: isMuted)
             }
         case .credit(let title, let username, _, let releasedAt):
             let text = Self.creditText(title: title, username: username, releasedAt: releasedAt)
@@ -417,6 +418,7 @@ struct BackgroundSoundNote: View {
                         .position(x: geo.size.width / 2, y: geo.size.height / 2)
                 }
                 .opacity(isMuted ? 1 : 0)
+                .meeshyAnimation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), value: isMuted)
             )
     }
 }
