@@ -1277,3 +1277,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   d'écriture est le même sur iOS : suivi ouvert.
 - Ce qui reste : #18714 (liste périmée republiée, deux appareils qui publient, permission iOS), #18580, #18431.
   #18578 se ferme avec cette PR ; #18389 aussi (serveur, web, iOS et Android livrés).
+- PR #18762 ouverte vers `dev`. CI : la CI de PR est gelée (`skipped`) ; `android.yml` lancé à la main sur la branche a
+  été annulé par le porteur au bout d'une minute (« canceled by @jcnm »), `ci.yml` en cours. `dev` est verrouillée : la
+  routine ne relance rien et ne fusionne pas ; la PR attend le porteur. `:core:model` et les gardes shared sont prouvés en
+  local ; `sdk-core` et `:core:network` ne le seront que par `android.yml`.
