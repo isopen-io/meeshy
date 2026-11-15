@@ -150,11 +150,13 @@ describe('serializeAttachmentForSocket', () => {
     expect(result.currentUserReactions).not.toContain('👍');
   });
 
-  it('returns empty reactionSummary and currentUserReactions when reactions is absent', () => {
+  it('returns empty reactionSummary and NO currentUserReactions key when reactions is absent', () => {
     const result = serializeAttachmentForSocket(makeRaw());
 
     expect(result.reactionSummary).toEqual({});
-    expect(result.currentUserReactions).toEqual([]);
+    // #18622 — sans lecteur nommé, la clé ne part pas du tout. Un `[]` servi
+    // n'est pas « je n'ai pas calculé », c'est « il n'y en a pas ».
+    expect('currentUserReactions' in result).toBe(false);
   });
 
   it('defaults fileSize to 0 when missing', () => {
