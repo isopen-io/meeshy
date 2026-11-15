@@ -120,8 +120,8 @@ import type { MessageMutationQueueParams } from './broadcastMessageMutation';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
-import { readQueuedMessageFacts } from './queuedMessageFacts';
 import { authorizeDrainedEntries } from './drainAuthorization';
+import { floorRefusalIsProven } from './drainHistoryFloor';
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
@@ -721,35 +721,36 @@ export class MeeshySocketIOManager {
       // fabrique pas un signal de récupération qui ne désigne rien.
       if (addressable.length === 0) return;
 
-      // La lecture des lignes `Message` du lot, faite UNE fois pour les deux
-      // gardes qui les interrogent — le PLANCHER (autorisation, juste en
-      // dessous) et la VIVACITÉ (le monde, plus bas). Elle ne décide RIEN de ce
-      // qu'il faut faire d'un échec : les deux consommateurs arbitrent la même
-      // absence à l'OPPOSÉ, et un `catch` commun aurait imposé au second la
-      // posture du premier écrit (#18615).
-      const facts = await readQueuedMessageFacts(this.prisma, addressable);
-
       // Gate d'autorisation, avant toute émission : une entrée dont
       // l'appartenance a pris fin — ou dont le message est passé sous le
       // PLANCHER D'HISTOIRE du lecteur — n'est pas rejouée, et ne compte donc
-      // dans aucun des trois signaux ci-dessous (émission,
-      // `pending-messages:delivered`, accusé de réception). Un accusé affirme
+      // pas dans l'ÉMISSION ni dans l'accusé de réception. Un accusé affirme
       // « ce message est arrivé chez son destinataire » — l'affirmer d'un
       // message qu'on vient de refuser de livrer mentirait à son auteur.
       //
+      // ⚠ Cette phrase décrit ce que CE chemin passe à l'accusé, pas ce que
+      // l'accusé ÉCRIT : `freezeMessageStatus` gèle `deliveredAt` par FENÊTRE
+      // DE TEMPS sur la conversation, pas sur la liste des messages remis, si
+      // bien qu'un message refusé ici peut quand même être marqué remis par
+      // l'avancée du curseur d'un message VOISIN. C'est #18614, antérieur à ce
+      // lot et hors de son périmètre — nommé ici pour que ce commentaire ne
+      // promette pas ce que `freezeMessageStatus` défait.
+      //
       // Les DEUX questions se lisent sur la même ligne `Participant`, et
       // `authorizeDrainedEntries` existe pour qu'elle ne soit lue qu'une fois.
+      // Il rend aussi les faits de message, que la garde de vivacité consomme
+      // plus bas sans relire la ligne.
       const authorization = await authorizeDrainedEntries({
         prisma: this.prisma,
         reader: { key: userId, isAnonymous },
         entries: addressable,
-        facts,
         onParticipationReadFailure: (error) =>
           logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
             userId,
             error,
           }),
       });
+      const facts = authorization.facts;
       if (authorization.endedConversationIds.length > 0) {
         logger.info('Dropped queued events for conversations the reader has left', {
           userId,
@@ -757,10 +758,31 @@ export class MeeshySocketIOManager {
           conversationIds: authorization.endedConversationIds,
         });
       }
-      // Refus DÉLIBÉRÉ, donc hors de `dropEntry` : il n'y a rien à faire relire
-      // au client — aucune porte REST ne sert ce message à ce lecteur.
+      // Les trois raisons ne sont PAS de même nature, et les confondre coûtait
+      // l'arriéré d'un lecteur borné sur une panne transitoire (#18615, audit
+      // adversarial) :
+      //
+      //  - un refus PROUVÉ (`below-history-floor`) ne nomme rien : aucune porte
+      //    REST ne sert ce message à ce lecteur, et un signal de récupération
+      //    qui ne désigne rien vaut moins que le silence ;
+      //  - une IGNORANCE (`floor-unreadable`, `message-date-unreadable`) est une
+      //    PERTE — le drain est destructif, l'entrée a déjà quitté Redis — et sa
+      //    conversation rejoint `undelivered`, donc `conversationIds`, pour que
+      //    le client la relise. La relecture passe par `historyFloorClause` :
+      //    elle ne peut pas servir ce que la garde vient de refuser.
       for (const { entry, reason } of authorization.flooredRefusals) {
-        logger.info('Dropped a queued entry the reader may no longer read', {
+        if (floorRefusalIsProven(reason)) {
+          logger.info('Dropped a queued entry the reader may no longer read', {
+            userId,
+            reason,
+            conversationId: entry.conversationId,
+            messageId: entry.messageId,
+            eventType: entry.eventType ?? 'new',
+          });
+          continue;
+        }
+        undelivered.push(entry);
+        logger.warn('Queued entry dropped without delivery — the reader floor could not be resolved', {
           userId,
           reason,
           conversationId: entry.conversationId,

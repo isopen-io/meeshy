@@ -5,7 +5,7 @@ import {
   type HistoryFloorParticipation,
 } from '../services/historyFloor';
 import { dropQueuedEntriesBelowHistoryFloor, type DrainFloorRefusal } from './drainHistoryFloor';
-import type { QueuedMessageFacts } from './queuedMessageFacts';
+import { readQueuedMessageFacts, type QueuedMessageFacts } from './queuedMessageFacts';
 
 /**
  * L'AUTORISATION du rejeu hors ligne : les deux questions que le drain doit
@@ -20,8 +20,21 @@ import type { QueuedMessageFacts } from './queuedMessageFacts';
  * qu'elle ne soit lue qu'une fois : le drain est le chemin de la tempête de
  * reconnexions, et la lecture s'agrège déjà sur toutes les conversations du lot.
  * « Avant de conclure qu'une garde coûterait une requête, regarder ce que le
- * site lit déjà » — ici elle n'en coûte AUCUNE, seulement six colonnes de plus
- * sur une requête existante.
+ * site lit déjà. »
+ *
+ * **Ce que ça coûte VRAIMENT, et la première rédaction de ce commentaire le
+ * niait** : cinq des six colonnes ajoutées sont gratuites — `permissions` et
+ * `anonymousSession` sont des types COMPOSITES, donc déjà dans le document lu.
+ * La sixième ne l'est pas. `HISTORY_FLOOR_PARTICIPANT_SELECT` porte
+ * `user: { select: { role: true } }`, et `Participant.user` est une **RELATION**
+ * (`schema.prisma` : `user User? @relation(...)`), que le connecteur Mongo
+ * charge par une requête SUPPLÉMENTAIRE. Le lot ajoute donc **une** lecture
+ * `User` par drain — pas par entrée, pas par conversation.
+ *
+ * Elle n'est pas retirable : c'est le rôle PLATEFORME, et sans lui un MODERATOR
+ * / ADMIN / BIGBOSS entré par un lien se verrait poser un plancher que le rang
+ * ii de `historyFloorFor` lui refuse. Le coût est assumé et nommé ; ce qui ne
+ * l'était pas, c'est de l'annoncer nul.
  *
  * ─── Pourquoi un module, et pas deux méthodes du manager ─────────────────────
  *
@@ -55,6 +68,15 @@ import type { QueuedMessageFacts } from './queuedMessageFacts';
  * (`queuedMessageLiveness`), qui interroge le MONDE et non l'autorité. C'est
  * l'ordre que le drain énonce déjà, et il a un effet de bord utile : la vivacité
  * n'a plus à interroger les entrées que l'autorisation vient de retirer.
+ *
+ * **C'est pourquoi la lecture des faits de message vit ICI et pas chez
+ * l'appelant.** Le gate de plancher en a besoin, donc elle doit précéder la fin
+ * de l'autorisation ; mais la poser AVANT le gate d'appartenance — ce que la
+ * première rédaction de ce lot faisait — remettait dans la requête les ids des
+ * conversations qu'on vient de quitter ou dont on est banni, c'est-à-dire
+ * exactement la propriété que le commentaire d'ordre du drain revendique. Elle
+ * tourne donc entre les deux gates, et l'appelant REÇOIT les faits pour la
+ * vivacité au lieu de les relire.
  */
 
 /** Le lecteur, par sa CLÉ DE FILE — `userId` pour un inscrit, `Participant.id` pour un invité de lien. */
@@ -63,7 +85,7 @@ export type DrainReader = {
   readonly isAnonymous: boolean;
 };
 
-export type DrainAuthorizationPrisma = Pick<PrismaClient, 'participant' | 'conversationShareLink'>;
+export type DrainAuthorizationPrisma = Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>;
 
 export type DrainAuthorization = {
   readonly kept: QueuedMessagePayload[];
@@ -72,6 +94,12 @@ export type DrainAuthorization = {
   /** Combien d'entrées ce seul gate a retirées — le journal ne le recalcule pas par soustraction. */
   readonly endedEntryCount: number;
   readonly flooredRefusals: readonly DrainFloorRefusal[];
+  /**
+   * Les faits de message lus ici, REMIS à l'appelant : la garde de vivacité les
+   * consomme sans relire la ligne. Une lecture partagée, deux postures — c'est
+   * le contrat de `queuedMessageFacts`.
+   */
+  readonly facts: QueuedMessageFacts;
 };
 
 type ParticipationRow = HistoryFloorParticipation & { readonly bannedAt: Date | null };
@@ -80,10 +108,9 @@ export async function authorizeDrainedEntries(params: {
   readonly prisma: DrainAuthorizationPrisma;
   readonly reader: DrainReader;
   readonly entries: QueuedMessagePayload[];
-  readonly facts: QueuedMessageFacts;
   readonly onParticipationReadFailure?: (error: unknown) => void;
 }): Promise<DrainAuthorization> {
-  const { prisma, reader, entries, facts } = params;
+  const { prisma, reader, entries } = params;
   const conversationIds = [...new Set(entries.map((entry) => entry.conversationId))];
 
   const participations = await readParticipations(prisma, reader, conversationIds).catch((error: unknown) => {
@@ -91,35 +118,33 @@ export async function authorizeDrainedEntries(params: {
     return null;
   });
 
-  // Fail-OPEN : l'arbitrage d'origine de cette lecture, inchangé. Les deux gates
-  // en dépendent, donc aucun des deux ne se prononce — et c'est le plus large
-  // des deux, l'appartenance, qui décide de la posture.
-  if (participations === null) {
-    return { kept: entries, endedConversationIds: [], endedEntryCount: 0, flooredRefusals: [] };
-  }
-
   // `bannedAt` est filtré en JS, pas dans le `where` : sous MongoDB un
   // `bannedAt: null` ne matche pas les documents où le champ est ABSENT (jamais
   // écrit), et exclurait donc les lignes historiques — le piège que `ban.ts`
   // documente déjà pour `leftAt` (audit C5).
-  const live = participations.filter((row) => row.bannedAt == null);
+  const live = (participations ?? []).filter((row) => row.bannedAt == null);
   const liveIds = new Set(live.map((row) => row.conversationId));
-  const authorized = liveIds.size === conversationIds.length
+
+  // Fail-OPEN : l'arbitrage d'origine de cette lecture, inchangé. Les deux gates
+  // en dépendent, donc aucun des deux ne se prononce — et c'est le plus large
+  // des deux, l'appartenance, qui décide de la posture.
+  const authorized = participations === null || liveIds.size === conversationIds.length
     ? entries
     : entries.filter((entry) => liveIds.has(entry.conversationId));
 
-  const floored = await dropQueuedEntriesBelowHistoryFloor({
-    prisma,
-    participations: live,
-    entries: authorized,
-    facts,
-  });
+  // APRÈS le gate d'appartenance, AVANT celui du plancher — voir § L'ordre.
+  const facts = await readQueuedMessageFacts(prisma, authorized);
+
+  const floored = participations === null
+    ? { kept: authorized, refused: [] as readonly DrainFloorRefusal[] }
+    : await dropQueuedEntriesBelowHistoryFloor({ prisma, participations: live, entries: authorized, facts });
 
   return {
     kept: floored.kept,
-    endedConversationIds: conversationIds.filter((id) => !liveIds.has(id)),
+    endedConversationIds: participations === null ? [] : conversationIds.filter((id) => !liveIds.has(id)),
     endedEntryCount: entries.length - authorized.length,
     flooredRefusals: floored.refused,
+    facts,
   };
 }
 

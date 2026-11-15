@@ -323,31 +323,94 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
   });
 
   /**
-   * Un refus de plancher ne fait avancer AUCUN des trois signaux de livraison :
-   * ni l'émission, ni `pending-messages:delivered`, ni l'accusé de réception
-   * qui fait passer la coche de l'expéditeur de « envoyé » à « remis ».
+   * Un refus PROUVÉ ne fait avancer aucun signal de livraison, et ne NOMME pas
+   * sa conversation : aucune porte REST ne sert ce message à ce lecteur, donc
+   * l'y envoyer relire ne désigne rien.
    *
-   * « Un accusé affirme *ce message est arrivé chez son destinataire* —
-   * l'affirmer d'un message qu'on vient de refuser de livrer mentirait à son
-   * auteur. » C'est la règle que le gate d'appartenance énonce, et la coche est
-   * MONOTONE (`_advanceCursor` ne recule jamais) : un accusé émis à tort ne se
-   * retire pas.
-   *
-   * Et le silence sur `pending-messages:delivered` est le comportement JUSTE,
-   * pas une omission : ce signal envoie le client RELIRE les conversations
-   * qu'il nomme, et aucune porte REST ne servira ce message à ce lecteur. Un
-   * signal de récupération qui ne désigne rien vaut moins que le silence.
+   * **Le premier jet de ce témoin ne pouvait pas tomber** (audit adversarial) :
+   * il assertait `count > 0` vide dans une scène où `pending-messages:delivered`
+   * n'est pas émis DU TOUT (`authorized.length === 0` ⇒ `return`). Mesuré :
+   * pousser les refus dans `undelivered` — c'est-à-dire faire exactement
+   * l'inverse de ce que le témoin prétendait garder — ne faisait tomber aucun
+   * des 1 396 témoins du sous-arbre. La scène juste est donc un lot MIXTE sur
+   * DEUX conversations, où l'événement est bien émis, et l'assertion porte sur
+   * `conversationIds` en ÉGALITÉ.
    */
-  it('ne fait avancer aucun signal de livraison pour une entrée refusée par le plancher', async () => {
-    seedReader([{ shareLinkId: LINK, historyVisibleFrom: null }]);
-    manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
+  it('un refus PROUVÉ ne nomme pas sa conversation et ne fait avancer aucun accusé', async () => {
+    seedReader([
+      { conversationId: CONV, shareLinkId: LINK, historyVisibleFrom: null },
+      { conversationId: OTHER, role: 'admin' },
+    ]);
+    manager.setDeliveryQueue(queueOf([entry(GRANTED, CONV), entry(AFTER_JOIN, OTHER)]));
 
     await manager._drainPendingMessages('reader', false);
 
-    expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toEqual([]);
-    expect(emittedWith(SERVER_EVENTS.READ_STATUS_UPDATED)).toEqual([]);
-    const announced = emittedWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED) as Array<{ count: number }>;
-    expect(announced.filter((a) => a.count > 0)).toEqual([]);
+    const announced = emittedWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED) as Array<{
+      count: number;
+      conversationIds: string[];
+    }>;
+    expect(announced).toHaveLength(1);
+    expect(announced[0].count).toBe(1);
+    // CONV est ABSENTE : son unique entrée a été refusée, et c'est prouvé.
+    expect(announced[0].conversationIds).toEqual([OTHER]);
+  });
+
+  /**
+   * Une IGNORANCE, elle, NOMME sa conversation — c'est une perte, pas un refus,
+   * et le drain est destructif : l'entrée a déjà quitté Redis. Le seul chemin
+   * de récupération est la relecture REST que ce signal déclenche, et elle
+   * passe par `historyFloorClause`, donc elle ne peut pas servir ce que la
+   * garde vient de refuser.
+   *
+   * Sans ce témoin, le lot échangeait une fuite rare contre une perte probable
+   * — exactement l'arbitrage que le gate d'appartenance a refusé d'avoir.
+   */
+  it.each([
+    [
+      'la date du message est illisible',
+      // Un octroi PAR DATE : le plancher se règle sans lire le lien (rang iii),
+      // donc ce qui manque est bien la DATE du message, et elle seule.
+      { conversationId: CONV, shareLinkId: LINK, historyVisibleFrom: GRANT_FROM },
+      () => {
+        prisma.message.findMany = jest.fn(async () => {
+          throw new Error('replica lagging');
+        }) as any;
+      },
+    ],
+    [
+      'le plancher est illisible',
+      // Ici c'est le LIEN qui décide — et il ne décide QUE si rien ne se règle
+      // avant lui. Avec un `historyVisibleFrom` posé, `settleBeforeLink` rend
+      // au rang iii et la ligne du lien n'est jamais lue : la panne qu'on met
+      // en scène n'arriverait pas. C'est la leçon de ce fichier, rejouée — une
+      // garde se met en scène depuis la loi qu'elle interroge.
+      { conversationId: CONV, shareLinkId: LINK },
+      () => {
+        prisma.conversationShareLink = {
+          findMany: jest.fn(async () => {
+            throw new Error('link read failed');
+          }),
+        } as any;
+      },
+    ],
+  ])('une IGNORANCE (%s) nomme sa conversation pour que le client la relise', async (_label, floored, breakIt) => {
+    seedReader([floored as FloorRow, { conversationId: OTHER, role: 'admin' }]);
+    (breakIt as () => void)();
+    manager.setDeliveryQueue(queueOf([entry(GRANTED, CONV), entry(AFTER_JOIN, OTHER)]));
+
+    await manager._drainPendingMessages('reader', false);
+
+    const announced = emittedWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED) as Array<{
+      count: number;
+      conversationIds: string[];
+    }>;
+    expect(announced).toHaveLength(1);
+    // L'entrée bornée est refusée, celle de l'admin passe.
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toHaveLength(1);
+    expect(announced[0].count).toBe(1);
+    // …et les DEUX conversations sont nommées : celle qui a livré, et celle
+    // qu'on a PERDUE et qu'il faut aller relire.
+    expect([...announced[0].conversationIds].sort()).toEqual([CONV, OTHER].sort());
   });
 
   // ─── Les NON-RÉGRESSIONS : ce que la garde ne doit pas retirer ────────────

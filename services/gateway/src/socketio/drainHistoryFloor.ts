@@ -82,17 +82,46 @@ import type { QueuedMessageFacts } from './queuedMessageFacts';
  *
  * ─── Un refus DÉLIBÉRÉ n'est pas une perte ───────────────────────────────────
  *
- * Comme le gate d'appartenance et celui de vivacité, ce refus ne passe pas par
- * `dropEntry` : celui-ci journalise en ERROR une perte à rattraper et NOMME sa
- * conversation dans `pending-messages:delivered` pour y envoyer le client
- * relire. Ici il n'y a rien à relire — `GET …/messages`, `/sync`,
- * `conversation:updated` et `GET /attachments/:id` refusent tous ce message au
- * même lecteur. Nommer la conversation l'enverrait chercher ce qu'aucune porte
- * ne lui sert.
+ * Comme le gate d'appartenance et celui de vivacité, un refus PROUVÉ
+ * (`below-history-floor`) ne passe pas par `dropEntry` : celui-ci journalise
+ * une perte à rattraper et NOMME sa conversation dans
+ * `pending-messages:delivered` pour y envoyer le client relire. Là il n'y a
+ * rien à relire — `GET …/messages`, `/sync`, `conversation:updated` et
+ * `GET /attachments/:id` refusent tous ce message au même lecteur.
+ *
+ * **Mais cette phrase n'est vraie QUE du refus prouvé**, et la première
+ * rédaction de ce lot l'appliquait aux trois. Voir {@link DrainFloorReason} :
+ * les deux autres sont des aveux d'ignorance, donc des PERTES, et elles
+ * nomment leur conversation.
  */
+/**
+ * Les trois raisons de refus, et elles ne sont PAS de même nature — l'appelant
+ * doit les arbitrer séparément, c'est pourquoi elles voyagent nommées.
+ *
+ * | raison | ce que la garde SAIT | c'est |
+ * |---|---|---|
+ * | `below-history-floor` | le message est sous le plancher | un refus **PROUVÉ** |
+ * | `floor-unreadable` | on ne sait pas quel est le plancher | un **aveu d'ignorance** |
+ * | `message-date-unreadable` | on ne sait pas de quel côté il tombe | un **aveu d'ignorance** |
+ *
+ * Les trois ne sont PAS émises, et c'est juste : fail-closed sur l'émission.
+ * Mais seule la première n'a « rien à faire relire au client ». Les deux
+ * autres sont des PERTES — le drain est destructif, l'entrée a déjà quitté
+ * Redis — et le client doit être envoyé relire la conversation par REST, où
+ * `historyFloorClause` réapplique le plancher : la relecture ne peut donc pas
+ * servir ce que la garde vient de refuser. Les taire échangerait une fuite
+ * rare contre une perte probable, exactement l'arbitrage que le gate
+ * d'appartenance a refusé d'avoir.
+ */
+export type DrainFloorReason = 'below-history-floor' | 'floor-unreadable' | 'message-date-unreadable';
+
+/** Un refus PROUVÉ ne nomme rien ; une IGNORANCE envoie relire. */
+export const floorRefusalIsProven = (reason: DrainFloorReason): boolean =>
+  reason === 'below-history-floor';
+
 export type DrainFloorRefusal = {
   readonly entry: QueuedMessagePayload;
-  readonly reason: 'below-history-floor' | 'floor-unreadable' | 'message-date-unreadable';
+  readonly reason: DrainFloorReason;
 };
 
 export type DrainFloorOutcome = {
@@ -123,8 +152,6 @@ export async function dropQueuedEntriesBelowHistoryFloor(params: {
   if (!entries.some((entry) => carriesMessageText(entry.eventType))) {
     return { kept: entries, refused: [] };
   }
-  if (participations.length === 0) return { kept: entries, refused: [] };
-
   const { floors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, participations);
   const unreadable = new Set(unreadableConversationIds);
   // Le cas DOMINANT : aucune participation bornée et aucun plancher illisible.
@@ -147,7 +174,7 @@ function refusalFor(
   floors: ReadonlyMap<string, Date>,
   unreadable: ReadonlySet<string>,
   facts: QueuedMessageFacts,
-): DrainFloorRefusal['reason'] | null {
+): DrainFloorReason | null {
   if (!carriesMessageText(entry.eventType)) return null;
   if (unreadable.has(entry.conversationId)) return 'floor-unreadable';
 
