@@ -200,3 +200,21 @@ describe('le numéro, par le parcours existant', () => {
     expect(host.textContent).toContain('Code invalide ou expiré');
   });
 });
+
+describe('« Validez votre compte » — une feuille basse qui entre et sort en mouvement (#18322)', () => {
+  test('sur un téléphone, elle se pose en bas comme la feuille d’iOS, et porte la prise de mouvement des feuilles', async () => {
+    const { host } = await monter();
+    const dialog = dialogOf(host) as HTMLDialogElement;
+    expect(dialog.getAttribute('data-sheet-presentation')).toBe('bottom');
+    expect(dialog.className).toContain('mt-auto');
+    expect(dialog.style.getPropertyValue('--dialog-rise-ms')).not.toBe('');
+  });
+
+  test('« Plus tard » ferme le dialogue en jouant sa sortie : il se ferme, et l’hôte l’apprend', async () => {
+    const { host, closed } = await monter();
+    const dialog = dialogOf(host) as HTMLDialogElement;
+    await mounter.click(buttonNamed(host, 'Plus tard'));
+    expect(dialog.open).toBe(false);
+    expect(closed).toEqual(['closed']);
+  });
+});
