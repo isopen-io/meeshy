@@ -100,6 +100,7 @@ struct DownloadBadgeView: View {
             case .compact: compactIdleBadge
             }
         }
+        .buttonStyle(MeeshyGlassPressStyle())
         .task {
             await downloader.checkCache(attachment)
         }
@@ -110,9 +111,9 @@ struct DownloadBadgeView: View {
     private var centredIdleBadge: some View {
         VStack(spacing: 6) {
             ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
+                Color.clear
                     .frame(width: 56, height: 56)
+                    .meeshyGlass(in: Circle(), isInteractive: true)
                 Circle()
                     .fill(accent.opacity(MeeshyOpacity.intense))
                     .frame(width: 48, height: 48)
@@ -138,9 +139,9 @@ struct DownloadBadgeView: View {
     /// dans le coin d'une case de grille sans toucher au « +N » du centre.
     private var compactIdleBadge: some View {
         ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
+            Color.clear
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+                .meeshyGlass(in: Circle(), isInteractive: true)
             Circle()
                 .fill(accent.opacity(MeeshyOpacity.intense))
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
