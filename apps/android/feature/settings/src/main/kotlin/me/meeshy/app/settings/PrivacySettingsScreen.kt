@@ -1,5 +1,6 @@
 package me.meeshy.app.settings
 
+import me.meeshy.ui.component.battery.BatterySharingSwitch
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -125,6 +126,10 @@ private fun PrivacyLocationSection(state: PrivacyUiState, viewModel: PrivacySett
                 onSelectPrecision = viewModel::setLocationPrecision,
                 onSelectMapStyle = viewModel::setLocationMapStyle,
             )
+        }
+        // Partager ma batterie, pour tous (#14147) : la coupure globale, côté émetteur.
+        SettingsCard(tint = MeeshyPalette.Info) {
+            BatterySharingSwitch()
         }
     }
 }

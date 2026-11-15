@@ -20,6 +20,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +33,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.conversationinfo.ConversationInfoHero
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.battery.BatteryPersonSection
+import me.meeshy.ui.component.battery.BatteryPersonSurface
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
@@ -126,6 +129,16 @@ internal fun ConversationInfoSheet(
                 headerActions()
                 Spacer(Modifier.size(MeeshySpacing.sm))
                 entries.forEach { entry -> ConversationInfoEntryRow(entry, accentColor) }
+                // La batterie du pair (#14147) : son état en épisode, et ce que je reçois de lui.
+                peerUserId?.let { peer ->
+                    BatteryPersonSection(
+                        userId = peer,
+                        name = title,
+                        surface = BatteryPersonSurface.CONVERSATION_INFO,
+                        nowMs = remember(peer) { System.currentTimeMillis() },
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                    )
+                }
                 pinnedPreview?.let { preview ->
                     Spacer(Modifier.size(MeeshySpacing.sm))
                     ConversationInfoPinnedPreviewCard(preview, accentColor, onOpenPinned)

@@ -63,9 +63,10 @@ export const MINIMUM_ROUTES = 100;
  * Les événements du contrat réellement confrontés, mesurés le 2026-11-14 — à comparer aux 176 que
  * `ServerToClientEvents` déclare. Le chiffre vit ICI, et pas seulement dans une prose, pour qu'une
  * extension de l'extracteur ait un endroit où se voir monter : il est passé de 110 à 125 quand les
- * deux derniers idiomes de routage ont rejoint la lecture (#18123).
+ * deux derniers idiomes de routage ont rejoint la lecture (#18123), puis à 128 quand Android a lu les
+ * trois `battery:*` (#14147, sur 180 déclarés).
  */
-export const SWEPT_EVENTS_AT_LAST_MEASURE = 125;
+export const SWEPT_EVENTS_AT_LAST_MEASURE = 128;
 
 export type KotlinField = {
   readonly name: string;

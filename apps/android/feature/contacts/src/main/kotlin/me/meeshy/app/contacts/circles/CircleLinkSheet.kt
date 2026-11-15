@@ -17,6 +17,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -34,6 +35,8 @@ import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.model.relation.RelationsConfig
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.battery.BatteryPersonSection
+import me.meeshy.ui.component.battery.BatteryPersonSurface
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.circles.levelIcon
 import me.meeshy.ui.component.circles.levelTitle
@@ -141,6 +144,13 @@ internal fun CircleLinkSheet(
                     }
                 }
             }
+            // La batterie (#14147) : ce que je partage à cette personne, et son état quand elle est en épisode.
+            BatteryPersonSection(
+                userId = link.userId,
+                name = name,
+                surface = BatteryPersonSurface.PERSON_FICHE,
+                nowMs = remember(link.userId) { System.currentTimeMillis() },
+            )
             Spacer(Modifier.heightIn(min = 16.dp))
         }
     }
