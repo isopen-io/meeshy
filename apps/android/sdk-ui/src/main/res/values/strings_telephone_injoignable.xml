@@ -9,11 +9,11 @@
     <string name="phone_reachability_cause_network">No network or airplane mode, probably</string>
     <string name="phone_reachability_a11y">%1$s\'s phone is unreachable</string>
     <string name="phone_reachability_share_global_title">Let my Close ones know if my phone is unreachable</string>
-    <string name="phone_reachability_share_global_scope">Your Close ones and your Blood know since when your phone stopped responding, never where you are.</string>
+    <string name="phone_reachability_share_global_scope">Your Close ones know since when it stopped responding, never where you are.</string>
     <string name="phone_reachability_share_person">Let %1$s know if my phone is unreachable</string>
     <string name="phone_reachability_share_person_scope">%1$s knows since when your phone stopped responding, and the likely cause.</string>
     <string name="phone_reachability_consent_title">Let %1$s know if your phone is unreachable?</string>
-    <string name="phone_reachability_consent_body">If your phone stops responding, %1$s will know since when. You can change this on their page.</string>
+    <string name="phone_reachability_consent_body">If it stops responding, %1$s will know since when. Editable on their page.</string>
     <string name="phone_reachability_consent_checkbox">Let %1$s know if my phone is unreachable</string>
     <string name="phone_reachability_consent_confirm">Confirm</string>
     <string name="phone_reachability_consent_later">Not now</string>

@@ -9,11 +9,11 @@
     <string name="phone_reachability_cause_network">Sans réseau ou en mode avion, probablement</string>
     <string name="phone_reachability_a11y">Le téléphone de %1$s est injoignable</string>
     <string name="phone_reachability_share_global_title">Prévenir mes Proches si mon téléphone est injoignable</string>
-    <string name="phone_reachability_share_global_scope">Vos Proches et vos Sangs savent depuis quand votre téléphone ne répond plus, jamais où vous êtes.</string>
+    <string name="phone_reachability_share_global_scope">Vos Proches savent depuis quand il ne répond plus, jamais où vous êtes.</string>
     <string name="phone_reachability_share_person">Prévenir %1$s si mon téléphone est injoignable</string>
     <string name="phone_reachability_share_person_scope">%1$s sait depuis quand votre téléphone ne répond plus, et la cause probable.</string>
     <string name="phone_reachability_consent_title">Prévenir %1$s si votre téléphone est injoignable ?</string>
-    <string name="phone_reachability_consent_body">Si votre téléphone ne répond plus, %1$s saura depuis quand. Modifiable sur sa fiche.</string>
+    <string name="phone_reachability_consent_body">S\'il ne répond plus, %1$s saura depuis quand. Modifiable sur sa fiche.</string>
     <string name="phone_reachability_consent_checkbox">Prévenir %1$s si mon téléphone est injoignable</string>
     <string name="phone_reachability_consent_confirm">Confirmer</string>
     <string name="phone_reachability_consent_later">Pas maintenant</string>

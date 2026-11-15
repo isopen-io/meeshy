@@ -9,11 +9,11 @@
     <string name="phone_reachability_cause_network">Senza rete o in modalità aereo, probabilmente</string>
     <string name="phone_reachability_a11y">Il telefono di %1$s è irraggiungibile</string>
     <string name="phone_reachability_share_global_title">Avvisare i miei Vicini se il mio telefono è irraggiungibile</string>
-    <string name="phone_reachability_share_global_scope">I tuoi Vicini e il tuo Sangue sanno da quando il tuo telefono non risponde, mai dove sei.</string>
+    <string name="phone_reachability_share_global_scope">I tuoi Vicini sanno da quando non risponde, mai dove sei.</string>
     <string name="phone_reachability_share_person">Avvisare %1$s se il mio telefono è irraggiungibile</string>
     <string name="phone_reachability_share_person_scope">%1$s sa da quando il tuo telefono non risponde, e la causa probabile.</string>
     <string name="phone_reachability_consent_title">Avvisare %1$s se il tuo telefono è irraggiungibile?</string>
-    <string name="phone_reachability_consent_body">Se il tuo telefono smette di rispondere, %1$s saprà da quando. Modificabile nella sua scheda.</string>
+    <string name="phone_reachability_consent_body">Se smette di rispondere, %1$s saprà da quando. Modificabile nella scheda.</string>
     <string name="phone_reachability_consent_checkbox">Avvisare %1$s se il mio telefono è irraggiungibile</string>
     <string name="phone_reachability_consent_confirm">Conferma</string>
     <string name="phone_reachability_consent_later">Non ora</string>

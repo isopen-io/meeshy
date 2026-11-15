@@ -199,7 +199,7 @@ function ConsentOffer({ language, name, onAnswer }: { readonly language: Interfa
         data-phone-reachability-consent-confirm=""
         onClick={() => onAnswer(checked)}
         className="grid place-items-center rounded-chip px-3 text-body font-semibold transition-transform focus-visible:outline-2 active:scale-[0.98]"
-        style={{ minHeight: 44, color: 'var(--color-ios-on-brand, #fff)', backgroundColor: 'var(--color-ios-brand)' }}
+        style={{ minHeight: 44, color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--color-ios-brand)' }}
       >
         {translatePhoneReachability(language, 'phone.consent.confirm')}
       </button>
