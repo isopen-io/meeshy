@@ -110,6 +110,20 @@ describe('RowActions — les sous-menus Favori et Déplacer vers…', () => {
     expect(menuLabel()).toBeNull();
   });
 
+  test('refermé depuis un sous-menu, le bouton de la ligne reprend son nom pendant que le menu sort', () => {
+    mount();
+    openMenu();
+    act(() => {
+      item('Favori')?.click();
+    });
+    act(() => {
+      item('💎')?.click();
+    });
+    const button = container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"][aria-expanded]');
+    expect(button?.getAttribute('aria-expanded')).toBe('false');
+    expect(button?.getAttribute('aria-label')).toBe('Actions de conversation');
+  });
+
   test('« Déplacer vers… » : les catégories puis « Mes conversations » ; retoucher la courante la vide', () => {
     const { choices } = mount();
     openMenu();
