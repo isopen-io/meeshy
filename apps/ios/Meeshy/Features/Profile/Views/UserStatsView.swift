@@ -123,6 +123,11 @@ struct UserStatsView: View {
 
     // MARK: - Timeline Chart
 
+    /// La frise dit sa période, pas « ACTIVITÉ » : le titre de l'écran le dit déjà.
+    static var timelineHeader: String {
+        String(localized: "user.stats.last_30_days", defaultValue: "30 DERNIERS JOURS", bundle: .main)
+    }
+
     private var timelineChart: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack(spacing: MeeshySpacing.xsPlus) {
@@ -130,7 +135,7 @@ struct UserStatsView: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundStyle(MeeshyColors.info)
                     .accessibilityHidden(true)
-                Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITÉ", bundle: .main))
+                Text(Self.timelineHeader)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.info)
                     .tracking(1.2)

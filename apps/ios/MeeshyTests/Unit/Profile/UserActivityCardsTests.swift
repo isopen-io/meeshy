@@ -90,6 +90,11 @@ final class UserActivityCardsTests: XCTestCase {
         XCTAssertTrue(source.contains("UserActivityCards.make(stats: viewModel.stats)"), "Les cartes viennent de la valeur, jamais d'une liste recopiée.")
     }
 
+    func test_timelineHeader_doesNotRepeatTheScreenTitle_butSaysItsPeriod() throws {
+        XCTAssertEqual(UserStatsView.timelineHeader, "30 DERNIERS JOURS")
+        XCTAssertFalse(try statsViewSource().contains("\"user.stats.activity\""), "« ACTIVITÉ » répétait le titre « Mon activité ».")
+    }
+
     func test_userStatsView_dropsTheBadgesBlock_whichMyLegendCarries() throws {
         let source = try statsViewSource()
 

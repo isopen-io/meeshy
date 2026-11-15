@@ -67,6 +67,24 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertEqual(ProfileActivityBand.values(of: nil).map(\.value), [0, 0, 0])
     }
 
+    func test_activityValues_withServedStats_areTheCardsOfMyActivity() {
+        let stats = UserStats(totalMessages: 12, totalConversations: 3, totalTranslations: 40)
+
+        XCTAssertEqual(ProfileActivityBand.values(of: stats), UserActivityCards.make(stats: stats),
+                       "la bande et l'écran Mon activité disent les mêmes nombres, sous les mêmes noms et les mêmes couleurs")
+    }
+
+    func test_activityOpenHint_namesTheScreenItOpens() {
+        XCTAssertEqual(ProfileActivityBand.openHint, "Ouvre Mon activité")
+    }
+
+    // MARK: - Contact
+
+    func test_contactFieldFocus_emailAndPhone_openSecurityOnTheirOwnSection() {
+        XCTAssertEqual(ProfileContactSection.Field.email.securityFocus, .securityEmail)
+        XCTAssertEqual(ProfileContactSection.Field.phone.securityFocus, .securityPhone)
+    }
+
     // MARK: - Mes contenus
 
     func test_savedContentRows_areStarred_thenBookmarks_thenMyPacks() {

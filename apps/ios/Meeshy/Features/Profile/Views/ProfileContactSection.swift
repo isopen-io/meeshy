@@ -11,7 +11,19 @@ struct ProfileContactSection: View {
     let phoneNumber: String?
     let isPhoneVerified: Bool
     let accentHex: String
-    let onOpenSecurity: () -> Void
+    let onOpenSecurity: (SettingsFocus) -> Void
+
+    /// Les deux rangées, chacune menant à SA section de Sécurité.
+    enum Field {
+        case email, phone
+
+        var securityFocus: SettingsFocus {
+            switch self {
+            case .email: return .securityEmail
+            case .phone: return .securityPhone
+            }
+        }
+    }
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -21,11 +33,11 @@ struct ProfileContactSection: View {
                                  title: String(localized: "profile.section.contact", bundle: .main),
                                  color: MeeshyColors.indigo300)
             VStack(spacing: 0) {
-                row(icon: "envelope.fill",
+                row(.email, icon: "envelope.fill",
                     title: String(localized: "profile.email", bundle: .main),
                     value: Self.displayedEmail(email), verified: Self.isFilled(email) ? isEmailVerified : nil,
                     identifier: "profile.contact.email")
-                row(icon: "phone.fill",
+                row(.phone, icon: "phone.fill",
                     title: String(localized: "profile.phone", bundle: .main),
                     value: Self.displayedPhone(phoneNumber), verified: Self.isFilled(phoneNumber) ? isPhoneVerified : nil,
                     identifier: "profile.contact.phone")
@@ -34,10 +46,10 @@ struct ProfileContactSection: View {
         }
     }
 
-    private func row(icon: String, title: String, value: String?, verified: Bool?, identifier: String) -> some View {
+    private func row(_ field: Field, icon: String, title: String, value: String?, verified: Bool?, identifier: String) -> some View {
         Button {
             HapticFeedback.light()
-            onOpenSecurity()
+            onOpenSecurity(field.securityFocus)
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 ProfileFieldIcon(name: icon, accentColor: accentHex)

@@ -7,7 +7,7 @@ import MeeshyUI
 /// master PIN… ») ouvrait les Réglages en haut de page : l'utilisateur devait
 /// trouver seul la ligne. Elle désigne désormais SON réglage : l'écran défile
 /// jusqu'à lui et le met en évidence.
-enum SettingsFocus: String, Equatable, CaseIterable {
+enum SettingsFocus: String, Equatable, CaseIterable, Identifiable {
     /// Consentement vocal (transcription et traduction des vocaux) : le
     /// profil vocal, dont la GESTION s'ouvre directement (#16418).
     case voiceProfile
@@ -18,6 +18,13 @@ enum SettingsFocus: String, Equatable, CaseIterable {
     case transcription
     /// Master PIN des conversations verrouillées : Réglages ▸ Sécurité.
     case masterPin
+    /// Mon e-mail, changé et vérifié dans Réglages ▸ Sécurité (#18590 : la
+    /// rangée Contact de ma fiche y mène).
+    case securityEmail
+    /// Mon téléphone, changé et vérifié dans Réglages ▸ Sécurité (#18590).
+    case securityPhone
+
+    var id: String { rawValue }
 
     /// La feuille que les Réglages ouvrent d'eux-mêmes pour ce réglage.
     enum Sheet: Equatable { case voiceProfileManage, voiceProfileWizard }
@@ -27,7 +34,7 @@ enum SettingsFocus: String, Equatable, CaseIterable {
         switch self {
         case .voiceProfile, .voiceProfileCreation: return .voiceProfile
         case .transcription: return .transcriptionMine
-        case .masterPin: return .security
+        case .masterPin, .securityEmail, .securityPhone: return .security
         }
     }
 
@@ -42,14 +49,21 @@ enum SettingsFocus: String, Equatable, CaseIterable {
     var unfoldsAnnex: Bool { SettingsLayout.unfoldsAnnex(toReach: destination) }
 
     /// Le réglage vit dans l'écran Sécurité, ouvert par-dessus les Réglages.
-    var opensSecurity: Bool { self == .masterPin }
+    var opensSecurity: Bool { destination == .security }
+
+    /// La section où l'écran Sécurité se pose en s'ouvrant : celle qu'on lui a
+    /// désignée, sinon celle qu'une invite a demandée, sinon aucune. Un réglage
+    /// qui ne vit pas dans Sécurité n'y désigne rien.
+    static func securityLanding(initial: SettingsFocus?, requested: SettingsFocus?) -> SettingsFocus? {
+        [initial, requested].compactMap { $0 }.first { $0.opensSecurity }
+    }
 
     /// La configuration de la voix s'ouvre DIRECTEMENT, sans second toucher.
     var opensSheet: Sheet? {
         switch self {
         case .voiceProfile: return .voiceProfileManage
         case .voiceProfileCreation: return .voiceProfileWizard
-        case .transcription, .masterPin: return nil
+        case .transcription, .masterPin, .securityEmail, .securityPhone: return nil
         }
     }
 }
@@ -68,6 +82,14 @@ final class SettingsFocusRequest: ObservableObject {
     /// Rend la demande et l'efface ; `nil` s'il n'y en a pas.
     func consume() -> SettingsFocus? {
         defer { pending = nil }
+        return pending
+    }
+
+    /// Consomme la demande si elle vise l'écran Sécurité ; une demande destinée
+    /// aux Réglages reste en attente.
+    func consumeSecurityFocus() -> SettingsFocus? {
+        guard let pending, pending.opensSecurity else { return nil }
+        self.pending = nil
         return pending
     }
 

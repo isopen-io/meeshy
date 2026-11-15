@@ -16,6 +16,33 @@ final class SettingsFocusTests: XCTestCase {
         XCTAssertTrue(SettingsFocus.masterPin.opensSecurity)
     }
 
+    func test_securityContactFocus_opensSecurityFromTheAccountSection_withoutSheet() {
+        for focus in [SettingsFocus.securityEmail, .securityPhone] {
+            XCTAssertEqual(focus.destination, .security, "\(focus)")
+            XCTAssertEqual(focus.settingsAnchor, "settings.section.account", "\(focus)")
+            XCTAssertTrue(focus.opensSecurity, "\(focus)")
+            XCTAssertNil(focus.opensSheet, "\(focus)")
+        }
+    }
+
+    func test_securityLanding_withAnInitialFocusOnSecurity_landsOnIt() {
+        XCTAssertEqual(SettingsFocus.securityLanding(initial: .securityPhone, requested: .masterPin), .securityPhone)
+        XCTAssertEqual(SettingsFocus.securityLanding(initial: nil, requested: .masterPin), .masterPin)
+        XCTAssertNil(SettingsFocus.securityLanding(initial: nil, requested: nil))
+        XCTAssertNil(SettingsFocus.securityLanding(initial: .voiceProfile, requested: .transcription),
+                     "un réglage qui ne vit pas dans Sécurité n'y désigne rien")
+    }
+
+    func test_consumeSecurityFocus_takesOnlyARequestForSecurity() {
+        let request = SettingsFocusRequest()
+        request.request(.voiceProfile)
+        XCTAssertNil(request.consumeSecurityFocus(), "une demande destinée aux Réglages reste en attente")
+        XCTAssertEqual(request.pending, .voiceProfile)
+        request.request(.securityEmail)
+        XCTAssertEqual(request.consumeSecurityFocus(), .securityEmail)
+        XCTAssertNil(request.pending)
+    }
+
     func test_consume_pendingRequest_isServedOnce() {
         let request = SettingsFocusRequest()
         request.request(.voiceProfile)
