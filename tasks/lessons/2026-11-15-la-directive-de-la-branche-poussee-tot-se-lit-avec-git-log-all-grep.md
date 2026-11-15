@@ -67,3 +67,15 @@ RÉELLE (`{ sealAtRest }` compris) là où la mienne en perdait le troisième
 paramètre : assignable au compilateur, donc un piège armé qu'aucun témoin
 n'aurait fait rougir. Céder n'est pas perdre le lot : c'est l'échanger contre la
 lecture adverse de son propre défaut.
+
+**Et une troisième fois, sur la PREUVE cette fois.** Le dépôt a déjà la leçon
+« un push juste après un autre annule le run CI du premier » (groupe de
+concurrence). Je l'ai rejouée en `workflow_dispatch` : trois dispatches
+successifs sur la même branche, chacun annulant le précédent, donc **aucune
+preuve avant le dernier**. Ce n'est pas une leçon neuve, c'est la même appliquée
+à un déclencheur que je ne rangeais pas sous « push ».
+
+La règle se relit donc sans mentionner le verbe : **sur une branche, un second
+déclenchement annule le premier, quel qu'il soit.** On dispatche UNE fois, après
+le dernier commit du lot, et on attend — relancer « pour être sûr » retarde
+exactement ce qu'on cherche à obtenir.
