@@ -504,13 +504,17 @@ private fun HeaderRow(
     }
 }
 
-/** Une ombre portée vers le haut, fixe : un dégradé sur l'étendue du flou, jamais de flou dessiné ni animé. */
+/**
+ * Une ombre portée vers le haut, fixe : un dégradé sur l'étendue du flou, jamais de flou dessiné ni animé. Elle part des
+ * coins arrondis de la feuille, pour ne pas déborder de leur courbe.
+ */
 private fun DrawScope.drawShadow(color: Color, density: Float) {
     val spread = MeeshyAnchoredSheetMetrics.SHADOW_RADIUS * 2f * density
+    val inset = MeeshyRadius.xxl.toPx()
     drawRect(
         brush = Brush.verticalGradient(colors = listOf(Color.Transparent, color), startY = -spread, endY = 0f),
-        topLeft = Offset(0f, -spread),
-        size = Size(size.width, spread),
+        topLeft = Offset(inset, -spread),
+        size = Size((size.width - 2f * inset).coerceAtLeast(0f), spread),
     )
 }
 
