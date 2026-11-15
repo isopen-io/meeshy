@@ -1203,4 +1203,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionné à la main : aucun conflit.
 - Gates locaux après la fusion : gateway `jest` `sharedLocation` + handler + `routes/relations` 13 suites, 243 verts ;
   `tsc` gateway vert ; web `bun test` du lot 90/90, `tsc --noEmit` vert.
+- Rouge du lot trouvé par la CI : `Tests · shared` (garde de parité des événements, #18342) comptait Android comme
+  lecteur de `location:share-own-changed` parce qu'un commentaire du cliquet des routes Android citait le nom de
+  l'événement. Commentaire reformulé : l'inventaire (Android et iOS en retard) redevient juste ; `vitest` shared
+  409 fichiers, 9 727 verts.
 - Prochain lot recommandé : #18578 (iOS + Android se recalent sur la passerelle), puis #18580, puis #18431.

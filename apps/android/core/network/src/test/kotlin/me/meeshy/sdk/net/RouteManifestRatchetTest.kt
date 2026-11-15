@@ -133,7 +133,7 @@ class RouteManifestRatchetTest {
          * `DELETE /me/location/history`, `GET /me/location/consultations`, `PUT /me/location/blood-settings` et
          * `GET /relations/:userId/location/history` —, servies par la passerelle ; `sang-position-historique@android` les portera.
          * 131 : plus `GET /relations/locations/mine` (#18389 : la liste de MES destinataires, que chaque appareil du compte
-         * relit sur `location:share-own-changed`) ; le recalage d'Android la portera (#18578).
+         * relit quand la passerelle annonce que son partage a changé) ; le recalage d'Android la portera (#18578).
          */
         const val TO_PORT_CEILING = 131
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
