@@ -1,8 +1,6 @@
-# Une CI rouge sur des témoins qu'on n'a pas touchés se diagnostique en NEUTRALISANT ses propres témoins
+## Une CI rouge sur des témoins qu'on n'a pas touchés se diagnostique en NEUTRALISANT ses propres témoins (cycle 163, #18641, #18644)
 
-*2026-11-15, cycle 163 (#18641, #18644).*
-
-## Le piège
+**Le piège**
 
 Un lot de trois lignes dans `apps/web/src/lib/api/socket.ts` a fait rougir deux
 témoins de pastille de PRÉSENCE, dans deux fichiers de `src/components/` qu'il
@@ -13,7 +11,7 @@ son propre diff un lien de causalité qui n'existe pas. Elle peut occuper un
 cycle entier, parce qu'on finit toujours par trouver une histoire plausible :
 ici, « mes invalidations touchent un magasin que la présence lit ».
 
-## La question juste
+**La question juste**
 
 **« Que rougit mon changement de PRODUCTION, mes témoins neutralisés ? »**
 
@@ -31,7 +29,7 @@ La deuxième ligne exonère la LOGIQUE. La quatrième nomme la vraie cause :
 **ajouter deux témoins, n'importe lesquels, n'importe où, suffit.** Le lot ne
 cassait rien — il déplaçait un seuil.
 
-## Pourquoi ça marche
+**Pourquoi ça marche**
 
 Un lot de correctif porte DEUX choses qui échouent différemment : une LOGIQUE
 de production, et des TÉMOINS qui occupent une place dans l'ordonnancement de la
@@ -44,7 +42,7 @@ Les séparer est la seule mesure qui tranche, et elle coûte une exécution de
 suite. Aucun raisonnement ne la remplace : les deux hypothèses prédisent
 exactement le même symptôme.
 
-## Trois corollaires, tous mesurés dans le même cycle
+**Trois corollaires, tous mesurés dans le même cycle**
 
 - **Une bissection suppose un ordre d'exécution, et cette supposition se
   vérifie.** Les 225 fichiers « alphabétiquement avant » le témoin fautif sont
@@ -62,7 +60,7 @@ exactement le même symptôme.
   la CI. Vérifier la version de ses outils AVANT de diagnostiquer un harnais :
   le `CLAUDE.md` demandait déjà que le conteneur et la CI ne divergent jamais.
 
-## La règle
+**La règle**
 
 Devant une CI rouge sur des témoins qu'on n'a pas touchés, ne pas chercher le
 lien de causalité. **Rejouer la suite avec sa production seule.** Et si elle est
