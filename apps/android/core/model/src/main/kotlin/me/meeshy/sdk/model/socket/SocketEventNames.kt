@@ -25,6 +25,10 @@ object SocketEventNames {
     const val BATTERY_PULL_REQUESTED = "battery:pull-requested"
     const val BATTERY_REPORT = "battery:report"
 
+    // téléphone injoignable (#18737, TEL-01) : serveur -> client, `user:<lecteur>` ; aucun événement montant
+    const val PHONE_UNREACHABLE = "phone:unreachable"
+    const val PHONE_REACHABLE = "phone:reachable"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -302,6 +306,8 @@ object SocketEventNames {
         BATTERY_PULL,
         BATTERY_PULL_REQUESTED,
         BATTERY_REPORT,
+        PHONE_UNREACHABLE,
+        PHONE_REACHABLE,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,

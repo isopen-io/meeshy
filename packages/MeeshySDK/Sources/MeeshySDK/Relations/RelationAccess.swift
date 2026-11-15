@@ -69,6 +69,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case locationProximity = "location.proximity"
     case deviceBattery = "device.battery"
     case deviceBatteryPull = "device.battery.pull"
+    case deviceUnreachable = "device.unreachable"
     case acquaintanceAuto = "acquaintance.auto"
 
     /// `isRelationFeature` : une feature qu'un serveur plus récent ajoute n'est
@@ -85,7 +86,8 @@ public enum RelationFeature: String, CaseIterable, Sendable {
         switch self {
         case .presenceOnline, .gameBasic, .bring, .locationTemporary: return .friend
         case .presenceDetailed, .gameSparksGlory, .notifyNewContent, .relayCommentersOnMyPosts,
-             .audienceClose, .listeningCategory, .talkie, .together, .deviceBattery: return .close
+             .audienceClose, .listeningCategory, .talkie, .together, .deviceBattery,
+             .deviceUnreachable: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
              .locationLive, .locationHistory, .locationProximity, .deviceBatteryPull: return .blood
         case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
@@ -100,7 +102,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
         switch self {
         case .bring, .talkie, .listeningCategory, .listeningTitle,
              .locationLive, .locationTemporary, .locationHistory, .locationProximity,
-             .deviceBattery, .deviceBatteryPull: return true
+             .deviceBattery, .deviceBatteryPull, .deviceUnreachable: return true
         default: return false
         }
     }
@@ -120,7 +122,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// stocké ouvre. Le serveur résout ; le miroir sert à ne pas proposer ce qu'il refusera.
     public var emitterConsentDefaultLevel: RelationLevel? {
         switch self {
-        case .deviceBattery, .deviceBatteryPull: return .blood
+        case .deviceBattery, .deviceBatteryPull, .deviceUnreachable: return .blood
         default: return nil
         }
     }

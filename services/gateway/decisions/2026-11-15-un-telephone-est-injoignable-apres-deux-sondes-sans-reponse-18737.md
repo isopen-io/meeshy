@@ -24,4 +24,4 @@
 
 8. **Un téléphone n'est déclaré qu'une fois PROUVÉ** : une version de l'app antérieure aux sondes les ignore, et la déclarer injoignable serait faux à chaque mise en poche (production rétrocompatible, #9223). Tant que le téléphone n'a jamais répondu à une sonde, deux sondes sans réponse ne déclarent rien : il est re-sondé une fois par heure, en silence, et sa première réponse le rend éligible (`stepUnproven`, `packages/shared/utils/phone-reachability.ts`).
 
-**Conséquences** : la fonctionnalité s'allume d'elle-même pour chaque téléphone dès que sa version répond, sans plancher de version ni bascule sèche. Le balayage relit chaque émetteur surveillé à chaque passe : suffisant sous 1 000 utilisateurs, une file triée par échéance le remplacera avant 100 000 (issue de suivi).
+**Conséquences** : la fonctionnalité s'allume d'elle-même pour chaque téléphone dès que sa version répond, sans plancher de version ni bascule sèche. Le balayage relit chaque émetteur surveillé à chaque passe : suffisant sous 1 000 utilisateurs, une file triée par échéance le remplacera avant 100 000 (#18759).

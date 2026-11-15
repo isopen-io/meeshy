@@ -46,7 +46,7 @@ class NotificationPreferenceSyncBodyTest {
         "contactRequestEnabled", "groupInviteEnabled", "memberJoinedEnabled", "memberLeftEnabled",
         "postLikeEnabled", "postCommentEnabled", "postRepostEnabled", "storyReactionEnabled",
         "commentReplyEnabled", "commentLikeEnabled", "friendContentEnabled",
-        "contactActivityEnabled", "gameEnabled", "deviceBatteryEnabled",
+        "contactActivityEnabled", "gameEnabled", "deviceBatteryEnabled", "deviceUnreachableEnabled",
         "dndEnabled", "dndStartTime", "dndEndTime", "dndDays", "dndUtcOffsetMinutes",
         "showPreview", "showSenderName", "groupNotifications", "notificationBadgeEnabled",
     )
@@ -157,6 +157,17 @@ class NotificationPreferenceSyncBodyTest {
         assertThat(body.gameEnabled).isFalse()
         assertThat(body.dndUtcOffsetMinutes).isEqualTo(540)
         assertThat(body.toPreferences(UserNotificationPreferences())).isEqualTo(prefs)
+    }
+
+    @Test
+    fun `le reglage du telephone injoignable part sur le fil et survit a l'aller-retour`() {
+        val prefs = UserNotificationPreferences(deviceUnreachableEnabled = false)
+
+        val body = NotificationPreferenceSyncBody.from(prefs)
+
+        assertThat(body.deviceUnreachableEnabled).isFalse()
+        assertThat(body.toPreferences(UserNotificationPreferences())).isEqualTo(prefs)
+        assertThat(body.copy(deviceUnreachableEnabled = null).toPreferences(prefs).deviceUnreachableEnabled).isFalse()
     }
 
     @Test
