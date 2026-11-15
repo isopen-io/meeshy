@@ -311,7 +311,7 @@
     "Meeshy::CallFrameRenderer": 2583,
     "Meeshy::CallManager": 2817,
     "Meeshy::CallView": 3031,
-    "Meeshy::ComposerCaptureSession": 1633,
+    "Meeshy::ComposerCaptureSession": 1627,
     "Meeshy::ConversationListView": 1688,
     "Meeshy::ConversationListViewModel": 2318,
     "Meeshy::ConversationMediaGalleryView": 2052,
@@ -334,7 +334,7 @@
     "MeeshySDK::OfflineQueue": 2957,
     "MeeshyUI::StickerPickerView": 1612,
     "MeeshyUI::StoryCanvasUIView": 6573,
-    "MeeshyUI::StoryComposerViewModel": 4424,
+    "MeeshyUI::StoryComposerViewModel": 4423,
     "MeeshyUI::TimelineViewModel": 1615,
     "MeeshyUI::UserProfileSheet": 1602
   }
