@@ -225,6 +225,52 @@ schéma.
 > elle, porte bien ce qu'ils réclament (`RELATION_FEATURES` contient
 > `'device.battery'`, `schema.prisma:200` déclare `batterySharingDisabledAt`).
 
+## Correction de la CORRECTION — et c'est la méthode qui a fauté, trois fois de suite
+
+**Tout ce qui suit dans la section ci-dessous est à lire à travers ceci.** J'ai
+affirmé « DEUX dispatches annulés sans AUCUN dispatch postérieur » en
+interrogeant l'API avec `perPage: 2` puis `perPage: 3`. Le relevé COMPLET en
+porte **douze**, et il change le verdict :
+
+| run | créé | annulé | successeur AVANT l'annulation ? | de moi ? |
+|---|---|---|---|---|
+| 29613 | 22:48:46 | 22:51:31 | non (29615 créé après) | oui |
+| 29615 | 22:52:19 | 23:00:47 | non (29618 créé après) | oui |
+| 29618 | 23:03:12 | 23:06:19 | non (29624 créé après) | oui |
+| **29624** | 23:29:44 | 23:30:47 | **OUI — 29625 à 23:30:24** | oui |
+| 29625 | 23:30:24 | 23:32:05 | non | **NON** |
+| 29526 | 19:09:01 | 19:15:58 | — | **NON** |
+| **29538** | 19:17:09 | **19:55:59 `success`** | — | oui |
+
+Deux faits, tous deux vrais, et aucun des deux n'était dans ma correction :
+
+1. **Une AUTRE session de ce compte lance des `workflow_dispatch` sur MA
+   branche** (29526, 29625). Celle de 23:30:24 a bien annulé la mienne de
+   23:29:44 — donc le mécanisme de concurrence que j'avais décrit au cycle 171
+   EST à l'œuvre, au moins là. C'est un problème de COORDINATION, pas de
+   capacité.
+2. **Quatre annulations sur cinq n'ont toujours aucun successeur dans leur
+   groupe.** Un second mécanisme, non identifié, existe bel et bien.
+
+Et le seul `success` de la soirée (29538) a été lancé dans le CREUX laissé par
+l'annulation de 29526 — il a tenu ses 38 minutes.
+
+> **Une affirmation d'ABSENCE tirée d'un relevé TRONQUÉ n'est pas une mesure.**
+> J'avais écrit cette leçon quelques heures plus tôt, dans ce même dépôt, à
+> propos d'un balayage qui écartait ce qu'il ne savait pas résoudre : *« zéro
+> trouvé » et « zéro existe » ne sont pas la même affirmation.* Je l'ai rejouée
+> sur `perPage: 2` — et la première correction, celle qui se voulait rigoureuse,
+> a introduit une seconde erreur de la même famille que celle qu'elle corrigeait.
+>
+> Le discriminant n'est pas « ai-je vérifié ? » mais **« mon instrument pouvait-il
+> voir ce que j'affirme absent ? »** — et un `perPage` est exactement le genre de
+> paramètre qui rend la réponse non.
+
+Ce qui reste donc établi : la règle de concurrence existe et explique AU MOINS
+une annulation de ce soir ; une autre session dispatche sur cette branche ; et
+un second canceller, non identifié, reste à trouver. Ce qui est RETIRÉ : la
+phrase « ce n'est pas la règle de concurrence », trop forte dans les deux sens.
+
 ## Correction à ma propre explication du cycle 171 — le mécanisme n'est PAS établi
 
 Le journal du cycle 171 et le corps de la PR #18705 affirment que « chaque
