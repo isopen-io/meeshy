@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-vayul2` |
+| Branche de travail de la session courante | `claude/practical-fermat-dqytex` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -51,7 +51,25 @@ normal.
 | **84w** | 2026-11-11 | `claude/practical-fermat-y94b4f` | → `dev` | ✅ mergé |
 | **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ✅ mergé |
 | **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ✅ mergé |
-| **87w** | 2026-11-14 | `claude/practical-fermat-vayul2` | → `dev` | ⏳ ouverte |
+| **87w** | 2026-11-14 | `claude/practical-fermat-vayul2` | → `dev` | ✅ mergé |
+| **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | → `dev` | ⏳ ouverte |
+
+**88w** — cohérence de thème / maintenabilité : la barre de composition d'un
+commentaire d'export (`routes/comment-compose-bar.tsx:100`) peignait le ▶
+(indicateur vidéo) **posé SUR la vignette vidéo** (`<img object-cover>`) en littéral
+`text-white` — 1 des 6 violations du gate. La charte nomme déjà cette encre : un
+glyphe blanc SUR un média est `text-on-media` (= `--color-on-media` = `--ios-on-media`
+= `#ffffff`, byte-identique, CONSTANT clair/sombre), le même jeton que le voisin
+direct `components/comment-media.tsx:92` sur le même motif (glyphe en surimpression
+de vignette). L'encre passe donc à `text-on-media` ; `drop-shadow` conservé. Pas une
+exemption : un jeton partagé. Témoins : `check-design-harmony.test.ts` (describe « le
+▶ d'une vignette vidéo », 38→40) + `comment-media` (6/6, non-régression). Gate **6 → 5
+violations** (−1, exactement `comment-compose-bar`), **5 → 4 fichiers** ; `tsc` 0.
+Housekeeping : 87w confirmée mergée (`var(--color-ios-on-brand)` sur les deux pastilles
+d'en-tête sur `dev`, gate mesuré 6/5 à l'ouverture) ; appariement analyses↔plans 1:1
+revérifié (45w→87w), 0 doublon de numéro `w` (suffixes `wb`/`wc`/… de juin = sous-
+itérations LEGACY intentionnelles). Analyse :
+`docs/analyses/uiux/2026-11-15-iteration-88w.md`.
 
 **87w** — cohérence de thème / maintenabilité : deux pastilles d'action de l'en-tête
 d'un fil peignaient le glyphe de leur état **actif** en littéral `'#fff'`, chacune sur
@@ -235,14 +253,16 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **87w**
-Revue fraîche `apps/web` — voir les pistes 87w+ en pied de
-`docs/analyses/uiux/2026-11-13-iteration-86w.md` (gate d'harmonie à **8/7** après
-86w : `message-menu` (`, black` ×2, masque de LUMINANCE — candidat exempt motivé ou
-helper de fondu partagé, cf. `edgeFadeMask` 85w), `thread-header-bring`/`thread-header-talkie`
-(`#fff` encre sur média), `comment-compose-bar.tsx` (▶ sur vignette),
-`admin-post-preview` (letterbox `#000`, candidat exempt motivé), `conversation-backdrop`
-(`rgba(`), `rank-blason` (`hsl(`) ; + axe épuration, toujours non entamé).
-**Toujours REMESURER le gate à l'ouverture** : il peut remonter si `dev` reçoit une
-poche neuve entre deux tours (9/7 → 28/11 entre 83w et 84w ; 13/10 → 17/12 entre
-84w et 85w ; 10/8 stable entre 85w et 86w).
+## Prochaine itération : **89w**
+Revue fraîche `apps/web` — voir les pistes 89w+ en pied de
+`docs/analyses/uiux/2026-11-15-iteration-88w.md` (gate d'harmonie à **5/4** après
+88w). Les cibles restantes sont désormais **des composants CALCULÉS, pas des
+littéraux** — chacune réclame un verdict « exemption motivée à la ligne » plutôt
+qu'un jeton : `message-menu` (`, black` ×2, masque de LUMINANCE — candidat exempt
+motivé ou helper `edgeFadeMask` 85w), `conversation-backdrop` (voile DYNAMIQUE
+`rgba(${view.veilColor}, ${view.veil})`), `rank-blason` (`hsl(` DYNAMIQUE de la roue
+du prisme), `admin-post-preview` (letterbox `#000`, candidat exempt motivé, cf. 76w) ;
++ axe épuration, toujours non entamé.
+**Toujours REMESURER le gate à l'ouverture** : 5/4 après 88w ; il peut remonter si
+`dev` reçoit une poche neuve entre deux tours (9/7 → 28/11 entre 83w et 84w ; 13/10
+→ 17/12 entre 84w et 85w ; 10/8 stable entre 85w et 86w ; 8/7 → 6/5 entre 86w et 87w).
