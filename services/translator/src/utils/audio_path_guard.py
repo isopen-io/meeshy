@@ -11,18 +11,23 @@ Le garde ne s'applique qu'aux chemins VENUS DE LA REQUÊTE : les fichiers que
 les handlers écrivent eux-mêmes (binaire multipart, base64) n'y passent pas.
 
 Racines : `TRANSLATOR_AUDIO_PATH_ROOTS` (séparées par `os.pathsep`) si la
-variable est posée, sinon le répertoire temporaire du processus et la racine
-d'uploads de la passerelle (`UPLOAD_PATH`, `/app/uploads` par défaut, la
-valeur même dont la passerelle compose les `audioPath` qu'elle envoie).
+variable est posée, sinon la seule racine d'uploads de la passerelle
+(`UPLOAD_PATH`, `/app/uploads` par défaut, la valeur même dont la passerelle
+compose les `audioPath` qu'elle envoie). Le répertoire temporaire n'en est
+JAMAIS une par défaut : le traducteur y garde l'audio en cours des autres
+utilisateurs sous des noms prévisibles. Une entrée relative, ou qui se résout
+en `/`, est ignorée.
 
 Le refus ne porte qu'une RAISON, jamais le chemin : les journaux et les
 charges d'erreur publiées n'en reçoivent pas une miette.
 """
 
+import logging
 import os
-import tempfile
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
+
+logger = logging.getLogger(__name__)
 
 ROOTS_ENV = "TRANSLATOR_AUDIO_PATH_ROOTS"
 GATEWAY_UPLOAD_ENV = "UPLOAD_PATH"
@@ -39,17 +44,38 @@ class AudioPathRejected(Exception):
         super().__init__(f"{AUDIO_PATH_REJECTED_MESSAGE}: {reason}")
 
 
+_logged_configurations: set = set()
+
+
 def _default_roots() -> Tuple[str, ...]:
-    return (
-        tempfile.gettempdir(),
-        os.getenv(GATEWAY_UPLOAD_ENV) or GATEWAY_UPLOAD_DEFAULT,
+    return (os.getenv(GATEWAY_UPLOAD_ENV) or GATEWAY_UPLOAD_DEFAULT,)
+
+
+def _root_of(entry: str) -> Optional[Path]:
+    candidate = Path(entry.strip())
+    if not entry.strip() or not candidate.is_absolute():
+        return None
+    resolved = candidate.resolve()
+    return None if resolved == Path(resolved.anchor) else resolved
+
+
+def _log_once(configuration: Tuple[str, ...], roots: Tuple[Path, ...]) -> None:
+    if configuration in _logged_configurations:
+        return
+    _logged_configurations.add(configuration)
+    logger.info(
+        "[TRANSLATOR] audioPath : %d racine(s) autorisée(s) %s",
+        len(roots),
+        [str(root) for root in roots],
     )
 
 
 def allowed_audio_roots() -> Tuple[Path, ...]:
     configured = os.getenv(ROOTS_ENV)
-    raw = configured.split(os.pathsep) if configured is not None else _default_roots()
-    return tuple(Path(entry).resolve() for entry in raw if entry.strip())
+    raw = tuple(configured.split(os.pathsep)) if configured is not None else _default_roots()
+    roots = tuple(root for root in map(_root_of, raw) if root is not None)
+    _log_once(raw, roots)
+    return roots
 
 
 def _resolved(raw: object) -> Path:
