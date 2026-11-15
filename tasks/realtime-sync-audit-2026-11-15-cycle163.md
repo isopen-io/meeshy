@@ -5,7 +5,8 @@
 
 **Livré** : #18602 — le cliquet du lockstep `_seq`, et les quatre doc-comments
 qui nommaient un consommateur sorti du dépôt. **Ouvert** : #18601, la lacune de
-produit que la mesure a rendue.
+produit que la mesure a rendue, et #18605, deux prémisses fausses sous le gap
+detector de `/sync` — la même classe, dans les fichiers voisins.
 
 ---
 
@@ -169,6 +170,7 @@ par site, donc la question se pose site par site.
 | # | ce que c'est | état |
 |---|---|---|
 | #18601 | le web n'observe aucun curseur — seule plateforme sans détection de trou exacte | **ouverte** ; le verdict de produit reste à rendre, et l'inventaire du cliquet la cite |
+| #18605 | deux prémisses fausses sous le gap detector de `/sync` — trouvées en relisant les voisins de la mesure | **ouverte** (lead du cycle 164) |
 | #18499 | les 5 canaux montants sourds + les 3 noms hors contrat | inventoriés ; verdict de produit à rendre |
 | #18342 | la jumelle descendante (6 événements qu'aucun client ne déclare) | ouverte |
 | #18115 | les trois champs morts de `AttachmentUpdatedEvent` | ouverte |
@@ -182,3 +184,29 @@ et quoi déclencher sur un trou (les deux autres plateformes ont chacune un
 coordinateur dédié). Le livrer dans ce lot substituerait mon verdict à celui du
 produit sur l'architecture de resynchronisation du web — même partage qu'au
 cycle 161 et qu'au cycle 162.
+
+## La classe ne s'arrête pas à `_seq` (#18605)
+
+Une fois la mesure faite, relire ses VOISINS a rendu deux prémisses de plus, du
+même genre et toutes deux portantes :
+
+- `routes/sync/index.ts:352` — « `_seq` est un curseur GLOBAL par compte
+  (`emitWithSeq`, **toutes familles d'évènements confondues**) » : une seule
+  famille l'avance, et c'est cette clause-là qui porte la conclusion « le gap
+  gouverne donc les QUATRE collections » ;
+- `routes/sync/budget.ts` — « `collections=messages` seul est le SEUL usage qui
+  existe aujourd'hui dans ce dépôt (**aucun appelant**) […] la SEULE collection
+  qui a un contrat aujourd'hui » : il y a un appelant, et il demande
+  `conversations` (iOS, deux sites). L'argument de rétrocompatibilité protège
+  donc la collection qui n'en a pas, en se croyant sans appelant du tout.
+
+Le SyncEngine est dense en énumérations de consommateurs parce que chacune y est
+portante : un budget, un seuil, le périmètre d'un gap. **Le lead du cycle 164
+n'est donc pas « corriger deux phrases » mais ré-instruire les conclusions
+qu'elles portaient** — si une décision reste la bonne, sa raison change.
+
+Et ce qui n'est PAS affirmé, faute de mesure : `GAP_THRESHOLD = 10 000` s'exprime
+en notifications manquées, pas en évènements. Savoir si le signal ainsi calibré
+voit encore un client réellement en retard demande une mesure, pas un
+raisonnement — annoncer une panne qu'on n'a pas mesurée coûte la confiance dans
+les cycles où il y en a une (cycle 103).
