@@ -79,3 +79,15 @@ La règle se relit donc sans mentionner le verbe : **sur une branche, un second
 déclenchement annule le premier, quel qu'il soit.** On dispatche UNE fois, après
 le dernier commit du lot, et on attend — relancer « pour être sûr » retarde
 exactement ce qu'on cherche à obtenir.
+
+**Et le piège du SIGNAL, sur un dépôt dont la CI des PR est gelée.** L'événement
+`check_suite.completed` arrive avec « aucune suite tierce n'est encore en cours
+ni en échec », ce qui se lit spontanément comme un feu vert. Mesuré ici : la
+suite déclenchée par `pull_request` revient **`skipped`**. Une suite sautée n'est
+ni en cours ni en échec — la notification est donc **vacuoue**, et la lire comme
+verte ferait déclarer une PR prête sans qu'une seule ligne ait été compilée.
+
+La formulation est d'ailleurs honnête, et c'est à la lecture que l'erreur se
+fait : elle dit ce qui n'échoue pas, jamais ce qui a réussi. **L'absence d'échec
+n'est une preuve que là où un échec était possible.** La preuve, ici, est le run
+`workflow_dispatch` nommé, et son `conclusion` lu à la main.
