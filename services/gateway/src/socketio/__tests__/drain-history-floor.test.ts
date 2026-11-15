@@ -366,6 +366,36 @@ describe('drain hors ligne — le plancher d’historique est relu au dernier in
     expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toHaveLength(1);
   });
 
+  /**
+   * **La non-régression la plus chère du lot.** `link-message` est le transport
+   * d'un message écrit DANS une conversation ouverte par lien — donc le
+   * transport nominal de la population qui a un plancher. Un message neuf est
+   * par construction au-dessus de tout plancher ; si la garde le refusait, elle
+   * couperait les invités de lien de leurs messages, c'est-à-dire exactement ce
+   * que le produit sert.
+   *
+   * Sa charge est la seule qui se DÉPLIE (une enveloppe `{ message }`), mais son
+   * `messageId` est au premier niveau comme les autres — c'est ce que la garde
+   * lit, et ce témoin le prouve plutôt que de le supposer.
+   */
+  it('rejoue un `link-message` neuf vers un invité de lien qui A un plancher', async () => {
+    const fresh = oid('m-fresh-link');
+    seedMessageDates([{ id: fresh, createdAt: new Date('2026-08-01T00:00:00Z') }]);
+    manager.setDeliveryQueue(queueOf([
+      {
+        payload: { message: { id: fresh, conversationId: CONV, content: 'neuf' } },
+        conversationId: CONV,
+        messageId: fresh,
+        eventType: 'link-message',
+      },
+    ]));
+
+    await manager._drainPendingMessages('reader', false);
+
+    expect(emittedWith(SERVER_EVENTS.LINK_MESSAGE_NEW)).toHaveLength(1);
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toHaveLength(1);
+  });
+
   /** L'octroi TIENT toujours : l'entrée antérieure à l'arrivée reste lisible. */
   it('rejoue un message antérieur à l’arrivée quand l’octroi couvre toujours sa date', async () => {
     manager.setDeliveryQueue(queueOf([entry(GRANTED)]));
