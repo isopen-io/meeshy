@@ -163,7 +163,7 @@ internal fun OriginalRow(selected: Boolean, onClick: () -> Unit) {
         Icon(imageVector = MeeshyIcons.Quote, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = if (selected) accent else MeeshyTheme.tokens.textPrimary)
-            Text(text = stringResource(R.string.story_language_original_hint), style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted)
+            Text(text = stringResource(R.string.story_language_original_hint), style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, modifier = Modifier.fillMaxWidth())
         }
         if (selected) Icon(imageVector = MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
     }

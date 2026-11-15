@@ -117,7 +117,8 @@ class GameEpureResourcesTest {
         assertThat(text(R.string.game_concept_prestige_what)).doesNotContain("cinq renaissances")
         assertThat(text(R.string.game_concept_prestige_what)).contains("facultative")
         retiredLanguages.forEach { folder ->
-            assertThat(valueIn(folder, "game_concept_prestige_what")).doesNotContain("5").doesNotContain("٥")
+            assertThat(valueIn(folder, "game_concept_prestige_what")).doesNotContain("5")
+            assertThat(valueIn(folder, "game_concept_prestige_what")).doesNotContain("٥")
         }
     }
 
@@ -415,10 +416,12 @@ class GameEpureResourcesTest {
     fun `la regle des etincelles et celle de la frappe se lisent en une phrase, le calcul derriere un i`() {
         assertThat(text(R.string.game_rules_1_body)).isEqualTo("Écrire, parler, publier, réagir, inviter : chaque vrai échange compte.")
         assertThat(text(R.string.game_rules_1_question)).isEqualTo("Qu’est-ce qui fait jaillir plus d’étincelles ?")
-        assertThat(text(R.string.game_rules_1_more)).contains("communauté ou amis").contains("Flamme")
+        assertThat(text(R.string.game_rules_1_more)).contains("communauté ou amis")
+        assertThat(text(R.string.game_rules_1_more)).contains("Flamme")
         assertThat(text(R.string.game_rules_3_body)).isEqualTo("Une Meesh se frappe à la main : elle fige une part de ta lumière.")
         assertThat(text(R.string.game_rules_3_question)).isEqualTo("Combien de lumière une frappe prend-elle ?")
-        assertThat(text(R.string.game_rules_3_more)).contains("30 %").contains("niveau 100")
+        assertThat(text(R.string.game_rules_3_more)).contains("30 %")
+        assertThat(text(R.string.game_rules_3_more)).contains("niveau 100")
         assertThat(text(R.string.game2_league_consent_how_question)).isEqualTo("Comment suis-je placé ?")
         assertThat(text(R.string.game_concept_league_use))
             .isEqualTo("Regarde ta place et ta zone : les 7 premiers montent, les 5 derniers descendent.")
