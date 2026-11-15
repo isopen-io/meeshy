@@ -153,13 +153,9 @@ struct ThemedAvatarButton: View {
     /// Le contour équipé du pair, la référence servie (#10946).
     var ring: ServedProfileDecorItem? = nil
     let action: () -> Void
-    @State private var isPressed = false
 
     var body: some View {
-        Button(action: {
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
-            action()
-        }) {
+        Button(action: action) {
             MeeshyAvatar(
                 name: name,
                 context: .conversationHeaderCollapsed,
@@ -172,12 +168,12 @@ struct ThemedAvatarButton: View {
                 isHere: isHere,
                 ring: ring
             )
-            .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
-            .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))
+            .shadow(color: Color(hex: color).opacity(0.4), radius: 8, y: 3)
+            .scaleEffect(isExpanded ? 1.1 : 1)
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(String(format: String(localized: "accessibility.user_profile_of", defaultValue: "Profil de %@", bundle: .main), name))
         .accessibilityHint(String(localized: "accessibility.user_profile.hint", defaultValue: "Ouvre les détails du profil", bundle: .main))
-        .settling($isPressed, to: false, after: .milliseconds(100), animation: .spring(response: 0.2, dampingFraction: 0.6))
     }
 }
 

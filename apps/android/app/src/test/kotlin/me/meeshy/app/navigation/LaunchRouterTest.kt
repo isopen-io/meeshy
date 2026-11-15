@@ -379,6 +379,17 @@ class LaunchRouterTest {
         LaunchRouter.route(LaunchExtras(tap = me.meeshy.sdk.model.push.PushPayload.decode(mapOf(*data)), routeHint = routeHint))
 
     @Test
+    fun `an added-to-community tap opens the community detail`() {
+        assertThat(tapRoute("type" to "community_invite", "communityId" to "k1"))
+            .isEqualTo(me.meeshy.app.navigation.graph.CommunityRoutes.detail("k1"))
+    }
+
+    @Test
+    fun `an added-to-community tap without the key keeps its former behaviour`() {
+        assertThat(tapRoute("type" to "community_invite", "communityId" to "")).isNull()
+    }
+
+    @Test
     fun `a message tap opens the conversation and highlights the message`() {
         assertThat(tapRoute("type" to "new_message", "conversationId" to "c1", "messageId" to "m1"))
             .isEqualTo(Routes.chat("c1", "m1"))

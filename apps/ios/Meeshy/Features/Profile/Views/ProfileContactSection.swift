@@ -19,7 +19,7 @@ struct ProfileContactSection: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             ProfileSectionHeader(icon: "envelope.fill",
                                  title: String(localized: "profile.section.contact", bundle: .main),
-                                 colorHex: MeeshyColors.indigo300Hex)
+                                 color: MeeshyColors.indigo300)
             VStack(spacing: 0) {
                 row(icon: "envelope.fill",
                     title: String(localized: "profile.email", bundle: .main),

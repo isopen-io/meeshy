@@ -836,4 +836,60 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "onReport ne doit être appelé qu'une fois — depuis le bouton destructif de la modale."
         )
     }
+
+    // MARK: - #18297 — chaque feuille a sa sortie visible, chaque bouton répond au doigt
+
+    private func flat(_ relativePath: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(relativePath))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// Les boutons ronds Appeler, Rechercher et Infos de l'aperçu d'une
+    /// conversation passent par le verre INTERACTIF du kit, sous le style qui
+    /// lui remet l'état pressé : un disque `adaptiveGlass` posé à la main dans un
+    /// bouton `.plain` ne répondait pas au doigt.
+    func test_previewHeaderButtons_answerThePressThroughTheKitGlass() throws {
+        let code = try flat("Meeshy/Features/Main/Views/ConversationListHelpers.swift")
+        XCTAssertFalse(code.contains(".adaptiveGlass(in:Circle()"),
+                       "un disque de verre posé à la main ne répond pas à l'appui")
+        XCTAssertTrue(code.contains(".meeshyGlass(in:Circle(),tint:Color(hex:accentColor).opacity(MeeshyOpacity.medium),isInteractive:true)"),
+                      "le disque des boutons de l'aperçu est le verre interactif du kit, teinté de l'accent")
+        XCTAssertTrue(code.contains(".buttonStyle(MeeshyGlassPressStyle())"),
+                      "le bouton remet l'état pressé au verre du kit")
+    }
+
+    /// Le sélecteur d'émojis par catégories offre un ✕ visible (défaut de #18542) ;
+    /// le glissement vers le bas reste.
+    func test_categorizedEmojiPicker_offersAVisibleClose() throws {
+        let code = try flat("Meeshy/Features/Main/Views/ConversationView+MessageSheets.swift")
+        guard let start = code.range(of: "CategorizedEmojiPickerSheet("),
+              let end = code.range(of: ".sheet(item:$overlayState.shareMessage)", range: start.upperBound..<code.endIndex) else {
+            return XCTFail("la feuille d'émojis par catégories est introuvable")
+        }
+        let sheet = String(code[start.lowerBound..<end.lowerBound])
+        XCTAssertNotNil(sheet.range(of: #"MeeshyGlassButton\(systemImage:"xmark",[^{]*\)\{overlayState\.fullReactionPickerMessage=nil\}"#,
+                                    options: .regularExpression),
+                        "la feuille d'émojis ne se quitte qu'en devinant le glissement")
+    }
+
+    /// Le fil de réponses est une FEUILLE : il se ferme par ✕, jamais par un
+    /// chevron de retour qui le fait passer pour un écran poussé.
+    func test_threadSheet_closesWithAGlassCross_notABackChevron() throws {
+        let code = try flat("Meeshy/Features/Main/Views/ThreadView.swift")
+        XCTAssertFalse(code.contains("chevron.backward"), "une feuille ne se ferme pas par « < »")
+        XCTAssertNotNil(code.range(of: #"MeeshyGlassButton\(systemImage:"xmark",[^{]*\)\{dismiss\(\)\}"#, options: .regularExpression),
+                        "la feuille du fil se ferme par un ✕ de verre du kit")
+    }
+
+    /// Toucher un message favori donne un retour sous le doigt avant
+    /// d'ouvrir la conversation : la rangée est un bouton à l'état pressé.
+    func test_starredRow_answersThePress() throws {
+        let code = try flat("Meeshy/Features/Main/Views/StarredMessagesView.swift")
+        XCTAssertFalse(code.contains(".onTapGesture{navigate(to:snapshot)}"),
+                       "un toucher sur la carte n'a aucun état pressé")
+        XCTAssertTrue(code.contains("Button{navigate(to:snapshot)}label:{StarredRow("),
+                      "la rangée favorite est un bouton")
+        XCTAssertTrue(code.contains(".buttonStyle(PressableButtonStyle())"),
+                      "la rangée favorite répond à l'appui")
+    }
 }
