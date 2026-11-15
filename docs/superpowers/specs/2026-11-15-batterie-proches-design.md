@@ -69,9 +69,14 @@ désactivé (le lot passerelle exclut les désactivés comme `pairAccessAmong`).
   `{ level: int 0..100, charging: bool, lowPower: bool, measuredAt: ISO, deviceLabel?: string ≤ 60 }`.
   Accusé `BatteryReportAck` : `{ success: true, data: { tracked: boolean } }` ou refus codé.
   `tracked: false` quand l'appareil n'est pas le « téléphone » suivi (deviceType `mobile`
-  le plus récemment actif) — le relevé est ignoré, sans erreur.
-- `battery:pull` — `{ userId }` → accusé ; codes `BATTERY_PULL_FORBIDDEN` (loi),
-  `BATTERY_PULL_TOO_SOON` (5 min par paire).
+  le plus récemment actif, jamais une tablette — un iPad se reconnaît à son modèle) — le
+  relevé est ignoré, sans erreur — ou quand l'émetteur a coupé son partage pour tous (rien
+  n'est rangé). Un `measuredAt` à plus de 2 min de l'horloge serveur est daté à sa réception.
+- `battery:pull` — `{ userId }` → accusé `{ requestedAt, episodeOnly: true }` : le relevé ne
+  revient au demandeur que s'il ouvre ou poursuit un épisode. Codes `BATTERY_PULL_FORBIDDEN`
+  (niveau ou blocage seulement : un Sang que l'émetteur a exclu reçoit le même accusé qu'un
+  Sang servi, sans réveil — aucun oracle), `BATTERY_PULL_TOO_SOON` (5 min par paire),
+  `BATTERY_RATE_LIMITED` (débit, socket comme REST).
 
 ### Descendant (serveur → client), room `user:<lecteur>`, projection par lecteur
 
@@ -96,8 +101,14 @@ côté client ; rattrapage à la connexion).
 ### Stockage
 
 Redis, clé par émetteur, **TTL 24 h**, aucun historique : l'état d'épisode
-(`BatteryEpisodeState`), le dernier relevé, le registre « a reçu le push critique » par
-lecteur (même TTL), le verrou de pull par paire (TTL 5 min).
+(`BatteryEpisodeState`), le dernier relevé, le registre des lecteurs SERVIS (qui en sort —
+lien, consentement, rôle d'équipe, compte désactivé — reçoit `battery:cleared`), le registre
+« a reçu le push critique » par lecteur (même TTL), le verrou de pull par paire (TTL 5 min),
+un verrou court par émetteur qui sérialise les pas (relevé, signe de vie, balayage) et un SET
+des émetteurs en épisode que le balayage relit (jamais `KEYS`). Une socket ouverte du
+téléphone suivi est un signe de vie : il n'est pas présumé éteint. La coupure globale efface
+l'état rangé. Les notifications `device_battery` expirent en 24 h, ne rangent pas le niveau
+dans leurs métadonnées, et se retirent chez qui perd l'accès.
 
 ### Codes d'erreur
 
