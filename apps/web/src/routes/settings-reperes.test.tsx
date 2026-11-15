@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { CIRCLE_NOTIFY_DEFAULTS } from '@meeshy/shared/utils/relation-levels';
 
 import { PackShop } from '@/components/pack-shop';
-import { stickerShopAdapter } from '@/components/composer-sticker-shop';
+import { stickerShopAdapter, stickerShopHintNote } from '@/components/composer-sticker-shop';
 import { PackSubmitEditor } from '@/components/sticker-pack-submit';
 import type { ActiveSession, ActiveSessions } from '@/lib/api/account-security';
 import type { AppPreferences } from '@/lib/api/app-preferences';
@@ -25,7 +25,7 @@ import { CircleNotifySectionView } from './settings-circle-notify';
 import { SettingsE2eeDevicesScreen } from './settings-e2ee-devices';
 import { EmailNotificationsPage } from './settings-notifications';
 import { SettingsSecurityScreen } from './settings-security';
-import { DataSection, NotificationsSection, PrivacySection, SettingsContent, SettingsOfflineNotice, type PreferencesView } from './settings-sections';
+import { AppearanceSection, DataSection, NotificationsSection, PrivacySection, SettingsContent, SettingsOfflineNotice, type PreferencesView } from './settings-sections';
 import { VerifyEmailChangePage } from './verify-email-change';
 
 /**
@@ -101,7 +101,8 @@ describe('confidentialité : chaque bascule propre à Meeshy dit ce qu’elle fa
       </SettingsContent>,
     );
     const read = atRest(host);
-    expect(read).toContain('écrire dans une conversation reste une preuve d\'activité');
+    expect(read).toContain('La pastille verte sur votre avatar indique que vous êtes actif.');
+    expect(read).not.toContain('preuve d\'activité');
     expect(read).toContain('Réciproque');
     expect(read).toContain('ne vous retrouveront pas par votre numéro ou votre e-mail');
     expect(read).toContain('seuls vos amis peuvent vous faire sonner');
@@ -117,6 +118,29 @@ describe('confidentialité : chaque bascule propre à Meeshy dit ce qu’elle fa
     const described = host.querySelector(`[id="${back?.getAttribute('aria-describedby')}"]`);
     expect(described?.textContent).toContain('était sur Meeshy récemment');
     expect(described?.className ?? '').not.toContain('sr-only');
+  });
+});
+
+describe('statut en ligne : la première phrase reste, la nuance passe derrière un (i)', () => {
+  test('le (i) est nommé par une question et porte « écrire reste une preuve d’activité »', async () => {
+    const host = await mount(
+      <SettingsContent>
+        <PrivacySection language="fr" view={ready} disabled={false} onToggle={noop} onRetry={noop} />
+      </SettingsContent>,
+    );
+    const button = infoButton(host, 'Que se passe-t-il si je le désactive ?');
+    const note = host.querySelector(`[id="${button.getAttribute('aria-controls')}"]`);
+    expect(note?.textContent).toBe('Personne ne voit plus ce point. Mais écrire dans une conversation reste une preuve d\'activité pour vos interlocuteurs.');
+    expect(note?.className).toContain('sr-only');
+    const toggle = host.querySelector('[role="switch"][aria-label="Statut en ligne"]');
+    expect(toggle?.getAttribute('aria-describedby')?.split(' ')).toContain(note?.id ?? '?');
+  });
+});
+
+describe('apparence : les langues de traduction disent le Prisme', () => {
+  test('la rangée porte, au repos, la phrase qui dit ce que la traduction fait', async () => {
+    const host = await mount(<AppearanceSection language="fr" theme="auto" onTheme={noop} interfaceChoice={null} onInterfaceLanguage={noop} primaryLanguage="fr" />);
+    expect(atRest(host.querySelector('[data-settings-content-languages]'))).toContain('Tout le contenu se lit dans votre langue, traduit automatiquement.');
   });
 });
 
@@ -245,6 +269,14 @@ describe('sécurité : les sessions', () => {
     expect(read).not.toContain('203.0.113.7');
   });
 
+  test('le bloc du chiffrement dit ce qu’il est avant de mener aux appareils', async () => {
+    const host = await mount(securityScreen(two));
+    await settle();
+    const block = host.querySelector('[data-settings-e2ee-devices-row]')?.closest('section') ?? null;
+    expect(atRest(block)).toContain('Il se choisit par conversation et ne se défait pas. Vos appareils chiffrés sont les seuls à lire ces conversations.');
+    expect(atRest(block)).toContain('Mes appareils chiffrés');
+  });
+
   test('la session d’ici est marquée « Cet appareil », et l’action d’une autre se nomme en entier', async () => {
     const host = await mount(securityScreen(two));
     await settle();
@@ -322,13 +354,18 @@ describe('mes appareils chiffrés', () => {
     expect(card?.querySelector('[data-e2ee-device-field="number"]')?.textContent).toContain('7');
   });
 
-  test('l’écran dit ce qu’est la liste, ce que fait un retrait et comment un appareil s’approuve', async () => {
+  test('l’écran dit ce qu’est la liste et ce que fait un retrait ; la façon d’approuver un appareil est derrière un (i)', async () => {
     const host = await mount(devicesScreen(served));
     await settle();
     const read = atRest(host);
     expect(read).toContain('CHIFFREMENT DE BOUT EN BOUT');
     expect(read).toContain('Retirez celui que vous avez perdu ou qu’on vous a volé : il sera déconnecté et ne recevra plus vos messages chiffrés.');
-    expect(read).toContain('L’approbation entre vos appareils se fait dans l’application Meeshy');
+    expect(read).not.toContain('L’approbation entre vos appareils');
+    const button = infoButton(host, 'Comment approuver un nouvel appareil ?');
+    const note = host.querySelector(`[id="${button.getAttribute('aria-controls')}"]`);
+    expect(note?.textContent).toBe('L’approbation entre vos appareils se fait dans l’application Meeshy, en lisant sur l’un le code affiché par l’autre.');
+    await click(button);
+    expect(atRest(host)).toContain('L’approbation entre vos appareils');
   });
 
   test('« vous êtes ici » dit en entier pourquoi ce navigateur ne lit pas le chiffré, et où le lire', async () => {
@@ -382,15 +419,23 @@ describe('les pages de lien du compte', () => {
 });
 
 describe('les packs', () => {
-  test('la boutique dit ce qu’installer et retirer change', async () => {
+  test('la boutique dit ce qu’installer et retirer change ; le sort des stickers déjà envoyés est derrière un (i)', async () => {
     appQueryClient.setQueryData(PACK_CATALOGUE_QUERY_KEY, []);
     const host = await mount(
       <QueryClientProvider client={appQueryClient}>
-        <PackShop adapter={stickerShopAdapter('fr', { source: 'fixture' } as unknown as ConversationsDeps)} language="fr" hint={translateStickerPacks('fr', 'stickerPacks.shop.hint')} />
+        <PackShop
+          adapter={stickerShopAdapter('fr', { source: 'fixture' } as unknown as ConversationsDeps)}
+          language="fr"
+          hint={translateStickerPacks('fr', 'stickerPacks.shop.hint')}
+          hintNote={stickerShopHintNote('fr')}
+        />
       </QueryClientProvider>,
     );
     await settle();
-    expect(atRest(host)).toContain('Installez les packs que vous voulez retrouver dans vos stickers, retirez les autres.');
+    expect(atRest(host.querySelector('[data-shop-hint]'))).toBe('Installez les packs à retrouver dans vos stickers, retirez les autres.');
+    expect(atRest(host)).not.toContain('restent lisibles');
+    const button = infoButton(host, 'Que deviennent les stickers déjà envoyés ?');
+    expect(host.querySelector(`[id="${button.getAttribute('aria-controls')}"]`)?.textContent).toBe('Les stickers déjà envoyés restent lisibles, même après le retrait de leur pack.');
   });
 
   test('proposer un pack dit ce qui arrive à la proposition', async () => {
@@ -401,6 +446,23 @@ describe('les packs', () => {
 });
 
 describe('sept langues', () => {
+  const LANGUAGES = ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'] as const;
+  const distinct = (values: readonly (string | undefined)[]): void => {
+    expect(values.every((value) => typeof value === 'string' && value.length > 5)).toBe(true);
+    expect(new Set(values).size).toBe(7);
+  };
+
+  test('les repères et les questions des réglages existent partout, traduits', async () => {
+    const main = await Promise.all(LANGUAGES.map(async (language) => (await import(`@/lib/interface-catalogs/catalog-${language}`)).default as Record<string, string>));
+    const sessions = await Promise.all(LANGUAGES.map(async (language) => (await import(`@/lib/interface-catalogs/catalog-sessions-${language}`)).default as Record<string, string>));
+    const packs = await Promise.all(LANGUAGES.map(async (language) => (await import(`@/lib/interface-catalogs/catalog-sticker-packs-${language}`)).default as Record<string, string>));
+    for (const key of ['settings.content_languages.info', 'settings.privacy.online_status.info', 'settings.privacy.online_status.question', 'settings.privacy.online_status.more']) {
+      distinct(main.map((catalog) => catalog[key]));
+    }
+    for (const key of ['e2eeDevices.section.lead', 'e2eeDevices.approval.question']) distinct(sessions.map((catalog) => catalog[key]));
+    for (const key of ['stickerPacks.shop.hint', 'stickerPacks.shop.hint.question', 'stickerPacks.shop.hint.more']) distinct(packs.map((catalog) => catalog[key]));
+  });
+
   test('la phrase courte de la traduction sur l’appareil existe partout, et n’est nulle part une copie du français', async () => {
     const values = await Promise.all(
       (['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'] as const).map(
