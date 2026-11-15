@@ -104,3 +104,74 @@ export function sweepDirectEnqueueCalls(srcDir: string): DirectEnqueueCall[] {
 
   return found;
 }
+
+/**
+ * Une CONSTRUCTION de `RedisDeliveryQueue` — c'est-à-dire une instance de plus,
+ * donc une TRANCHE MÉMOIRE de plus.
+ */
+export interface DeliveryQueueConstruction {
+  /** Chemin relatif à `src/`, pour que la clé ne dérive pas avec le dépôt. */
+  readonly file: string;
+  /** La ligne SOURCE, dépouillée — jamais un numéro de ligne (règle du cycle 87 bis). */
+  readonly call: string;
+}
+
+const QUEUE_CONSTRUCTION = /new\s+RedisDeliveryQueue\s*\(/;
+
+/**
+ * Le SEUL site de production qui a le droit de construire la file.
+ *
+ * `server.ts` la construit et l'ENREGISTRE aussitôt
+ * (`setSharedDeliveryQueue`) : c'est ce couple — construire ET enregistrer —
+ * qui fait de cette instance « la file du processus », et non la construction
+ * seule. Un second site qui construirait puis enregistrerait écraserait le
+ * registre ; un second site qui construit SANS enregistrer est ce que ce
+ * balayage interdit.
+ */
+export const QUEUE_CONSTRUCTION_SITES: ReadonlyArray<string> = ['server.ts'];
+
+/**
+ * Pourquoi l'UNICITÉ d'instance demande son propre cliquet (#18616).
+ *
+ * `delivery-queue-door-sweep` ci-dessus garde l'ENFILAGE : il interdit qu'un
+ * transport écrive lui-même dans la file. Il ne peut pas voir une seconde
+ * INSTANCE — celle-ci passe par l'unité partagée, respecte le contrat de fil,
+ * et serait donc verte à tous les cliquets existants.
+ *
+ * Ce qu'une seconde instance coûte est invisible au code qui l'emploie : la
+ * tranche REDIS est partagée, et rien n'y casse. La tranche MÉMOIRE — le repli
+ * qu'emprunte toute entrée écrite pendant un hoquet Redis — est PAR INSTANCE,
+ * et les trois unités qui la traversent ne connaissent que l'instance
+ * ENREGISTRÉE :
+ *
+ * | unité | comment elle trouve la file | ce qu'une seconde instance lui cache |
+ * |---|---|---|
+ * | le drain (`_drainPendingMessages`) | `this.deliveryQueue` du manager | une entrée tombée en mémoire n'est JAMAIS livrée |
+ * | la purge (`applyMessageRemovalEffects`, vue unique) | `getSharedDeliveryQueue()` | le texte d'un message brûlé SURVIT dans ce tas |
+ * | le balayage de TTL (`DeliveryQueueCleanupJob`) | l'instance de `server.ts` | aucune expiration sur cette tranche |
+ *
+ * **Quand ce témoin tombe** : la réparation est de RÉSOUDRE la file par le
+ * registre (`getSharedDeliveryQueue`, `getSharedOfflineEnqueuer`), jamais
+ * d'ajouter une ligne à l'inventaire — il n'y a pas de seconde file légitime
+ * dans un processus, et les deux doc-comments qui AFFIRMAIENT l'unicité
+ * (`server.ts`, `delivery-queue-registry.ts`) disaient faux pendant qu'elle
+ * existait.
+ */
+export function sweepDeliveryQueueConstructions(srcDir: string): DeliveryQueueConstruction[] {
+  const found: DeliveryQueueConstruction[] = [];
+
+  for (const file of walk(srcDir)) {
+    const relative = file.slice(srcDir.length + 1).split('\\').join('/');
+    // Un témoin construit la file pour l'EXERCER — c'est son rôle. Ce que ce
+    // balayage garde, c'est la PRODUCTION.
+    if (relative.includes('__tests__') || relative.endsWith('.test.ts')) continue;
+    if (QUEUE_CONSTRUCTION_SITES.includes(relative)) continue;
+
+    for (const line of stripComments(readFileSync(file, 'utf8')).split('\n')) {
+      if (!QUEUE_CONSTRUCTION.test(line)) continue;
+      found.push({ file: relative, call: line.trim() });
+    }
+  }
+
+  return found;
+}
