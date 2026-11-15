@@ -125,12 +125,12 @@
       "firstScreen": 143
     },
     "communities": {
-      "total": 38,
-      "firstScreen": 38
+      "total": 21,
+      "firstScreen": 21
     },
     "communities-new": {
-      "total": 17,
-      "firstScreen": 17
+      "total": 15,
+      "firstScreen": 15
     },
     "contact": {
       "total": 171,
@@ -209,8 +209,8 @@
       "firstScreen": 37
     },
     "me-bookmarks": {
-      "total": 97,
-      "firstScreen": 38
+      "total": 84,
+      "firstScreen": 35
     },
     "me-progression": {
       "total": 162,
@@ -233,23 +233,23 @@
       "firstScreen": 82
     },
     "me-progression-ligue": {
-      "total": 199,
-      "firstScreen": 66
+      "total": 190,
+      "firstScreen": 71
     },
     "me-progression-prestige": {
       "total": 30,
       "firstScreen": 30
     },
     "me-progression-reglages": {
-      "total": 153,
-      "firstScreen": 69
+      "total": 141,
+      "firstScreen": 62
     },
     "me-progression-regles": {
       "total": 387,
       "firstScreen": 129
     },
     "me-progression-saison": {
-      "total": 139,
+      "total": 136,
       "firstScreen": 98
     },
     "me-progression-succes": {
@@ -565,6 +565,30 @@
       },
       "motif": "La citation d'un média coule nom et libellé sur une ligne au lieu de trois étages : un mot de plus du fil entre dans le premier écran, le total ne bouge pas",
       "issue": 18392
+    },
+    "me-progression-ligue": {
+      "de": {
+        "total": 199,
+        "firstScreen": 66
+      },
+      "a": {
+        "total": 190,
+        "firstScreen": 71
+      },
+      "motif": "Une phrase dit ce qu'est la joute (groupe de 30, 7 qui montent, 5 qui descendent) ; la légende « étincelles » ne se répète plus sur chaque ligne du classement, seule la valeur reste vue",
+      "issue": 18148
+    },
+    "me-progression-reglages": {
+      "de": {
+        "total": 141,
+        "firstScreen": 59
+      },
+      "a": {
+        "total": 141,
+        "firstScreen": 62
+      },
+      "motif": "Le premier écran avait été capturé hors CI à 59 ; la CI en mesure 62 à total inchangé (141), toujours sous les 69 d'avant l'épure du jeu",
+      "issue": 18238
     }
   }
 }

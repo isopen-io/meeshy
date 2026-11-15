@@ -125,6 +125,7 @@ final class EpureReglagesFichesTests: XCTestCase {
         for language in Self.otherLanguages {
             let value = try XCTUnwrap(values[language], language)
             XCTAssertNotEqual(value, "Inclure", language)
+            guard value.lowercased() != value.uppercased() else { continue }
             XCTAssertNotEqual(value, value.uppercased(), "\(language) : la casse haute écrite en dur disparaît")
         }
         let rows = try app()

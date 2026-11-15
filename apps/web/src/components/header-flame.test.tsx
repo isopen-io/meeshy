@@ -283,6 +283,42 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     }
   });
 
+  test('carte ouverte, le retour Android ou Précédent ferme la CARTE seule : la conversation reste (#18326)', async () => {
+    const left: string[] = [];
+    const onPop = () => left.push('popstate');
+    const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => undefined} />);
+    await mounter.click(host.querySelector<HTMLElement>('[data-header-flame] button'));
+    const before = window.location.href;
+    window.addEventListener('popstate', onPop);
+    try {
+      await act(async () => {
+        window.history.back();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    } finally {
+      window.removeEventListener('popstate', onPop);
+    }
+    expect(host.querySelector('[data-flame-card]')).toBeNull();
+    expect(window.location.href).toBe(before);
+  });
+
+  test('Échap, un <dialog> ouvert dessous : ferme la carte seule et retient la fermeture du dialogue (#18326)', async () => {
+    const dialog = document.createElement('dialog');
+    document.body.append(dialog);
+    try {
+      const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => undefined} />);
+      await mounter.click(host.querySelector<HTMLElement>('[data-header-flame] button'));
+      const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      await act(async () => {
+        host.querySelector('[data-flame-card] a')?.dispatchEvent(escape);
+      });
+      expect(host.querySelector('[data-flame-card]')).toBeNull();
+      expect(escape.defaultPrevented).toBe(true);
+    } finally {
+      dialog.remove();
+    }
+  });
+
   test('la pastille de l’en-tête déplié ouvre la MÊME carte que la flamme repliée (#17987)', async () => {
     const touched: string[] = [];
     const host = await mounter.mount(<EngagementPill snapshot={snapshot()} interactive onHideFlame={() => touched.push('x')} />);

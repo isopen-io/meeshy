@@ -163,6 +163,7 @@ final class EntryScreensEpureTests: XCTestCase {
             "activation.gate.moreLinks",
             "signInLink.switchAccount.message", "signInLink.switchAccount.messageUnknownCurrent",
             "signInLink.deviceConfirm.message", "signInLink.deviceConfirm.messageReplacing",
+            "emailProof.secondFactorRequired",
         ]
         for key in Self.appFrench.keys where !justified.contains(key) {
             let french = try XCTUnwrap(app[key]?["fr"], key)

@@ -31,6 +31,8 @@ final class EpureProfilBringPositionTests: XCTestCase {
         AppSourceGuard.stripComments(try String(contentsOf: Self.repoRoot.appendingPathComponent("apps/ios/Meeshy/" + relativePath), encoding: .utf8))
     }
 
+    private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
+
     private static let otherLanguages = ["en", "es", "pt-BR", "de", "it", "ar"]
 
     private static let french: [String: String] = [
@@ -71,15 +73,20 @@ final class EpureProfilBringPositionTests: XCTestCase {
 
     // MARK: - Bring : la première phrase reste au repos, la seconde passe derrière un (i)
 
-    func test_bring_explain_keepsTheOrientationSentence_andNotTheSilentModeDetail() {
-        XCTAssertEqual(ProfileBringWording.explain, "Pour une urgence extrême : son téléphone sonne, même verrouillé.")
-        XCTAssertFalse(ProfileBringWording.explain.contains("silencieux"))
+    func test_bring_explain_keepsTheOrientationSentence_andNotTheSilentModeDetail() throws {
+        XCTAssertEqual(ProfileBringWording.explain, served("bring.explain"))
+        let sentence = try XCTUnwrap(try app()["bring.explain"]?["fr"])
+        XCTAssertEqual(sentence, "Pour une urgence extrême : son téléphone sonne, même verrouillé.")
+        XCTAssertFalse(sentence.contains("silencieux"))
     }
 
-    func test_bring_explainNote_isNamedByItsQuestion_andCarriesTheSilentModeDetail() {
+    func test_bring_explainNote_isNamedByItsQuestion_andCarriesTheSilentModeDetail() throws {
+        let app = try app()
         let note = ProfileBringWording.explainNote
-        XCTAssertEqual(note.question, "Et si son iPhone est en silencieux ?")
-        XCTAssertEqual(note.text, "Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.")
+        XCTAssertEqual(note.question, served("bring.silent.question"))
+        XCTAssertEqual(note.text, served("bring.silent.note"))
+        XCTAssertEqual(app["bring.silent.question"]?["fr"], "Et si son iPhone est en silencieux ?")
+        XCTAssertEqual(app["bring.silent.note"]?["fr"], "Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.")
     }
 
     func test_bring_row_showsTheSentenceAtRest_andHostsTheInfoNote() throws {
@@ -90,17 +97,21 @@ final class EpureProfilBringPositionTests: XCTestCase {
 
     // MARK: - Position : l'échéance et l'arrêt restent au repos, la mise à jour passe derrière un (i)
 
-    func test_shareLocation_explain_saysUntilWhenAndHowToStop_butNotTheRefreshDetail() {
-        let sentence = ShareLocationWording.explain(name: "Bob")
+    func test_shareLocation_explain_saysUntilWhenAndHowToStop_butNotTheRefreshDetail() throws {
+        XCTAssertEqual(ShareLocationWording.explain(name: "Bob"), String(format: served("sharedLocation.share.explain"), "Bob"))
+        let sentence = String(format: try XCTUnwrap(try app()["sharedLocation.share.explain"]?["fr"]), "Bob")
         XCTAssertEqual(sentence, "Bob voit ta position jusqu'à l'échéance ; tu peux l'arrêter depuis sa fiche.")
         XCTAssertTrue(sentence.contains("depuis sa fiche"), "la phrase dit où arrêter le partage")
         XCTAssertFalse(sentence.contains("Meeshy est ouvert"))
     }
 
-    func test_shareLocation_explainNote_isNamedByItsQuestion() {
+    func test_shareLocation_explainNote_isNamedByItsQuestion() throws {
+        let app = try app()
         let note = ShareLocationWording.explainNote
-        XCTAssertEqual(note.question, "Quand ma position se met-elle à jour ?")
-        XCTAssertEqual(note.text, "Elle se met à jour quand Meeshy est ouvert.")
+        XCTAssertEqual(note.question, served("sharedLocation.share.refresh.question"))
+        XCTAssertEqual(note.text, served("sharedLocation.share.refresh.note"))
+        XCTAssertEqual(app["sharedLocation.share.refresh.question"]?["fr"], "Quand ma position se met-elle à jour ?")
+        XCTAssertEqual(app["sharedLocation.share.refresh.note"]?["fr"], "Elle se met à jour quand Meeshy est ouvert.")
     }
 
     func test_shareLocation_sheet_showsTheSentenceAtRest_andHostsTheInfoNoteInThePrecisionFooter() throws {

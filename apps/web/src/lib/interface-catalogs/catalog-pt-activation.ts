@@ -16,7 +16,7 @@ const ptActivation = {
   'activation.email.failed': 'Não foi possível enviar o código. Tente novamente.',
   'activation.email.done': 'E-mail verificado ✓',
   'activation.phone.label': 'Adicione um número para proteger e recuperar sua conta',
-  'activation.phone.add': 'Adicionar meu número',
+  'activation.phone.add': 'Adicionar',
   'activation.phone.field': 'Número de telefone',
   'activation.phone.hint': 'No formato internacional, por exemplo +55 11 91234 5678',
   'activation.phone.send': 'Enviar o código',

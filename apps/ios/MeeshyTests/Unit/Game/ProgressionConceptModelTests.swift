@@ -461,7 +461,9 @@ final class ProgressionConceptModelTests: XCTestCase {
     func test_state_withoutAServedWallet_theConvertibleBalanceComesFromThePriceAndTheMissing_neverFromTheScore() {
         XCTAssertEqual(ProgressionConceptModel.convertiblePoints(progress: progress(jcnm, meesh: nil), game: jcnm), 5_823)
         XCTAssertEqual(ProgressionConceptModel.convertiblePoints(progress: progress(jcnm, meesh: jcnmWallet), game: jcnm), 5_823)
-        XCTAssertTrue(state(.points, jcnm, meesh: nil)?.contains(GameCopy.convertiblePoints(5_823)) ?? false)
+        XCTAssertEqual(state(.points, jcnm, meesh: nil), ConceptText.statePointsMissingPlain(
+            held: GameCopy.points(77_099), missing: GameCopy.convertiblePoints(1_839), number: n(79)
+        ))
     }
 
     func test_state_flame_saysTheStepItIsAt() {
