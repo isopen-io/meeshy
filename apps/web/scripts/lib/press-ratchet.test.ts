@@ -38,7 +38,7 @@ const sourcesOfTree = () =>
  * (#18326), puis 938 depuis que toute la zone du kit répond à l'appui
  * (`press-kit-navigation.test.ts`).
  */
-const PLAFOND = { mute: 937, durations: 20 } as const;
+const PLAFOND = { mute: 937, durations: 18 } as const;
 
 const source = (path: string, text: string) => ({ path, text });
 

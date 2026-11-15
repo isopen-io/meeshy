@@ -11,6 +11,7 @@ import { createDraftStore } from '@/lib/send/draft-store';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { FeedPostCard } from './feed-post-card';
@@ -186,6 +187,20 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
 
     act(() => entrees.find((e) => e.dataset.feedPostAction === 'copyText')?.click());
     expect(journal).toEqual(['copy:Bonjour le fil']);
+  });
+
+  test('refermé par un choix, le panneau SORT en fondu : encore peint, inerte, puis retiré (#18327)', async () => {
+    const { menu } = host('u-me');
+    monte(post(), menu);
+    const entrees = await ouvre();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'copyText')?.click());
+    const sortant = document.querySelector('[role="menu"]');
+    expect(sortant?.hasAttribute('data-leaving')).toBe(true);
+    expect(sortant?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   test('MA publication : « Supprimer » part vers l’hôte', async () => {
