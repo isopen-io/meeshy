@@ -275,6 +275,10 @@
     <string name="identity_role_admin">Admin</string>
     <string name="identity_role_creator">Créateur</string>
     <string name="identity_role_moderator">Modérateur</string>
+    <string name="kit_anchored_sheet_close">Fermer</string>
+    <string name="kit_anchored_sheet_height">Hauteur de la feuille</string>
+    <string name="kit_anchored_sheet_height_expanded">agrandie</string>
+    <string name="kit_anchored_sheet_height_reduced">réduite</string>
     <string name="kit_color_dots_position">Couleur %1$s sur %2$s</string>
     <string name="language_strip_more">Autres langues</string>
     <string name="lentille_mode_menu_selected">sélectionné</string>

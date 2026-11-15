@@ -86,11 +86,10 @@ public struct AnimatedLogoView: View {
         .scaleEffect(breathing ? 1.05 : 1.0)
         .onAppear {
             showDash1 = true; showDash2 = true; showDash3 = true
-            if Self.breathes(continuous: continuous, reduceMotion: reduceMotion) {
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    breathe = true
-                }
-            }
+            syncBreathing()
+        }
+        .adaptiveOnChange(of: continuous) { _, _ in
+            syncBreathing()
         }
         .adaptiveOnChange(of: reduceMotion) { _, reduce in
             guard reduce else { return }
@@ -102,6 +101,19 @@ public struct AnimatedLogoView: View {
             withTransaction(Transaction(animation: nil)) {
                 breathe = false
             }
+        }
+    }
+
+    /// La respiration suit `continuous` tout au long de la vie de la vue : un
+    /// rafraîchissement qui commence après l'apparition la démarre, sa fin
+    /// l'arrête sans animation.
+    private func syncBreathing() {
+        guard Self.breathes(continuous: continuous, reduceMotion: reduceMotion) else {
+            withTransaction(Transaction(animation: nil)) { breathe = false }
+            return
+        }
+        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+            breathe = true
         }
     }
 }

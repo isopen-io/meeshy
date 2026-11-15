@@ -71,7 +71,7 @@ import { safeBroadcast } from '../serverEmit';
 import { emitMessageNewBestEffort } from '../messageNewEmission';
 import { emitMessageNewByLanguage } from '../messageNewByLanguage';
 import { readerSignedPlanBestEffort, readerSignedPlanForMessageIdBestEffort } from '../readerSignedDelivery';
-import { editReadership, blockedEditKeys, emitEditedToReaders } from '../editedAudience';
+import { messageReadership, blockedReaderKeys, emitEditedToReaders } from '../editedAudience';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { admitLoadedMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
@@ -915,10 +915,10 @@ export class MessageHandler {
       // deux sorties qui portent le texte édité : la mention ci-dessous et
       // `message:edited` plus bas. Les résoudre séparément serait deux lectures
       // pour la même question, et surtout deux occasions de n'en garder qu'une.
-      const editReaders = await editReadership(this.prisma, message.conversationId, validated.messageId, (err) =>
+      const editReaders = await messageReadership(this.prisma, message.conversationId, validated.messageId, (err) =>
         handlerLogger.error('edit readership unresolvable — edit not delivered live nor queued', { messageId: validated.messageId, error: err }),
       );
-      const editBlocked = blockedEditKeys(editReaders);
+      const editBlocked = blockedReaderKeys(editReaders);
 
       // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL : quelqu'un
       // que l'édition vient de nommer n'est pas forcément dans
