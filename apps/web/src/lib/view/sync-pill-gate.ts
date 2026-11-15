@@ -1,6 +1,7 @@
 import { useStore } from 'zustand/react';
 
 import { outboxStore } from '@/lib/send/outbox-store';
+import { pillAnnouncementStore } from '@/lib/view/sync-pill-announcements';
 import { useOnline } from '@/lib/net/online';
 
 /**
@@ -32,5 +33,7 @@ import { useOnline } from '@/lib/net/online';
 export function useSyncPillArmed(): boolean {
   const online = useOnline();
   const enFile = useStore(outboxStore, (s) => Object.keys(s.entries).length > 0);
-  return !online || enFile;
+  /* Une annonce confiée à la pastille (#14147) l'arme aussi : la batterie d'un Proche n'attend pas l'outbox. */
+  const annonce = useStore(pillAnnouncementStore, (s) => s.queue.length > 0);
+  return !online || enFile || annonce;
 }

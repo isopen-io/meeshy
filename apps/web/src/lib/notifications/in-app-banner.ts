@@ -1,5 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
+
+
 import { conversationPreviewStore } from './conversation-preview';
 import type { NotificationRecord } from './record';
 
@@ -18,7 +20,9 @@ import type { NotificationRecord } from './record';
  *   `?? notificationPreviewConversation?.id` d'iOS), pour une ligne déjà
  *   lue, et pour un appel
  *   entrant ou terminé : la couche d'appel le présente elle-même ;
- * - une nouvelle bannière REMPLACE la précédente, sans file d'attente.
+ * - une nouvelle bannière REMPLACE la précédente, sans file d'attente ;
+ * - la batterie d'un Proche (`device_battery`, #14147) ne descend JAMAIS en bannière : onglet ouvert, la
+ *   pastille de synchronisation la dit À LA PLACE du push — une seule voix pour un même palier.
  */
 
 const CALL_LAYER_TYPES = new Set(['incoming_call', 'incoming_call_alert', 'call', 'CALL_INCOMING', 'call_ended']);
@@ -41,7 +45,18 @@ export const inAppBannerStore = createStore<BannerState>((set) => ({
   dismiss: () => set({ current: null }),
 }));
 
+/**
+ * Le type que la passerelle sert pour la batterie d'un Proche (`BATTERY_NOTIFICATION_TYPE`), écrit en LITTÉRAL :
+ * ce module est dans la première peinture, et le contrat de la batterie n'a rien à y faire. Un témoin tient les
+ * deux égaux ; la pastille se charge à la première batterie reçue, jamais au démarrage.
+ */
+export const IN_APP_BATTERY_TYPE = 'device_battery';
+
 export function offerInAppBanner(notification: NotificationRecord, location: { readonly pathname: string }): void {
+  if (notification.type === IN_APP_BATTERY_TYPE) {
+    void import('@/lib/battery/battery-pill').then((pill) => pill.announceBatteryNotification(notification));
+    return;
+  }
   if (!shouldShowBanner(notification, location)) return;
   inAppBannerStore.setState({ current: notification });
 }
