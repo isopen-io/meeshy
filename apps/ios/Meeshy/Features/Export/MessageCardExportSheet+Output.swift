@@ -186,13 +186,13 @@ extension MessageCardExportSheet {
             do {
                 var videos = backdrop.map { [$0] } ?? []
                 for item in attached {
-                    let file = await Task.detached(priority: .userInitiated) {
+                    let file = await Task(priority: .userInitiated) { @concurrent in
                         await MessageCardMediaLoader.localFile(item.fileURL, kind: .video)
                     }.value
                     if let file { videos.append(MessageCardScrollVideo(id: item.media.id, file: file)) }
                 }
                 let ready = videos
-                let file = try await Task.detached(priority: .userInitiated) {
+                let file = try await Task(priority: .userInitiated) { @concurrent in
                     try await MessageCardScrollExporter.export(input: input, pictures: pictures, speed: speed, videos: ready, progress: progress)
                 }.value
                 try Task.checkCancellation()

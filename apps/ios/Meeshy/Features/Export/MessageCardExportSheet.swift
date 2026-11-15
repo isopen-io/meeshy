@@ -575,7 +575,7 @@ struct MessageCardExportSheet: View {
         guard let item = backdropItem else { return }
         backdropLoading = true
         let veil = chosenBackdrop?.veil ?? MessageCardBackdrop.defaultVeil
-        let chosen = await Task.detached(priority: .userInitiated) { await MessageCardBackdropLoader.load(item, veil: veil) }.value
+        let chosen = await Task(priority: .userInitiated) { @concurrent in await MessageCardBackdropLoader.load(item, veil: veil) }.value
         backdropLoading = false
         guard !Task.isCancelled else {
             chosen?.discard()
@@ -606,7 +606,7 @@ struct MessageCardExportSheet: View {
         failed = false
         let input = input(for: format)
         let pictures = paintedPictures
-        let (card, tall) = await Task.detached(priority: .userInitiated) {
+        let (card, tall) = await Task(priority: .userInitiated) { @concurrent in
             (MessageCardRenderer.render(input, pictures: pictures), MessageCardRenderer.scrollLayout(input))
         }.value
         guard !Task.isCancelled, key == renderKey else { return }

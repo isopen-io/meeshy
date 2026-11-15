@@ -10,13 +10,24 @@ import MeeshyUI
 /// de la photothèque, copiée sur l'appareil : sa première image peint
 /// l'aperçu et l'image fixe, son fichier anime le GIF, la vidéo et la vidéo
 /// qui défile. Rien ne quitte l'appareil.
-nonisolated struct MessageCardChosenBackdrop: Equatable, @unchecked Sendable {
+nonisolated struct MessageCardChosenBackdrop: Equatable, Sendable {
     let token: UUID
     let media: MessageCardMedia
-    let poster: CGImage
+    /// La première image, portée comme les pixels des médias de la carte.
+    private let still: MessageCardPictures
     /// Le fichier d'une vidéo, dans le `tmp` de l'app — `nil` pour une photo.
     let videoFile: URL?
     var veil: Double
+
+    init(token: UUID, media: MessageCardMedia, poster: CGImage, videoFile: URL?, veil: Double) {
+        self.token = token
+        self.media = media
+        self.still = MessageCardPictures([MessageCardBackdrop.mediaID: poster])
+        self.videoFile = videoFile
+        self.veil = veil
+    }
+
+    var poster: CGImage? { still.images[MessageCardBackdrop.mediaID] }
 
     var backdrop: MessageCardBackdrop { MessageCardBackdrop(media: media, veil: veil) }
     var isVideo: Bool { videoFile != nil }
@@ -129,8 +140,8 @@ struct MessageCardBackdropPanel: View {
         ZStack {
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(Color.primary.opacity(0.07))
-            if let chosen {
-                Image(decorative: chosen.poster, scale: 1)
+            if let chosen, let poster = chosen.poster {
+                Image(decorative: poster, scale: 1)
                     .resizable()
                     .scaledToFill()
                 if chosen.isVideo {
