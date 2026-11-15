@@ -17,6 +17,7 @@ import me.meeshy.sdk.cache.store.inMemoryDatabase
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CommunityUpdatedEvent
 import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.api.CommunityApi
@@ -132,5 +133,44 @@ class CommunityCacheRepositoryTest {
         assertThat(ApiError("boom", httpStatus = 500).toCommunityFetchException().failure).isEqualTo(ContentFetchFailure.SERVER)
         assertThat(ApiError("offline", code = "NETWORK").toCommunityFetchException().failure).isEqualTo(ContentFetchFailure.NETWORK)
         assertThat(ApiError("parse", code = "PARSE").toCommunityFetchException().failure).isEqualTo(ContentFetchFailure.SERVER)
+    }
+
+    private fun updated(communityId: String, name: String, updatedAt: String = "2026-11-15T12:00:00.000Z") =
+        CommunityUpdatedEvent(
+            communityId = communityId, identifier = "mshy_$communityId", name = name, isPrivate = false,
+            memberCount = 4, updatedAt = updatedAt,
+        )
+
+    @Test fun `community updated reecrit la fiche et la ligne de liste sans relance reseau`() = runTest {
+        val members = listOf(ApiCommunityMember(id = "m1"))
+        cache().put("community:detail", "c1", community("c1").copy(members = members), ApiCommunity.serializer(), null)
+        cache().put("community:list", "page0", listOf(community("c0"), community("c1")), ListSerializer(ApiCommunity.serializer()), null)
+
+        repository().apply(updated("c1", "Renommee"))
+
+        val detail = cache().get("community:detail", "c1", ApiCommunity.serializer())!!.value
+        assertThat(detail.name).isEqualTo("Renommee")
+        assertThat(detail.memberCount).isEqualTo(4)
+        assertThat(detail.members).isEqualTo(members)
+        val list = cache().get("community:list", "page0", ListSerializer(ApiCommunity.serializer()))!!.value
+        assertThat(list.map { it.name }).containsExactly("Com c0", "Renommee").inOrder()
+        coVerify(exactly = 0) { api.list(any(), any(), any()) }
+    }
+
+    @Test fun `community updated ne cree rien quand l appareil ne tient pas la communaute`() = runTest {
+        repository().apply(updated("c9", "Inconnue"))
+
+        assertThat(cache().get("community:detail", "c9", ApiCommunity.serializer())).isNull()
+        assertThat(cache().get("community:list", "page0", ListSerializer(ApiCommunity.serializer()))).isNull()
+    }
+
+    @Test fun `community updated ne rajeunit pas l instant de lecture`() = runTest {
+        cache().put("community:detail", "c1", community("c1"), ApiCommunity.serializer(), null)
+        val fetchedAt = cache().get("community:detail", "c1", ApiCommunity.serializer())!!.fetchedAt
+        clock.now += 60_000
+
+        repository().apply(updated("c1", "Renommee"))
+
+        assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())!!.fetchedAt).isEqualTo(fetchedAt)
     }
 }
