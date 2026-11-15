@@ -214,6 +214,37 @@ elle est assumée : avant lui, 100 % des entrées média de cette tranche étaie
 perdues. La refermer demande un sous-budget par famille ou une priorité
 d'éviction — une décision, pas un correctif.
 
+### Une note de PROCESS sur la PREUVE, parce qu'elle a coûté trois runs
+
+La CI des PR est gelée (`vars.PR_CI_GEL`), donc la preuve passe par un
+`workflow_dispatch` de `ci.yml` sur la branche. Ce que le gel ne dit pas, et qui
+se lit trois lignes plus haut dans le même fichier :
+
+```yaml
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
+```
+
+**Chaque dispatch ANNULE le précédent sur la même branche.** Trois runs ont été
+tués ainsi, et le symptôme est trompeur : le job « Verdict CI » rend
+`Verdict : rouge — build, glory-frames, test, test-gateway-coverage,
+test-python, test-voice-api, test-voice-e2e, web-navigateur` — une liste qui a
+l'air d'un échec LARGE touchant Python, le web et les cadres de gloire, que ce
+lot ne touche pas. Le relevé des conclusions par job rend l'inverse : **un seul
+`failure` (le verdict lui-même), tout le reste `cancelled`**, et les quatre jobs
+qui avaient eu le temps de finir étaient VERTS.
+
+> **Un verdict agrégé nomme ce qui n'a pas RÉUSSI, pas ce qui a ÉCHOUÉ.** Lire
+> sa liste comme une liste d'échecs envoie déboguer huit sous-systèmes au lieu
+> de regarder pourquoi le run s'est arrêté. La question à poser à un verdict
+> large est d'abord **« ces jobs ont-ils TOURNÉ ? »** — et elle se répond par
+> les conclusions par job, jamais par la chaîne du verdict.
+
+Corollaire opératoire : un `push` sur une branche de travail ne déclenche RIEN
+(`on: push: branches: [main, dev]`), donc pousser est gratuit ; c'est le
+dispatch qui coûte, et il ne s'en lance qu'UN à la fois.
+
 ### Une note de PROCESS, parce qu'elle se reproduira
 
 Le lot tel que commité à `37cab576f` **ne typecheckait pas** : les deux fixtures
