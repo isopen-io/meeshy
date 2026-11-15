@@ -280,6 +280,7 @@
     <string name="kit_anchored_sheet_height_expanded">ingrandita</string>
     <string name="kit_anchored_sheet_height_reduced">ridotta</string>
     <string name="kit_color_dots_position">Colore %1$s di %2$s</string>
+    <string name="kit_progress_ring_busy">In corso</string>
     <string name="language_strip_more">Altre lingue</string>
     <string name="lentille_mode_menu_selected">selezionato</string>
     <string name="live_location_duration_title">Durata della condivisione</string>
