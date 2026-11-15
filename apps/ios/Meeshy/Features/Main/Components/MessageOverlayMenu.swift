@@ -227,6 +227,7 @@ struct MessageOverlayMenu: View {
     }
 
     private func handlePrimaryAction(_ action: PrimaryAction) {
+        guard isVisible else { return }
         switch action {
         case .reply:
             onReply?()
@@ -378,6 +379,7 @@ struct MessageOverlayMenu: View {
                 )
                 .offset(y: clusterDragOffset - menuRise)
                 .opacity(isVisible ? 1 : 0)
+                .allowsHitTesting(isVisible)
                 .scaleEffect(settled ? 1.0 : 0.85, anchor: .top)
                 // highPriorityGesture : en `.gesture` simple, les Button
                 // des rows gagnent les drags lents (vérifié simulateur —
@@ -417,7 +419,7 @@ struct MessageOverlayMenu: View {
                         .offset(y: clusterDragOffset)
                         .opacity(isVisible ? 1 : 0)
                         .scaleEffect(settled ? 1.0 : 0.7, anchor: .center)
-                        .allowsHitTesting(true)
+                        .allowsHitTesting(isVisible)
                 }
             }
             // #9043 — le glissement vaut sur TOUTE la vue (le voile, l'aperçu
@@ -647,6 +649,7 @@ struct MessageOverlayMenu: View {
     }
 
     private func reagirDepuisLaBande(_ emoji: String) {
+        guard isVisible else { return }
         EmojiUsageTracker.recordUsage(emoji: emoji)
         onReact?(emoji)
         dismiss()
@@ -730,6 +733,7 @@ struct MessageOverlayMenu: View {
     // MARK: - Dismiss
 
     private func dismiss() {
+        guard isVisible else { return }
         HapticFeedback.light()
         // Sortie : l'overlay se retracte vers le coin natif de la bulle ;
         // un fondu sous « Réduire les animations ». La cascade d'entree des

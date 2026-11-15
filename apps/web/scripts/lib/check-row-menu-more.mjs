@@ -135,7 +135,7 @@ export async function checkRowMenuMore({ browser, base, check }) {
   }));
   check(left.menu === 'Actions de conversation' && left.focus === 'Favori', `Flèche gauche ramène au menu, le focus sur « Favori » (${JSON.stringify(left)})`);
   await page.keyboard.press('Escape');
-  const closed = await page.evaluate((button) => ({ menu: document.querySelector('[role="menu"]') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);
+  const closed = await page.evaluate((button) => ({ menu: document.querySelector('[role="menu"]:not([data-leaving])') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);
   check(!closed.menu && closed.focus, `Échap referme et rend le focus au bouton (${JSON.stringify(closed)})`);
 
   // f. tenir la ligne ouvre l'aperçu au-dessus des actions (#11211) — sans `contextmenu`, comme Safari iOS

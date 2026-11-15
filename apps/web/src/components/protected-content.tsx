@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -25,6 +25,8 @@ import { captureShield } from '@/lib/capture/capture-shield';
 import { useCaptureShield } from '@/lib/capture/use-capture-shield';
 import type { Attachment } from '@/lib/api/types';
 import { purgeViewOnceMedia, viewOnceMediaUrlsOf } from '@/lib/api/view-once';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -919,7 +921,21 @@ function ViewOnceStage({ onClose, children }: { readonly onClose: () => void; re
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  useBackDismiss(onClose);
+  /* LA SORTIE EST GARDÉE AVANT `onClose` (#18327) : le voile et le média s'effacent en fondu, puis la
+     scène se ferme. Sous « Réduire les animations », tout de suite. Un second geste ne relance rien. */
+  const [leaving, setLeaving] = useState(false);
+  const leave = useCallback(() => {
+    if (prefersReducedMotion()) onCloseRef.current();
+    else setLeaving(true);
+  }, []);
+  useEffect(() => {
+    if (!leaving) return undefined;
+    const timer = setTimeout(() => onCloseRef.current(), LAYER_MOTION_MS);
+    return () => clearTimeout(timer);
+  }, [leaving]);
+  useBackDismiss(leave, { active: !leaving });
+  const leaveRef = useRef(leave);
+  leaveRef.current = leave;
 
   useLayoutEffect(() => {
     const root = document.getElementById('root');
@@ -929,7 +945,7 @@ function ViewOnceStage({ onClose, children }: { readonly onClose: () => void; re
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      onCloseRef.current();
+      leaveRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -946,13 +962,14 @@ function ViewOnceStage({ onClose, children }: { readonly onClose: () => void; re
       aria-label={translate(language, 'message.viewOnce.sealed.a11y')}
       data-view-once-stage=""
       className="view-once-stage"
+      {...layerMotion(leaving, { '--layer-shift': '0 0' } as CSSProperties)}
     >
       <button
         ref={closeRef}
         type="button"
         className="btn-press view-once-stage-close"
         aria-label={translate(language, 'message.viewOnce.close')}
-        onClick={onClose}
+        onClick={leave}
       >
         <Glyph name="x" size={22} />
       </button>

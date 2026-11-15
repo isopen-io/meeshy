@@ -14,6 +14,7 @@ import { createTalkieCapture, talkieEncodingSupportedOnce } from '@/lib/talkie/t
 import { bindTalkieSender, createTalkieSender, type TalkieCaptureFactory, type TalkieSendOutcome, type TalkieSendPhase, type TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
 import { createTalkieVoiceCopier } from '@/lib/talkie/talkie-voice-copy';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 import { BRAND, BRAND_FILL, FOCUS, INK_2 } from './user-profile-style';
 
@@ -102,6 +103,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   readonly onRelease: () => void;
 }) {
   const [info, setInfo] = useState(false);
+  const infoShown = useLayerPresence(info ? true : null);
   if (!supported) {
     return (
       <p data-talkie-unsupported="" className="rounded-card px-3.5 py-3 text-caption" style={{ color: INK_2, backgroundColor: BRAND_FILL }}>
@@ -129,24 +131,24 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
           aria-controls="talkie-info"
           aria-label={translateCircles(language, 'talkie.send.info.a11y')}
           onClick={() => setInfo((open) => !open)}
-          className={`grid shrink-0 place-items-center rounded-full text-body font-bold ${FOCUS}`}
+          className={`btn-press grid shrink-0 place-items-center rounded-full text-body font-bold ${FOCUS}`}
           style={{ width: 48, height: 48, color: BRAND, outlineColor: BRAND }}
         >
           <span aria-hidden="true">ⓘ</span>
         </button>
       </div>
-      {info ? (
-        <p id="talkie-info" data-talkie-info-text="" className="text-caption" style={{ color: INK_2 }}>
+      {infoShown.value === null ? null : (
+        <p id="talkie-info" data-talkie-info-text="" className="text-caption" {...layerMotion(infoShown.leaving, { color: INK_2 })}>
           {translateCircles(language, 'talkie.send.info')}
         </p>
-      ) : null}
+      )}
       <button
         type="button"
         data-talkie-send=""
         aria-pressed={live}
         aria-label={translateCircles(language, 'talkie.send.hold.a11y', { name })}
         {...talkieHoldHandlers({ onPress, onRelease })}
-        className={`grid select-none place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
+        className={`btn-press grid select-none place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
         style={{
           minHeight: 52,
           touchAction: 'none',

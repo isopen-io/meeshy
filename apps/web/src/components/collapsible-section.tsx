@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
+import { layerMotion, LAYER_MOTION_MS, useLayerPresence } from '@/lib/view/dialog-exit';
+
 import { Glyph } from './glyph';
 import { SECTION_BRAND_INK, SECTION_CARD_STYLE } from './grouped-section';
 
@@ -65,6 +67,7 @@ export function CollapsibleSection({
   readonly children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const panel = useLayerPresence(open ? true : null);
   const titleId = `${id}-title`;
   const panelId = `${id}-panel`;
 
@@ -83,21 +86,23 @@ export function CollapsibleSection({
           <Glyph
             name="caretDown"
             size={12}
-            style={{ transform: open ? undefined : 'rotate(180deg)', transition: 'transform 140ms ease' }}
+            style={{ transform: open ? undefined : 'rotate(180deg)', transition: `transform ${LAYER_MOTION_MS}ms ease` }}
           />
           {icon}
           <span className="min-w-0 flex-1 truncate text-start">{title}</span>
         </button>
       </h2>
-      <div id={panelId} hidden={!open}>
-        {open ? (
-          card ? (
-            <div className="grid overflow-hidden rounded-card" style={SECTION_CARD_STYLE}>
-              {children}
-            </div>
-          ) : (
-            children
-          )
+      <div id={panelId} hidden={panel.value === null}>
+        {panel.value !== null ? (
+          <div {...layerMotion(panel.leaving)}>
+            {card ? (
+              <div className="grid overflow-hidden rounded-card" style={SECTION_CARD_STYLE}>
+                {children}
+              </div>
+            ) : (
+              children
+            )}
+          </div>
         ) : null}
       </div>
     </section>
