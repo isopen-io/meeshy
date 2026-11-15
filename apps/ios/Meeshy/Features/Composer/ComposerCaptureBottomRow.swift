@@ -15,7 +15,7 @@ import MeeshyUI
 /// revient dès que les segments sont supprimés.
 ///
 /// **En édition, les outils gardent la colonne du viseur** (#18638, qui retourne la rangée
-/// de #9567) : « Filtres », « Effets », « Cadres », « Recadrer », « Texte » et, pour une
+/// de #9567) : « Effets » (#18639), « Recadrer », « Texte » et, pour une
 /// vidéo, « Couper » et « Son », en colonne en bas à gauche, sur la prise ; sous elle les
 /// panneaux des outils ACTIFS — le spectre du son, la piste de découpe (#9353) —, ou la bande
 /// ouverte (ses miniatures se peignent sur le média retouché), qui les replie.
@@ -110,15 +110,15 @@ struct ComposerCaptureBottomRow: View {
             }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
-                    // **Texte · Fond · Galerie · Sticker AVANT les familles** (#17432).
+                    // **Galerie · Texte · Fond · Stickers AVANT « Effets »** (#17432, #18639).
                     ComposerViewfinderColumnView(entries: sceneEntries) { sceneEntry?($0) }
                     if ComposerViewfinderColumn.separatesLooks(sceneEntries: sceneEntries,
                                                                offersLooks: ComposerCaptureGesture.offersRail(context)) {
                         ComposerViewfinderRailSeparator()
                     }
                     if ComposerCaptureGesture.offersRail(context) {
-                        ComposerLookRail(open: session.openFamily) { famille in
-                            session.toggleFamily(famille)
+                        ComposerLookRail(open: session.openFamily != nil) {
+                            session.toggleFamily(ComposerLookStripRule.railFamily)
                         }
                         .transition(.opacity)
                     }
@@ -142,10 +142,10 @@ struct ComposerCaptureBottomRow: View {
     }
 
     /// **Au bas de la retouche : la colonne des outils, puis les panneaux** (#18638,
-    /// #9754) — « Filtres », « Effets », « Cadres », « Recadrer », « Texte », « Couper »,
+    /// #9754) — « Effets », « Recadrer », « Texte », « Couper »,
     /// « Son » à gauche : chaque outil se retire ou revient d'un toucher, sans fermer les
     /// autres. Dessous, un panneau par outil ACTIF : la piste de découpe portant le spectre
-    /// du son (#10341), ou le spectre seul quand la coupe est retirée. Une famille ouverte prend la place de tout cela,
+    /// du son (#10341), ou le spectre seul quand la coupe est retirée. La bande ouverte prend la place de tout cela,
     /// sa bande au niveau de son rail (#10311).
     private var editTools: some View {
         VStack(spacing: ComposerEditScene.gap) {
@@ -190,28 +190,28 @@ struct ComposerCaptureBottomRow: View {
         }
     }
 
-    /// **La colonne du viseur, gardée après la prise** (#18638, porteur 2026-11-15) : Filtres ·
-    /// Effets · Cadres puis les outils de la retouche, en bas à gauche, posés SUR la prise comme
+    /// **La colonne du viseur, gardée après la prise** (#18638, porteur 2026-11-15) : « Effets »
+    /// puis les outils de la retouche, en bas à gauche, posés SUR la prise comme
     /// le rail de la capture — plus de rangée en bas.
     private var editRail: some View {
-        ComposerLookRail(open: session.openFamily, editTools: session.editTools,
-                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
-            session.toggleFamily(famille)
+        ComposerLookRail(open: session.openFamily != nil, editTools: session.editTools,
+                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) {
+            session.toggleFamily(ComposerLookStripRule.railFamily)
         }
         .padding(.leading, MeeshySpacing.mdPlus)
         .padding(.bottom, ComposerEditScene.railBottomInset(framed: session.editFramesScene))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// **La famille ouverte, au niveau de son rail** (#10311) : Filtres · Effets
-    /// · Cadres en colonne, la bande à leur droite — jamais un panneau qui
-    /// flotte au-dessus des outils. Retoucher la famille ouverte rend les outils.
+    /// **La bande ouverte, au niveau de son rail** (#10311) : « Effets » à gauche,
+    /// la bande à sa droite — jamais un panneau qui flotte au-dessus des outils.
+    /// Retoucher « Effets » rend les outils.
     private var familyRow: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-                // Le haut de la colonne sur le haut des cases (#10339).
-                ComposerLookRail(open: session.openFamily) { famille in
-                    session.toggleFamily(famille)
+                // Le haut de « Effets » sur le haut des cases (#10339).
+                ComposerLookRail(open: session.openFamily != nil) {
+                    session.toggleFamily(ComposerLookStripRule.railFamily)
                 }
                 .padding(.leading, MeeshySpacing.mdPlus)
                 .padding(.top, ComposerTriggerOutline.outset)
@@ -244,7 +244,7 @@ struct ComposerCaptureBottomRow: View {
 /// **La phrase du geste, centrée sur la scène** (A8, #17109 : « Touchez deux
 /// fois pour une photo · maintenez pour filmer »). Elle se tait pendant la
 /// prise et la retouche, sous un cadre, dont le bas porte sa propre écriture
-/// (#9557), bande ouverte, où le nom du choix prend sa place (#9566), et dès
+/// (#9557), bande ouverte, dont les noms des cases prennent sa place (#18639), et dès
 /// qu'une prise a été faite (#16482). Elle ne prend aucun doigt : la scène
 /// sous elle vise et photographie.
 struct ComposerCaptureGestureHint: View {

@@ -206,8 +206,9 @@ struct ComposerCaptureChrome: View {
         session.gestureContext(allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
     }
 
-    /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777),
-    /// réglé sur la luminance mesurée de la bande du cadre qu'il couvre.
+    /// Sous un cadre, la rangée haute se pose sur un voile qui lui garde 4,5:1 (#9777),
+    /// réglé sur la luminance mesurée de la bande du cadre qu'elle couvre ; le bas
+    /// n'en a plus (#18639) — ses mots se tiennent par leur ombre portée.
     @State private var chromeBands: ComposerCaptureChromeBands?
     /// Le chrome au repos retombe à 35 % (CAM-8).
     @State private var chromeRest: Double = 1
@@ -219,10 +220,6 @@ struct ComposerCaptureChrome: View {
 
     private var chromeVeilTop: Double {
         ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.top)
-    }
-
-    private var chromeVeilBottom: Double {
-        ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.bottom)
     }
 
     /// Le cadre de l'aperçu, à sa toile : la scène que la vue Metal peint déjà.
@@ -286,7 +283,7 @@ struct ComposerCaptureChrome: View {
                 Spacer(minLength: 0)
                 bottomRow
             }
-            .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop, chromeVeilBottom], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
+            .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
             if session.isRenderingLook { renderingSpinner }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
@@ -318,7 +315,6 @@ struct ComposerCaptureChrome: View {
            !session.phase.isEditing || session.editChromeShown {
             ComposerCaptureBottomRow(session: session, context: context, railOpacity: chromeRest)
                 .allowsHitTesting(!finishing)
-                .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeilBottom))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
@@ -367,7 +363,7 @@ struct ComposerCaptureChrome: View {
     }
 
     /// **Les formats, PAR-DESSUS le cadre** (#15193), au-dessus de ses crochets
-    /// du bas, et « Annuler » en tête (#15355).
+    /// du bas, en puces et sans « Annuler » (#18639).
     @ViewBuilder
     private var cropPresets: some View {
         if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
@@ -375,13 +371,9 @@ struct ComposerCaptureChrome: View {
                 let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
                                                   framed: session.editFramesScene, playback: session.offersEditPlayback)
                 let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
-                HStack(spacing: 0) {
-                    ComposerCropCancelButton { ComposerCropFlow.cancel(session) }
-                        .padding(.leading, ComposerEditPresetsLayout.leadingInset)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        ComposerCropPresetBar(selected: ComposerCropFlow.preset(of: session)) {
-                            ComposerCropFlow.apply($0, to: session)
-                        }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    ComposerCropPresetBar(selected: ComposerCropFlow.preset(of: session)) {
+                        ComposerCropFlow.apply($0, to: session)
                     }
                 }
                 .frame(width: rangee.width, height: rangee.height)
@@ -435,7 +427,7 @@ struct ComposerCaptureChrome: View {
             onDone: { session.finishEditing() },
             saveState: session.takeSaveState,
             onSave: { session.saveTakeToPhotos() })
-        .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeilTop))
+        .background(ComposerCaptureChromeVeil(opacity: chromeVeilTop))
     }
 
     /// **Lecture et volume d'une vidéo, en haut à droite sous « Terminé »,

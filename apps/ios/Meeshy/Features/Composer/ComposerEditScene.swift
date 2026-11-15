@@ -8,7 +8,7 @@ nonisolated enum ComposerEditPanel: Hashable, Sendable {
     case none
     /// La piste de découpe d'une vidéo.
     case trim
-    /// La bande des filtres ou des cadres.
+    /// La bande mêlée des filtres, effets et cadres.
     case band
     /// Les proportions par presets, posées SUR le cadre (#15193) : elles ne
     /// retiennent aucune place.
@@ -63,15 +63,14 @@ nonisolated enum ComposerEditScene {
         }
     }
 
-    /// **Une famille ouverte descend AU NIVEAU de son rail** (#10311, porteur
+    /// **La bande ouverte descend AU NIVEAU de son rail** (#10311, porteur
     /// 2026-10-12 : « ses éléments descendent au niveau du rail, pas un panneau
-    /// flottant plus haut ») : Filtres · Effets · Cadres en colonne, la bande à
-    /// leur droite, sur une seule rangée — elle prend la place des outils. Les
-    /// puces qui la trient se posent dessous (#17267).
+    /// flottant plus haut ») : « Effets » à gauche, la bande à sa droite, sur une
+    /// seule rangée — elle prend la place des outils. Les puces qui la trient se
+    /// posent dessous (#17267).
     static var familyRow: CGFloat {
-        let familles = CGFloat(ComposerLookFamily.allCases.count)
-        let rail = familles * MeeshyControlSize.tapTarget + (familles - 1) * MeeshySpacing.sm
-        return max(bandHeight + 2 * ComposerTriggerOutline.outset, rail) + ComposerLookStripRule.chipsHeight
+        max(bandHeight + 2 * ComposerTriggerOutline.outset, ComposerLookStripRule.railEntryHeight)
+            + ComposerLookStripRule.chipsHeight
     }
 
     /// Ce que le bas retient sous la scène : les outils, et chaque panneau

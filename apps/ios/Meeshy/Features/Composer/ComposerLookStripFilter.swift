@@ -57,8 +57,7 @@ nonisolated struct ComposerLookStripFilter: Equatable, Sendable {
         return ComposerLookStripFilter(type: type, mood: garde)
     }
 
-    /// Chaque ouverture de la bande repart de « Tout » ; passer d'une famille du
-    /// rail à une autre, bande ouverte, garde le tri.
+    /// Chaque ouverture de la bande repart de « Tout » ; la replier garde le tri.
     func following(open avant: ComposerLookFamily?, to apres: ComposerLookFamily?) -> ComposerLookStripFilter {
         avant == nil && apres != nil ? ComposerLookStripFilter() : self
     }
@@ -71,7 +70,7 @@ nonisolated struct ComposerLookStripFilter: Equatable, Sendable {
 
 /// **La liste unique de la bande, et ce que ses puces en gardent** (#17267) :
 /// filtres, effets et cadres ensemble, « Aucun » en tête, puis chaque famille
-/// dans l'ordre du rail (Filtres · Effets · Cadres).
+/// dans son ordre de tri (Filtres · Effets · Cadres).
 nonisolated enum ComposerLookStripFilterRule {
 
     /// Tout ce que la bande peut proposer, sans les « Aucun » de chaque famille.
@@ -148,14 +147,5 @@ nonisolated enum ComposerLookStripFilterRule {
     static func followedIndex(in items: [ComposerLookStripItem], look: ComposerPhotoLook,
                               focus: ComposerLookStripItem?) -> Int? {
         chosenIndex(in: items, look: look, focus: focus) ?? (items.isEmpty ? nil : 0)
-    }
-
-    /// Toucher une famille du rail ouvre la bande sur SA moitié du look.
-    static func focus(opening family: ComposerLookFamily, look: ComposerPhotoLook) -> ComposerLookStripItem {
-        switch family {
-        case .filters: return .filter(look.filter)
-        case .effects: return .effect(look.effect)
-        case .frames: return .frame(look.frame)
-        }
     }
 }
