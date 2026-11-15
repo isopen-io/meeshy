@@ -1,4 +1,4 @@
-## Un instrument se corrige aussi par ce qu'il CESSE de voir (cycle 163, #18632)
+## Un instrument se corrige aussi par ce qu'il CESSE de voir (cycle 166, #18632)
 
 Le balayage des sorties d'acquittement (`ack-exit-sweep.ts`) a été faux trois
 fois avant d'être juste, et la troisième erreur n'a été vue que par accident.
