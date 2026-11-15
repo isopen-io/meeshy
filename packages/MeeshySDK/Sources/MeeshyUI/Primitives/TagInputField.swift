@@ -44,10 +44,12 @@ public struct TagInputField: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            if !selectedTags.isEmpty { chips }
+            if !selectedTags.isEmpty { chips.transition(.opacity) }
             inputField
-            if focused { suggestionPanel }
+            if focused { suggestionPanel.transition(.opacity) }
         }
+        .meeshyAnimation(MeeshyAnimation.springFast, value: focused)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: selectedTags)
     }
 
     private var chips: some View {
@@ -93,8 +95,10 @@ public struct TagInputField: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "common.clear_input", defaultValue: "Effacer la saisie", bundle: .module))
+                .transition(.opacity)
             }
         }
+        .meeshyAnimation(MeeshyAnimation.springFast, value: editing.isEmpty)
         .padding(MeeshySpacing.md)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)

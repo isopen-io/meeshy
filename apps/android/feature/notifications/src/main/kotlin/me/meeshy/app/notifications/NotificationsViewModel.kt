@@ -41,6 +41,8 @@ data class NotificationsUiState(
     val isCategoryLoading: Boolean = false,
     /** Les personnes à qui « Se connecter » est parti depuis cet écran — posé AVANT l'aller-retour. */
     val connectRequestedIds: Set<String> = emptySet(),
+    /** Les personnes dont « Écrire » résout encore la conversation : un second toucher s'ignore jusqu'à la réponse. */
+    val writeInFlightIds: Set<String> = emptySet(),
     val friendIds: Set<String> = emptySet(),
 ) {
     /**
@@ -284,15 +286,24 @@ class NotificationsViewModel @Inject constructor(
     /**
      * Un geste de rangée. « Écrire » ouvre ailleurs ; « Se connecter » s'affiche envoyé TOUT DE
      * SUITE et se défait s'il échoue (miroir de `runQuickAction`, iOS). La notification est lue
-     * dans les deux cas : on y a répondu.
+     * dans les deux cas : on y a répondu. Un « Écrire » qui résout encore sa conversation ignore le toucher suivant :
+     * un double toucher n'ouvre qu'une conversation.
      */
     fun performQuickAction(notification: ApiNotification, action: NotificationQuickAction) {
+        if (action is NotificationQuickAction.Write && action.userId in _state.value.writeInFlightIds) return
         markAsRead(notification.id)
         if (action is NotificationQuickAction.Connect) {
             _state.update { it.copy(connectRequestedIds = it.connectRequestedIds + action.userId) }
         }
+        if (action is NotificationQuickAction.Write) {
+            _state.update { it.copy(writeInFlightIds = it.writeInFlightIds + action.userId) }
+        }
         viewModelScope.launch {
-            when (val outcome = quickActionPerformer.perform(action)) {
+            val outcome = quickActionPerformer.perform(action)
+            if (action is NotificationQuickAction.Write) {
+                _state.update { it.copy(writeInFlightIds = it.writeInFlightIds - action.userId) }
+            }
+            when (outcome) {
                 is QuickActionOutcome.OpenConversation -> _events.trySend(NotificationsEvent.OpenConversation(outcome.conversationId))
                 is QuickActionOutcome.Connected -> Unit
                 is QuickActionOutcome.Failed -> {

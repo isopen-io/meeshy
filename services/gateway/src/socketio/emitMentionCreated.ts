@@ -1,7 +1,7 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitIO } from './serverEmit';
 
-import { blockedEditKeys, type EditReadership } from './editedAudience';
+import { blockedReaderKeys, type MessageReadership } from './editedAudience';
 /**
  * La surface Socket.IO minimale de cet éventail, structurale comme celle de
  * `emitConversationPreviewUpdate` : la fonction accepte aussi bien le `Server`
@@ -21,12 +21,12 @@ export interface MentionCreatedParams {
   timestamp: Date;
   /**
    * QUI a le droit de LIRE ce message — le verdict ENTIER
-   * (`editReadership`, `editedAudience.ts`), jamais l'ensemble de clés qu'il
+   * (`messageReadership`, `editedAudience.ts`), jamais l'ensemble de clés qu'il
    * contient.
    *
    * **La distinction n'est pas cosmétique, et c'est la leçon `[]`-vs-`undefined`
    * du cycle 116.** Un `ReadonlySet` ne peut pas dire « je ne sais pas » :
-   * `blockedEditKeys({kind:'unknown'})` rend un ensemble VIDE, donc transforme
+   * `blockedReaderKeys({kind:'unknown'})` rend un ensemble VIDE, donc transforme
    * une IGNORANCE en AFFIRMATION (« personne n'est bloqué »). Passer l'ensemble
    * faisait donc partir le texte édité vers TOUS les nommés à l'instant même
    * où `message:edited` se taisait sur ses deux canaux — deux sorties de la
@@ -53,7 +53,7 @@ export interface MentionCreatedParams {
    * éditer — omis au premier essai sur la foi d'un « c'est un envoi » que le
    * commentaire du site contredisait.
    */
-  readership?: EditReadership;
+  readership?: MessageReadership;
   onError?: (error: unknown) => void;
 }
 
@@ -88,7 +88,7 @@ export function emitMentionCreated(params: MentionCreatedParams): void {
   // part : c'est le MÊME arbitrage que `message:edited` prend au même instant,
   // depuis la même résolution. Voir `readership`.
   if (params.readership?.kind === 'unknown') return;
-  const blocked = params.readership ? blockedEditKeys(params.readership) : undefined;
+  const blocked = params.readership ? blockedReaderKeys(params.readership) : undefined;
 
   for (const mentionedUserId of newlyMentionedUserIds) {
     if (mentionedUserId === editorUserId) continue;
