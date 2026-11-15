@@ -1,0 +1,226 @@
+/* LA RANGÉE DE PUCES DE CHOIX (K04, #17599) — capsules de texte, voile plat, courante
+   blanche. AUCUNE matière ici : le verre, la feuille ou la pilule qui porte la rangée
+   viennent d'ailleurs (K01, K10, K11, K15). Chaque valeur chiffrée vient de
+   `meeshy-chip-row-rule.ts` / `meeshy-chip-row.tsx`, qui la posent en propriétés
+   `--kit-chip-*` ; `meeshy-chip-row.test.tsx` les compare aux vecteurs de parité
+   (`docs/product/kit/K04-MeeshyChipRow.vectors.json`). Seules l'opacité du fond, la
+   couleur de l'encre et la largeur du dégradé du masque s'animent. */
+@property --kit-chip-fade-low {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --kit-chip-fade-high {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@layer components {
+  .kit-chip-row {
+    --kit-chip-slack: max(0px, calc((var(--target-min) - var(--kit-chip-h)) / 2));
+    box-sizing: border-box;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .kit-chip-row__track {
+    display: flex;
+    box-sizing: border-box;
+    align-items: center;
+    gap: var(--kit-chip-gap);
+    padding-inline: var(--kit-chip-inset);
+  }
+
+  .kit-chip-row[data-layout='scroll'] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
+    padding-block: var(--kit-chip-slack);
+    margin-block: calc(-1 * var(--kit-chip-slack));
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .kit-chip-row[data-layout='scroll']::-webkit-scrollbar {
+    display: none;
+  }
+
+  .kit-chip-row[data-layout='scroll'] > .kit-chip-row__track {
+    inline-size: max-content;
+    min-inline-size: 100%;
+  }
+
+  .kit-chip-row[data-layout='wrap'] > .kit-chip-row__track {
+    flex-wrap: wrap;
+    row-gap: var(--kit-chip-row-gap);
+  }
+
+  .kit-chip-row[data-layout='equal'] > .kit-chip-row__track > .kit-chip {
+    flex: 1 1 0;
+    min-inline-size: 0;
+  }
+
+  .kit-chip-row[data-overflow] {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      var(--color-on-media) var(--kit-chip-fade-low),
+      var(--color-on-media) calc(100% - var(--kit-chip-fade-high)),
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      var(--color-on-media) var(--kit-chip-fade-low),
+      var(--color-on-media) calc(100% - var(--kit-chip-fade-high)),
+      transparent
+    );
+    transition:
+      --kit-chip-fade-low var(--kit-chip-edge-ms) ease-in-out,
+      --kit-chip-fade-high var(--kit-chip-edge-ms) ease-in-out;
+  }
+
+  .kit-chip-row[data-edge-low] {
+    --kit-chip-fade-low: var(--kit-chip-fade);
+  }
+
+  .kit-chip-row[data-edge-high] {
+    --kit-chip-fade-high: var(--kit-chip-fade);
+  }
+
+  .kit-chip {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kit-chip-glyph-gap);
+    min-block-size: var(--kit-chip-h);
+    min-inline-size: var(--kit-chip-h);
+    max-inline-size: 100%;
+    margin: 0;
+    padding-block: 0;
+    padding-inline: var(--kit-chip-pad);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background-color: transparent;
+    color: var(--kit-chip-ink);
+    font: inherit;
+    font-size: var(--kit-chip-font);
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+    opacity: var(--kit-chip-opacity);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    transition: color var(--kit-chip-tone-ms) ease;
+  }
+
+  .kit-chip::before {
+    content: '';
+    position: absolute;
+    inset-block: calc(-1 * max(0px, (var(--target-min) - 100%) / 2));
+    inset-inline: calc(-1 * max(0px, (var(--target-min) - 100%) / 2));
+  }
+
+  .kit-chip[data-glyph-only] {
+    padding-inline: 0;
+  }
+
+  .kit-chip:disabled {
+    cursor: default;
+  }
+}
+
+.kit-chip__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: var(--kit-chip-fill);
+  opacity: var(--kit-chip-fill-rest);
+  pointer-events: none;
+  transition: opacity var(--kit-chip-tone-ms) ease;
+}
+
+.kit-chip__body {
+  position: relative;
+  display: inline-flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: var(--kit-chip-glyph-gap);
+}
+
+.kit-chip__title {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kit-chip__glyph {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--kit-chip-glyph-lead);
+  block-size: var(--kit-chip-glyph-lead);
+  font-size: var(--kit-chip-glyph-lead);
+  line-height: 1;
+}
+
+.kit-chip[data-glyph-only] .kit-chip__glyph {
+  inline-size: var(--kit-chip-glyph-alone);
+  block-size: var(--kit-chip-glyph-alone);
+  font-size: var(--kit-chip-glyph-alone);
+}
+
+.kit-chip__glyph > svg,
+.kit-chip__trailing > svg {
+  inline-size: 1em;
+  block-size: 1em;
+}
+
+.kit-chip__trailing {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--kit-chip-glyph-trailing);
+  block-size: var(--kit-chip-glyph-trailing);
+  font-size: var(--kit-chip-glyph-trailing);
+  line-height: 1;
+}
+
+@media (hover: hover) {
+  .kit-chip:hover:not(:disabled) .kit-chip__fill {
+    opacity: var(--kit-chip-fill-hover);
+  }
+}
+
+.kit-chip:active:not(:disabled) .kit-chip__fill,
+.kit-chip[data-pressed]:not(:disabled) .kit-chip__fill {
+  opacity: var(--kit-chip-fill-pressed);
+  transition: none;
+}
+
+.kit-chip:focus-visible {
+  outline: 2px solid var(--ios-media-backdrop);
+  outline-offset: -4px;
+  box-shadow: inset 0 0 0 2px var(--color-on-media);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-chip,
+  .kit-chip__fill,
+  .kit-chip-row[data-overflow] {
+    transition: none;
+  }
+
+  .kit-chip:active:not(:disabled) .kit-chip__fill,
+  .kit-chip[data-pressed]:not(:disabled) .kit-chip__fill {
+    opacity: var(--kit-chip-fill-pressed);
+  }
+}
