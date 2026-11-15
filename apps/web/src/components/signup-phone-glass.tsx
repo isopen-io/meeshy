@@ -73,18 +73,26 @@ export function SignupPhoneGlass({
       <div
         ref={glass}
         data-signup-phone-glass
-        className="glass glass-card flex items-center gap-1 rounded-field-ios ps-1.5 pe-3"
+        className="glass glass-card relative flex items-center gap-1 rounded-field-ios ps-1.5 pe-3"
         style={{
           minHeight: 56,
           border: `1px solid ${focused ? 'color-mix(in srgb, var(--ios-indigo-500) 60%, transparent)' : 'color-mix(in srgb, var(--color-ios-ink) 12%, transparent)'}`,
-          boxShadow: focused
-            ? '0 0 0 4px color-mix(in srgb, var(--ios-indigo-500) 14%, transparent), 0 10px 30px color-mix(in srgb, var(--color-ios-ink) 12%, transparent)'
-            : '0 8px 24px color-mix(in srgb, var(--color-ios-ink) 8%, transparent)',
-          transition: 'box-shadow 0.25s ease, border-color 0.25s ease',
+          boxShadow: '0 8px 24px color-mix(in srgb, var(--color-ios-ink) 8%, transparent)',
+          transition: 'border-color 0.25s ease',
           transformOrigin: 'center',
           willChange: 'transform',
         }}
       >
+        <span
+          aria-hidden="true"
+          data-signup-phone-ring
+          className="pointer-events-none absolute inset-0 transition-opacity"
+          style={{
+            borderRadius: 'inherit',
+            opacity: focused ? 1 : 0,
+            boxShadow: '0 0 0 4px color-mix(in srgb, var(--ios-indigo-500) 14%, transparent), 0 10px 30px color-mix(in srgb, var(--color-ios-ink) 12%, transparent)',
+          }}
+        />
         <button
           type="button"
           data-signup-country

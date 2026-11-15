@@ -30,6 +30,7 @@ import {
 } from '@/lib/i18n-circle-notify-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { relationLevelLabel } from '@/lib/relations/level-labels';
+import { LAYER_MOTION_MS, layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 /**
  * **« QUI EST PRÉVENU »** (#14063) — Réglages › Notifications. Trois
@@ -163,6 +164,7 @@ function FamilyRow({
   readonly onChoose: (key: CircleNotifyKey, value: RelationAudienceChoice) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const panel = useLayerPresence(open ? true : null);
   const panelId = useId();
   return (
     <div>
@@ -182,12 +184,18 @@ function FamilyRow({
           {familySummary(language, family, preferences)}
         </span>
         <span aria-hidden="true" className="shrink-0" style={{ color: SECTION_INK_2 }}>
-          <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} className={open ? 'rotate-90' : 'rtl:-scale-x-100'} />
+          <GlyphSvg
+            glyph={SETTINGS_GLYPHS.caretRight}
+            size={12}
+            className={open ? '' : 'rtl:-scale-x-100'}
+            style={{ transform: open ? 'rotate(90deg)' : 'none', transition: `transform ${LAYER_MOTION_MS}ms` }}
+          />
         </span>
       </button>
-      <div id={panelId} hidden={!open}>
-        {open
-          ? familyKeys(family).map(([action, key]) => (
+      <div id={panelId} hidden={panel.value === null}>
+        {panel.value !== null ? (
+          <div {...layerMotion(panel.leaving)}>
+            {familyKeys(family).map(([action, key]) => (
               <ActionRow
                 key={key}
                 language={language}
@@ -197,8 +205,9 @@ function FamilyRow({
                 disabled={disabled}
                 onChoose={onChoose}
               />
-            ))
-          : null}
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

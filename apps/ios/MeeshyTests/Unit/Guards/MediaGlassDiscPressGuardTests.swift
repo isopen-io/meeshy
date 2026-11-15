@@ -47,6 +47,16 @@ final class MediaGlassDiscPressGuardTests: XCTestCase {
                       "le bouton « télécharger » pose l'état pressé que le verre du kit lit")
     }
 
+    func test_downloadBadge_glassCarriesTheAccentDiscAndArrow() throws {
+        let source = try code(Self.badgePath)
+        XCTAssertNil(source.range(of: #"Color\.clear\.frame\([^)]*\)\.meeshyGlass\("#, options: .regularExpression),
+                     "le verre posé sur un Color.clear voisin ne presse que son liseré : le disque d'accent et la flèche restent figés à l'appui")
+        let glassedDiscs = source.components(separatedBy: "}.frame(width:").dropFirst()
+            .filter { $0.range(of: #"^[^)]*\)\.meeshyGlass\(in:Circle\(\),isInteractive:true\)"#, options: .regularExpression) != nil }
+        XCTAssertEqual(glassedDiscs.count, 2,
+                       "les deux formes du disque « télécharger » posent le verre sur la pile qui porte le disque d'accent et la flèche")
+    }
+
     func test_visitorClose_isAKitGlassButton() throws {
         let source = try code(Self.visitorPath)
         XCTAssertTrue(source.contains("MeeshyGlassButton(systemImage:\"xmark\""),

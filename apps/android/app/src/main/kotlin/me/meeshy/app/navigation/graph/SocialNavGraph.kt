@@ -56,6 +56,7 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenMood = { navController.pushFrom(entry, Routes.moodSpotlight(it)) },
             onOpenProfile = rememberProfileOpenerOverSheet(navController),
             onOpenGame = { navController.pushFrom(entry, GameRoutes.route(it)) },
+            onOpenCommunity = { navController.pushFrom(entry, CommunityRoutes.detail(it)) },
             onOpenStoryContent = { target, context ->
                 navController.pushFrom(entry, StoryRoutes.storyTarget(target.postId, target.action, target.commentId, target.parentCommentId, context))
             },

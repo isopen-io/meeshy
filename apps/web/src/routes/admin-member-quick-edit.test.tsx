@@ -151,6 +151,13 @@ describe('ce qui se lit d’un coup d’œil', () => {
 });
 
 describe('une information s’édite là où elle s’affiche, et part seule', () => {
+  test('le bloc dit au repos que toucher une information l’édite et que la quitter l’enregistre', async () => {
+    const { host } = await open(member());
+    const note = host.querySelector('[data-admin-quick-edit-note]');
+    expect(textOf(note)).toBe('Touchez une information pour la modifier : elle s’enregistre dès que vous la quittez.');
+    expect(note?.closest('.sr-only')).toBeNull();
+  });
+
   test('le nom affiché : la perte du focus valide, seul le champ changé part, le cache bascule', async () => {
     const { host, calls } = await open(member(), { replies: [patch('', (body) => ({ ok: true, data: served(body) }))] });
     await commit(host, 'displayName', 'Alice M.');

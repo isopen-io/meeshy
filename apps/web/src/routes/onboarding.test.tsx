@@ -454,3 +454,32 @@ describe('« Montre-toi » (#17237) — après le courriel, avant le salut, jama
     expect(card(host)).toBe('global');
   });
 });
+
+describe('le passage d’une carte à la suivante — la carte qui part sort en mouvement (#18322)', () => {
+  test('« Continuer » laisse partir la carte quittée vers le bord de début, en fondu, sans rien de touchable', async () => {
+    signIn();
+    const { deps } = harness();
+    const played: { readonly ghost: boolean; readonly frames: unknown }[] = [];
+    const own = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+    const native = HTMLElement.prototype.animate;
+    HTMLElement.prototype.animate = function (this: HTMLElement, frames: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions) {
+      played.push({ ghost: this.hasAttribute('data-onb-ghost'), frames });
+      return native.call(this, frames, options);
+    };
+    try {
+      const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+      await click(action(host, 'languages.confirm'));
+      expect(card(host)).toBe('global');
+
+      const ghost = host.querySelector<HTMLElement>('[data-onboarding] [data-onb-ghost]');
+      expect(ghost).not.toBeNull();
+      expect(ghost?.getAttribute('aria-hidden')).toBe('true');
+      expect(ghost?.hasAttribute('inert')).toBe(true);
+      expect(ghost?.querySelector('[data-onb-action], [data-onb-card], [id]')).toBeNull();
+      expect(JSON.stringify(played.filter((entry) => entry.ghost).map((entry) => entry.frames))).toContain('"opacity":0');
+    } finally {
+      if (own === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+      else Object.defineProperty(HTMLElement.prototype, 'animate', own);
+    }
+  });
+});

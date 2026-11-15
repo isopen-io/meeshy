@@ -7,7 +7,6 @@ import type fr from './contenus-fr';
 
 const f = {
   /* ─── Posts: the list ─── */
-  'admin.posts.subtitle': 'Publicações, stories, reels e status de toda a plataforma: identifique, entenda e remova o que precisa sair.',
   'admin.posts.caption': 'Publicações da plataforma',
   'admin.posts.tabs.label': 'Tipo de publicação',
   'admin.posts.tab.all': 'Todas',
@@ -42,7 +41,6 @@ const f = {
   'admin.posts.col.state': 'Estado',
   'admin.posts.col.published': 'Publicada',
   'admin.posts.empty': 'Nenhuma publicação',
-  'admin.posts.empty.hint': 'As publicações, stories, reels e estados aparecerão aqui assim que forem publicados.',
   'admin.posts.filtered': 'Nenhuma publicação com estes filtros',
   'admin.posts.restricted': 'Conteúdo de audiência restrita',
   'admin.posts.noText': 'Sem texto',
@@ -66,7 +64,6 @@ const f = {
 
   /* ─── Posts: the record ─── */
   'admin.posts.notFound': 'Esta publicação não foi encontrada',
-  'admin.posts.notFound.hint': 'Ela não existe mais ou o endereço está errado.',
   'admin.posts.publishedOn': 'Publicada em {date}',
   'admin.posts.stat.likes': 'Curtidas',
   'admin.posts.stat.comments': 'Comentários',
@@ -134,7 +131,6 @@ const f = {
   'admin.posts.remove.already': 'Esta publicação já havia sido removida.',
 
   /* ─── Communities: the list ─── */
-  'admin.community.subtitle': 'As comunidades da plataforma: quem as dirige, quantas pessoas continuam lá dentro e o que contêm.',
   'admin.community.caption': 'Comunidades da plataforma',
   'admin.community.search': 'Procurar (nome, identificador, descrição)',
   'admin.community.count': 'Resultados: {count}',
@@ -153,7 +149,6 @@ const f = {
   'admin.community.col.state': 'Estado',
   'admin.community.col.created': 'Criada',
   'admin.community.empty': 'Nenhuma comunidade',
-  'admin.community.empty.hint': 'As comunidades aparecerão aqui assim que alguém criar uma.',
   'admin.community.filtered': 'Nenhuma comunidade corresponde a estes filtros',
   'admin.community.visibility.private': 'Privada',
   'admin.community.visibility.private.explain': 'Fora da pesquisa: só se entra por convite e só os seus membros podem ler a sua página.',
@@ -165,7 +160,6 @@ const f = {
 
   /* ─── Communities: the record ─── */
   'admin.community.notFound': 'Esta comunidade não foi encontrada',
-  'admin.community.notFound.hint': 'Ela não existe mais ou o endereço está errado.',
   'admin.community.banner': 'Banner da comunidade',
   'admin.community.stat.members': 'Membros ativos',
   'admin.community.stat.left': 'Saídas',

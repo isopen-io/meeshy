@@ -383,7 +383,7 @@ describe('agir : des liens vers la bonne fiche, jamais un geste dupliqué', () =
     expect(actions?.querySelector('[data-admin-link="authorSecurity"]')?.getAttribute('href')).toBe(`/admin/users/${OBJECT_ID(4)}?tab=security`);
     expect(actions?.querySelector('[data-admin-link="authorSecurity"]')?.textContent).toContain('Examiner l’auteur : Membre 4');
     expect(actions?.querySelector('[data-admin-link="conversationReading"]')?.getAttribute('href')).toBe(`/admin/conversations/${OBJECT_ID(5)}`);
-    expect(actions?.textContent).toContain('le signalement ne bannit ni ne retire rien lui-même');
+    expect(actions?.textContent).not.toContain('le signalement ne bannit');
   });
 
   test('un membre signalé : sa fiche, onglet Sécurité, pour le bannir', async () => {

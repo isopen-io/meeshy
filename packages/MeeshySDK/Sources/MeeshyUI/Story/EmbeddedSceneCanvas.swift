@@ -185,6 +185,9 @@ public struct EmbeddedSceneCanvas: View {
     public var paintsSceneBackground: Bool
     /// Seuls les touchers qui tombent sur un objet restent au canvas (#17432).
     public var passesThroughEmptyTouches: Bool
+    /// Y (écran) sous lequel la saisie en place ne descend pas — le haut du clavier quand l'hôte
+    /// ne réduit pas sa scène (#18638). `.greatestFiniteMagnitude` : aucun plancher.
+    public var inlineEditFloorGlobalY: CGFloat
 
     public init(
         slide: Binding<StorySlide>,
@@ -217,8 +220,10 @@ public struct EmbeddedSceneCanvas: View {
         inlineEditYieldsToManipulation: Bool = false,
         inlineEditInputLink: StoryInlineEditInputLink? = nil,
         paintsSceneBackground: Bool = true,
-        passesThroughEmptyTouches: Bool = false
+        passesThroughEmptyTouches: Bool = false,
+        inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude
     ) {
+        self.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         self.inlineEditInputLink = inlineEditInputLink
         self.paintsSceneBackground = paintsSceneBackground
         self.passesThroughEmptyTouches = passesThroughEmptyTouches
@@ -293,7 +298,7 @@ public struct EmbeddedSceneCanvas: View {
                 onInlineTextChanged: onInlineTextChanged,
                 onInlineTextEditEnded: onInlineTextEditEnded,
                 selectedItemId: selectedItemId,
-                selectionBadge: selectionBadge,
+                selectionBadge: selectionBadge, inlineEditFloorGlobalY: inlineEditFloorGlobalY,
                 onBackgroundTapped: onBackgroundTapped,
                 onBackgroundLongPressed: onBackgroundLongPressed,
                 onBackgroundMediaLongPressed: onBackgroundMediaLongPressed,

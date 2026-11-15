@@ -157,7 +157,6 @@ export function AdminOperationsPanel({
       <AdminPageHeader
         language={language}
         title={translateAdmin(language, 'admin.nav.operations')}
-        subtitle={translateAdmin(language, 'admin.ops.subtitle')}
         place={{ section: 'operations' }}
       />
       <AdminOfflineNotice language={language} />

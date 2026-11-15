@@ -281,7 +281,7 @@ describe('la barre haute de la story est la barre commune des plein écrans', ()
     click(item);
     expect(calls).toEqual(['save']);
     expect(opens).toEqual([true, false]);
-    expect(el.querySelector('[role="menu"]')).toBeNull();
+    expect(el.querySelector('[role="menu"]:not([data-leaving])')).toBeNull();
   });
 
   test('le menu « … » offre « Partager » (le fichier composé) et « Imager » à tout lecteur, entre Enregistrer et Retirer (#13881)', () => {

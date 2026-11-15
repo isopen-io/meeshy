@@ -911,6 +911,12 @@
           "iosKey": "time.short.weeks",
           "androidName": "time_relative_weeks",
           "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "kit.color_dots.position",
+          "androidName": "kit_color_dots_position",
+          "status": "adopted"
         }
       ]
     }

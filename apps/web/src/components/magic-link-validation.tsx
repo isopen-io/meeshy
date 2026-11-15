@@ -117,8 +117,11 @@ export function MagicLinkValidation({
   }
 
   function retry() {
-    called.current = false;
-    setState(token === null ? 'invalid' : 'validating');
+    if (token === null) {
+      setState('invalid');
+      return;
+    }
+    void run(false);
   }
 
   return (
@@ -148,7 +151,7 @@ export function MagicLinkValidation({
                 to="magicLink"
                 replace
                 search={{ next: returnUrl ?? undefined }}
-                className="grid place-items-center rounded-field font-bold text-ios-on-brand"
+                className="btn-press grid place-items-center rounded-field font-bold text-ios-on-brand"
                 style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }}
               >
                 {translate(language, 'magicLink.requestNew')}
@@ -157,7 +160,7 @@ export function MagicLinkValidation({
                 to="login"
                 search={{ next: returnUrl ?? undefined }}
                 replace
-                className="grid place-items-center rounded-field font-semibold"
+                className="btn-press grid place-items-center rounded-field font-semibold"
                 style={{
                   minHeight: 52,
                   border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
@@ -204,7 +207,7 @@ export function MagicLinkValidation({
             <button
               type="button"
               onClick={retry}
-              className="mx-auto grid place-items-center rounded-field px-6 font-semibold text-ios-on-brand"
+              className="btn-press mx-auto grid place-items-center rounded-field px-6 font-semibold text-ios-on-brand"
               style={{ minHeight: 44, background: 'var(--color-ios-brand)' }}
             >
               {translate(language, 'magicLink.retry')}

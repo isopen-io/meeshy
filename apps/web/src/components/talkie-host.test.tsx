@@ -3,6 +3,7 @@ import { act } from 'react';
 
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { createTalkieStore, type TalkieStoreApi } from '@/lib/talkie/talkie-live';
 import type { TalkieSink } from '@/lib/talkie/talkie-player';
 import { createActMounter } from '@/test-support/act-mount';
@@ -78,7 +79,7 @@ describe('l’indicateur du talkie', () => {
     expect(node.querySelector('[data-talkie-incoming]')?.textContent).toContain('Quelqu’un vous parle');
   });
 
-  test('« Couper » fait taire la voix AU GESTE et retire l’indicateur', async () => {
+  test('« Couper » fait taire la voix AU GESTE et l’indicateur part en fondu, inerte', async () => {
     appQueryClient.setQueryData(['conversations'], {
       pages: [{ conversations: [{ participants: [{ user: { id: 'u-ada', username: 'ada', displayName: 'Ada' } }] }] }],
     });
@@ -88,9 +89,16 @@ describe('l’indicateur du talkie', () => {
     const node = await mount(host(store, sink));
     const mute = node.querySelector<HTMLButtonElement>('[data-talkie-mute="t1"]');
     expect(mute?.getAttribute('aria-label')).toContain('Ada');
+    expect(node.querySelector('[data-talkie-incoming]')?.hasAttribute('data-layer-motion')).toBe(true);
     await click(mute);
-    expect(node.querySelector('[data-talkie-incoming]')).toBeNull();
     expect(silenced).toEqual(['t1']);
+    const leaving = node.querySelector('[data-talkie-incoming]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(node.querySelector('[data-talkie-incoming]')).toBeNull();
   });
 
   test('passé la durée maximale sans fin annoncée, l’indicateur part et la voix se tait', async () => {
@@ -101,7 +109,7 @@ describe('l’indicateur du talkie', () => {
     shift = 0;
     const node = await mount(host(store, sink));
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      await new Promise((resolve) => setTimeout(resolve, 60 + LAYER_MOTION_MS));
     });
     await settle();
     expect(node.querySelector('[data-talkie-incoming]')).toBeNull();

@@ -188,7 +188,7 @@ describe('sur un téléphone court, la porte du mot de passe tient dans la vue (
   test('à 667 px de haut, le blason cède la place aux champs', async () => {
     await withViewportHeight(667, async () => {
       const el = await mount(<LoginDoors method="password" />);
-      expect(el.querySelector('h1')).toBeNull();
+      expect([...el.querySelectorAll('h1')].map((title) => text(title))).toEqual(['Connexion']);
       expect(el.querySelector('#login-username')).not.toBeNull();
     });
   });

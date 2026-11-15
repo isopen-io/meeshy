@@ -46,6 +46,14 @@ class PushTapIntentFactoryTest {
     }
 
     @Test
+    fun `le toucher d un ajout a une communaute garde la communaute nommee`() {
+        val intent = shadowOf(factory.contentIntent(mapOf("type" to "community_invite", "communityId" to "k1"), requestCode = 8)).savedIntent
+        val (payload, _) = PushTapExtras.read(intent)
+
+        assertThat(payload.communityId).isEqualTo("k1")
+    }
+
+    @Test
     fun `le toucher ouvre l activite directement et reste immuable`() {
         val pending = factory.contentIntent(data, requestCode = 7)
         val shadow = shadowOf(pending)
