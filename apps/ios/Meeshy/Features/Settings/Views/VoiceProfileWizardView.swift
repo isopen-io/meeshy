@@ -23,19 +23,25 @@ struct VoiceProfileWizardView: View {
             VStack(spacing: 0) {
                 header
 
-                switch viewModel.currentStep {
-                case .consent:
-                    consentStep
-                case .ageVerification:
-                    ageVerificationStep
-                case .recording:
-                    recordingStep
-                case .processing:
-                    processingStep
-                case .complete:
-                    completeStep
+                // Une étape se fond dans la suivante : sans transition, chaque
+                // étape remplaçait l'écran d'un coup.
+                Group {
+                    switch viewModel.currentStep {
+                    case .consent:
+                        consentStep
+                    case .ageVerification:
+                        ageVerificationStep
+                    case .recording:
+                        recordingStep
+                    case .processing:
+                        processingStep
+                    case .complete:
+                        completeStep
+                    }
                 }
+                .transition(.opacity)
             }
+            .meeshyAnimation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), reduced: MeeshyMotion.reducedFade, value: viewModel.currentStep)
         }
         .task {
             await viewModel.checkConsent()
