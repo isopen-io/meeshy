@@ -61,6 +61,8 @@ src/
 3. **Transcription**: STT-only processing
 4. **Voice**: Voice profile creation/updating
 
+**Un chemin de fichier reçu par ZMQ (`audioPath`, `audioPath_1/_2`) n'est lu que via `utils/audio_path_guard.py`** (#18628) : le PULL n'est pas authentifié, donc un chemin hors des racines `TRANSLATOR_AUDIO_PATH_ROOTS` (défaut : la seule racine d'uploads `UPLOAD_PATH`/`/app/uploads`, jamais `/tmp`, où vit l'audio en cours d'autrui ; entrées relatives ou `/` ignorées) est refusé en `AUDIO_PATH_REJECTED`, sans jamais journaliser le chemin.
+
 ## Audio Pipeline (3 stages)
 ```
 Audio → Transcription (Faster-Whisper) → Translation (NLLB) → TTS (Chatterbox)

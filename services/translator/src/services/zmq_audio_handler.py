@@ -21,6 +21,7 @@ from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
 from config.message_limits import validate_audio_duration
 from services.task_privacy import in_at_rest_task, shown, under_declared_regime
+from utils.audio_path_guard import AUDIO_PATH_REJECTED, AUDIO_PATH_REJECTED_MESSAGE, AudioPathRejected
 
 # Import du pipeline audio.
 #
@@ -229,7 +230,7 @@ class AudioHandler:
                 audio_base64=request_data.get('audioBase64'),   # Legacy base64
                 audio_mime_type=request_data.get('audioMimeType'),
                 audio_url=request_data.get('audioUrl'),
-                audio_path=request_data.get('audioPath')  # Legacy fallback
+                audio_path=request_data.get('audioPath')  # Legacy, gardé par racine (#18628)
             )
 
             if not local_audio_path:
@@ -239,7 +240,7 @@ class AudioHandler:
                     f"url={request_data.get('audioUrl') or 'none'}"
                 )
 
-            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}: {local_audio_path}")
+            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}")
 
             # Flag pour savoir si on doit nettoyer le fichier temp après.
             # 'binary' (ZMQ multipart, le chemin PRIMAIRE) écrit aussi un fichier
@@ -418,12 +419,13 @@ class AudioHandler:
             except Exception:
                 pass  # Ignorer les erreurs de nettoyage
 
+            rejected = isinstance(e, AudioPathRejected)
             await self._publish_audio_error(
                 task_id=task_id,
                 message_id=request_data.get('messageId', ''),
                 attachment_id=request_data.get('attachmentId', ''),
-                error="Audio processing failed",
-                error_code="processing_failed"
+                error=AUDIO_PATH_REJECTED_MESSAGE if rejected else "Audio processing failed",
+                error_code=AUDIO_PATH_REJECTED if rejected else "processing_failed"
             )
 
     @staticmethod
