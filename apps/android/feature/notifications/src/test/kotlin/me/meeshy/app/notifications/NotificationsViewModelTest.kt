@@ -471,6 +471,23 @@ class NotificationsViewModelTest {
         assertThat(vm.events.first()).isEqualTo(NotificationsEvent.OpenConversation("c9"))
     }
 
+    @Test
+    fun `a second write while the first one resolves is ignored and the chip reads in flight`() = runTest {
+        val performer = performer()
+        val answer = CompletableDeferred<QuickActionOutcome>()
+        coEvery { performer.perform(any()) } coAnswers { answer.await() }
+        val vm = NotificationsViewModel(repository(), performer)
+
+        vm.performQuickAction(typed("n1", "contact_joined"), NotificationQuickAction.Write("u1"))
+        vm.performQuickAction(typed("n1", "contact_joined"), NotificationQuickAction.Write("u1"))
+
+        assertThat(vm.state.value.writeInFlightIds).containsExactly("u1")
+        coVerify(exactly = 1) { performer.perform(NotificationQuickAction.Write("u1")) }
+        answer.complete(QuickActionOutcome.OpenConversation("c9"))
+        assertThat(vm.state.value.writeInFlightIds).isEmpty()
+        assertThat(vm.events.first()).isEqualTo(NotificationsEvent.OpenConversation("c9"))
+    }
+
     private fun categoryVm(repo: NotificationRepository, vararg served: ApiNotification): NotificationsViewModel {
         coEvery { repo.listScopePage(any(), any(), any(), any()) } returns NetworkResult.Success(page(served.toList()))
         return NotificationsViewModel(repo, performer())

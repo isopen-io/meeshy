@@ -99,19 +99,19 @@ describe('ce qui est offert suit ce qui manque', () => {
   test('les deux manquent ⇒ « Recevoir le code » ET « Ajouter mon numéro », et « Plus tard »', async () => {
     const { host } = await monter();
     expect(buttonNamed(host, 'Recevoir le code')).not.toBeNull();
-    expect(buttonNamed(host, 'Ajouter mon numéro')).not.toBeNull();
+    expect(buttonNamed(host, 'Ajouter')).not.toBeNull();
     expect(buttonNamed(host, 'Plus tard')).not.toBeNull();
   });
 
   test('seul le numéro manque ⇒ pas de code d’adresse', async () => {
     const { host } = await monter({ ...INVITE, missing: ['phone'] });
     expect(buttonNamed(host, 'Recevoir le code')).toBeNull();
-    expect(buttonNamed(host, 'Ajouter mon numéro')).not.toBeNull();
+    expect(buttonNamed(host, 'Ajouter')).not.toBeNull();
   });
 
   test('seule l’adresse manque ⇒ pas de numéro', async () => {
     const { host } = await monter({ ...INVITE, missing: ['email'] });
-    expect(buttonNamed(host, 'Ajouter mon numéro')).toBeNull();
+    expect(buttonNamed(host, 'Ajouter')).toBeNull();
   });
 });
 
@@ -152,7 +152,7 @@ describe('l’adresse se valide SANS quitter la modal', () => {
     await mounter.submit(host);
 
     expect(changes.at(-1)).toEqual({ phase: 'done', deadline: null, missing: ['phone'] });
-    expect(buttonNamed(host, 'Ajouter mon numéro')).not.toBeNull();
+    expect(buttonNamed(host, 'Ajouter')).not.toBeNull();
     expect(host.textContent).toContain('Adresse vérifiée');
   });
 
@@ -168,7 +168,7 @@ describe('le numéro, par le parcours existant', () => {
   test('« Ajouter mon numéro » ⇒ numéro ⇒ code SMS ⇒ vérifié', async () => {
     const { host, calls, changes } = await monter({ ...INVITE, missing: ['phone'] });
 
-    await mounter.click(buttonNamed(host, 'Ajouter mon numéro'));
+    await mounter.click(buttonNamed(host, 'Ajouter'));
     mounter.type(host, '#activation-phone', '+33 6 12 34 56 78');
     await mounter.click(buttonNamed(host, 'Envoyer le code'));
     expect(calls).toEqual(['phone:+33 6 12 34 56 78']);
@@ -183,7 +183,7 @@ describe('le numéro, par le parcours existant', () => {
 
   test('un numéro refusé se dit sous le champ', async () => {
     const { host } = await monter({ ...INVITE, missing: ['phone'] }, { requestPhoneCode: async () => ({ ok: false, status: 0, error: 'x', code: 'INVALID_PHONE' }) });
-    await mounter.click(buttonNamed(host, 'Ajouter mon numéro'));
+    await mounter.click(buttonNamed(host, 'Ajouter'));
     mounter.type(host, '#activation-phone', '0612');
     await mounter.click(buttonNamed(host, 'Envoyer le code'));
     expect(host.querySelector('#activation-phone')?.getAttribute('aria-invalid')).toBe('true');
@@ -192,7 +192,7 @@ describe('le numéro, par le parcours existant', () => {
 
   test('un code SMS refusé se dit', async () => {
     const { host } = await monter({ ...INVITE, missing: ['phone'] }, { verifyPhoneCode: async () => ({ ok: false, status: 400, error: 'Invalid code' }) });
-    await mounter.click(buttonNamed(host, 'Ajouter mon numéro'));
+    await mounter.click(buttonNamed(host, 'Ajouter'));
     mounter.type(host, '#activation-phone', '+33612345678');
     await mounter.click(buttonNamed(host, 'Envoyer le code'));
     mounter.type(host, '#activation-phone-code', '000000');

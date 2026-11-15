@@ -75,7 +75,7 @@ export function FailedSendBand({
         data-send-discard
         data-variant="destructive"
         onClick={onDiscard}
-        className="shrink-0 px-1 text-mini font-semibold"
+        className="active:opacity-80 shrink-0 px-1 text-mini font-semibold"
         style={{ minHeight: 44, minWidth: 44, color: textColor, textDecoration: 'underline' }}
       >
         {translateMessagePieces(language, 'message.menu.discard')}
@@ -100,7 +100,7 @@ export function FailedSendBand({
           data-send-failed="retryable"
           onClick={onRetry}
           {...titleProp}
-          className="flex flex-1 items-center gap-1.5 text-start font-semibold"
+          className="active:opacity-80 flex flex-1 items-center gap-1.5 text-start font-semibold"
           style={{ color: textColor, minHeight: 44 }}
         >
           <Glyph name="warningCircle" size={12} />
@@ -114,7 +114,7 @@ export function FailedSendBand({
   }
 
   return (
-    <button type="button" data-send-failed="retryable" onClick={onRetry} {...titleProp} className={className} style={style}>
+    <button type="button" data-send-failed="retryable" onClick={onRetry} {...titleProp} className={`active:opacity-80 ${className}`} style={style}>
       <Glyph name="warningCircle" size={12} />
       <span data-send-failed-label className="flex-1">{label}</span>
       <span data-send-retry style={{ textDecoration: 'underline' }}>{translate(language, 'message.send.retry')}</span>

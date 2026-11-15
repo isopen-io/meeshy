@@ -37,6 +37,13 @@ public object MeeshyMotion {
     public fun <T> springBouncy(): SpringSpec<T> =
         spring(dampingRatio = 0.6f, stiffness = stiffnessForResponse(0.5f))
 
+    /**
+     * A spring from an iOS `(response, dampingFraction)` pair, for a component whose law owns its pair (the kit's anchored
+     * sheet, K15: 0.32 / 0.88) — the same conversion as the three springs above, never a local `spring(...)` literal.
+     */
+    public fun <T> springFor(response: Float, dampingFraction: Float): SpringSpec<T> =
+        spring(dampingRatio = dampingFraction, stiffness = stiffnessForResponse(response))
+
     /** Standard UI transition — the historic name of [springDefault]. */
     public fun <T> standardSpring(): SpringSpec<T> = springDefault()
 
