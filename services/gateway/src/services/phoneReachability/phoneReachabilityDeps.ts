@@ -7,6 +7,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PHONE_PROBE_PUSH_TYPE, PHONE_REACHABILITY_NOTIFICATION_TYPE } from '@meeshy/shared/types/phone-reachability';
 import { getPushNotificationService } from '../PushNotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import { retractedNotificationOf, type RetractedNotification } from '../notifications/retractedNotifications';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { isViewingConversation } from '../../socketio/conversationViewingProbe';
 import { batteryContextReaderOf } from '../battery/batteryContext';
@@ -29,12 +30,14 @@ export async function probePhone(prisma: PrismaClient, emitterId: string, reques
 type RawId = { readonly $oid?: string } | string | null | undefined;
 const idOf = (value: RawId): string | null => (typeof value === 'string' ? value : value?.$oid ?? null);
 
-export type RetractionAnnouncer = { readonly announceNotificationsRetracted: (rows: readonly { readonly id: string; readonly userId: string }[]) => Promise<void> };
+export type RetractionAnnouncer = { readonly announceNotificationsRetracted: (rows: readonly RetractedNotification[]) => Promise<void> };
 
 /**
  * Les notifications d'injoignabilité d'un émetteur chez un lecteur : SUPPRIMÉES, puis ANNONCÉES par
  * le service de notification (`notification:deleted` sur les appareils connectés, push de révocation
  * `notification_revoked` sur les autres) — la bannière déjà affichée et la cloche s'effacent aussi.
+ * Chaque ligne passe par `retractedNotificationOf`, le site unique qui lit `delivery.pushSent` : sans
+ * lui, la révocation se perdrait en silence.
  */
 export async function retractPhoneReachabilityNotifications(
   prisma: Pick<PrismaClient, 'notification'>,
@@ -44,12 +47,12 @@ export async function retractPhoneReachabilityNotifications(
   if (pairs.length === 0) return;
   const raw = (await prisma.notification.findRaw({
     filter: { type: PHONE_REACHABILITY_NOTIFICATION_TYPE, $or: pairs.map((pair) => ({ userId: { $oid: pair.readerId }, 'actor.id': pair.emitterId })) },
-    options: { projection: { _id: 1, userId: 1 } },
-  })) as unknown as ReadonlyArray<{ readonly _id?: RawId; readonly userId?: RawId }>;
+    options: { projection: { _id: 1, userId: 1, type: 1, context: 1, delivery: 1 } },
+  })) as unknown as ReadonlyArray<{ readonly _id?: RawId; readonly userId?: RawId; readonly type?: unknown; readonly context?: unknown; readonly delivery?: unknown }>;
   const rows = raw.flatMap((row) => {
     const id = idOf(row._id);
     const userId = idOf(row.userId);
-    return id && userId ? [{ id, userId }] : [];
+    return id && userId ? [retractedNotificationOf({ id, userId, type: row.type, context: row.context, delivery: row.delivery })] : [];
   });
   if (rows.length === 0) return;
   await prisma.notification.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
@@ -82,6 +85,7 @@ export function phoneReachabilityRelayDepsOf(params: { readonly prisma: PrismaCl
     }),
     probe: (emitterId) => probePhone(params.prisma, emitterId, new Date().toISOString()),
     isTrackedDevice: ({ userId, sessionId }) => isTrackedPhone(params.prisma, { userId, sessionId, now: new Date() }),
+    trackedSession: (userId) => trackedBatterySession(params.prisma, { userId, now: new Date() }),
     trackedDeviceConnected: (userId) => isTrackedBatteryDeviceConnected({ prisma: params.prisma, io: params.io, userId, now: new Date() }),
     batteryLow: async (userId) => LOW_PHASES.has((await readBatteryRecord(battery.cache, userId))?.episode.phase ?? 'normal'),
     retractPushes: (pairs) => retractPhoneReachabilityNotifications(params.prisma, getSharedNotificationService() ?? null, pairs),

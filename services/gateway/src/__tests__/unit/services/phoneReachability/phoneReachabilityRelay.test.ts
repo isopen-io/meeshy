@@ -84,6 +84,7 @@ function monde(options: {
   const conversing = new Set(options.enConversation ?? []);
   let now = T0 - 70 * MIN;
   let connecte = options.connecte ?? false;
+  let suivie: string | null = 's1';
   const lectures = { count: 0 };
   const compter = <T extends object>(target: T): T =>
     new Proxy(target, {
@@ -110,7 +111,8 @@ function monde(options: {
     probe: async (emitterId) => {
       sondes.push(emitterId);
     },
-    isTrackedDevice: async ({ sessionId }) => sessionId !== 'tablette',
+    isTrackedDevice: async ({ sessionId }) => sessionId === suivie,
+    trackedSession: async () => suivie,
     trackedDeviceConnected: async () => connecte,
     batteryLow: async () => options.batterieBasse ?? false,
     retractPushes: async (pairs) => {
@@ -168,6 +170,9 @@ function monde(options: {
     couper: () => {
       const row = world.users.rows.find((r) => r.id === EMETTEUR);
       if (row) row.unreachableSharingDisabledAt = new Date(T0);
+    },
+    suivre: (sessionId: string | null) => {
+      suivie = sessionId;
     },
     connecter: (value: boolean) => {
       connecte = value;
@@ -268,6 +273,35 @@ describe('une version qui ne répond pas aux sondes', () => {
     expect(m.pushes).toEqual([]);
     expect(m.emissions).toEqual([]);
     expect(m.sondes.length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('la preuve appartient au téléphone suivi, même quand il change sans signe de vie', () => {
+  it('un vieux téléphone devenu le suivi par sa seule activité n\'est pas déclaré sur la preuve de l\'ancien', async () => {
+    const m = monde();
+    await m.prouver();
+    m.suivre('vieil-android');
+    for (let i = 0; i < 6; i += 1) {
+      m.avancer(10 * MIN);
+      await m.balayer();
+    }
+    expect(m.pushes).toEqual([]);
+    expect(m.emissions).toEqual([]);
+  });
+
+  it('la socket ouverte d\'un autre téléphone suivi ne recopie pas la preuve de l\'ancien', async () => {
+    const m = monde();
+    await m.prouver();
+    m.suivre('vieil-android');
+    m.connecter(true);
+    m.avancer(70 * MIN);
+    await m.balayer();
+    m.connecter(false);
+    for (let i = 0; i < 4; i += 1) {
+      m.avancer(10 * MIN);
+      await m.balayer();
+    }
+    expect(m.pushes).toEqual([]);
   });
 });
 

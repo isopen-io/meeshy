@@ -63,6 +63,8 @@ export type PhoneReachabilityRelayDeps = {
   readonly probe: (emitterId: string) => Promise<void>;
   /** La session est-elle celle du téléphone suivi (le même que celui de la batterie) ? */
   readonly isTrackedDevice: (params: { readonly userId: string; readonly sessionId: string | null }) => Promise<boolean>;
+  /** La session du téléphone suivi MAINTENANT ; nulle quand le compte n'a plus de téléphone reconnu. */
+  readonly trackedSession: (userId: string) => Promise<string | null>;
   /** Le téléphone suivi a-t-il une socket OUVERTE ? Une connexion vivante est un signe de vie. */
   readonly trackedDeviceConnected: (userId: string) => Promise<boolean>;
   /** Le dernier épisode de batterie connu était-il critique ou éteint ? Il fait la cause probable. */
@@ -219,12 +221,23 @@ async function tickLocked(deps: PhoneReachabilityRelayDeps, emitterId: string): 
   }
   if (previous.unreachableSince !== null) return reconcileOutageLocked(deps, emitterId, previous);
   const now = iso(deps);
-  const blind = phoneReachabilityStep(previous, { kind: 'tick', now, batteryLow: false });
-  if (!blind.probe && !blind.announcement) return { outcome: 'idle' };
+  const due = phoneReachabilityStep(previous, { kind: 'tick', now, batteryLow: false });
+  if (!due.probe && !due.announcement) return { outcome: 'idle' };
+  const tracked = await deps.trackedSession(emitterId);
+  if (tracked === null) {
+    await dropWatch(deps, emitterId);
+    return { outcome: 'dropped' };
+  }
   if (await deps.trackedDeviceConnected(emitterId)) {
-    const { state } = phoneReachabilityStep(previous, { kind: 'alive', at: now });
+    const { state } = phoneReachabilityStep(previous, { kind: 'alive', at: now, sessionId: tracked });
     await storeReachability(deps.cache, emitterId, record(previous, state));
     return { outcome: 'alive' };
+  }
+  const proofHolder = tracked === previous.sessionId ? previous : { ...previous, lastAnsweredAt: null, sessionId: tracked };
+  const blind = phoneReachabilityStep(proofHolder, { kind: 'tick', now, batteryLow: false });
+  if (!blind.probe && !blind.announcement) {
+    await storeReachability(deps.cache, emitterId, record(previous, blind.state));
+    return { outcome: 'idle' };
   }
   const audience = await audienceOf(deps, emitterId);
   if (audience.size === 0) {
@@ -235,7 +248,7 @@ async function tickLocked(deps: PhoneReachabilityRelayDeps, emitterId: string): 
     await storeReachability(deps.cache, emitterId, record(previous, blind.state));
     return { outcome: 'probed', fanOut: () => deps.probe(emitterId).catch(() => undefined) };
   }
-  const { state, announcement } = phoneReachabilityStep(previous, { kind: 'tick', now, batteryLow: await deps.batteryLow(emitterId).catch(() => false) });
+  const { state, announcement } = phoneReachabilityStep(proofHolder, { kind: 'tick', now, batteryLow: await deps.batteryLow(emitterId).catch(() => false) });
   const readers = [...audience];
   await storeReachability(deps.cache, emitterId, record(previous, state, readers));
   const served = servedPhoneReachability(emitterId, { ...state, servedTo: readers });
@@ -247,6 +260,7 @@ async function tickLocked(deps: PhoneReachabilityRelayDeps, emitterId: string): 
       await forgetPushedReaders(deps.cache, emitterId);
       const pushed = await fanOutUnreachable(deps, served, announcement, readers);
       if (await stillDeclared(deps, served)) await rememberPushedReaders(deps.cache, emitterId, pushed);
+      else await retract(deps, pushed.map((readerId) => ({ emitterId, readerId })));
     },
   };
 }
