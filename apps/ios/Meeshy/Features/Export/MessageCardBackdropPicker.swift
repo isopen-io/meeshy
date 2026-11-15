@@ -1,7 +1,6 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
-import ImageIO
 import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
@@ -65,10 +64,8 @@ nonisolated enum MessageCardBackdropLoader {
 
     private static func video(_ file: URL, veil: Double) async -> MessageCardChosenBackdrop? {
         let asset = AVURLAsset(url: file)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxPixels, height: maxPixels)
-        guard let poster = try? await generator.image(at: .zero).image else { return nil }
+        let request = VideoThumbnailRequest.firstFrame(of: file, maxDimension: CGFloat(maxPixels), cachesResult: false)
+        guard let poster = await VideoThumbnailGenerator.shared.image(for: request)?.cgImage else { return nil }
         let duration = (try? await asset.load(.duration)).map(CMTimeGetSeconds)
         let media = MessageCardMedia(
             id: MessageCardBackdrop.mediaID, kind: .video,
@@ -79,13 +76,7 @@ nonisolated enum MessageCardBackdropLoader {
     }
 
     private static func downsampled(_ data: Data) -> CGImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixels,
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: CGFloat(maxPixels), decodeImmediately: false)
     }
 }
 
