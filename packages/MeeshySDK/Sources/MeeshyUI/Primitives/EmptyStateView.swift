@@ -16,6 +16,17 @@ public struct EmptyStateView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    /// L'état vide monte de 12 pt en apparaissant ; sous « Réduire les
+    /// animations », il apparaît en place, en fondu.
+    nonisolated static func entryOffset(appeared: Bool, reduceMotion: Bool) -> CGFloat {
+        appeared || reduceMotion ? 0 : MeeshySpacing.md
+    }
 
     public init(
         icon: String,
@@ -70,9 +81,13 @@ public struct EmptyStateView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : MeeshySpacing.md)
+        .offset(y: Self.entryOffset(appeared: appeared, reduceMotion: reduceMotion))
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
+            meeshyWithAnimation(
+                MeeshyAnimation.springDefault.delay(0.15),
+                reduced: MeeshyMotion.reducedFade,
+                reduceMotion: reduceMotion
+            ) {
                 appeared = true
             }
         }

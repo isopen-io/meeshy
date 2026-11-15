@@ -7,6 +7,11 @@ struct TwoFactorSetupView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @ObservedObject var viewModel: TwoFactorViewModel
 
     let onComplete: () -> Void
@@ -151,7 +156,7 @@ struct TwoFactorSetupView: View {
 
             Button {
                 HapticFeedback.medium()
-                withAnimation { step = .enterCode(setup) }
+                animate { step = .enterCode(setup) }
             } label: {
                 Text(String(localized: "2fa_next_button", defaultValue: "Suivant"))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
@@ -232,7 +237,7 @@ struct TwoFactorSetupView: View {
 
             Button {
                 HapticFeedback.light()
-                withAnimation { step = .showSecret(setup) }
+                animate { step = .showSecret(setup) }
             } label: {
                 Text(String(localized: "2fa_back_to_qr", defaultValue: "Retour au QR code"))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
@@ -351,15 +356,19 @@ struct TwoFactorSetupView: View {
 
     // MARK: - Actions
 
+    /// Un changement d'étape se fond ; sous « Réduire les animations », un
+    /// fondu court remplace le ressort.
+    private func animate(_ change: () -> Void) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion, change)
+    }
+
     private func initiateSetup() {
         step = .loading
         Task {
             await viewModel.beginSetup()
-            if let setup = viewModel.setupData {
-                step = .showSecret(setup)
-            } else {
-                step = .error(viewModel.error ?? String(localized: "twofactor.error.setup", defaultValue: "Impossible de démarrer la configuration 2FA", bundle: .main))
-            }
+            let next: SetupStep = viewModel.setupData.map { .showSecret($0) }
+                ?? .error(viewModel.error ?? String(localized: "twofactor.error.setup", defaultValue: "Impossible de démarrer la configuration 2FA", bundle: .main))
+            animate { step = next }
         }
     }
 
@@ -370,10 +379,11 @@ struct TwoFactorSetupView: View {
             await viewModel.enable(code: verificationCode)
             if !viewModel.recoveryCodes.isEmpty {
                 HapticFeedback.success()
-                withAnimation { step = .showBackupCodes(viewModel.recoveryCodes) }
+                animate { step = .showBackupCodes(viewModel.recoveryCodes) }
             } else {
                 HapticFeedback.error()
-                codeError = viewModel.error ?? String(localized: "twofactor.error.invalidCode", defaultValue: "Code invalide. Vérifiez et réessayez.", bundle: .main)
+                let message = viewModel.error ?? String(localized: "twofactor.error.invalidCode", defaultValue: "Code invalide. Vérifiez et réessayez.", bundle: .main)
+                animate { codeError = message }
                 viewModel.clearError()
             }
             verifying = false

@@ -71,7 +71,7 @@ export function ContentRemovalSheet({
             type="button"
             data-content-removal="cancel"
             onClick={onCancel}
-            className={`rounded-card px-5 text-body font-semibold ${FOCUS}`}
+            className={`btn-press rounded-card px-5 text-body font-semibold ${FOCUS}`}
             style={{ minHeight: 48, border: '1px solid var(--color-edge)', color: 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {translate(language, 'common.cancel')}
@@ -83,7 +83,7 @@ export function ContentRemovalSheet({
             onClick={() => {
               if (reason !== null) onConfirm(reason);
             }}
-            className={`rounded-card px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
+            className={`btn-press rounded-card px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
             style={{ minHeight: 48, backgroundColor: 'var(--color-error)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {translate(language, 'moderation.remove.action')}

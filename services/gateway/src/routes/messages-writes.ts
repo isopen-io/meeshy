@@ -8,7 +8,7 @@ import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
-import { editReadership } from '../socketio/editedAudience';
+import { messageReadership } from '../socketio/editedAudience';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import { mergeTrackingLinksIntoMetadata } from '../services/messaging/messageLinks';
 import {
@@ -366,7 +366,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // gestionnaire, si bien qu'elle avait son `message:edited` gardé et son
       // `mention:created` nu.
       emitMentionCreated({
-        readership: await editReadership(prisma, message.conversationId, messageId, (err) =>
+        readership: await messageReadership(prisma, message.conversationId, messageId, (err) =>
           logger.error('Edit - edit readership unresolvable, mention withheld', err as Error),
         ),
         io: socketIOHandler?.getManager()?.getIO(),

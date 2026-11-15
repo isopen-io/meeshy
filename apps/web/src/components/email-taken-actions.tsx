@@ -44,7 +44,7 @@ export function EmailTakenActions({
     <Link
       to="forgotPassword"
       search={{ email }}
-      className="inline-flex items-center text-caption font-medium"
+      className="active:opacity-80 inline-flex items-center text-caption font-medium"
       style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
     >
       {translate(language, 'signup.emailTaken.forgotPassword')}
@@ -54,7 +54,7 @@ export function EmailTakenActions({
     <button
       type="button"
       onClick={onSendLink}
-      className={`inline-flex items-center gap-1.5 text-caption font-semibold ${linkClassName}`}
+      className={`active:opacity-80 inline-flex items-center gap-1.5 text-caption font-semibold ${linkClassName}`}
       style={{ minHeight: 44 }}
     >
       <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={16} />
@@ -107,7 +107,7 @@ export function EmailTakenActions({
         disabled={isClaiming}
         aria-busy={isClaiming}
         aria-describedby="signup-email-claim-note"
-        className="inline-flex items-center justify-self-start text-caption font-semibold"
+        className="active:opacity-80 inline-flex items-center justify-self-start text-caption font-semibold"
         style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
       >
         {translate(language, 'signup.emailTaken.notMe')}

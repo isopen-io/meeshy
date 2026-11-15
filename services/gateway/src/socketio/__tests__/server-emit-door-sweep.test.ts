@@ -37,7 +37,11 @@
 import { describe, it, expect } from '@jest/globals';
 import { join } from 'path';
 
-import { sweepRawServerEmitters, sweepUntypedEmitDoors } from './server-emit-door-sweep';
+import {
+  sweepErasingEmitArgumentCasts,
+  sweepRawServerEmitters,
+  sweepUntypedEmitDoors,
+} from './server-emit-door-sweep';
 
 const SRC_DIR = join(__dirname, '..', '..');
 
@@ -107,5 +111,46 @@ describe('portes d’émission Socket.IO — aucun `Server` NU détenu pour éme
     expect(sweepRawServerEmitters(join(__dirname, 'fixtures', 'derived-server-emitter'))).toEqual(
       [],
     );
+  });
+});
+
+/**
+ * ## La porte peut être JUSTE et l'ARGUMENT la neutraliser (#18649)
+ *
+ * Les deux cliquets ci-dessus gardent le RECEVEUR de `.emit(` : une signature
+ * réécrite à la main, un `Server` nu détenu pour émettre. Tous deux étaient
+ * VERTS pendant que deux sites de production importaient la bonne porte et
+ * passaient `event as never, data as never` — le couple n'était confronté ni
+ * sur le nom ni sur la forme, sur un canal qui n'a aucun sérialiseur.
+ *
+ * L'inventaire doit rester VIDE : la réparation est de narrower le type jusqu'au
+ * site d'appel, jamais de porter une ligne d'exemption.
+ */
+describe('portes d’émission Socket.IO — aucun couple (événement, charge) casté à travers', () => {
+  it('aucun argument de `.emit(` n’est casté vers un type qui EFFACE', () => {
+    expect(sweepErasingEmitArgumentCasts(SRC_DIR)).toEqual([]);
+  });
+
+  it('le balayage VOIT les quatre cibles qu’il prétend interdire', () => {
+    const casts = sweepErasingEmitArgumentCasts(
+      join(__dirname, 'fixtures', 'erasing-emit-argument-cast')
+    );
+
+    // `as never` compte DEUX fois sur le même appel : le canal ET la charge.
+    expect(casts.map((c) => c.argument)).toEqual([
+      'event as never',
+      'data as never',
+      'data as any',
+      'data as unknown',
+      'event as keyof ServerToClientEvents',
+      'data as any',
+    ]);
+    expect(new Set(casts.map((c) => c.file))).toEqual(new Set(['caller.ts']));
+  });
+
+  it('le balayage ne signale ni un cast vers le type DÉCLARÉ, ni un cast niché, ni l’ack', () => {
+    expect(
+      sweepErasingEmitArgumentCasts(join(__dirname, 'fixtures', 'correlated-emit-argument'))
+    ).toEqual([]);
   });
 });

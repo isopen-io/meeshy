@@ -67,7 +67,7 @@ function SoundNote({ control, language }: { readonly control: SoundCreditControl
       }}
       onPointerDown={stop}
       onPointerUp={stop}
-      className="pointer-events-auto relative inline-grid shrink-0 place-items-center rounded-full after:absolute after:-inset-x-4 after:-top-2 after:-bottom-6 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-4"
+      className="btn-press pointer-events-auto relative inline-grid shrink-0 place-items-center rounded-full after:absolute after:-inset-x-4 after:-top-2 after:-bottom-6 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-4"
       style={{ color: 'inherit', outlineColor: 'currentColor' }}
     >
       {note}

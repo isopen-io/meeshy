@@ -32,7 +32,7 @@ const deUserProfile = {
   'userProfile.stat.filterLabel': 'Nach {name} filtern',
   'userProfile.stat.filterClear': 'Alle anzeigen',
   'userProfile.context.received': '{name} möchte sich mit Ihnen verbinden. Nehmen Sie an, um Nachrichten auszutauschen.',
-  'userProfile.context.sent': 'Sie haben {name} eine Verbindungsanfrage gesendet. Warten auf Antwort.',
+  'userProfile.context.sent': 'Anfrage an {name} gesendet.',
   'userProfile.action.write': 'Schreiben',
   'userProfile.action.writeLabel': '{name} schreiben',
   'userProfile.action.block': 'Blockieren',
