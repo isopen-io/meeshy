@@ -293,20 +293,21 @@ class MeeshyAnchoredSheetBehaviorTest {
     @Test
     fun `rouverte pendant sa sortie, la feuille republie sa place`() {
         lateinit var state: MeeshyAnchoredSheetState
-        var open by mutableStateOf<String?>("a")
-        show(reduceMotion = false) {
+        var leaving by mutableStateOf(false)
+        show {
             state = rememberMeeshyAnchoredSheetState()
-            MeeshyAnchoredSheetHost(open = open, onDismissRequest = {}, title = "Plus", height = MeeshyAnchoredSheetHeight.Regular, state = state) { Rows() }
+            CompositionLocalProvider(LocalMeeshyAnchoredSheetLeaving provides leaving) {
+                MeeshyAnchoredSheet(onDismissRequest = {}, title = "Plus", height = MeeshyAnchoredSheetHeight.Regular, state = state) { Rows() }
+            }
         }
         assertThat(state.footprintPx).isWithin(1f).of(window * 0.5f)
 
-        compose.mainClock.autoAdvance = false
-        compose.runOnIdle { open = null }
-        compose.mainClock.advanceTimeBy(EXIT_WINDOW_MILLIS)
+        leaving = true
+        compose.waitForIdle()
+        compose.runOnIdle { state.clear() }
         assertThat(state.footprintPx).isEqualTo(0f)
 
-        compose.runOnIdle { open = "a" }
-        compose.mainClock.autoAdvance = true
+        leaving = false
         compose.waitForIdle()
 
         assertThat(state.footprintPx).isWithin(1f).of(window * 0.5f)
@@ -316,20 +317,21 @@ class MeeshyAnchoredSheetBehaviorTest {
     fun `une feuille qui sort ne prend plus ni le retour ni le toucher hors feuille`() {
         var dismissed = 0
         var hostBacks = 0
-        var open by mutableStateOf<String?>("a")
-        show(reduceMotion = false) {
+        var leaving by mutableStateOf(false)
+        show {
             BackHandler { hostBacks++ }
-            MeeshyAnchoredSheetHost(open = open, onDismissRequest = { dismissed++ }, title = "Plus", height = MeeshyAnchoredSheetHeight.Regular) { Rows() }
+            CompositionLocalProvider(LocalMeeshyAnchoredSheetLeaving provides leaving) {
+                MeeshyAnchoredSheet(onDismissRequest = { dismissed++ }, title = "Plus", closeLabel = "Fermer", height = MeeshyAnchoredSheetHeight.Regular) { Rows() }
+            }
         }
         compose.onNodeWithContentDescription(OUTSIDE).assertExists()
 
-        compose.mainClock.autoAdvance = false
-        compose.runOnIdle { open = null }
-        compose.mainClock.advanceTimeBy(EXIT_WINDOW_MILLIS)
+        leaving = true
+        compose.waitForIdle()
 
         compose.onNodeWithContentDescription(OUTSIDE).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Fermer").assertDoesNotExist()
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        compose.mainClock.autoAdvance = true
         compose.waitForIdle()
 
         assertThat(dismissed).isEqualTo(0)
@@ -424,6 +426,5 @@ class MeeshyAnchoredSheetBehaviorTest {
     private companion object {
         const val ROWS = "rows"
         const val OUTSIDE = "Close the sheet"
-        const val EXIT_WINDOW_MILLIS = 48L
     }
 }

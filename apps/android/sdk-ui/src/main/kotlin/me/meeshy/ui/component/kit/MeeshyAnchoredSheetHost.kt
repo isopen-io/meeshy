@@ -18,6 +18,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -63,6 +64,7 @@ public fun <T : Any> MeeshyAnchoredSheetHost(
     val reduceMotion = LocalReduceMotion.current
     val motion = remember(reduceMotion) { MeeshyAnchoredSheetMetrics.motion(reduceMotion) }
     LaunchedEffect(open == null) { if (open == null) state.clear() }
+    val currentOpen = rememberUpdatedState(open)
     AnimatedContent(
         targetState = open,
         modifier = modifier.fillMaxSize(),
@@ -80,7 +82,7 @@ public fun <T : Any> MeeshyAnchoredSheetHost(
     ) { item ->
         if (item != null) {
             val slot: (@Composable () -> Unit)? = if (trailing != null) ({ trailing(item) }) else null
-            CompositionLocalProvider(LocalMeeshyAnchoredSheetLeaving provides (item != open)) {
+            CompositionLocalProvider(LocalMeeshyAnchoredSheetLeaving provides (item != currentOpen.value)) {
                 MeeshyAnchoredSheet(
                     onDismissRequest = onDismissRequest,
                     title = title,
