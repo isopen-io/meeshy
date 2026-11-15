@@ -275,6 +275,10 @@
     <string name="identity_role_admin">Admin</string>
     <string name="identity_role_creator">Creador</string>
     <string name="identity_role_moderator">Moderador</string>
+    <string name="kit_anchored_sheet_close">Cerrar</string>
+    <string name="kit_anchored_sheet_height">Altura de la hoja</string>
+    <string name="kit_anchored_sheet_height_expanded">ampliada</string>
+    <string name="kit_anchored_sheet_height_reduced">reducida</string>
     <string name="language_strip_more">Otros idiomas</string>
     <string name="lentille_mode_menu_selected">seleccionado</string>
     <string name="live_location_duration_title">Duración del uso compartido</string>

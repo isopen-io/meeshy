@@ -125,12 +125,12 @@
       "firstScreen": 143
     },
     "communities": {
-      "total": 33,
-      "firstScreen": 33
+      "total": 21,
+      "firstScreen": 21
     },
     "communities-new": {
-      "total": 17,
-      "firstScreen": 17
+      "total": 15,
+      "firstScreen": 15
     },
     "contact": {
       "total": 171,
@@ -202,15 +202,15 @@
     },
     "login": {
       "total": 50,
-      "firstScreen": 47
+      "firstScreen": 48
     },
     "me": {
       "total": 96,
       "firstScreen": 37
     },
     "me-bookmarks": {
-      "total": 97,
-      "firstScreen": 38
+      "total": 84,
+      "firstScreen": 35
     },
     "me-progression": {
       "total": 162,
@@ -597,7 +597,7 @@
       },
       "a": {
         "total": 50,
-        "firstScreen": 47
+        "firstScreen": 48
       },
       "motif": "L'écran se nomme (« Connexion ») et la phrase du lien e-mail dit, au repos, ce que « Recevoir le lien » déclenche",
       "issue": 17584

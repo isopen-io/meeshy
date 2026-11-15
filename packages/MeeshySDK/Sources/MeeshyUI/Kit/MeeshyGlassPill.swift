@@ -126,7 +126,7 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
             divider
             if presence.showsRow, Self.hasButtons || Self.hasPrimary {
                 rowSection
-                    .transition(rowTransition)
+                    .meeshyTransition(rowTransition)
             }
         }
     }

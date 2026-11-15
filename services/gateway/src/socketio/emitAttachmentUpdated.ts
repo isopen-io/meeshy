@@ -1,7 +1,8 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { PLAN_UNAVAILABLE } from './planOutcome';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { blockedReaderKeys, messageReadership } from './editedAudience';
 import {
   emitToConversationParticipants,
   type ConversationRoomEmitter,
@@ -90,6 +91,37 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
 
   const participants = await loadActiveParticipants(prisma, conversationId);
 
+  // #18613 — QUI a le droit de LIRE le message porteur. Le dépôt DÉCLARE cet
+  // événement porteur de texte, deux fois dans le même fichier
+  // (`TEXT_BEARING_TABLE` et sa table en prose, `queuedEventContract.ts`), rangé
+  // avec `new`, `edited`, `translation` et `link-message` — et c'était le SEUL
+  // des cinq à ne jamais interroger la loi (#9709). Aucune des trois audiences
+  // ci-dessous ne lisait `joinedAt` ni `historyVisibleFrom` : ni l'admission de
+  // lecture de FICHIER dont s'autorise le plan signé (`editedAudience.ts` écrit
+  // qu'elle « ne dispense pas du plancher »), ni `PARTICIPATION_VIVANTE` de la
+  // diffusion chaînée, ni la file. Un invité entré par un lien qui refuse
+  // l'historique recevait donc la transcription Whisper entière, ses traductions
+  // et l'adresse du fichier d'un message que `GET …/messages`, `/sync`,
+  // `conversation:updated` et `GET /attachments/:id` lui refusent tous.
+  //
+  // Le balayage des médias en attente n'ayant AUCUNE borne temporelle basse,
+  // l'enrichissement tire sur un message d'âge arbitraire : il n'y a pas de
+  // course à gagner, seulement une pièce bloquée et un invité entre-temps.
+  //
+  // `'unknown'` se tait sur les DEUX canaux — direct et file — comme sur le
+  // chemin d'édition : on ne sait NI qui est bloqué, NI qui est autorisé, et la
+  // relecture du fil sert la pièce enrichie que la base garde.
+  const readership = await messageReadership(prisma, conversationId, messageId, (error) =>
+    // `error` en DEUXIÈME argument, `context` en troisième : la signature est
+    // `error(message, error?, context?)`, et tout passer en un seul objet range
+    // l'`Error` dans le créneau qui ne le déplie pas — ni message, ni pile.
+    // `'unknown'` perd l'enrichissement DÉFINITIVEMENT pour les absents : c'est
+    // la panne qu'`onError` existe pour NOMMER.
+    logger.error('attachment-updated readership unresolvable — nothing live, nothing queued', error, { conversationId, messageId }),
+  );
+  if (readership.kind === 'unknown') return;
+  const blocked = blockedReaderKeys(readership);
+
   // #9646 — la pièce d'un message protégé (le vocal d'une flamme, dont la
   // transcription et les pistes TTS arrivent après l'envoi) part par
   // destinataire, ses adresses signées pour chacun ; la diffusion chaînée
@@ -113,6 +145,10 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
       // Rien en direct : voir `readerSignedPlanForMessageIdBestEffort`.
     } else if (plan) {
       for (const target of plan.targets) {
+        // Le plan s'autorise sur l'admission de lecture de FICHIER, qui ne
+        // regarde ni `joinedAt` ni `historyVisibleFrom` : le plancher se pose
+        // ICI, jamais sur la foi de cette admission (#18613).
+        if (blocked.has(target.key)) continue;
         // Par CIBLE (audit adversarial de #17026) : une cible qui lève
         // priverait toutes les suivantes de la pièce enrichie, et la file ne
         // compense pas les comptes connectés.
@@ -131,6 +167,11 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
         participants,
         event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
         payload,
+        // Retirer leur room PERSONNELLE ne suffit pas : la room de conversation
+        // est chaînée elle aussi, et le handshake y met la socket d'un invité
+        // sous `PARTICIPATION_VIVANTE` seul. `.except()` les sort de TOUTE la
+        // chaîne (#18613).
+        exceptRooms: [...blocked].map((key) => ROOMS.user(key)),
       });
     }
   } catch (error) {
@@ -155,6 +196,11 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
       eventType: 'attachment-updated',
       messageId,
       payload,
+      // Sans cette exclusion, la transcription d'un message hors du plancher
+      // d'un invité l'attendait 48 h dans Redis sous sa clé, et le drain la
+      // rejouait à sa reconnexion : la fuite survivait à la déconnexion qui
+      // l'avait empêchée en direct (#18613).
+      excludedQueueKeys: blocked,
       // The default (messageId, eventType) identity would let a second
       // attachment's enrichment supersede the first's on a two-audio message.
       ...(attachmentId ? { dedupKey: attachmentId } : {}),

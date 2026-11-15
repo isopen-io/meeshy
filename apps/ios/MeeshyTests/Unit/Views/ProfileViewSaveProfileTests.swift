@@ -231,13 +231,27 @@ final class ProfileViewSaveProfileTests: XCTestCase {
         return String(rest[..<end.lowerBound])
     }
 
+    /// La photo et la bannière partagent un seul envoi (`upload(_:as:)`) : la garde vise ce bloc, et vérifie que les
+    /// deux portes y mènent bien, chacune avec son emplacement — une porte qui contournerait l'envoi commun rougit ici.
+    func test_bothImageUploads_goThroughTheSharedUpload_withTheirOwnSlot() throws {
+        let source = try profileViewSource()
+
+        for (declaration, call) in [
+            ("private func uploadAvatar(", "upload(image, as: .avatar)"),
+            ("private func uploadBanner(", "upload(image, as: .banner)")
+        ] {
+            let block = try body(of: declaration, in: source)
+            XCTAssertTrue(block.contains(call), "\(declaration) doit passer par l'envoi commun : \(call)")
+            XCTAssertFalse(block.contains("authManager.currentUser ="), "\(declaration) écrit currentUser hors de l'envoi commun")
+        }
+    }
+
     func test_serverUserAssignments_inTheThreeUploadPaths_goThroughMergingServerUser() throws {
         let source = try profileViewSource()
 
         for declaration in [
             "private func saveProfile()",
-            "private func uploadAvatar(",
-            "private func uploadBanner("
+            "private func upload("
         ] {
             let block = try body(of: declaration, in: source)
             XCTAssertTrue(

@@ -113,20 +113,51 @@ const isListOrLiveThread = (queryKey: QueryKey): boolean =>
   queryKey[0] === CONVERSATIONS_QUERY_KEY[0] && (queryKey.length === 1 || (queryKey.length === 3 && queryKey[2] === 'messages'));
 
 /**
- * Seules les requêtes DÉJÀ SERVIES et au repos sont relues : une requête
- * jamais servie est celle du démarrage à froid, encore en vol, et une relecture
- * en vol (cache restauré) part après la sienne — la relancer doublerait la
- * requête que l'écran vient d'émettre. Ni la case d'une conversation, ni une
- * fenêtre ancrée (#7420, du passé) : `message:new` ne les nourrit pas. Seules
- * les requêtes OBSERVÉES repartent (`refetchType: 'active'` par défaut) ; un
- * fil fermé est seulement marqué périmé.
+ * DÉJÀ SERVIE ET AU REPOS — le seul état où une relecture rattrape quelque
+ * chose, et le seul où elle ne double rien.
+ *
+ * Une requête jamais servie est celle du démarrage à froid : elle partira
+ * APRÈS l'entrée dans les rooms et couvrira donc la fenêtre entière. Une
+ * requête en vol (cache restauré, relecture déjà lancée) la couvre de même,
+ * puisque sa réponse est postérieure à son départ. Dans les deux cas la
+ * relancer coûterait une requête de plus sur le chemin de la première
+ * peinture, sans rien apprendre.
  */
-export function catchUpFirstAuthentication(queryClient: QueryClient): void {
+const servedAndAtRest = (query: { readonly state: { readonly dataUpdatedAt: number; readonly fetchStatus: string } }): boolean =>
+  query.state.dataUpdatedAt > 0 && query.state.fetchStatus !== 'fetching';
+
+/**
+ * LE RATTRAPAGE DE LA PREMIÈRE CONNEXION (#10573, #18573) — le socket se
+ * branche après la première peinture, et ce qui est parti entre la lecture REST
+ * et l'entrée dans les rooms n'a atteint aucun gestionnaire.
+ *
+ * Deux portées, parce que les familles ne se ressemblent pas :
+ *
+ * - les CONVERSATIONS, dont seules la liste et le fil VIVANT sont relus — ni la
+ *   case d'une conversation, ni une fenêtre ancrée (#7420, du passé) :
+ *   `message:new` ne les nourrit pas ;
+ * - les familles PERSONNELLES que l'appelant NOMME
+ *   (`CATCH_UP_PERSONAL_FAMILIES`, `socket.ts`), prises par leur racine : la
+ *   cloche, les demandes d'amitié, les messages favoris. Ce sont les MÊMES que
+ *   la branche de reconnexion, et c'est le point du lot — la fenêtre est la
+ *   même, donc la liste aussi. Seul le PRÉDICAT les sépare.
+ *
+ * Dans les deux cas, seules les requêtes DÉJÀ SERVIES et au repos repartent
+ * (`servedAndAtRest`), et seules les requêtes OBSERVÉES sont re-jouées
+ * (`refetchType: 'active'` par défaut) ; une famille dont aucun écran n'est
+ * ouvert est seulement marquée périmée.
+ */
+export function catchUpFirstAuthentication(
+  queryClient: QueryClient,
+  personalFamilies: readonly (readonly unknown[])[],
+): void {
   void queryClient.invalidateQueries({
     queryKey: CONVERSATIONS_QUERY_KEY,
-    predicate: (query) =>
-      query.state.dataUpdatedAt > 0 && query.state.fetchStatus !== 'fetching' && isListOrLiveThread(query.queryKey),
+    predicate: (query) => servedAndAtRest(query) && isListOrLiveThread(query.queryKey),
   });
+  for (const queryKey of personalFamilies) {
+    void queryClient.invalidateQueries({ queryKey, predicate: servedAndAtRest });
+  }
 }
 
 export function catchUpThreadMessage(

@@ -32,7 +32,7 @@ const itUserProfile = {
   'userProfile.stat.filterLabel': 'Filtra su {name}',
   'userProfile.stat.filterClear': 'Mostra tutto',
   'userProfile.context.received': '{name} vuole entrare in contatto con te. Accetta per scambiare messaggi.',
-  'userProfile.context.sent': 'Hai inviato una richiesta di connessione a {name}. In attesa di risposta.',
+  'userProfile.context.sent': 'Richiesta inviata a {name}.',
   'userProfile.action.write': 'Scrivere',
   'userProfile.action.writeLabel': 'Scrivere a {name}',
   'userProfile.action.block': 'Bloccare',

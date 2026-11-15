@@ -1,16 +1,15 @@
 import SwiftUI
 import Combine
-import StoreKit
 import MeeshySDK
 import MeeshyUI
 
 struct SupportView: View {
     @Environment(\.dismiss) private var dismiss
-    // Demande d'avis native (StoreKit). ID-free : pas d'App Store ID requis.
-    // Quand l'app aura un ID App Store numérique, préférer un Link direct
-    // `itms-apps://…?action=write-review` (Apple recommande le deep-link pour
-    // un bouton explicite, requestReview restant soumis à ses heuristiques).
-    @Environment(\.requestReview) private var requestReview
+    /// Un bouton explicite « Noter l'app » ouvre la page d'avis de l'App
+    /// Store : `requestReview` reste soumis aux heuristiques d'iOS (environ
+    /// trois fois par an, jamais en TestFlight) et laissait le toucher sans
+    /// effet une fois le quota atteint.
+    @Environment(\.openURL) private var openURL
     private var theme: ThemeManager { ThemeManager.shared }
 
     private let accentColor = MeeshyColors.successHex
@@ -62,7 +61,7 @@ struct SupportView: View {
                 supportLink(icon: "book.fill", title: String(localized: "support.help.center", defaultValue: "Centre d'aide", bundle: .main), url: "https://meeshy.me/help", color: accentColor)
                 supportLink(icon: "questionmark.circle.fill", title: String(localized: "support.help.faq", defaultValue: "FAQ", bundle: .main), url: "https://meeshy.me/faq", color: accentColor)
                 supportButton(icon: "star.fill", title: String(localized: "support.help.rate", defaultValue: "Noter l'app", bundle: .main), color: accentColor) {
-                    requestReview()
+                    openURL(SupportReviewLink.url)
                 }
             }
             .background(SettingsSectionBackground(tint: accentColor))
@@ -214,5 +213,15 @@ struct SupportView: View {
         .padding(.vertical, MeeshySpacing.smPlus)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(value)")
+    }
+}
+
+/// La page « Écrire un avis » de Meeshy sur l'App Store, dérivée de la fiche
+/// que l'invite de mise à jour ouvre déjà : un seul identifiant d'app.
+enum SupportReviewLink {
+    static var url: URL {
+        var components = URLComponents(url: UpgradeGateView.defaultStoreURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "action", value: "write-review")]
+        return components?.url ?? UpgradeGateView.defaultStoreURL
     }
 }
