@@ -5,6 +5,7 @@ import { inAppBannerStore, offerInAppBanner, shouldShowBanner } from './in-app-b
 import { bannerPresentation, bannerSwipeOutcome } from './in-app-banner-view';
 import type { NotificationRecord } from './record';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+import { pillAnnouncementStore } from '@/lib/view/sync-pill-announcements';
 
 await loadNotificationRowCatalog('fr');
 
@@ -135,5 +136,19 @@ describe('la bannière d’une notification du jeu (#9490)', () => {
     const duo = bannerPresentation(record({ type: 'game_duo_invited', title: 'Amina t’invite', content: 'Ouvre la mission.', context: {} }), { language: 'fr', now: NOW });
     expect(duo.game).toBe(false);
     expect(bannerPresentation(record({}), { language: 'fr', now: NOW }).game).toBe(false);
+  });
+});
+
+describe('la batterie d’un Proche, onglet ouvert (#14147)', () => {
+  test('ne descend jamais en bannière : la pastille la dit à sa place, une seule fois', () => {
+    inAppBannerStore.getState().dismiss();
+    pillAnnouncementStore.setState({ queue: [] });
+    offerInAppBanner(
+      record({ type: 'device_battery', title: 'Ada n’a presque plus de batterie', content: 'Batterie à 4 %', context: {}, metadata: { batteryKind: 'critical' } }),
+      { pathname: '/c' },
+    );
+    expect(inAppBannerStore.getState().current).toBeNull();
+    expect(pillAnnouncementStore.getState().queue.map((entry) => entry.text)).toEqual(['Ada n’a presque plus de batterie · Batterie à 4 %']);
+    pillAnnouncementStore.setState({ queue: [] });
   });
 });

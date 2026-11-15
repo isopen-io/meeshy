@@ -1,5 +1,9 @@
 import { createStore } from 'zustand/vanilla';
 
+import { BATTERY_NOTIFICATION_TYPE } from '@meeshy/shared/types/battery-constants';
+
+import { announceBatteryNotification } from '@/lib/battery/battery-pill';
+
 import { conversationPreviewStore } from './conversation-preview';
 import type { NotificationRecord } from './record';
 
@@ -18,7 +22,9 @@ import type { NotificationRecord } from './record';
  *   `?? notificationPreviewConversation?.id` d'iOS), pour une ligne déjà
  *   lue, et pour un appel
  *   entrant ou terminé : la couche d'appel le présente elle-même ;
- * - une nouvelle bannière REMPLACE la précédente, sans file d'attente.
+ * - une nouvelle bannière REMPLACE la précédente, sans file d'attente ;
+ * - la batterie d'un Proche (`device_battery`, #14147) ne descend JAMAIS en bannière : onglet ouvert, la
+ *   pastille de synchronisation la dit À LA PLACE du push — une seule voix pour un même palier.
  */
 
 const CALL_LAYER_TYPES = new Set(['incoming_call', 'incoming_call_alert', 'call', 'CALL_INCOMING', 'call_ended']);
@@ -42,6 +48,10 @@ export const inAppBannerStore = createStore<BannerState>((set) => ({
 }));
 
 export function offerInAppBanner(notification: NotificationRecord, location: { readonly pathname: string }): void {
+  if (notification.type === BATTERY_NOTIFICATION_TYPE) {
+    announceBatteryNotification(notification);
+    return;
+  }
   if (!shouldShowBanner(notification, location)) return;
   inAppBannerStore.setState({ current: notification });
 }
