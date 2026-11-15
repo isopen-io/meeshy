@@ -200,7 +200,7 @@ private fun Wide(exit: MeeshyModeAction) {
         Spacer(Modifier.weight(1f))
         MeeshyModePlate(
             label = ModeSampleNames.PLATE,
-            modifier = Modifier.padding(bottom = MeeshyModePlateMetrics.bottomMargin(0f).dp),
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = MeeshyModePlateMetrics.bottomMargin(0f).dp),
             maxWidth = WidePlateWidth,
             tone = MeeshyGlassTone.Plain,
             windowHeight = BoardWindowHeight,

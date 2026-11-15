@@ -158,6 +158,14 @@ public object MeeshyModeChromeRecipe {
 
     // endregion
 
+    // region La roue d'une capsule occupée
+
+    public const val SPINNER_STROKE: Float = 2f
+    public const val SPINNER_SWEEP: Float = 270f
+    public const val SPINNER_TURN_MILLIS: Int = 900
+
+    // endregion
+
     // region Mouvement
 
     public const val TRAVEL: Float = 12f
