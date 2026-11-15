@@ -273,9 +273,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
             CATransaction.commit()
             return
         }
-        // Posé sur le viseur, le canvas ne couvre pas l'écran : son voile y dessinerait un cadre.
-        // L'hôte voile l'aperçu entier (#18638).
-        guard !passesThroughEmptyTouches else { return }
+        guard !backgroundLayer.isHidden else { return } // sans fond peint, l'hôte voile l'image entière (#18640)
         inlineEditScrimLayer.isHidden = false
         inlineEditScrimLayer.opacity = 1
     }
