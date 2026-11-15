@@ -53,7 +53,7 @@ describe('/welcome — plus aucun texte en dur', () => {
   });
 
   test('les cinq textes existent dans les sept langues, traduits', () => {
-    for (const key of ['welcome.tagline', 'welcome.createAccount', 'welcome.signIn', 'welcome.createAccount.hint', 'welcome.signIn.hint', 'login.title', 'magicLink.lead', 'magicLink.howItWorks', 'magicLink.howItWorks.text'] as const) {
+    for (const key of ['welcome.tagline', 'welcome.createAccount.hint', 'welcome.signIn.hint', 'login.title', 'magicLink.lead', 'magicLink.howItWorks', 'magicLink.howItWorks.text'] as const) {
       const values = SUPPORTED_INTERFACE_LANGUAGES.map((language) => translate(language, key));
       expect(values.every((value) => value.length > 3)).toBe(true);
       expect(new Set(values).size).toBe(SUPPORTED_INTERFACE_LANGUAGES.length);

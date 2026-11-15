@@ -29,6 +29,10 @@ import { InfoHintButton, InfoHintText, useInfoHint } from './info-hint';
  * plafond. Tant qu'il charge, la place est tenue (`aria-busy`) — le mode
  * présélectionné part de toute façon si l'on crée avant.
  *
+ * **L'irréversibilité se dit là où on la choisit** (épure #17584, règle 7) : UNE
+ * phrase, visible quand le bout en bout est le mode retenu. Tant qu'un autre mode
+ * l'est, rien au repos ne parle de celui qu'on n'a pas choisi.
+ *
  * **Replié par défaut** (#14646, la feuille allégée) : un `<details>` natif dont
  * le résumé dit le mode retenu (« Chiffrement · Serveur ») — le choix existe,
  * il ne prend la place qu'à qui le déplie.
@@ -133,9 +137,11 @@ function LoadedPicker({
           {t(currentKey)}
         </p>
       )}
-      <p data-creation-encryption-footer className="px-1 text-caption" style={{ color: MUTED }}>
-        {t(FACT_KEY.endToEndNeverTurnedOff)}
-      </p>
+      {selected === 'e2ee' ? (
+        <p data-creation-encryption-footer className="px-1 text-caption" style={{ color: MUTED }}>
+          {t(FACT_KEY.endToEndIsFinal)}
+        </p>
+      ) : null}
     </div>
   );
 }

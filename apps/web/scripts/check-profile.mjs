@@ -535,7 +535,7 @@ try {
          une tuile muette informe, un bouton sans effet mentirait (loi 4). */
       check(
         band.find((t) => t.cle === 'storiesCount')?.bouton === false && band.filter((t) => t.bouton).length === 2,
-        `${label} : « Stories » n'est PAS un bouton, « Postes » et « Réels » le sont`,
+        `${label} : « Stories » n'est PAS un bouton, « Publications » et « Réels » le sont`,
       );
 
       /* LA RÈGLE 1 DU PRISME, sur le prisme à UN échelon de ce contexte

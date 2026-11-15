@@ -89,8 +89,8 @@
       "firstScreen": 14
     },
     "auth-magic-link": {
-      "total": 14,
-      "firstScreen": 14
+      "total": 26,
+      "firstScreen": 26
     },
     "auth-magic-link-validate": {
       "total": 26,
@@ -125,8 +125,8 @@
       "firstScreen": 143
     },
     "communities": {
-      "total": 38,
-      "firstScreen": 38
+      "total": 33,
+      "firstScreen": 33
     },
     "communities-new": {
       "total": 17,
@@ -137,8 +137,8 @@
       "firstScreen": 63
     },
     "conversations-new": {
-      "total": 70,
-      "firstScreen": 70
+      "total": 43,
+      "firstScreen": 43
     },
     "discover": {
       "total": 38,
@@ -185,24 +185,24 @@
       "firstScreen": 18
     },
     "links-share": {
-      "total": 61,
-      "firstScreen": 61
+      "total": 56,
+      "firstScreen": 56
     },
     "links-share-new": {
-      "total": 95,
+      "total": 84,
       "firstScreen": 51
     },
     "links-tracking": {
-      "total": 37,
-      "firstScreen": 37
+      "total": 55,
+      "firstScreen": 55
     },
     "links-tracking-new": {
       "total": 37,
       "firstScreen": 37
     },
     "login": {
-      "total": 37,
-      "firstScreen": 37
+      "total": 50,
+      "firstScreen": 47
     },
     "me": {
       "total": 96,
@@ -301,12 +301,12 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 293,
-      "firstScreen": 74
+      "total": 284,
+      "firstScreen": 61
     },
     "settings-appareils-chiffres": {
-      "total": 89,
-      "firstScreen": 89
+      "total": 71,
+      "firstScreen": 71
     },
     "settings-data-export": {
       "total": 5,
@@ -317,12 +317,12 @@
       "firstScreen": 16
     },
     "settings-packs": {
-      "total": 44,
-      "firstScreen": 44
+      "total": 36,
+      "firstScreen": 36
     },
     "settings-securite": {
-      "total": 32,
-      "firstScreen": 32
+      "total": 52,
+      "firstScreen": 52
     },
     "settings-verify-email-change": {
       "total": 20,
@@ -353,8 +353,8 @@
       "firstScreen": 97
     },
     "welcome": {
-      "total": 23,
-      "firstScreen": 23
+      "total": 16,
+      "firstScreen": 16
     },
     "world": {
       "total": 25,
@@ -460,15 +460,15 @@
     },
     "links-tracking": {
       "de": {
-        "total": 34,
-        "firstScreen": 34
-      },
-      "a": {
         "total": 37,
         "firstScreen": 37
       },
-      "motif": "Chaque lien de suivi montre sa date de création",
-      "issue": 17641
+      "a": {
+        "total": 55,
+        "firstScreen": 55
+      },
+      "motif": "Chaque lien de suivi montre son dernier clic sous sa date de création : de quoi reconnaître un lien qui sert encore",
+      "issue": 17584
     },
     "links-tracking-new": {
       "de": {
@@ -589,6 +589,42 @@
       },
       "motif": "Le premier écran avait été capturé hors CI à 59 ; la CI en mesure 62 à total inchangé (141), toujours sous les 69 d'avant l'épure du jeu",
       "issue": 18238
+    },
+    "login": {
+      "de": {
+        "total": 37,
+        "firstScreen": 37
+      },
+      "a": {
+        "total": 50,
+        "firstScreen": 47
+      },
+      "motif": "L'écran se nomme (« Connexion ») et la phrase du lien e-mail dit, au repos, ce que « Recevoir le lien » déclenche",
+      "issue": 17584
+    },
+    "auth-magic-link": {
+      "de": {
+        "total": 14,
+        "firstScreen": 14
+      },
+      "a": {
+        "total": 26,
+        "firstScreen": 26
+      },
+      "motif": "Le panneau du lien e-mail dit au repos ce que « Recevoir le lien » déclenche ; le (i) ne garde que la durée du lien",
+      "issue": 17584
+    },
+    "settings-securite": {
+      "de": {
+        "total": 32,
+        "firstScreen": 32
+      },
+      "a": {
+        "total": 52,
+        "firstScreen": 52
+      },
+      "motif": "Le bloc « Chiffrement de bout en bout » dit ce qu'il est (choisi par conversation, irréversible) avant de mener aux appareils",
+      "issue": 17584
     }
   }
 }

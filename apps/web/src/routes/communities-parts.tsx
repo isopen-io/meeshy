@@ -11,6 +11,7 @@ import { InfoNoted } from '@/components/info-hint';
 import { IosSwitch } from '@/components/ios-switch';
 import type { CommunityConversation, CommunityDraft, CommunitySummary } from '@/lib/api/communities';
 import { attachmentSrc } from '@/lib/api/media-url';
+import { communityCardBlurb } from '@/lib/communities/card-blurb';
 import { communityAccent, compactCount, conversationTitleOf } from '@/lib/communities/view';
 import { initialsOf } from '@/lib/view/conversation';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -196,8 +197,8 @@ export function CommunityCard({ language, community }: { readonly language: Inte
           {community.name}
         </span>
         {community.description === null ? null : (
-          <span data-community-description className="line-clamp-2 text-chip leading-snug" style={{ color: 'var(--color-on-media-2)' }}>
-            {community.description}
+          <span data-community-description title={community.description} className="line-clamp-2 text-chip leading-snug" style={{ color: 'var(--color-on-media-2)' }}>
+            {communityCardBlurb(community.description)}
           </span>
         )}
         <span data-community-counts className="flex items-center gap-2 text-chip font-semibold" style={{ color: 'var(--color-on-media)' }}>

@@ -139,7 +139,7 @@ describe('statut en ligne : la première phrase reste, la nuance passe derrière
 
 describe('apparence : les langues de traduction disent le Prisme', () => {
   test('la rangée porte, au repos, la phrase qui dit ce que la traduction fait', async () => {
-    const host = await mount(<AppearanceSection language="fr" theme="auto" onTheme={noop} interfaceChoice={null} onInterfaceLanguage={noop} primaryLanguage="fr" />);
+    const host = await mount(<AppearanceSection language="fr" theme="system" onTheme={noop} interfaceChoice={null} onInterfaceLanguage={noop} primaryLanguage="fr" />);
     expect(atRest(host.querySelector('[data-settings-content-languages]'))).toContain('Tout le contenu se lit dans votre langue, traduit automatiquement.');
   });
 });

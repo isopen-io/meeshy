@@ -130,7 +130,7 @@ describe('la rangée d’un lien de partage montre de quoi le reconnaître', () 
     expect(conversation?.textContent).toBe('Salle sécurité du réseau');
     expect(conversation?.className ?? '').not.toContain('truncate');
     expect(conversation?.className ?? '').toContain('line-clamp-2');
-    expect(conversation?.parentElement?.querySelector('[data-share-link-joined]')).toBeNull();
+    expect(host.querySelector('[data-share-link-joined]')?.parentElement?.contains(conversation ?? null)).toBe(false);
   });
 
   test('l’expiration s’ajoute à la date de création', async () => {

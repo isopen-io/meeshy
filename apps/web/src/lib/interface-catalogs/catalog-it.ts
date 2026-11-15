@@ -174,7 +174,7 @@ const it = {
   'bookmarks.offline.body': 'I tuoi post salvati compariranno alla riconnessione.',
   'bookmarks.allLoaded': 'Tutti i tuoi post salvati sono caricati',
   'bookmarks.filter.all': 'Tutto',
-  'bookmarks.filter.posts': 'Post',
+  'bookmarks.filter.posts': 'Pubblicazioni',
   'bookmarks.filter.reels': 'Reel',
   'bookmarks.filter.a11y': 'Filtra i post salvati',
   'settings.tools.bookmarks': 'Post salvati',
@@ -460,8 +460,9 @@ const it = {
   'settings.delete_account': "Elimina l'account",
   'settings.privacy.title': 'Privacy',
   'settings.privacy.online_status': 'Stato online',
-  'settings.privacy.online_status.info':
-    'Il punto verde sul tuo avatar indica che sei attivo. Disattivato, nessuno lo vede, ma scrivere in una conversazione rivela comunque la tua presenza.',
+  'settings.privacy.online_status.info': 'Il punto verde sul tuo avatar indica che sei attivo.',
+  'settings.privacy.online_status.question': 'Cosa succede se lo disattivo?',
+  'settings.privacy.online_status.more': 'Nessuno vede più quel punto. Ma scrivere in una conversazione rivela comunque la tua presenza.',
   'settings.privacy.last_seen': 'Ultimo accesso',
   'settings.privacy.read_receipts': 'Conferme di lettura',
   'settings.privacy.read_receipts.info':
@@ -475,6 +476,7 @@ const it = {
   'settings.interface_language': "Lingua dell'interfaccia",
   'settings.interface_language.automatic': 'Automatico',
   'settings.content_languages': 'Lingue di traduzione',
+  'settings.content_languages.info': 'Tutti i contenuti si leggono nella tua lingua, tradotti automaticamente.',
   'settings.section.notifications': 'Notifiche',
   'settings.notifications.title': 'Notifiche',
   'settings.notif.sounds': 'Suoni',
