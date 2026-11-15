@@ -169,7 +169,7 @@ export function PublicationEditSheet({
                 type="button"
                 data-publication-edit-retry
                 onClick={save}
-                className="ms-2 inline-flex items-center px-1 font-semibold underline"
+                className="active:opacity-80 ms-2 inline-flex items-center px-1 font-semibold underline"
                 style={{ minHeight: 44, color: 'var(--color-ios-brand)' }}
               >
                 {translate(language, 'feed.retry')}
@@ -187,7 +187,7 @@ export function PublicationEditSheet({
               persist(original);
               onClose();
             }}
-            className="rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)', opacity: busy ? 0.5 : 1 }}
           >
             {translate(language, 'common.cancel')}
@@ -197,7 +197,7 @@ export function PublicationEditSheet({
             data-publication-edit-save
             disabled={!submittable || busy}
             onClick={save}
-            className="rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: 44,
               backgroundColor: 'var(--color-ios-brand)',

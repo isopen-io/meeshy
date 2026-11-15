@@ -192,7 +192,7 @@ export function DecorPreview(props: DecorPreviewProps) {
     >
       <div className="flex h-full flex-col pt-safe pb-safe">
         <header className="flex shrink-0 items-center gap-2 px-3 py-2">
-          <button type="button" data-decor-preview-close aria-label={tp(language, 'packs.preview.close')} onClick={onClose} className={roundButton} style={chrome}>
+          <button type="button" data-decor-preview-close aria-label={tp(language, 'packs.preview.close')} onClick={onClose} className={`btn-press ${roundButton}`} style={chrome}>
             <Glyph name="x" size={20} />
           </button>
           <div className="min-w-0 flex-1">
@@ -206,10 +206,10 @@ export function DecorPreview(props: DecorPreviewProps) {
               </p>
             )}
           </div>
-          <button type="button" data-decor-zoom-out aria-label={tp(language, 'packs.preview.zoomOut')} disabled={!zoomed} onClick={() => setScale(zoomBy(zoom, -1))} className={roundButton} style={chrome}>
+          <button type="button" data-decor-zoom-out aria-label={tp(language, 'packs.preview.zoomOut')} disabled={!zoomed} onClick={() => setScale(zoomBy(zoom, -1))} className={`btn-press ${roundButton}`} style={chrome}>
             <GlyphSvg glyph={PACK_PREVIEW_GLYPHS.minus} size={18} />
           </button>
-          <button type="button" data-decor-zoom-in aria-label={tp(language, 'packs.preview.zoomIn')} onClick={() => setScale(zoomBy(zoom, 1))} className={roundButton} style={chrome}>
+          <button type="button" data-decor-zoom-in aria-label={tp(language, 'packs.preview.zoomIn')} onClick={() => setScale(zoomBy(zoom, 1))} className={`btn-press ${roundButton}`} style={chrome}>
             <Glyph name="plus" size={18} />
           </button>
         </header>
@@ -240,7 +240,7 @@ export function DecorPreview(props: DecorPreviewProps) {
                 <p role="status" className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
                   {tp(language, 'packs.sheet.failed')}
                 </p>
-                <button type="button" data-decor-retry onClick={() => void items.refetch()} className="min-h-11 rounded-full px-4 text-body font-semibold" style={chrome}>
+                <button type="button" data-decor-retry onClick={() => void items.refetch()} className="btn-press min-h-11 rounded-full px-4 text-body font-semibold" style={chrome}>
                   {t(language, 'packs.retry')}
                 </button>
               </div>
@@ -261,7 +261,7 @@ export function DecorPreview(props: DecorPreviewProps) {
                 aria-label={tp(language, 'packs.preview.previous')}
                 disabled={!canStep}
                 onClick={() => step(-1)}
-                className={`${roundButton} absolute start-3 top-1/2 -translate-y-1/2`}
+                className={`btn-press ${roundButton} absolute start-3 top-1/2 -translate-y-1/2`}
                 style={chrome}
               >
                 <Glyph name="caretLeft" size={18} className="rtl:-scale-x-100" />
@@ -272,7 +272,7 @@ export function DecorPreview(props: DecorPreviewProps) {
                 aria-label={tp(language, 'packs.preview.next')}
                 disabled={!canStep}
                 onClick={() => step(1)}
-                className={`${roundButton} absolute end-3 top-1/2 -translate-y-1/2`}
+                className={`btn-press ${roundButton} absolute end-3 top-1/2 -translate-y-1/2`}
                 style={chrome}
               >
                 <GlyphSvg glyph={PACK_PREVIEW_GLYPHS.caretRight} size={18} className="rtl:-scale-x-100" />
@@ -305,13 +305,13 @@ export function DecorPreview(props: DecorPreviewProps) {
                   aria-busy={busy}
                   aria-label={`${tp(language, 'packs.preview.equip')} ${itemName}`}
                   onClick={() => void equip()}
-                  className="min-h-11 shrink-0 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="btn-press min-h-11 shrink-0 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
                   style={{ backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-brand)' }}
                 >
                   {tp(language, 'packs.preview.equip')}
                 </button>
               ) : action.kind === 'buy' ? (
-                <button type="button" data-decor-pack-action aria-busy={busy} onClick={() => void onAction()} className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold" style={chrome}>
+                <button type="button" data-decor-pack-action aria-busy={busy} onClick={() => void onAction()} className="btn-press min-h-11 shrink-0 rounded-full px-4 text-body font-semibold" style={chrome}>
                   {action.label}
                 </button>
               ) : action.kind === 'locked' ? (
@@ -342,7 +342,7 @@ export function DecorPreview(props: DecorPreviewProps) {
                       data-decor-proposal={`${proposal.pack}/${proposal.key}`}
                       aria-label={decorItemName(names, proposal)}
                       onClick={() => onProposal(proposal)}
-                      className="grid w-full place-items-center rounded-chip p-1 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      className="btn-press grid w-full place-items-center rounded-chip p-1 focus-visible:outline-2 focus-visible:outline-offset-2"
                       style={{ minHeight: 44, backgroundColor: 'var(--color-ios-fill)', outlineColor: 'var(--color-ios-brand)' }}
                     >
                       <DecorThumb item={proposal} accent={accent} scheme={scheme} />
