@@ -57,6 +57,7 @@ const es = {
   'battery.share.globalOff': 'Compartir tu batería está desactivado para todos, desde tu perfil.',
   'battery.global.title': 'Compartir mi batería',
   'battery.global.explain': 'Tu Sangre, y los allegados a quienes se la concediste, saben cuándo tu batería te impedirá responder pronto. Nunca en una conversación.',
+  'battery.global.question': '¿Quién ve mi batería?',
   'battery.consent.title': '{name} ahora es Cercano',
   'battery.consent.body': 'Puedes mostrarle cuándo tu batería está baja, para que sepa por qué ya no respondes. Puedes cambiarlo aquí en cualquier momento.',
   'battery.consent.confirm': 'Continuar',

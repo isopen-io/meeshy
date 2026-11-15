@@ -214,7 +214,7 @@ describe('le profil d’une personne', () => {
 });
 
 describe('mon profil', () => {
-  test('la coupure globale se bascule, et le web dit qu’il n’envoie rien', async () => {
+  test('la coupure globale se bascule ; qui la voit et ce que le web n’envoie pas se lisent derrière le (i)', async () => {
     const client = new QueryClient();
     const { deps, calls } = gateway({ level: 'NONE', extra: (request) => (request.method === 'PUT' ? { ok: true, data: { sharingEnabled: false } } : undefined) });
     const host = await mount(<MeBatterySection language="fr" deps={deps} client={client} />);
@@ -225,6 +225,8 @@ describe('mon profil', () => {
     await settle();
     expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({ sharingEnabled: false });
     expect(host.querySelector('[data-battery-global]')?.getAttribute('aria-checked')).toBe('false');
-    expect(host.querySelector('[data-battery-web-note]')).not.toBeNull();
+    const why = host.querySelector<HTMLButtonElement>('button[aria-label="Qui voit ma batterie ?"]');
+    expect(why?.getAttribute('aria-expanded')).toBe('false');
+    expect(host.textContent).toContain('seule l’application Meeshy de votre téléphone partage votre batterie');
   });
 });

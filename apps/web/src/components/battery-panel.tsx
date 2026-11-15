@@ -27,6 +27,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 import { BatteryGlyph } from './battery-glyph';
+import { SETTINGS_GLYPHS } from './glyphs-settings';
 import { SwitchRow } from './conversation-settings-section';
 import { GroupedSection, SECTION_INK, SECTION_INK_2 } from './grouped-section';
 
@@ -379,20 +380,25 @@ export function MeBatterySection({ language, deps = apiDeps, client = appQueryCl
   const { settings, problem, save } = useEmitterSettings(deps, client);
   if (!ready) return null;
   return (
-    <GroupedSection id="me-battery" title={translateBattery(language, 'battery.detail.title')} icon={<BatteryGlyph level={60} tone="low" charging={false} width={18} ink="currentColor" />}>
+    <GroupedSection
+      id="me-battery"
+      title={translateBattery(language, 'battery.detail.title')}
+      icon={<BatteryGlyph level={60} tone="low" charging={false} width={18} ink="currentColor" />}
+      note={{
+        label: translateBattery(language, 'battery.global.question'),
+        text: `${translateBattery(language, 'battery.global.explain')} ${translateBattery(language, 'battery.webNote')}`,
+        glyph: SETTINGS_GLYPHS.info,
+      }}
+    >
       {settings === null ? null : (
         <SwitchRow
           label={translateBattery(language, 'battery.global.title')}
-          hint={translateBattery(language, 'battery.global.explain')}
           checked={settings.sharingEnabled}
           onChange={(on) => void save(on)}
           marker="data-battery-global"
         />
       )}
       <SettingsProblem language={language} problem={problem} />
-      <span data-battery-web-note="" className="px-3 pb-2 text-caption" style={{ color: SECTION_INK_2 }}>
-        {translateBattery(language, 'battery.webNote')}
-      </span>
     </GroupedSection>
   );
 }

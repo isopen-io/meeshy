@@ -57,6 +57,7 @@ const pt = {
   'battery.share.globalOff': 'O compartilhamento da sua bateria está desligado para todos, no seu perfil.',
   'battery.global.title': 'Compartilhar minha bateria',
   'battery.global.explain': 'Seu Sangue, e os Próximos a quem você a concedeu, sabem quando sua bateria logo impedirá você de responder. Nunca numa conversa.',
+  'battery.global.question': 'Quem vê minha bateria?',
   'battery.consent.title': '{name} agora é Próximo',
   'battery.consent.body': 'Você pode mostrar quando sua bateria está fraca, para que a pessoa saiba por que você parou de responder. Dá para mudar isso aqui a qualquer momento.',
   'battery.consent.confirm': 'Continuar',

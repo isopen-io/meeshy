@@ -57,6 +57,7 @@ const ar = {
   'battery.share.globalOff': 'مشاركة بطاريتك متوقفة للجميع، من ملفك الشخصي.',
   'battery.global.title': 'مشاركة بطاريتي',
   'battery.global.explain': 'أهل دمك، والمقرّبون الذين منحتهم ذلك، يعرفون حين توشك بطاريتك أن تمنعك من الرد. ليس في محادثة أبدًا.',
+  'battery.global.question': 'من يرى بطاريتي؟',
   'battery.consent.title': '{name} أصبح الآن من المقرّبين',
   'battery.consent.body': 'يمكنك أن تُظهر له متى تكون بطاريتك منخفضة، ليعرف لماذا توقفت عن الرد. يمكنك تغيير ذلك هنا في أي وقت.',
   'battery.consent.confirm': 'متابعة',

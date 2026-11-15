@@ -57,6 +57,7 @@ const en = {
   'battery.share.globalOff': 'Battery sharing is turned off for everyone, from your profile.',
   'battery.global.title': 'Share my battery',
   'battery.global.explain': 'Your Blood, and the Close ones you granted it to, know when your battery will soon keep you from answering. Never in a conversation.',
+  'battery.global.question': 'Who sees my battery?',
   'battery.consent.title': '{name} is now Close',
   'battery.consent.body': 'You can let them see when your battery is low, so they know why you stopped answering. You can change this here at any time.',
   'battery.consent.confirm': 'Continue',

@@ -57,6 +57,7 @@ const de = {
   'battery.share.globalOff': 'Das Teilen deines Akkus ist für alle ausgeschaltet, in deinem Profil.',
   'battery.global.title': 'Meinen Akku teilen',
   'battery.global.explain': 'Dein Blut und die Nahestehenden, denen du es erlaubt hast, erfahren, wenn dein Akku dich bald nicht mehr antworten lässt. Nie in einem Gespräch.',
+  'battery.global.question': 'Wer sieht meinen Akku?',
   'battery.consent.title': '{name} ist jetzt Vertraut',
   'battery.consent.body': 'Du kannst ihr zeigen, wenn dein Akku schwach ist, damit sie weiß, warum du nicht mehr antwortest. Du kannst das hier jederzeit ändern.',
   'battery.consent.confirm': 'Weiter',

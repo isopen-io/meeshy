@@ -57,6 +57,7 @@ const fr = {
   'battery.share.globalOff': 'Le partage de votre batterie est coupé pour tous, depuis votre profil.',
   'battery.global.title': 'Partager ma batterie',
   'battery.global.explain': 'Vos Sangs, et les Proches à qui vous l’avez accordée, savent quand votre batterie vous empêchera bientôt de répondre. Jamais dans une conversation.',
+  'battery.global.question': 'Qui voit ma batterie ?',
   'battery.consent.title': '{name} est maintenant un Proche',
   'battery.consent.body': 'Vous pouvez lui montrer quand votre batterie est basse, pour qu’il sache pourquoi vous ne répondez plus. Ce réglage reste modifiable ici.',
   'battery.consent.confirm': 'Continuer',

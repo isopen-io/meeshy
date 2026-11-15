@@ -57,6 +57,7 @@ const it = {
   'battery.share.globalOff': 'La condivisione della tua batteria è disattivata per tutti, dal tuo profilo.',
   'battery.global.title': 'Condividi la mia batteria',
   'battery.global.explain': 'Il tuo Sangue, e i Vicini a cui l’hai concessa, sanno quando la tua batteria ti impedirà presto di rispondere. Mai in una conversazione.',
+  'battery.global.question': 'Chi vede la mia batteria?',
   'battery.consent.title': '{name} ora è Vicino',
   'battery.consent.body': 'Puoi mostrargli quando la tua batteria è scarica, così sa perché non rispondi più. Puoi cambiarlo qui in qualsiasi momento.',
   'battery.consent.confirm': 'Continua',
