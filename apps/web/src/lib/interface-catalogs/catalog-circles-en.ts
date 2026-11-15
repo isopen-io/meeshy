@@ -151,6 +151,8 @@ const en = {
   'together.unavailable': 'This media can’t play on this device.',
   'together.someone': 'Someone',
   'together.gone': 'The invitation is no longer valid.',
+  'together.join.offline': 'Offline: the session didn’t open.',
+  'together.join.failed': 'The session didn’t open. Try again.',
   'together.ended': 'The together session has ended.',
   'together.row.title': 'Watch or listen together',
   'together.row.explain': 'Pick a video or an audio from your conversation: {name} plays it at the same time as you.',

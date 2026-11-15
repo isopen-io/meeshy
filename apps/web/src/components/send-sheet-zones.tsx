@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 
 import type { PublishFormat } from '@/lib/send/send-sheet-plan';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { SEND_SHEET_GLYPHS } from './glyphs-send-sheet';
@@ -270,10 +271,14 @@ function CommunityGroup({
             {labels.channels(community.channels.length)}
           </span>
         </span>
-        <Glyph name="caretDown" size={GLYPH_SIZE.sm} style={{ transform: open ? 'rotate(180deg)' : undefined, color: 'var(--color-ios-ink-3)' }} />
+        <Glyph
+          name="caretDown"
+          size={GLYPH_SIZE.sm}
+          style={{ transform: open ? 'rotate(180deg)' : undefined, transition: `transform ${LAYER_MOTION_MS}ms ease`, color: 'var(--color-ios-ink-3)' }}
+        />
       </button>
       {open ? (
-        <ul id={listId} className="ps-6">
+        <ul id={listId} className="ps-6" {...layerMotion(false)}>
           {community.channels.map((row) => {
             const detail = labels.detail(row);
             return <RecipientLine key={row.key} row={row} on={selectedKeys.has(row.key)} inert={inert(row)} {...(detail === undefined ? {} : { detail })} onToggle={() => onToggle(row)} />;

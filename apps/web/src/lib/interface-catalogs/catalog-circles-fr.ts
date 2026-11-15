@@ -153,6 +153,8 @@ const fr = {
   'together.unavailable': 'Ce média ne se lit pas sur cet appareil.',
   'together.someone': 'Quelqu’un',
   'together.gone': 'L’invitation n’est plus valable.',
+  'together.join.offline': 'Hors ligne : la séance ne s’est pas ouverte.',
+  'together.join.failed': 'La séance ne s’est pas ouverte. Réessayez.',
   'together.ended': 'La séance ensemble est terminée.',
   'together.row.title': 'Regarder ou écouter ensemble',
   'together.row.explain': 'Choisissez une vidéo ou un audio de votre conversation : {name} le lit en même temps que vous.',

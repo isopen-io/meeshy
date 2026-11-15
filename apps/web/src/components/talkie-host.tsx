@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { useStore } from 'zustand/react';
 
 import { apiDeps } from '@/lib/api/deps';
@@ -13,6 +13,7 @@ import { bindTalkieLive, talkieStore, type LiveTalkie, type TalkieStoreApi } fro
 import { talkiePlayer, type TalkieSink } from '@/lib/talkie/talkie-player';
 import { bindTalkieWake } from '@/lib/talkie/talkie-wake-intent';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 /**
  * **LE TALKIE REÇU, ONGLET OUVERT** (#16638, sous-lot `proche-talkie@web`) — un
@@ -37,11 +38,13 @@ export function TalkieIncomingView({
   talkie,
   name,
   onMute,
+  leaving = false,
 }: {
   readonly language: InterfaceLanguage;
   readonly talkie: LiveTalkie;
   readonly name: string;
   readonly onMute: () => void;
+  readonly leaving?: boolean;
 }) {
   const title = translateCircles(language, 'talkie.incoming.title', { name });
   const mute = translateCircles(language, 'talkie.incoming.mute');
@@ -51,7 +54,7 @@ export function TalkieIncomingView({
       aria-live="polite"
       data-talkie-incoming={talkie.talkieId}
       className="fixed inset-x-0 top-0 z-[80] flex justify-center px-4"
-      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', pointerEvents: 'none' }}
+      {...layerMotion(leaving, { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', pointerEvents: 'none', '--layer-shift': '0 -8px' } as CSSProperties)}
     >
       <div
         className="flex items-center gap-3 rounded-full py-1 pl-4 pr-1 shadow-lg"
@@ -66,7 +69,7 @@ export function TalkieIncomingView({
           data-talkie-mute={talkie.talkieId}
           aria-label={`${mute} — ${title}`}
           onClick={onMute}
-          className="grid place-items-center rounded-full px-4 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="btn-press grid place-items-center rounded-full px-4 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ minHeight: 44, backgroundColor: 'var(--color-on-state)', color: 'var(--color-brand)', outlineColor: 'var(--color-on-state)' }}
         >
           {mute}
@@ -90,6 +93,7 @@ export function TalkieHost({
   const ready = useCirclesCatalog(language);
   const talkie = useStore(store, (state) => state.active[0] ?? null);
   const count = useStore(store, (state) => state.active.length);
+  const shown = useLayerPresence(ready ? talkie : null);
 
   useEffect(
     () =>
@@ -111,12 +115,13 @@ export function TalkieHost({
     return () => clearTimeout(timer);
   }, [store, sink, count, talkie?.talkieId]);
 
-  if (talkie === null || !ready) return null;
-  const known = knownPersonByIdInConversations(appQueryClient, talkie.fromUserId);
+  const shownTalkie = shown.value;
+  if (shownTalkie === null) return null;
+  const known = knownPersonByIdInConversations(appQueryClient, shownTalkie.fromUserId);
   const name = known?.displayName ?? known?.username ?? translateCircles(language, 'talkie.incoming.someone');
   const mute = (): void => {
-    store.getState().close(talkie.talkieId);
-    sink.silence(talkie.talkieId);
+    store.getState().close(shownTalkie.talkieId);
+    sink.silence(shownTalkie.talkieId);
   };
-  return <TalkieIncomingView language={language} talkie={talkie} name={name} onMute={mute} />;
+  return <TalkieIncomingView language={language} talkie={shownTalkie} name={name} onMute={mute} leaving={shown.leaving} />;
 }
