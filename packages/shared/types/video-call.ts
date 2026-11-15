@@ -703,6 +703,30 @@ export interface CallInitiateAck {
 }
 
 /**
+ * ACK pour call:signal
+ *
+ * **La forme de refus n'est pas décorative : c'est ce qui distingue un refus
+ * d'une panne de réseau.** `SocketAck.parse` (SDK iOS) rend `.timedOut` quand
+ * rien n'arrive et `.refused(…)` quand un `{ success: false }` arrive — et
+ * `CallSdpSignaler` REJOUE en backoff exponentiel sur le premier. Tant que les
+ * refus de `call:signal` ne rendaient rien, un refus DÉFINITIF
+ * (`NOT_A_PARTICIPANT`, `SIGNAL_SENDER_MISMATCH`, `INVALID_SIGNAL`) était rejoué
+ * à l'identique, 3 s par tentative, en consommant le budget de débit (#18632).
+ *
+ * `error` suit la forme de `CallInitiateAck` / `CallJoinAck` — `SocketAckRefusal`
+ * (SDK) décode déjà `code` et `error.code`/`error.message`, tous optionnels :
+ * l'élargissement est ADDITIF sur le fil et ne demande rien aux clients. Relevé
+ * des trois consommateurs avant de l'écrire (règle du cycle 105) : iOS
+ * (`emitCallSignalWithAck`) le décode, le web fabrique un rappel VIDE
+ * (`use-webrtc-p2p.ts`), Android n'envoie pas d'acquittement
+ * (`CallSignalManager.emitSignal`).
+ */
+export interface CallSignalAck {
+  readonly success: boolean;
+  readonly error?: { code: string; message: string };
+}
+
+/**
  * ACK pour call:join
  */
 export interface CallJoinAck {

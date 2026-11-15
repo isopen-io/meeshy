@@ -54,6 +54,9 @@ function FlagList({ flags, anchor }: { readonly flags: readonly ShareLinkFlag[];
 export function PermissionsSection({ language, link }: { readonly language: AdminLanguage; readonly link: AdminShareLink }) {
   return (
     <AdminFicheSection id="permissions" title={translateAdmin(language, 'admin.shareLink.section.permissions')}>
+      <p data-admin-block-intro className="text-caption" style={{ color: INK2 }}>
+        {translateAdmin(language, 'admin.shareLink.section.permissions.intro')}
+      </p>
       <FlagList anchor="permissions" flags={shareLinkGuestPermissions(link, language)} />
     </AdminFicheSection>
   );

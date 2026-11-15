@@ -76,6 +76,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { waitForValueSettled } from './lib/settle-value.mjs';
 import { writeOnStage } from './lib/stage-typing.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
@@ -666,7 +667,9 @@ async function runScheme(colorScheme) {
     await pagesPage.click('[data-publish-kind-choice="POST"]');
     await pagesPage.waitForSelector('[data-publish-layout-choice="sine"]', { timeout: 4000 });
     await twoFrames(pagesPage);
-    const layoutMenu = await pagesPage.evaluate(() => {
+    /* Le menu se lit AU REPOS : son entrée glisse encore de quelques dixièmes de pixel deux images
+       après son apparition, et la comparaison clair / sombre ci-dessous rougissait au hasard des runs. */
+    const layoutMenu = (await waitForValueSettled(pagesPage, () => {
       const menu = document.querySelector('[data-publish-kind-menu]');
       const capsule = document.querySelector('[data-publish-split]')?.getBoundingClientRect();
       const rows = Array.from(document.querySelectorAll('[data-publish-layout-choice]')).map((el) => ({
@@ -677,7 +680,7 @@ async function runScheme(colorScheme) {
       return r === undefined || capsule === undefined
         ? null
         : { menuTop: r.top, menuBottom: r.bottom, capsuleTop: capsule.top, capsuleBottom: capsule.bottom, innerHeight, rows };
-    });
+    })) ?? null;
     check(
       layoutMenu !== null && layoutMenu.rows.map((row) => row.mode).join(',') === 'carousel,reel,hero,wave,sine',
       `${tag} : les cinq agencements, dans l'ordre iOS (ComposerMosaicChoice.ordered) — ${JSON.stringify(layoutMenu?.rows)}`,
@@ -730,11 +733,45 @@ async function runScheme(colorScheme) {
   return measures;
 }
 
+/**
+ * Compare deux relevés de géométrie à la tolérance de sous-pixel du fichier
+ * (`± 0.5`, l'idiome qu'il emploie déjà douze fois, dont trois lignes au-dessus
+ * de ce site).
+ *
+ * `JSON.stringify(clair) === JSON.stringify(sombre)` tranchait sur l'arrondi du
+ * moteur de rendu : le haut de `320.layoutMenu` a été mesuré 52.58, 52.38 et
+ * 52.23 selon la passe, sur un code INCHANGÉ, et l'accusation changeait de clé
+ * d'une passe à l'autre (#18664). La HAUTEUR du menu, elle, ne bougeait pas
+ * (446.00 des deux côtés) : ce n'est pas le thème qui déplace la mise en page,
+ * c'est la position absolue qui est bruitée.
+ *
+ * Ce que la garde continue d'exiger, et qui est l'invariant de produit : mêmes
+ * clés, mêmes longueurs, mêmes valeurs non numériques, et chaque nombre à moins
+ * d'un demi-pixel. Une vraie divergence de thème — une bordure, une graisse,
+ * une taille de police — déplace d'au moins 1 px et rougit toujours.
+ */
+const SUBPIXEL = 0.5;
+
+const sameGeometry = (a, b) => {
+  if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) <= SUBPIXEL;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((value, index) => sameGeometry(value, b[index]));
+  }
+  if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
+    const clefsA = Object.keys(a).sort();
+    const clefsB = Object.keys(b).sort();
+    if (JSON.stringify(clefsA) !== JSON.stringify(clefsB)) return false;
+    return clefsA.every((clef) => sameGeometry(a[clef], b[clef]));
+  }
+  return a === b;
+};
+
 const clair = await runScheme('light');
 const sombre = await runScheme('dark');
 check(
-  JSON.stringify(clair) === JSON.stringify(sombre),
-  `clair et sombre ne rendent pas la même géométrie — clair ${JSON.stringify(clair)} / sombre ${JSON.stringify(sombre)}`,
+  sameGeometry(clair, sombre),
+  `clair et sombre ne rendent pas la même géométrie (au-delà de ${SUBPIXEL} px) — clair ${JSON.stringify(clair)} / sombre ${JSON.stringify(sombre)}`,
 );
 
 /**

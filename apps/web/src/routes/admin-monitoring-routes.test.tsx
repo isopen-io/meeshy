@@ -88,6 +88,16 @@ const select = (host: ParentNode, id: string) => host.querySelector<HTMLSelectEl
 const DEFAULT_PATH = `${adminEndpoints.routeUsage}?scope=watched&limit=100`;
 
 describe('l’usage des routes — ouverture', () => {
+  test('les routes surveillées disent, visibles au repos, quand une adresse se retire : zéro appel, angles morts lus', async () => {
+    const { deps } = scripted(routeReply);
+    const host = await open(deps);
+
+    const section = host.querySelector('[data-admin-monitoring-section="watched"]');
+    const intro = section?.querySelector('h2 ~ p:not(.sr-only)');
+    expect(intro?.textContent).toContain('zéro appel observé autorise le retrait');
+    expect(intro?.textContent).toContain('angles morts');
+  });
+
   test('l’onglet s’ouvre par l’adresse : seule SA lecture part — la santé n’est pas montée', async () => {
     const { deps, paths } = scripted(routeReply);
     const host = await open(deps);
@@ -233,7 +243,8 @@ describe('les avis — avant tout chiffre', () => {
 
     const notice = normalized(host.querySelector('[data-admin-notice="warning"]')?.textContent ?? '');
     expect(notice).toContain('1 234 échantillons');
-    expect(notice).toContain('Les totaux des routes surveillées restent exacts');
+    expect(notice).toContain('non ventilés par plateforme et version');
+    expect(notice).toContain('les totaux des routes surveillées restent exacts');
   });
 
   test('un détail tronqué : combien de lignes sur combien', async () => {

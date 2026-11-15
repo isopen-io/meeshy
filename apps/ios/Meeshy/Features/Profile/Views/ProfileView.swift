@@ -28,7 +28,7 @@ struct ProfileView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showStats = false
-    @State private var showSecurity = false
+    @State private var securityFocus: SettingsFocus?
     @State private var stats: UserStats?
     @State private var showSystemLanguagePicker = false
     @State private var showRegionalLanguagePicker = false
@@ -87,8 +87,8 @@ struct ProfileView: View {
         .sheet(isPresented: $showStats) {
             UserStatsView()
         }
-        .sheet(isPresented: $showSecurity) {
-            SecurityView().environmentObject(authManager)
+        .sheet(item: $securityFocus) { focus in
+            SecurityView(focus: focus).environmentObject(authManager)
         }
         .onAppear { loadUserData() }
         .task { await loadStats() }
@@ -253,7 +253,7 @@ struct ProfileView: View {
                     ProfileContactSection(
                         email: user?.email, isEmailVerified: user?.emailVerifiedAt != nil,
                         phoneNumber: user?.phoneNumber, isPhoneVerified: user?.phoneVerifiedAt != nil,
-                        accentHex: accentColor, onOpenSecurity: { showSecurity = true }
+                        accentHex: accentColor, onOpenSecurity: { securityFocus = $0 }
                     )
                     languagesSection
                     activitySection

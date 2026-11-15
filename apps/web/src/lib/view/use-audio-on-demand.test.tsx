@@ -8,6 +8,16 @@ import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Attachment } from '@/lib/api/types';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import {
+  createMediaProcessingFailuresStore,
+  type MediaProcessingFailuresApi,
+} from '@/lib/api/media-processing-failures';
+import {
+  applyAudioTranslationFailed,
+  applyTranscriptionFailed,
+  isMediaProcessingFailed,
+} from '@/lib/api/realtime-media-processing-failed';
+
 import { ON_DEMAND_STALL_MS, useAudioOnDemand, type AudioOnDemand } from './use-audio-on-demand';
 
 /**
@@ -33,6 +43,15 @@ afterAll(async () => {
 });
 
 const wait = (ms: number) => act(async () => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+
+const onSilentClock = async (run: () => Promise<void>) => {
+  jest.useFakeTimers();
+  try {
+    await run();
+  } finally {
+    jest.useRealTimers();
+  }
+};
 
 const bare = (): Attachment =>
   ({
@@ -206,6 +225,140 @@ describe('une transcription lente n’est pas prise pour un silence (#10759)', (
 
       await act(async () => probe.read().transcribe());
       expect(calls.filter((call) => call.path.endsWith('/transcribe'))).toHaveLength(2);
+      probe.unmount();
+    }));
+});
+
+/**
+ * #18537 — LA PASSERELLE DIT LA PANNE EN UNE SECONDE, LE LECTEUR L'ATTENDAIT 90.
+ *
+ * `audio:transcription-failed` / `audio:translation-failed` sont diffusés sur la
+ * room de la conversation, et lus par iOS comme par Android depuis toujours. Le
+ * web n'avait aucun puits : la puce restait figée sur « Transcription… » pendant
+ * tout le plafond de SILENCE, puis rendait la main **sans servir le `notice`
+ * dessiné pour cette phrase exacte**.
+ *
+ * Le harnais INJECTE son magasin : le singleton de module ferait fuir le verdict
+ * d'un témoin dans le suivant, et un témoin qui hérite d'un état ne peut plus
+ * dire ce qu'il garde.
+ */
+describe('une panne dite par le temps réel lève l’attente et se dit (#18537)', () => {
+  const mountOn = (deps: ConversationsDeps, failures: MediaProcessingFailuresApi) => {
+    const state: { current: AudioOnDemand | null } = { current: null };
+    function Probe() {
+      state.current = useAudioOnDemand({
+        attachment: bare(),
+        fallbackLanguage: 'fr',
+        readerLanguages: ['fr', 'en'],
+        deps,
+        stallAfterMs: 10_000,
+        failures,
+      });
+      return null;
+    }
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => root.render(<Probe />));
+    const read = (): AudioOnDemand => {
+      if (state.current === null) throw new Error('sonde non montée');
+      return state.current;
+    };
+    return {
+      read,
+      unmount: () => {
+        act(() => root.unmount());
+        container.remove();
+      },
+    };
+  };
+
+  const failedEvent = (attachmentId: string) => ({
+    conversationId: '68c1f0a9b2d4e5f601020304',
+    messageId: 'm-queued',
+    attachmentId,
+    error: 'whisper unavailable',
+  });
+
+  test('« Transcription… » tombe à l’arrivée de la panne, bien avant le plafond, et la phrase est servie', async () => {
+    const { deps } = queuingGateway();
+    const failures = createMediaProcessingFailuresStore();
+    const probe = mountOn(deps, failures);
+    await act(async () => probe.read().transcribe());
+    expect(probe.read().transcribing).toBe(true);
+    expect(probe.read().notice).toBeNull();
+
+    const payload = failedEvent('a-queued');
+    expect(isMediaProcessingFailed(payload)).toBe(true);
+    await act(async () => applyTranscriptionFailed(failures, payload));
+
+    expect(probe.read().transcribing).toBe(false);
+    expect(probe.read().notice).toBe('media.audio.transcribe_failed');
+    probe.unmount();
+  });
+
+  test('la panne d’une AUTRE pièce ne touche pas celle-ci', async () => {
+    const { deps } = queuingGateway();
+    const failures = createMediaProcessingFailuresStore();
+    const probe = mountOn(deps, failures);
+    await act(async () => probe.read().transcribe());
+
+    await act(async () => applyTranscriptionFailed(failures, failedEvent('a-autre')));
+
+    expect(probe.read().transcribing).toBe(true);
+    expect(probe.read().notice).toBeNull();
+    probe.unmount();
+  });
+
+  test('« Traduction… » tombe pour TOUTES les langues en attente — l’événement n’en nomme aucune', async () => {
+    const { deps } = queuingGateway();
+    const failures = createMediaProcessingFailuresStore();
+    const probe = mountOn(deps, failures);
+    await act(async () => probe.read().requestTranslation('en'));
+    await act(async () => probe.read().requestTranslation('es'));
+    expect(probe.read().pendingLanguages).toEqual(['en', 'es']);
+
+    await act(async () => applyAudioTranslationFailed(failures, failedEvent('a-queued')));
+
+    expect(probe.read().pendingLanguages).toEqual([]);
+    expect(probe.read().notice).toBe('media.audio.translate_failed');
+    probe.unmount();
+  });
+
+  test('redemander efface le verdict : la seconde demande affiche de nouveau son attente', async () => {
+    const { calls, deps } = queuingGateway();
+    const failures = createMediaProcessingFailuresStore();
+    const probe = mountOn(deps, failures);
+    await act(async () => probe.read().transcribe());
+    await act(async () => applyTranscriptionFailed(failures, failedEvent('a-queued')));
+    expect(probe.read().transcribing).toBe(false);
+
+    await act(async () => probe.read().transcribe());
+
+    expect(probe.read().transcribing).toBe(true);
+    expect(probe.read().notice).toBeNull();
+    expect(calls.filter((call) => call.path.endsWith('/transcribe'))).toHaveLength(2);
+    probe.unmount();
+  });
+
+  /**
+   * Les deux faits sont DISJOINTS, et c'est la moitié du lot qu'on casserait le
+   * plus facilement : retirer le plafond parce que le temps réel existe figerait
+   * le bouton pour toujours exactement quand le signal ne peut pas arriver.
+   */
+  test('le plafond de silence survit à l’arrivée du puits — rien ne vient, l’attente se lève quand même', () =>
+    onSilentClock(async () => {
+      const { deps } = queuingGateway();
+      const failures = createMediaProcessingFailuresStore();
+      const probe = mountOn(deps, failures);
+      await act(async () => probe.read().transcribe());
+
+      act(() => jest.advanceTimersByTime(9_000));
+      expect(probe.read().transcribing).toBe(true);
+      act(() => jest.advanceTimersByTime(1_000));
+
+      expect(probe.read().transcribing).toBe(false);
+      expect(probe.read().notice).toBeNull();
       probe.unmount();
     }));
 });

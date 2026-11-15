@@ -23,7 +23,7 @@ describe('sept langues, quatre phrases raccourcies et une ligne neuve', () => {
       age: translateOnboarding('fr', 'onboarding.age.body'),
       about: translateInvite('fr', 'world.about'),
     };
-    expect(fr.lead).toBe('Comment se connecter sans mot de passe ?');
+    expect(fr.lead).toBe('Combien de temps le lien reste-t-il valable ?');
     expect(fr.friends).toBe('Ajoute 3 personnes qui te ressemblent.');
     expect(fr.profile).toBe('Un visage et une bannière : on te reconnaît plus vite.');
     expect(fr.age).toBe('Pour te proposer les bons espaces.');

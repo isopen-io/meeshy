@@ -79,8 +79,6 @@ final class ComposerCaptureSession: ObservableObject {
     var imageFormat: EntityImageFormat?
     /// Celles de l'ouverture : un écart est un recadrage de l'auteur (CAM-14).
     var openingAspect: CGFloat?
-    /// Ce qu'« Annuler » rend pendant le recadrage (#15355).
-    var cropEntry: ComposerCropEntry?
     /// Les outils de retouche actifs — Crop, Trim, Son, ensemble ; vide hors retouche.
     @Published var activeEditTools: Set<ComposerEditTool> = []
     /// **Le chrome de la retouche, par-dessus la prise** : montré à

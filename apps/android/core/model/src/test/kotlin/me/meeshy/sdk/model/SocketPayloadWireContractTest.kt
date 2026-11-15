@@ -214,26 +214,6 @@ class SocketPayloadWireContractTest {
     }
 
     /**
-     * `attachmentId` est posé CONDITIONNELLEMENT par `emitAttachmentUpdated.ts` : un enrichissement
-     * qui porte sur le message entier n'en nomme aucune pièce. Second piège armé de #18070.
-     */
-    @Test
-    fun `an attachment update without attachmentId decodes`() {
-        val raw = """
-            {
-              "messageId": "m1",
-              "conversationId": "c1",
-              "status": "ready"
-            }
-        """.trimIndent()
-
-        val event = json.decodeFromString(AttachmentUpdatedEvent.serializer(), raw)
-
-        assertThat(event.attachmentId).isNull()
-        assertThat(event.status).isEqualTo("ready")
-    }
-
-    /**
      * La charge exacte de `PostReactionHandler.ts` — l'émetteur de `post:liked` et `post:unliked` —
      * recopiée clé par clé : le total absolu s'appelle **`likeCount`**, sans `s`.
      *

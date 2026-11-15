@@ -459,8 +459,9 @@ const de = {
   'settings.delete_account': 'Konto löschen',
   'settings.privacy.title': 'Datenschutz',
   'settings.privacy.online_status': 'Online-Status',
-  'settings.privacy.online_status.info':
-    'Der grüne Punkt auf deinem Avatar zeigt, dass du aktiv bist. Deaktiviert sieht ihn niemand — wer aber in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem.',
+  'settings.privacy.online_status.info': 'Der grüne Punkt auf deinem Avatar zeigt, dass du aktiv bist.',
+  'settings.privacy.online_status.question': 'Was passiert, wenn ich ihn ausschalte?',
+  'settings.privacy.online_status.more': 'Niemand sieht den Punkt mehr. Wer aber in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem.',
   'settings.privacy.last_seen': 'Letzte Anmeldung',
   'settings.privacy.read_receipts': 'Lesebestätigungen',
   'settings.privacy.read_receipts.info':
@@ -474,6 +475,7 @@ const de = {
   'settings.interface_language': 'Sprache der Benutzeroberfläche',
   'settings.interface_language.automatic': 'Automatisch',
   'settings.content_languages': 'Übersetzungssprachen',
+  'settings.content_languages.info': 'Alle Inhalte liest du in deiner Sprache, automatisch übersetzt.',
   'settings.section.notifications': 'Mitteilungen',
   'settings.notifications.title': 'Mitteilungen',
   'settings.notif.sounds': 'Töne',
