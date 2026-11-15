@@ -151,6 +151,8 @@ const pt = {
   'together.unavailable': 'Esta mídia não toca neste aparelho.',
   'together.someone': 'Alguém',
   'together.gone': 'O convite não é mais válido.',
+  'together.join.offline': 'Offline: a sessão não foi aberta.',
+  'together.join.failed': 'A sessão não foi aberta. Tente novamente.',
   'together.ended': 'A sessão juntos terminou.',
   'together.row.title': 'Assistir ou ouvir juntos',
   'together.row.explain': 'Escolha um vídeo ou um áudio da conversa: {name} reproduz ao mesmo tempo que você.',

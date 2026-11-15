@@ -6,6 +6,7 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { isContextMenuKey, useLongPress } from '@/lib/view/long-press';
 import { placePopoverVertical } from '@/lib/view/popover';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import type { SummaryEntryAction, SummaryEntryMenu } from '@/lib/view/summary-exits';
 
@@ -57,10 +58,13 @@ const GLYPH: Record<SummaryEntryAction, (typeof THREAD_MENU_GLYPHS)[keyof typeof
 function SummaryEntryMenuPanel({
   entry,
   onChoose,
+  onLeave,
   onClose,
 }: {
   readonly entry: OpenEntry;
   readonly onChoose: (action: SummaryEntryAction) => void;
+  /** Refermé : le menu n'est plus ouvert, même s'il reste peint le temps de son fondu. */
+  readonly onLeave: () => void;
   readonly onClose: () => void;
 }) {
   const language = currentInterfaceLanguage();
@@ -71,16 +75,21 @@ function SummaryEntryMenuPanel({
     onScroll: onClose,
     onResize: onClose,
     initialOpen: true,
+    exitMs: LAYER_MOTION_MS,
   });
 
-  const wasOpen = useRef(false);
+  /* Refermé, le menu SORT en fondu (#18327) : l'hôte ne le retire qu'une fois la sortie jouée. */
+  const wasMounted = useRef(false);
   useEffect(() => {
-    if (roving.open) {
-      wasOpen.current = true;
+    if (!roving.open) onLeave();
+  }, [roving.open, onLeave]);
+  useEffect(() => {
+    if (roving.mounted) {
+      wasMounted.current = true;
       return;
     }
-    if (wasOpen.current) onClose();
-  }, [roving.open, onClose]);
+    if (wasMounted.current) onClose();
+  }, [roving.mounted, onClose]);
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (isContextMenuKey(event)) {
@@ -91,7 +100,7 @@ function SummaryEntryMenuPanel({
     roving.onMenuKeyDown(event);
   };
 
-  if (!roving.open || typeof document === 'undefined') return null;
+  if (!roving.mounted || typeof document === 'undefined') return null;
 
   const rect = entry.anchor.getBoundingClientRect();
   const viewportWidth = window.innerWidth;
@@ -119,7 +128,7 @@ function SummaryEntryMenuPanel({
         event.stopPropagation();
       }}
       className="fixed z-40 overflow-hidden rounded-card py-1 shadow-cast"
-      style={{ top, left, width, backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)' }}
+      {...layerMotion(roving.leaving, { top, left, width, backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)' })}
     >
       {entry.actions.map((action, index) => (
         <button
@@ -165,6 +174,8 @@ export function useSummaryEntryMenu(menu: SummaryEntryMenu | undefined): {
 } {
   const [open, setOpen] = useState<OpenEntry | null>(null);
   const openRef = useRef(false);
+  /* Une ouverture = un menu : rouvert pendant la sortie du précédent, il ne reprend pas son état. */
+  const opening = useRef(0);
   const swallowClickUntil = useRef(0);
 
   const longPress = useLongPress({
@@ -175,11 +186,16 @@ export function useSummaryEntryMenu(menu: SummaryEntryMenu | undefined): {
       const actions = menu.actionsOf(messageId);
       if (actions.length === 0) return false;
       openRef.current = true;
+      opening.current += 1;
       setOpen({ anchor: element, messageId, label: element.dataset['summaryLabel'] ?? '', actions });
       return true;
     },
   });
 
+  /* Un menu qui SORT n'est plus ouvert : le relâcher d'un toucher qui le referme reste un toucher. */
+  const leave = useRef(() => {
+    openRef.current = false;
+  }).current;
   const close = useRef(() => {
     openRef.current = false;
     setOpen(null);
@@ -209,7 +225,7 @@ export function useSummaryEntryMenu(menu: SummaryEntryMenu | undefined): {
 
   const panel =
     open === null || menu === undefined ? null : (
-      <SummaryEntryMenuPanel entry={open} onClose={close} onChoose={(action) => menu.run(action, open.messageId)} />
+      <SummaryEntryMenuPanel key={opening.current} entry={open} onLeave={leave} onClose={close} onChoose={(action) => menu.run(action, open.messageId)} />
     );
 
   return { press: menu === undefined ? undefined : press, guard, panel };
