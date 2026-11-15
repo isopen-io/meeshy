@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La batterie des Proches (#14147) : android-only tant que les clés battery.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="battery_someone">Un allegado</string>
+    <string name="battery_pill_low">%1$s · batería baja (%2$d %%)</string>
+    <string name="battery_pill_threshold">%1$s · batería al %2$d %%</string>
+    <string name="battery_pill_critical">%1$s · batería crítica (%2$d %%)</string>
+    <string name="battery_pill_critical_drop">%1$s · la batería baja rápido (%2$d %%)</string>
+    <string name="battery_pill_probably_off">%1$s · teléfono probablemente apagado</string>
+    <string name="battery_pill_charging">%1$s · cargando</string>
+    <string name="battery_pill_back_on">%1$s · teléfono encendido de nuevo</string>
+    <string name="battery_pill_recharged">%1$s · batería recargada</string>
+    <string name="battery_pill_ended">%1$s · batería de nuevo normal</string>
+    <string name="battery_pill_generic">%1$s · novedades de la batería</string>
+    <string name="battery_detail_title">Batería</string>
+    <string name="battery_level">%1$d %%</string>
+    <string name="battery_charging">Cargando</string>
+    <string name="battery_low_power">Modo de ahorro de energía</string>
+    <string name="battery_autonomy">Quedan unas %1$d h %2$d min</string>
+    <string name="battery_measured_ago">hace %1$d min</string>
+    <string name="battery_measured_now">Ahora mismo</string>
+    <string name="battery_off">Teléfono probablemente apagado</string>
+    <string name="battery_pull">Pedir una lectura</string>
+    <string name="battery_pull_sent">Lectura pedida</string>
+    <string name="battery_pull_episode_only">Pedida. Su nivel solo se muestra cuando baja.</string>
+    <string name="battery_pull_too_soon">Ya pedida. Vuelve a intentarlo en unos minutos.</string>
+    <string name="battery_pull_forbidden">Solo un Sangre puede pedir una lectura.</string>
+    <string name="battery_pull_unavailable">Petición no disponible por ahora.</string>
+    <string name="battery_a11y">Batería de %1$s: %2$d %%</string>
+    <string name="battery_a11y_charging">Batería de %1$s: %2$d %%, cargando</string>
+    <string name="battery_share_global_title">Compartir mi batería</string>
+    <string name="battery_share_global_hint">Tus allegados y tu Sangre solo ven tu nivel cuando baja. Android lo mide cuando Meeshy está abierto, cada 15 minutos en segundo plano y cuando un Sangre lo pide, nunca más a menudo.</string>
+    <string name="battery_share_person">Compartir mi batería con %1$s</string>
+    <string name="battery_share_person_hint">%1$s solo ve tu nivel cuando baja.</string>
+    <string name="battery_consent_title">¿Compartir tu batería con %1$s?</string>
+    <string name="battery_consent_body">Si tu batería baja, %1$s lo sabrá. Puedes cambiarlo cuando quieras desde su ficha.</string>
+    <string name="battery_consent_checkbox">Compartir mi batería con %1$s</string>
+    <string name="battery_consent_confirm">Confirmar</string>
+    <string name="battery_consent_later">Ahora no</string>
+    <string name="battery_receive_title">Alertas de batería de %1$s</string>
+    <string name="battery_receive_all">Todas las alertas</string>
+    <string name="battery_receive_critical">Solo críticas</string>
+    <string name="battery_receive_pill">Solo en la app</string>
+    <string name="battery_receive_none">Nada</string>
+    <string name="battery_unavailable">Ajustes de batería no disponibles.</string>
+</resources>

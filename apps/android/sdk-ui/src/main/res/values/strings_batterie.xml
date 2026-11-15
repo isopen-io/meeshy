@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La batterie des Proches (#14147) : android-only tant que les clés battery.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="battery_someone">A close one</string>
+    <string name="battery_pill_low">%1$s · low battery (%2$d %%)</string>
+    <string name="battery_pill_threshold">%1$s · battery at %2$d %%</string>
+    <string name="battery_pill_critical">%1$s · critical battery (%2$d %%)</string>
+    <string name="battery_pill_critical_drop">%1$s · battery dropping fast (%2$d %%)</string>
+    <string name="battery_pill_probably_off">%1$s · phone probably off</string>
+    <string name="battery_pill_charging">%1$s · charging</string>
+    <string name="battery_pill_back_on">%1$s · phone back on</string>
+    <string name="battery_pill_recharged">%1$s · battery recharged</string>
+    <string name="battery_pill_ended">%1$s · battery back to normal</string>
+    <string name="battery_pill_generic">%1$s · battery update</string>
+    <string name="battery_detail_title">Battery</string>
+    <string name="battery_level">%1$d %%</string>
+    <string name="battery_charging">Charging</string>
+    <string name="battery_low_power">Power saving mode</string>
+    <string name="battery_autonomy">About %1$d h %2$d min left</string>
+    <string name="battery_measured_ago">%1$d min ago</string>
+    <string name="battery_measured_now">Just now</string>
+    <string name="battery_off">Phone probably off</string>
+    <string name="battery_pull">Request a reading</string>
+    <string name="battery_pull_sent">Reading requested</string>
+    <string name="battery_pull_episode_only">Requested. Their level only shows when it gets low.</string>
+    <string name="battery_pull_too_soon">Already requested. Try again in a few minutes.</string>
+    <string name="battery_pull_forbidden">Only Blood can request a reading.</string>
+    <string name="battery_pull_unavailable">Request unavailable right now.</string>
+    <string name="battery_a11y">%1$s battery: %2$d %%</string>
+    <string name="battery_a11y_charging">%1$s battery: %2$d %%, charging</string>
+    <string name="battery_share_global_title">Share my battery</string>
+    <string name="battery_share_global_hint">Close ones and Blood see your level only when it gets low. Android measures it while Meeshy is open, every 15 minutes in the background, and when Blood asks — never more often.</string>
+    <string name="battery_share_person">Share my battery with %1$s</string>
+    <string name="battery_share_person_hint">%1$s sees your level only when it gets low.</string>
+    <string name="battery_consent_title">Share your battery with %1$s?</string>
+    <string name="battery_consent_body">If your battery gets low, %1$s will know. You can change this at any time in their profile.</string>
+    <string name="battery_consent_checkbox">Share my battery with %1$s</string>
+    <string name="battery_consent_confirm">Confirm</string>
+    <string name="battery_consent_later">Not now</string>
+    <string name="battery_receive_title">Battery alerts from %1$s</string>
+    <string name="battery_receive_all">All alerts</string>
+    <string name="battery_receive_critical">Critical only</string>
+    <string name="battery_receive_pill">In the app only</string>
+    <string name="battery_receive_none">Nothing</string>
+    <string name="battery_unavailable">Battery settings unavailable.</string>
+</resources>

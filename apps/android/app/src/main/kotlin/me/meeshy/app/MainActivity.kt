@@ -50,6 +50,7 @@ import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
+import me.meeshy.sdk.battery.BatteryStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.SystemBarsAppearance
 import me.meeshy.sdk.model.call.CallLinkRequest
@@ -62,6 +63,7 @@ import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.component.LocalConversationViewers
 import me.meeshy.ui.component.LocalPresenceStore
+import me.meeshy.ui.component.battery.LocalBatteryStore
 import me.meeshy.ui.component.video.LocalVideoPictureInPicture
 import me.meeshy.ui.component.video.VideoPictureInPictureCoordinator
 import me.meeshy.ui.profile.LocalProfileGameSlot
@@ -99,6 +101,10 @@ class MainActivity : ComponentActivity() {
     /** La carte de présence unique de la session : [LocalPresenceStore] la fournit aux avatars. */
     @Inject
     lateinit var presenceStore: PresenceStore
+
+    /** La batterie des Proches (#14147) : [LocalBatteryStore] la fournit à l'en-tête et aux avatars. */
+    @Inject
+    lateinit var batteryStore: BatteryStore
 
     /** Qui a l'écran de quelle conversation ouvert : [LocalConversationViewers] le fournit aux avatars. */
     @Inject
@@ -220,6 +226,7 @@ class MainActivity : ComponentActivity() {
                     CompositionLocalProvider(
                         LocalMediaBaseUrl provides config.apiBaseUrl,
                         LocalPresenceStore provides presenceStore,
+                        LocalBatteryStore provides batteryStore,
                         LocalConversationViewers provides conversationViewing.viewers,
                         // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
                         LocalProfileGameSlot provides gameSlot,
