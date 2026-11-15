@@ -404,3 +404,15 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Hors lot : la bannière in-app (`NotificationBannerHost`) n'ouvre que conversation, publication ou jeu ; un toucher sur la bannière d'un ajout reste sans effet, comme avant.
 - Témoins : `PushTapDestinationTest` (+4), `PushPayloadTest` (+1), `NotificationDestinationResolverTest` (+3), `LaunchRouterTest` (+2), `PushTapIntentFactoryTest` (+1). Preuve : `android.yml` sur la PR (`jvm-check` ne tourne pas en conteneur, `libsignal-client` refusé par le proxy).
 - Prochain lot recommandé : #18439 (iOS et Android consomment `community:updated`), puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14/15 — réveils 44 à 51 (rattrapage)
+
+- Runs consacrés à fusionner #18568 (#18061, la notification « ajouté à la communauté » ouvre la communauté sur Android) : `dev` verrouillé plusieurs heures, puis rouges Android étrangers ; fusion `17a816d67` une fois `dev` réparé. Suppression de branche refusée par le proxy (API 403). Suivi ouvert : #18670 (la bannière in-app Android n'ouvre pas la communauté).
+
+## 2026-11-15 — réveil 52 (15:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte, `dev` déverrouillé.
+- Lot : #18439, volet iOS (la référence). `community:updated` est décodé par le SDK (`CommunityUpdatedEvent`, `Sockets/CommunityUpdateChannel.swift`, canal hors de `MessageSocketManager` comme `ConversationObsolescenceChannel`), routé (`SocketEvent.communityUpdated`, table des conversations) et servi par `MessageSocketProviding.communityUpdated`. Une seule règle d'application (`Models/CommunityUpdatedEvent+Apply.swift`) pour le modèle d'écran (`MeeshyCommunity.applying`) et la ligne persistée (`APICommunity.applying`) : autre communauté ⇒ rien, événement plus ancien que la copie ⇒ rien, rôle du lecteur, « N en ligne », emoji et nombre de canaux gardés, empreinte floue d'une image qui change oubliée. Appliqué sans relance réseau à `CacheCoordinator.communities` (toutes clés, `repaintEverywhere`), à `CommunityListViewModel` et à `CommunityDetailViewModel` (flux injecté, défaut `CommunityUpdateChannel.live`).
+- Témoins : SDK `CommunityUpdatedEventTests` (6, décodage clé par clé depuis la charge de l'émetteur), `SocketInboundRouteTableTests` (+1 route, relevé figé +1 nom), `CacheCoordinatorCommunityUpdatesTests` (2) ; app `CommunityListViewModelTests` (+3), `CommunityDetailViewModelTests` (+2). Preuve : CI iOS de la PR (pas de Swift en conteneur).
+- Gates locaux : shared `ios-socket-event-enum-parity`, `socket-event-name-gate`, `socket-payload-shape`, `socket-event-orphan-gate` verts ; cliquets maison iOS identiques à `dev` (ses rouges `fixed-font`/`kit-glass-*` et la suite non enregistrée `UserActivityCardsTests` sont étrangers).
+- Reste de #18439 : le volet Android (#18439 reste ouverte) ; la rangée Communautés de la liste des conversations relit le cache réécrit à son prochain chargement, sans rafraîchissement en direct.

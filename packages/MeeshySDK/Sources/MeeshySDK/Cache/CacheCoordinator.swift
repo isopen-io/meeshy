@@ -216,6 +216,7 @@ public actor CacheCoordinator {
         subscribeToLifecycle()
         subscribeToPostEngagement()
         subscribeToConversationObsolescence()
+        subscribeToCommunityUpdates()
         Task { await self.backfillSearchIndexIfNeeded() }
     }
 
