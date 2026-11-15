@@ -192,10 +192,9 @@ final class SharedLocationSharingCenter: ObservableObject {
             case .unavailable: return .locationUnavailable
             }
             guard self.isLive else { return .refused(.failed) }
-            self.markReceived(false)
             let previous = self.roster
             let next = previous.pruned(now: self.now()).adding(userId: userId, precision: precision, duration: duration, now: self.now())
-            return await self.publish(next, fix: fix, previous: previous)
+            return await self.publish(next, fix: fix, previous: previous, claimsPublishing: true)
         }
     }
 
@@ -322,7 +321,15 @@ final class SharedLocationSharingCenter: ObservableObject {
         }
     }
 
-    private func publish(_ wanted: SharedLocationRoster, fix: SharedLocationFix, previous: SharedLocationRoster) async -> SharedLocationShareProblem? {
+    /// `claimsPublishing` : le geste « Partager » d'ici fait de cet appareil celui qui publie — mais seulement une fois le
+    /// démarrage accepté (ou son accusé perdu) : un « Partager » refusé laisse un appareil qui n'a fait que RECEVOIR la
+    /// liste muet, même au prochain lancement.
+    private func publish(
+        _ wanted: SharedLocationRoster,
+        fix: SharedLocationFix,
+        previous: SharedLocationRoster,
+        claimsPublishing: Bool = false
+    ) async -> SharedLocationShareProblem? {
         let next = wanted.settled
         let instant = now()
         let recipients = next.deadlinedRecipients(now: instant)
@@ -334,9 +341,11 @@ final class SharedLocationSharingCenter: ObservableObject {
         guard isLive else { return .refused(.failed) }
         switch verdict {
         case .started:
+            if claimsPublishing { markReceived(false) }
             engage(next, fix: fix)
             return nil
         case .refused(.unconfirmed):
+            if claimsPublishing { markReceived(false) }
             engage(previous.union(next), fix: fix)
             return .refused(.unconfirmed)
         case .refused(let outcome):

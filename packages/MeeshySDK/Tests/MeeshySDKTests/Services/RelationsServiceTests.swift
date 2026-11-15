@@ -131,6 +131,20 @@ final class RelationsServiceTests: XCTestCase {
         XCTAssertTrue(own.recipients.isEmpty)
     }
 
+    /// Une réponse sans liste lisible est « je ne sais pas », jamais « plus rien n'est partagé » : l'appareil qui
+    /// l'adopterait perdrait ses « Arrêter » pendant que la passerelle sert encore sa position.
+    func test_ownSharedLocation_withoutAReadableList_fails() async {
+        for body in [#"{"success":true,"data":{}}"#, #"{"success":true,"data":{"recipients":"tous"}}"#] {
+            let (service, api) = makeSUT()
+            api.stubWire("/relations/locations/mine", json: body)
+
+            do {
+                _ = try await service.ownSharedLocation()
+                XCTFail("une liste illisible ne doit pas se lire comme vide : \(body)")
+            } catch {}
+        }
+    }
+
     // MARK: - Baisser (#14910)
 
     func test_lower_postsTheTargetLevelAndReadsTheServedLink() async throws {

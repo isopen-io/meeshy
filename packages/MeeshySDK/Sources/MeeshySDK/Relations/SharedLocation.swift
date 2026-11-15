@@ -185,7 +185,9 @@ public struct SharedLocationOwnRecipient: Decodable, Sendable, Equatable {
 }
 
 /// `GET /relations/locations/mine` — MON partage en cours, tel que la passerelle le sert. Un partage par compte : c'est
-/// lui qui fait foi, pour chacun des appareils du compte. Une personne illisible est écartée sans faire tomber le cliché.
+/// lui qui fait foi, pour chacun des appareils du compte. Une personne illisible est écartée sans faire tomber le cliché ;
+/// une réponse SANS liste lisible n'est pas « plus rien n'est partagé » mais « je ne sais pas » : elle échoue, et
+/// l'appareil garde sa liste et ses « Arrêter » (iso `decodeOwnSharedLocation` du web).
 public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     public let recipients: [SharedLocationOwnRecipient]
 
@@ -197,8 +199,7 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let lenient = (try? c.decodeIfPresent([Lenient].self, forKey: .recipients)) ?? nil
-        recipients = (lenient ?? []).compactMap(\.value)
+        recipients = try c.decode([Lenient].self, forKey: .recipients).compactMap(\.value)
     }
 
     private struct Lenient: Decodable {

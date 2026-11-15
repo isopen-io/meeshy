@@ -1224,3 +1224,25 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Rouge vu sur le commit précédent, étranger au lot : `Gardes iOS (texte)` — cliquet des couleurs `Color(hex:)` à 468
   pour une référence de 466 ; la PR ne touche aucune couleur iOS (seul Swift : deux lignes de `RelationsEndpoint`).
 - Prochain lot recommandé : #18578 (iOS + Android se recalent sur la passerelle), puis #18580, puis #18431.
+
+## 2026-11-15 — réveil de 19 h : iOS se recale sur le partage que la passerelle sert (#18578, moitié iOS)
+
+- Reprise : la PR #18581 (#18389, serveur + web) a été fusionnée dans `dev` par le porteur ; aucune PR cercles ouverte.
+  Aucune branche vivante n'écrit `apps/ios/Meeshy/Features/SharedLocation/` ni le centre Android : lot réservé avant
+  toute écriture.
+- Lot : la moitié iOS de #18578 (iso `shared-location-sharing.ts` du web). SDK : `location:share-own-changed` routé
+  (`SharedLocationEvents.ownChanged`), `RelationsService.ownSharedLocation()` lit `GET /relations/locations/mine`
+  (`SharedLocationOwnSnapshot`). App : `SharedLocationRoster.withServed` (la liste servie fait foi, retraits en attente
+  d'ici gagnants), `SharedLocationSharingCenter.sync()` à chaque socket accrochée (avant la réconciliation) et à chaque
+  annonce ; une liste REÇUE d'un autre appareil (marque gardée par compte) ne suit pas la position, ne reprend pas au
+  lancement et solde ses échéances sans rien envoyer ; « Partager » fait de cet iPhone celui qui publie.
+- Gardes : `RelationsEndpoint.locationsMine` sort des entrées en attente du catalogue Swift ; la garde de parité des
+  événements ne compte plus iOS comme absent de `location:share-own-changed` (Android seul).
+- Ce qui reste de #18578 : Android (centre `SharedLocationSharingCenter.kt`, `ApiRoutesRelations.LOCATIONS_MINE`).
+- Audit adversarial avant PR : un bloquant corrigé (une réponse SANS liste lisible se lisait « plus rien n'est
+  partagé » : l'iPhone perdait ses « Arrêter » pendant que la passerelle servait encore sa position ; elle échoue
+  désormais, comme sur le web), un « Partager » refusé sur un appareil qui n'a fait que recevoir ne le fait plus
+  publier au lancement suivant (la marque ne tombe qu'à l'accusé). Les trois écarts communs aux trois clients (liste
+  périmée republiée avant la relecture, deux appareils qui publient, demande de permission sur un « Arrêter » iOS)
+  sont ouverts en #18714.
+- Prochain lot recommandé : la moitié Android de #18578, puis #18714, puis #18580.

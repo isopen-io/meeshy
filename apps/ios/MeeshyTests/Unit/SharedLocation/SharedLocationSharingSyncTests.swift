@@ -243,4 +243,21 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertFalse(sut.store.received)
         XCTAssertEqual(Set(sut.emitter.starts.last?.recipients.map(\.userId) ?? []), [alice, bob])
     }
+
+    /// Un « Partager » refusé (hors ligne, débit) sur un appareil qui n'a fait que RECEVOIR la liste ne le fait pas
+    /// publier : ni maintenant, ni au prochain lancement.
+    func test_aRefusedShare_onAReceivingDevice_keepsItSilent_evenAfterARelaunch() async {
+        let store = FakeSharedLocationRosterStore()
+        let sut = makeSUT(store: store)
+        sut.served.snapshot = snapshot([(alice, .exact, 3600)])
+        await sut.center.sync()
+        sut.emitter.startVerdict = .refused(.offline)
+
+        let problem = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(problem, .refused(.offline))
+        XCTAssertTrue(store.received)
+        XCTAssertFalse(sut.fixes.isFollowing)
+        XCTAssertFalse(makeSUT(store: store).fixes.isFollowing)
+    }
 }
