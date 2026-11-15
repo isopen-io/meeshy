@@ -122,7 +122,9 @@ struct StoryNavigationTraceTests {
 @MainActor
 struct PlaybackPlayerCensusTests {
 
-    @Test func liveCount_followsCreationAndRelease() {
+    /// AVFoundation peut libérer un `AVPlayer` un tour de boucle après sa dernière référence (mesuré sur le
+    /// simulateur iOS 26.1 de la CI) : la table faible le perd alors, mais pas dans la même pile.
+    @Test func liveCount_followsCreationAndRelease() async {
         let census = PlaybackPlayerCensus()
         let kept = AVPlayer()
         census.track(kept)
@@ -130,6 +132,9 @@ struct PlaybackPlayerCensusTests {
             let released = AVPlayer()
             census.track(released)
             #expect(census.liveCount == 2)
+        }
+        for _ in 0..<50 where census.liveCount != 1 {
+            try? await Task.sleep(for: .milliseconds(20))
         }
         #expect(census.liveCount == 1)
         withExtendedLifetime(kept) {}
