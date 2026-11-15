@@ -51,6 +51,8 @@ struct SettingsAnnexFold<Content: View>: View {
                         .foregroundStyle(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer()
                 Image(systemName: "chevron.down")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
