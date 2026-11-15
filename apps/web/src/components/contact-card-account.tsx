@@ -119,7 +119,7 @@ export function ContactAccountRow({
                   event.stopPropagation();
                   onAction(action, account);
                 }}
-                className="flex-1 rounded-chip px-4 text-body font-semibold"
+                className="btn-press flex-1 rounded-chip px-4 text-body font-semibold"
                 style={{
                   minHeight: 44,
                   backgroundColor: primary ? 'var(--color-ios-brand)' : 'transparent',

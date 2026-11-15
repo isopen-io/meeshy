@@ -129,7 +129,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
           aria-controls="talkie-info"
           aria-label={translateCircles(language, 'talkie.send.info.a11y')}
           onClick={() => setInfo((open) => !open)}
-          className={`grid shrink-0 place-items-center rounded-full text-body font-bold ${FOCUS}`}
+          className={`btn-press grid shrink-0 place-items-center rounded-full text-body font-bold ${FOCUS}`}
           style={{ width: 48, height: 48, color: BRAND, outlineColor: BRAND }}
         >
           <span aria-hidden="true">ⓘ</span>
@@ -146,7 +146,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
         aria-pressed={live}
         aria-label={translateCircles(language, 'talkie.send.hold.a11y', { name })}
         {...talkieHoldHandlers({ onPress, onRelease })}
-        className={`grid select-none place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
+        className={`btn-press grid select-none place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
         style={{
           minHeight: 52,
           touchAction: 'none',

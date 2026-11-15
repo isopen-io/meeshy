@@ -73,3 +73,24 @@ describe('fiche de contact — copier sans presse-papiers asynchrone (#8986)', (
     expect(host.querySelector('[data-contact-toast]')?.textContent?.trim()).toBe('Copied to clipboard');
   });
 });
+
+describe('fiche de contact — elle entre et sort en fondu (#18320, défaut de #18552)', () => {
+  test('la fiche s’ouvre en fondu, et ✕ la ferme d’un coup en laissant son fantôme jouer la sortie', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, writable: true, value() {} });
+    try {
+      const closed: string[] = [];
+      const host = await mounter.mount(
+        <ContactCardSheet card={CARD} accounts={[]} language="en" busy={null} onAction={() => {}} onClose={() => closed.push('close')} />,
+      );
+      const dialog = host.querySelector<HTMLDialogElement>('dialog[data-contact-sheet]');
+      expect(dialog?.hasAttribute('data-dialog-fade')).toBe(true);
+      await mounter.click(host.querySelector<HTMLButtonElement>('[data-contact-close]'));
+      expect(closed).toEqual(['close']);
+      expect(dialog?.open).toBe(false);
+      expect(document.querySelector('[data-dialog-ghost]')?.getAttribute('data-dialog-ghost')).toBe('centered');
+    } finally {
+      delete (HTMLElement.prototype as { showPopover?: unknown }).showPopover;
+      for (const ghost of document.querySelectorAll('[data-dialog-ghost]')) ghost.remove();
+    }
+  });
+});
