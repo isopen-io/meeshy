@@ -22,6 +22,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-13 | Le détail d'une communauté dit combien de membres sont en ligne, sans dire qui (passerelle, web, iOS) | voir réveil du 2026-11-13 | #18014 | voir réveil du 2026-11-13 |
 | 2026-11-14 | Une image de profil ou de communauté ne désigne qu'un hôte Meeshy (passerelle) | voir réveil 38 | #16809 | voir réveil 38 |
 | 2026-11-14 | Le détail Android d'une communauté dit « N en ligne », comme iOS et le web | voir réveil 40 | #18026 | voir réveil 40 |
+| 2026-11-14 | Sur Android, la notification « ajouté à la communauté » ouvre la communauté | voir réveil 43 | #18061 | voir réveil 43 |
 
 ## 2026-11-07 — lot 1
 
@@ -391,3 +392,15 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - CI de la tête `5039d5f4e` : tout vert sauf `Android (assemble + unit tests)`, rouge sur les 7 mêmes tests de `:feature:calls` que `dev` (#18490, ouverte), que la PR ne touche pas. `assembleDebug` vert ; `:core:model`, `:core:network` et `:feature:community` (dont `CommunityDecodingTest`) passés avant l'arrêt de Gradle sur `:feature:calls`.
 - `origin/dev` intégré sans conflit ; `xcstrings_to_android.py --check` vert sur la fusion.
 - Prochain lot recommandé : inchangé (#18061, puis #18439, puis le reste de #16857).
+
+## 2026-11-14 — réveil 42 (17:38 UTC)
+
+- Run consacré à fusionner #18479 (#18026, « N en ligne » sur Android) une fois `dev` déverrouillé : fusion `8078bfefd`. Non journalisé à ce réveil-là ; consigné ici.
+
+## 2026-11-14 — réveil 43 (19:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte, `dev` déverrouillé.
+- Lot : #18061 (Android). `PushPayload.communityId` (la clé `communityId` de la carte ; `''` = absente) et `NotificationContext.communityId` ; `PushTapDestination.Community`, élue avant la conversation pour la famille communauté / membres d'iOS (`RootNotificationNavigator` : `community_invite`, `community_joined`/`left`, `member_*`, `added_to_conversation`, `new_conversation*`, `removed_from_conversation`) ; sans la clé, le chemin d'avant. Une seule table pour les deux portes : la ligne de la cloche (`NotificationDestination.Community` → `onOpenCommunity` → `CommunityRoutes.detail`) et le push (`PushTapExtras` transporte `communityId`, `LaunchRouter` ouvre `CommunityRoutes.detail`).
+- Hors lot : la bannière in-app (`NotificationBannerHost`) n'ouvre que conversation, publication ou jeu ; un toucher sur la bannière d'un ajout reste sans effet, comme avant.
+- Témoins : `PushTapDestinationTest` (+4), `PushPayloadTest` (+1), `NotificationDestinationResolverTest` (+3), `LaunchRouterTest` (+2), `PushTapIntentFactoryTest` (+1). Preuve : `android.yml` sur la PR (`jvm-check` ne tourne pas en conteneur, `libsignal-client` refusé par le proxy).
+- Prochain lot recommandé : #18439 (iOS et Android consomment `community:updated`), puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.

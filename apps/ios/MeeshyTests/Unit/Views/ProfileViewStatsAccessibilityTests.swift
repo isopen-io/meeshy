@@ -30,16 +30,16 @@ final class ProfileViewStatsAccessibilityTests: XCTestCase {
             "Le bouton doit exposer le libellé composé."
         )
         XCTAssertTrue(
-            band.contains("profile.stats.a11y.hint"),
-            "Le bouton doit porter un indice : la bande a l'air statique mais ouvre les statistiques détaillées."
+            band.contains(".accessibilityHint(Self.openHint)"),
+            "Le bouton doit porter un indice : la bande a l'air statique mais ouvre Mon activité."
         )
     }
 
     func test_activityAccessibilityLabel_pairsEachValueWithItsNoun_andCountsNoRequest() throws {
         let band = try source("ProfileActivityBand.swift")
-        for key in ["profile.section.activity", "profile.stats.messages", "profile.stats.conversations", "user.stats.translations"] {
-            XCTAssertTrue(band.contains(key), "Le libellé composé doit redire \(key), pour que chaque valeur garde son nom.")
-        }
+        XCTAssertTrue(band.contains("profile.section.activity"), "Le libellé composé commence par le titre de la section.")
+        XCTAssertTrue(band.contains("UserActivityCards.make(stats: stats)"), "Les trois nombres et leurs noms viennent des cartes de Mon activité.")
+        XCTAssertFalse(band.contains("profile.stats.messages"), "Une seule famille de clés pour les trois nombres.")
         XCTAssertFalse(band.contains("profile.stats.friends"), "Un compteur de demandes n'est pas une statistique.")
     }
 

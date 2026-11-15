@@ -129,6 +129,20 @@ describe('« Qui est prévenu » — se déplier par action, choisir', () => {
     ]);
   });
 
+  test('la famille se déplie et se replie en mouvement : les actions entrent en fondu, restent le temps de leur sortie, et la flèche tourne', async () => {
+    const host = await mount(section().element);
+    const button = familyButton(host, 'publication');
+    if (button !== null) await click(button);
+    const panel = () => host.querySelector(`#${button?.getAttribute('aria-controls') ?? 'absent'}`);
+    expect(panel()?.querySelector('[data-layer-motion]')?.hasAttribute('data-leaving')).toBe(false);
+    expect(button?.querySelector('svg')?.getAttribute('style') ?? '').toContain('transition');
+    if (button !== null) await click(button);
+    expect(button?.getAttribute('aria-expanded')).toBe('false');
+    const leaving = panel()?.querySelector('[data-layer-motion]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.querySelectorAll('select')).toHaveLength(6);
+  });
+
   test('choisir un cran le remet à l’hôte, clé plate et valeur', async () => {
     const { element, chosen } = section();
     const host = await mount(element);

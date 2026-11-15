@@ -9,7 +9,9 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { isTrackingToken } from '@/lib/links/tracking-redirect';
 import { useRoute } from '@/lib/router';
 import { safeNextPath } from '@/lib/session-guard';
+import '@/styles/sheet-motion.css';
 import { participantAvatarOf, initialsOf } from '@/lib/view/conversation';
+import { DIALOG_MOTION_STYLE, useDialogExit } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useViewer } from '@/lib/view/use-viewer';
 import { Link } from '@/routes/route-table';
@@ -97,6 +99,7 @@ export function VisitorInvitationDialog({
   const served = state === 'served';
   const refused = state === 'refused';
   useBackDismiss(served ? onDismiss : () => {});
+  useDialogExit(ref, { kind: 'confirm' });
 
   useEffect(() => {
     const dialog = ref.current;
@@ -120,6 +123,7 @@ export function VisitorInvitationDialog({
     <dialog
       ref={ref}
       data-visitor-invitation={state}
+      data-dialog-fade=""
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       onCancel={(event) => {
@@ -127,7 +131,7 @@ export function VisitorInvitationDialog({
       }}
       onClose={served ? onDismiss : undefined}
       className="m-auto w-[min(26rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-veil"
-      style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
+      style={{ ...DIALOG_MOTION_STYLE, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
     >
       <div className="grid justify-items-center gap-4 p-6 text-center">
         {named !== null ? (

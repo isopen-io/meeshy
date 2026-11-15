@@ -1,8 +1,8 @@
 import CoreGraphics
 import Foundation
 
-/// Les deux familles du rail (#9351).
-/// L'ordre de déclaration EST l'ordre du rail : Filtres · Effets · Cadres
+/// Les familles de la bande : un détail de TRI, plus une entrée du rail (#18639).
+/// L'ordre de déclaration EST l'ordre de la liste mêlée : Filtres · Effets · Cadres
 /// (#10311, porteur 2026-10-12).
 nonisolated enum ComposerLookFamily: String, CaseIterable, Hashable, Sendable {
     case filters
@@ -121,23 +121,22 @@ nonisolated enum ComposerLookStripRule {
     }
     static let spacing: CGFloat = 8
     static var pitch: CGFloat { cellSize.width + spacing }
-    /// Le nom du choix, seul sous la bande (#9566), discret (porteur 2026-10-12).
-    static let chosenNameSize: CGFloat = 10
-    static let chosenNameHeight: CGFloat = 18
+    /// **Chaque case se nomme sous elle, AVANT d'être choisie** (#18639) : la choisie ne gagne que le gras et deux points.
+    static func nameSize(chosen: Bool) -> CGFloat { chosen ? 11 : 9 }
+    static let nameHeight: CGFloat = 18
     /// La rangée des puces qui trient la bande (#17267) : une cible de 44 pt.
     static let chipsHeight: CGFloat = 44
-    /// Filtres · Effets · Cadres posés au niveau de la bande : leur bas sur le
-    /// bas des cases (porteur 2026-10-12).
-    static var railBottomInset: CGFloat { chosenNameHeight + ComposerTriggerOutline.outset }
+    /// La colonne posée au niveau de la bande : son bas sur le bas des cases
+    /// (porteur 2026-10-12).
+    static var railBottomInset: CGFloat { nameHeight + ComposerTriggerOutline.outset }
 
-    /// **La colonne Filtres · Effets · Cadres a la hauteur exacte d'une case**
-    /// (#10339, porteur 2026-10-12 : « les bordures ne sont pas alignées ») : son
-    /// haut sur le haut des cases, son bas sur leur bas, et l'espacement des
-    /// cases entre ses entrées.
-    static var railEntryHeight: CGFloat {
-        let familles = CGFloat(ComposerLookFamily.allCases.count)
-        return (cellSize.height - (familles - 1) * spacing) / familles
-    }
+    /// **UNE entrée de looks au rail, « Effets »** (#18639) :
+    /// elle ouvre la liste mêlée, que les puces trient (Tout · Filtres · Cadres ·
+    /// Effets image · Effets visage · ambiances) ; la retoucher la replie.
+    static let railFamily: ComposerLookFamily = .effects
+
+    /// Chaque entrée de la colonne est une cible de 44 pt.
+    static let railEntryHeight: CGFloat = 44
 
     /// La case sous le milieu de la bande, pour un défilement de `scrolled`
     /// points depuis la première ; les rebonds restent sur les bords.

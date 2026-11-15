@@ -80,65 +80,27 @@ struct ComposerCropBrackets: View {
     }
 }
 
-/// **Les proportions par presets**, sous la scène : le preset que la scène
-/// réalise est allumé ; un recadrage libre n'en allume aucun. Aucun libellé
-/// ne rétrécit : la bande défile jusqu'aux bords de l'écran.
+/// **Les proportions par presets, en puces** (#18639) : la
+/// puce de tri de la bande (`CallFrameMoodChip`), le preset que la scène réalise
+/// allumé ; un recadrage libre n'en allume aucun. Aucun libellé ne rétrécit : la
+/// rangée défile jusqu'aux bords de l'écran.
 struct ComposerCropPresetBar: View {
     let selected: ComposerCropPreset?
     let onSelect: (ComposerCropPreset) -> Void
 
     var body: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            ForEach(ComposerCropPreset.allCases, id: \.self) { preset in
-                Button {
-                    HapticFeedback.light()
-                    onSelect(preset)
-                } label: {
-                    Text(preset.label)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
-                        .foregroundStyle(selected == preset ? Color.yellow : .white)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, MeeshySpacing.md)
-                        .frame(minHeight: MeeshyControlSize.tapTarget)
-                        .adaptiveLiquidGlass(in: Capsule(), interactive: true)
+        AdaptiveGlassContainer(spacing: CallFrameMoodChips.spacing) {
+            HStack(spacing: CallFrameMoodChips.spacing) {
+                ForEach(ComposerCropPreset.allCases, id: \.self) { preset in
+                    CallFrameMoodChip(title: preset.label, isSelected: selected == preset) {
+                        HapticFeedback.light()
+                        onSelect(preset)
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(preset.label)
-                .accessibilityAddTraits(selected == preset ? .isSelected : [])
             }
+            .padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
         }
-        .padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
         .frame(height: ComposerEditScene.presetsHeight)
-    }
-}
-
-/// **« Annuler » du recadrage** (#15355), en tête des formats : il rend le
-/// cadre d'avant l'entrée dans Recadrer en un geste. Une flèche de retour, pas
-/// la croix : la croix abandonne toute la retouche.
-struct ComposerCropCancelButton: View {
-    static let minSide: CGFloat = MeeshyControlSize.tapTarget
-
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                Text(ComposerCaptureCopy.cancelEdit)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, MeeshySpacing.md)
-            .frame(minWidth: Self.minSide, minHeight: Self.minSide)
-            .adaptiveLiquidGlass(in: Capsule(), interactive: true)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(ComposerCaptureCopy.cancelCrop)
     }
 }
 

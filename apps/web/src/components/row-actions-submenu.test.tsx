@@ -69,10 +69,11 @@ function mount(): { readonly actions: string[]; readonly choices: RowSubmenuChoi
   return { actions, choices };
 }
 
-const items = (): HTMLButtonElement[] => [...document.body.querySelectorAll<HTMLButtonElement>('[role="menu"] button')];
+/* Le menu OUVERT : celui qui SORT (`data-leaving`, le temps du fondu — #18327) n'en est plus un. */
+const items = (): HTMLButtonElement[] => [...document.body.querySelectorAll<HTMLButtonElement>('[role="menu"]:not([data-leaving]) button')];
 const labels = (): string[] => items().map((b) => b.textContent ?? '');
 const item = (label: string): HTMLButtonElement | undefined => items().find((b) => b.textContent === label);
-const menuLabel = (): string | null => document.body.querySelector('[role="menu"]')?.getAttribute('aria-label') ?? null;
+const menuLabel = (): string | null => document.body.querySelector('[role="menu"]:not([data-leaving])')?.getAttribute('aria-label') ?? null;
 
 function openMenu(): void {
   const button = container.querySelector<HTMLButtonElement>('button[aria-label="Actions de conversation"]');
@@ -107,6 +108,20 @@ describe('RowActions — les sous-menus Favori et Déplacer vers…', () => {
     });
     expect(choices).toEqual([{ kind: 'favorite', emoji: '💎' }]);
     expect(menuLabel()).toBeNull();
+  });
+
+  test('refermé depuis un sous-menu, le bouton de la ligne reprend son nom pendant que le menu sort', () => {
+    mount();
+    openMenu();
+    act(() => {
+      item('Favori')?.click();
+    });
+    act(() => {
+      item('💎')?.click();
+    });
+    const button = container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"][aria-expanded]');
+    expect(button?.getAttribute('aria-expanded')).toBe('false');
+    expect(button?.getAttribute('aria-label')).toBe('Actions de conversation');
   });
 
   test('« Déplacer vers… » : les catégories puis « Mes conversations » ; retoucher la courante la vide', () => {
@@ -146,7 +161,7 @@ describe('RowActions — les sous-menus Favori et Déplacer vers…', () => {
   test('au clavier : Flèche droite entre dans le sous-menu, Flèche gauche en sort', () => {
     mount();
     openMenu();
-    const menu = (): HTMLElement | null => document.body.querySelector('[role="menu"]');
+    const menu = (): HTMLElement | null => document.body.querySelector('[role="menu"]:not([data-leaving])');
     const press = (key: string) =>
       act(() => {
         menu()?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));

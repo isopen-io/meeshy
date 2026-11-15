@@ -28,7 +28,7 @@ struct ProfileView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showStats = false
-    @State private var showSecurity = false
+    @State private var securityFocus: SettingsFocus?
     @State private var stats: UserStats?
     @State private var showSystemLanguagePicker = false
     @State private var showRegionalLanguagePicker = false
@@ -87,8 +87,8 @@ struct ProfileView: View {
         .sheet(isPresented: $showStats) {
             UserStatsView()
         }
-        .sheet(isPresented: $showSecurity) {
-            SecurityView().environmentObject(authManager)
+        .sheet(item: $securityFocus) { focus in
+            SecurityView(focus: focus).environmentObject(authManager)
         }
         .onAppear { loadUserData() }
         .task { await loadStats() }
@@ -248,12 +248,12 @@ struct ProfileView: View {
                                           accentHex: accentColor, onOpen: open)
                     ProfileIdentitySection(
                         isEditing: isEditing, firstName: $firstName, lastName: $lastName,
-                        displayName: $displayName, bio: $bio, username: user?.username, accentHex: accentColor
+                        displayName: $displayName, bio: $bio, username: user?.username, accentColor: accentColor
                     )
                     ProfileContactSection(
                         email: user?.email, isEmailVerified: user?.emailVerifiedAt != nil,
                         phoneNumber: user?.phoneNumber, isPhoneVerified: user?.phoneVerifiedAt != nil,
-                        accentHex: accentColor, onOpenSecurity: { showSecurity = true }
+                        accentHex: accentColor, onOpenSecurity: { securityFocus = $0 }
                     )
                     languagesSection
                     activitySection
@@ -406,7 +406,7 @@ struct ProfileView: View {
 
     private var languagesSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), colorHex: MeeshyColors.errorHex)
+            ProfileSectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), color: MeeshyColors.error)
 
             Text(String(localized: "profile.language.intro", defaultValue: "Meeshy te montre tout dans ta langue principale, sinon dans la suivante.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
@@ -466,7 +466,7 @@ struct ProfileView: View {
     /// Légende et mon décor, là où je cherche « où j'en suis ».
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "chart.bar.fill", title: ProfileActivityBand.title, colorHex: MeeshyColors.indigo300Hex)
+            ProfileSectionHeader(icon: "chart.bar.fill", title: ProfileActivityBand.title, color: MeeshyColors.indigo300)
             ProfileActivityBand(stats: stats, onOpen: openActivity)
             progressionEntry
             ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })

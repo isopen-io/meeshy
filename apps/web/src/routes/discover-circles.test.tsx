@@ -28,7 +28,7 @@ import { CircleLinkRow, CircleLinkSheet, CircleRequestRow, CircleSectionHeader, 
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-const { mount, unmountAll, click, settle } = createActMounter();
+const { mount, rerender, unmountAll, click, settle } = createActMounter();
 
 beforeAll(async () => {
   ensureHappyDomRegistered();
@@ -194,6 +194,41 @@ describe('l’onglet « Cercles », câblé', () => {
     expect(host.textContent).toContain('Ada Lovelace');
     await click(host.querySelector<HTMLButtonElement>('[data-circle-raise="CLOSE"]'));
     expect(raised).toEqual([['u-ada', 'CLOSE']]);
+  });
+
+  test('une demande acceptée ou refusée quitte la liste en se repliant, et la section « Demandes » part avec la dernière', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link(), link({ userId: 'u-bob' })]);
+    const first = request({ id: 'r-1', targetLevel: 'CLOSE' });
+    const second = request({ id: 'r-2', senderId: 'u-bob', sender: { ...ada, id: 'u-bob', displayName: 'Bob' }, targetLevel: 'CLOSE' });
+    const withReceived = (received: FriendRequestRecord[]) => (
+      <CirclesPanel language="fr" enabled={false} online now={NOW} received={received} sent={[]} accepted={accepted} requestHandlers={handlers} onRaise={noop} onFindContacts={noop} />
+    );
+    const realMatchMedia = window.matchMedia;
+    const proto = HTMLElement.prototype;
+    const realAnimate = proto.animate;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('no-preference'),
+      media: query,
+      addEventListener: noop,
+      removeEventListener: noop,
+    })) as unknown as typeof window.matchMedia;
+    proto.animate = function () {
+      return { finished: new Promise<void>(noop), cancel: noop } as unknown as Animation;
+    } as typeof proto.animate;
+    try {
+      const host = await mount(withReceived([first, second]));
+      expect(host.querySelector('[data-circle-request="r-1"]')).not.toBeNull();
+      await rerender(host, withReceived([second]));
+      expect(host.querySelector('[data-circle-request="r-1"]')?.hasAttribute('data-row-exiting')).toBe(true);
+      expect(host.querySelector('[data-circle-request="r-1"]')?.hasAttribute('inert')).toBe(true);
+      expect(host.querySelector('[data-circle-request="r-2"]')?.hasAttribute('data-row-exiting')).toBe(false);
+      await rerender(host, withReceived([]));
+      expect(host.querySelector('[data-circle-requests-section]')?.hasAttribute('data-row-exiting')).toBe(true);
+      expect(host.querySelector('[data-circle-requests-section]')?.textContent).toContain('Bob');
+    } finally {
+      window.matchMedia = realMatchMedia;
+      proto.animate = realAnimate;
+    }
   });
 
   test('aucun lien : l’état vide dit pourquoi et mène à la découverte', async () => {
