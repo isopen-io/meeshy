@@ -128,14 +128,24 @@ final class ComposerOpeningPlanTests: XCTestCase {
                                                                      pendingSegments: 0, editing: false))
     }
 
+    /// Porteur 2026-11-15 (#18654) : « lorsqu'on choisit Galerie on remplace l'image ».
+    func test_disarmsCameraOnLibraryPick_whileRetouching_replacesTheTake() {
+        XCTAssertTrue(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .armed,
+                                                                     pendingSegments: 0, editing: true))
+        XCTAssertTrue(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .armed,
+                                                                     pendingSegments: 2, editing: true),
+                      "la vidéo assemblée en retouche est la prise qu'on remplace")
+        XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: false, stage: .armed,
+                                                                      pendingSegments: 0, editing: true),
+                       "un média venu d'une autre porte ne remplace rien")
+    }
+
     func test_disarmsCameraOnLibraryPick_somethingFilmedOrNotTheOpeningPick_keepsTheCamera() {
         XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .armed,
                                                                       pendingSegments: 1, editing: false),
                        "des segments en attente ne partent jamais en silence")
         XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .recording,
                                                                       pendingSegments: 0, editing: false))
-        XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .armed,
-                                                                      pendingSegments: 0, editing: true))
         XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: false, stage: .armed,
                                                                       pendingSegments: 0, editing: false))
     }

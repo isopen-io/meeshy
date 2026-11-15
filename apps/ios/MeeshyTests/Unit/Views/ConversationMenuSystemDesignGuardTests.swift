@@ -862,11 +862,14 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     /// le glissement vers le bas reste.
     func test_categorizedEmojiPicker_offersAVisibleClose() throws {
         let code = try flat("Meeshy/Features/Main/Views/ConversationView+MessageSheets.swift")
-        guard let start = code.range(of: "CategorizedEmojiPickerSheet("),
-              let end = code.range(of: ".sheet(item:$overlayState.shareMessage)", range: start.upperBound..<code.endIndex) else {
+        XCTAssertTrue(code.contains(".sheet(item:$overlayState.fullReactionPickerMessage){msginfullReactionPicker(for:msg)}"),
+                      "le « + » de la barre de réactions présente la feuille d'émojis par catégories")
+        guard let start = code.range(of: "privatefuncfullReactionPicker(for"),
+              let end = code.range(of: ".presentationDragIndicator(.visible)", range: start.upperBound..<code.endIndex) else {
             return XCTFail("la feuille d'émojis par catégories est introuvable")
         }
         let sheet = String(code[start.lowerBound..<end.lowerBound])
+        XCTAssertTrue(sheet.contains("CategorizedEmojiPickerSheet("), "la feuille est le sélecteur par catégories")
         XCTAssertNotNil(sheet.range(of: #"MeeshyGlassButton\(systemImage:"xmark",[^{]*\)\{overlayState\.fullReactionPickerMessage=nil\}"#,
                                     options: .regularExpression),
                         "la feuille d'émojis ne se quitte qu'en devinant le glissement")

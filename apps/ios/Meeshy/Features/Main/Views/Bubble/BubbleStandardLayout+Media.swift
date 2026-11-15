@@ -75,8 +75,8 @@ extension BubbleStandardLayout {
                 makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
                     .frame(width: gridMaxWidth)
             } else {
-                makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
-                    .frame(width: gridMaxWidth, height: 240)
+                let frame = BubbleSoloImageFrame.size(width: item.width, height: item.height, maxWidth: gridMaxWidth)
+                makeGridCell(item, cellPointWidth: frame.width, solo: true).frame(width: frame.width, height: frame.height)
             }
         case 2:
             HStack(spacing: gridSpacing) {
@@ -491,6 +491,7 @@ fileprivate struct BubbleGridCell: View {
         switch attachment.type {
         case .image:
             BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth,
+                                contentMode: solo ? .fit : .fill,
                                 onFullImageLoaded: { displayedImageLanded = true })
                 .modifier(MediaDescriptionLabel(text: spokenDescription))
         case .video:
@@ -621,6 +622,32 @@ fileprivate struct BubbleGridCell: View {
     }
 }
 
+// MARK: - BubbleSoloImageFrame — la case d'une image seule suit son ratio (#18678)
+
+/// **Une image seule s'affiche entière, à ses proportions** (retour porteur,
+/// #18678) : portrait, paysage ou carré, bornée en largeur (`maxWidth`) et en
+/// hauteur (`maxHeightRatio` × largeur, le plafond de la vidéo seule), jamais
+/// recadrée. Un ratio extrême garde un plancher `minSide` sur l'autre côté ;
+/// l'image y est posée en `.fit`. Sans dimensions connues, la case historique.
+/// La grille à 2, 3 et 4+ pièces reste en remplissage : seule l'image seule
+/// change. Partagée par la bulle et le Fil (`FocalMediaGridLayout`).
+nonisolated enum BubbleSoloImageFrame {
+    static let maxHeightRatio: CGFloat = 1.6
+    static let minSide: CGFloat = 80
+    static let fallbackHeight: CGFloat = 240
+
+    static func size(width: Int?, height: Int?, maxWidth: CGFloat,
+                     maxHeight: CGFloat? = nil, minSide: CGFloat = minSide) -> CGSize {
+        guard let width, let height, width > 0, height > 0 else {
+            return CGSize(width: maxWidth, height: fallbackHeight)
+        }
+        let ratio = CGFloat(width) / CGFloat(height)
+        let fitted = min(maxWidth / ratio, maxHeight ?? maxWidth * maxHeightRatio)
+        let boxWidth = max(min(maxWidth, fitted * ratio), min(minSide, maxWidth))
+        return CGSize(width: boxWidth.rounded(), height: max(fitted, minSide).rounded())
+    }
+}
+
 // MARK: - BubbleGridImageView (extracted so its `some View` is bounded)
 
 fileprivate struct BubbleGridImageView: View {
@@ -628,6 +655,9 @@ fileprivate struct BubbleGridImageView: View {
     /// Largeur en points de la cellule (décidée par `visualMediaGrid`). Sert à
     /// choisir la variante d'image la plus légère suffisante (bande passante 5.2).
     let cellPointWidth: CGFloat
+    /// `.fit` pour l'image seule, dont la case suit déjà son ratio
+    /// (`BubbleSoloImageFrame`) : elle n'est jamais coupée (#18678).
+    var contentMode: ContentMode = .fill
     /// Le plein format affiché est résident — relayé au badge (#10370).
     var onFullImageLoaded: (@MainActor () -> Void)? = nil
 
@@ -683,7 +713,7 @@ fileprivate struct BubbleGridImageView: View {
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
-            .aspectRatio(contentMode: .fill)
+            .aspectRatio(contentMode: contentMode)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
         } else {

@@ -70,7 +70,8 @@ struct ProfileFieldIcon: View {
 struct ProfileNavigationRow: View {
     let icon: String
     let title: String
-    let hint: String
+    /// Indice VoiceOver, seulement quand le titre ne dit pas déjà où la rangée mène (épure : un « Ouvre X » sous « X » est du bruit).
+    let hint: String?
     let identifier: String
     let accentHex: String
     let action: () -> Void
@@ -101,7 +102,7 @@ struct ProfileNavigationRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
-        .accessibilityHint(hint)
+        .accessibilityHint(hint ?? "")
         .accessibilityIdentifier(identifier)
     }
 }

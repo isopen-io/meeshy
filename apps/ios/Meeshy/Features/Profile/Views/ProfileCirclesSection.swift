@@ -26,11 +26,11 @@ struct ProfileCirclesSection: View {
                     emptyLine(phrase).meeshyTransition(.opacity)
                 }
                 if let requests = Self.requestsText(count: summary.pendingCount) {
-                    ProfileNavigationRow(icon: "person.badge.plus", title: requests, hint: Self.requestsHint,
+                    ProfileNavigationRow(icon: "person.badge.plus", title: requests, hint: nil,
                                          identifier: "profile.circles.requests", accentHex: accentHex) { onOpen(.requests) }
                         .meeshyTransition(.opacity)
                 }
-                ProfileNavigationRow(icon: "person.crop.circle.badge.plus", title: Self.inviteTitle, hint: Self.inviteHint,
+                ProfileNavigationRow(icon: "person.crop.circle.badge.plus", title: Self.inviteTitle, hint: nil,
                                      identifier: "profile.circles.invite", accentHex: accentHex) { onOpen(.invite) }
             }
             .background(ProfileSectionCard(tintHex: accentHex))
@@ -75,14 +75,14 @@ struct ProfileCirclesSection: View {
     /// « Ami, 3 personnes » : le cercle d'abord, puis qui l'habite.
     static func pillAccessibilityLabel(title: String, count: Int) -> String {
         let format = String(localized: "profile.circles.pill.a11y", defaultValue: "%@, %lld personnes", bundle: .main)
-        return String(format: format, title, count)
+        return String.localizedStringWithFormat(format, title, count)
     }
 
     /// `nil` quand rien n'attend : la rangée n'existe pas plutôt que de dire « 0 ».
     static func requestsText(count: Int) -> String? {
         guard count > 0 else { return nil }
         let format = String(localized: "profile.circles.requests", defaultValue: "%lld demandes à répondre", bundle: .main)
-        return String(format: format, count)
+        return String.localizedStringWithFormat(format, count)
     }
 
     /// La phrase ne se dit que si AUCUN cercle n'a personne, et seulement une fois les liens servis : elle explique les
@@ -96,16 +96,8 @@ struct ProfileCirclesSection: View {
         String(localized: "profile.circles.open.hint", defaultValue: "Ouvre Mes cercles", bundle: .main)
     }
 
-    private static var requestsHint: String {
-        String(localized: "profile.circles.requests.hint", defaultValue: "Ouvre les demandes qui attendent ta réponse", bundle: .main)
-    }
-
     private static var inviteTitle: String {
         String(localized: "profile.circles.invite", defaultValue: "Inviter", bundle: .main)
-    }
-
-    private static var inviteHint: String {
-        String(localized: "profile.circles.invite.hint", defaultValue: "Ouvre le parrainage pour inviter quelqu'un sur Meeshy", bundle: .main)
     }
 }
 
@@ -126,7 +118,7 @@ private struct ProfileCirclePill: View {
             VStack(spacing: MeeshySpacing.xxs) {
                 Text(CircleLevelNames.icon(of: entry.level))
                     .font(MeeshyFont.relative(MeeshyFont.subtitleSize))
-                Text("\(entry.count)")
+                Text(entry.count, format: .number)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold, design: .rounded))
                     .foregroundStyle(textPrimary)
                     .contentTransition(.numericText())
