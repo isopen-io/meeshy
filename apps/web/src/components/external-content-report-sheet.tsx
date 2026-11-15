@@ -99,7 +99,7 @@ export function ExternalContentReportSheet({
           <button
             type="button"
             onClick={onClose}
-            className={`rounded-card px-5 text-body font-semibold ${FOCUS}`}
+            className={`btn-press rounded-card px-5 text-body font-semibold ${FOCUS}`}
             style={{ minHeight: 48, border: '1px solid var(--color-edge)', color: 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {t('externalInterop.report.done.close')}
@@ -163,7 +163,7 @@ export function ExternalContentReportSheet({
           <button
             type="button"
             onClick={onClose}
-            className={`rounded-card px-5 text-body font-semibold ${FOCUS}`}
+            className={`btn-press rounded-card px-5 text-body font-semibold ${FOCUS}`}
             style={{ minHeight: 48, border: '1px solid var(--color-edge)', color: 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {t('externalInterop.report.cancel')}
@@ -172,7 +172,7 @@ export function ExternalContentReportSheet({
             type="submit"
             disabled={reason === null || busy}
             aria-busy={busy}
-            className={`rounded-card px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
+            className={`btn-press rounded-card px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
             style={{ minHeight: 48, backgroundColor: 'var(--color-error)', outlineColor: 'var(--color-ios-brand)' }}
             data-external-report-submit=""
           >

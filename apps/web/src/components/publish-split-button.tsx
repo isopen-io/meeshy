@@ -326,7 +326,7 @@ export function PublishSplitButton({
         onClick={onPrimary}
         disabled={disabled}
         aria-busy={busy}
-        className="grid place-items-center px-4 text-body font-semibold focus-visible:outline-2 disabled:opacity-60"
+        className="btn-press grid place-items-center px-4 text-body font-semibold focus-visible:outline-2 disabled:opacity-60"
         style={{ minHeight: 44, outlineColor: 'var(--color-ios-on-brand)', outlineOffset: -4 }}
       >
         {label}
@@ -344,7 +344,7 @@ export function PublishSplitButton({
           if (!open) measure();
           setOpen((value) => !value);
         }}
-        className="grid place-items-center focus-visible:outline-2 disabled:opacity-60"
+        className="btn-press grid place-items-center focus-visible:outline-2 disabled:opacity-60"
         style={{ minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-on-brand)', outlineOffset: -4 }}
       >
         <Glyph name="caretDown" size={16} />

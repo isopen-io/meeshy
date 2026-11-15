@@ -89,8 +89,7 @@ struct SecurityPhoneSection: View {
                     Task { await phoneFlow.requestCode(for: phone) }
                 } label: {
                     HStack(spacing: MeeshySpacing.sm) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption.weight(.semibold))
+                        SecurityVerifyGlyph(isSending: phoneFlow.isSending)
                         Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                             .font(.footnote.weight(.semibold))
                     }
@@ -98,6 +97,7 @@ struct SecurityPhoneSection: View {
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.sm)
                 }
+                .disabled(phoneFlow.isSending)
             }
 
             Spacer()

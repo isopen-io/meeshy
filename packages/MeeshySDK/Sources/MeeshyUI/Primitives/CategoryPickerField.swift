@@ -63,12 +63,16 @@ public struct CategoryPickerField: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if let selected = selectedCategory {
                 selectedChip(selected)
+                    .transition(.opacity)
             }
             inputField
             if focused {
                 suggestionList
+                    .transition(.opacity)
             }
         }
+        .meeshyAnimation(MeeshyAnimation.springFast, value: focused)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: selectedId)
     }
 
     private func selectedChip(_ category: ConversationCategory) -> some View {
@@ -116,8 +120,10 @@ public struct CategoryPickerField: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "common.clear_input", defaultValue: "Effacer la saisie", bundle: .module))
+                .transition(.opacity)
             }
         }
+        .meeshyAnimation(MeeshyAnimation.springFast, value: editing.isEmpty)
         .padding(MeeshySpacing.md)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)

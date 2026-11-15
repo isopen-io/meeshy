@@ -176,8 +176,8 @@ class ReduceMotionRatchetTest {
 
         /**
          * 89 le 2026-11-14 avant #18459, 72 apres. Rebase de 86 a la relecture (le meme jour) : la regle compte aussi
-         * `tween(durationMillis = 150)`, qui la contournait. Abaisser, jamais relever.
+         * `tween(durationMillis = 150)`, qui la contournait. 79 apres #18275 (la cloche nomme ses durees). Abaisser, jamais relever.
          */
-        const val LITERAL_TWEEN_CEILING = 86
+        const val LITERAL_TWEEN_CEILING = 79
     }
 }

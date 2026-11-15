@@ -40,7 +40,7 @@ function EffectChip({
       aria-label={`${label}, ${active ? 'actif' : 'inactif'}`}
       /* CIBLE ≥ 44 (dimension 5) — la hauteur, comme les capsules du rail
          éphémère (`min-h-11`). */
-      className="inline-flex min-h-11 shrink-0 items-center rounded-full px-3.5 text-title font-semibold"
+      className="btn-press inline-flex min-h-11 shrink-0 items-center rounded-full px-3.5 text-title font-semibold"
       style={
         active
           ? {
@@ -128,7 +128,7 @@ export function EffectsPanel({
               type="button"
               data-effects-clear-all
               onClick={() => onChange(withoutDecorativeEffects(flags))}
-              className="-my-2.5 inline-flex min-h-11 items-center px-1 text-[12px] font-semibold"
+              className="active:opacity-80 -my-2.5 inline-flex min-h-11 items-center px-1 text-[12px] font-semibold"
               style={{ color: 'var(--color-error)' }}
             >
               {translate(language, 'composer.effects.clearAll')}

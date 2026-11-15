@@ -115,16 +115,14 @@ class VoiceHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour Voice API response")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur Voice API: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur Voice API: {type(e).__name__}")
 
             # Publier une erreur
             error_response = {
                 'type': 'voice_api_error',
                 'taskId': request_data.get('taskId', ''),
                 'requestType': request_data.get('type', ''),
-                'error': str(e),
+                'error': 'Voice API request failed',
                 'errorCode': 'INTERNAL_ERROR',
                 'timestamp': time.time()
             }
@@ -164,16 +162,15 @@ class VoiceHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour Voice Profile response")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur Voice Profile: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur Voice Profile: {type(e).__name__}")
 
             # Publier une erreur
             error_response = {
                 'type': 'voice_profile_error',
                 'request_id': request_data.get('request_id', ''),
                 'user_id': request_data.get('user_id', ''),
-                'error': str(e),
+                'error': 'Voice profile request failed',
+                'errorCode': 'INTERNAL_ERROR',
                 'success': False,
                 'timestamp': time.time()
             }
@@ -216,9 +213,7 @@ class VoiceHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour publier résultat du job")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication résultat job: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication résultat job: {type(e).__name__}")
 
     def set_voice_api_services(
         self,

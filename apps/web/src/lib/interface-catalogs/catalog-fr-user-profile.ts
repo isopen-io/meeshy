@@ -39,7 +39,7 @@ const frUserProfile = {
   'userProfile.stat.filterLabel': 'Filtrer sur {name}',
   'userProfile.stat.filterClear': 'Tout afficher',
   'userProfile.context.received': '{name} souhaite entrer en contact avec vous. Acceptez pour échanger des messages.',
-  'userProfile.context.sent': 'Vous avez envoyé une demande de connexion à {name}. En attente de sa réponse.',
+  'userProfile.context.sent': 'Demande envoyée à {name}.',
   'userProfile.action.write': 'Écrire',
   'userProfile.action.writeLabel': 'Écrire à {name}',
   'userProfile.action.block': 'Bloquer',

@@ -39,6 +39,24 @@ import { shareLinkHasExpired } from '../shareLinkReadGate';
  * cliquet des audiences (`conversation-audience-living-participation`) ne
  * l'accepte comme épellation de la loi que parce que le témoin voisin prouve
  * cette identité.
+ *
+ * ─── CE QU'ELLE NE GARANTIT PAS ─────────────────────────────────────────────
+ *
+ * **Elle ne regarde NI `joinedAt` NI `historyVisibleFrom` : elle ne dispense pas
+ * du PLANCHER D'HISTORIQUE.** Un invité entré par un lien qui refuse
+ * l'historique est « admis » au sens de cette porte, et n'a pourtant le droit de
+ * lire aucun message antérieur à son arrivée.
+ *
+ * Tout appelant qui sert du CONTENU de message — texte, transcription,
+ * traduction, adresse de fichier — doit donc interroger `messageReadership()`
+ * (`socketio/editedAudience.ts`) EN PLUS de cette admission.
+ *
+ * La phrase vivait chez UN de ses appelants (`editedAudience.ts`), où elle était
+ * juste et ne pointait rien : `emitAttachmentUpdated` s'autorisait sur la même
+ * porte pour servir une transcription Whisper, sans plancher, et le commentaire
+ * décrivait mot pour mot son défaut un fichier plus loin (#18613). Elle est ici
+ * parce que c'est ici que le prochain usager la lira. Détail :
+ * `tasks/lessons/2026-11-15-un-commentaire-juste-peut-decrire-un-site-qui-ne-l-est-pas.md`.
  */
 export const ADMITTED_FILE_READER_WHERE = PARTICIPATION_VIVANTE;
 

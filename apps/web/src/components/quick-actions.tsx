@@ -124,7 +124,7 @@ export function QuickActions({ moreLabel, actions, conversationCount }: QuickAct
                     type="button"
                     onClick={() => lancer(action)}
                     title={action.hint}
-                    className="grid w-full place-items-center gap-1.5 rounded-hero px-1 py-3 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    className="btn-press grid w-full place-items-center gap-1.5 rounded-hero px-1 py-3 focus-visible:outline-2 focus-visible:outline-offset-2"
                     style={{ minHeight: 88, backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)', outlineColor: 'var(--color-ios-brand)' }}
                   >
                     <span
@@ -161,7 +161,7 @@ function PrimaryAction({ action, quiet, onRun }: { readonly action: QuickAction;
         <button
           type="button"
           onClick={() => onRun(action)}
-          className="flex w-full min-w-0 flex-1 items-center gap-3 rounded-hero px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="btn-press flex w-full min-w-0 flex-1 items-center gap-3 rounded-hero px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
           style={
             quiet
               ? { minHeight: 44, color: 'var(--color-ios-brand)', border: '1px solid var(--color-edge)', outlineColor: 'var(--color-ios-brand)' }

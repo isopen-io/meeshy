@@ -14,10 +14,10 @@ import {
 import type { Anonymized, ServerEmitTarget } from './serverEmit';
 import type { QueuedVariantFor } from './queuedEventContract';
 import {
-  editReadership,
-  blockedEditKeys,
+  messageReadership,
+  blockedReaderKeys,
   emitEditedToReaders,
-  type EditReadership,
+  type MessageReadership,
 } from './editedAudience';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
@@ -350,11 +350,11 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
   // des ids, pas de contenu : leur audience ne change pas ici, et c'est une
   // décision — révéler l'EXISTENCE d'un message est une question distincte,
   // suivie par sa propre issue.
-  const readership: EditReadership =
+  const readership: MessageReadership =
     params.eventType === 'edited'
-      ? await editReadership(params.prisma, conversationId, messageId, onError)
+      ? await messageReadership(params.prisma, conversationId, messageId, onError)
       : { kind: 'room' };
-  const blockedKeys = blockedEditKeys(readership);
+  const blockedKeys = blockedReaderKeys(readership);
   try {
     // #9646 — un message protégé qui porte des pièces : par destinataire,
     // chacun sa variante (scellée ou non) et ses adresses signées.

@@ -45,7 +45,7 @@ export function CountrySheet({ onSelect, onClose }: { onSelect: (country: Countr
           <button
             type="button"
             onClick={() => onSelect(country)}
-            className="flex w-full items-center gap-3 px-4 text-start"
+            className="btn-press flex w-full items-center gap-3 px-4 text-start"
             style={{ minHeight: 44 }}
           >
             <span aria-hidden="true">{country.flag}</span>

@@ -63,10 +63,12 @@ const escapeListeners = (): readonly string[] =>
  * celui que `useRovingMenu` garde pour `layer: false`). Le relevé de l'audit en
  * comptait 26 : il lisait `role="menuitem"` comme un menu, et prenait ainsi
  * `reaction-rail` (des barreaux, sans couche) et `shortcut-scope` (une liste de
- * sélecteurs) pour des couches.
+ * sélecteurs) pour des couches. 21 et 18 depuis que le menu « ⋯ » des
+ * visionneuses, la rangée des teintes et la carte de la série entrent dans la
+ * pile (#18326).
  */
-const LAYERS_BASE = 24;
-const ESCAPE_BASE = 19;
+const LAYERS_BASE = 21;
+const ESCAPE_BASE = 18;
 
 describe('aucune couche nouvelle n’échappe à la pile du retour', () => {
   test(`les couches hors de la pile ne dépassent pas ${LAYERS_BASE} fichiers`, () => {

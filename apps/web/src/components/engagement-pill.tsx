@@ -95,7 +95,7 @@ export function EngagementPill({
           onClick={() => setCardOpen((open) => !open)}
           aria-expanded={cardOpen}
           aria-controls={cardOpen ? cardId : undefined}
-          className="inline-flex min-h-11 shrink-0 items-center"
+          className="btn-press inline-flex min-h-11 shrink-0 items-center"
         >
           <span className={className}>{body}</span>
         </button>
@@ -123,7 +123,7 @@ export function EngagementPill({
   }
 
   return interactive ? (
-    <Link to="progression" data-engagement-pill={model.kind} className="inline-flex min-h-11 shrink-0 items-center">
+    <Link to="progression" data-engagement-pill={model.kind} className="btn-press inline-flex min-h-11 shrink-0 items-center">
       <span className={className}>{body}</span>
     </Link>
   ) : (

@@ -273,6 +273,10 @@
     <string name="identity_role_admin">Admin</string>
     <string name="identity_role_creator">Creator</string>
     <string name="identity_role_moderator">Moderator</string>
+    <string name="kit_anchored_sheet_close">Close</string>
+    <string name="kit_anchored_sheet_height">Sheet height</string>
+    <string name="kit_anchored_sheet_height_expanded">expanded</string>
+    <string name="kit_anchored_sheet_height_reduced">collapsed</string>
     <string name="kit_progress_ring_busy">In progress</string>
     <string name="language_strip_more">Other languages</string>
     <string name="lentille_mode_menu_selected">selected</string>

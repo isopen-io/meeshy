@@ -45,7 +45,6 @@ struct ProgressionView: View {
         // présentation (pile iPhone, panneau droit iPad, feuille).
         GamePageScaffold(
             title: String(localized: "progression.title", defaultValue: "Ma Légende", bundle: .main),
-            enablesEdgePop: false,
             onRefresh: { await viewModel.load(forceNetwork: true) },
             // Les précisions du rang, ouvertes depuis l'en-tête, offrent « Voir la fiche ».
             onOpenConcept: { router.push(.progressionConcept($0)) },

@@ -381,7 +381,12 @@ readonly SHARED_BASELINE=0
 # charge assignable au `Record<string, unknown>` que la file stocke, sans assertion.
 # Le lot avait été écrit avec les casts, puis nettoyé avant la fusion ; c'est ce
 # nettoyage qui gagne la ligne. Fusionné avec dev (#16940), la mesure tombe à 490.
-readonly GATEWAY_BASELINE=489
+# 488 depuis #18649 (cycle 163) : `MeeshySocketIOManager` passait
+# `emitter.emit(event as keyof ServerToClientEvents, data as any)` sous un
+# commentaire qui AFFIRMAIT le seul canal émis. L'affirmation mesurée vraie,
+# `broadcastFn` DÉCLARE `typeof SERVER_EVENTS.TYPING_STOP` et `TypingEvent` :
+# le cast n'a plus d'objet, et la dette descend d'une ligne.
+readonly GATEWAY_BASELINE=488
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

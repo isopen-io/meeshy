@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- K15 : la zone hors d'une feuille ancrée est un bouton nommé ; Android seulement (fiche K15 §5). -->
+    <string name="kit_anchored_sheet_dismiss">Fechar a folha</string>
+</resources>

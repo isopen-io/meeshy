@@ -110,7 +110,7 @@ export function PasswordInput({
         aria-label={translate(language, revealed ? 'password.hide' : 'password.show')}
         onMouseDown={(event) => event.preventDefault()}
         onClick={flip}
-        className="absolute inset-y-0 end-0 grid place-items-center"
+        className="btn-press absolute inset-y-0 end-0 grid place-items-center"
         style={{ minWidth: 44, minHeight: 44, color: 'var(--color-ios-ink-3)' }}
       >
         <Glyph name={revealed ? 'eyeSlash' : 'eye'} size={20} />

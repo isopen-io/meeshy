@@ -132,7 +132,12 @@ export class StatusHandler {
    */
   async handleSocketDisconnecting(
     socketId: string,
-    broadcastFn: (room: string, event: string, data: unknown, exceptSocketIds?: string[]) => void,
+    broadcastFn: (
+      room: string,
+      event: typeof SERVER_EVENTS.TYPING_STOP,
+      data: TypingEvent,
+      exceptSocketIds?: string[]
+    ) => void,
     otherSocketIds?: ReadonlySet<string>
   ): Promise<void> {
     const typers = this.activeTypers.get(socketId);
