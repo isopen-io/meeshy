@@ -4,6 +4,7 @@ import { guestShareLinkId } from '../../services/shareLinkReadGate';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
+import { writeLinkMessageIdempotently } from './messageIdempotency.js';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -89,6 +90,19 @@ function sendWriteRefusal(reply: FastifyReply, refusal: ConversationWriteRefused
  * `sender` reste le `Participant` chargé par Prisma : c'est ce que les clients
  * reçoivent déjà du chemin socket, et `linkMessageSchema` décrit cette forme.
  */
+/**
+ * Les usernames que la PREMIÈRE tentative a validés, relus sur la ligne.
+ *
+ * `Message.validatedMentions` est un scalaire, donc la projection partagée le
+ * ramène sans avoir à le demander. Le repli est le tableau VIDE et non une
+ * re-résolution : sur un renvoi, recalculer les mentions écrirait des lignes et
+ * renotifierait: ici on ne fait que RENDRE ce qui est déjà vrai.
+ */
+function persistedValidatedMentions(row: { validatedMentions?: unknown }): readonly string[] {
+  const raw = row.validatedMentions;
+  return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
+}
+
 function buildLinkMessagePayload(params: {
   message: {
     id: string;
@@ -382,9 +396,15 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
       // Créer le message avec le contenu transformé.
       // Phase 4 §6.2 — `clientMessageId` propagé pour le dedup contract.
-      // Pas de catch-P2002 ici (chemin anonyme simple) — un retry serveur
-      // produit le même cid donc Prisma renvoie une 409 que la couche
-      // Fastify mappe en réponse 409 Conflict côté client.
+      //
+      // #18617 — l'écriture rejoint ce contrat au lieu de s'en exempter. Le
+      // commentaire qui vivait ici promettait « un 409 que la couche Fastify
+      // mappe » : mesuré, aucun mappeur n'était atteint (le `create` est dans
+      // le `try` du gestionnaire, dont la branche terminale est
+      // `sendInternalError`) et le bloc `response:` ne déclarait pas de 409.
+      // Un renvoi — le seul scénario que l'idempotence existe pour absorber —
+      // rendait donc 500, sur une surface dont le `clientMessageId` est
+      // OBLIGATOIRE : le conflit y est garanti, pas accidentel.
       // #11381 — dans une conversation `server`/`hybrid`, la base ne reçoit que le chiffré.
       const regime = participantShareLink.conversation;
       const sealedText = sealsAtRest(regime)
@@ -397,7 +417,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         })
         : null;
 
-      const stored = await fastify.prisma.message.create({
+      const written = await writeLinkMessageIdempotently({
+        prisma: fastify.prisma,
+        conversationId: participantShareLink.conversationId,
+        clientMessageId: body.clientMessageId,
         data: {
           conversationId: participantShareLink.conversationId,
           senderId: anonymousParticipant.id,
@@ -410,29 +433,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           ...LIVE_MESSAGE_MARK,
           ...linkMessageMetadata(sharedPlace)
         },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              userId: true,
-              displayName: true,
-              avatar: true,
-              type: true,
-              language: true,
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  firstName: true,
-                  lastName: true,
-                  displayName: true,
-                  avatar: true
-                }
-              }
-            }
-          }
-        }
       });
+      const stored = written.row;
       // #14643 — admis quand la conversation était ouverte, écrit pendant son obsolescence : né effacé, diffusé à personne.
       if (await sealMessageIfConversationObsoleted(fastify.prisma, { conversationId: participantShareLink.conversationId, messageId: stored.id })) {
         return sendWriteRefusal(reply, { admitted: false, reason: 'conversation-closed' });
@@ -453,6 +455,39 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // les usernames dans le payload, les ids dans l'éventail. L'unité
       // court-circuite d'elle-même un contenu sans `@`, qui ne coûte donc
       // aucune requête.
+      // #18617 — un RENVOI : la première tentative a déjà tout fait. On ne garde
+      // que ce qui COMPOSE la réponse, et on saute tout ce qui a un EFFET.
+      //
+      // Ce n'est pas une optimisation, c'est la correction : les mentions
+      // écrivent des lignes `Mention`, les effets post-sauvegarde poussent au
+      // translator et comptent les statistiques, la notification pousse une
+      // bannière, et la diffusion afficherait le message une SECONDE FOIS chez
+      // tous les participants. C'est la garde `!isDuplicate` que les trois
+      // appelants du chemin canonique portent déjà.
+      //
+      // `validatedMentions` se lit sur la ligne RELUE plutôt que recalculé :
+      // c'est la trace durable que la première tentative a laissée, et la
+      // recalculer renotifierait ceux qu'elle nomme.
+      //
+      // La garde d'OBSOLESCENCE (#14643) reste en AMONT de cette branche, et
+      // c'est délibéré : elle ne décrit pas ce que le renvoi refait, mais
+      // l'état de la conversation MAINTENANT. Une conversation fermée entre la
+      // première tentative et le renvoi doit rendre le même refus qu'à une
+      // écriture neuve — sinon le renvoi serait la seule porte par laquelle un
+      // message ressort d'une conversation close.
+      if (written.isDuplicate) {
+        return sendSuccess(reply, {
+          messageId: message.id,
+          message: buildLinkMessagePayload({
+            message,
+            conversationId: participantShareLink.conversationId,
+            senderId: anonymousParticipant.id,
+            place,
+            validatedMentions: persistedValidatedMentions(stored),
+          })
+        }, { statusCode: 201 });
+      }
+
       const mentions = await resolveMessageMentions({
         prisma: fastify.prisma,
         mentionService: fastify.mentionService,
