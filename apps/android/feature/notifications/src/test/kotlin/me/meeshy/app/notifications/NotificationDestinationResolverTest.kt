@@ -391,4 +391,37 @@ class NotificationDestinationResolverTest {
         assertThat(NotificationDestinationResolver.resolve(me.meeshy.sdk.model.push.PushPayload(type = "login_new_device")))
             .isEqualTo(NotificationDestination.None)
     }
+
+    // --- Communauté (#18061, iOS RootNotificationNavigator : `.communityDetail`) ---
+
+    @Test
+    fun `an added-to-community row opens the community it names`() {
+        val row = notification("community_invite", conversationId = "c1").let {
+            it.copy(context = it.context?.copy(communityId = "k1"))
+        }
+
+        assertThat(NotificationDestinationResolver.resolve(row)).isEqualTo(NotificationDestination.Community("k1"))
+    }
+
+    @Test
+    fun `a community row without a community keeps its former destination`() {
+        assertThat(NotificationDestinationResolver.resolve(notification("community_invite", conversationId = "c1")))
+            .isEqualTo(NotificationDestination.Conversation("c1"))
+    }
+
+    @Test
+    fun `the community destination dispatches to the community opener only`() {
+        val opened = mutableListOf<String>()
+
+        NotificationDestination.Community("k1").dispatch(
+            onOpenConversation = { opened += "conversation:$it" },
+            onOpenPost = { opened += "post:$it" },
+            onOpenReel = { opened += "reel:$it" },
+            onOpenStory = { opened += "story:$it" },
+            onOpenProfile = { opened += "profile:$it" },
+            onOpenCommunity = { opened += "community:$it" },
+        )
+
+        assertThat(opened).containsExactly("community:k1")
+    }
 }

@@ -38,9 +38,9 @@ const dryExits = (): readonly string[] =>
 /**
  * LE COMPTE DU JOUR. Mesuré le 2026-11-14 (commentaires retirés) : 10 fichiers ouvraient une modale sans
  * jouer sa sortie, les mêmes que l'audit sur ec7974abaa. `Sheet`, `ConfirmDialog` et `SendSheetFrame` en
- * sortent avec ce lot : 7.
+ * sortent avec ce lot : 7. La fiche de contact joue la sienne depuis #18320.
  */
-const PLAFOND = 5;
+const PLAFOND = 4;
 
 const read = (path: string): string => stripComments(readFileSync(join(SRC, path), 'utf8'));
 

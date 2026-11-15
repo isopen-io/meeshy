@@ -279,6 +279,7 @@
     <string name="kit_anchored_sheet_height">Hauteur de la feuille</string>
     <string name="kit_anchored_sheet_height_expanded">agrandie</string>
     <string name="kit_anchored_sheet_height_reduced">réduite</string>
+    <string name="kit_color_dots_position">Couleur %1$s sur %2$s</string>
     <string name="language_strip_more">Autres langues</string>
     <string name="lentille_mode_menu_selected">sélectionné</string>
     <string name="live_location_duration_title">Durée du partage</string>
