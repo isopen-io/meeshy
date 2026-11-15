@@ -41,7 +41,7 @@ import {
  * Qui la porte ne se lit PAS ici : ce paragraphe a affirmé trois clients
  * jusqu'au 2026-11-14 en nommant, pour le web, `notification-socketio.singleton`
  * — un fichier de l'application web LEGACY, sortie du dépôt au #7668. Mesuré
- * (cycle 166, #18602) : iOS observe (`MessageSocketRoutes+Notifications.swift`),
+ * (cycle 168, #18602) : iOS observe (`MessageSocketRoutes+Notifications.swift`),
  * Android observe (`sdk-core/.../socket/MessageSocketManager.kt`, câblé au
  * cycle 108 ; avant ça il jetait le champ pendant que le contrat partagé
  * affirmait le contraire), et `apps/web` n'observe AUCUN curseur (#18601).

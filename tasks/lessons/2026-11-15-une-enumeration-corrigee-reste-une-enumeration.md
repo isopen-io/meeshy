@@ -1,6 +1,6 @@
 ## Une énumération de CONSOMMATEURS corrigée reste une énumération — et celle qui raconte sa propre erreur passée est la plus crédible de toutes
 
-*2026-11-15, #18602 / #18601 (cycle 166). Mesure : la passerelle estampille le
+*2026-11-15, #18602 / #18601 (cycle 168). Mesure : la passerelle estampille le
 curseur `_seq` sur UN événement ; iOS et Android l'observent ; `apps/web`
 n'observe rien, et quatre doc-comments affirmaient le contraire.*
 

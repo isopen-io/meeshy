@@ -1,6 +1,6 @@
 ## Deux accusations DIFFÉRENTES pour un arbre IDENTIQUE : la signature d'un seuil posé sur une égalité, jamais d'une régression
 
-*2026-11-15, #18607 (rencontré au cycle 166, sur la PR #18604). `dev` rouge une
+*2026-11-15, #18607 (rencontré au cycle 168, sur la PR #18604). `dev` rouge une
 passe sur deux depuis que la garde existe.*
 
 ### Ce qui s'est passé

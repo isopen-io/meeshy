@@ -1,4 +1,4 @@
-# Cycle 166 — la règle était écrite, mesurée nulle part, et fausse sur une plateforme sur trois
+# Cycle 168 — la règle était écrite, mesurée nulle part, et fausse sur une plateforme sur trois
 
 *2026-11-15. Branche `claude/exciting-planck-kfor5u`, partie de la tête de `dev`
 (`134848579`).*
@@ -12,6 +12,9 @@
 > sœur passée à 165 l'a sauté, et une revendication en vol ne se voit pas. C'est
 > le défaut d'espace de noms partagé de #5102 : *un identifiant qui ne s'alloue
 > pas collisionne.*
+>
+> Puis 166 s’est trouvé pris à la fusion dans `dev` (#18656, les canaux frères), et
+> 167 par #18634 : ce journal prend 168.
 
 **Livré** : #18602 — le cliquet du lockstep `_seq`, et les quatre doc-comments
 qui nommaient un consommateur sorti du dépôt. **Ouvert** : #18601, la lacune de
@@ -157,7 +160,7 @@ Et une fragilité de la première rédaction, trouvée en relisant : comparer
 `nombre de sites` à `nombre d'événements distincts` rougissait faussement dès
 que deux sites observent le MÊME événement. Le relevé unique porte l'événement
 par site, donc la question se pose site par site.
-# Cycle 166 — la porte était juste, et c'est l'argument qui la neutralisait
+# Cycle 168 — la porte était juste, et c'est l'argument qui la neutralisait
 
 *2026-11-15. Branche `claude/exciting-planck-hg95mt`, repartie de la tête de
 `dev` (`1348485794`).*
