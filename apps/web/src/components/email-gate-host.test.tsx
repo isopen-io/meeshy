@@ -106,7 +106,7 @@ describe('la vue s’ouvre, dit pourquoi, et le code est déjà parti', () => {
 
   test('seule l’adresse est demandée : le numéro n’encombre pas la vue', async () => {
     const { host } = await monter();
-    expect(buttonNamed(host, 'Ajouter mon numéro')).toBeNull();
+    expect(buttonNamed(host, 'Ajouter')).toBeNull();
   });
 });
 

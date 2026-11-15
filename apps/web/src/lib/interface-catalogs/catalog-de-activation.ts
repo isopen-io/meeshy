@@ -16,7 +16,7 @@ const deActivation = {
   'activation.email.failed': 'Der Code konnte nicht gesendet werden. Bitte versuche es erneut.',
   'activation.email.done': 'E-Mail bestätigt ✓',
   'activation.phone.label': 'Füge eine Telefonnummer hinzu, um dein Konto zu schützen und wiederherzustellen',
-  'activation.phone.add': 'Meine Nummer hinzufügen',
+  'activation.phone.add': 'Hinzufügen',
   'activation.phone.field': 'Telefonnummer',
   'activation.phone.hint': 'Im internationalen Format, zum Beispiel +49 151 23456789',
   'activation.phone.send': 'Code senden',

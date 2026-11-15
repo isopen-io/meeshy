@@ -727,11 +727,13 @@ export function DiscoverEmpty({
   title,
   subtitle,
   data,
+  children,
 }: {
   readonly glyph: ReactNode;
   readonly title: string;
   readonly subtitle?: string;
   readonly data: string;
+  readonly children?: ReactNode;
 }) {
   return (
     <div data-discover-empty={data} className="grid flex-1 content-center justify-items-center gap-3 px-6 py-10 text-center">
@@ -746,6 +748,7 @@ export function DiscoverEmpty({
           {subtitle}
         </p>
       )}
+      {children}
     </div>
   );
 }

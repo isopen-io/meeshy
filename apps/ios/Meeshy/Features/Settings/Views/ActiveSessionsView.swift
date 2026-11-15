@@ -202,6 +202,7 @@ struct ActiveSessionsView: View {
                     sectionTitle(String(localized: "sessions.section.others", defaultValue: "Autres appareils", bundle: .main))
                     ForEach(viewModel.otherSessions) { session in
                         sessionRow(session)
+                            .transition(.opacity)
                     }
                     revokeAllButton
                 }
@@ -212,6 +213,8 @@ struct ActiveSessionsView: View {
 
                 Spacer().frame(height: 40)
             }
+            // Une session déconnectée s'efface et la liste remonte en douceur.
+            .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: viewModel.otherSessions.map(\.id))
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, MeeshySpacing.lg)
         }
