@@ -141,7 +141,7 @@ nonisolated enum ComposerEditTools {
     }
 }
 
-/// **Le recadrage qu'on avait en ouvrant l'outil** (porteur 2026-11-15, #18654) : fermer
+/// **Le recadrage qu'on avait en ouvrant l'outil** (#18654) : fermer
 /// « Recadrer » garde le format ; « Annuler », à la place de « Terminé », rend celui-ci.
 nonisolated struct ComposerCropSnapshot: Equatable, Sendable {
     var aspect: CGFloat?
@@ -168,7 +168,7 @@ nonisolated enum ComposerRetouchRailItem: Hashable, Sendable {
     case separator
 }
 
-/// **La colonne de la retouche est celle du viseur** (porteur 2026-11-15, #18654) :
+/// **La colonne de la retouche est celle du viseur** (#18654) :
 /// Galerie · Texte · Stickers · Son, un trait, puis Effets · Recadrer · Couper. Sans « Fond » :
 /// la prise est là. Le son d'une prise qui en porte un se règle ; sinon « Son » en pose un sur
 /// la scène. Hors du composer, aucune entrée de scène : la colonne garde ses seuls outils.

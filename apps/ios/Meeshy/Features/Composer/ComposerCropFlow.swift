@@ -16,7 +16,7 @@ enum ComposerCropFlow {
         ComposerCropSnapshot(aspect: session.editAspect, framing: session.framing)
     }
 
-    /// **« Annuler » rend le recadrage d'avant l'outil, et le range** (porteur 2026-11-15, #18654).
+    /// **« Annuler » rend le recadrage d'avant l'outil, et le range** (#18654).
     static func cancel(_ before: ComposerCropSnapshot?, in session: ComposerCaptureSession) {
         guard session.phase.isEditing, !session.isRenderingLook, let before else { return }
         session.editAspect = before.aspect
