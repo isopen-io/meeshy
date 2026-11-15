@@ -612,8 +612,7 @@ final class ComposerEditToolsTests: XCTestCase {
                     XCTAssertGreaterThanOrEqual(scene.minY, rangee.maxY, "\(ecran) \(p) : la scène recadrée commence dessous")
                 }
             }
-            let rail = CGRect(x: 0, y: ecran.height - ComposerEditScene.gap - ComposerEditScene.toolsRow,
-                              width: ecran.width, height: ComposerEditScene.toolsRow)
+            let rail = CGRect(x: 0, y: ecran.height / 2, width: ComposerEditScene.railColumnWidth, height: ecran.height / 2)
             XCTAssertFalse(ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: true).intersects(rail))
         }
     }
@@ -625,9 +624,9 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     /// **Les formats FLOTTENT sur le cadre** (#15193) : posés par-dessus
-    /// l'image, au-dessus de ses deux crochets du bas, ils vont d'un bord de
-    /// l'écran à l'autre (« le moins coupés possible ») ; aucun des quatre
-    /// crochets ne les coupe, et le rail des outils reste dessous, à 375 et 440 pt.
+    /// l'image, au-dessus de ses deux crochets du bas, ils vont de la colonne des
+    /// outils au bord droit de l'écran (« le moins coupés possible ») ; aucun des
+    /// quatre crochets ne les coupe, à 375 et 440 pt.
     func test_thePresetsRow_floatsOnTheFrame_acrossTheScreen_clearOfTheFourBrackets() {
         let ecrans = [CGSize(width: 375, height: 812 - 47 - 34), CGSize(width: 440, height: 956 - 62 - 34)]
         let cible = MeeshyControlSize.tapTarget
@@ -638,7 +637,8 @@ final class ComposerEditToolsTests: XCTestCase {
                                                       framed: true, playback: lecture)
                     let scene = ComposerEditScene.rect(aspect: aspect, in: zone)
                     let rangee = ComposerEditPresetsLayout.frame(scene: scene)
-                    XCTAssertEqual(rangee.minX, 0, accuracy: 0.001, "\(ecran) : la rangée part du bord gauche de l'écran")
+                    XCTAssertEqual(rangee.minX, ComposerEditScene.railColumnWidth, accuracy: 0.001,
+                                   "\(ecran) : la rangée part de la droite de la colonne des outils (#18638)")
                     XCTAssertEqual(rangee.maxX, ecran.width, accuracy: 0.001, "\(ecran) : jusqu'au bord droit")
                     XCTAssertGreaterThanOrEqual(rangee.minY, scene.minY, "\(ecran) \(aspect) : sur le cadre")
                     XCTAssertLessThanOrEqual(rangee.maxY, scene.maxY, "\(ecran) \(aspect) : sur le cadre")
@@ -663,8 +663,8 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     /// **Aucun libellé du rail n'est coupé** (porteur 2026-10-20) : à 375 comme
-    /// à 440 pt, chaque entrée du rail d'une vidéo (six outils) garde au moins
-    /// la largeur entière de son nom — le rail défile plutôt que de rogner.
+    /// à 440 pt, chaque entrée de la colonne d'une vidéo garde au moins la
+    /// largeur entière de son nom.
     func test_theEditRail_neverTruncatesALabel_at375And440() async {
         let (session, _) = await videoSession()
         let noms = ComposerLookFamily.allCases.map(ComposerCaptureCopy.familyName)
@@ -672,7 +672,7 @@ final class ComposerEditToolsTests: XCTestCase {
         for largeur in [CGFloat(375), 440] {
             let ecran = RenderedScreen(ComposerCaptureBottomRow(session: session, context: session.gestureContext)
                                         .frame(width: largeur),
-                                       size: CGSize(width: largeur, height: 400))
+                                       size: CGSize(width: largeur, height: 600))
             for nom in noms {
                 let ideal = UIHostingController(rootView: Text(nom)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold)))

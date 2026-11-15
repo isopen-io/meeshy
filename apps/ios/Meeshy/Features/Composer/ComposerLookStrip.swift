@@ -83,49 +83,30 @@ extension View {
 // MARK: - Le rail
 
 /// **Le rail vertical, en bas à gauche** (#9351) : Filtres, Cadres. Toucher une
-/// famille ouvre sa bande ; la retoucher la replie. En retouche il se couche
-/// sous la scène et gagne « Recadrer » (#9567). Ni verre ni cadre : le
+/// famille ouvre sa bande ; la retoucher la replie. En retouche il garde sa
+/// colonne et gagne les outils de la prise (#18638). Ni verre ni cadre : le
 /// pictogramme et le nom, ombrés pour rester lisibles (porteur 2026-10-07,
 /// #9566) — « Cadres » porte le pictogramme du cadre de l'appel vidéo.
 struct ComposerLookRail: View {
     let open: ComposerLookFamily?
-    /// Vertical pendant la capture ; en rangée sous la scène de retouche (#9567).
-    var axis: Axis = .vertical
     /// Les outils de la retouche, après les familles (#9754) — vide pendant la
     /// capture : ils n'existent qu'en retouche.
     var editTools: [ComposerEditTool] = []
     /// Les outils dont la surface est à l'écran : ils s'allument, ensemble.
     var shownTools: Set<ComposerEditTool> = []
     var onTool: (ComposerEditTool) -> Void = { _ in }
-    /// Les libellés gardent leur largeur entière : le rail défile plutôt que de
-    /// les rétrécir ou les couper (porteur 2026-10-20).
-    var fitsLabels = false
-    /// **Posée à côté des cases** (#10339) : la colonne prend leur hauteur exacte
-    /// et leur espacement — chaque entrée en ligne, pictogramme puis nom.
-    var alignedWithCells = false
     let onSelect: (ComposerLookFamily) -> Void
 
     var body: some View {
-        let disposition = axis == .vertical
-            ? AnyLayout(VStackLayout(alignment: .leading,
-                                     spacing: alignedWithCells ? ComposerLookStripRule.spacing : MeeshySpacing.sm))
-            : AnyLayout(HStackLayout(spacing: editTools.isEmpty ? MeeshySpacing.xl : MeeshySpacing.md))
-        // Les entrées se construisent ICI, sur le fil principal : en retouche, le
-        // rail est un candidat de `ViewThatFits` (`ComposerEditRailFit`), que le
-        // rendu asynchrone d'iOS 26 mesure hors du main (#9135, #11411).
-        let familles = ComposerLookFamily.allCases.map { famille in
-            AsyncRenderRow(id: famille, content: tool(symbol: ComposerCaptureCopy.familySymbol(famille),
-                                                      name: ComposerCaptureCopy.familyName(famille),
-                                                      selected: open == famille) { onSelect(famille) })
-        }
-        let outils = editTools.map { outil in
-            AsyncRenderRow(id: outil, content: tool(symbol: ComposerCaptureCopy.editToolSymbol(outil),
-                                                    name: ComposerCaptureCopy.editToolName(outil),
-                                                    selected: shownTools.contains(outil)) { onTool(outil) })
-        }
-        disposition {
-            ForEach(familles, content: asyncRenderRowContent)
-            ForEach(outils, content: asyncRenderRowContent)
+        VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
+            ForEach(ComposerLookFamily.allCases, id: \.self) { famille in
+                tool(symbol: ComposerCaptureCopy.familySymbol(famille), name: ComposerCaptureCopy.familyName(famille),
+                     selected: open == famille) { onSelect(famille) }
+            }
+            ForEach(editTools, id: \.self) { outil in
+                tool(symbol: ComposerCaptureCopy.editToolSymbol(outil), name: ComposerCaptureCopy.editToolName(outil),
+                     selected: shownTools.contains(outil)) { onTool(outil) }
+            }
         }
     }
 
@@ -142,31 +123,18 @@ struct ComposerLookRail: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    @ViewBuilder
+    /// Chaque entrée en ligne, pictogramme puis nom, à la hauteur exacte des cases (#10339).
     private func label(symbol: String, name: String) -> some View {
-        if alignedWithCells {
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: symbol)
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                Text(name)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(minWidth: MeeshyControlSize.tapTarget, alignment: .leading)
-            .frame(height: ComposerLookStripRule.railEntryHeight)
-        } else {
-            VStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: symbol)
-                    .font(MeeshyFont.relative(17, weight: .semibold))
-                Text(name)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(fitsLabels ? 1 : 0.7)
-                    .fixedSize(horizontal: fitsLabels, vertical: false)
-            }
-            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: symbol)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+            Text(name)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
+        .frame(minWidth: MeeshyControlSize.tapTarget, alignment: .leading)
+        .frame(height: ComposerLookStripRule.railEntryHeight)
     }
 }
 

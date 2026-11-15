@@ -214,6 +214,9 @@ struct ComposerCaptureChrome: View {
 
     private var framed: Bool { session.look.frame != ComposerPhotoFrame.none }
 
+    /// On écrit sur l'aperçu (#18638) : le bas du viseur et la phrase du geste cèdent au clavier.
+    private var typing: Bool { sceneObjects?.typing != nil }
+
     private var chromeVeilTop: Double {
         ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.top)
     }
@@ -267,12 +270,13 @@ struct ComposerCaptureChrome: View {
                     .overlay(alignment: .topLeading) { exposureLayer(width: proxy.size.width) }
                     .allowsHitTesting(!finishing)
             }
+            typingTouchCatcher
             sceneObjectsLayer
             cropBrackets
             if !finishing, session.offersEditPlayback { editPlayback }
             cropPresets
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
-            ComposerCaptureGestureHint(session: session)
+            if !typing { ComposerCaptureGestureHint(session: session) }
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
@@ -280,20 +284,14 @@ struct ComposerCaptureChrome: View {
                     .allowsHitTesting(showsTopRow)
                     .accessibilityHidden(!showsTopRow)
                 Spacer(minLength: 0)
-                // En retouche, le bas suit le chrome (#10930) : la prise garde
-                // tout l'écran, les outils se posent par-dessus.
-                if !session.phase.isEditing || session.editChromeShown {
-                    ComposerCaptureBottomRow(session: session, context: context, railOpacity: chromeRest)
-                        .allowsHitTesting(!finishing)
-                        .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeilBottom))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                bottomRow
             }
             .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop, chromeVeilBottom], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
             if session.isRenderingLook { renderingSpinner }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: typing)
         .modifier(ComposerCaptureChromeRestWatch(session: session, timer: session.selfTimer, opacity: $chromeRest))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
         .modifier(ComposerCaptureDismissAndBudget(session: session))
@@ -312,15 +310,40 @@ struct ComposerCaptureChrome: View {
         }
     }
 
+    /// En retouche, le bas suit le chrome (#10930) : la prise garde tout l'écran, les outils se
+    /// posent par-dessus. Pendant la frappe sur l'aperçu, il cède au clavier (#18638).
+    @ViewBuilder
+    private var bottomRow: some View {
+        if ComposerViewfinderScene.servesCaptureControls(typing: typing),
+           !session.phase.isEditing || session.editChromeShown {
+            ComposerCaptureBottomRow(session: session, context: context, railOpacity: chromeRest)
+                .allowsHitTesting(!finishing)
+                .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeilBottom))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// **Pendant la frappe sur l'aperçu, un toucher à vide termine la saisie** (#18638) : posée
+    /// sur la nappe de capture, sous les objets, elle ne laisse partir ni photo ni vidéo.
+    @ViewBuilder
+    private var typingTouchCatcher: some View {
+        if let saisie = sceneObjects?.typing {
+            Color.black.opacity(ComposerViewfinderScene.typingVeilOpacity)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { saisie.onDismiss() }
+                .transition(.opacity)
+                .accessibilityHidden(true)
+        }
+    }
+
     /// **La scène sur le viseur** (#17432) : ses objets, sans son fond, à la place de la carte —
     /// au-dessus de la nappe, sous le chrome. Un toucher sur un objet le prend, une zone vide
     /// traverse vers la capture.
     @ViewBuilder
     private var sceneObjectsLayer: some View {
         if let sceneObjects, let cadre = sceneObjectsFrame, !session.phase.isEditing {
-            sceneObjects
-                .frame(width: cadre.width, height: cadre.height)
-                .position(x: cadre.midX, y: cadre.midY)
+            ComposerViewfinderObjectsLayer(canvas: sceneObjects, frame: cadre)
                 .transition(.opacity)
         }
     }

@@ -61,7 +61,10 @@ final class ComposerCaptureRecetteTests: XCTestCase {
 
     func test_railIsAlignedWithTheCells_inCaptureAndInRetouch() throws {
         let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
-        XCTAssertEqual(bas.components(separatedBy: "alignedWithCells: true").count - 1, 2)
+        XCTAssertEqual(bas.components(separatedBy: "ComposerLookRail(open: session.openFamily").count - 1, 3,
+                       "capture, famille ouverte et outils de retouche montent la même colonne (#18638)")
+        let rail = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(rail.contains(".frame(height: ComposerLookStripRule.railEntryHeight)"), "à la hauteur des cases")
         XCTAssertTrue(bas.contains(".padding(.top, ComposerTriggerOutline.outset)"), "en retouche, haut sur haut")
     }
 
