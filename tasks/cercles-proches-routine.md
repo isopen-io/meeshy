@@ -1207,4 +1207,10 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   lecteur de `location:share-own-changed` parce qu'un commentaire du cliquet des routes Android citait le nom de
   l'événement. Commentaire reformulé : l'inventaire (Android et iOS en retard) redevient juste ; `vitest` shared
   409 fichiers, 9 727 verts.
+- CI du dernier commit (`4b80a97a5`) : passerelle (3 tranches + couverture), shared, web, agent, builds (bun, SDK,
+  app) verts. Rouges étrangers : Android `:feature:game` (ci-dessus) et Playwright tranche 3 (une puce d'appel sous
+  44 pt en sombre 320×568, verte sur le commit précédent au même code web).
+- **Fusion BLOQUÉE** : `dev` est verrouillée (`lock_branch` activé, aucun commit sur `dev` depuis le 2026-11-14 à
+  23 h 08 UTC) ; la fusion rend `405 Cannot change this locked branch`. Le verrou ne se lève que par un administrateur :
+  la routine ne le contourne pas. La PR est prête à fusionner dès qu'il est levé.
 - Prochain lot recommandé : #18578 (iOS + Android se recalent sur la passerelle), puis #18580, puis #18431.
