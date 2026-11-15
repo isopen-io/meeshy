@@ -14,6 +14,7 @@ import { cachedDirectWith } from '@/lib/mood/reply';
 import { togetherStore, type TogetherInviteOutcome, type TogetherStoreApi } from '@/lib/together/together-live';
 import { useTogetherClient } from '@/lib/together/use-together-client';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 import { BRAND, BRAND_FILL, FOCUS, INK, INK_2 } from './user-profile-style';
 
@@ -95,6 +96,7 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
   readonly inviting?: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const list = useLayerPresence(open ? true : null);
   return (
     <div data-together-row="" className="grid gap-2 rounded-card px-3.5 py-3" style={{ backgroundColor: BRAND_FILL }}>
       <button
@@ -110,38 +112,40 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
           {translateCircles(language, 'together.row.title')}
         </span>
       </button>
-      {open ? (
-        pieces === null || pieces.length === 0 ? (
-          <p data-together-empty="" className="text-caption" style={{ color: INK_2 }}>
-            {translateCircles(language, 'together.row.empty')}
-          </p>
-        ) : (
-          <>
-            <p className="text-caption" style={{ color: INK_2 }}>
-              {translateCircles(language, 'together.row.explain', { name })}
+      {list.value === null ? null : (
+        <div data-together-list="" className="grid gap-2" {...layerMotion(list.leaving)}>
+          {pieces === null || pieces.length === 0 ? (
+            <p data-together-empty="" className="text-caption" style={{ color: INK_2 }}>
+              {translateCircles(language, 'together.row.empty')}
             </p>
-            <ul className="grid gap-1">
-              {pieces.map((piece) => (
-                <li key={piece.attachment.id}>
-                  <button
-                    type="button"
-                    data-together-piece={piece.attachment.id}
-                    aria-label={translateCircles(language, 'together.row.invite.a11y', { name, file: piece.attachment.originalName })}
-                    onClick={() => onInvite(piece)}
-                    disabled={inviting !== null}
-                    aria-busy={inviting === piece.attachment.id}
-                    className={`btn-press flex w-full items-center gap-2 rounded-chip px-3 text-start text-body ${FOCUS}`}
-                    style={{ minHeight: 44, color: INK, outlineColor: BRAND }}
-                  >
-                    <span aria-hidden="true">{piece.media === 'video' ? '🎬' : '🎧'}</span>
-                    <span className="truncate">{piece.attachment.originalName}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )
-      ) : null}
+          ) : (
+            <>
+              <p className="text-caption" style={{ color: INK_2 }}>
+                {translateCircles(language, 'together.row.explain', { name })}
+              </p>
+              <ul className="grid gap-1">
+                {pieces.map((piece) => (
+                  <li key={piece.attachment.id}>
+                    <button
+                      type="button"
+                      data-together-piece={piece.attachment.id}
+                      aria-label={translateCircles(language, 'together.row.invite.a11y', { name, file: piece.attachment.originalName })}
+                      onClick={() => onInvite(piece)}
+                      disabled={inviting !== null}
+                      aria-busy={inviting === piece.attachment.id}
+                      className={`btn-press flex w-full items-center gap-2 rounded-chip px-3 text-start text-body disabled:opacity-60 ${FOCUS}`}
+                      style={{ minHeight: 44, color: INK, outlineColor: BRAND }}
+                    >
+                      <span aria-hidden="true">{piece.media === 'video' ? '🎬' : '🎧'}</span>
+                      <span className="truncate">{piece.attachment.originalName}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 });
