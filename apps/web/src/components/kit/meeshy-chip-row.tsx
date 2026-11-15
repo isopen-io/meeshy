@@ -115,6 +115,9 @@ const sameCell = (left: CellProps, right: CellProps): boolean =>
   left.onActivate === right.onActivate &&
   sameChip(left.chip, right.chip);
 
+const showsTrailing = (trailing: MeeshyChipTrailing, isSelected: boolean): trailing is Exclude<MeeshyChipTrailing, 'none'> =>
+  trailing === 'chevron' || (trailing === 'remove' && isSelected);
+
 const titleOf = (chip: MeeshyChip, chipLabel: MeeshyChipLabel | undefined, ink: string): ReactNode => {
   if (chipLabel !== undefined) return <span className="kit-chip__title">{chipLabel(chip, ink)}</span>;
   return chip.title === '' ? null : <span className="kit-chip__title">{chip.title}</span>;
@@ -155,7 +158,7 @@ const MeeshyChipCell = memo(function MeeshyChipCell({ chip, isSelected, isTabSto
         )}
         {titleOf(chip, chipLabel, ink)}
       </span>
-      {trailing === 'none' ? null : <TrailingGlyph kind={trailing} />}
+      {showsTrailing(trailing, access.isSelected) ? <TrailingGlyph kind={trailing} /> : null}
     </button>
   );
 }, sameCell);
@@ -213,7 +216,10 @@ const useEdgeFade = (row: { readonly current: HTMLDivElement | null }, track: { 
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize);
     observer?.observe(element);
     if (track.current !== null) observer?.observe(track.current);
+    const direction = typeof MutationObserver === 'undefined' ? null : new MutationObserver(onResize);
+    direction?.observe(document.documentElement, { attributes: true, attributeFilter: ['dir'] });
     return () => {
+      direction?.disconnect();
       element.removeEventListener('scroll', onScroll);
       element.removeEventListener('wheel', onWheel);
       observer?.disconnect();

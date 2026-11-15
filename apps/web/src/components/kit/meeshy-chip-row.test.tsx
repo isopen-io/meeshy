@@ -228,6 +228,13 @@ describe('ce que le lecteur d’écran entend', () => {
     expect(cell(view, 's').hasAttribute('data-glyph-only')).toBe(true);
   });
 
+  test('le ✕ de retrait n’est que sur une puce courante, le chevron toujours', () => {
+    const view = mount(<MeeshyChipRow {...harness({ mode: 'multiple', selection: ['a'], chips: [{ id: 'a', title: 'A', trailing: 'remove' }, { id: 'b', title: 'B', trailing: 'remove' }, { id: 'c', title: 'C', trailing: 'chevron', kind: 'menu' }] }).props} />);
+    expect(cell(view, 'a').querySelector('[data-kit-chip-trailing="remove"]')).not.toBeNull();
+    expect(cell(view, 'b').querySelector('[data-kit-chip-trailing]')).toBeNull();
+    expect(cell(view, 'c').querySelector('[data-kit-chip-trailing="chevron"]')).not.toBeNull();
+  });
+
   test('les glyphes sont masqués au lecteur d’écran', () => {
     const view = mount(<MeeshyChipRow {...harness({ chips: [{ id: 'a', title: 'A', icon: <svg />, trailing: 'remove' }] }).props} />);
     expect(view.querySelector('.kit-chip__glyph')?.getAttribute('aria-hidden')).toBe('true');
