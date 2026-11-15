@@ -183,9 +183,12 @@ canal, consentement par défaut) et les listes littérales de `relation-levels.t
 3. Miroirs iOS et Android : cas de la matrice, lecture des fixtures, émission.
 4. Web : réception, SyncPill, icône, fiche.
 
-## 8. Miroirs à mettre à jour (suivi immédiat)
+## 8. Miroirs à mettre à jour
 
-Ajouter `device.battery` / `device.battery.pull` à la matrice lue par
-`RelationAccess.swift` et `RelationAccess.kt` : leurs tests de parité relisent
-`relation-levels.ts` et rougiront tant que ces cas manquent — c'est voulu, ce sont les
-lots miroirs qui les soldent.
+`device.battery` / `device.battery.pull` sont dans la matrice lue par `RelationAccess.swift`
+et `RelationAccess.kt` (seuil, consentement, action dirigée), avec la table
+`RELATION_EMITTER_CONSENT_DEFAULT_LEVEL` (`emitterConsentDefaultLevel`) : leurs tests de
+parité relisent `relation-levels.ts` et rejouent les cas de `relation-access-cases.json`.
+Le relecteur de `battery-episode-cases.json` entre avec le lot miroir qui consomme
+l'épisode côté client (lot 3) : aucun client n'exécute `batteryEpisodeStep` aujourd'hui,
+le serveur seul fait avancer l'épisode.
