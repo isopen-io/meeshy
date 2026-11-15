@@ -599,7 +599,7 @@ export function RowActions({
       <button
         ref={buttonRef}
         type="button"
-        aria-label={menuLabel}
+        aria-label={open ? menuLabel : translate(language, 'rowActions.menu')}
         aria-haspopup="menu"
         aria-expanded={open}
         {...(tabStop ? {} : { tabIndex: -1 })}
