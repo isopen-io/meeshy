@@ -117,8 +117,11 @@ export function MagicLinkValidation({
   }
 
   function retry() {
-    called.current = false;
-    setState(token === null ? 'invalid' : 'validating');
+    if (token === null) {
+      setState('invalid');
+      return;
+    }
+    void run(false);
   }
 
   return (
