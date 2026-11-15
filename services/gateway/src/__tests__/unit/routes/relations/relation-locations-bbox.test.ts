@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import fastJson from 'fast-json-stringify';
-import { parseBbox, sharedLocationItemSchema } from '../../../../routes/relations/locations';
+import { ownSharedLocationSchema, parseBbox, sharedLocationItemSchema } from '../../../../routes/relations/locations';
 
 describe('parseBbox', () => {
   it('absente : toute la carte', () => {
@@ -46,5 +46,20 @@ describe('la forme servie au rattrapage (#17966)', () => {
 
   it('rien de plus riche ne part à côté : un champ non déclaré est retiré', () => {
     expect(JSON.parse(serialize({ ...servie, accuracy: 4, recipients: ['x'] }))).toEqual(servie);
+  });
+});
+
+describe('mon partage, relu par mes appareils (#18389)', () => {
+  const serialize = fastJson(ownSharedLocationSchema as unknown as Parameters<typeof fastJson>[0]);
+  const servi = { recipients: [{ userId: '6300000000000000000000f1', precision: 'exact', expiresAt: '2026-11-08T13:00:00.000Z' }], expiresAt: '2026-11-08T13:00:00.000Z' };
+
+  it('la liste, les précisions et les échéances traversent le sérialiseur ; sans partage, le terme est nul', () => {
+    expect(JSON.parse(serialize(servi))).toEqual(servi);
+    expect(JSON.parse(serialize({ recipients: [], expiresAt: null }))).toEqual({ recipients: [], expiresAt: null });
+  });
+
+  it('rien ne part à côté : position, maille ou session non déclarées sont retirées', () => {
+    const fuyant = { ...servi, position: { latitude: 48.85 }, sessionId: 'x', recipients: [{ ...servi.recipients[0], cell: { latitude: 48.8 } }] };
+    expect(JSON.parse(serialize(fuyant))).toEqual(servi);
   });
 });

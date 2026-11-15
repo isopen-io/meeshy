@@ -430,7 +430,7 @@
     <string name="game_concept_points_name">Funken</string>
     <string name="game_concept_points_tip_1">Komm jeden Tag wieder: Eine brennende Flamme nährt deine Funken.</string>
     <string name="game_concept_points_tip_2">Löse einen Schwung aus, um deine Funken zu vervielfachen.</string>
-    <string name="game_concept_points_use">Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel.</string>
+    <string name="game_concept_points_use">Eine Meesh zu prägen bannt einen Teil davon in die Münze, für immer in deinem Erbe bewahrt; dein Level folgt dem Licht, das dir bleibt.</string>
     <string name="game_concept_prestige_name">Die Wiedergeburt</string>
     <string name="game_concept_prestige_tip_1">Trag dein Licht bis Level 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -678,10 +678,10 @@
     <string name="game_guide_moment_first_level_next">%1$s bis Level %2$s.</string>
     <string name="game_guide_moment_first_level_short">Level %1$s · %2$s bis zum nächsten.</string>
     <string name="game_guide_moment_first_level_what">Dein Licht wächst: Das erste Level ist geschafft.</string>
-    <string name="game_guide_moment_first_mint_means">Ein Teil deines Lichts ist in der Münze gebannt: Dein Level ist um ebenso viel gesunken, dein Rang nie.</string>
+    <string name="game_guide_moment_first_mint_means">Ein Teil deines Lichts ist in der Münze gebannt, für immer bewahrt; dein Ruhm ist gewachsen, und dein Level folgt dem Licht, das dir bleibt.</string>
     <string name="game_guide_moment_first_mint_next">Was du empfangen hast, bleibt empfangen: Jeder neue Funke lässt dein Licht wieder wachsen.</string>
-    <string name="game_guide_moment_first_mint_possible_means_drop">Prägen bannt %1$s deines Lichts in eine Münze: Dein Level sinkt um ebenso viel, und du gewinnst +%2$s Ruhm.</string>
-    <string name="game_guide_moment_first_mint_possible_means_free">Prägen bannt %1$s deines Lichts in eine Münze, ohne dass du ein Level verlierst, und du gewinnst +%2$s Ruhm.</string>
+    <string name="game_guide_moment_first_mint_possible_means_drop">Prägen bannt %1$s deines Lichts in eine Münze für die Ewigkeit, und du gewinnst +%2$s Ruhm; dein Level folgt dem Licht, das dir bleibt.</string>
+    <string name="game_guide_moment_first_mint_possible_means_free">Prägen bannt %1$s deines Lichts in eine Münze, ohne dein Level zu ändern, und du gewinnst +%2$s Ruhm.</string>
     <string name="game_guide_moment_first_mint_possible_next">Präge jetzt, oder lass dein Licht erst wachsen.</string>
     <string name="game_guide_moment_first_mint_possible_short">Eine Meesh bannt %1$s deines Lichts.</string>
     <string name="game_guide_moment_first_mint_possible_what">Du kannst deine erste Meesh prägen.</string>
@@ -745,7 +745,7 @@
     <string name="game_guide_step_levels_means">Jedes Level verlangt etwas mehr Funken als das vorherige.</string>
     <string name="game_guide_step_levels_next">Ab Level 5 schicken dir deine Ahnen deinen ersten Traum.</string>
     <string name="game_guide_step_levels_what">Zwanzig Gestalten deines Lichts, und Level, die dein Rang öffnet.</string>
-    <string name="game_guide_step_mint_means">Prägen bannt einen Teil deines Lichts in die Münze: Dein Level sinkt um ebenso viel, dein Rang nie, und jede Prägung bringt dir Ruhm.</string>
+    <string name="game_guide_step_mint_means">Prägen bannt einen Teil deines Lichts in die Münze, für immer bewahrt, und jede Prägung bringt dir Ruhm, der deinen Rang voranbringt; dein Level folgt dem Licht, das dir bleibt.</string>
     <string name="game_guide_step_mint_next">Dein Ruhm gibt dir deinen Namen: deinen Rang.</string>
     <string name="game_guide_step_mint_what">Ist dein Licht groß genug, prägt man eine Meesh.</string>
     <string name="game_guide_step_missions_means">Erfülle sie, damit die Gabe erscheint und deine Flamme genährt wird.</string>

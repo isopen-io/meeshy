@@ -62,6 +62,9 @@ const ATTACHMENT = {
   createdAt: new Date(),
   transcription: { text: 'Hi' },
   translations: { en: { url: 'https://cdn/en.mp3' } },
+  // Un lecteur a réagi : c'est ce que la pièce porte EN BASE, et ce que le
+  // sérialiseur doit refuser de transformer en champ par lecteur (#18622).
+  reactions: [{ emoji: '🔥', participantId: 'participant-B' }],
 } as Record<string, unknown>;
 
 describe('emitAttachmentUpdated — the live audience', () => {
@@ -81,6 +84,49 @@ describe('emitAttachmentUpdated — the live audience', () => {
     expect(payload.messageId).toBe('msg-1');
     expect(payload.attachment.transcription).toEqual({ text: 'Hi' });
     expect(payload.attachment.translations).toEqual({ en: { url: 'https://cdn/en.mp3' } });
+  });
+
+  /**
+   * #18622 — la charge est PARTAGÉE : une seule est construite, pour la room de
+   * la conversation, les rooms personnelles ET la file hors ligne. Elle ne peut
+   * donc porter aucun champ PAR LECTEUR.
+   *
+   * `currentUserReactions` en était un, servi `[]` faute de lecteur à nommer —
+   * et `[]` dit « il n'y en a pas », pas « je n'ai pas calculé ». Le web
+   * FUSIONNE cette charge et ne préserve que `transcription` et `translations`,
+   * et seulement sur `null` : les réactions du lecteur sur sa propre pièce
+   * disparaissaient à chaque enrichissement du vocal.
+   *
+   * Le témoin interroge la PRÉSENCE DE LA CLÉ, jamais sa valeur : une clé
+   * présente à `undefined` écrase tout autant dans un `{ ...cached, ...incoming }`.
+   */
+  it("ne porte AUCUN champ par lecteur — la charge est partagée (#18622)", async () => {
+    const { emitted, deps } = makeDeps();
+
+    await emitAttachmentUpdated({ ...deps, conversationId: 'conv-1', messageId: 'msg-1', attachment: ATTACHMENT });
+
+    const attachment = (emitted[0].payload as { attachment: Record<string, unknown> }).attachment;
+    expect('currentUserReactions' in attachment).toBe(false);
+    // L'agrégat PARTAGÉ voyage, lui : c'est un compte, pas une appartenance, et
+    // le retirer avec l'autre retirerait la pastille elle-même.
+    expect(attachment.reactionSummary).toEqual({ '🔥': 1 });
+  });
+
+  /**
+   * La file hors ligne REMET cette même charge jusqu'à 48 h plus tard : si la
+   * clé y était, le défaut survivrait à la reconnexion du lecteur — et il est
+   * alors PIRE, puisque le lecteur a pu réagir entre-temps depuis un autre
+   * appareil.
+   */
+  it("n'enfile pas davantage de champ par lecteur (#18622)", async () => {
+    const { enqueued, deps } = makeDeps(THREE, []);
+
+    await emitAttachmentUpdated({ ...deps, conversationId: 'conv-1', messageId: 'msg-1', attachment: ATTACHMENT });
+
+    expect(enqueued.length).toBeGreaterThan(0);
+    for (const { entry } of enqueued) {
+      expect('currentUserReactions' in (entry.payload.attachment as Record<string, unknown>)).toBe(false);
+    }
   });
 
   it('carries `attachmentId` at the top level — the native Android decoder requires it (#11264)', async () => {

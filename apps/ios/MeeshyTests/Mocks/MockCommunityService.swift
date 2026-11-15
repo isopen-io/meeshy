@@ -27,6 +27,14 @@ enum CommunityStubs {
         """)
     }
 
+    static func communityUpdated(communityId: String = "c1", name: String, isPrivate: Bool = true, memberCount: Int = 9) -> CommunityUpdatedEvent {
+        CommunityUpdatedEvent(
+            communityId: communityId, identifier: "mshy_\(communityId)", name: name, description: "Réglée ailleurs",
+            avatar: nil, banner: nil, isPrivate: isPrivate, memberCount: memberCount,
+            updatedAt: "2026-11-15T10:00:00.000Z"
+        )
+    }
+
     static func page<T: Decodable>(_ items: [T], hasMore: Bool = false) -> OffsetPaginatedAPIResponse<[T]> {
         OffsetPaginatedAPIResponse(
             success: true,
@@ -72,7 +80,11 @@ final class MockCommunityService: CommunityServiceProviding, @unchecked Sendable
         CommunityStubs.page([APICommunitySearchResult]())
     }
 
-    func get(communityId: String) async throws -> APICommunity { try getResult.get() }
+    private(set) var getCallCount = 0
+    func get(communityId: String) async throws -> APICommunity {
+        getCallCount += 1
+        return try getResult.get()
+    }
 
     func create(name: String, identifier: String?, description: String?, isPrivate: Bool) async throws -> APICommunity {
         createCallCount += 1

@@ -344,11 +344,20 @@ extension MessageCardLayoutEngine {
         ))
     }
 
+    /// Ce qui se peint SOUS le filigrane : le fond CHOISI s'il y en a un (#18672),
+    /// sinon le média du message posé en fond.
+    func paintedBackdrop(_ media: MessageCardMediaPlan, width: Double, height: Double) -> [MessageCardOp] {
+        if let chosen = input.backdrop {
+            return backdropOps(chosen.media, width: width, height: height, veilAlpha: chosen.veil)
+        }
+        return media.backdrop.map { backdropOps($0, width: width, height: height) } ?? []
+    }
+
     /// Le visuel peint EN FOND, sous un voile de la couleur de la palette :
     /// le texte reste lisible, et la carte garde sa teinte.
-    func backdropOps(_ media: MessageCardMedia, width: Double, height: Double) -> [MessageCardOp] {
+    func backdropOps(_ media: MessageCardMedia, width: Double, height: Double, veilAlpha: Double? = nil) -> [MessageCardOp] {
         let base = palette.background.first?.color ?? MessageCardColor.hex("#000000")
-        let veil = MessageCardColor(red: base.red, green: base.green, blue: base.blue, alpha: palette.tone == .dark ? 0.6 : 0.72)
+        let veil = MessageCardColor(red: base.red, green: base.green, blue: base.blue, alpha: veilAlpha ?? (palette.tone == .dark ? 0.6 : 0.72))
         return [
             .media(MessageCardMediaOp(mediaID: media.id, kind: media.kind, x: 0, y: 0, width: width, height: height, radius: 0, placeholder: base)),
             .panel(MessageCardRectOp(x: 0, y: 0, width: width, height: height, radius: 0, color: veil)),

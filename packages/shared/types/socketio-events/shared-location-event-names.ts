@@ -22,6 +22,12 @@ export const SHARED_LOCATION_SERVER_EVENTS = {
   SHARED_LOCATION_CHANGED: 'location:share-changed',
   /** À un destinataire : le partage est arrêté, ou ne lui est plus servi. */
   SHARED_LOCATION_ENDED: 'location:share-ended',
+  /**
+   * À TOUS les appareils de l'émetteur (sa room `user:<id>`), sans charge : son partage a
+   * changé (démarré, remplacé, arrêté). Chaque appareil relit alors `GET /relations/locations/mine`
+   * et se recale : un retrait fait sur un appareil vaut pour les autres (#18389).
+   */
+  SHARED_LOCATION_OWN_CHANGED: 'location:share-own-changed',
   /** À chacun de deux Sangs consentants proches l'un de l'autre : « X est près de toi », sans coordonnée (#13937). */
   BLOOD_PROXIMITY: 'location:blood-proximity',
 } as const;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
-import { decodeSharedLocation, loadSharedLocations, sharedLocationsQueryOptions } from './shared-locations';
+import { decodeOwnSharedLocation, decodeSharedLocation, loadOwnSharedLocation, loadSharedLocations, sharedLocationsQueryOptions } from './shared-locations';
 import { estClefNonPersistable, estClefSouveraine } from './souverain';
 import { apiResponseMayBeCached } from '@/lib/net/api-runtime-cache';
 import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
@@ -119,5 +119,40 @@ describe('sharedLocationsQueryOptions', () => {
 describe('le service worker ne garde pas les positions de mes liens (audit #16984)', () => {
   test('la réponse brute de GET /relations/locations n’entre pas dans le seau « api » (NetworkFirst, 7 jours sur disque, rejouée hors réseau)', () => {
     expect(apiResponseMayBeCached(`${relationsEndpoints.locations}?bbox=-180,-90,180,90`)).toBe(false);
+  });
+});
+
+describe('MON partage, tel que la passerelle le sert (#18389)', () => {
+  const ID = '64B000000000000000000001';
+  const row = { userId: ID, precision: 'exact', expiresAt: '2026-11-14T09:00:00.000Z' };
+
+  test('lit la liste servie, identifiants en minuscules, et rien d’autre', () => {
+    expect(decodeOwnSharedLocation({ recipients: [{ ...row, latitude: 48.85 }], expiresAt: '2026-11-14T09:00:00.000Z', position: { latitude: 1 } })).toEqual({
+      recipients: [{ userId: ID.toLowerCase(), precision: 'exact', expiresAt: '2026-11-14T09:00:00.000Z' }],
+      expiresAt: '2026-11-14T09:00:00.000Z',
+    });
+  });
+
+  test('une ligne illisible se saute ; une précision inconnue se lit « ville »', () => {
+    const decoded = decodeOwnSharedLocation({ recipients: [{ userId: 'x' }, { ...row, expiresAt: 'demain' }, { ...row, precision: 'gps' }], expiresAt: null });
+    expect(decoded?.recipients).toEqual([{ userId: ID.toLowerCase(), precision: 'city', expiresAt: row.expiresAt }]);
+  });
+
+  test('sans liste lisible : « je ne sais pas » (null), jamais « plus aucun partage »', () => {
+    expect(decodeOwnSharedLocation(null)).toBeNull();
+    expect(decodeOwnSharedLocation({ expiresAt: null })).toBeNull();
+    expect(decodeOwnSharedLocation({ recipients: [], expiresAt: null })).toEqual({ recipients: [], expiresAt: null });
+  });
+
+  test('appelle GET /relations/locations/mine ; un échec (passerelle d’avant, hors ligne) rend null', async () => {
+    const ok = fakeTransport({ ok: true, data: { recipients: [row], expiresAt: row.expiresAt } });
+    expect((await loadOwnSharedLocation({ source: 'gateway', transport: ok.transport }))?.recipients).toHaveLength(1);
+    expect(ok.requests[0]).toMatchObject({ method: 'GET', path: relationsEndpoints.locationsMine });
+    const ko = fakeTransport({ ok: false, error: { kind: 'http', status: 404 } } as unknown as ApiResult<unknown>);
+    expect(await loadOwnSharedLocation({ source: 'gateway', transport: ko.transport })).toBeNull();
+  });
+
+  test('la relecture ne survit dans aucun cache disque du service worker', () => {
+    expect(apiResponseMayBeCached(relationsEndpoints.locationsMine)).toBe(false);
   });
 });
