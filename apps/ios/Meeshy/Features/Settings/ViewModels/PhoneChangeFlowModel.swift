@@ -33,6 +33,9 @@ final class PhoneChangeFlowModel: ObservableObject {
     @Published private(set) var isSending = false
     @Published private(set) var isVerifying = false
     @Published private(set) var error: String?
+    /// « Réduire les animations », transmis par la vue qui porte le flux : une
+    /// étape change alors par un fondu court, jamais par un ressort.
+    var reducesMotion = false
 
     private let userService: UserServiceProviding
     private let authManager: AuthManaging
@@ -60,13 +63,11 @@ final class PhoneChangeFlowModel: ObservableObject {
     // MARK: - Étapes
 
     func beginEditing() {
-        withAnimation(MeeshyAnimation.springFast) {
-            step = .editing
-        }
+        animate { step = .editing }
     }
 
     func cancel() {
-        withAnimation {
+        animate {
             step = .idle
             newPhone = ""
             code = ""
@@ -91,7 +92,7 @@ final class PhoneChangeFlowModel: ObservableObject {
         do {
             _ = try await userService.changePhone(ChangePhoneRequest(newPhoneNumber: newPhone))
             HapticFeedback.success()
-            withAnimation { step = .codeSent }
+            animate { step = .codeSent }
         } catch let failure as MeeshyError {
             HapticFeedback.error()
             error = failure.errorDescription
@@ -112,7 +113,7 @@ final class PhoneChangeFlowModel: ObservableObject {
             _ = try await userService.verifyPhoneChange(VerifyPhoneChangeRequest(code: code))
             HapticFeedback.success()
             await authManager.checkExistingSession()
-            withAnimation {
+            animate {
                 step = .idle
                 code = ""
                 newPhone = ""
@@ -134,6 +135,10 @@ final class PhoneChangeFlowModel: ObservableObject {
             self.error = Self.genericError
             return false
         }
+    }
+
+    private func animate(_ change: () -> Void) {
+        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reducesMotion, change)
     }
 
     private static var genericError: String {

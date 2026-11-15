@@ -28,7 +28,6 @@ import me.meeshy.sdk.model.MessageExpiredEvent
 import me.meeshy.sdk.model.MessagePinnedEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
-import me.meeshy.sdk.model.AttachmentUpdatedEvent
 import me.meeshy.sdk.model.ConversationEncryptionChangedSocketEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
@@ -88,7 +87,6 @@ class MessageSocketManager @Inject constructor(
     private val _translationShared = SocketInboundRoute.subject<MessageTranslationSharedEvent>()
     private val _transcriptionReady = SocketInboundRoute.subject<TranscriptionReadyEvent>()
     private val _audioTranslationReady = SocketInboundRoute.subject<AudioTranslationEvent>()
-    private val _attachmentUpdated = SocketInboundRoute.subject<AttachmentUpdatedEvent>()
     private val _conversationUpdated = SocketInboundRoute.subject<ConversationUpdatedSocketEvent>()
     private val _encryptionChanged = SocketInboundRoute.subject<ConversationEncryptionChangedSocketEvent>()
     private val _conversationDeleted = SocketInboundRoute.subject<ConversationDeletedSocketEvent>()
@@ -147,7 +145,6 @@ class MessageSocketManager @Inject constructor(
     val translationShared: SharedFlow<MessageTranslationSharedEvent> = _translationShared.exposed()
     val transcriptionReady: SharedFlow<TranscriptionReadyEvent> = _transcriptionReady.exposed()
     val audioTranslationReady: SharedFlow<AudioTranslationEvent> = _audioTranslationReady.exposed()
-    val attachmentUpdated: SharedFlow<AttachmentUpdatedEvent> = _attachmentUpdated.exposed()
     val conversationUpdated: SharedFlow<ConversationUpdatedSocketEvent> = _conversationUpdated.exposed()
     /** `conversation:encryption-changed` (#12956) — `EndToEndRegimeBinding` en retient l'activation e2ee. */
     val encryptionChanged: SharedFlow<ConversationEncryptionChangedSocketEvent> = _encryptionChanged.exposed()
@@ -190,9 +187,8 @@ class MessageSocketManager @Inject constructor(
      * lifecycle emits besides its arrival, all plain-emitted by the gateway (no `_seq`,
      * `NotificationService.ts`'s `announceReadBulk`/`announceDeletedBulk`/`emitCountsUpdate`
      * doc-comments: estampiller ferait avancer un curseur sans lecteur). Mirrors iOS
-     * `MessageSocketManager` / web `notification-socketio.singleton.ts`'s
-     * `onNotificationRead`/`onNotificationReadBulk`/`onNotificationDeleted`/
-     * `onNotificationDeletedBulk`/`onCounts`.
+     * `MessageSocketRoutes+Notifications.swift` — the web mirror this paragraph used to
+     * name (`notification-socketio.singleton.ts`) left the repository at #7668.
      */
     val notificationRead: SharedFlow<NotificationReadSocketEvent> = _notificationRead.exposed()
     val notificationReadBulk: SharedFlow<NotificationReadBulkSocketEvent> = _notificationReadBulk.exposed()
@@ -234,7 +230,6 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.MESSAGE_TRANSLATION_SHARED, _translationShared)
         route(SocketEventNames.AUDIO_TRANSCRIPTION_READY, _transcriptionReady)
         route(SocketEventNames.AUDIO_TRANSLATION_READY, _audioTranslationReady)
-        route(SocketEventNames.MESSAGE_ATTACHMENT_UPDATED, _attachmentUpdated)
         route(SocketEventNames.CONVERSATION_UPDATED, _conversationUpdated)
         route(SocketEventNames.CONVERSATION_ENCRYPTION_CHANGED, _encryptionChanged)
         route(SocketEventNames.CONVERSATION_DELETED, _conversationDeleted)
@@ -253,11 +248,16 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.LOCATION_LIVE_STARTED, _liveLocationStarted)
         route(SocketEventNames.LOCATION_LIVE_UPDATED, _liveLocationUpdated)
         route(SocketEventNames.LOCATION_LIVE_STOPPED, _liveLocationStopped)
-        // SyncEngine — observer le `_seq` AVANT de livrer l'event, comme le web
-        // (`notification-socketio.singleton.ts`) : un trou prouve que des
-        // notifications ont été manquées. Le curseur suit le flux SERVEUR, donc il
-        // avance même si le décodage échoue ensuite (un décodage raté est notre
-        // bug, pas un trou d'émission) et même si aucun écran n'écoute.
+        // SyncEngine — observer le `_seq` AVANT de livrer l'event : un trou prouve
+        // que des notifications ont été manquées. Le curseur suit le flux SERVEUR,
+        // donc il avance même si le décodage échoue ensuite (un décodage raté est
+        // notre bug, pas un trou d'émission) et même si aucun écran n'écoute.
+        //
+        // Le miroir est iOS (`MessageSocketRoutes+Notifications.swift`), PAS le web :
+        // cette ligne a dit « comme le web (`notification-socketio.singleton.ts`) »
+        // jusqu'au 2026-11-14, en nommant un fichier du web LEGACY sorti du dépôt au
+        // #7668 — `apps/web` n'observe aucun curseur (#18601). Ce qui estampille et
+        // ce qui observe se lisent au cliquet `socket-seq-lockstep-gate` (#18602).
         route(SocketEventNames.NOTIFICATION_NEW, _notificationReceived) { raw ->
             syncSeqTracker.observe((raw.opt(SEQ_KEY) as? Number)?.toLong())
         }

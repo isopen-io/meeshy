@@ -98,6 +98,7 @@ import type {
   CallTranslationRequestEvent,
   CallTranslationRequestedEvent,
   CallTranslationResponseEvent,
+  CallSignalAck,
 } from '../video-call.js';
 import type {
   CallRecordingAck,
@@ -197,6 +198,7 @@ import type {
   SharedLocationAck,
   SharedLocationChangedEventData,
   SharedLocationEndedEventData,
+  SharedLocationOwnChangedEventData,
   SharedLocationStartPayload,
   SharedLocationStopAck,
   SharedLocationUpdatePayload,
@@ -386,6 +388,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOW_PLAYING_CLEARED]: (data: NowPlayingClearedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
+  [SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED]: (data: SharedLocationOwnChangedEventData) => void;
   [SERVER_EVENTS.BLOOD_PROXIMITY]: (data: BloodProximityEventData) => void;
   [SERVER_EVENTS.TOGETHER_INVITED]: (data: TogetherInvitedEventData) => void;
   [SERVER_EVENTS.TOGETHER_STARTED]: (data: TogetherStartedEventData) => void;
@@ -660,7 +663,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack?: (response: CallInitiateAck) => void) => void;
   [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack?: (response: CallJoinAck) => void) => void;
   [CLIENT_EVENTS.CALL_LEAVE]: (data: { callId: string }) => void;
-  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: CallSignalAck) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_SCREEN]: (data: CallMediaToggleClientEvent) => void;

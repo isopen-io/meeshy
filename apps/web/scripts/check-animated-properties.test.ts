@@ -31,6 +31,12 @@ describe('geometryAnimationsIn — ce que le gate reconnaît', () => {
     expect(properties('css', '.a { transition: transform 1s, opacity 1s; }')).toEqual([]);
   });
 
+  test('une transition sur la croissance d’un élément flexible (#18322, M6)', () => {
+    expect(properties('css', '.a { transition: flex-grow 500ms ease, background-color 300ms; }')).toEqual(['flex-grow']);
+    expect(properties('css', '.a { transition: flex 500ms ease; }')).toEqual(['flex']);
+    expect(properties('ts', "const a = { transition: 'flex-shrink 200ms' };")).toEqual(['flex-shrink']);
+  });
+
   test('un @keyframes qui touche la géométrie, et lui seul', () => {
     const css = '@keyframes burn { 0% { grid-template-rows: 1fr; opacity: 1; } 100% { grid-template-rows: 0fr; height: 0; } }\n.b { height: 4px; }';
     expect(properties('css', css)).toEqual(['grid-template-rows', 'grid-template-rows', 'height']);
@@ -85,6 +91,7 @@ describe('les six sites du lot sont à zéro', () => {
   test('call-bubble.tsx : plus de left/top/width/height animés', () => none('ts', 'components/call-bubble.tsx'));
   test('call-stage.tsx : plus de left/top/width/height animés', () => none('ts', 'components/call-stage.tsx'));
   test('comments-zone.ts : plus de height/bottom animés', () => none('ts', 'lib/view/comments-zone.ts'));
+  test('onboarding.css : les segments de progression ne font plus croître leur largeur (#18322)', () => none('css', 'styles/onboarding.css'));
 });
 
 describe('le dépôt entier', () => {

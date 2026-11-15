@@ -143,10 +143,10 @@ struct SettingsView: View {
         if !focus.opensSecurity { _ = SettingsFocusRequest.shared.consume() }
         focusedSetting = focus
         if let sheet = focus.opensSheet {
-            Task { await DelayedUI.perform(after: .milliseconds(500)) { present(sheet) } }
+            Task { await DelayedUI.perform(after: MeeshyMotion.sheetAfterPush) { present(sheet) } }
         }
         guard focus.opensSecurity else { return }
-        Task { await DelayedUI.perform(after: .milliseconds(900)) { presentedSheet = .security } }
+        Task { await DelayedUI.perform(after: MeeshyMotion.sheetAfterFocusScroll) { presentedSheet = .security } }
     }
 
     /// #16418 — la configuration de la voix s'ouvre d'elle-même, une fois la
@@ -164,7 +164,7 @@ struct SettingsView: View {
         guard let focus, let anchor = focus.settingsAnchor else { return }
         isAnnexUnfolded = SettingsLayout.annexUnfolded(current: isAnnexUnfolded, reaching: focus.destination)
         let reduce = reduceMotion
-        Task { await DelayedUI.perform(after: .milliseconds(350)) {
+        Task { await DelayedUI.perform(after: MeeshyMotion.pushSettle) {
             meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduce) { proxy.scrollTo(anchor, anchor: .center) }
         } }
     }

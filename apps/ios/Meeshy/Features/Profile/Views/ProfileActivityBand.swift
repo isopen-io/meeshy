@@ -16,18 +16,23 @@ struct ProfileActivityBand: View {
     let stats: UserStats?
     let onOpen: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
+        let layout = Self.stacksVertically(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize)
+            ? AnyLayout(VStackLayout(spacing: MeeshySpacing.md))
+            : AnyLayout(HStackLayout(spacing: MeeshySpacing.md))
         Button {
             HapticFeedback.light()
             onOpen()
         } label: {
-            HStack(spacing: MeeshySpacing.md) {
+            layout {
                 ForEach(Self.values(of: stats)) { card($0) }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(stats: stats))
         .accessibilityAddTraits(.isButton)
@@ -38,7 +43,7 @@ struct ProfileActivityBand: View {
         VStack(spacing: MeeshySpacing.xsPlus) {
             Text(item.value, format: .number)
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(hex: item.colorHex))
+                .foregroundStyle(Color(hex: item.valueHex(isDark: theme.mode.isDark)))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText())
@@ -61,6 +66,11 @@ struct ProfileActivityBand: View {
 
     static var title: String {
         String(localized: "profile.section.activity", defaultValue: "MON ACTIVITÉ", bundle: .main)
+    }
+
+    /// Aux tailles de texte d'accessibilité, les trois cartes s'empilent : côte à côte, « Conversations » se tronquait.
+    static func stacksVertically(isAccessibilitySize: Bool) -> Bool {
+        isAccessibilitySize
     }
 
     /// Avant la réponse du serveur, la bande dit zéro : elle ne garde ni n'estime rien.

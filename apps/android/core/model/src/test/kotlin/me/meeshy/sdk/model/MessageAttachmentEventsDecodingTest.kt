@@ -31,6 +31,24 @@ class MessageAttachmentEventsDecodingTest {
         assertThat(event.servedAttachmentId).isEqualTo("a9")
     }
 
+    /**
+     * LE PIÈGE DE #18070, PORTÉ DEPUIS LA JUMELLE MORTE (#18115). `attachmentId` est posé
+     * CONDITIONNELLEMENT par `emitAttachmentUpdated.ts` — un enrichissement qui porte sur le message
+     * ENTIER n'en nomme aucune pièce, et ne joint donc pas de pièce non plus. Ce cas-là était gardé
+     * par `AttachmentUpdatedEvent`, le miroir PLAT que personne ne collectait ; retirer le miroir
+     * sans porter son témoin aurait perdu la garde avec le code mort.
+     */
+    @Test
+    fun `an enrichment that names no piece at all still decodes`() {
+        val event = json.decodeFromString<MessageAttachmentUpdatedEvent>(
+            """{"conversationId":"c1","messageId":"m1"}""",
+        )
+
+        assertThat(event.concerns("c1")).isTrue()
+        assertThat(event.servedAttachmentId).isNull()
+        assertThat(event.attachment).isNull()
+    }
+
     @Test
     fun `a half written piece does not cost the event`() {
         val event = json.decodeFromString<MessageAttachmentUpdatedEvent>(

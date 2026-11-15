@@ -91,6 +91,8 @@ struct SettingsRowLabel<Trailing: View>: View {
 
             trailing
         }
+        // Un titre qui passe sur deux lignes (grand texte) s'aligne à gauche : un `Button` centre le texte qu'il porte.
+        .multilineTextAlignment(.leading)
         .padding(.horizontal, MeeshySpacing.md + 2)
         .padding(.vertical, MeeshySpacing.sm + 2)
     }
