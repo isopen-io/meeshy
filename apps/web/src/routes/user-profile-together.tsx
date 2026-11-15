@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { apiDeps } from '@/lib/api/deps';
@@ -86,11 +86,13 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
   name,
   pieces,
   onInvite,
+  inviting = null,
 }: {
   readonly language: InterfaceLanguage;
   readonly name: string;
   readonly pieces: readonly TogetherPiece[] | null;
   readonly onInvite: (piece: TogetherPiece) => void;
+  readonly inviting?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -100,7 +102,7 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
         data-together-open=""
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className={`grid place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
+        className={`btn-press grid place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
         style={{ minHeight: 52, color: BRAND, border: `1.5px solid ${BRAND}`, outlineColor: BRAND }}
       >
         <span>
@@ -126,7 +128,9 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
                     data-together-piece={piece.attachment.id}
                     aria-label={translateCircles(language, 'together.row.invite.a11y', { name, file: piece.attachment.originalName })}
                     onClick={() => onInvite(piece)}
-                    className={`flex w-full items-center gap-2 rounded-chip px-3 text-start text-body ${FOCUS}`}
+                    disabled={inviting !== null}
+                    aria-busy={inviting === piece.attachment.id}
+                    className={`btn-press flex w-full items-center gap-2 rounded-chip px-3 text-start text-body ${FOCUS}`}
                     style={{ minHeight: 44, color: INK, outlineColor: BRAND }}
                   >
                     <span aria-hidden="true">{piece.media === 'video' ? '🎬' : '🎧'}</span>
@@ -197,12 +201,20 @@ export function ProfileTogetherRow({
   const conversationId = allowed ? cachedDirectWith(appQueryClient, person.id) : undefined;
   const pieces = useDirectPieces(deps, conversationId);
   const client = useTogetherClient({ watch, store, listen: false });
+  const [inviting, setInviting] = useState<string | null>(null);
+  const invitingRef = useRef<string | null>(null);
 
   if (!ready || !allowed) return null;
   const name = person.displayName ?? person.username;
   const invite = (piece: TogetherPiece): void => {
-    if (conversationId === undefined) return;
-    void client.invite({ toUserId: person.id, conversationId, attachmentId: piece.attachment.id }).then((outcome) => onNotice(translateCircles(language, OUTCOME_NOTICE[outcome], { name }), outcome !== 'invited'));
+    if (conversationId === undefined || invitingRef.current !== null) return;
+    invitingRef.current = piece.attachment.id;
+    setInviting(piece.attachment.id);
+    void client.invite({ toUserId: person.id, conversationId, attachmentId: piece.attachment.id }).then((outcome) => {
+      invitingRef.current = null;
+      setInviting(null);
+      onNotice(translateCircles(language, OUTCOME_NOTICE[outcome], { name }), outcome !== 'invited');
+    });
   };
-  return <ProfileTogetherRowView language={language} name={name} pieces={pieces} onInvite={invite} />;
+  return <ProfileTogetherRowView language={language} name={name} pieces={pieces} onInvite={invite} inviting={inviting} />;
 }

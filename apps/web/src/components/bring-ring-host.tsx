@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { useStore } from 'zustand/react';
 
 import { apiDeps } from '@/lib/api/deps';
@@ -13,6 +13,8 @@ import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { knownPersonByIdInConversations } from '@/lib/profile/known-people-cache';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 /**
  * **L'ÉCRAN DE SONNERIE DU BRING, ONGLET OUVERT** (#13936, sous-lot
@@ -46,13 +48,16 @@ export function BringRingView({
   ring,
   name,
   onStop,
+  leaving = false,
 }: {
   readonly language: InterfaceLanguage;
   readonly ring: LiveBring;
   readonly name: string;
   readonly onStop: () => void;
+  readonly leaving?: boolean;
 }) {
   const stopRef = useRef<HTMLButtonElement>(null);
+  useBackDismiss(onStop, { escape: true, held: true, active: !leaving });
   useEffect(() => stopRef.current?.focus(), [ring.bringId]);
   const title = translateCircles(language, 'bring.incoming.title', { name });
   return (
@@ -63,7 +68,7 @@ export function BringRingView({
       aria-describedby={`bring-body-${ring.bringId}`}
       data-bring-ring={ring.bringId}
       className="fixed inset-0 z-[90] grid place-items-center px-4"
-      style={{ backgroundColor: 'var(--color-error)' }}
+      {...layerMotion(leaving, { backgroundColor: 'var(--color-error)', '--layer-shift': '0 0' } as CSSProperties)}
     >
       <div className="grid w-full max-w-sm justify-items-center gap-4 text-center" style={{ color: 'var(--color-on-state)' }}>
         <span aria-hidden="true" className="text-[64px] leading-none motion-safe:animate-pulse">
@@ -80,7 +85,7 @@ export function BringRingView({
           type="button"
           data-bring-stop={ring.bringId}
           onClick={onStop}
-          className="grid w-full place-items-center rounded-card px-6 text-title font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="btn-press grid w-full place-items-center rounded-card px-6 text-title font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ minHeight: 64, backgroundColor: 'var(--color-on-state)', color: 'var(--color-error)', outlineColor: 'var(--color-on-state)' }}
         >
           {translateCircles(language, 'bring.incoming.stop')}
@@ -105,6 +110,7 @@ export function BringRingHost({
 }) {
   const ready = useCirclesCatalog(language);
   const ring = useStore(store, (state) => state.incoming[0] ?? null);
+  const shown = useLayerPresence(ready ? ring : null);
 
   useEffect(() => watch((socket) => bindBringLive({ socket, store, viewerId: viewerIdOf })), [watch, store]);
 
@@ -120,12 +126,13 @@ export function BringRingHost({
     };
   }, [bringId, expiresAt, ready, language, store, tones]);
 
-  if (ring === null || !ready) return null;
-  const known = knownPersonByIdInConversations(appQueryClient, ring.fromUserId);
+  const shownRing = shown.value;
+  if (shownRing === null) return null;
+  const known = knownPersonByIdInConversations(appQueryClient, shownRing.fromUserId);
   const name = known?.displayName ?? known?.username ?? translateCircles(language, 'bring.incoming.someone');
   const stop = (): void => {
-    store.getState().stop(ring.bringId);
-    void stopBring(deps, ring.bringId);
+    store.getState().stop(shownRing.bringId);
+    void stopBring(deps, shownRing.bringId);
   };
-  return <BringRingView language={language} ring={ring} name={name} onStop={stop} />;
+  return <BringRingView language={language} ring={shownRing} name={name} onStop={stop} leaving={shown.leaving} />;
 }
