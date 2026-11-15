@@ -1192,3 +1192,15 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   le serveur ne sert pas sort de la liste (témoin). Assumés : un arrêt de compte côté serveur (suppression) ne s'annonce
   pas ; un « Arrêter » fait sur un appareil qui n'a pas démarré envoie SA position une fois (#18580).
 - Suivis ouverts : iOS et Android (#18578), un seul appareil publie (#18580). #18389 reste ouverte jusqu'à #18578.
+
+## 2026-11-15 — réveil de 1 h : la PR #18581 menée à la fusion (#18389, serveur + web)
+
+- Reprise : la PR #18581 (un partage, plusieurs appareils) était ouverte ; le run consiste à la fusionner, pas à en
+  ouvrir une autre. Dernier commit de la session précédente à 23 h 51, aucune autre session ne l'écrivait.
+- Rouge de la PR : Android `:feature:game:testDebugUnitTest`, un seul témoin (`GameRulesScreenComposeTest` « toucher le
+  i de la frappe déplie le calcul », ligne 109). Étranger au lot (épure du jeu #17584) ; il n'apparaît que parce que la
+  session précédente a fait recompiler ces témoins. La PR #18595 reprend déjà `:feature:game` : on lui cède.
+- `origin/dev` fusionné à la main : aucun conflit.
+- Gates locaux après la fusion : gateway `jest` `sharedLocation` + handler + `routes/relations` 13 suites, 243 verts ;
+  `tsc` gateway vert ; web `bun test` du lot 90/90, `tsc --noEmit` vert.
+- Prochain lot recommandé : #18578 (iOS + Android se recalent sur la passerelle), puis #18580, puis #18431.
