@@ -66,7 +66,7 @@ export function ListHeader({
         type="button"
         onClick={() => setShareSheetOpen(true)}
         aria-label={translate(language, 'list.header.share')}
-        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="btn-press grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <span
@@ -79,7 +79,7 @@ export function ListHeader({
       <Link
         to="conversationsNew"
         aria-label={translate(language, 'list.header.new')}
-        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="btn-press grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <span
@@ -99,7 +99,7 @@ export function ListHeader({
       <Link
         to="progression"
         aria-label={translate(language, 'list.header.progression')}
-        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="btn-press grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <span

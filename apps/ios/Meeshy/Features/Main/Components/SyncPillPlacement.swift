@@ -81,11 +81,6 @@ nonisolated enum SyncPillPlacement {
         let edge = keyboardAwareEdge(safeAreaBottom: safeAreaBottom, keyboardHeight: keyboardHeight)
         return max(chromeTopFromScreenBottom - edge, 0)
     }
-
-    /// La courbe sur laquelle la pastille rejoint une NOUVELLE hauteur de
-    /// chrome (barre qui grandit d'une ligne, panneau d'émojis, arrivée dans une
-    /// conversation) — celle de la barre et de son panneau d'émojis.
-    static let dockAnimation: Animation = .spring(response: 0.3, dampingFraction: 0.8)
 }
 
 /// **Qui déclare le chrome bas : le DERNIER écran monté** (#10840).
@@ -160,9 +155,9 @@ private struct SyncPillBandMount: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .padding(.bottom, SyncPillPlacement.bottomPadding(dockedChromeHeight: dock.claims.height))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .animation(SyncPillPlacement.dockAnimation, value: dock.claims.height)
+            .offset(y: -SyncPillPlacement.bottomPadding(dockedChromeHeight: dock.claims.height))
+            .meeshyAnimation(MeeshyAnimation.springFast, value: dock.claims.height)
     }
 }
 

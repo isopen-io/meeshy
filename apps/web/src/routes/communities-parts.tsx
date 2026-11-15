@@ -195,11 +195,6 @@ export function CommunityCard({ language, community }: { readonly language: Inte
         <span data-community-name className="line-clamp-2 text-secondary leading-tight font-bold" style={{ color: 'var(--color-on-media)' }}>
           {community.name}
         </span>
-        {community.description === null ? null : (
-          <span data-community-description className="line-clamp-2 text-chip leading-snug" style={{ color: 'var(--color-on-media-2)' }}>
-            {community.description}
-          </span>
-        )}
         <span data-community-counts className="flex items-center gap-2 text-chip font-semibold" style={{ color: 'var(--color-on-media)' }}>
           <Count icon={<Glyph name="users" size={11} />} value={compactCount(community.memberCount, language)} label={membersLabel(language, community.memberCount)} />
           <Count

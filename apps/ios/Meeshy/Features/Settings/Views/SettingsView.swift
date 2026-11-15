@@ -3,6 +3,10 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// **Les Réglages, composés depuis leur loi** (#18589) : `SettingsLayout`
+/// ordonne les blocs et leurs rangées, cet écran tient l'état qu'elles écrivent
+/// — la feuille présentée, le pli des annexes, la langue de l'interface, les
+/// trois interrupteurs d'interface, la déconnexion en cours.
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.routerCommands) private var router
@@ -10,39 +14,22 @@ struct SettingsView: View {
     @EnvironmentObject private var authManager: AuthManager
     @ObservedObject private var prefs: UserPreferencesManager
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     @State private var showLogoutConfirm = false
-    @State private var showAccountSwitcher = false
     /// Choix explicite de langue d'interface — `nil` = suit la langue
     /// principale du compte. Lu une fois au montage depuis `UILanguageOverride`.
     @State private var interfaceLanguageChoice: String? = UILanguageOverride.explicitChoice
     @State private var showInterfaceLanguageRestartHint = false
-    /// Q6 (P1) — driver d'overlay pendant `await authManager.logout()`.
-    /// L'alert iOS native ne permet pas un spinner inline sur son bouton,
-    /// donc on affiche un overlay sobre tant que la quiesce-then-purge
-    /// async n'est pas terminée. Empêche aussi le double-tap sur le
-    /// bouton "Se déconnecter" (disabled).
+    /// Vrai pendant `await authManager.logout()` : le voile le montre, et les
+    /// boutons du pied se désactivent contre le double toucher.
     @State private var isLoggingOut = false
-    @State private var showPrivacySettings = false
-    @State private var showNotificationSettings = false
-    @State private var showSecurity = false
-    @State private var showBlockedUsers = false
-    @State private var showAbout = false
-    @State private var showPrivacyPolicy = false
-    @State private var showTerms = false
-    @State private var showLicenses = false
-    @State private var showSupport = false
-    @State private var showDataStorage = false
-    @State private var showDataExport = false
-    @State private var showDeleteAccount = false
-    @State private var showStats = false
-    @State private var showAffiliate = false
-    @State private var showVoiceProfileWizard = false
+    /// UNE feuille à la fois : deux rangées touchées vite ne superposent rien.
+    @State private var presentedSheet: SettingsSheet?
+    /// Replié à chaque montage : une annexe s'ouvre quand on la cherche.
+    @State private var isAnnexUnfolded = false
     @State private var openNoteID: String?
-    @State private var showVoiceProfileManage = false
-    /// Ouverte par un indicateur (#16418) : sans profil, l'assistant suit.
-    @State private var voiceManageOpensWizard = false
-    @State private var showMediaDownload = false
     @State private var packsRequest: PackShopLauncher.Request?
     @ObservedObject private var packShopLauncher: PackShopLauncher
     init(prefs: UserPreferencesManager = .shared, packShopLauncher: PackShopLauncher = .shared) {
@@ -61,6 +48,10 @@ struct SettingsView: View {
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     var body: some View {
         ZStack {
             presentations
@@ -74,31 +65,7 @@ struct SettingsView: View {
                 Spacer()
             }
         }
-        .overlay {
-            // Q6 — overlay sobre pendant le logout async (p50 ~300ms,
-            // p95 ~800ms). Pattern industriel WhatsApp/Signal. Bloque
-            // les interactions utilisateur pour éviter qu'un tap arrive
-            // pendant le quiesce et provoque une navigation orpheline.
-            if isLoggingOut {
-                ZStack {
-                    Color.black.opacity(MeeshyOpacity.strong).ignoresSafeArea()
-                    VStack(spacing: MeeshySpacing.md + 2) {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .controlSize(.large)
-                            .tint(.white)
-                        Text(String(localized: "settings.logout.inprogress", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundStyle(.white)
-                    }
-                    .padding(.horizontal, MeeshySpacing.xxxl)
-                    .padding(.vertical, MeeshySpacing.xxl)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                }
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.18), value: isLoggingOut)
-            }
-        }
+        .overlay { SettingsLogoutVeil(isVisible: isLoggingOut) }
         .task { await prefs.fetchFromBackend() }
     }
 
@@ -113,9 +80,6 @@ struct SettingsView: View {
         Color.clear
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
-            .sheet(isPresented: $showStats) { UserStatsView() }
-            .sheet(isPresented: $showAffiliate) { AffiliateView() }
-            .sheet(isPresented: $showDataExport) { DataExportView() }
             // iOS ne relit `AppleLanguages` qu'au démarrage : l'écran courant reste
             // dans l'ancienne langue, et le taire ferait passer un réglage qui
             // marche pour un réglage mort — c'est précisément le reproche qui avait
@@ -129,59 +93,29 @@ struct SettingsView: View {
                             defaultValue: "L'interface passera dans cette langue au prochain démarrage de Meeshy.",
                             bundle: .main))
             }
-            // #8286 — « Changer de compte » GARDE les sessions : la feuille liste
-            // les comptes de l'appareil, un compte gardé s'ouvre sans mot de passe.
-            .sheet(isPresented: $showAccountSwitcher) {
-                AccountSwitcherSheet()
-                    .environmentObject(authManager)
-            }
             .alert(String(localized: "settings.logout.title", bundle: .main), isPresented: $showLogoutConfirm) {
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
-                Button(String(localized: "settings.logout.title", bundle: .main), role: .destructive) {
-                    // P1 — logout() est désormais async + quiesce-then-purge
-                    // (disconnect sockets, reset services SDK, wipe keychain).
-                    // Le disconnect explicite du socket n'est plus nécessaire,
-                    // il est intégré au logout().
-                    // Q6 — overlay loading pendant l'await (300-800ms p50/p95).
-                    isLoggingOut = true
-                    // #8286 — la session et les données locales partent, le compte
-                    // RESTE listé : y revenir redemande le mot de passe.
-                    Task {
-                        await authManager.logout(forgettingAccount: false)
-                        isLoggingOut = false
-                    }
-                }
+                Button(String(localized: "settings.logout.title", bundle: .main), role: .destructive, action: logout)
             } message: {
                 Text(String(localized: "settings.logout.message", bundle: .main))
             }
-            .sheet(isPresented: $showPrivacySettings) {
-                PrivacySettingsView()
-            }
-            .sheet(isPresented: $showNotificationSettings) {
-                NotificationSettingsView()
-            }
-            .sheet(isPresented: $showSecurity) {
-                // Une feuille n'hérite pas des EnvironmentObject de son
-                // présentateur : `SecurityView` lit `authManager`.
-                SecurityView()
-                    .environmentObject(authManager)
-            }
-            .sheet(isPresented: $showBlockedUsers) {
-                BlockedUsersView()
-            }
-            .sheet(isPresented: $showAbout) { AboutView() }
-            .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView() }
-            .sheet(isPresented: $showTerms) { TermsOfServiceView() }
-            .sheet(isPresented: $showLicenses) { LicensesView() }
-            .sheet(isPresented: $showSupport) { SupportView() }
-            .sheet(isPresented: $showDataStorage) { DataStorageView() }
-            .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
+            .sheet(item: $presentedSheet) { SettingsSheetContent(sheet: $0, authManager: authManager) }
             .sheet(item: $packsRequest) { PacksSettingsView(initialDomain: $0.domain, focusedPack: $0.pack, initialPage: $0.page) }
             .onReceive(SettingsFocusRequest.shared.$pending.compactMap { $0 }, perform: receiveFocus)
             .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
                 packsRequest = packShopLauncher.consume()
             }
-            .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
+    }
+
+    /// `logout()` désactive les sockets, remet les services du SDK à zéro et
+    /// vide le trousseau. La session et les données locales partent, le compte
+    /// RESTE listé : y revenir redemande le mot de passe (#8286).
+    private func logout() {
+        isLoggingOut = true
+        Task {
+            await authManager.logout(forgettingAccount: false)
+            isLoggingOut = false
+        }
     }
 
     // MARK: - Header
@@ -201,7 +135,7 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Scroll Content
+    // MARK: - Focus
 
     /// #16339 — le réglage désigné par une invite ; le master PIN vit dans
     /// Sécurité, qui consomme la demande à son tour.
@@ -212,17 +146,30 @@ struct SettingsView: View {
             Task { await DelayedUI.perform(after: .milliseconds(500)) { present(sheet) } }
         }
         guard focus.opensSecurity else { return }
-        Task { await DelayedUI.perform(after: .milliseconds(900)) { showSecurity = true } }
+        Task { await DelayedUI.perform(after: .milliseconds(900)) { presentedSheet = .security } }
     }
 
     /// #16418 — la configuration de la voix s'ouvre d'elle-même, une fois la
     /// poussée des Réglages achevée.
     private func present(_ sheet: SettingsFocus.Sheet) {
         switch sheet {
-        case .voiceProfileManage: voiceManageOpensWizard = true; showVoiceProfileManage = true
-        case .voiceProfileWizard: showVoiceProfileWizard = true
+        case .voiceProfileManage: presentedSheet = .voiceProfileManage(opensWizardWhenEmpty: true)
+        case .voiceProfileWizard: presentedSheet = .voiceProfileWizard
         }
     }
+
+    /// Un réglage d'annexe déplie d'abord le pli : l'ancre visée n'est montée
+    /// qu'une fois dépliée, et le défilement attend la poussée de l'écran.
+    private func scroll(to focus: SettingsFocus?, with proxy: ScrollViewProxy) {
+        guard let focus, let anchor = focus.settingsAnchor else { return }
+        isAnnexUnfolded = SettingsLayout.annexUnfolded(current: isAnnexUnfolded, reaching: focus.destination)
+        let reduce = reduceMotion
+        Task { await DelayedUI.perform(after: .milliseconds(350)) {
+            meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduce) { proxy.scrollTo(anchor, anchor: .center) }
+        } }
+    }
+
+    // MARK: - Scroll Content
 
     private var scrollContent: some View {
         ScrollViewReader { proxy in
@@ -240,23 +187,11 @@ struct SettingsView: View {
             SettingsDeferredContent {
                 VStack(spacing: MeeshySpacing.xl) {
                     profileCard
-                    accountSection
-                        .id(SettingsFocus.masterPin.settingsAnchor)
-                        .modifier(SettingsFocusHighlight(isActive: focusedSetting == .masterPin))
-                    appearanceSection
-                    voiceProfileSection
-                        .id(SettingsFocus.voiceProfile.settingsAnchor)
-                        .modifier(SettingsFocusHighlight(isActive: focusedSetting?.settingsAnchor == SettingsFocus.voiceProfile.settingsAnchor))
-                    transcriptionSection
-                        .id(SettingsFocus.transcription.settingsAnchor)
-                        .modifier(SettingsFocusHighlight(isActive: focusedSetting == .transcription))
-                    notificationsSection
-                    dataSection
-                    meeshyToolsSection
-                    supportSection
-                    aboutSection
-                    SettingsSwitchAccountButton(isDisabled: isLoggingOut) { showAccountSwitcher = true }
-                    SettingsLogoutButton(isDisabled: isLoggingOut) { showLogoutConfirm = true }
+                    ForEach(SettingsLayout.blocks(in: .life)) { blockView($0) }
+                    SettingsAnnexFold(isUnfolded: $isAnnexUnfolded, summary: SettingsLayout.annexSummary) {
+                        ForEach(SettingsLayout.blocks(in: .annex)) { blockView($0) }
+                    }
+                    ForEach(SettingsLayout.blocks(in: .footer)) { blockView($0) }
 
                     Spacer().frame(height: 40)
                 }
@@ -267,16 +202,58 @@ struct SettingsView: View {
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
-        .adaptiveOnChange(of: focusedSetting, initial: true) { _, focus in
-            guard let focus else { return }
-            Task { await DelayedUI.perform(after: .milliseconds(350)) {
-                withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(focus.settingsAnchor, anchor: .center) }
-            } }
-        }
+        .adaptiveOnChange(of: focusedSetting, initial: true) { _, focus in scroll(to: focus, with: proxy) }
         }
     }
 
-    // MARK: - Account Section
+    private func blockView(_ block: SettingsBlock) -> some View {
+        SettingsBlockView(block: block) { row(for: $0) }
+            .id(block.id.anchor)
+            .modifier(SettingsFocusHighlight(isActive: focusedSetting?.settingsAnchor == block.id.anchor))
+    }
+
+    // MARK: - Rows
+
+    @ViewBuilder
+    private func row(for destination: SettingsDestination) -> some View {
+        switch destination {
+        case .theme: themeRow
+        case .interfaceLanguage: interfaceLanguageRow
+        case .shop: shopRow
+        case .transcriptionMine: transcriptionMineRow
+        case .transcriptionAuto: transcriptionAutoRow
+        case .lentilleList: lentilleListRow
+        case .readingModes: readingModesRow
+        case .riviereMode: riviereModeRow
+        case .switchAccount: SettingsSwitchAccountButton(isDisabled: isLoggingOut) { open(.switchAccount) }
+        case .logout: SettingsLogoutButton(isDisabled: isLoggingOut) { open(.logout) }
+        case .deleteAccount: SettingsDeleteAccountButton(isDisabled: isLoggingOut) { open(.deleteAccount) }
+        case .privacy, .security, .blockedUsers, .notifications, .voiceProfile, .mediaDownload,
+             .storage, .exportData, .helpCenter, .about, .terms, .privacyPolicy, .licenses:
+            navigationRow(destination)
+        }
+    }
+
+    @ViewBuilder
+    private func navigationRow(_ destination: SettingsDestination) -> some View {
+        if let content = SettingsRowContent.of(destination, voice: .current(prefs)) {
+            SettingsNavigationRow(content: content) { open(destination) }
+        }
+    }
+
+    /// Le toucher d'une rangée exécute la présentation que la loi lui déclare :
+    /// l'écran n'en recopie aucune à côté d'elle.
+    private func open(_ destination: SettingsDestination) {
+        switch destination.presentation {
+        case .sheet(let sheet): presentedSheet = sheet
+        case .voiceSetup: presentedSheet = SettingsRowContent.voiceProfile(.current(prefs)).sheet
+        case .shop: packsRequest = PackShopLauncher.Request(domain: nil, pack: nil)
+        case .logoutConfirmation: showLogoutConfirm = true
+        case .control: return
+        }
+    }
+
+    // MARK: - Profile Card
 
     private var profileCard: some View {
         Button {
@@ -315,180 +292,33 @@ struct SettingsView: View {
         .accessibilityLabel(String(localized: "settings.my_profile", bundle: .main))
     }
 
-    private var accountSection: some View {
-        settingsSection(title: String(localized: "settings.section.account", bundle: .main), icon: "person.circle.fill", color: MeeshyColors.trackingAccentHex) {
-            Button {
-                HapticFeedback.light()
-                showPrivacySettings = true
-            } label: {
-                settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.privacy.a11y", bundle: .main))
-            .accessibilityHint(String(localized: "settings.privacy.hint", bundle: .main))
+    // MARK: - Appearance
 
-            Button {
-                HapticFeedback.light()
-                showSecurity = true
-            } label: {
-                settingsRow(icon: "shield.fill", title: String(localized: "settings.security.title", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.security.a11y", bundle: .main))
-            .accessibilityHint(String(localized: "settings.security.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                showBlockedUsers = true
-            } label: {
-                settingsRow(icon: "lock.shield", title: String(localized: "settings.blocked_users", bundle: .main), color: MeeshyColors.errorHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.blocked_users", bundle: .main))
-            .accessibilityHint(String(localized: "settings.blocked_users.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.heavy()
-                showDeleteAccount = true
-            } label: {
-                settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", bundle: .main), color: MeeshyColors.errorHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(MeeshyColors.error.opacity(0.6))
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.delete_account", bundle: .main))
-            .accessibilityHint(String(localized: "settings.delete_account.hint", bundle: .main))
+    private var themeRow: some View {
+        settingsRow(icon: theme.preference.icon, title: String(localized: "settings.theme", bundle: .main), color: theme.preference.tintColor) {
+            SettingsThemePicker(selection: theme.preference, onSelect: selectTheme)
         }
     }
 
-    // MARK: - Appearance Section
-
-    private var appearanceSection: some View {
-        settingsSection(title: String(localized: "settings.section.appearance", bundle: .main), icon: "paintbrush.fill", color: MeeshyColors.warningHex) {
-            settingsRow(icon: theme.preference.icon, title: String(localized: "settings.theme", bundle: .main), color: theme.preference.tintColor) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ForEach(ThemePreference.allCases, id: \.self) { pref in
-                        Button {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                theme.preference = pref
-                                theme.syncWithSystem(colorScheme)
-                            }
-                            syncThemeToPrefs(pref)
-                        } label: {
-                            VStack(spacing: MeeshySpacing.xs) {
-                                Image(systemName: pref.icon)
-                                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                                Text(themeLabel(for: pref))
-                                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
-                                    // Un seul segment = une seule ligne, à sa
-                                    // largeur idéale : sans `fixedSize`, le
-                                    // HStack compressait d'abord ces libellés
-                                    // (« Au… », « So… ») alors que la place ne
-                                    // manquait pas — le Spacer de la row doit
-                                    // céder avant le texte.
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
-                            }
-                            .foregroundColor(theme.preference == pref ? Color(hex: pref.tintColor) : theme.textMuted)
-                            .padding(.horizontal, MeeshySpacing.sm + 2)
-                            .padding(.vertical, MeeshySpacing.xs + 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                                    .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(MeeshyOpacity.light) : Color.clear)
-                            )
-                        }
-                        .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(themeLabel(for: pref))")
-                        .accessibilityValue(theme.preference == pref ? String(localized: "common.selected", bundle: .main) : "")
-                        .accessibilityAddTraits(theme.preference == pref ? .isSelected : [])
-                    }
-                }
-            }
-            // Le picker avait été retiré le 2026-07-20 : il écrivait
-            // `application.interfaceLanguage`, que personne ne relisait. Il
-            // revient branché sur `UILanguageOverride`, qui applique
-            // réellement la langue au lancement depuis le 2026-07-25 — c'était
-            // le fil manquant, pas le contrôle qui était en trop.
-            interfaceLanguageRow
-            interfaceFeatureRows
+    private func selectTheme(_ pref: ThemePreference) {
+        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+            theme.preference = pref
+            theme.syncWithSystem(colorScheme)
         }
+        syncThemeToPrefs(pref)
     }
 
-    /// Libellés localisés des segments de thème — `ThemePreference.label`
-    /// (SDK) renvoie du français en dur, qui fuyait tel quel dans les six
-    /// autres langues de l'interface.
-    private func themeLabel(for pref: ThemePreference) -> String {
-        switch pref {
-        case .system:
-            return String(localized: "settings.theme.auto", defaultValue: "Auto", bundle: .main)
-        case .light:
-            return String(localized: "settings.theme.light", defaultValue: "Clair", bundle: .main)
-        case .dark:
-            return String(localized: "settings.theme.dark", defaultValue: "Sombre", bundle: .main)
-        }
-    }
-
-    /// Langue de l'interface — choix propre à l'affichage, sans effet sur les
-    /// langues de traduction du profil. « Automatique » suit la langue
-    /// principale du compte, ce que faisait l'app jusqu'ici.
+    /// Le picker avait été retiré le 2026-07-20 : il écrivait
+    /// `application.interfaceLanguage`, que personne ne relisait. Il est branché
+    /// sur `UILanguageOverride`, qui applique réellement la langue au lancement :
+    /// c'était le fil manquant, pas le contrôle qui était en trop.
     private var interfaceLanguageRow: some View {
         settingsRow(icon: "globe",
                     title: String(localized: "settings.interface_language",
                                   defaultValue: "Langue de l'interface", bundle: .main),
                     color: MeeshyColors.indigo600Hex) {
-            Menu {
-                Button {
-                    selectInterfaceLanguage(nil)
-                } label: {
-                    Label(automaticLanguageLabel,
-                          systemImage: interfaceLanguageChoice == nil ? "checkmark" : "")
-                }
-                ForEach(UILanguageOverride.selectableCodes, id: \.self) { code in
-                    Button {
-                        selectInterfaceLanguage(code)
-                    } label: {
-                        Label(Self.interfaceLanguageLabel(code),
-                              systemImage: interfaceLanguageChoice == code ? "checkmark" : "")
-                    }
-                }
-            } label: {
-                HStack(spacing: MeeshySpacing.xs) {
-                    Text(interfaceLanguageChoice.map(Self.interfaceLanguageLabel)
-                         ?? automaticLanguageLabel)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.interface_language",
-                                       defaultValue: "Langue de l'interface", bundle: .main))
-            .accessibilityValue(interfaceLanguageChoice.map(Self.interfaceLanguageLabel)
-                                ?? automaticLanguageLabel)
+            SettingsInterfaceLanguageMenu(choice: interfaceLanguageChoice, onSelect: selectInterfaceLanguage)
         }
-    }
-
-    private var automaticLanguageLabel: String {
-        String(localized: "settings.interface_language.automatic",
-               defaultValue: "Automatique", bundle: .main)
-    }
-
-    /// Nom de la langue DANS cette langue — un utilisateur qui cherche l'arabe
-    /// reconnaît « العربية », pas « Arabe ».
-    private static func interfaceLanguageLabel(_ code: String) -> String {
-        let locale = Locale(identifier: code)
-        return locale.localizedString(forIdentifier: code)?.capitalized ?? code
     }
 
     /// Enregistre le choix et prévient : il s'applique au relancement
@@ -502,29 +332,50 @@ struct SettingsView: View {
         showInterfaceLanguageRestartHint = true
     }
 
+    /// Un pack décore : la Boutique se range avec l'apparence. « Mes packs »
+    /// reste joignable par le Profil (#16433 : une porte règle, l'autre montre).
+    private var shopRow: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                HapticFeedback.light()
+                open(.shop)
+            } label: {
+                settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.shop", defaultValue: "Boutique", bundle: .main), color: MeeshyColors.warningHex) {
+                    SettingsRowChevron()
+                }
+            }
+            .accessibilityLabel(String(localized: "settings.packs.shop", defaultValue: "Boutique", bundle: .main))
+            SettingsRowSentence(text: SettingsOrientation.packs)
+        }
+    }
+
     // MARK: - Interface Features
 
-    /// Liste Lentille, modes de lecture et Rivière ont quitté la bêta le
-    /// 2026-09-14 (#6482) : actifs par défaut, réglés sur l'appareil comme la
-    /// langue de l'interface. La Rivière est un mode de lecture — modes coupés,
-    /// la loi ne l'ouvre jamais, d'où sa rangée désactivée et l'indice qui dit
-    /// pourquoi.
-    @ViewBuilder
-    private var interfaceFeatureRows: some View {
+    /// Liste Lentille, modes de lecture et Rivière ont quitté la bêta (#6482) :
+    /// actifs par défaut, réglés sur l'appareil, rangés en annexe parce qu'on
+    /// les règle une fois. La Rivière est un mode de lecture — modes coupés, la
+    /// loi ne l'ouvre jamais, d'où sa rangée désactivée et la phrase qui dit pourquoi.
+    private var lentilleListRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             settingsRow(icon: "list.bullet.rectangle.fill", title: lentilleListTitle, color: MeeshyColors.trackingAccentHex) {
                 featureToggle(.lentilleList, title: lentilleListTitle, isOn: $lentilleListEnabled)
             }
             SettingsRowSentence(text: SettingsOrientation.lentilleList)
         }
+    }
 
+    private var readingModesRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             settingsRow(icon: "text.book.closed.fill", title: readingModesTitle, color: MeeshyColors.indigo400Hex, note: SettingsInfoNotes.readingModes) {
                 featureToggle(.readingModes, title: readingModesTitle, isOn: $readingModesEnabled)
             }
             SettingsRowSentence(text: SettingsOrientation.readingModes)
         }
+    }
 
+    /// Couper les modes de lecture grise la Rivière et change sa phrase : le
+    /// changement se fond au lieu de sauter.
+    private var riviereModeRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             settingsRow(icon: "water.waves", title: riviereModeTitle, color: MeeshyColors.infoHex) {
                 featureToggle(.riviereMode, title: riviereModeTitle, isOn: $riviereModeEnabled)
@@ -532,7 +383,9 @@ struct SettingsView: View {
             .disabled(!readingModesEnabled)
             .opacity(readingModesEnabled ? 1 : 0.45)
             SettingsRowSentence(text: readingModesEnabled ? SettingsOrientation.riviereMode : SettingsOrientation.riviereUnavailable)
+                .contentTransition(.opacity)
         }
+        .meeshyAnimation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), reduced: MeeshyMotion.reducedFade, value: readingModesEnabled)
     }
 
     private func featureToggle(_ flag: LentilleFeatureFlag, title: String, isOn: Binding<Bool>) -> some View {
@@ -561,347 +414,31 @@ struct SettingsView: View {
         String(localized: "settings.interface.riviere_mode", defaultValue: "Mode Rivière", bundle: .main)
     }
 
-    // MARK: - Notifications Section
+    // MARK: - Transcription
 
-    private var notificationsSection: some View {
-        settingsSection(title: String(localized: "settings.section.notifications", bundle: .main), icon: "bell.fill", color: MeeshyColors.errorHex) {
-            settingsRow(icon: "bell.badge.fill", title: String(localized: "settings.notifications.title", bundle: .main), color: MeeshyColors.errorHex) {
-                Toggle("", isOn: Binding(
-                    get: { prefs.notification.pushEnabled },
-                    set: { val in prefs.updateNotification { $0.pushEnabled = val } }
-                ))
+    private var transcriptionMineRow: some View {
+        settingsRow(icon: "mic.fill", title: String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main), color: MeeshyColors.indigo300Hex) {
+            Toggle("", isOn: Binding(
+                get: { prefs.audio.transcriptionEnabled },
+                set: { val in prefs.updateAudio { $0.transcriptionEnabled = val } }
+            ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
-                .accessibilityLabel(String(localized: "settings.notif.push.a11y", bundle: .main))
-                .accessibilityValue(prefs.notification.pushEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
-            }
+                .accessibilityLabel(String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main))
+                .accessibilityValue(prefs.audio.transcriptionEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
+        }
+    }
 
-            settingsRow(icon: "speaker.wave.2.fill", title: String(localized: "settings.notif.sounds", bundle: .main), color: MeeshyColors.indigo300Hex) {
-                Toggle("", isOn: Binding(
-                    get: { prefs.notification.soundEnabled },
-                    set: { val in prefs.updateNotification { $0.soundEnabled = val } }
-                ))
+    private var transcriptionAutoRow: some View {
+        settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", bundle: .main), color: MeeshyColors.indigo300Hex, note: SettingsInfoNotes.transcriptionAuto) {
+            Toggle("", isOn: Binding(
+                get: { prefs.audio.autoTranscribeIncoming },
+                set: { val in prefs.updateAudio { $0.autoTranscribeIncoming = val } }
+            ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
-                .accessibilityLabel(String(localized: "settings.notif.sounds.a11y", bundle: .main))
-                .accessibilityValue(prefs.notification.soundEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
-            }
-
-            settingsRow(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notif.vibrations", bundle: .main), color: MeeshyColors.trackingAccentHex) {
-                Toggle("", isOn: Binding(
-                    get: { prefs.notification.vibrationEnabled },
-                    set: { val in prefs.updateNotification { $0.vibrationEnabled = val } }
-                ))
-                .labelsHidden()
-                .tint(Color(hex: accentColor))
-                .accessibilityLabel(String(localized: "settings.notif.vibrations", bundle: .main))
-                .accessibilityValue(prefs.notification.vibrationEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
-            }
-
-            Button {
-                HapticFeedback.light()
-                showNotificationSettings = true
-            } label: {
-                settingsRow(icon: "slider.horizontal.3", title: String(localized: "settings.notif.more_options", bundle: .main), color: MeeshyColors.errorHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.notif.more_options.a11y", bundle: .main))
-            .accessibilityHint(String(localized: "settings.notif.more_options.hint", bundle: .main))
-        }
-    }
-
-    // MARK: - Data Section
-
-    private var dataSection: some View {
-        settingsSection(title: String(localized: "settings.section.data", bundle: .main), icon: "externaldrive.fill", color: MeeshyColors.warningHex) {
-            Button {
-                HapticFeedback.light()
-                showDataStorage = true
-            } label: {
-                settingsRow(icon: "internaldrive.fill", title: String(localized: "settings.storage", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.storage", bundle: .main))
-            .accessibilityHint(String(localized: "settings.storage.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                showMediaDownload = true
-            } label: {
-                settingsRow(icon: "arrow.down.circle.fill", title: String(localized: "settings.media.download.title", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.media.download.a11y", bundle: .main))
-            .accessibilityHint(String(localized: "settings.media.download.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                packsRequest = PackShopLauncher.Request(domain: nil, pack: nil)
-            } label: {
-                settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.shop", defaultValue: "Boutique", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.packs.shop", defaultValue: "Boutique", bundle: .main))
-            SettingsRowSentence(text: SettingsOrientation.packs)
-
-            Button {
-                HapticFeedback.light()
-                packsRequest = PackShopLauncher.Request(domain: nil, pack: nil, page: .mine)
-            } label: {
-                settingsRow(icon: "square.stack.3d.up.fill", title: String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main))
-            .accessibilityIdentifier("settings.packs.mine")
-
-            Button {
-                HapticFeedback.light()
-                showDataExport = true
-            } label: {
-                settingsRow(icon: "square.and.arrow.up.fill", title: String(localized: "settings.export_data", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.export_data", bundle: .main))
-            .accessibilityHint(String(localized: "settings.export_data.hint", bundle: .main))
-        }
-    }
-
-    // MARK: - Voice Profile Section
-
-    private var voiceProfileSection: some View {
-        settingsSection(title: String(localized: "settings.section.voice", bundle: .main), icon: "waveform.and.mic", color: MeeshyColors.trackingAccentHex, sentence: SettingsOrientation.voice) {
-            Button {
-                HapticFeedback.light()
-                voiceManageOpensWizard = false
-                showVoiceProfileManage = true
-            } label: {
-                settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", bundle: .main), color: MeeshyColors.trackingAccentHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.voice.manage", bundle: .main))
-            .accessibilityHint(String(localized: "settings.voice.manage.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                showVoiceProfileWizard = true
-            } label: {
-                settingsRow(icon: "plus.circle.fill", title: String(localized: "settings.voice.create", bundle: .main), color: MeeshyColors.successHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.voice.create", bundle: .main))
-            .accessibilityHint(String(localized: "settings.voice.create.hint", bundle: .main))
-        }
-        .sheet(isPresented: $showVoiceProfileWizard) {
-            VoiceProfileWizardView(accentColor: MeeshyColors.trackingAccentHex)
-        }
-        .sheet(isPresented: $showVoiceProfileManage) {
-            VoiceProfileManageView(accentColor: MeeshyColors.trackingAccentHex, opensWizardWhenEmpty: voiceManageOpensWizard)
-        }
-    }
-
-    // MARK: - Transcription Section
-
-    private var transcriptionSection: some View {
-        settingsSection(title: String(localized: "settings.section.transcription", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo300Hex, sentence: SettingsOrientation.transcription) {
-            settingsRow(icon: "mic.fill", title: String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main), color: MeeshyColors.indigo300Hex) {
-                Toggle("", isOn: Binding(
-                    get: { prefs.audio.transcriptionEnabled },
-                    set: { val in prefs.updateAudio { $0.transcriptionEnabled = val } }
-                ))
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
-                    .accessibilityLabel(String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main))
-                    .accessibilityValue(prefs.audio.transcriptionEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
-            }
-
-            settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", bundle: .main), color: MeeshyColors.indigo300Hex, note: SettingsInfoNotes.transcriptionAuto) {
-                Toggle("", isOn: Binding(
-                    get: { prefs.audio.autoTranscribeIncoming },
-                    set: { val in prefs.updateAudio { $0.autoTranscribeIncoming = val } }
-                ))
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
-                    .accessibilityLabel(String(localized: "settings.transcription.auto", bundle: .main))
-                    .accessibilityValue(prefs.audio.autoTranscribeIncoming ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
-            }
-        }
-    }
-
-    // MARK: - Meeshy Tools Section
-
-    private var meeshyToolsSection: some View {
-        settingsSection(title: String(localized: "settings.section.tools", bundle: .main), icon: "wrench.and.screwdriver.fill", color: MeeshyColors.successHex) {
-            Button {
-                HapticFeedback.light()
-                router.push(.starredMessages)
-            } label: {
-                settingsRow(icon: "star.fill", title: String(localized: "settings.tools.starred", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.tools.starred", bundle: .main))
-            .accessibilityHint(String(localized: "settings.tools.starred.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                router.push(.bookmarks)
-            } label: {
-                settingsRow(icon: "bookmark.fill", title: String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main), color: MeeshyColors.indigo400Hex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main))
-            .accessibilityHint(String(localized: "settings.tools.bookmarks.hint", defaultValue: "Voir les posts et les réels que vous avez enregistrés", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                showStats = true
-            } label: {
-                settingsRow(icon: "chart.bar.fill", title: String(localized: "settings.tools.stats", bundle: .main), color: MeeshyColors.indigo300Hex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.tools.stats", bundle: .main))
-            .accessibilityHint(String(localized: "settings.tools.stats.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                router.push(.progression)
-            } label: {
-                settingsRow(icon: "trophy.fill", title: String(localized: "settings.tools.progression", defaultValue: "Ma Légende", bundle: .main), color: MeeshyColors.warningHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.tools.progression", defaultValue: "Ma Légende", bundle: .main))
-            SettingsRowSentence(text: SettingsOrientation.progression)
-
-            Button {
-                HapticFeedback.light()
-                showAffiliate = true
-            } label: {
-                settingsRow(icon: "link.badge.plus", title: String(localized: "settings.tools.affiliate", bundle: .main), color: MeeshyColors.successHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.tools.affiliate", bundle: .main))
-            SettingsRowSentence(text: SettingsOrientation.affiliate)
-        }
-    }
-
-    // MARK: - Support Section
-
-    private var supportSection: some View {
-        settingsSection(title: String(localized: "settings.section.help", bundle: .main), icon: "questionmark.circle.fill", color: MeeshyColors.successHex) {
-            Button {
-                HapticFeedback.light()
-                showSupport = true
-            } label: {
-                settingsRow(icon: "lifepreserver.fill", title: String(localized: "settings.help_center", bundle: .main), color: MeeshyColors.successHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.help_center", bundle: .main))
-            .accessibilityHint(String(localized: "settings.help_center.hint", bundle: .main))
-        }
-    }
-
-    // MARK: - About Section
-
-    private var aboutSection: some View {
-        settingsSection(title: String(localized: "settings.section.about", bundle: .main), icon: "info.circle.fill", color: MeeshyColors.infoHex) {
-            Button {
-                HapticFeedback.light()
-                showAbout = true
-            } label: {
-                settingsRow(icon: "info.circle.fill", title: String(localized: "settings.about.meeshy", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.about.meeshy", bundle: .main))
-            .accessibilityHint(String(localized: "settings.about.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                showTerms = true
-            } label: {
-                settingsRow(icon: "doc.text.fill", title: String(localized: "settings.terms", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.terms", bundle: .main))
-            .accessibilityHint(String(localized: "settings.terms.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                showPrivacyPolicy = true
-            } label: {
-                settingsRow(icon: "hand.raised.fill", title: String(localized: "settings.privacy_policy", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.privacy_policy", bundle: .main))
-            .accessibilityHint(String(localized: "settings.privacy_policy.hint", bundle: .main))
-
-            Button {
-                HapticFeedback.light()
-                showLicenses = true
-            } label: {
-                settingsRow(icon: "checkmark.seal.fill", title: String(localized: "settings.licenses", bundle: .main), color: MeeshyColors.infoHex) {
-                    Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
-                }
-            }
-            .accessibilityLabel(String(localized: "settings.licenses", bundle: .main))
-            .accessibilityHint(String(localized: "settings.licenses.hint", bundle: .main))
-
-            settingsRow(icon: "sparkles", title: String(localized: "settings.version", bundle: .main), color: MeeshyColors.warningHex) {
-                Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-            }
+                .accessibilityLabel(String(localized: "settings.transcription.auto", bundle: .main))
+                .accessibilityValue(prefs.audio.autoTranscribeIncoming ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
         }
     }
 
@@ -917,16 +454,6 @@ struct SettingsView: View {
     }
 
     // MARK: - Reusable Components
-
-    private func settingsSection<Content: View>(
-        title: String,
-        icon: String,
-        color: String,
-        sentence: String? = nil,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        SettingsSectionCard(title: title, icon: icon, color: color, sentence: sentence, content: content())
-    }
 
     private func settingsRow<Trailing: View>(
         icon: String,

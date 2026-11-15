@@ -220,13 +220,27 @@ describe('notification:counts', () => {
   });
 });
 
-describe('la reconnexion rejoue la cloche', () => {
-  test('une seconde authentification marque les notifications périmées', () => {
+describe('toute authentification rejoue la cloche', () => {
+  /**
+   * #18573 — ce témoin affirmait que la PREMIÈRE authentification laissait la
+   * cloche intacte. C'était un contrôle qui gelait la lacune : le socket se
+   * branche APRÈS la première peinture, donc une notification créée entre la
+   * lecture REST et l'entrée dans la room personnelle n'atteint aucun
+   * gestionnaire — et rien d'autre ne la rattrape, le seul lecteur des comptes
+   * ne relisant que sur FOCUS de fenêtre, qu'un démarrage à froid ne produit
+   * pas. Les deux authentifications périment donc la cloche.
+   */
+  test('la PREMIÈRE comme la seconde marquent les notifications périmées', () => {
     const { socket, queryClient } = connect();
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, {});
-    expect(queryClient.getQueryState(NOTIFICATION_COUNTS_QUERY_KEY)?.isInvalidated).toBe(false);
+
     socket.fire(SERVER_EVENTS.AUTHENTICATED, {});
     expect(queryClient.getQueryState(NOTIFICATION_COUNTS_QUERY_KEY)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(notificationListKey('all'))?.isInvalidated).toBe(true);
+
+    queryClient.setQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY, { total: 2, unread: 1, byType: {} });
+    expect(queryClient.getQueryState(NOTIFICATION_COUNTS_QUERY_KEY)?.isInvalidated).toBe(false);
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, {});
+    expect(queryClient.getQueryState(NOTIFICATION_COUNTS_QUERY_KEY)?.isInvalidated).toBe(true);
   });
 });

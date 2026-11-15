@@ -33,7 +33,7 @@ struct EffectChip: View {
                     .overlay(Capsule().stroke(accent.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: isSelected)
         .accessibilityLabel("\(label), \(isSelected ? String(localized: "effects.active", defaultValue: "actif", bundle: .main) : String(localized: "effects.inactive", defaultValue: "inactif", bundle: .main))")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -118,7 +118,7 @@ struct EffectsPickerView: View {
                         .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
         )
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hasPanelEffect)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: hasPanelEffect)
     }
 
     private func sectionTitle(_ title: String) -> some View {

@@ -5,6 +5,11 @@ import MeeshyUI
 
 struct ChangePasswordView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var currentPassword = ""
@@ -258,7 +263,7 @@ struct ChangePasswordView: View {
                         .stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: 1)
                 )
         )
-        .transition(.scale.combined(with: .opacity))
+        .meeshyTransition(.scale.combined(with: .opacity))
     }
 
     // MARK: - Reusable Components
@@ -320,6 +325,14 @@ struct ChangePasswordView: View {
 
     // MARK: - Actions
 
+    /// Le message d'erreur se fond sous le bouton : sa transition ne jouait
+    /// jamais, faute de transaction animée autour de la mutation.
+    private func showError(_ message: String?) {
+        meeshyWithAnimation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+            errorMessage = message
+        }
+    }
+
     private func changePassword() {
         guard isValid else { return }
         let submitted = form
@@ -336,7 +349,7 @@ struct ChangePasswordView: View {
                 )
 
                 HapticFeedback.success()
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
                     showSuccess = true
                 }
                 _ = await cancellableSleep(for: .milliseconds(1500))
@@ -346,15 +359,15 @@ struct ChangePasswordView: View {
                 // Le stack réseau ne lève que MeeshyError (pas APIError) : un 400
                 // = « mot de passe actuel incorrect » → message localisé dédié.
                 if case .server(let statusCode, let msg) = error {
-                    errorMessage = statusCode == 400 && submitted.asksCurrentPassword
+                    showError(statusCode == 400 && submitted.asksCurrentPassword
                         ? String(localized: "auth.password.change.error.current", defaultValue: "Mot de passe actuel incorrect", bundle: .main)
-                        : msg
+                        : msg)
                 } else {
-                    errorMessage = error.localizedDescription
+                    showError(error.localizedDescription)
                 }
             } catch {
                 HapticFeedback.error()
-                errorMessage = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
+                showError(String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main))
             }
             isSaving = false
         }

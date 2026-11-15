@@ -779,7 +779,7 @@ export function RequestsSection({ language, pending }: { readonly language: Inte
       ? title
       : `${title}, ${translate(language, pending.count === 1 && !pending.more ? 'profile.friend_requests.count.one' : 'profile.friend_requests.count.other', { count: shown })}`;
   return (
-    <Section id="profile-requests" title={translate(language, 'profile.section.requests')} glyph="userPlus">
+    <div className="grid overflow-hidden rounded-card" style={CARD_STYLE}>
       <Link to="discover" data-profile-requests aria-label={label} className={ENTRY_CLASS} style={{ minHeight: 52, outlineColor: 'var(--color-ios-brand)' }}>
         <FieldIcon spec={{ set: 'socle', name: 'users' }} />
         <span className="min-w-0 flex-1 text-body font-medium" style={{ color: INK }}>
@@ -798,7 +798,7 @@ export function RequestsSection({ language, pending }: { readonly language: Inte
           <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
         </span>
       </Link>
-    </Section>
+    </div>
   );
 }
 

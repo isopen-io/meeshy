@@ -121,7 +121,7 @@ class SheetExitRatchetTest {
         /** Mesuré à 73 le 2026-11-14, 68 après le socle #18416 ; abaissé par chaque lot qui migre, jamais relevé. */
         const val RAW_SHEET_CEILING = 68
 
-        /** Mesuré à 24 le 2026-11-14, 19 après le socle #18416 ; abaissé par chaque lot qui migre, jamais relevé. */
-        const val NULL_VISIBILITY_CEILING = 19
+        /** Mesuré à 24 le 2026-11-14, 19 après le socle #18416, 18 après #18275 (la bannière in-app) ; abaissé par chaque lot qui migre, jamais relevé. */
+        const val NULL_VISIBILITY_CEILING = 18
     }
 }
