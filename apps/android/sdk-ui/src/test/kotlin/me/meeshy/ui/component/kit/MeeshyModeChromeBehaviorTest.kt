@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -16,10 +17,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
@@ -36,6 +39,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
@@ -97,6 +101,11 @@ class MeeshyModeChromeBehaviorTest {
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
                 .assertHasClickAction()
         }
+        compose.onNodeWithContentDescription("Quitter").assert(
+            SemanticsMatcher("l'indice de Quitter") { node ->
+                node.config.getOrNull(SemanticsActions.OnClick)?.label == "Revient à l'état d'avant"
+            },
+        )
     }
 
     @Test
@@ -252,6 +261,27 @@ class MeeshyModeChromeBehaviorTest {
             .performSemanticsAction(SemanticsActions.Dismiss)
 
         assertThat(exits).isEqualTo(1)
+    }
+
+    @Test
+    fun `sans exitOnEscape, l'echappement du lecteur d'ecran n'est pas pris par le cadre`() {
+        show { MeeshyModeChrome(label = "Dessin", exit = exit(), confirm = confirm(), exitOnEscape = false) }
+
+        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Dessin"))
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.Dismiss))
+    }
+
+    @Test
+    fun `en RTL, Quitter se pose au bord de debut et la validation au bord de fin`() {
+        show {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                MeeshyModeChrome(label = "Dessin", exit = exit(), confirm = confirm())
+            }
+        }
+
+        val exitLeft = compose.onNodeWithContentDescription("Quitter").fetchSemanticsNode().boundsInRoot.left
+        val confirmLeft = compose.onNodeWithContentDescription("Valider").fetchSemanticsNode().boundsInRoot.left
+        assertThat(exitLeft).isGreaterThan(confirmLeft)
     }
 
     @Test

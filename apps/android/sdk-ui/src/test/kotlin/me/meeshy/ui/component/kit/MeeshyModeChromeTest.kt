@@ -391,6 +391,16 @@ class MeeshyModeChromeTest {
         }
     }
 
+    @Test
+    fun `la roue d'une capsule occupee est celle du systeme - aucune roue redessinee`() {
+        val capsule = k16Sources().single { it.name == "MeeshyModeCapsule.kt" }.readText()
+
+        assertThat(capsule).contains("CircularProgressIndicator(")
+        listOf("rememberInfiniteTransition", "drawArc", "infiniteRepeatable").forEach { word ->
+            assertWithMessage("MeeshyModeCapsule.kt redessine la roue : $word").that(capsule.contains(word)).isFalse()
+        }
+    }
+
     // endregion
 
     // region Aides
