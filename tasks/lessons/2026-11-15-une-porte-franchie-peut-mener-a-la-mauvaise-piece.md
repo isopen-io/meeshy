@@ -149,3 +149,26 @@ du littéral et ne dit rien de qui le lit. Mesuré : ajouter
 > redemande-t-il ? »** — et elle se répond en faisant tourner le consommateur,
 > jamais son double. Un témoin qui capture les dépendances depuis un
 > consommateur MOQUÉ prouve la forme de l'objet, pas l'usage qu'on en fait.
+
+### Corollaire le plus net : prouver le ROUGE ne suffit pas, il faut prouver le VERT du MÊME témoin
+
+Le témoin écrit pour tenir le troisième paramètre interrogeait
+`Extends<Parameters<…>['length'], 3>`. Pour une fonction à paramètre OPTIONNEL,
+`Parameters<…>['length']` vaut `2 | 3` et jamais `3` : l'assertion se résolvait
+en `boolean`, donc elle était **ROUGE DANS LES DEUX ÉTATS**.
+
+Elle avait l'air d'une garde parce que la mutation la faisait passer de
+`boolean` à `false` — deux `TS2344` à la même ligne, indiscernables pour qui ne
+lit que « ça tombe ». Le cliquet de dette de types l'a signalée, pas moi : son
+plafond est passé de 76 à 77 **sans aucune mutation**.
+
+> **Une assertion cassée tombe sous toutes les mutations, y compris celles
+> qu'elle ne garde pas.** La discipline du dépôt — *toujours prouver le ROUGE* —
+> a une seconde moitié qu'on oublie parce qu'elle a l'air acquise : le même
+> témoin doit être VERT sans la mutation, et ça se vérifie en le regardant, pas
+> en supposant que la suite l'aurait dit. Ici la suite ne pouvait rien dire :
+> `ts-jest` ne typecheque plus, donc seul un gate que personne ne lance à chaque
+> édition portait l'information.
+
+Le sens juste était l'interrogation inverse — **3 est-il une arité POSSIBLE ?**
+(`3 extends 2 | 3` ⇒ vrai ; `3 extends 2` ⇒ faux.)

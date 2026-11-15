@@ -182,6 +182,19 @@ d'amnistie, et sans objet depuis #10203, qui lui a retiré le typecheck. Mesuré
 sous la mutation, `npx jest` est VERT et c'est le **gate A**
 (`tsc -p tsconfig.test.json`) qui rougit, portant son compte de 76 à 77.
 
+### Et le témoin écrit pour F5 était ROUGE DANS LES DEUX ÉTATS
+
+Il interrogeait `Extends<Parameters<…>['length'], 3>`. Pour une fonction à
+paramètre OPTIONNEL, cette longueur vaut `2 | 3` et jamais `3` : l'assertion se
+résolvait en `boolean`. Elle avait l'air d'une garde parce que la mutation la
+faisait passer de `boolean` à `false` — deux `TS2344` à la même ligne.
+
+**C'est le cliquet de dette de types qui l'a signalée, pas moi** : son plafond
+est passé de 76 à 77 SANS aucune mutation. La discipline « toujours prouver le
+ROUGE » a une seconde moitié qu'on oublie parce qu'elle a l'air acquise — le
+même témoin doit être VERT sans la mutation. Le sens juste est l'interrogation
+inverse : *3 est-il une arité POSSIBLE ?* (`3 extends 2 | 3`).
+
 ### Les deux affirmations du lot corrigées À LA BAISSE
 
 | affirmation | ce qui est vrai |

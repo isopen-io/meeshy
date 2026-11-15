@@ -80,11 +80,27 @@ type _RegistrableAsIs = Assert<Extends<RedisDeliveryQueue, SharedDeliveryQueue>>
  *
  * Elle se tient — en interrogeant l'arité plutôt que l'assignabilité, et c'est
  * le gate A qui la tient (voir le préambule : `npx jest` est vert sous cette
- * mutation). Ce que ça garde n'est pas un comportement de production (l'objet résolu est la vraie
+ * mutation).
+ *
+ * **Le SENS de l'interrogation compte, et sa première rédaction était fausse.**
+ * `Parameters<…>['length']` d'une fonction à paramètre OPTIONNEL vaut `2 | 3`,
+ * jamais `3` : `Extends<Parameters<…>['length'], 3>` se résout donc en
+ * `boolean` et l'assertion était **ROUGE DANS LES DEUX ÉTATS**. Elle avait
+ * l'air d'une garde parce que la mutation la faisait passer de `boolean` à
+ * `false` — deux `TS2344` différents, pour quelqu'un qui ne lisait que le fait
+ * qu'elle tombe. Le sens juste est l'autre : **3 est-il une arité POSSIBLE ?**
+ * (`3 extends 2 | 3` ⇒ vrai ; `3 extends 2` ⇒ faux.)
+ *
+ * > **Prouver le ROUGE ne suffit pas : il faut prouver le VERT du même
+ * > témoin.** Une assertion cassée tombe sous toutes les mutations, y compris
+ * > celles qu'elle ne garde pas — et c'est indiscernable d'une garde qui marche
+ * > tant qu'on ne mesure que l'état muté.
+ *
+ * Ce que ça garde n'est pas un comportement de production (l'objet résolu est la vraie
  * `RedisDeliveryQueue`, qui honore l'option quoi qu'en dise sa projection) :
  * c'est un DOUBLE futur, déclaré sous la projection et sourd au scellement.
  */
-type _EnqueueDeclaresTheOption = Assert<Extends<Parameters<QueuedEntryEnqueuer['enqueue']>['length'], 3>>;
+type _EnqueueDeclaresTheOption = Assert<Extends<3, Parameters<QueuedEntryEnqueuer['enqueue']>['length']>>;
 
 describe('registre de la file — les capacités publiées sont celles de la classe', () => {
   /**
