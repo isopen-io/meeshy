@@ -3,6 +3,7 @@ package me.meeshy.ui.component.kit
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -70,6 +71,14 @@ class MeeshyStatusCapsuleHostTest {
         step(1)
     }
 
+    /** Pose l'élément sur le fil de l'UI et applique l'écriture : l'horloge figée ne le fait pas seule. */
+    private fun present(scene: Scene, item: MeeshyStatusCapsuleItem?) {
+        compose.runOnUiThread {
+            scene.item = item
+            Snapshot.sendApplyNotifications()
+        }
+    }
+
     private fun step(milliseconds: Long) {
         compose.mainClock.advanceTimeBy(milliseconds)
     }
@@ -112,7 +121,7 @@ class MeeshyStatusCapsuleHostTest {
         val scene = Scene()
         host(scene)
 
-        scene.item = item(kind = MeeshyStatusCapsuleKind.Failure)
+        present(scene, item(kind = MeeshyStatusCapsuleKind.Failure))
         step(100)
 
         compose.onNodeWithContentDescription("Limite atteinte").assertExists()
@@ -131,7 +140,7 @@ class MeeshyStatusCapsuleHostTest {
         host(scene)
 
         expected.entries.forEachIndexed { index, (kind, played) ->
-            scene.item = item(id = "kind.$index", kind = kind)
+            present(scene, item(id = "kind.$index", kind = kind))
             step(100)
             assertThat(scene.recorder.received.last()).isEqualTo(haptic(played))
         }
@@ -143,7 +152,7 @@ class MeeshyStatusCapsuleHostTest {
         val scene = Scene()
         host(scene, haptic = MeeshyStatusCapsuleHostHaptic.None)
 
-        scene.item = item(kind = MeeshyStatusCapsuleKind.Failure)
+        present(scene, item(kind = MeeshyStatusCapsuleKind.Failure))
         step(100)
 
         compose.onNodeWithContentDescription("Limite atteinte").assertExists()
@@ -154,10 +163,10 @@ class MeeshyStatusCapsuleHostTest {
     fun `le meme element repose ne rejoue rien`() {
         val scene = Scene()
         host(scene)
-        scene.item = item()
+        present(scene, item())
         step(100)
 
-        scene.item = item()
+        present(scene, item())
         step(100)
 
         assertThat(scene.recorder.received).hasSize(1)
@@ -167,15 +176,15 @@ class MeeshyStatusCapsuleHostTest {
     fun `le meme id redit dans les 2 s se tait, il reparle apres`() {
         val scene = Scene()
         host(scene)
-        scene.item = item(occurrence = 0)
+        present(scene, item(occurrence = 0))
         step(100)
 
-        scene.item = item(occurrence = 1)
+        present(scene, item(occurrence = 1))
         step(1000)
         assertThat(scene.recorder.received).hasSize(1)
 
         step(1200)
-        scene.item = item(occurrence = 2)
+        present(scene, item(occurrence = 2))
         step(100)
         assertThat(scene.recorder.received).hasSize(2)
     }
@@ -184,10 +193,10 @@ class MeeshyStatusCapsuleHostTest {
     fun `un autre id parle tout de suite`() {
         val scene = Scene()
         host(scene)
-        scene.item = item(id = "limit.text")
+        present(scene, item(id = "limit.text"))
         step(10)
 
-        scene.item = item(id = "limit.image", message = "Image")
+        present(scene, item(id = "limit.image", message = "Image"))
         step(10)
 
         assertThat(scene.recorder.received).hasSize(2)
@@ -201,7 +210,7 @@ class MeeshyStatusCapsuleHostTest {
     fun `sans action, elle se retire a 4 s, pas avant`() {
         val scene = Scene()
         host(scene)
-        scene.item = item()
+        present(scene, item())
         step(3900)
         assertThat(scene.dismissed).isEmpty()
 
@@ -214,7 +223,7 @@ class MeeshyStatusCapsuleHostTest {
     fun `sous lecteur d'ecran, elle reste au moins 6 s`() {
         val scene = Scene(screenReader = true)
         host(scene)
-        scene.item = item()
+        present(scene, item())
         step(5900)
         assertThat(scene.dismissed).isEmpty()
 
@@ -227,7 +236,7 @@ class MeeshyStatusCapsuleHostTest {
     fun `la duree que le systeme recommande l'emporte quand elle est plus longue`() {
         val scene = Scene(recommendedFloor = 10_000)
         host(scene)
-        scene.item = item()
+        present(scene, item())
         step(9900)
         assertThat(scene.dismissed).isEmpty()
 
@@ -240,7 +249,7 @@ class MeeshyStatusCapsuleHostTest {
     fun `une duree imposee par l'hote l'emporte`() {
         val scene = Scene()
         host(scene)
-        scene.item = item(duration = MeeshyStatusCapsuleDuration.Milliseconds(2500))
+        present(scene, item(duration = MeeshyStatusCapsuleDuration.Milliseconds(2500)))
         step(2400)
         assertThat(scene.dismissed).isEmpty()
 
@@ -253,7 +262,7 @@ class MeeshyStatusCapsuleHostTest {
     fun `avec une action, elle reste tant que l'hote ne la retire pas`() {
         val scene = Scene()
         host(scene)
-        scene.item = item(action = MeeshyStatusCapsuleAction("Réessayer") { })
+        present(scene, item(action = MeeshyStatusCapsuleAction("Réessayer") { }))
 
         step(60_000)
 
@@ -265,7 +274,7 @@ class MeeshyStatusCapsuleHostTest {
     fun `une capsule persistante ne se retire jamais seule`() {
         val scene = Scene()
         host(scene)
-        scene.item = item(duration = MeeshyStatusCapsuleDuration.Persistent)
+        present(scene, item(duration = MeeshyStatusCapsuleDuration.Persistent))
 
         step(60_000)
 
@@ -276,10 +285,10 @@ class MeeshyStatusCapsuleHostTest {
     fun `un minuteur en retard ne ferme jamais son successeur`() {
         val scene = Scene()
         host(scene)
-        scene.item = item(id = "first")
+        present(scene, item(id = "first"))
         step(3000)
 
-        scene.item = item(id = "second", message = "Autre", duration = MeeshyStatusCapsuleDuration.Persistent)
+        present(scene, item(id = "second", message = "Autre", duration = MeeshyStatusCapsuleDuration.Persistent))
         step(10_000)
 
         assertThat(scene.dismissed).doesNotContain("first")
@@ -290,10 +299,10 @@ class MeeshyStatusCapsuleHostTest {
     fun `l'element retire par l'app ne rappelle plus rien`() {
         val scene = Scene()
         host(scene)
-        scene.item = item()
+        present(scene, item())
         step(1000)
 
-        scene.item = null
+        present(scene, null)
         step(10_000)
 
         assertThat(scene.dismissed).isEmpty()
@@ -308,7 +317,7 @@ class MeeshyStatusCapsuleHostTest {
         var performed = 0
         val scene = Scene()
         host(scene)
-        scene.item = item(action = MeeshyStatusCapsuleAction("Réessayer") { performed++ })
+        present(scene, item(action = MeeshyStatusCapsuleAction("Réessayer") { performed++ }))
         step(100)
 
         compose.onNodeWithText("Réessayer").performClick()
@@ -323,7 +332,7 @@ class MeeshyStatusCapsuleHostTest {
         var closed = 0
         val scene = Scene()
         host(scene)
-        scene.item = item(closeLabel = "Fermer", onDismiss = { closed++ })
+        present(scene, item(closeLabel = "Fermer", onDismiss = { closed++ }))
         step(100)
 
         compose.onNodeWithContentDescription("Fermer").performClick()

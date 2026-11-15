@@ -125,8 +125,8 @@ class MeeshyStatusCapsuleLawTest {
         assertThat(MeeshyStatusCapsuleRecipe.slideOffset.value).isEqualTo(recipe.double("slideOffset").toFloat())
         assertThat(MeeshyStatusCapsuleRecipe.REDUCED_FADE_MILLIS).isEqualTo(recipe.int("reducedFadeMs"))
         assertThat(MeeshyStatusCapsuleRecipe.dismissThreshold.value).isEqualTo(recipe.double("dismissThreshold").toFloat())
-        assertThat(MeeshyStatusCapsuleRecipe.DETAIL_OPACITY.toDouble()).isEqualTo(recipe.double("detailOpacity"))
-        assertThat(MeeshyStatusCapsuleRecipe.ACTION_PRESSED_OPACITY.toDouble()).isEqualTo(recipe.double("actionPressedOpacity"))
+        assertThat(MeeshyStatusCapsuleRecipe.DETAIL_OPACITY.toDouble()).isWithin(1e-6).of(recipe.double("detailOpacity"))
+        assertThat(MeeshyStatusCapsuleRecipe.ACTION_PRESSED_OPACITY.toDouble()).isWithin(1e-6).of(recipe.double("actionPressedOpacity"))
     }
 
     @Test
