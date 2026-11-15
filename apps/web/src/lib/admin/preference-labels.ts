@@ -183,6 +183,7 @@ const NOTIFICATION: Kinds<NotificationPreference> = {
   commentLikeEnabled: 'flag',
   friendContentEnabled: 'flag',
   contactActivityEnabled: 'flag',
+  deviceBatteryEnabled: 'flag',
   gameEnabled: 'flag',
   gamePhotoEnabled: 'flag',
   bringEnabled: 'flag',

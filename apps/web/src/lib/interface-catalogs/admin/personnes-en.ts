@@ -150,6 +150,7 @@ const f = {
   'admin.people.pref.notification.commentLikeEnabled': 'Likes on my comments',
   'admin.people.pref.notification.friendContentEnabled': 'Posts from my friends',
   'admin.people.pref.notification.contactActivityEnabled': 'A contact coming back on Meeshy',
+  'admin.people.pref.notification.deviceBatteryEnabled': 'A close one’s low battery',
   'admin.people.pref.notification.gameEnabled': 'Meeshy game notification',
   'admin.people.pref.notification.gamePhotoEnabled': 'Moments to capture (game push)',
   'admin.people.pref.notification.bringEnabled': 'Receive Brings (forced sound)',
