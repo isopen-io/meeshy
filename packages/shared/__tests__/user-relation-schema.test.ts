@@ -39,6 +39,12 @@ describe('schéma — le lien entre deux personnes (#13926)', () => {
     expect(block('model', 'FriendRequest')).toMatch(/targetLevel\s+String\?/);
   });
 
+  it('porte le partage de batterie TRI-ÉTAT par paire, sans migration (#14147)', () => {
+    const setting = block('model', 'RelationFeatureSetting');
+    expect(setting).toMatch(/^\s+batteryShared\s+Boolean\?\s*$/m);
+    expect(setting).toMatch(/^\s+batteryWithdrawnAt\s+DateTime\?\s*$/m);
+  });
+
   it('déclare AtomLink, réservé à l’Atome, avec son unique', () => {
     const atom = block('model', 'AtomLink');
     expect(atom).toMatch(/@@unique\(\[atomId, electronId\]\)/);

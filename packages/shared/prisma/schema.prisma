@@ -2235,6 +2235,13 @@ model RelationFeatureSetting {
   locationWithdrawnAt        DateTime?
   locationHistoryWithdrawnAt DateTime?
   proximityWithdrawnAt       DateTime?
+  /// Partage de la BATTERIE de `ownerId` à `otherId` (#14147), TRI-ÉTAT : absent ou nul = le
+  /// défaut du niveau effectif (accordé entre Sangs et dans l'équipe, refusé entre Proches),
+  /// `true` = accordé (le consentement donné une fois à un Proche), `false` = refusé (même à
+  /// un Sang). Résolu par `resolveEmitterConsent` ; optionnel, sans migration.
+  batteryShared              Boolean?
+  /// Quand le partage de batterie a été RETIRÉ (trace, comme les retraits ci-dessus).
+  batteryWithdrawnAt         DateTime?
   /// Non nul = `ownerId` est en FANTÔME CIBLÉ pour `otherId` depuis cette date (#13937) : l'autre ne
   /// reçoit ni historique ni alerte de proximité, et rien ne lui dit pourquoi. Ce n'est pas un
   /// consentement : une ligne née d'un fantôme laisse ses quatre partages faux.
