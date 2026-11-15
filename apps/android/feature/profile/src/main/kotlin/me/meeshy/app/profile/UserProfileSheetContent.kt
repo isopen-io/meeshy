@@ -163,7 +163,6 @@ internal fun ProfileSheetLoadedContent(
                                 userId = profile.id,
                                 name = header.displayName,
                                 surface = BatteryPersonSurface.PROFILE,
-                                nowMs = now,
                             )
                         }
                         AnimatedContent(

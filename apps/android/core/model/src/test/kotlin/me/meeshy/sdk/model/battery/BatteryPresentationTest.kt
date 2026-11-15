@@ -64,6 +64,13 @@ class BatteryPresentationTest {
     }
 
     @Test
+    fun `le relevé à la demande se pose sur la personne, au Sang seulement, épisode servi ou non`() {
+        assertThat(BatteryPersonRules.offersPull(RelationLevel.BLOOD, onPerson = true)).isTrue()
+        assertThat(BatteryPersonRules.offersPull(RelationLevel.BLOOD, onPerson = false)).isFalse()
+        assertThat(BatteryPersonRules.offersPull(RelationLevel.CLOSE, onPerson = true)).isFalse()
+    }
+
+    @Test
     fun `le consentement d'un Proche est propose une fois et jamais a un Sang`() {
         assertThat(BatteryPersonRules.offersConsent(RelationLevel.CLOSE, shared = false, alreadyOffered = false, sharingEnabled = true)).isTrue()
         assertThat(BatteryPersonRules.offersConsent(RelationLevel.CLOSE, shared = false, alreadyOffered = true, sharingEnabled = true)).isFalse()

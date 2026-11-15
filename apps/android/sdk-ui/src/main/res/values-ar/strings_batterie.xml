@@ -37,9 +37,9 @@
     <string name="battery_consent_checkbox">مشاركة بطاريتي مع %1$s</string>
     <string name="battery_consent_confirm">تأكيد</string>
     <string name="battery_consent_later">ليس الآن</string>
-    <string name="battery_receive_title">تنبيهات بطارية %1$s</string>
-    <string name="battery_receive_all">كل التنبيهات</string>
-    <string name="battery_receive_critical">الحرجة فقط</string>
+    <string name="battery_receive_title">بطاريته</string>
+    <string name="battery_receive_all">الكل كإشعارات</string>
+    <string name="battery_receive_critical">الحرج فقط</string>
     <string name="battery_receive_pill">داخل التطبيق فقط</string>
     <string name="battery_receive_none">لا شيء</string>
     <string name="battery_unavailable">إعدادات البطارية غير متاحة.</string>

@@ -17,7 +17,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -149,7 +148,6 @@ internal fun CircleLinkSheet(
                 userId = link.userId,
                 name = name,
                 surface = BatteryPersonSurface.PERSON_FICHE,
-                nowMs = remember(link.userId) { System.currentTimeMillis() },
             )
             Spacer(Modifier.heightIn(min = 16.dp))
         }

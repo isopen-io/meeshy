@@ -1,10 +1,13 @@
 package me.meeshy.sdk.battery
 
+import android.content.Context
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
@@ -26,6 +29,7 @@ import me.meeshy.core.common.DefaultDispatcher
 import me.meeshy.sdk.model.battery.BatteryAnnouncement
 import me.meeshy.sdk.model.battery.BatteryEvent
 import me.meeshy.sdk.model.battery.BatteryRoster
+import me.meeshy.sdk.model.battery.BatteryRosterSnapshot
 import me.meeshy.sdk.model.battery.BatteryState
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.BatteryApi
@@ -60,6 +64,38 @@ internal sealed interface BatteryFetch {
     data object Unavailable : BatteryFetch
 }
 
+/** Où le dernier roster servi se range entre deux lancements ; une lecture ou une écriture qui échoue ne casse rien. */
+interface BatteryRosterCache {
+    fun read(): BatteryRosterSnapshot?
+
+    /** `null` efface. */
+    fun write(snapshot: BatteryRosterSnapshot?)
+}
+
+/** Un fichier JSON privé de l'application : un seul compte à la fois, vidé au changement de compte. */
+class FileBatteryRosterCache(context: Context, private val json: Json) : BatteryRosterCache {
+    private val file = File(context.applicationContext.filesDir, FILE_NAME)
+
+    override fun read(): BatteryRosterSnapshot? = runCatching {
+        if (!file.exists()) return null
+        json.decodeFromString(BatteryRosterSnapshot.serializer(), file.readText())
+    }.getOrNull()
+
+    override fun write(snapshot: BatteryRosterSnapshot?) {
+        runCatching {
+            if (snapshot == null || snapshot.items.isEmpty()) {
+                file.delete()
+            } else {
+                file.writeText(json.encodeToString(BatteryRosterSnapshot.serializer(), snapshot))
+            }
+        }
+    }
+
+    private companion object {
+        const val FILE_NAME = "meeshy_battery_roster.json"
+    }
+}
+
 /** Les flux qui nourrissent le magasin — isolés pour que les tests les pilotent à la main. */
 internal class BatterySources(
     val events: Flow<BatteryEvent>,
@@ -67,15 +103,18 @@ internal class BatterySources(
     val snapshot: suspend () -> List<BatteryState>?,
     val fetch: suspend (String) -> BatteryFetch,
     val viewerId: () -> String?,
+    val cache: BatteryRosterCache,
+    val now: () -> Long,
 )
 
 /**
  * LA BATTERIE DES PROCHES, CÔTÉ LECTEUR (#14147) — le branchement de [BatteryRoster].
  *
  * `battery:changed` / `battery:cleared` s'appliquent dans l'ordre du fil ; à chaque socket accrochée, le rattrapage
- * (`GET /relations/battery`) fait foi, sauf pour les personnes qu'un événement a touchées depuis. Le magasin tient en
- * mémoire : l'icône s'affiche dès que l'état est connu, sans jamais d'attente sur un état déjà tenu. La déconnexion ou
- * le changement de compte vident tout ([clear]).
+ * (`GET /relations/battery`) fait foi, sauf pour les personnes qu'un événement a touchées depuis. CACHE-FIRST : le
+ * dernier roster servi est rangé par compte ([BatteryRosterCache], borné au TTL de 24 h) et se peint dès la construction,
+ * avant toute socket — démarrage à froid, hors ligne ou réseau lent ; le rattrapage le remplace ensuite. La déconnexion
+ * ou le changement de compte vident tout, cache compris ([clear]).
  */
 @Singleton
 class BatteryRepository internal constructor(
@@ -85,6 +124,7 @@ class BatteryRepository internal constructor(
 
     @Inject
     constructor(
+        @ApplicationContext context: Context,
         api: BatteryApi,
         sockets: BatterySocketEventsManager,
         socketManager: SocketManager,
@@ -103,12 +143,14 @@ class BatteryRepository internal constructor(
                 }
             },
             viewerId = { sessionRepository.currentUserId },
+            cache = FileBatteryRosterCache(context, json),
+            now = System::currentTimeMillis,
         ),
         dispatcher,
     )
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
-    private val _roster = MutableStateFlow(BatteryRoster())
+    private val _roster = MutableStateFlow(restored())
     override val roster: StateFlow<BatteryRoster> = _roster.asStateFlow()
     private val _notices = MutableSharedFlow<BatteryNotice>(extraBufferCapacity = NOTICE_BUFFER)
     override val notices: SharedFlow<BatteryNotice> = _notices.asSharedFlow()
@@ -116,6 +158,7 @@ class BatteryRepository internal constructor(
     init {
         scope.launch { sources.events.collect(::receive) }
         scope.launch { sources.connected.distinctUntilChanged().filter { it }.collect { launch { catchUp() } } }
+        scope.launch { roster.map { it.byUser }.distinctUntilChanged().collect(::persist) }
     }
 
     override fun stateOf(userId: String?): Flow<BatteryState?> =
@@ -142,6 +185,15 @@ class BatteryRepository internal constructor(
 
     override suspend fun clear() {
         reduce { BatteryRoster() }
+        sources.cache.write(null)
+    }
+
+    private fun restored(): BatteryRoster =
+        sources.cache.read()?.restore(sources.viewerId(), sources.now()) ?: BatteryRoster()
+
+    private fun persist(byUser: Map<String, BatteryState>) {
+        val viewer = sources.viewerId() ?: return
+        sources.cache.write(BatteryRosterSnapshot.of(viewer, BatteryRoster(byUser = byUser)))
     }
 
     private fun receive(event: BatteryEvent) {

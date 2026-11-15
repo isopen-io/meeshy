@@ -31,16 +31,13 @@ private val MinTouch = 48.dp
 
 /**
  * Le détail de la batterie d'une personne (infos de conversation, profil) : niveau, charge, mode économie, autonomie
- * estimée, « il y a X min » — et « Demander un relevé » pour un Sang seulement ([canPull]). Rien hors épisode : l'appelant
- * ne monte la carte que sur un état servi.
+ * estimée, « il y a X min ». Rien hors épisode : l'appelant ne monte la carte que sur un état servi. « Demander un
+ * relevé » n'en fait pas partie ([BatteryPullRow]) : c'est hors épisode qu'il sert le plus.
  */
 @Composable
 fun BatteryDetailCard(
     state: BatteryState,
     nowMs: Long,
-    canPull: Boolean,
-    pullOutcome: BatteryPullOutcome?,
-    onPull: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -52,13 +49,18 @@ fun BatteryDetailCard(
         batteryFacts(state, nowMs).forEach { fact ->
             Text(fact, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (canPull) {
-            TextButton(onClick = onPull, modifier = Modifier.heightIn(min = MinTouch)) {
-                Text(stringResource(R.string.battery_pull))
-            }
-            pullOutcome?.let { outcome ->
-                Text(pullOutcomeText(outcome), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+    }
+}
+
+/** « Demander un relevé », au Sang seulement — que l'état soit servi ou non ; l'issue que la passerelle rend se dit dessous. */
+@Composable
+fun BatteryPullRow(pullOutcome: BatteryPullOutcome?, onPull: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        TextButton(onClick = onPull, modifier = Modifier.heightIn(min = MinTouch)) {
+            Text(stringResource(R.string.battery_pull))
+        }
+        pullOutcome?.let { outcome ->
+            Text(pullOutcomeText(outcome), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -104,11 +106,11 @@ fun BatterySwitchRow(title: String, hint: String?, checked: Boolean, enabled: Bo
     }
 }
 
-/** Ce que je reçois de cette personne : tout, le critique, la SyncPill seule, rien. */
+/** Ce que je reçois de cette personne : tout, le critique, la SyncPill seule, rien — les mots d'iOS. */
 @Composable
-fun BatteryReceiveModePicker(name: String, selected: BatteryReceiveMode, enabled: Boolean, onSelect: (BatteryReceiveMode) -> Unit, modifier: Modifier = Modifier) {
+fun BatteryReceiveModePicker(selected: BatteryReceiveMode, enabled: Boolean, onSelect: (BatteryReceiveMode) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().selectableGroup()) {
-        Text(stringResource(R.string.battery_receive_title, name), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.battery_receive_title), style = MaterialTheme.typography.titleSmall)
         BatteryReceiveMode.entries.forEach { mode ->
             Row(
                 Modifier

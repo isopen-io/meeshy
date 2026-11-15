@@ -12,8 +12,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -25,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.battery.BatteryConsentLedger
 import me.meeshy.sdk.battery.BatteryPersonSettings
@@ -46,14 +49,15 @@ val LocalBatteryConsentLedger = staticCompositionLocalOf<BatteryConsentLedger?> 
 enum class BatteryPersonSurface { PERSON_FICHE, CONVERSATION_INFO, PROFILE }
 
 /**
- * La batterie d'une personne, à l'endroit où on la cherche (#14147) :
- * - partout : le détail de son état quand elle est en épisode, « Demander un relevé » pour un Sang ;
+ * La batterie d'une personne, à l'endroit où on la cherche (#14147), disposée comme iOS :
+ * - partout : le détail de son état quand elle est en épisode (« il y a X min » vieillit chaque minute) ;
+ * - fiche et profil de la personne : « Demander un relevé » pour un Sang, épisode servi ou non ;
  * - fiche : « Partager ma batterie avec X » dès Proche, et UNE proposition au Proche, case non cochée ;
  * - infos de conversation : ce que je reçois d'elle (tout, critique, SyncPill, rien).
  * Rien ne s'affiche sans lien qui le permette, et aucune attente ne masque un état déjà tenu.
  */
 @Composable
-fun BatteryPersonSection(userId: String, name: String, surface: BatteryPersonSurface, nowMs: Long, modifier: Modifier = Modifier) {
+fun BatteryPersonSection(userId: String, name: String, surface: BatteryPersonSurface, modifier: Modifier = Modifier) {
     val gateway = LocalBatterySettings.current ?: return
     val ledger = LocalBatteryConsentLedger.current
     val scope = rememberCoroutineScope()
@@ -61,6 +65,7 @@ fun BatteryPersonSection(userId: String, name: String, surface: BatteryPersonSur
     var settings by remember(userId) { mutableStateOf<BatteryPersonSettings?>(null) }
     var pullOutcome by remember(userId) { mutableStateOf<BatteryPullOutcome?>(null) }
     val sharingEnabled by gateway.sharingEnabled.collectAsStateWithLifecycle()
+    val nowMs by rememberMinuteClock()
 
     LaunchedEffect(gateway, userId) {
         settings = gateway.personSettings(userId)
@@ -68,17 +73,12 @@ fun BatteryPersonSection(userId: String, name: String, surface: BatteryPersonSur
     }
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        state?.let { served ->
-            BatteryDetailCard(
-                state = served,
-                nowMs = nowMs,
-                canPull = settings?.level?.let(BatteryPersonRules::mayPull) == true,
-                pullOutcome = pullOutcome,
-                onPull = { scope.launch { pullOutcome = gateway.pull(userId) } },
-            )
-        }
+        state?.let { served -> BatteryDetailCard(state = served, nowMs = nowMs) }
         val loaded = settings ?: return@Column
         if (!BatteryPersonRules.mayShare(loaded.level)) return@Column
+        if (BatteryPersonRules.offersPull(loaded.level, onPerson = surface != BatteryPersonSurface.CONVERSATION_INFO)) {
+            BatteryPullRow(pullOutcome = pullOutcome, onPull = { scope.launch { pullOutcome = gateway.pull(userId) } })
+        }
         when (surface) {
             BatteryPersonSurface.PERSON_FICHE -> SharePart(
                 name = name,
@@ -93,7 +93,6 @@ fun BatteryPersonSection(userId: String, name: String, surface: BatteryPersonSur
                 },
             )
             BatteryPersonSurface.CONVERSATION_INFO -> BatteryReceiveModePicker(
-                name = name,
                 selected = loaded.receive,
                 enabled = true,
                 onSelect = { mode ->
@@ -106,6 +105,17 @@ fun BatteryPersonSection(userId: String, name: String, surface: BatteryPersonSur
         }
     }
 }
+
+/** L'horloge du détail : elle avance chaque minute tant que la section est composée, pour que « il y a X min » vieillisse. */
+@Composable
+private fun rememberMinuteClock(): State<Long> = produceState(initialValue = System.currentTimeMillis()) {
+    while (true) {
+        delay(CLOCK_TICK_MS)
+        value = System.currentTimeMillis()
+    }
+}
+
+private const val CLOCK_TICK_MS: Long = 60_000L
 
 @Composable
 private fun SharePart(

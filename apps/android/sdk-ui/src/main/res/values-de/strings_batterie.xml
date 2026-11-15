@@ -37,9 +37,9 @@
     <string name="battery_consent_checkbox">Meinen Akku mit %1$s teilen</string>
     <string name="battery_consent_confirm">Bestätigen</string>
     <string name="battery_consent_later">Nicht jetzt</string>
-    <string name="battery_receive_title">Akku-Hinweise von %1$s</string>
-    <string name="battery_receive_all">Alle Hinweise</string>
-    <string name="battery_receive_critical">Nur kritische</string>
+    <string name="battery_receive_title">Ihr Akku</string>
+    <string name="battery_receive_all">Alles als Mitteilung</string>
+    <string name="battery_receive_critical">Nur Kritisches</string>
     <string name="battery_receive_pill">Nur in der App</string>
     <string name="battery_receive_none">Nichts</string>
     <string name="battery_unavailable">Akku-Einstellungen nicht verfügbar.</string>

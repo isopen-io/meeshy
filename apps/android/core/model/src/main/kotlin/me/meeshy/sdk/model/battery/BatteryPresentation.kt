@@ -54,6 +54,13 @@ public object BatteryPersonRules {
     public fun mayPull(level: RelationLevel): Boolean = level == RelationLevel.BLOOD
 
     /**
+     * « Demander un relevé » se pose sur la PERSONNE (sa fiche, son profil), comme sur iOS — jamais dans les infos de
+     * conversation, qui portent le détail et ce que je reçois. Il ne dépend pas d'un état servi : c'est hors épisode
+     * qu'il réveille un téléphone muet.
+     */
+    public fun offersPull(level: RelationLevel, onPerson: Boolean): Boolean = onPerson && mayPull(level)
+
+    /**
      * Le consentement d'un Proche est PROPOSÉ une fois, case non cochée : seulement entre Proches (un Sang le reçoit par
      * défaut), quand rien n'est encore partagé, que la proposition n'a jamais été faite et que je n'ai pas tout coupé.
      */

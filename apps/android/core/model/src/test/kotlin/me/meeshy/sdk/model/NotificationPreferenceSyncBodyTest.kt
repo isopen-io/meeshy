@@ -46,7 +46,7 @@ class NotificationPreferenceSyncBodyTest {
         "contactRequestEnabled", "groupInviteEnabled", "memberJoinedEnabled", "memberLeftEnabled",
         "postLikeEnabled", "postCommentEnabled", "postRepostEnabled", "storyReactionEnabled",
         "commentReplyEnabled", "commentLikeEnabled", "friendContentEnabled",
-        "contactActivityEnabled", "gameEnabled",
+        "contactActivityEnabled", "gameEnabled", "deviceBatteryEnabled",
         "dndEnabled", "dndStartTime", "dndEndTime", "dndDays", "dndUtcOffsetMinutes",
         "showPreview", "showSenderName", "groupNotifications", "notificationBadgeEnabled",
     )

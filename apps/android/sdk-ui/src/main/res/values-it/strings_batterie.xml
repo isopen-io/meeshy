@@ -37,9 +37,9 @@
     <string name="battery_consent_checkbox">Condividi la mia batteria con %1$s</string>
     <string name="battery_consent_confirm">Conferma</string>
     <string name="battery_consent_later">Non ora</string>
-    <string name="battery_receive_title">Avvisi batteria di %1$s</string>
-    <string name="battery_receive_all">Tutti gli avvisi</string>
-    <string name="battery_receive_critical">Solo critici</string>
+    <string name="battery_receive_title">La sua batteria</string>
+    <string name="battery_receive_all">Tutto come notifica</string>
+    <string name="battery_receive_critical">Solo il critico</string>
     <string name="battery_receive_pill">Solo nell\'app</string>
     <string name="battery_receive_none">Niente</string>
     <string name="battery_unavailable">Impostazioni batteria non disponibili.</string>

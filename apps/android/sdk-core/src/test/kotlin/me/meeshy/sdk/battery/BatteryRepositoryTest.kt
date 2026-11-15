@@ -12,13 +12,23 @@ import me.meeshy.sdk.model.battery.BatteryAnnouncement
 import me.meeshy.sdk.model.battery.BatteryAnnouncementKind
 import me.meeshy.sdk.model.battery.BatteryEvent
 import me.meeshy.sdk.model.battery.BatteryPhase
+import me.meeshy.sdk.model.battery.BatteryRoster
+import me.meeshy.sdk.model.battery.BatteryRosterSnapshot
 import me.meeshy.sdk.model.battery.BatteryState
 import org.junit.Test
 
 /** Le magasin de la batterie des Proches (#14147) : socket, rattrapage à la connexion, relecture, compte. */
 class BatteryRepositoryTest {
 
-    private class Harness(scope: TestScope) {
+    private class MemoryCache(var stored: BatteryRosterSnapshot? = null) : BatteryRosterCache {
+        override fun read(): BatteryRosterSnapshot? = stored
+
+        override fun write(snapshot: BatteryRosterSnapshot?) {
+            stored = snapshot
+        }
+    }
+
+    private class Harness(scope: TestScope, val cache: MemoryCache = MemoryCache(), val now: Long = 20L) {
         val events = MutableSharedFlow<BatteryEvent>(extraBufferCapacity = 8)
         val connected = MutableStateFlow(false)
         var viewer: String? = "me"
@@ -31,6 +41,8 @@ class BatteryRepositoryTest {
                 snapshot = { snapshot() },
                 fetch = { fetch(it) },
                 viewerId = { viewer },
+                cache = cache,
+                now = { now },
             ),
             StandardTestDispatcher(scope.testScheduler),
         )
@@ -115,5 +127,42 @@ class BatteryRepositoryTest {
         h.repository.refresh("u2")
         h.repository.clear()
         assertThat(h.repository.roster.value.byUser).isEmpty()
+    }
+
+    @Test
+    fun `au demarrage a froid, l'etat range du meme compte se peint avant toute socket`() = runTest {
+        val cache = MemoryCache(BatteryRosterSnapshot.of("me", BatteryRoster().receive(state(level = 4))))
+        val h = Harness(this, cache)
+        assertThat(h.repository.roster.value.stateOf("u2")?.level).isEqualTo(4)
+        assertThat(h.connected.value).isFalse()
+    }
+
+    @Test
+    fun `le cache d'un autre compte ne se peint pas`() = runTest {
+        val cache = MemoryCache(BatteryRosterSnapshot.of("other", BatteryRoster().receive(state(level = 4))))
+        val h = Harness(this, cache)
+        assertThat(h.repository.roster.value.byUser).isEmpty()
+    }
+
+    @Test
+    fun `chaque etat servi se range, et cleared le retire du cache`() = runTest {
+        val h = Harness(this)
+        testScheduler.runCurrent()
+        h.events.emit(BatteryEvent.Changed(state(level = 7), null))
+        testScheduler.runCurrent()
+        assertThat(h.cache.stored?.restore("me", 20L)?.stateOf("u2")?.level).isEqualTo(7)
+
+        h.events.emit(BatteryEvent.Cleared("u2", null))
+        testScheduler.runCurrent()
+        assertThat(h.cache.stored?.restore("me", 20L)?.byUser).isEmpty()
+    }
+
+    @Test
+    fun `le changement de compte vide aussi le cache`() = runTest {
+        val cache = MemoryCache(BatteryRosterSnapshot.of("me", BatteryRoster().receive(state(level = 4))))
+        val h = Harness(this, cache)
+        h.repository.clear()
+        testScheduler.runCurrent()
+        assertThat(h.cache.stored?.restore("me", 20L)?.byUser.orEmpty()).isEmpty()
     }
 }

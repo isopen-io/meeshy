@@ -77,6 +77,7 @@
     <string name="sessions_revoke_all_error">Não foi possível desconectar os outros aparelhos.</string>
     <string name="settings_notif_type_contact_activity">Retorno de um contato</string>
     <string name="settings_notif_type_contact_activity_subtitle">Um contato volta ao Meeshy, no máximo a cada 3 horas.</string>
+    <string name="settings_notif_type_device_battery">Bateria dos meus Próximos</string>
     <string name="settings_packs_orientation">Os Meeshes compram pacotes: fundos de conversa, anéis de avatar, banners.</string>
     <string name="settings_packs_title">Loja</string>
     <string name="settings_privacy_analytics_info">Métricas de uso anônimas: telas abertas, recursos usados, falhas. Nunca o conteúdo das suas mensagens nem seus contatos.</string>
