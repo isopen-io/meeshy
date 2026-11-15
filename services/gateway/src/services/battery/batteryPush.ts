@@ -3,9 +3,12 @@
  * jamais un message de conversation. Le titre est CADRÉ dans la langue du lecteur
  * (`utils/recipient-language.ts`), le corps tient en un niveau : rien d'autre ne voyage.
  * Le pipeline existant décide du reste (préférence `deviceBatteryEnabled`, blocage, sourdine).
+ *
+ * AUCUN HISTORIQUE (spec § 3) : la ligne `Notification` expire avec l'état (24 h), le niveau
+ * n'est que dans son corps, et elle se retire chez qui perd l'accès (`retractBatteryNotifications`).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { BatteryAnnouncement } from '@meeshy/shared/types/battery';
+import { BATTERY_CONFIG, type BatteryAnnouncement } from '@meeshy/shared/types/battery';
 import type { DeviceBatteryNotificationMetadata } from '@meeshy/shared/types/notification';
 import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -41,7 +44,12 @@ function bodyOf(lang: string, kind: PushedKind, level: number | null): string {
   return notificationString(lang, kind === 'probably-off' ? 'battery.offBody' : 'battery.levelBody', { count: level });
 }
 
-export function batteryPusherOf(params: { readonly prisma: BatteryPushDb; readonly notifications: BatteryNotifier | null }): BatteryPusher {
+export function batteryPusherOf(params: {
+  readonly prisma: BatteryPushDb;
+  readonly notifications: BatteryNotifier | null;
+  readonly now?: () => number;
+}): BatteryPusher {
+  const now = params.now ?? Date.now;
   return async (push: BatteryPush) => {
     const kind = PUSHED_KIND[push.announcement.kind];
     if (kind === undefined || params.notifications === null) return false;
@@ -56,7 +64,6 @@ export function batteryPusherOf(params: { readonly prisma: BatteryPushDb; readon
       action: 'view_profile',
       userId: emitter.id,
       batteryKind: kind,
-      batteryLevel: push.announcement.level,
     };
     const created = await params.notifications.createNotification({
       userId: push.readerId,
@@ -69,6 +76,7 @@ export function batteryPusherOf(params: { readonly prisma: BatteryPushDb; readon
       context: {},
       metadata,
       collapseId: `battery-${emitter.id}`,
+      expiresAt: new Date(now() + BATTERY_CONFIG.stateTtlSeconds * 1000),
     });
     return created !== null && created !== undefined;
   };

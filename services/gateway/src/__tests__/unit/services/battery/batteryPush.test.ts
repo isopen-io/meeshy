@@ -26,7 +26,7 @@ function monde(readerLang: Record<string, string | null> = { systemLanguage: 'fr
       { id: LECTEUR, username: 'lecteur', displayName: null, avatar: null, regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null, ...readerLang },
     ]),
   };
-  return { push: batteryPusherOf({ prisma: prisma as never, notifications }), created };
+  return { push: batteryPusherOf({ prisma: prisma as never, notifications, now: () => Date.parse(AT) }), created };
 }
 
 describe('le push de la batterie', () => {
@@ -41,10 +41,17 @@ describe('le push de la batterie', () => {
       lang: 'fr',
       title: 'Awa n’a presque plus de batterie',
       content: 'Batterie à 5 %',
-      metadata: { action: 'view_profile', userId: EMETTEUR, batteryKind: 'critical', batteryLevel: 5 },
+      metadata: { action: 'view_profile', userId: EMETTEUR, batteryKind: 'critical' },
       collapseId: `battery-${EMETTEUR}`,
       context: {},
     });
+  });
+
+  it('aucun historique : la ligne expire avec l\'état (24 h), et le niveau ne se range pas dans ses métadonnées', async () => {
+    const m = monde();
+    await m.push({ readerId: LECTEUR, emitterId: EMETTEUR, announcement: { kind: 'critical', level: 4, at: AT } });
+    expect(m.created[0]?.expiresAt).toEqual(new Date(Date.parse(AT) + 86_400_000));
+    expect(m.created[0]?.metadata).toEqual({ action: 'view_profile', userId: EMETTEUR, batteryKind: 'critical' });
   });
 
   it('la langue de cadrage descend le prisme du lecteur (rang 2)', async () => {

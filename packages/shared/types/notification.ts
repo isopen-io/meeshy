@@ -651,14 +651,14 @@ export interface RelationAcquaintanceNotificationMetadata extends BaseNotificati
 
 /**
  * Metadata pour device_battery (#14147) — la batterie d'un Proche ou d'un Sang.
- * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seuls le palier et le
- * niveau voyagent : ni l'appareil, ni l'estimation, ni l'heure du relevé.
+ * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seul le palier se range :
+ * ni le niveau (il n'est que dans le corps), ni l'appareil, ni l'estimation, ni
+ * l'heure du relevé. La ligne expire avec l'état (24 h) : aucun historique.
  */
 export interface DeviceBatteryNotificationMetadata extends BaseNotificationMetadata {
   readonly action: 'view_profile';
   readonly userId: string;
   readonly batteryKind: 'critical' | 'probably-off' | 'back-on' | 'charging' | 'recharged';
-  readonly batteryLevel: number | null;
 }
 
 /** Le contenu qu'un retrait par la modération a visé (#11149). */
