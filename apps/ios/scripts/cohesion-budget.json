@@ -311,7 +311,7 @@
     "Meeshy::CallFrameRenderer": 2583,
     "Meeshy::CallManager": 2817,
     "Meeshy::CallView": 3031,
-    "Meeshy::ComposerCaptureSession": 1633,
+    "Meeshy::ComposerCaptureSession": 1627,
     "Meeshy::ConversationListView": 1688,
     "Meeshy::ConversationListViewModel": 2318,
     "Meeshy::ConversationMediaGalleryView": 2052,
