@@ -103,20 +103,68 @@ def written_paths(site: str, service, verified) -> List[Path]:
     return [entry['path'] for entry in seen]
 
 
+def assert_user_id_refused(result, site, service, verified, tmp_path, temp_dir):
+    assert result['success'] is False
+    assert result['error'] == 'Invalid user_id'
+    assert result['user_id'] == ''
+    assert written_paths(site, service, verified) == []
+    assert files_outside(tmp_path, temp_dir) == []
+    assert [p for p in temp_dir.rglob('*') if p.is_file()] == []
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize('site', ['analyze', 'verify'])
-async def test_hostile_user_id_never_writes_outside_temp_dir(tmp_path, monkeypatch, site):
+async def test_hostile_user_id_is_refused_before_any_write(tmp_path, monkeypatch, site):
     for user_id in hostile_user_ids(tmp_path):
         handler, service, verified = make_handler(tmp_path, monkeypatch)
         temp_dir = handler.temp_dir.resolve()
 
-        await run_site(handler, site, user_id)
+        result = await run_site(handler, site, user_id)
 
-        assert files_outside(tmp_path, temp_dir) == []
-        paths = written_paths(site, service, verified)
-        assert len(paths) == 1
-        assert paths[0].resolve().parent == temp_dir
-        assert 'evil' not in paths[0].name and 'escaped' not in paths[0].name
+        assert_user_id_refused(result, site, service, verified, tmp_path, temp_dir)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('site', ['analyze', 'verify'])
+@pytest.mark.parametrize('user_id', [
+    OBJECT_ID[:23],
+    OBJECT_ID + 'a',
+    'z' * 24,
+    OBJECT_ID[:23] + '/',
+    OBJECT_ID + '\n',
+    12345,
+    ['65a1f0c2b3d4e5f6a7b8c9d0'],
+    {'$ne': None},
+])
+async def test_user_id_that_is_not_an_object_id_is_refused(tmp_path, monkeypatch, site, user_id):
+    handler, service, verified = make_handler(tmp_path, monkeypatch)
+    temp_dir = handler.temp_dir.resolve()
+
+    result = await run_site(handler, site, user_id)
+
+    assert_user_id_refused(result, site, service, verified, tmp_path, temp_dir)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('site', ['analyze', 'verify'])
+async def test_user_id_refusal_writes_nothing_to_logs(tmp_path, monkeypatch, caplog, site):
+    handler, _, _ = make_handler(tmp_path, monkeypatch)
+    caplog.set_level('DEBUG')
+
+    await run_site(handler, site, '../../escaped')
+
+    assert caplog.records == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('site', ['analyze', 'verify'])
+async def test_uppercase_object_id_is_accepted(tmp_path, monkeypatch, site):
+    handler, service, verified = make_handler(tmp_path, monkeypatch)
+
+    result = await run_site(handler, site, OBJECT_ID.upper())
+
+    assert result['user_id'] == OBJECT_ID.upper()
+    assert len(written_paths(site, service, verified)) == 1
 
 
 @pytest.mark.asyncio
