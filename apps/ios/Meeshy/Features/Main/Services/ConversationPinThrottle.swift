@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - La temporisation (#11388)
 
