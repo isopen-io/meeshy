@@ -1,11 +1,5 @@
 package me.meeshy.ui.component.kit
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -17,13 +11,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ProvidableCompositionLocal
-import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -34,12 +28,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -51,7 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
-import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
@@ -248,37 +236,14 @@ private fun CapsuleTitle(title: String, labelScale: Float, ink: Color, modifier:
 }
 
 /**
- * La roue d'une capsule occupée : un arc de 270° qui tourne, dessiné au pas (la rotation se lit en phase de dessin, rien
- * ne se recompose). Sous « réduire les animations », l'arc reste posé : l'état « occupé » se lit sans mouvement.
+ * La roue d'une capsule occupée : celle du système (Material 3), à l'encre de la capsule, dans la place du glyphe. Elle
+ * s'anime au dessin, sans recomposer la capsule. Pendant iOS : `ProgressView` circulaire.
  */
 @Composable
 private fun Spinner(side: Float, ink: Color) {
-    val reduceMotion = LocalReduceMotion.current
-    val rotation: State<Float>? = if (reduceMotion) {
-        null
-    } else {
-        rememberInfiniteTransition(label = "meeshyModeCapsuleSpinner").animateFloat(
-            initialValue = 0f,
-            targetValue = FULL_TURN,
-            animationSpec = infiniteRepeatable(tween(MeeshyModeChromeRecipe.SPINNER_TURN_MILLIS, easing = LinearEasing)),
-            label = "meeshyModeCapsuleSpinnerTurn",
-        )
-    }
-    Canvas(Modifier.size(side.dp)) {
-        val stroke = MeeshyModeChromeRecipe.SPINNER_STROKE.dp.toPx()
-        rotate(degrees = rotation?.value ?: 0f) {
-            drawArc(
-                color = ink,
-                startAngle = -QUARTER_TURN,
-                sweepAngle = MeeshyModeChromeRecipe.SPINNER_SWEEP,
-                useCenter = false,
-                topLeft = Offset(stroke / 2f, stroke / 2f),
-                size = Size(size.width - stroke, size.height - stroke),
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
-            )
-        }
-    }
+    CircularProgressIndicator(
+        modifier = Modifier.size(side.dp),
+        color = ink,
+        strokeWidth = MeeshyModeChromeRecipe.SPINNER_STROKE.dp,
+    )
 }
-
-private const val FULL_TURN = 360f
-private const val QUARTER_TURN = 90f

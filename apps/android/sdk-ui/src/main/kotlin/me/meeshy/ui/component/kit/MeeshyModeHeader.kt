@@ -30,7 +30,7 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
  *
  * Atome opaque : l'hôte fournit les actions ; le cadre ne sait ni ce que Quitter défait ni ce que Valider garde. Hors des
  * capsules il laisse passer tous les touchers. Échap, le retour matériel et le geste d'échappement du lecteur d'écran
- * valent Quitter ; Ctrl ou Méta + Entrée vaut la validation.
+ * valent Quitter (les trois se coupent ensemble par `exitOnEscape`) ; Ctrl ou Méta + Entrée vaut la validation.
  *
  * Quand il ne tient plus, la loi [MeeshyModeHeaderFit] réduit dans l'ordre : le centre en glyphe, la validation en coche,
  * puis les libellés à 80 % et leur troncature, Quitter en dernier. Un emplacement vide se passe à `null`. Le pas se décide
@@ -110,7 +110,7 @@ internal fun MeeshyModeHeaderPiece(
                     .semantics {
                         paneTitle = label
                         isTraversalGroup = true
-                        dismiss { actions.performExit() }
+                        if (exitOnEscape) dismiss { actions.performExit() }
                     },
             ) {
                 MeeshyModeHeaderRow(
