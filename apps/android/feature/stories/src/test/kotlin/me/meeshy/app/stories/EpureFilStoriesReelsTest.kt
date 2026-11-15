@@ -24,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import org.w3c.dom.Element
 
 /**
@@ -195,6 +196,7 @@ class StoriesEpureStringsContractTest {
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w360dp-h900dp")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class StoryLanguageOriginalHintTest {
 
     @get:Rule
