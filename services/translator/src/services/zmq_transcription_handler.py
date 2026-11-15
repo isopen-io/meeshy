@@ -12,6 +12,12 @@ import uuid
 from pathlib import Path
 from typing import Dict, Optional
 from services.task_privacy import shown, under_declared_regime
+from utils.audio_path_guard import (
+    AUDIO_PATH_REJECTED,
+    AUDIO_PATH_REJECTED_MESSAGE,
+    AudioPathRejected,
+    guard_requested_audio_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +56,9 @@ class TranscriptionHandler:
 
         Format attendu (trois modes):
 
-        Mode 1 - Via chemin fichier (attachments):
+        Mode 1 - Via chemin fichier (attachments). Le chemin vient d'un socket
+        non authentifié : il n'est lu que sous une racine autorisée
+        (`utils.audio_path_guard`, #18628), sinon `AUDIO_PATH_REJECTED`.
         {
             "type": "transcription_only",
             "taskId": str,
@@ -87,7 +95,7 @@ class TranscriptionHandler:
         logger.info(f"   - taskId: {request_data.get('taskId')}")
         logger.info(f"   - messageId: {request_data.get('messageId')}")
         logger.info(f"   - attachmentId: {request_data.get('attachmentId')}")
-        logger.info(f"   - audioPath: {request_data.get('audioPath', 'N/A')}")
+        logger.info(f"   - audioPath: {'fourni' if request_data.get('audioPath') else 'N/A'}")
         logger.info(f"   - audioData: {('YES, ' + str(len(request_data.get('audioData', ''))) + ' chars') if request_data.get('audioData') else 'N/A'}")
         logger.info(f"   - _audioBinary: {('YES, ' + str(len(request_data.get('_audioBinary', b''))) + ' bytes') if request_data.get('_audioBinary') else 'N/A'}")
         logger.info(f"   - audioFormat: {request_data.get('audioFormat', 'N/A')}")
@@ -129,7 +137,7 @@ class TranscriptionHandler:
             logger.info(f"🔍 [TRANSLATOR-TRACE] Sources disponibles:")
             logger.info(f"   - audio_binary: {len(audio_binary) if audio_binary else 0} bytes")
             logger.info(f"   - audio_data: {len(audio_data) if audio_data else 0} chars")
-            logger.info(f"   - audio_path: {audio_path or 'N/A'}")
+            logger.info(f"   - audio_path: {'fourni' if audio_path else 'N/A'}")
 
             if not audio_path and not audio_data and not audio_binary:
                 logger.error(f"🔍 [TRANSLATOR-TRACE] ❌ Aucune source audio fournie")
@@ -179,6 +187,7 @@ class TranscriptionHandler:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Audio base64 décodé: {len(audio_bytes)} bytes → {temp_file_path}")
             else:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Mode: FICHIER direct")
+                audio_path = guard_requested_audio_path(audio_path)
 
             logger.info(f"🔍 [TRANSLATOR-TRACE] Étape 4: Obtention service transcription...")
             # Obtenir le service de transcription
@@ -257,12 +266,13 @@ class TranscriptionHandler:
             logger.error(f"❌ [TRANSLATOR] Erreur transcription only: {type(e).__name__}")
 
             logger.info(f"🔍 [TRANSLATOR-TRACE] Publication erreur...")
+            rejected = isinstance(e, AudioPathRejected)
             await self._publish_transcription_error(
                 task_id=task_id,
                 message_id=request_data.get('messageId', ''),
                 attachment_id=request_data.get('attachmentId', ''),
-                error="Transcription failed",
-                error_code="transcription_failed"
+                error=AUDIO_PATH_REJECTED_MESSAGE if rejected else "Transcription failed",
+                error_code=AUDIO_PATH_REJECTED if rejected else "transcription_failed"
             )
             logger.info(f"🔍 [TRANSLATOR-TRACE] ======== FIN TRANSCRIPTION (erreur) ========")
 
