@@ -1,14 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { SharedLocationFix, SharedLocationStartPayload, SharedLocationVerdict } from './shared-location-sending';
-import {
-  createSharedLocationSharingCenter,
-  SHARED_LOCATION_RETRY_MS,
-  type SharedLocationEmitter,
-  type SharedLocationFixResult,
-  type SharedLocationFixSource,
-} from './shared-location-sharing';
-import { decodeSharedLocationRoster, EMPTY_ROSTER, encodeSharedLocationRoster, rosterOps } from './shared-location-roster';
+import { AMI, AUTRE, deferred, flush, HOUR, makeWorld, PARIS, STARTED, T0 } from '@/test-support/shared-location-sharing-world';
+
+import type { SharedLocationFix, SharedLocationVerdict } from './shared-location-sending';
+import { SHARED_LOCATION_RETRY_MS } from './shared-location-sharing';
+import { EMPTY_ROSTER, encodeSharedLocationRoster, rosterOps } from './shared-location-roster';
 
 /**
  * **MON PARTAGE DE POSITION, SUR CET ONGLET** (#18345, iso `SharedLocationSharingCenter.swift`
@@ -17,119 +13,6 @@ import { decodeSharedLocationRoster, EMPTY_ROSTER, encodeSharedLocationRoster, r
  * relevé, retirer une personne ARRÊTE tout ; un accusé perdu garde « Arrêter » pour l'union ;
  * une échéance non soldée est rejouée.
  */
-
-const AMI = 'a'.repeat(24);
-const AUTRE = 'b'.repeat(24);
-const OWNER = 'c'.repeat(24);
-const T0 = Date.parse('2026-11-14T08:00:00.000Z');
-const HOUR = 3_600_000;
-const PARIS: SharedLocationFix = { latitude: 48.8566, longitude: 2.3522, accuracy: 12 };
-const STARTED: SharedLocationVerdict = { kind: 'started', expiresAt: T0 + HOUR };
-
-type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void };
-const deferred = <T,>(): Deferred<T> => {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
-  });
-  return { promise, resolve };
-};
-
-const flush = async (): Promise<void> => {
-  for (let i = 0; i < 10; i += 1) await Promise.resolve();
-};
-
-function makeWorld({
-  fix = { kind: 'fix', fix: PARIS } as SharedLocationFixResult,
-  stored = null as string | null,
-  granted = true,
-  memory = new Map<string, string>(),
-}: { readonly fix?: SharedLocationFixResult; readonly stored?: string | null; readonly granted?: boolean; readonly memory?: Map<string, string> } = {}) {
-  const clock = { now: T0 };
-  const account = { current: OWNER as string | null };
-  const starts: SharedLocationStartPayload[] = [];
-  const updates: SharedLocationFix[] = [];
-  let stops = 0;
-  const startQueue: Array<() => Promise<SharedLocationVerdict>> = [];
-  const stopQueue: Array<() => Promise<boolean>> = [];
-  const updateQueue: Array<() => Promise<SharedLocationVerdict>> = [];
-  const emitter: SharedLocationEmitter = {
-    start: (payload) => {
-      starts.push(payload);
-      return (startQueue.shift() ?? (async () => STARTED))();
-    },
-    update: (next) => {
-      updates.push(next);
-      return (updateQueue.shift() ?? (async () => STARTED))();
-    },
-    stop: () => {
-      stops += 1;
-      return (stopQueue.shift() ?? (async () => true))();
-    },
-  };
-  const source = { result: fix, granted, prompts: 0, following: 0, listener: null as ((fix: SharedLocationFix) => void) | null };
-  const fixes: SharedLocationFixSource = {
-    isGranted: async () => source.granted,
-    currentFix: async () => {
-      source.prompts += 1;
-      return source.result;
-    },
-    follow: (onFix) => {
-      source.following += 1;
-      source.listener = onFix;
-      return () => {
-        source.following -= 1;
-        source.listener = null;
-      };
-    },
-  };
-  if (stored !== null) memory.set('roster', stored);
-  const timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
-  const center = createSharedLocationSharingCenter({
-    emitter,
-    fixes,
-    storage: {
-      getItem: (key) => memory.get(key) ?? null,
-      setItem: (key, value) => void memory.set(key, value),
-      removeItem: (key) => void memory.delete(key),
-    },
-    storageKey: 'roster',
-    now: () => clock.now,
-    schedule: (delay, run) => {
-      const timer = { at: clock.now + delay, run, cancelled: false };
-      timers.push(timer);
-      return () => {
-        timer.cancelled = true;
-      };
-    },
-    owner: OWNER,
-    currentAccount: () => account.current,
-  });
-  const advance = async (ms: number): Promise<void> => {
-    clock.now += ms;
-    const due = timers.filter((t) => !t.cancelled && t.at <= clock.now);
-    due.forEach((t) => {
-      t.cancelled = true;
-      t.run();
-    });
-    await flush();
-  };
-  return {
-    center,
-    clock,
-    account,
-    starts,
-    updates,
-    stops: () => stops,
-    startQueue,
-    stopQueue,
-    updateQueue,
-    source,
-    memory,
-    stored: () => decodeSharedLocationRoster(memory.get('roster') ?? null, memory.get('roster.withdrawals') ?? null),
-    advance,
-  };
-}
 
 describe('partager', () => {
   test('partager avec un Ami publie la liste entière, suit la position et garde la liste', async () => {

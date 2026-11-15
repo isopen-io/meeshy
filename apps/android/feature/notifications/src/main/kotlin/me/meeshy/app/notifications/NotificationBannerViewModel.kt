@@ -37,6 +37,11 @@ data class InAppBanner(
     val conversationId: String?,
     val postId: String?,
     /**
+     * La communauté que la notification nomme quand la table de la cloche et du push l'élit (« ajouté à la
+     * communauté Y », #18670) : toucher la bannière ouvre son détail, comme la ligne et le push (#18061). `null` sinon.
+     */
+    val communityId: String? = null,
+    /**
      * `UserNotificationPreferences.showPreview` coupé (#4818) : [presentation] a déjà son
      * contenu masqué ([NotificationBannerPresentation.appliedPreviewSetting]), et ce drapeau
      * dit à [NotificationBannerHost] de peindre le libellé générique à la place — un `body`
@@ -214,6 +219,7 @@ class NotificationBannerViewModel @Inject constructor(
             avatarUrl = avatar.url,
             conversationId = conversationId,
             postId = shown.context?.postId ?: shown.metadata?.postId,
+            communityId = (NotificationDestinationResolver.resolve(shown) as? NotificationDestination.Community)?.communityId,
             previewHidden = !prefs.showPreview,
             game = shown.takeIf { NotificationDestinationResolver.resolve(it) is NotificationDestination.Game },
         )

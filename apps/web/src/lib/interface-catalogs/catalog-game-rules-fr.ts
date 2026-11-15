@@ -7,7 +7,7 @@ const fr = {
   'game.rules.3.title': 'On frappe des Meeshes',
   'game.rules.3.body': 'Une Meesh se frappe à la main : une part de ta lumière s’y fige.',
   'game.rules.4.title': 'Frapper fige ta lumière',
-  'game.rules.4.body': 'La part figée quitte ta lumière, et seulement elle : ton niveau baisse d’autant. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu.',
+  'game.rules.4.body': 'La part figée quitte ta lumière, et seulement elle : ton niveau suit la lumière qui te reste. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu.',
   'game.rules.5.title': 'Le rang ne recule jamais',
   'game.rules.5.body': 'Chaque frappe, chaque niveau atteint pour la première fois, chaque haut fait fait grandir ta gloire. La gloire te donne ton rang.',
   'game.rules.6.title': 'L’Héritage se garde ou se dépense',

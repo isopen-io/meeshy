@@ -430,7 +430,7 @@
     <string name="game_concept_points_name">Étincelles</string>
     <string name="game_concept_points_tip_1">Reviens chaque jour : une Flamme allumée nourrit tes étincelles.</string>
     <string name="game_concept_points_tip_2">Déclenche un élan pour multiplier tes étincelles.</string>
-    <string name="game_concept_points_use">Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.</string>
+    <string name="game_concept_points_use">Frapper une Meesh en fige une part dans la pièce, gardée pour toujours dans ton Héritage ; ton niveau suit la lumière qui te reste.</string>
     <string name="game_concept_prestige_name">La Renaissance</string>
     <string name="game_concept_prestige_tip_1">Porte ta lumière jusqu’au niveau 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -678,10 +678,10 @@
     <string name="game_guide_moment_first_level_next">%1$s jusqu’au niveau %2$s.</string>
     <string name="game_guide_moment_first_level_short">Niveau %1$s · %2$s jusqu’au suivant.</string>
     <string name="game_guide_moment_first_level_what">Ta lumière grandit : premier niveau franchi.</string>
-    <string name="game_guide_moment_first_mint_means">Une part de ta lumière s’est figée dans la pièce : ton niveau a baissé d’autant, ton rang jamais.</string>
+    <string name="game_guide_moment_first_mint_means">Une part de ta lumière s’est figée dans la pièce, gardée pour toujours ; ta gloire a grandi, et ton niveau suit la lumière qui te reste.</string>
     <string name="game_guide_moment_first_mint_next">Ce que tu as reçu reste reçu : chaque nouvelle étincelle fait regrandir ta lumière.</string>
-    <string name="game_guide_moment_first_mint_possible_means_drop">Frapper fige %1$s de ta lumière dans une pièce : ton niveau baisse d’autant, et tu gagnes +%2$s de gloire.</string>
-    <string name="game_guide_moment_first_mint_possible_means_free">Frapper fige %1$s de ta lumière dans une pièce, sans te faire perdre un niveau, et tu gagnes +%2$s de gloire.</string>
+    <string name="game_guide_moment_first_mint_possible_means_drop">Frapper fige %1$s de ta lumière dans une pièce gardée pour toujours, et tu gagnes +%2$s de gloire ; ton niveau suit la lumière qui te reste.</string>
+    <string name="game_guide_moment_first_mint_possible_means_free">Frapper fige %1$s de ta lumière dans une pièce, sans changer ton niveau, et tu gagnes +%2$s de gloire.</string>
     <string name="game_guide_moment_first_mint_possible_next">Frappe maintenant, ou laisse d’abord grandir ta lumière.</string>
     <string name="game_guide_moment_first_mint_possible_short">Une Meesh fige %1$s de ta lumière.</string>
     <string name="game_guide_moment_first_mint_possible_what">Tu peux frapper ta première Meesh.</string>
@@ -745,7 +745,7 @@
     <string name="game_guide_step_levels_means">Chaque niveau demande un peu plus d’étincelles que le précédent.</string>
     <string name="game_guide_step_levels_next">Au niveau 5, tes aïeux t’envoient ton premier rêve.</string>
     <string name="game_guide_step_levels_what">Vingt états de ta lumière, et des niveaux que ton rang ouvre.</string>
-    <string name="game_guide_step_mint_means">Frapper fige une part de ta lumière dans la pièce : ton niveau baisse d’autant, ton rang jamais, et chaque frappe t’apporte de la gloire.</string>
+    <string name="game_guide_step_mint_means">Frapper fige une part de ta lumière dans la pièce, gardée pour toujours, et chaque frappe t’apporte de la gloire qui fait avancer ton rang ; ton niveau suit la lumière qui te reste.</string>
     <string name="game_guide_step_mint_next">Ta gloire te donne ton nom : ton rang.</string>
     <string name="game_guide_step_mint_what">Quand ta lumière est assez grande, on frappe une Meesh.</string>
     <string name="game_guide_step_missions_means">Réalise-les pour faire apparaître l’Offrande et nourrir ta Flamme.</string>

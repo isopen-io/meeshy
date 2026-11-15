@@ -430,7 +430,7 @@
     <string name="game_concept_points_name">Sparks</string>
     <string name="game_concept_points_tip_1">Come back every day: a lit Flame feeds your sparks.</string>
     <string name="game_concept_points_tip_2">Build momentum to multiply your sparks.</string>
-    <string name="game_concept_points_use">Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much.</string>
+    <string name="game_concept_points_use">Minting a Meesh binds part of it into the coin, kept forever in your Legacy; your level follows the light you still hold.</string>
     <string name="game_concept_prestige_name">Rebirth</string>
     <string name="game_concept_prestige_tip_1">Carry your light all the way to level 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -678,10 +678,10 @@
     <string name="game_guide_moment_first_level_next">%1$s to level %2$s.</string>
     <string name="game_guide_moment_first_level_short">Level %1$s · %2$s to the next.</string>
     <string name="game_guide_moment_first_level_what">Your light grows: first level crossed.</string>
-    <string name="game_guide_moment_first_mint_means">Part of your light is now bound in the coin: your level dropped by as much, your rank never does.</string>
+    <string name="game_guide_moment_first_mint_means">Part of your light is now bound in the coin, kept forever; your glory has grown, and your level follows the light you still hold.</string>
     <string name="game_guide_moment_first_mint_next">What you received stays received: every new spark makes your light grow again.</string>
-    <string name="game_guide_moment_first_mint_possible_means_drop">Minting binds %1$s of your light into a coin: your level drops by as much, and you gain +%2$s glory.</string>
-    <string name="game_guide_moment_first_mint_possible_means_free">Minting binds %1$s of your light into a coin, without making you lose a level, and you gain +%2$s glory.</string>
+    <string name="game_guide_moment_first_mint_possible_means_drop">Minting binds %1$s of your light into a coin kept forever, and you gain +%2$s glory; your level follows the light you still hold.</string>
+    <string name="game_guide_moment_first_mint_possible_means_free">Minting binds %1$s of your light into a coin, without changing your level, and you gain +%2$s glory.</string>
     <string name="game_guide_moment_first_mint_possible_next">Mint now, or let your light grow first.</string>
     <string name="game_guide_moment_first_mint_possible_short">A Meesh binds %1$s of your light.</string>
     <string name="game_guide_moment_first_mint_possible_what">You can mint your first Meesh.</string>
@@ -745,7 +745,7 @@
     <string name="game_guide_step_levels_means">Each level asks for a few more sparks than the one before.</string>
     <string name="game_guide_step_levels_next">At level 5, your ancestors send you your first dream.</string>
     <string name="game_guide_step_levels_what">Twenty phases of your light, and levels your rank opens.</string>
-    <string name="game_guide_step_mint_means">Minting binds part of your light into the coin: your level drops by as much, your rank never does, and every mint brings you glory.</string>
+    <string name="game_guide_step_mint_means">Minting binds part of your light into the coin, kept forever, and every mint brings you glory that moves your rank forward; your level follows the light you still hold.</string>
     <string name="game_guide_step_mint_next">Your glory gives you your name: your rank.</string>
     <string name="game_guide_step_mint_what">When your light has grown enough, you can mint a Meesh.</string>
     <string name="game_guide_step_missions_means">Complete them to make the Offering appear and to feed your Flame.</string>
