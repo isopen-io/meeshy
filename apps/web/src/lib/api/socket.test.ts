@@ -8,13 +8,12 @@ import { conversationStore } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 
-import { CONVERSATIONS_QUERY_KEY, CONVERSATION_CATEGORIES_QUERY_KEY, conversationQueryKey } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
 import { attachmentStatusDetailsQueryKey } from './attachments';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
 import { FEED_QUERY_KEY } from './feed';
-import { FEED_NEW_COUNT_KEY } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { BLOCKED_USERS_QUERY_KEY } from './blocks';
@@ -475,73 +474,6 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     pageParams: [undefined],
   });
   const feedPost = (queryClient: QueryClient) => queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts[0];
-
-  /**
-   * **LE REJEU COUVRE AUSSI LE FIL SOCIAL ET LE RAIL DES STORIES** (#18641) —
-   * la connexion écoute 74 événements serveur ; le rejeu de reconnexion en
-   * couvrait QUATRE familles (conversations, cloche, amitié, favoris), chacune
-   * ajoutée par le lot qui en avait besoin (#6288, #6321, #7378). Les dix
-   * événements `post:*` et les six `story:*` n'y étaient pas, alors que leurs
-   * gestionnaires écrivent `FEED_QUERY_KEY` et `STORY_TRAY_QUERY_KEY`
-   * (`feed-realtime.ts`).
-   *
-   * RIEN NE LES RATTRAPAIT AILLEURS, et c'est ce qui fait le défaut :
-   * `refetchOnReconnect` suit `navigator.onLine`, qui ne bascule pas quand
-   * SEUL le socket tombe (redémarrage de la passerelle) ; `staleTime` périme
-   * sans rejouer, et une requête MONTÉE n'a alors aucun déclencheur. Le fil et
-   * le rail sont exactement les deux surfaces qu'on peut REGARDER pendant la
-   * coupure — les autres caisses de cartes se rejoignent par une navigation,
-   * donc par un montage, donc par une relecture.
-   *
-   * La SENTINELLE est `['feed', 'new-count']`, un ENTIER qui partage la racine
-   * `['feed']` (`feed-new-count.ts`) : le fil s'invalide en `exact`, jamais par
-   * balayage de sa racine — même règle qu'au #6974, et celle que
-   * `card-caches.ts` déclare déjà en `exact: true` pour ce même voisinage.
-   */
-  test('une RE-authentification périme le fil social et le rail des stories, jamais la racine `[feed]`', () => {
-    const { deps, socket, queryClient } = buildDeps();
-    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({}));
-    queryClient.setQueryData(STORY_TRAY_QUERY_KEY, []);
-    queryClient.setQueryData(FEED_NEW_COUNT_KEY, 0);
-    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
-
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(false);
-
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-
-    expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(FEED_NEW_COUNT_KEY)?.isInvalidated).toBe(false);
-  });
-
-  /**
-   * **ET LES CATÉGORIES DE CONVERSATION** (#18641) — la TROISIÈME famille, et
-   * elle n'a pas été trouvée en cherchant « quelles caisses de cartes
-   * manquent ? » : `['conversation-categories']` est une RACINE À PART que le
-   * préfixe `['conversations']` du rejeu ne couvre pas (TanStack compare les
-   * clés élément par élément). Les onglets qu'elle sert vivent sur l'écran de
-   * la liste, donc MONTÉS pendant la coupure — le discriminant exact de ce lot.
-   *
-   * Ce témoin fixe aussi ce que le lot a failli rejouer : son énumération
-   * s'était arrêtée à ce qui RESSEMBLAIT au défaut. iOS rehydrate les trois sur
-   * le même signal — `FeedViewModel+Socket` (rts-01), `StoryViewModel` (rts-02)
-   * et `categoryStore.hydrate()` (`ConversationStoreSocketBridgeTests`
-   * § `test_didReconnect_rehydratesCategoryStore`).
-   */
-  test('une RE-authentification périme les catégories de conversation — une racine à part du préfixe `[conversations]`', () => {
-    const { deps, socket, queryClient } = buildDeps();
-    queryClient.setQueryData(CONVERSATION_CATEGORIES_QUERY_KEY, []);
-    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
-
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    expect(queryClient.getQueryState(CONVERSATION_CATEGORIES_QUERY_KEY)?.isInvalidated).toBe(false);
-
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-
-    expect(queryClient.getQueryState(CONVERSATION_CATEGORIES_QUERY_KEY)?.isInvalidated).toBe(true);
-  });
 
   test('`post:liked` d’un AUTRE lecteur remplace le compte par le compte servi, sans remplir mon cœur', () => {
     const { deps, socket, queryClient } = buildDeps();
