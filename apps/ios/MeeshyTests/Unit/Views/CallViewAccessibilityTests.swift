@@ -585,7 +585,7 @@ final class CallViewAccessibilityTests: XCTestCase {
             return
         }
         guard let avatarRange = source.range(
-            of: "audioAvatarPair(isCompact: pillText.compactsAudioLayout)",
+            of: "audioAvatarPair(isCompact: isCompact)",
             range: layoutRange.upperBound..<source.endIndex
         ) else {
             XCTFail("duoLayout must pose audioAvatarPair(isCompact:) in its audio stage")

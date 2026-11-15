@@ -154,7 +154,8 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
     }
 
     /// Les `%` d'une traduction, comptés comme le formateur les lit : un spécificateur (`%@`, `%1$@`, `%lld`,
-    /// `%.1f`…) est un ARGUMENT, `%%` un pourcentage littéral, tout autre `%` est NU.
+    /// `%.1f`…) ou une substitution du catalogue (`%#@count@`, ses variations plurielles) est un ARGUMENT,
+    /// `%%` un pourcentage littéral, tout autre `%` est NU.
     static func pourcents(dans texte: String) -> (arguments: Int, nus: Int) {
         let conversions: Set<Character> = ["@", "d", "D", "i", "u", "U", "x", "X", "f", "F", "e", "E", "g", "G", "c", "s", "S"]
         let caracteres = Array(texte)
@@ -178,6 +179,11 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
             } else {
                 curseur = debutPosition
             }
+            if let fin = Self.finDeSubstitution(dans: caracteres, depuis: curseur) {
+                arguments += 1
+                index = fin
+                continue
+            }
             if curseur < caracteres.count, caracteres[curseur] == "." {
                 curseur += 1
                 while curseur < caracteres.count, caracteres[curseur].isASCII, caracteres[curseur].isNumber { curseur += 1 }
@@ -192,6 +198,13 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
             }
         }
         return (arguments, nus)
+    }
+
+    /// `#@nom@` : la substitution que le catalogue résout par ses variations — l'index qui la suit, sinon `nil`.
+    static func finDeSubstitution(dans caracteres: [Character], depuis debut: Int) -> Int? {
+        guard debut + 1 < caracteres.count, caracteres[debut] == "#", caracteres[debut + 1] == "@",
+              let fermeture = caracteres[(debut + 2)...].firstIndex(of: "@"), fermeture > debut + 2 else { return nil }
+        return fermeture + 1
     }
 
     /// Un `%` nu dans une traduction qui porte des arguments — c'est alors elle que le formateur lit. Sans
@@ -229,6 +242,9 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
         XCTAssertFalse(Self.porteUnPourcentNu("%1$@%% to %2$@"))
         XCTAssertFalse(Self.porteUnPourcentNu("entre 30% et 50%"), "sans argument, rien n'est formaté")
         XCTAssertFalse(Self.porteUnPourcentNu("%lld jours, %.1f km"))
+        XCTAssertFalse(Self.porteUnPourcentNu("%1$@, %#@count@"), "une substitution plurielle du catalogue est un argument")
+        XCTAssertTrue(Self.porteUnPourcentNu("%#@count@ % de plus"))
+        XCTAssertTrue(Self.porteUnPourcentNu("%1$@ %#@"), "une substitution sans nom n'en est pas une")
     }
 
     /// La garde doit reconnaître la forme qu'elle interdit, sinon elle est verte

@@ -55,6 +55,9 @@ data class CardFormat(
     val aspect: CardAspect = CardAspect.AUTO,
     val authorPlacement: CardAuthorPlacement = CardAuthorPlacement.ABOVE,
     val tilt: CardTilt = CardTilt.NONE,
+    /** La maquette dont ce format est habillé ([CardModels]) — `null` : une combinaison libre. */
+    val model: String? = null,
+    val decor: CardDecor = CardDecor.NONE,
 ) {
     operator fun get(toggle: CardToggle): Boolean = when (toggle) {
         CardToggle.SHOW_CONVERSATION_TITLE -> showConversationTitle
@@ -104,6 +107,12 @@ data class CardFormat(
             put("aspect", aspect.key)
             put("authorPlacement", authorPlacement.key)
             put("tilt", tilt.key)
+            model?.let { put("model", it) }
+            if (!decor.isNone) {
+                put("alignment", decor.alignment.key)
+                put("frame", decor.frame.key)
+                put("ornament", decor.ornament.key)
+            }
         }.toString()
 
     companion object {
@@ -130,6 +139,12 @@ data class CardFormat(
                 aspect = CardAspect.entries.firstOrNull { it.key == text("aspect") } ?: CardAspect.AUTO,
                 authorPlacement = CardAuthorPlacement.entries.firstOrNull { it.key == text("authorPlacement") } ?: CardAuthorPlacement.ABOVE,
                 tilt = CardTilt.entries.firstOrNull { it.key == text("tilt") } ?: CardTilt.NONE,
+                model = text("model")?.takeIf(CardModels::isValidId),
+                decor = CardDecor(
+                    alignment = CardDecor.Alignment.entries.firstOrNull { it.key == text("alignment") } ?: CardDecor.Alignment.START,
+                    frame = CardDecor.Frame.entries.firstOrNull { it.key == text("frame") } ?: CardDecor.Frame.NONE,
+                    ornament = CardDecor.Ornament.entries.firstOrNull { it.key == text("ornament") } ?: CardDecor.Ornament.NONE,
+                ),
             )
         }
 

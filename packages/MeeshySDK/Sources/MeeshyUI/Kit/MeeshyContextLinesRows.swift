@@ -50,18 +50,23 @@ public struct MeeshyContextReferenceLine: View, Equatable {
 
     private var row: some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            ForEach(Array(visible.enumerated()), id: \.element.id) { index, reference in
-                if index > 0 {
-                    Text(verbatim: "·")
-                        .foregroundStyle(separatorInk)
-                        .accessibilityHidden(true)
-                }
-                segment(reference)
-            }
+            ForEach(visible.enumerated().map { index, reference in
+                AsyncRenderRow(id: reference.id, content: separatedSegment(reference, isFirst: index == 0))
+            }, content: asyncRenderRowContent)
         }
         .font(MeeshyFont.relative(MeeshyContextLinesRecipe.referenceTextSize, weight: .semibold))
         .foregroundStyle(textInk)
         .fixedSize()
+    }
+
+    @ViewBuilder
+    private func separatedSegment(_ reference: MeeshyContextReference, isFirst: Bool) -> some View {
+        if !isFirst {
+            Text(verbatim: "·")
+                .foregroundStyle(separatorInk)
+                .accessibilityHidden(true)
+        }
+        segment(reference)
     }
 
     private func segment(_ reference: MeeshyContextReference) -> some View {

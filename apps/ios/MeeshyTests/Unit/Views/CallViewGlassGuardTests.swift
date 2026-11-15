@@ -567,7 +567,9 @@ final class CallViewGlassGuardTests: XCTestCase {
         let stage = try stageSource()
         XCTAssertFalse(stage.contains("reduceMotion ? nil"), "une bascule sèche n'est pas un fondu court")
         let controls = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var spotlightControls: some View", in: stage))
-        XCTAssertTrue(controls.contains("withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { isFullScreen.toggle() }"))
+        XCTAssertTrue(controls.contains("press(button, from: level, isScreenShare: isScreenShare)"), "chaque bouton de la capsule passe par le même appui (loi 15, #17961)")
+        let press = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func press(", in: stage))
+        XCTAssertTrue(press.contains("withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) {"))
         let spotlight = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func spotlight(", in: stage))
         XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .bottom, extent: Self.rowStripHeight, stage: stageFrame))"))
         XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .trailing, extent: Self.columnStripWidth, stage: stageFrame))"))
@@ -836,7 +838,15 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(featured.contains(".onTapGesture { onStageTap() }"), "le toucher à la une est le toucher de la scène")
         XCTAssertFalse(featured.contains("choose(.grid)"), "le toucher à la une ne rend pas la grille")
         let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var spotlightControls: some View", in: stage))
-        XCTAssertTrue(capsule.contains("choose(.grid)"), "la capsule rend la grille")
+        XCTAssertTrue(capsule.contains("press(button, from: level, isScreenShare: isScreenShare)"))
+        let press = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func press(", in: stage))
+        XCTAssertTrue(press.contains("if button == .grid { choose(.grid) }"), "la capsule rend la grille")
+        for level in [GroupCallFullScreenLevel.off, .fullScreen, .total] {
+            for isScreenShare in [false, true] {
+                XCTAssertEqual(GroupCallSpotlight.capsuleButtons(level: level, isScreenShare: isScreenShare).first, .grid,
+                               "« Revenir à la grille » ouvre la capsule à chaque niveau (\(level), partage : \(isScreenShare))")
+            }
+        }
         let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: try callViewCode()))
         XCTAssertTrue(layout.contains("onStageTap: toggleControls"))
     }

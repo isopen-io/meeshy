@@ -50,6 +50,25 @@ internal class CardExportState(
     /** L'image de chaque média de la carte, chargée une fois à l'ouverture ([CardPictureLoader]) ; vide tant qu'elle charge. */
     var pictures by mutableStateOf<Map<String, android.graphics.Bitmap>>(emptyMap())
 
+    /** Le fond choisi dans la galerie (#18672) et ses pixels, remis à la peinture sous [CardBackdrop.MEDIA_ID]. */
+    var backdrop by mutableStateOf<CardBackdrop?>(null)
+    var backdropPicture by mutableStateOf<android.graphics.Bitmap?>(null)
+    var backdropFailed by mutableStateOf(false)
+
+    /** Ce que la peinture reçoit : les médias de la carte, et le fond choisi. */
+    val painted: Map<String, android.graphics.Bitmap>
+        get() = backdropPicture?.let { pictures + (CardBackdrop.MEDIA_ID to it) } ?: pictures
+
+    /** La vidéo qui défile (#18671) : choisie, sa vitesse, son avancement pendant l'encodage. */
+    var video by mutableStateOf(false)
+    var speed by mutableStateOf(CardScrollSpeed.standard)
+    var progress by mutableStateOf<Double?>(null)
+
+    /** La hauteur de la carte sans plafond et celle de sa fenêtre — `null` : elle tient dans son format, rien ne défile. */
+    var scroll by mutableStateOf<Pair<Double, Double>?>(null)
+
+    val scrollPlan: CardScrollPlan? get() = scroll?.let { (content, window) -> CardScrollPlan.of(content, window, speed) }
+
     val title: String? = CardText.nonBlank(conversationTitle)
     val languages: List<CardLanguage> = source.languages
     val tabs: List<CardTab> = CardTab.offered(languages.size + 1)
@@ -58,23 +77,29 @@ internal class CardExportState(
 
     val preparing: Boolean get() = source.preparing
 
-    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}|${pictures.keys.sorted().joinToString(",")}|${subject?.hero?.id.orEmpty()}"
+    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}|${painted.keys.sorted().joinToString(",")}|${subject?.hero?.id.orEmpty()}|${backdrop?.media?.url.orEmpty()}:${backdrop?.veil ?: 0.0}"
     val ready: Boolean get() = rendered != null && renderedKey == renderKey
     val isDefault: Boolean get() = savedDefault == format
 
     fun inputFor(next: CardFormat, from: CardSubject = checkNotNull(subject)): CardInput = CardInput.of(
         from, next, handle = viewer.username, conversationTitle = title, anonymousLabel = anonymousLabel,
         formatDate = { dateFormat.format(Date(it)) }, formatTime = { timeFormat.format(Date(it)) },
-    )
+    ).copy(backdrop = backdrop)
 
     /** Peint l'aperçu hors du thread principal ; un résultat périmé par un nouveau choix est écarté. */
     suspend fun renderPreview() {
         val key = renderKey
         val input = inputFor(format)
-        val shown = pictures
+        val shown = painted
         failed = false
         val card = runCatching { withContext(Dispatchers.Default) { CardRenderer.render(input, PREVIEW_WIDTH, shown) } }.getOrNull()
+        val tall = runCatching {
+            withContext(Dispatchers.Default) {
+                CardRenderer.layout(input.copy(unbounded = true)).let { layout -> layout.viewportHeight?.let { layout.height to it } }
+            }
+        }.getOrNull()
         if (key != renderKey) return
+        scroll = tall?.takeIf { (content, window) -> content - window > 1 }
         if (card == null) failed = true else {
             rendered = card
             renderedKey = key
@@ -113,11 +138,23 @@ internal class CardExportState(
     /** La vitrine : l'état de la carte (sans son template) nomme la clé d'une vignette. */
     fun thumbSource(store: CardThumbnailStore, subject: CardSubject): CardThumbSource {
         val neutral = format.copy(template = CardTemplates.defaultId).serialized
-        val shown = pictures
+        val shown = painted
         return CardThumbSource(
             store = store,
             keyOf = { id -> "${id.rawValue}|$neutral|${exportLanguage.orEmpty()}|${shown.keys.sorted().joinToString(",")}" },
             inputOf = { id -> inputFor(format.copy(template = id), subject) },
+            pictures = shown,
+        )
+    }
+
+    /** Les maquettes : chacune peinte sur le message courant, habillée de ce qu'elle impose (#18673). */
+    fun modelThumbSource(store: CardThumbnailStore, subject: CardSubject): CardModelThumbSource {
+        val neutral = (CardModels.model(CardModels.DEFAULT_ID)?.applied(format) ?: format).serialized
+        val shown = painted
+        return CardModelThumbSource(
+            store = store,
+            keyOf = { model -> "model:${model.id}|$neutral|${exportLanguage.orEmpty()}|${shown.keys.sorted().joinToString(",")}" },
+            inputOf = { model -> inputFor(model.applied(format), subject) },
             pictures = shown,
         )
     }

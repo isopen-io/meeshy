@@ -146,7 +146,7 @@ extension ConversationViewModel {
         // #17938 — le magasin garde ce qui brûle : une publication pendant la combustion ne retire plus la ligne.
         messageStore.burning.formUnion(burning)
         for id in burning { burningEphemeralIds[id] = true }
-        messages = messages.markingBurning(burningEphemeralIds)
+        for index in messages.indices where burningEphemeralIds[messages[index].id] == true { messages[index].isBurning = true }
 
         Task { @MainActor [weak self] in
             let duration = EphemeralBurn.duration(reduceMotion: UIAccessibility.isReduceMotionEnabled)
