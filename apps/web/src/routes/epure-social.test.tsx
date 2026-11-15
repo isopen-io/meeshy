@@ -101,6 +101,7 @@ describe('les clés sans lecteur disparaissent des sept langues', () => {
 
   const ADDED = [
     'circles.intro',
+    'circles.empty.question',
     'profile.language.intro',
     'community.create.privacy.question',
     'bookmarks.empty.question',

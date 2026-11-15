@@ -1,12 +1,14 @@
 package me.meeshy.app.onboarding
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -180,5 +182,47 @@ class OnboardingOverlayTest {
 
         compose.onNodeWithText("card:story").assertExists()
         compose.onNodeWithText("card:languages").assertDoesNotExist()
+    }
+
+    @Test
+    fun `un toucher pendant le changement de carte est ignore, puis la carte posee repond`() {
+        var current by mutableStateOf("languages")
+        var advances = 0
+        compose.setContent {
+            MeeshyTheme {
+                OnboardingOverlay(
+                    state = state(card = current), onSkipAll = {}, reduceMotion = false,
+                    announce = {}, onSuccessHaptic = {},
+                ) { key ->
+                    Text(
+                        "next:$key",
+                        Modifier.testTag("advance:$key").clickable {
+                            advances += 1
+                            current = if (key == "languages") "story" else "recap"
+                        },
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+
+        compose.onNodeWithTag("advance:languages").performClick()
+        compose.mainClock.advanceTimeBy(TRANSITION_PROBE_MILLIS)
+        compose.onNodeWithTag("advance:story").performClick()
+        compose.mainClock.advanceTimeBy(TRANSITION_PROBE_MILLIS)
+
+        assertThat(advances).isEqualTo(1)
+
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        compose.onNodeWithTag("advance:story").performClick()
+        compose.waitForIdle()
+
+        assertThat(advances).isEqualTo(2)
+    }
+
+    private companion object {
+        const val TRANSITION_PROBE_MILLIS = 120L
     }
 }

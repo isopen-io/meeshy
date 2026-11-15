@@ -61,6 +61,7 @@ extension ReaderAudioMixer {
                              loopsEveryClip: Bool) {
         configurationTicket &+= 1
         // Tear down any prior background node before re-attaching.
+        nodeRetirement.settle()
         if let prior = backgroundEntry {
             prior.player.stop()
             prior.fadeTimers.forEach { $0.invalidate() }

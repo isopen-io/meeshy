@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
 import me.meeshy.sdk.model.NotificationBannerSwipe
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.rememberHeldPresence
 import me.meeshy.ui.theme.MeeshyMotion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,61 +88,77 @@ fun NotificationBannerHost(
         modifier = modifier.fillMaxWidth().statusBarsPadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
-        AnimatedVisibility(
-            visible = banner != null,
-            enter = if (reduceMotion) {
-                fadeIn(tween(FADE_MILLIS))
-            } else {
-                slideInVertically(MeeshyMotion.springBouncy()) { -it } + fadeIn()
-            },
-            exit = if (reduceMotion) {
-                fadeOut(tween(FADE_MILLIS))
-            } else {
-                slideOutVertically { -it } + fadeOut()
-            },
-        ) {
-            banner?.let { shown ->
-                MeeshyNotificationToast(
-                    senderName = headlineText(shown.presentation.headline),
-                    title = if (shown.previewHidden) {
-                        stringResource(R.string.notification_banner_preview_hidden)
-                    } else {
-                        presentationBodyText(shown.presentation) ?: ""
-                    },
-                    modifier = Modifier
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .graphicsLayer { translationY = lift }
-                        .bannerGestures(
-                            onLift = { lift = it },
-                            onDismiss = viewModel::dismiss,
-                            onPreview = {
-                                shown.conversationId?.let { id ->
-                                    previewedAt = System.currentTimeMillis()
-                                    viewModel.dismiss()
-                                    onPreviewConversation(id)
-                                }
-                            },
-                        ),
-                    avatarName = shown.avatarName,
-                    avatarUrl = shown.avatarUrl,
-                    onTap = {
-                        val now = System.currentTimeMillis()
-                        val suppressed = NotificationBannerSwipe.isTapSuppressed(now, previewedAt) ||
-                            NotificationBannerSwipe.isTapSuppressed(now, lastModalPresentedAtMillis())
-                        if (!suppressed) {
-                            // Consommée AVANT la navigation, comme une ligne de la cloche (iOS #6999).
-                            viewModel.onTapped()
-                            shown.game?.let { game ->
-                                // Toucher le palier annoncé : il se célèbre PAR-DESSUS l'écran du jeu que le toucher ouvre.
-                                revealTap.onOpened(game)
-                                (NotificationDestinationResolver.resolve(game) as? NotificationDestination.Game)?.let { onOpenGame(it.target) }
-                            } ?: shown.conversationId?.let(onOpenConversation)
-                                ?: shown.postId?.let(onOpenPost)
-                        }
-                    },
-                )
-            }
+        NotificationBannerTransition(banner = banner, reduceMotion = reduceMotion) { shown ->
+            MeeshyNotificationToast(
+                senderName = headlineText(shown.presentation.headline),
+                title = if (shown.previewHidden) {
+                    stringResource(R.string.notification_banner_preview_hidden)
+                } else {
+                    presentationBodyText(shown.presentation) ?: ""
+                },
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .graphicsLayer { translationY = lift }
+                    .bannerGestures(
+                        onLift = { lift = it },
+                        onDismiss = viewModel::dismiss,
+                        onPreview = {
+                            shown.conversationId?.let { id ->
+                                previewedAt = System.currentTimeMillis()
+                                viewModel.dismiss()
+                                onPreviewConversation(id)
+                            }
+                        },
+                    ),
+                avatarName = shown.avatarName,
+                avatarUrl = shown.avatarUrl,
+                onTap = {
+                    val now = System.currentTimeMillis()
+                    val suppressed = NotificationBannerSwipe.isTapSuppressed(now, previewedAt) ||
+                        NotificationBannerSwipe.isTapSuppressed(now, lastModalPresentedAtMillis())
+                    if (!suppressed) {
+                        // Consommée AVANT la navigation, comme une ligne de la cloche (iOS #6999).
+                        viewModel.onTapped()
+                        shown.game?.let { game ->
+                            // Toucher le palier annoncé : il se célèbre PAR-DESSUS l'écran du jeu que le toucher ouvre.
+                            revealTap.onOpened(game)
+                            (NotificationDestinationResolver.resolve(game) as? NotificationDestination.Game)?.let { onOpenGame(it.target) }
+                        } ?: shown.conversationId?.let(onOpenConversation)
+                            ?: shown.postId?.let(onOpenPost)
+                    }
+                },
+            )
         }
+    }
+}
+
+/**
+ * La bannière entre en glissant du haut et ressort par le même chemin, sur le ressort `springBouncy` de l'iOS
+ * (`RootSharedLayers`) pour le glissement comme pour le fondu ; sous « Réduire les animations », un fondu de 200 ms
+ * (l'`easeOut` 0,2 s de l'iOS). Pendant la sortie, le contenu peint la DERNIÈRE bannière : celle qui s'en va.
+ */
+@Composable
+internal fun NotificationBannerTransition(
+    banner: InAppBanner?,
+    reduceMotion: Boolean,
+    content: @Composable (InAppBanner) -> Unit,
+) {
+    val presence = rememberHeldPresence(banner)
+    val shown = presence.value
+    AnimatedVisibility(
+        visibleState = presence.visibleState,
+        enter = if (reduceMotion) {
+            fadeIn(tween(FADE_MILLIS))
+        } else {
+            slideInVertically(MeeshyMotion.springBouncy()) { -it } + fadeIn(MeeshyMotion.springBouncy())
+        },
+        exit = if (reduceMotion) {
+            fadeOut(tween(FADE_MILLIS))
+        } else {
+            slideOutVertically(MeeshyMotion.springBouncy()) { -it } + fadeOut(MeeshyMotion.springBouncy())
+        },
+    ) {
+        if (shown != null) content(shown)
     }
 }
 

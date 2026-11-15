@@ -28,6 +28,7 @@ extension StoryBackgroundLayer {
         } else {
             self.avPlayer = providedCarrierPlayer() ?? AVPlayer(playerItem: item)
         }
+        if let player = self.avPlayer { PlaybackPlayerCensus.shared?.track(player) }
         // `mute` reste pris en compte pour les call sites existants (renderer),
         // avec l'état dynamique `self.isMuted` mis à jour par le canvas : si l'un
         // OU l'autre demande mute, le player démarre silencieux ; le toggle
@@ -46,9 +47,7 @@ extension StoryBackgroundLayer {
         // en mode silent (simulator OU device avec switch).
         // Pose la session de lecture via la source UNIQUE (call-aware) si pas déjà
         // `.playback` — idempotent, no-op pendant un appel (micro préservé).
-        if AVAudioSession.sharedInstance().category != .playback {
-            MediaSessionCoordinator.shared.activateContentPlayback(ContentPlaybackAudibility.of(self.avPlayer))
-        }
+        MediaSessionCoordinator.shared.ensureContentPlayback(ContentPlaybackAudibility.of(self.avPlayer))
         let pl = AVPlayerLayer(player: avPlayer)
         pl.frame = bounds
         // Initial gravity: aspectFill as fallback until naturalSize loads.

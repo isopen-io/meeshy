@@ -260,7 +260,11 @@ struct SyncPill: View {
     // The status dot pulses in the app's persistent chrome — motion the user
     // cannot dismiss. Reduce Motion must reach it. (The pulse is driven by
     // `dotTimer`, not by a `repeatForever` curve — see `pulseCurve`.)
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     /// Hors de la phase active, ni battement ni rotation (#17250, `SyncPillDotClock`).
     @Environment(\.scenePhase) private var scenePhase
     @State private var dotPhase: Int = 0
@@ -361,13 +365,13 @@ struct SyncPill: View {
         Group {
             if !entries.isEmpty && isVisible {
                 pillContent
-                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                    .meeshyTransition(.opacity.combined(with: .scale(scale: 0.85)))
             } else {
                 EmptyView()
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isVisible)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: entries.isEmpty)
+        .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: isVisible)
+        .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: entries.isEmpty)
         .onAppear {
             rotator.setItemCount(entries.count)
             handleEntriesChange()
@@ -472,7 +476,7 @@ struct SyncPill: View {
             return
         }
         hideSettle.arm(after: Self.idleHideDelay) {
-            withAnimation(.easeOut(duration: 0.3)) { isVisible = false }
+            isVisible = false
         }
     }
 
@@ -481,7 +485,7 @@ struct SyncPill: View {
         HStack(spacing: metrics.itemSpacing) {
             statusDot
             labelText
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .meeshyTransition(.opacity.combined(with: .move(edge: .top)))
                 .id(visibleEntry?.id ?? "empty")
             if entries.count > 1 {
                 Text("\(min(rotator.currentIndex + 1, entries.count))/\(entries.count)")
@@ -498,7 +502,8 @@ struct SyncPill: View {
                 .shadow(color: Color.black.opacity(isDark ? 0.35 : 0.12), radius: 6, x: 0, y: 2)
         )
         // Le passage compacte ⇄ grande se fait en douceur, jamais d'un saut.
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: metrics)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: metrics)
+        .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: visibleEntry?.id)
         // **La pastille enfle au début d'une frappe, puis redescend** (amplitude
         // ×1,1).
         //

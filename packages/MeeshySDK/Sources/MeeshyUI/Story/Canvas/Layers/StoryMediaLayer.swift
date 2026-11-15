@@ -517,9 +517,8 @@ public final class StoryMediaLayer: CALayer {
         // quand l'appareil chauffe ou économise — y compris en cours de lecture.
         MediaPolicyMonitor.shared.adopt(item, role: .watched)
 
-        // Nouvel item ⇒ fenêtre de rognage inconnue jusqu'à preuve du
-        // contraire : repli "source entière" pendant le chargement (voir
-        // doc de `currentTrimBounds`).
+        // Nouvel item ⇒ fenêtre de rognage inconnue : repli « source entière »
+        // pendant le chargement (`currentTrimBounds`).
         currentTrimBounds = nil
         startLoadingTrimWindow(for: item)
 
@@ -529,6 +528,7 @@ public final class StoryMediaLayer: CALayer {
             let provided = providedCarrierPlayer()
             playsAProvidedPlayer = provided != nil
             let player = provided ?? AVPlayer(playerItem: item)
+            PlaybackPlayerCensus.shared?.track(player)
             let playerLayer = AVPlayerLayer(player: player)
             playerLayer.frame = bounds
             playerLayer.videoGravity = .resizeAspectFill
@@ -565,12 +565,12 @@ public final class StoryMediaLayer: CALayer {
         // entre les deux — auquel cas il joue sous catégorie `.ambient`, donc
         // silencieux en simulator silent mode et sur device avec le switch
         // physique. Forcer la catégorie ici est idempotent et coûte ~0 ms.
-        if (mode == .play || playsInEditMode), AVAudioSession.sharedInstance().category != .playback {
+        if mode == .play || playsInEditMode {
             // Pose la session de lecture via la source UNIQUE (call-aware) : idempotent,
             // no-op pendant un appel (micro de l'appel préservé). Couvre aussi le
             // composer live preview (`.edit` + `playsInEditMode`) → audio des
             // vidéos qui bouclent dans l'éditeur.
-            MediaSessionCoordinator.shared.activateContentPlayback(ContentPlaybackAudibility.of(player))
+            MediaSessionCoordinator.shared.ensureContentPlayback(ContentPlaybackAudibility.of(player))
         }
 
         switch mode {

@@ -46,6 +46,11 @@ public struct SwipeableRow<Content: View>: View {
     @State private var openOffset: CGFloat = 0
     @State private var rowID = UUID()
     private let coordinator: SwipeRowCoordinator
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     // Layout
     private let actionWidth: CGFloat = 76
@@ -149,8 +154,8 @@ public struct SwipeableRow<Content: View>: View {
             coordinator.rowDidClose(rowID)
             openOffset = 0
         }
-        .animation(.spring(response: 0.40, dampingFraction: 0.74), value: dragOffset)
-        .animation(.spring(response: 0.40, dampingFraction: 0.74), value: openOffset)
+        .meeshyAnimation(MeeshyAnimation.springDefault, value: dragOffset)
+        .meeshyAnimation(MeeshyAnimation.springDefault, value: openOffset)
     }
 
     private var openFrameReader: some View {
@@ -203,8 +208,8 @@ public struct SwipeableRow<Content: View>: View {
                         .font(MeeshyFont.relative(10, weight: .semibold))
                 }
                 .foregroundStyle(.white)
-                .scaleEffect(0.4 + 0.6 * progress)
-                .animation(.spring(response: 0.25, dampingFraction: 0.6), value: progress)
+                .scaleEffect(SwipeRowRules.cellScale(progress: progress, reduceMotion: reduceMotion))
+                .meeshyAnimation(MeeshyAnimation.springFast, value: progress)
             }
         }
         .frame(width: actionWidth)
@@ -293,7 +298,7 @@ public struct SwipeableRow<Content: View>: View {
 
     private func close() {
         coordinator.rowDidClose(rowID)
-        withAnimation(.spring(response: 0.40, dampingFraction: 0.74)) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) {
             openOffset = 0
         }
     }

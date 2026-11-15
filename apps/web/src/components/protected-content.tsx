@@ -586,7 +586,7 @@ function VeilButton({
       type="button"
       data-protected="hidden"
       data-surface={surface}
-      className="protected-veil"
+      className="btn-press protected-veil"
       aria-label={translate(language, 'message.veiled')}
       aria-describedby={`${messageId}-reveal-hint`}
       aria-busy={pending || undefined}
@@ -825,7 +825,7 @@ export function ViewOnceChip({
         data-protected="hidden"
         data-view-once-chip="sealed"
         data-glyph={glyph}
-        className={className}
+        className={`btn-press ${className}`}
         aria-label={aria}
         aria-busy={pending || undefined}
         onClick={(event) => {
@@ -950,7 +950,7 @@ function ViewOnceStage({ onClose, children }: { readonly onClose: () => void; re
       <button
         ref={closeRef}
         type="button"
-        className="view-once-stage-close"
+        className="btn-press view-once-stage-close"
         aria-label={translate(language, 'message.viewOnce.close')}
         onClick={onClose}
       >

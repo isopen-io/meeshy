@@ -87,16 +87,14 @@ struct StoryCardView: View {
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
-    /// Annonce du fond (B3.3-5) — résolveur unique partagé avec la carte de
-    /// post et le plein écran réel (E1). Remplace `storyHasBackgroundAudio` +
-    /// `headerBackgroundAudioDisplay` : primitive Equatable descendue en
-    /// `let` depuis `StoryViewerView.backgroundSoundAnnouncement`, même
-    /// règle que `storyHasAudibleSound` juste au-dessus.
+    /// Annonce du fond (B3.3-5), résolveur unique partagé avec la carte de post
+    /// et le plein écran réel (E1), descendue en primitive Equatable.
     let backgroundSoundAnnouncement: BackgroundAudioAnnouncement
     /// Présence d'une transcription affichable — pilote l'entrée « Transcription »
     /// du menu « … ». Même règle de descente en primitive que ci-dessus.
     let storyHasAudioTranscript: Bool
     let isGlobalMuted: Bool
+    let isSoundVeiledByIdentity: Bool // voile d'un nouvel auteur, story muette dessous (#18516)
     let availableTranslationLanguages: [TranslationLanguage]
     /// Langue d'exploration active (`nil` = chaine préférée). Descendue en `let`
     /// jusqu'au strip pour y marquer le drapeau lu.
@@ -423,7 +421,7 @@ struct StoryCardView: View {
                               accentColorHex: composerAccentColor,
                               carrier: story, sceneFloorHex: composerAccentColor,
                               preferredContentLanguages: resolvedViewerLanguageChain,
-                              isMuted: isGlobalMuted,
+                              isMuted: StoryIdentityVeilSound.canvasMuted(userMuted: isGlobalMuted, veiled: isSoundVeiledByIdentity),
                               servesLetterboxFill: false,
                               scrubber: sceneScrubber, stagesSoundChips: false,
                               preloadedImages: preloadedImages,
@@ -442,7 +440,7 @@ struct StoryCardView: View {
                                      preloadedImages: preloadedImages,
                                      preloadedVideoURLs: preloadedVideoURLs,
                                      preloadedAudioURLs: preloadedAudioURLs,
-                                     mute: isGlobalMuted,
+                                     mute: StoryIdentityVeilSound.canvasMuted(userMuted: isGlobalMuted, veiled: isSoundVeiledByIdentity),
                                      isPaused: isCanvasPlaybackPaused,
                                      servesLetterboxFill: false,
                                      scrubber: sceneScrubber,

@@ -61,7 +61,7 @@ export function PhoneAddPrompt({
       <button
         type="button"
         onClick={onDismiss}
-        className="grid place-items-center rounded-chip px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="btn-press grid place-items-center rounded-chip px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ ...phoneSecondaryButton, border: 0, color: 'var(--color-ios-ink-2)' }}
       >
         {translate(language, 'phonePrompt.later')}
