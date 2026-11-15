@@ -151,6 +151,8 @@ const it = {
   'together.unavailable': 'Questo contenuto non si riproduce su questo dispositivo.',
   'together.someone': 'Qualcuno',
   'together.gone': 'L’invito non è più valido.',
+  'together.join.offline': 'Offline: la sessione non si è aperta.',
+  'together.join.failed': 'La sessione non si è aperta. Riprova.',
   'together.ended': 'La sessione insieme è terminata.',
   'together.row.title': 'Guardare o ascoltare insieme',
   'together.row.explain': 'Scegli un video o un audio della vostra conversazione: {name} lo riproduce insieme a te.',

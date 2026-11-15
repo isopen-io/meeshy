@@ -285,10 +285,12 @@
     <string name="kit_anchored_sheet_height">ارتفاع اللوحة</string>
     <string name="kit_anchored_sheet_height_expanded">موسّعة</string>
     <string name="kit_anchored_sheet_height_reduced">مصغّرة</string>
+    <string name="kit_color_dots_position">اللون %1$s من %2$s</string>
     <string name="kit_field_busy">قيد التنفيذ</string>
     <string name="kit_field_clear">مسح</string>
     <string name="kit_field_count">%1$s من %2$s حرف</string>
     <string name="kit_field_limit_reached">تم بلوغ الحد الأقصى للأحرف</string>
+    <string name="kit_progress_ring_busy">قيد التنفيذ</string>
     <string name="language_strip_more">لغات أخرى</string>
     <string name="lentille_mode_menu_selected">محدد</string>
     <string name="live_location_duration_title">مدة المشاركة</string>

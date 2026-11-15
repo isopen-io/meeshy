@@ -13,6 +13,36 @@ final class ComposerLookEffectsFamilyTests: XCTestCase {
         XCTAssertEqual(ComposerLookFamily.allCases, [.filters, .effects, .frames])
     }
 
+    // MARK: - #18639 — une seule entrée « Effets » au rail
+
+    func test_rail_offersOneLooksEntry_effects_withTheCallWordAndPictogram() {
+        XCTAssertEqual(ComposerLookStripRule.railFamily, .effects)
+        XCTAssertEqual(ComposerCaptureCopy.looksName, CallControlsCopy.effectsCaption, "le mot de l'appel")
+        XCTAssertEqual(ComposerCaptureCopy.looksSymbol, "wand.and.stars")
+    }
+
+    func test_rail_mountsOneLooksEntry_neverTheFamilies() throws {
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
+        let debut = try XCTUnwrap(bande.range(of: "struct ComposerLookRail: View {"))
+        let fin = try XCTUnwrap(bande.range(of: "struct ComposerLookStrip: View {", range: debut.upperBound..<bande.endIndex))
+        let rail = String(bande[debut.upperBound..<fin.lowerBound])
+        XCTAssertFalse(rail.contains("ComposerLookFamily.allCases"), "plus Filtres · Effets · Cadres")
+        XCTAssertTrue(rail.contains("ComposerCaptureCopy.looksName"))
+        let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
+        XCTAssertEqual(bas.components(separatedBy: "session.toggleFamily(ComposerLookStripRule.railFamily)").count - 1, 3,
+                       "capture, bande ouverte et retouche ouvrent la même bande mêlée")
+    }
+
+    func test_toggleTheLooksEntry_opensThenFoldsTheMixedBand() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.toggleFamily(ComposerLookStripRule.railFamily)
+        XCTAssertNotNil(session.openFamily)
+        XCTAssertEqual(ComposerLookStripFilterRule.items(ComposerLookStripFilter()).count,
+                       1 + ComposerLookStripFilterRule.catalogue.count, "la bande mêle filtres, effets et cadres")
+        session.toggleFamily(ComposerLookStripRule.railFamily)
+        XCTAssertNil(session.openFamily, "la retoucher la replie")
+    }
+
     func test_effectsBand_startsWithNone_andOffersTheCallEffects() {
         let bande = ComposerLookStripRule.items(.effects)
         XCTAssertEqual(bande, CallFaceEffect.allCases.map { ComposerLookStripItem.effect($0) })

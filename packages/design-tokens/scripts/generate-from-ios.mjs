@@ -200,6 +200,7 @@ const SEMANTIQUES = [
   ['error', '--ios-error'],
   ['errorStrong', '--ios-error-strong'],
   ['errorDark', '--ios-error-dark'],
+  ['errorInk', '--ios-error-ink'],
   ['warning', '--ios-warning'],
   ['info', '--ios-info'],
   ['pinnedBlue', '--ios-pinned'],

@@ -56,7 +56,7 @@ final class ComposerCaptureChromeBandTests: XCTestCase {
 
     func test_aMeasure_neverSetsTheVeilOfAnotherFrame() {
         let photomaton = ComposerPhotoFrame.montage(.frame("photo.photomaton"))
-        let bandes = ComposerCaptureChromeBands(top: 0.02, bottom: 0.02, frame: ComposerLookSceneKey.token(photomaton))
+        let bandes = ComposerCaptureChromeBands(top: 0.02, frame: ComposerLookSceneKey.token(photomaton))
         XCTAssertEqual(bandes.measuring(photomaton), bandes)
         XCTAssertNil(bandes.measuring(.montage(.frame("photo.crypte"))), "l'autre cadre attend sa mesure sous le voile plein")
     }
@@ -72,7 +72,16 @@ final class ComposerCaptureChromeBandTests: XCTestCase {
             backdrop: haut.composited(over: bas), overlay: CIImage.empty(), slots: [])
         let bandes = try XCTUnwrap(ComposerCaptureChromeLegibility.bands(of: scene, context: CIContext()))
         XCTAssertGreaterThan(bandes.top, 0.9, "un cadre blanc sous la rangée haute")
-        XCTAssertLessThan(bandes.bottom, 0.05, "un cadre noir sous la barre du bas")
+    }
+
+    /// #18639 (porteur 2026-11-15) : plus de fond gris derrière les outils du bas.
+    @MainActor
+    func test_bottomRow_hasNoVeil_onlyTheTopRowKeepsOne() throws {
+        let vues = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
+        XCTAssertFalse(vues.contains("chromeVeilBottom"))
+        XCTAssertEqual(vues.components(separatedBy: "ComposerCaptureChromeVeil(").count - 1, 1, "la rangée haute seule")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
+        XCTAssertFalse(bas.contains("ComposerCaptureChromeVeil("))
     }
 }
 

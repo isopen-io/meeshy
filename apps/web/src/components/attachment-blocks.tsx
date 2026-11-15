@@ -25,6 +25,7 @@ import { useCarriedPlayback } from '@/lib/view/audio-carry';
 import { PLAYBACK_SPEEDS, formatMediaTime, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
+  KARAOKE_TONE_MS,
   karaokeTone,
   segmentSeekTarget,
   type KaraokeTone,
@@ -465,8 +466,8 @@ function VoiceAttachment({
                         const target = segmentSeekTarget(segments, i);
                         if (target !== null) seek(target);
                       }}
-                      className="cursor-pointer rounded-[4px] transition-[color,background-color,opacity] duration-150"
-                      style={KARAOKE_STYLE[tone]}
+                      className="cursor-pointer rounded-[4px] transition-[color,background-color,opacity]"
+                      style={{ ...KARAOKE_STYLE[tone], transitionDuration: `${KARAOKE_TONE_MS}ms` }}
                     >
                       {segment.text}
                     </span>{' '}

@@ -486,7 +486,7 @@ struct ConversationPreviewView: View {
         Button(action: action) {
             headerGlassButtonLabel(icon: icon, targetSize: targetSize)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(MeeshyGlassPressStyle())
         .accessibilityLabel(Text(label))
     }
 
@@ -498,7 +498,7 @@ struct ConversationPreviewView: View {
             .font(.footnote.weight(.semibold))
             .foregroundStyle(Color.white)
             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
+            .meeshyGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium), isInteractive: true)
             .frame(width: targetSize, height: ConversationPreviewRenderer.headerTargetSize)
             .contentShape(Rectangle())
     }

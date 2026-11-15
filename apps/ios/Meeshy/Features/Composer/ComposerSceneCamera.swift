@@ -222,6 +222,8 @@ nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Senda
     case text
     case background
     case sticker
+    /// Un son pour la scène (#18654) : sa feuille se pose sur le viseur vivant.
+    case sound
 
     /// Ce que l'entrée fait de la caméra.
     enum Camera: Equatable, Sendable {
@@ -252,6 +254,7 @@ nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Senda
         case .text: return .text
         case .background: return .background
         case .sticker: return .sticker
+        case .sound: return .sound
         case .gallery: return nil
         }
     }
@@ -263,7 +266,7 @@ nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Senda
     var accessibilityIdentifier: String { "composer.viewfinder.\(rawValue)" }
 }
 
-/// **La colonne du viseur du composer : Galerie · Texte · Fond · Stickers, puis
+/// **La colonne du viseur du composer : Galerie · Texte · Fond · Stickers · Son, puis
 /// les familles de look** (#17432). Elle retourne « pas de rail au viseur »
 /// (A8, #17109) : les rails de la SCÈNE cèdent toujours, mais le viseur armé
 /// porte ses entrées de scène. La caméra de conversation n'en a aucune ; une
@@ -277,9 +280,18 @@ nonisolated enum ComposerViewfinderColumn {
     }
 
     /// Une feuille se pose PAR-DESSUS le viseur vivant ; un outil qui s'édite SUR la scène (la
-    /// saisie d'un texte, la bande du cadre) prend la scène le temps de l'outil, caméra armée.
-    static func yieldsToScene(toolPresentsSheet: Bool) -> Bool {
-        !toolPresentsSheet
+    /// bande du cadre) prend la scène le temps de l'outil, caméra armée.
+    /// **Le texte, lui, se saisit SUR le viseur vivant** (#18638, porteur 2026-11-15) : le clavier
+    /// monte, sa barre de style avec lui, et la saisie se pose sur l'aperçu — jamais une scène
+    /// réduite sur fond noir.
+    static func yieldsToScene(toolPresentsSheet: Bool, typesOnViewfinder: Bool = false) -> Bool {
+        !toolPresentsSheet && !typesOnViewfinder
+    }
+
+    /// Le texte s'écrit sur l'aperçu quand ses objets s'y montrent : la prise sera le fond
+    /// (`ComposerViewfinderScene.captureFoundsBackground`). Sinon il s'écrit sur la scène.
+    static func typesOnViewfinder(entry: ComposerViewfinderEntry, captureFoundsBackground: Bool) -> Bool {
+        entry == .text && captureFoundsBackground
     }
 
     /// L'outil auquel le viseur a cédé la scène est-il encore ouvert ? Sa fermeture rend le
@@ -302,6 +314,7 @@ nonisolated enum ComposerViewfinderColumn {
         case .text: return String(localized: "composer.viewfinder.text", defaultValue: "Texte", bundle: .main)
         case .background: return String(localized: "composer.viewfinder.background", defaultValue: "Fond", bundle: .main)
         case .sticker: return String(localized: "composer.viewfinder.stickers", defaultValue: "Stickers", bundle: .main)
+        case .sound: return String(localized: "composer.capture.tool.sound", defaultValue: "Son", bundle: .main)
         }
     }
 }
