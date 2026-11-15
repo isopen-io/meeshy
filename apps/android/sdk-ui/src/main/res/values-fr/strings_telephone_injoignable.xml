@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Le téléphone injoignable (#18737) : android-only tant que les clés phone.* ne sont pas au catalogue iOS. -->
 <resources>
-    <string name="phone_reachability_someone">un proche</string>
-    <string name="phone_reachability_pill_unreachable">Le téléphone de %1$s est injoignable depuis %2$s</string>
-    <string name="phone_reachability_pill_reachable">Le téléphone de %1$s répond de nouveau</string>
+    <string name="phone_reachability_someone">Un proche</string>
+    <string name="phone_reachability_pill_unreachable">%1$s a un téléphone injoignable depuis %2$s</string>
+    <string name="phone_reachability_pill_reachable">%1$s est de nouveau joignable</string>
     <string name="phone_reachability_card_since">Téléphone injoignable depuis %1$s</string>
     <string name="phone_reachability_cause_battery">Batterie vide, probablement</string>
     <string name="phone_reachability_cause_network">Sans réseau ou en mode avion, probablement</string>
-    <string name="phone_reachability_a11y">Le téléphone de %1$s est injoignable</string>
+    <string name="phone_reachability_a11y">%1$s a un téléphone injoignable</string>
     <string name="phone_reachability_share_global_title">Prévenir mes Proches si mon téléphone est injoignable</string>
     <string name="phone_reachability_share_global_scope">Vos Proches savent depuis quand il ne répond plus, jamais où vous êtes.</string>
     <string name="phone_reachability_share_person">Prévenir %1$s si mon téléphone est injoignable</string>

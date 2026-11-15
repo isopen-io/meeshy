@@ -39,9 +39,9 @@ class PhoneReachabilityStringsTest {
     @Test
     fun `le francais dit les mots du produit`() {
         val fr = strings("values-fr").mapValues { it.value.replace("\\'", "'") }
-        assertThat(fr.getValue("phone_reachability_pill_unreachable")).isEqualTo("Le téléphone de %1\$s est injoignable depuis %2\$s")
-        assertThat(fr.getValue("phone_reachability_pill_reachable")).isEqualTo("Le téléphone de %1\$s répond de nouveau")
-        assertThat(fr.getValue("phone_reachability_someone")).isEqualTo("un proche")
+        assertThat(fr.getValue("phone_reachability_pill_unreachable")).isEqualTo("%1\$s a un téléphone injoignable depuis %2\$s")
+        assertThat(fr.getValue("phone_reachability_pill_reachable")).isEqualTo("%1\$s est de nouveau joignable")
+        assertThat(fr.getValue("phone_reachability_someone")).isEqualTo("Un proche")
         assertThat(fr.getValue("phone_reachability_card_since")).isEqualTo("Téléphone injoignable depuis %1\$s")
         assertThat(fr.getValue("phone_reachability_cause_battery")).isEqualTo("Batterie vide, probablement")
         assertThat(fr.getValue("phone_reachability_cause_network")).isEqualTo("Sans réseau ou en mode avion, probablement")
