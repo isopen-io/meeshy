@@ -375,7 +375,7 @@ extension iPadRootView {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .contactRecentlyActive, .deviceBattery, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .deviceBattery, .deviceUnreachable, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,

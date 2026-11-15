@@ -330,6 +330,10 @@ struct ConversationInfoSheet: View {
                 BatteryDetailSection(userId: peer)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.sm)
+                // Son téléphone injoignable (#18737) : depuis quand et pourquoi, rien quand il répond.
+                PhoneReachabilityDetailSection(userId: peer)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.sm)
             }
 
             Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))

@@ -145,6 +145,9 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "battery.25", title: String(localized: "settings.notifications.device_battery", defaultValue: "Batterie de mes proches", bundle: .main), color: MeeshyColors.successHex,
                         keyPath: \.receivesDeviceBattery)
 
+            notifToggle(icon: "iphone.slash", title: String(localized: "settings.notifications.device_unreachable", defaultValue: "Téléphone injoignable de mes Proches", bundle: .main), color: MeeshyColors.successHex,
+                        keyPath: \.receivesDeviceUnreachable)
+
             notifToggle(icon: "person.3.fill", title: String(localized: "settings.notifications.group_invites", defaultValue: "Invitations de groupe", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.groupInviteEnabled)
 

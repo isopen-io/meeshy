@@ -255,6 +255,8 @@ struct ProfileView: View {
                     activitySection
                     // Partager ma batterie, pour tous (#14147) : la coupure globale, côté émetteur, dans MON profil.
                     BatterySharingSettingsSection(accentColor: accentColor)
+                    // Prévenir mes Proches si mon téléphone est injoignable (#18737) : la coupure globale, le fantôme.
+                    PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
                     if ProfilePackShortcuts.isShown(viewerId: authManager.currentUser?.id, profileUserId: user?.id) {
                         ProfileSavedContentRows(accentHex: accentColor, onOpen: open)
                     }
