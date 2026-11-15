@@ -102,6 +102,19 @@ def test_a_symlink_under_the_root_pointing_outside_is_rejected(root, outside):
     assert rejected.value.reason == "outside_roots"
 
 
+def test_the_guard_hands_back_the_checked_target_not_the_requested_spelling(root):
+    # Le consommateur doit ouvrir CE QUI A ÉTÉ VÉRIFIÉ : rendre la graphie
+    # demandée laisserait un lien de la racine être re-résolu plus tard,
+    # après une substitution, hors de tout contrôle.
+    audio = _inside(root)
+    (root / "sub").mkdir()
+    link = root / "alias.wav"
+    link.symlink_to(audio)
+
+    assert guard_requested_audio_path(str(link)) == str(audio.resolve())
+    assert guard_requested_audio_path(str(root / "sub" / ".." / "voice.wav")) == str(audio.resolve())
+
+
 def test_a_directory_under_the_root_is_rejected(root):
     folder = root / "folder"
     folder.mkdir()
