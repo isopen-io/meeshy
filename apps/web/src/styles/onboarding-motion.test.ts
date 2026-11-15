@@ -8,8 +8,8 @@ import { describe, expect, test } from 'bun:test';
  */
 const CSS = readFileSync(new URL('./onboarding.css', import.meta.url).pathname, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
-const transitions = [...CSS.matchAll(/\btransition\s*:\s*([^;]*);/g)].map((found) => found[1]);
-const keyframeBodies = [...CSS.matchAll(/@keyframes\s+[\w-]+\s*\{([\s\S]*?)\n\}/g)].map((found) => found[1]);
+const transitions = [...CSS.matchAll(/\btransition\s*:\s*([^;]*);/g)].map((found) => found[1] ?? '');
+const keyframeBodies = [...CSS.matchAll(/@keyframes\s+[\w-]+\s*\{([\s\S]*?)\n\}/g)].map((found) => found[1] ?? '');
 
 describe('onboarding.css — l’accueil anime sans repeindre', () => {
   test('aucune transition ne porte l’ombre', () => {

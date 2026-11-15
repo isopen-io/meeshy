@@ -537,14 +537,12 @@ describe('MagicLinkValidation — « Réessayer » relance la validation (#18322
   afterEach(leaveEmailLink);
 
   test('hors ligne puis Réessayer : la validation repart, et le lien revenu en ligne est servi', async () => {
-    const replies: Awaited<ReturnType<typeof auth.validateMagicLink>>[] = [
-      { ok: false, status: 0, error: 'Failed to fetch' },
-      { ok: false, status: 400, error: 'Invalid or expired token' },
-    ];
+    const offline: Awaited<ReturnType<typeof auth.validateMagicLink>> = { ok: false, status: 0, error: 'Failed to fetch' };
+    const dead: Awaited<ReturnType<typeof auth.validateMagicLink>> = { ok: false, status: 400, error: 'Invalid or expired token' };
     const tokens: string[] = [];
     const validate: typeof auth.validateMagicLink = async (token) => {
       tokens.push(token);
-      return replies[tokens.length - 1] ?? replies[replies.length - 1];
+      return tokens.length === 1 ? offline : dead;
     };
     arriveByEmailLink('/auth/magic-link', 'm-retry');
     container = document.createElement('div');
