@@ -93,7 +93,11 @@ struct MeeshyKeyboardDockAccessoryRoot<Glyph: View, Above: View>: View {
     let glyph: (String) -> Glyph
     let above: Above
 
-    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     var body: some View {
         MeeshyKeyboardDockStack(gap: MeeshyKeyboardDockRecipe.aboveGap) {
@@ -110,13 +114,13 @@ struct MeeshyKeyboardDockAccessoryRoot<Glyph: View, Above: View>: View {
     }
 
     /// La bande de l'hôte entre par le bas avec un fondu en 250 ms et sort en 200 ms, que l'hôte l'anime ou
-    /// non : l'animation est portée par la transition. « Réduire les animations » : le fondu seul.
+    /// non : l'animation est portée par la transition. « Réduire les animations » : le fondu seul, en 150 ms.
     private var bandTransition: AnyTransition {
         let travel = MeeshyKeyboardDockRecipe.bandTravel(reduceMotion: reduceMotion)
         let motion = AnyTransition.opacity.combined(with: .offset(y: travel))
         return .asymmetric(
-            insertion: motion.animation(.easeOut(duration: MeeshyKeyboardDockRecipe.bandEnterDuration)),
-            removal: motion.animation(.easeIn(duration: MeeshyKeyboardDockRecipe.bandExitDuration))
+            insertion: motion.animation(.easeOut(duration: MeeshyKeyboardDockRecipe.bandEnterDuration(reduceMotion: reduceMotion))),
+            removal: motion.animation(.easeIn(duration: MeeshyKeyboardDockRecipe.bandExitDuration(reduceMotion: reduceMotion)))
         )
     }
 }

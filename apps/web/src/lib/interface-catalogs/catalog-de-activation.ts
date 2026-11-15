@@ -27,6 +27,8 @@ const deActivation = {
   'activation.phone.failed': 'Diese Nummer konnte nicht gespeichert werden. Bitte versuche es erneut.',
   'activation.phone.codeInvalid': 'Ungültiger oder abgelaufener Code',
   'activation.phone.done': 'Nummer bestätigt ✓',
+  'activation.phone.edit': 'Nummer ändern',
+  'activation.phone.resend': 'Code erneut senden',
   'activation.complete': 'Dein Konto ist bestätigt. Danke!',
   'activation.later': 'Später',
   'activation.close': 'Schließen',

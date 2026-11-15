@@ -27,6 +27,8 @@ const itActivation = {
   'activation.phone.failed': 'Impossibile salvare questo numero. Riprova.',
   'activation.phone.codeInvalid': 'Codice non valido o scaduto',
   'activation.phone.done': 'Numero verificato ✓',
+  'activation.phone.edit': 'Modifica il numero',
+  'activation.phone.resend': 'Invia di nuovo il codice',
   'activation.complete': 'Il tuo account è convalidato. Grazie!',
   'activation.later': 'Più tardi',
   'activation.close': 'Chiudi',

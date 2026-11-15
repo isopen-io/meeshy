@@ -106,7 +106,7 @@ export function MentionSuggestions({
                 onPointerDown={(e) => e.preventDefault()}
                 onPointerEnter={() => onHighlight(index)}
                 onClick={() => onPick(candidate)}
-                className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2"
+                className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 active:opacity-80"
                 style={selected ? { backgroundColor: 'color-mix(in srgb, var(--accent) 14%, transparent)' } : undefined}
               >
                 <PeerAvatar

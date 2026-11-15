@@ -2,12 +2,14 @@ import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import { isGridKey, nextGridIndex } from '@/lib/emoji/emoji-grid-keys';
 import { skinToneVariants, type EmojiSkinTone } from '@/lib/emoji/emoji-skin-tone';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
  * LES TEINTES D'UN EMOJI (#10533) — ses six variantes, « par défaut » en tête,
  * sur une rangée posée au bas de la grille : un menu à choix unique, dont la
  * teinte en cours est cochée et reçoit le focus. Les flèches le parcourent (de
- * droite à gauche, elles s'inversent), Échap le referme SANS fermer la feuille.
+ * droite à gauche, elles s'inversent), Échap le referme SANS fermer la feuille,
+ * et le retour Android comme Précédent aussi : la rangée est la couche du dessus.
  * Choisir une variante la rend à l'hôte, qui retient la teinte.
  */
 export function EmojiToneMenu({
@@ -28,6 +30,7 @@ export function EmojiToneMenu({
   readonly onDismiss: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  useBackDismiss(onDismiss);
 
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
@@ -76,7 +79,7 @@ export function EmojiToneMenu({
               data-emoji-tone={variant.tone}
               tabIndex={checked ? 0 : -1}
               onClick={() => onChoose(variant.tone)}
-              className="grid shrink place-items-center rounded-chip text-2xl focus-visible:outline-2 focus-visible:-outline-offset-2"
+              className="btn-press grid shrink place-items-center rounded-chip text-2xl focus-visible:outline-2 focus-visible:-outline-offset-2"
               style={{
                 minHeight: 44,
                 minWidth: 44,

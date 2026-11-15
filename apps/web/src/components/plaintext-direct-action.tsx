@@ -50,7 +50,7 @@ export function PlaintextDirectAction({
         aria-busy={state.busy}
         onClick={() => void onOpen()}
         {...{ [`data-${marker}-open-plaintext`]: '' }}
-        className="flex items-center justify-center gap-2 rounded-chip px-4 text-body font-semibold disabled:opacity-50"
+        className="btn-press flex items-center justify-center gap-2 rounded-chip px-4 text-body font-semibold disabled:opacity-50"
         style={{ minHeight: 44, color: 'var(--accent)', border: '1px solid var(--accent)' }}
       >
         {label}
