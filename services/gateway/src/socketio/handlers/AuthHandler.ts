@@ -36,6 +36,7 @@ import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { LIVE_CALL_PARTICIPATION } from '../../services/calls/liveCallParticipations';
 import { PresenceForeground } from '../presence-foreground';
 import { refuseSocketBelowAppVersionFloor } from '../../middleware/app-version-floor';
+import { noteBatteryAlive, sessionIdOfSocket } from './BatteryHandler';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -463,6 +464,8 @@ export class AuthHandler {
       // jamais en ligne — la tâche porte son verrou de 3 h et ses erreurs.
       scheduleContactRecentlyActiveAnnouncement(this.prisma, user.id);
     }
+    // #14147 — le téléphone suivi présumé éteint qui revient est « rallumé », premier socket ou non.
+    noteBatteryAlive({ userId: user.id, sessionId: sessionIdOfSocket(socket) });
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
