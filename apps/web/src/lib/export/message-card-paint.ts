@@ -292,8 +292,9 @@ function paintBackdrop(ctx: Paintable, layout: CardLayout, sources: readonly (Ca
 export function paintMessageCard(ctx: Paintable, layout: CardLayout, template: MessageCardTemplate, options: PaintOptions = {}): void {
   paintBackground(ctx, layout, template.palette);
   paintBackdrop(ctx, layout, options.sources ?? []);
-  paintWatermark(ctx, layout, template.palette);
   const resolved: ResolvedOptions = { sources: options.sources ?? [], progress: options.progress ?? null, strokeFloor: options.strokeFloor ?? 0 };
+  for (const op of layout.fixed ?? []) paintOp(ctx, op, resolved);
+  paintWatermark(ctx, layout, template.palette);
   if (layout.tilt === 0) {
     for (const op of layout.ops) paintOp(ctx, op, resolved);
     return;

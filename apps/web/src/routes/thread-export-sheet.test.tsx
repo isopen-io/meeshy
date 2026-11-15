@@ -9,7 +9,8 @@ import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { INITIAL_MESSAGE_CARD_FORMAT, MESSAGE_CARD_FORMAT_KEY } from '@/lib/export/message-card-format';
-import { ALL_TEMPLATE_IDS, CARD_LINKS, CARD_PALETTE_IDS, CARD_TYPEFACE_IDS, FEATURED_TEMPLATE_IDS } from '@/lib/export/message-card-templates';
+import { ALL_TEMPLATE_IDS, CARD_LINKS, CARD_PALETTE_IDS, CARD_TYPEFACE_IDS } from '@/lib/export/message-card-templates';
+import { BUILT_IN_MODELS } from '@/lib/export/message-card-models';
 import { MESSAGE_CARD_USAGE_KEY } from '@/lib/export/message-card-usage';
 import type { SafeStorage } from '@/lib/storage';
 
@@ -264,14 +265,28 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     expect(host.querySelector('[data-export-count]')?.getAttribute('data-export-count')).toBe(String(ALL_TEMPLATE_IDS.length / 2));
   });
 
-  test('un appareil neuf voit la vitrine en « Populaires » ; ensuite, ses plus utilisés d’abord', async () => {
-    const fresh = await mountSheet();
-    const shown = (host: HTMLElement) => Array.from(host.querySelectorAll('[data-export-template]')).map((node) => node.getAttribute('data-export-template'));
-    expect(shown(fresh.host)).toEqual([...FEATURED_TEMPLATE_IDS]);
-    mounter.unmountAll();
-    const storage = memoryStorage({ [MESSAGE_CARD_USAGE_KEY]: JSON.stringify({ 'braise.marqueur.silence': 4, 'lagon.futur.filet': 1 }) });
-    const used = await mountSheet({ storage });
-    expect(shown(used.host).slice(0, 2)).toEqual(['braise.marqueur.silence', 'lagon.futur.filet']);
+  test('« Styles » montre les huit maquettes, et en choisir une habille la carte de son allure et de son décor (#18673)', async () => {
+    const { host, harness } = await mountSheet();
+    const shown = Array.from(host.querySelectorAll('[data-export-model]')).map((node) => node.getAttribute('data-export-model'));
+    expect(shown).toEqual(BUILT_IN_MODELS.map((model) => model.id));
+    await mounter.click(host.querySelector('[data-export-model="epure"]'));
+    await mounter.settle();
+    const painted = harness.painted[harness.painted.length - 1];
+    expect(painted?.template).toBe('ardoise.systeme.silence');
+    expect(painted?.aspect).toBe('square');
+    expect(painted?.decor).toEqual({ alignment: 'center', frame: 'border', ornament: 'none' });
+  });
+
+  test('une maquette ne propose que ses liaisons, et le hasard garde la sienne', async () => {
+    const { host, harness } = await mountSheet({ random: () => 0.5 });
+    await mounter.click(host.querySelector('[data-export-model="bulles"]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-tab="link"]'));
+    await mounter.settle();
+    expect(Array.from(host.querySelectorAll('[data-export-link]')).map((node) => node.getAttribute('data-export-link'))).toEqual(['bulles']);
+    await mounter.click(host.querySelector('[data-export-random]'));
+    await mounter.settle();
+    expect(harness.painted[harness.painted.length - 1]?.template.endsWith('.bulles')).toBe(true);
   });
 
   test('« Au hasard » tire un template parmi tous', async () => {
@@ -746,7 +761,7 @@ describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
       const { host } = await mountSheet();
       await mounter.settle();
       await mounter.settle();
-      const thumb = host.querySelector('[data-export-template] img');
+      const thumb = host.querySelector('[data-export-model] img');
       expect(thumb?.className.includes('object-contain')).toBe(true);
       expect(thumb?.className.includes('object-cover')).toBe(false);
     } finally {

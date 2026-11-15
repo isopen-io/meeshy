@@ -9,6 +9,8 @@ import {
   type CardMediaLayout,
 } from './message-card-arrangement';
 import { DEFAULT_AUDIO_STYLE, heroMediaOps, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock } from './message-card-media';
+import { decorateCard } from './message-card-decor';
+import type { CardDecor } from './message-card-models';
 import type { CardOp } from './message-card-ops';
 import { HERO_GAP, heroHeight, heroSpan } from './message-card-hero';
 import { THREAD_SEPARATOR_ROW, threadLevel, threadRoom, threadSeparatorOps, threadShift } from './message-card-thread';
@@ -101,6 +103,8 @@ export type MessageCardInput = {
    * compte plus parmi les médias de la réponse (#10915).
    */
   readonly heroMedia?: number | null;
+  /** Le décor de la maquette (#18673) — centrage, cadre, panneau, ornement. */
+  readonly decor?: CardDecor;
 };
 
 /**
@@ -134,6 +138,10 @@ export type CardLayout = {
   readonly tilt: number;
   /** Le visuel peint EN FOND (#9236) — droit comme le fond, sous un voile de la palette ; `null` : aucun. */
   readonly backdrop: CardBackdrop | null;
+  /** Ce qui reste DROIT et FIXE au-dessus du fond : le cadre d'une maquette (#18673). */
+  readonly fixed?: readonly CardOp[];
+  /** La hauteur de la fenêtre d'une carte qui défile — absente : la carte entière est l'image. */
+  readonly viewportHeight?: number | null;
 };
 
 /** Le visuel de fond : son rang dans `MessageCardInput.media`, et le voile qui garde le texte lisible. */
@@ -576,7 +584,8 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
 
   const backdrop: CardBackdrop | null =
     backdropIndex === null || backdropMedia === undefined ? null : { index: backdropIndex, video: backdropMedia.kind === 'video', veil: veilOf(palette) };
-  return { width, height, ops, regions, watermark: watermarkOf(input.handle), truncated, tilt: CARD_TILT_RADIANS[frame.tilt], backdrop };
+  const laid: CardLayout = { width, height, ops, regions, watermark: watermarkOf(input.handle), truncated, tilt: CARD_TILT_RADIANS[frame.tilt], backdrop };
+  return input.decor === undefined ? laid : decorateCard(laid, input.decor, palette);
 }
 
 /** Ce que la liaison peint dans son bloc, entre le bas de la citation (`y`) et la réponse. */

@@ -15,12 +15,13 @@ import {
 } from '@/lib/export/message-card-format';
 import type { CardPart, CardRegion, MessageCardInput, MessageCardPart } from '@/lib/export/message-card-layout';
 import { cardOutputsOf, extensionOfType, type CardOutput } from '@/lib/export/message-card-output';
+import { BUILT_IN_MODELS, DEFAULT_MODEL_ID, applyModel, modelById, offeredLinks, type CardModel } from '@/lib/export/message-card-models';
 import type { CardSource } from '@/lib/export/message-card-paint';
 import type { CardMedia } from '@/lib/export/message-card-media';
 import { messageCardFileName, type CardMediaAuthor, type MessageCardSubject, type MessageCardSubjectPart } from '@/lib/export/message-card-subject';
-import { randomTemplateId, templateIdOf, templateOf, type CardLinkId, type CardPaletteId, type CardTypefaceId, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
+import { CARD_LINKS, randomTemplateId, templateIdOf, templateOf, type CardLinkId, type CardPaletteId, type CardTypefaceId, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
 import { createThumbnailCache } from '@/lib/export/message-card-thumbnails';
-import { popularTemplates, readTemplateUsage, recordTemplateUse } from '@/lib/export/message-card-usage';
+import { readTemplateUsage, recordTemplateUse } from '@/lib/export/message-card-usage';
 import { translateExportCard, type ExportCardCatalogKey } from '@/lib/i18n-export-card-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
@@ -62,7 +63,11 @@ import { ExportTray, TAB_OF_PART, type ExportTab } from './thread-export-tray';
  * sont chargés À LA DEMANDE : le fil n'en paie rien.
  */
 
-const POPULAR_COUNT = 6;
+/** Les liaisons qu'offre la maquette choisie — toutes sans maquette. */
+const linksOf = (id: string | null): readonly CardLinkId[] => {
+  const model = modelById(id);
+  return model === null ? CARD_LINKS : offeredLinks(model);
+};
 
 /** La largeur d'une vignette peinte : deux fois sa plus grande largeur affichée, pour un écran dense. */
 const THUMB_WIDTH = 240;
@@ -187,6 +192,7 @@ export function messageCardInputOf(params: {
     mediaArrangement: format.mediaArrangement,
     featuredMedia: featured === -1 ? null : featured,
     audioStyle: format.audioStyle,
+    decor: format.decor,
     /* Les réponses jointes (#8734) sont des « autres » : l'anonymat de la citation les couvre. */
     ...(subject.followUps === undefined ? {} : { followUps: subject.followUps.map((follow) => part(follow, format.anonymizeQuoted, null)) }),
   };
@@ -274,7 +280,6 @@ export function MessageExportSheet({
   );
   const quickSent = useRef(false);
   const [usage] = useState(() => readTemplateUsage(storage));
-  const [popular] = useState(() => popularTemplates(usage, POPULAR_COUNT));
   const title = conversationTitle !== null && conversationTitle.trim() !== '' ? conversationTitle.trim() : null;
 
   /* Les portes sont PRÉCHARGÉES pendant que la carte se peint : sur iOS, le
@@ -298,10 +303,10 @@ export function MessageExportSheet({
   const [motionBusy, setMotionBusy] = useState<Exclude<CardOutput, 'image'> | null>(null);
   const motionCache = useMotionCache();
 
-  const inputFor = (template: MessageCardTemplateId): MessageCardInput =>
+  const inputOfFormat = (shown: MessageCardFormat): MessageCardInput =>
     messageCardInputOf({
       subject,
-      format: { ...format, template },
+      format: shown,
       handle,
       conversationTitle: title,
       anonymousLabel: translateExportCard(language, 'export.card.anonymous'),
@@ -309,6 +314,7 @@ export function MessageExportSheet({
       formatTime: (date) => new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(date),
       featured,
     });
+  const inputFor = (template: MessageCardTemplateId): MessageCardInput => inputOfFormat({ ...format, template });
 
   const key = `${formatKey(format)}|${featured ?? ''}|${media.version}|${subjectKey}`;
 
@@ -344,6 +350,20 @@ export function MessageExportSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cache, context, subject],
   );
+
+  /* Les maquettes (#18673) : chacune peinte sur le message, habillée de ce qu'elle impose ; leur clé suit ce qu'elles laissent à l'utilisateur. */
+  const neutralModel = modelById(DEFAULT_MODEL_ID);
+  const modelContext = `${JSON.stringify(neutralModel === null ? format : applyModel(neutralModel, format))}|${featured ?? ''}|${exportLanguage ?? ''}|${media.version}|${subjectKey}`;
+  const modelThumbs = useMemo(() => {
+    const sources = new Map(
+      BUILT_IN_MODELS.map((model): [string, ThumbSource] => [
+        model.id,
+        { cache, keyOf: () => `model:${model.id}|${modelContext}`, render: () => thumbnail(inputOfFormat(applyModel(model, format)), THUMB_WIDTH, media.sources) },
+      ]),
+    );
+    return (model: CardModel): ThumbSource => sources.get(model.id) ?? thumbs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cache, modelContext, subject, thumbs]);
 
   /* Une carte à médias n'est PRÊTE qu'avec leurs pixels : « Imager rapide » ne part jamais avec des cadres vides. */
   const ready = rendered !== null && rendered.key === key && !media.loading && !preparing;
@@ -392,7 +412,14 @@ export function MessageExportSheet({
 
   const toggle = (option: MessageCardToggle) => setFormat((current) => ({ ...current, [option]: !current[option] }));
   const choose = (choice: FrameChoice) => setFormat((current) => ({ ...current, ...choice }));
-  const pick = (template: MessageCardTemplateId) => setFormat((current) => ({ ...current, template }));
+  /* Un template hors des liaisons de la maquette l'en fait sortir : la carte n'est plus « Bulles » avec un filet. */
+  const pick = (template: MessageCardTemplateId) =>
+    setFormat((current) => {
+      const model = modelById(current.model);
+      const inModel = model !== null && offeredLinks(model).includes(templateOf(template).link);
+      return { ...current, template, model: inModel ? current.model : null };
+    });
+  const pickModel = (model: CardModel) => setFormat((current) => applyModel(model, current));
   const current = templateOf(format.template);
   const pickPart = (part: { readonly palette?: CardPaletteId; readonly typeface?: CardTypefaceId; readonly link?: CardLinkId }) =>
     pick(templateIdOf({ palette: part.palette ?? current.paletteId, typeface: part.typeface ?? current.typefaceId, link: part.link ?? current.link }));
@@ -440,7 +467,11 @@ export function MessageExportSheet({
           <button
             type="button"
             data-export-random=""
-            onClick={() => pick(randomTemplateId(random))}
+            onClick={() => {
+              const drawn = templateOf(randomTemplateId(random));
+              const model = modelById(format.model);
+              pick(templateIdOf({ palette: drawn.paletteId, typeface: drawn.typefaceId, link: model?.link ?? drawn.link }));
+            }}
             aria-label={translateExportCard(language, 'export.card.random')}
             title={translateExportCard(language, 'export.card.random')}
             className="grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -568,9 +599,10 @@ export function MessageExportSheet({
             featured={shownId}
             onFeatured={setFeatured}
             hasMediaAuthors={hasMediaAuthors}
-            popular={popular.includes(format.template) ? popular : [format.template, ...popular]}
-            thumbs={thumbs}
-            onTemplate={pick}
+            models={BUILT_IN_MODELS}
+            modelThumbs={modelThumbs}
+            onModel={pickModel}
+            links={linksOf(format.model)}
             onPart={pickPart}
             onToggle={toggle}
             onChoice={choose}

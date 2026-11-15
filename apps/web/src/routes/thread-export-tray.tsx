@@ -4,9 +4,8 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { EXPORT_CARD_GLYPHS } from '@/components/glyphs-export-card';
 import type { MessageCardFormat, MessageCardToggle } from '@/lib/export/message-card-format';
 import type { CardPart } from '@/lib/export/message-card-layout';
+import { modelName, type CardModel } from '@/lib/export/message-card-models';
 import {
-  ALL_TEMPLATE_IDS,
-  CARD_LINKS,
   CARD_PALETTES,
   CARD_PALETTE_IDS,
   CARD_TYPEFACES,
@@ -23,7 +22,8 @@ import { spokenLanguageName } from '@/lib/view/language-name';
 
 import { PRESSED, Pill, REST } from './thread-export-controls';
 import { AUDIO_STYLE_LABEL, FramePanel, MEDIA_ARRANGEMENT_LABEL, MEDIA_LAYOUT_LABEL, MediaPanel, type FrameChoice, type VisualChoice } from './thread-export-frame';
-import { CardThumb, LinkGlyph, cssFontOf, paletteGradient, type ThumbSource } from './thread-export-thumb';
+import { ModelRow } from './thread-export-models';
+import { LinkGlyph, cssFontOf, paletteGradient, type ThumbSource } from './thread-export-thumb';
 
 /**
  * **LE PLATEAU D'« IMAGINE »** — un seul verre, un seul réglage à la fois. Les
@@ -157,9 +157,12 @@ export type ExportTrayProps = {
   readonly featured: string | null;
   readonly onFeatured: (id: string) => void;
   readonly hasMediaAuthors: boolean;
-  readonly popular: readonly MessageCardTemplateId[];
-  readonly thumbs: ThumbSource;
-  readonly onTemplate: (id: MessageCardTemplateId) => void;
+  /** Les maquettes (#18673), chacune peinte sur le message par sa propre source de vignette. */
+  readonly models: readonly CardModel[];
+  readonly modelThumbs: (model: CardModel) => ThumbSource;
+  readonly onModel: (model: CardModel) => void;
+  /** Les liaisons de la maquette choisie — toutes sans maquette. */
+  readonly links: readonly CardLinkId[];
   readonly onPart: (part: { readonly palette?: CardPaletteId; readonly typeface?: CardTypefaceId; readonly link?: CardLinkId }) => void;
   readonly onToggle: (toggle: MessageCardToggle) => void;
   readonly onChoice: (choice: FrameChoice) => void;
@@ -200,7 +203,10 @@ export function ExportTray(props: ExportTrayProps) {
     .join(' · ');
   const subtitle: Readonly<Record<ExportTab, string>> = {
     content: '',
-    styles: templateLabel(language, format.template),
+    styles: (() => {
+      const model = props.models.find((candidate) => candidate.id === format.model);
+      return model === undefined ? templateLabel(language, format.template) : modelName(model, language);
+    })(),
     frame: '',
     palette: current.palette.name,
     typeface: translateExportCard(language, TYPEFACE_LABEL[current.typefaceId]),
@@ -232,21 +238,7 @@ export function ExportTray(props: ExportTrayProps) {
 
       <div role="tabpanel" aria-label={translateExportCard(language, TAB_LABEL[tab])} className={`flex min-h-[92px] items-center gap-2 px-4 pb-3 ${panelLayout}`}>
         {tab === 'styles' ? (
-          <>
-            {props.popular.map((id) => (
-              <CardThumb key={id} id={id} source={props.thumbs} label={templateLabel(language, id)} pressed={id === format.template} width={64} onPick={() => props.onTemplate(id)} data={{ 'data-export-template': id }} />
-            ))}
-            <button
-              type="button"
-              data-export-gallery=""
-              onClick={props.onGallery}
-              className="grid shrink-0 place-items-center rounded-field px-3 text-center focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ minWidth: 76, minHeight: 72, ...REST }}
-            >
-              <span className="text-title font-bold leading-none">{ALL_TEMPLATE_IDS.length}</span>
-              <span className="text-mini font-semibold">{translateExportCard(language, 'export.card.gallery.open')}</span>
-            </button>
-          </>
+          <ModelRow language={language} models={props.models} selected={format.model} sourceOf={props.modelThumbs} onPick={props.onModel} onCombinations={props.onGallery} />
         ) : null}
 
         {tab === 'content' ? <div data-export-content="">{props.content}</div> : null}
@@ -300,7 +292,7 @@ export function ExportTray(props: ExportTrayProps) {
           : null}
 
         {tab === 'link'
-          ? CARD_LINKS.map((link) => (
+          ? props.links.map((link) => (
               <Tile key={link} pressed={link === current.link} onClick={() => props.onPart({ link })} data={{ 'data-export-link': link }} label={translateExportCard(language, LINK_LABEL[link])}>
                 <LinkGlyph link={link} />
               </Tile>
