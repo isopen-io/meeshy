@@ -123,31 +123,53 @@ final class ComposerOpeningPlanTests: XCTestCase {
 
     // MARK: - Choisir dans la photothèque rend la scène
 
-    func test_disarmsCameraOnLibraryPick_armedAndUntouched_disarms() {
-        XCTAssertTrue(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .armed,
-                                                                     pendingSegments: 0, editing: false))
+    private func pick(count: Int = 1, fromViewfinder: Bool = true, openingPick: Bool = true,
+                      stage: ComposerSceneCameraStage = .armed, pendingSegments: Int = 0,
+                      editing: Bool = false) -> ComposerOpeningPlan.LibraryPick {
+        ComposerOpeningPlan.libraryPick(count: count, fromViewfinder: fromViewfinder, openingPick: openingPick,
+                                        stage: stage, pendingSegments: pendingSegments, editing: editing)
     }
 
-    /// Porteur 2026-11-15 (#18654) : « lorsqu'on choisit Galerie on remplace l'image ».
-    func test_disarmsCameraOnLibraryPick_whileRetouching_replacesTheTake() {
-        XCTAssertTrue(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .armed,
-                                                                     pendingSegments: 0, editing: true))
-        XCTAssertTrue(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .armed,
-                                                                     pendingSegments: 2, editing: true),
-                      "la vidéo assemblée en retouche est la prise qu'on remplace")
-        XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: false, stage: .armed,
-                                                                      pendingSegments: 0, editing: true),
-                       "un média venu d'une autre porte ne remplace rien")
+    func test_libraryPick_atOpening_foundsTheScenes_andRendsTheScene() {
+        XCTAssertEqual(pick(fromViewfinder: false), .foundsScenes(disarms: true))
+        XCTAssertEqual(pick(count: 3, fromViewfinder: false), .foundsScenes(disarms: true),
+                       "à l'ouverture, une série fonde ses scènes (#8540)")
     }
 
-    func test_disarmsCameraOnLibraryPick_somethingFilmedOrNotTheOpeningPick_keepsTheCamera() {
-        XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .armed,
-                                                                      pendingSegments: 1, editing: false),
-                       "des segments en attente ne partent jamais en silence")
-        XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: true, stage: .recording,
-                                                                      pendingSegments: 0, editing: false))
-        XCTAssertFalse(ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: false, stage: .armed,
-                                                                      pendingSegments: 0, editing: false))
+    /// Porteur 2026-11-15 (#18710) : en retouche, la Galerie pose les images SUR la prise.
+    func test_libraryPick_whileRetouching_posesOverTheTake_andNeverReplacesIt() {
+        XCTAssertEqual(pick(editing: true), .overlay)
+        XCTAssertEqual(pick(count: 4, editing: true), .overlay)
+        XCTAssertEqual(pick(pendingSegments: 2, editing: true), .overlay, "la vidéo assemblée reste la prise")
+        XCTAssertEqual(pick(fromViewfinder: false, editing: true), .foundsScenes(disarms: false),
+                       "un média venu d'une autre porte ne coupe pas la retouche")
+    }
+
+    /// Au viseur, UNE image devient le fond (le viseur s'arrête), PLUSIEURS se posent sur le viseur vivant.
+    func test_libraryPick_atTheViewfinder_oneBecomesTheBackground_severalPoseOverTheLiveViewfinder() {
+        XCTAssertEqual(pick(count: 1), .foundsScenes(disarms: true))
+        XCTAssertEqual(pick(count: 2), .overlay)
+        XCTAssertEqual(pick(count: ComposerOpeningLibrarySheet.maxSelectionCount), .overlay)
+    }
+
+    func test_libraryPick_somethingFilmedOrNotTheOpeningPick_keepsTheCamera() {
+        XCTAssertEqual(pick(pendingSegments: 1), .foundsScenes(disarms: false), "des segments en attente ne partent jamais en silence")
+        XCTAssertEqual(pick(stage: .recording), .foundsScenes(disarms: false))
+        XCTAssertEqual(pick(fromViewfinder: false, openingPick: false), .foundsScenes(disarms: false))
+        XCTAssertEqual(pick(count: 3, stage: .off), .foundsScenes(disarms: false), "sans viseur vivant, rien à poser dessus")
+    }
+
+    func test_host_overlayPick_posesForegroundObjects_andKeepsTheCamera() throws {
+        let tri = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/MeeshyComposerHost+ScenePicking.swift")
+        XCTAssertTrue(tri.contains("ComposerOpeningPlan.libraryPick(count: count, fromViewfinder: viewfinderLibrary != .closed"))
+        XCTAssertTrue(tri.contains("ComposerViewfinderOverlay.pose(medias, on: self)"), "les médias se posent par-dessus")
+        let pose = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerViewfinderSceneCanvas.swift")
+        XCTAssertTrue(pose.contains("host.viewModel.toggleBackground(id: fond)"),
+                      "aucune image posée par-dessus ne devient le fond : la prise le sera")
+        XCTAssertTrue(pose.contains("rail: .roleDejaPose"), "le rail reste armé pour la prise")
+        let viseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift")
+        XCTAssertTrue(viseur.contains("(openingPickFoundsScenes, viewfinderLibrary) = (true, .opened)"),
+                      "la Galerie de la colonne se reconnaît")
     }
 
     func test_resolve_library_halfHeightFromIOS17_fullScreenBefore() {
@@ -162,7 +184,7 @@ final class ComposerOpeningPlanTests: XCTestCase {
         let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(hote.contains("sceneServesCapture: sceneServesCapture"), "une citation n'arme rien")
         XCTAssertTrue(hote.contains("ComposerOpeningLibrarySheet(isPresented: $showsOpeningLibrary"))
-        XCTAssertTrue(hote.contains("closeOpeningLibraryForPick()"), "choisir ferme la feuille et rend la scène")
+        XCTAssertTrue(hote.contains("closeOpeningLibraryForPick(count: items.count)"), "choisir ferme la feuille et rend la scène")
         let feuille = try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerOpeningLibrarySheet.swift")
         XCTAssertTrue(feuille.contains(".photosPickerStyle(.inline)"))
         XCTAssertTrue(hote.contains("capturing: sceneCapture.holdStartedAt != nil"),
