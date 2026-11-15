@@ -62,10 +62,20 @@ const TALKIE_INCOMING_FLOORS: Readonly<Record<PushRoutingClient, string | null>>
   ios: '1.1.7', 'android-native': null, 'android-shell': null, web: null,
 };
 
+/**
+ * `battery_pull` (#14147) : le réveil SILENCIEUX qui demande au téléphone de relever sa batterie maintenant. Un client
+ * qui ne sait pas relever n'en ferait rien (iOS) ou une bannière vide (Android data-only) : aucun client publié ne le
+ * route encore, chaque lot client pose ici sa première version. La demande part aussi par la socket, sans plancher.
+ */
+const BATTERY_PULL_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
+  ios: null, 'android-native': null, 'android-shell': null, web: null,
+};
+
 export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['game_photo_moment', { ios: null, 'android-native': null, 'android-shell': '2.23.0', web: '2.23.0' }],
   ['bring_stopped', BRING_STOPPED_FLOORS],
   ['talkie_incoming', TALKIE_INCOMING_FLOORS],
+  ['battery_pull', BATTERY_PULL_FLOORS],
 ]);
 
 const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.(app|android)(\.|$)/;

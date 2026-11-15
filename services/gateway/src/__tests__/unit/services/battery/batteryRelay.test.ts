@@ -16,6 +16,8 @@ import {
   batterySnapshotFor,
   batteryStateFor,
   captureBatteryAccess,
+  captureBatteryAudience,
+  refreshBatteryAudience,
   refreshBatteryBetween,
   reportBattery,
   sweepBatteryOff,
@@ -92,6 +94,7 @@ function monde(options: { readonly settings?: readonly Row[]; readonly enConvers
   return {
     deps,
     settings,
+    world,
     emissions,
     pushes,
     conversing,
@@ -294,5 +297,30 @@ describe('le rattrapage et le rafraîchissement quand le lien change', () => {
     m.settings.rows.push({ ownerId: EMETTEUR, otherId: PROCHE, batteryShared: true });
     await refreshBatteryBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, before: avantProche });
     expect(m.vers(PROCHE).map((e) => e.event)).toEqual([SERVER_EVENTS.BATTERY_CHANGED]);
+  });
+});
+
+describe('la coupure globale de l\'émetteur', () => {
+  it('efface chez chaque lecteur qui voyait, et seulement chez lui ; la reprise fait remonter l\'état', async () => {
+    const m = monde();
+    await m.releve(20);
+    m.emissions.length = 0;
+    const users = (m.world.prisma as unknown as { user: { rows: Row[] } }).user.rows;
+    const emetteur = users.find((row) => row.id === EMETTEUR)!;
+
+    const avant = await captureBatteryAudience(m.deps, EMETTEUR);
+    emetteur.batterySharingDisabledAt = new Date(T0);
+    await refreshBatteryAudience(m.deps, { emitterId: EMETTEUR, before: avant });
+    expect(m.emissions.map((e) => [e.room, e.event]).sort()).toEqual(
+      [SANG, PROCHE_CONSENTI].map((id) => [ROOMS.user(id), SERVER_EVENTS.BATTERY_CLEARED]).sort(),
+    );
+
+    m.emissions.length = 0;
+    const coupe = await captureBatteryAudience(m.deps, EMETTEUR);
+    emetteur.batterySharingDisabledAt = null;
+    await refreshBatteryAudience(m.deps, { emitterId: EMETTEUR, before: coupe });
+    expect(m.emissions.map((e) => [e.room, e.event]).sort()).toEqual(
+      [SANG, PROCHE_CONSENTI].map((id) => [ROOMS.user(id), SERVER_EVENTS.BATTERY_CHANGED]).sort(),
+    );
   });
 });

@@ -319,3 +319,21 @@ export async function refreshBatteryBetween(
     else if (!after && before) emitCleared(deps, readerId, emitterId);
   }
 }
+
+/** Les lecteurs qui voient l'épisode de `emitterId` MAINTENANT — à capturer avant une coupure globale. */
+export async function captureBatteryAudience(deps: BatteryRelayDeps, emitterId: string): Promise<ReadonlySet<string>> {
+  if (!servedBatteryState(emitterId, await readBatteryRecord(deps.cache, emitterId))) return new Set();
+  return new Set((await audienceOf(deps, emitterId)).keys());
+}
+
+/**
+ * Rejoue l'audience ENTIÈRE d'un émetteur après sa coupure ou sa reprise globale : `changed` vers
+ * qui gagne l'accès, `cleared` vers qui voyait (`before`) et ne voit plus.
+ */
+export async function refreshBatteryAudience(deps: BatteryRelayDeps, params: { readonly emitterId: string; readonly before: ReadonlySet<string> }): Promise<void> {
+  const state = servedBatteryState(params.emitterId, await readBatteryRecord(deps.cache, params.emitterId));
+  if (!state) return;
+  const after = await audienceOf(deps, params.emitterId);
+  [...after.keys()].filter((id) => !params.before.has(id)).forEach((id) => emitChanged(deps, id, state));
+  [...params.before].filter((id) => !after.has(id)).forEach((id) => emitCleared(deps, id, params.emitterId));
+}
