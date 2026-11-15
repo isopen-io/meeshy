@@ -167,7 +167,10 @@ export function useDialogExit(ref: RefObject<HTMLDialogElement | null>, { kind }
   useLayoutEffect(() => {
     const dialog = ref.current;
     if (dialog === null) return undefined;
-    const onCancel = () => {
+    /* Un Échap que le dialogue refuse (son `onCancel` pose `preventDefault`, posé avant cet écouteur) le
+       laisse ouvert : un fantôme se peindrait à côté de lui. */
+    const onCancel = (event: Event) => {
+      if (event.defaultPrevented) return;
       leaveDialogAsGhost(dialog, kindRef.current);
     };
     dialog.addEventListener('cancel', onCancel);

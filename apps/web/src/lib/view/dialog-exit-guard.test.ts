@@ -40,7 +40,7 @@ const dryExits = (): readonly string[] =>
  * jouer sa sortie, les mêmes que l'audit sur ec7974abaa. `Sheet`, `ConfirmDialog` et `SendSheetFrame` en
  * sortent avec ce lot : 7.
  */
-const PLAFOND = 7;
+const PLAFOND = 5;
 
 const read = (path: string): string => stripComments(readFileSync(join(SRC, path), 'utf8'));
 
