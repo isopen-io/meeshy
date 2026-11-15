@@ -349,11 +349,10 @@ extension StoryCanvasUIView {
             lastBgSnapX = nil
             lastBgSnapY = nil
 
-            // Bring-to-front au touch : couvre tap simple ET début de drag.
-            // Skip pour le background media (toujours derrière les fg) — le
-            // helper filtre déjà mais on est explicite ici pour la lisibilité.
+            // Bring-to-front au touch (tap ET début de drag), jamais le fond ; ses cibles à l'hôte (#18712).
             if id != backgroundMediaObjectId {
                 bringForegroundToFront(id: id)
+                onItemDragged?(.began(id: id, finger: convert(location, to: nil), start: CGPoint(x: sx, y: sy)))
             }
         case .changed:
             guard let id = manipulatedItemId, bounds.size != .zero else { return }
@@ -376,11 +375,8 @@ extension StoryCanvasUIView {
             // rebuildLayers et appliqué via applyContentTransform sur le
             // contentLayer du bg.
             //
-            // Sensibilité réduite (× 0.5) pour le pan BG : le geste s'applique
-            // au repositionnement d'une image qui couvre déjà tout le canvas,
-            // donc un déplacement 1:1 du doigt à la position normalisée est
-            // trop sensible pour ajuster finement le cadrage (user feedback
-            // 2026-05-29 : « avec une faible sensibilité »).
+            // Sensibilité réduite (× 0.5) pour le pan BG : un déplacement 1:1 d'une image qui couvre
+            // tout le canvas est trop sensible pour cadrer finement (user feedback 2026-05-29).
             //
             // Snap de CADRAGE : contrairement au
             // foreground (rails 0.18/0.25/0.5/0.75/0.82), le bg s'accroche au
@@ -400,6 +396,7 @@ extension StoryCanvasUIView {
                 return
             }
 
+            onItemDragged?(.moved(finger: convert(location, to: nil)))
             let rawX = clamp(dragStartSlideX + dxNorm)
             let rawY = clamp(dragStartSlideY + dyNorm)
             let (snappedX, didSnapX) = snap(rawX)
@@ -409,6 +406,7 @@ extension StoryCanvasUIView {
             slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            onItemDragged?(recognizer.state == .ended ? .ended(finger: convert(location, to: nil)) : .cancelled)
             releaseParkedInlineEditor()
             manipulatedItemId = nil
             lastBgSnapX = nil

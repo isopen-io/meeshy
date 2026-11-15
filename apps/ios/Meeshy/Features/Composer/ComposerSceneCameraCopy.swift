@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyUI
 
 /// **Le vocabulaire du viseur** (#4080, vue `2b`).
 ///
@@ -236,6 +237,15 @@ enum ComposerCameraCopy {
     /// Le voile du viseur sous la galerie ouverte (#18709) : le toucher la referme.
     static var closeLibrary: String {
         String(localized: "composer.camera.library.close", defaultValue: "Fermer la galerie", table: "ComposerCamera", bundle: .main)
+    }
+
+    /// Les cibles du glisser d'un objet posé (#18712) : la copie en haut, la poubelle en bas.
+    static var dragTargets: MeeshyDragTargetsLabels {
+        MeeshyDragTargetsLabels(
+            duplicate: String(localized: "composer.camera.drag.duplicate", defaultValue: "Dupliquer", table: "ComposerCamera", bundle: .main),
+            duplicateHot: String(localized: "composer.camera.drag.duplicate.hot", defaultValue: "Lâcher pour dupliquer", table: "ComposerCamera", bundle: .main),
+            remove: String(localized: "composer.camera.drag.remove", defaultValue: "Retirer", table: "ComposerCamera", bundle: .main),
+            removeHot: String(localized: "composer.camera.drag.remove.hot", defaultValue: "Lâcher pour retirer", table: "ComposerCamera", bundle: .main))
     }
 
     /// Sous le cadenas, pendant la prise tenue (A9).

@@ -98,8 +98,9 @@ nonisolated enum ComposerViewfinderScene {
     }
 
     /// Les objets prennent le doigt viseur armé seulement : une tenue ou une prise garde le sien.
-    /// En retouche ils se montrent sans le prendre : le doigt y cadre la prise et ses outils.
-    static func objectsTakeTouches(stage: ComposerSceneCameraStage, holding: Bool, editing: Bool = false) -> Bool {
-        stage == .armed && !holding && !editing
+    /// En retouche aussi (#18712) : chaque objet posé sur la prise se déplace au doigt, un toucher
+    /// à vide y cadre toujours la prise.
+    static func objectsTakeTouches(stage: ComposerSceneCameraStage, holding: Bool) -> Bool {
+        stage == .armed && !holding
     }
 }
