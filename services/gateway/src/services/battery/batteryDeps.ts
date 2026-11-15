@@ -3,7 +3,8 @@
  * partagé du processus résolu à l'usage, l'horloge, la porte d'émission, le contexte « en
  * conversation », le push dédié, le téléphone suivi et le réveil silencieux du relevé.
  * Les routes qui changent un lien, un consentement ou un blocage rejouent la projection de la
- * paire par {@link refreshBatteryAfter} : un échec n'arrête jamais le geste.
+ * paire par {@link refreshBatteryAfter} — batterie ET téléphone injoignable (#18737) : un échec
+ * n'arrête jamais le geste.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { BATTERY_NOTIFICATION_TYPE, BATTERY_PULL_PUSH_TYPE } from '@meeshy/shared/types/battery';
@@ -19,6 +20,8 @@ import { batteryPusherOf } from './batteryPush';
 import type { BatteryPullDeps } from './batteryPull';
 import { captureBatteryAccess, refreshBatteryBetween, type BatteryPairAccess, type BatteryPushPair, type BatteryRelayDeps } from './batteryRelay';
 import type { BatteryCache } from './batteryStore';
+import { phoneReachabilityRelayDepsOf } from '../phoneReachability/phoneReachabilityDeps';
+import { capturePhoneReachabilityAccess, refreshPhoneReachabilityBetween } from '../phoneReachability/phoneReachabilityRelay';
 
 /** Sans Redis (développement, panne), l'ensemble des émetteurs surveillés vit dans le processus. */
 const localSets = new Map<string, Set<string>>();
@@ -169,22 +172,43 @@ export function batteryPullDepsOf(params: { readonly prisma: PrismaClient; reado
 
 type RefreshParams = { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined; readonly report: (error: unknown) => void };
 
+/**
+ * Ce que la paire voit de l'ÉTAT DU TÉLÉPHONE de l'autre, AVANT un changement : la batterie, et
+ * l'injoignabilité du téléphone (#18737), dont les clés portent le préfixe `phone:`. Les routes qui
+ * changent un lien, un consentement ou un blocage n'appellent qu'un couple capture / rafraîchissement.
+ */
+const PHONE_PREFIX = 'phone:';
+
 /** À appeler AVANT une baisse, un blocage ou un retrait ; une lecture ratée rend une capture vide. */
 export async function captureBatteryBefore(params: RefreshParams, pair: { readonly userA: string; readonly userB: string }): Promise<BatteryPairAccess> {
-  try {
-    return await captureBatteryAccess(batteryRelayDepsOf(params), pair);
-  } catch (error) {
-    params.report(error);
-    return new Map();
-  }
+  const [battery, phone] = await Promise.all([
+    captureBatteryAccess(batteryRelayDepsOf(params), pair).catch((error: unknown) => {
+      params.report(error);
+      return new Map<string, boolean>();
+    }),
+    capturePhoneReachabilityAccess(phoneReachabilityRelayDepsOf(params), pair)
+      .catch((error: unknown) => {
+        params.report(error);
+        return new Map<string, boolean>();
+      }),
+  ]);
+  return new Map([...battery, ...[...phone].map(([key, seen]) => [`${PHONE_PREFIX}${key}`, seen] as const)]);
 }
 
 export async function refreshBatteryAfter(
   params: RefreshParams,
   pair: { readonly userA: string; readonly userB: string; readonly before?: BatteryPairAccess },
 ): Promise<void> {
+  const before = pair.before ?? new Map<string, boolean>();
+  const battery = new Map([...before].filter(([key]) => !key.startsWith(PHONE_PREFIX)));
+  const phone = new Map([...before].filter(([key]) => key.startsWith(PHONE_PREFIX)).map(([key, seen]) => [key.slice(PHONE_PREFIX.length), seen] as const));
   try {
-    await refreshBatteryBetween(batteryRelayDepsOf(params), pair);
+    await refreshBatteryBetween(batteryRelayDepsOf(params), { userA: pair.userA, userB: pair.userB, before: battery });
+  } catch (error) {
+    params.report(error);
+  }
+  try {
+    await refreshPhoneReachabilityBetween(phoneReachabilityRelayDepsOf(params), { userA: pair.userA, userB: pair.userB, before: phone });
   } catch (error) {
     params.report(error);
   }

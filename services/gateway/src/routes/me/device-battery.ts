@@ -4,6 +4,8 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { batteryRelayDepsOf } from '../../services/battery/batteryDeps';
 import { captureBatteryAudience, forgetBatteryOf, refreshBatteryAudience, reportBattery } from '../../services/battery/batteryRelay';
 import { readBatteryEmitterSettings, writeBatteryEmitterSettings } from '../../services/battery/batterySettings';
+import { phoneReachabilityRelayDepsOf } from '../../services/phoneReachability/phoneReachabilityDeps';
+import { notePhoneAlive } from '../../services/phoneReachability/phoneReachabilityRelay';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
@@ -41,6 +43,9 @@ export default async function deviceBatteryMeRoutes(fastify: FastifyInstance): P
     try {
       const sessionId = sessionIdOfRequest(request);
       const ack = await reportBattery(relayOf(), { emitterId: request.user!.userId, sessionId, payload: request.body });
+      // #18737 — un relevé du téléphone suivi est un signe de vie : il n'est pas injoignable.
+      void notePhoneAlive(phoneReachabilityRelayDepsOf({ prisma: fastify.prisma, io: relationIoOf(fastify) }), { userId: request.user!.userId, sessionId })
+        .catch((error: unknown) => logError(fastify.log, 'Phone sign of life not noted after battery report:', error));
       return sendBatteryAck(reply, ack);
     } catch (error) {
       logError(fastify.log, 'Battery report error:', error);

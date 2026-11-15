@@ -28,6 +28,7 @@ import {
   type NowPlayingRelayDeps,
 } from '../nowPlaying/nowPlayingRelay';
 import { reconcileBatteryOfAccount, type BatteryRelayDeps } from '../battery/batteryRelay';
+import { reconcilePhoneReachabilityOfAccount, type PhoneReachabilityRelayDeps } from '../phoneReachability/phoneReachabilityRelay';
 import { RITUAL_SHARE_FEATURE } from './relationConsent';
 import { ACCOUNT_STATE_SELECT, isUsableTeamAccount } from './usableAccount';
 
@@ -73,18 +74,20 @@ export async function teamMayGrantShares(
  * (`now-playing:cleared`), au lieu d'y rester jusqu'à son expiration (15 min) — revue du 2026-11-13.
  * Avec `battery`, la batterie qu'un ex-collègue voyait — ou que ce compte voyait d'un ex-collègue
  * — s'efface de même (`battery:cleared`), et ses notifications de batterie se retirent (#14147).
+ * Avec `phoneReachability`, l'injoignabilité du téléphone suit le même chemin (`phone:reachable`, #18737).
  * Une lecture qui échoue LÈVE : l'appelant journalise, et la loi continue de refuser.
  */
 export type TeamShareRevocationDb = SharesBeyondLinkDb & Pick<PrismaClient, 'user'>;
 
 export async function revokeTeamSharesOf(
   prisma: TeamShareRevocationDb,
-  params: { readonly userId: string; readonly now: Date; readonly nowPlaying?: NowPlayingRelayDeps; readonly battery?: BatteryRelayDeps },
+  params: { readonly userId: string; readonly now: Date; readonly nowPlaying?: NowPlayingRelayDeps; readonly battery?: BatteryRelayDeps; readonly phoneReachability?: PhoneReachabilityRelayDeps },
 ): Promise<void> {
   const account = await prisma.user.findUnique({ where: { id: params.userId }, select: { role: true, ...ACCOUNT_STATE_SELECT } });
   if (isUsableTeamAccount(account)) return;
   const cuts = await withdrawSharesTheLinkDoesNotOpen(prisma, { userId: params.userId, at: params.now });
   if (params.battery) await reconcileBatteryOfAccount(params.battery, params.userId);
+  if (params.phoneReachability) await reconcilePhoneReachabilityOfAccount(params.phoneReachability, params.userId);
   const nowPlaying = params.nowPlaying;
   if (!nowPlaying) return;
   const before = new Map<string, NowPlayingReaderAccess>(cuts.map((cut) => [nowPlayingDirectionKey(cut.emitterId, cut.readerId), cut.listening]));

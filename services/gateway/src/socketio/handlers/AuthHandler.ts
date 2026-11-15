@@ -37,6 +37,7 @@ import { LIVE_CALL_PARTICIPATION } from '../../services/calls/liveCallParticipat
 import { PresenceForeground } from '../presence-foreground';
 import { refuseSocketBelowAppVersionFloor } from '../../middleware/app-version-floor';
 import { noteBatteryAlive, sessionIdOfSocket } from './BatteryHandler';
+import { notePhoneSignOfLife } from './PhoneReachabilityHandler';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -466,6 +467,8 @@ export class AuthHandler {
     }
     // #14147 — le téléphone suivi présumé éteint qui revient est « rallumé », premier socket ou non.
     noteBatteryAlive({ userId: user.id, sessionId: sessionIdOfSocket(socket) });
+    // #18737 — et la socket du téléphone suivi est son signe de vie : il n'est pas injoignable.
+    notePhoneSignOfLife({ userId: user.id, sessionId: sessionIdOfSocket(socket) });
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,

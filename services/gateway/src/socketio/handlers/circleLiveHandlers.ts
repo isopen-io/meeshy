@@ -1,13 +1,14 @@
 /**
  * Les portes socket du DIRECT entre Proches et Sangs (jalon 2 des cercles, #13925) : le
  * talkie (#13935), l'écoute partagée (#13934), le partage temporaire de position (#16980) et la séance « ensemble »
- * (#17012) et la batterie (#14147). Un seul site d'enregistrement, pour que
+ * (#17012), la batterie (#14147) et le balayage du téléphone injoignable (#18737). Un seul site d'enregistrement, pour que
  * le gestionnaire de sockets n'en grossisse pas d'une ligne par feature.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ServerEmitIOWithRooms } from '../serverEmit';
 import { batteryHandlerDeps, listenBattery } from './BatteryHandler';
 import { listenNowPlaying, nowPlayingHandlerDeps } from './NowPlayingHandler';
+import { ensurePhoneReachabilitySweep } from './PhoneReachabilityHandler';
 import { listenSharedLocation, sharedLocationHandlerDeps } from './SharedLocationHandler';
 import { listenTalkie, talkieHandlerDeps } from './TalkieHandler';
 import { listenTogether, togetherHandlerDeps } from './TogetherHandler';
@@ -28,4 +29,5 @@ export function listenCircleLive(
   listenSharedLocation(socket, sharedLocationHandlerDeps(params));
   listenTogether(socket, togetherHandlerDeps(params));
   listenBattery(socket, batteryHandlerDeps(params));
+  ensurePhoneReachabilitySweep(params);
 }
