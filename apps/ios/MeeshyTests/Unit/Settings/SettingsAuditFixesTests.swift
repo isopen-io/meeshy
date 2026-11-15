@@ -121,4 +121,50 @@ final class SettingsAuditFixesTests: XCTestCase {
         let sheet = try code("Meeshy/Features/Settings/Views/EncryptedDevices/EncryptedDeviceSheet.swift")
         XCTAssertTrue(sheet.contains("value: shown != nil)"))
     }
+
+    // MARK: - Recette du 2026-11-15 et contre-audit (#18589)
+
+    func test_rowTitles_onTwoLines_alignLeading_neverCentered() throws {
+        XCTAssertTrue(try code("Meeshy/Features/Settings/Views/SettingsSectionCard.swift").contains(".multilineTextAlignment(.leading)"),
+                      "« Utilisateurs bloqués », « Exporter mes données » se centraient en grand texte")
+        let fold = try code("Meeshy/Features/Settings/Views/SettingsAnnexFold.swift")
+        XCTAssertTrue(fold.contains(".multilineTextAlignment(.leading)"), "le résumé du pli se centrait")
+        XCTAssertTrue(fold.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+    }
+
+    func test_interfaceLanguageMenu_label_reachesTheTapTarget() throws {
+        XCTAssertTrue(try code("Meeshy/Features/Settings/Views/SettingsInterfaceLanguageMenu.swift").contains(".meeshyTapTarget()"),
+                      "le libellé du menu ne faisait que 20 pt de haut")
+    }
+
+    func test_settingsSheet_declaresItselfToTheSurfaceRegistry() throws {
+        XCTAssertTrue(try code("Meeshy/Features/Settings/Views/SettingsSheetContent.swift").contains("content.closesForConversationOpening(.sheet)"))
+    }
+
+    func test_phoneFlow_underReducedMotion_stillWalksEveryStep() {
+        let flow = PhoneChangeFlowModel()
+        flow.reducesMotion = true
+
+        flow.beginEditing()
+        XCTAssertEqual(flow.step, .editing)
+        flow.cancel()
+        XCTAssertEqual(flow.step, .idle)
+    }
+
+    func test_phoneFlow_animatesThroughTheMotionHelper_neverARawSpring() throws {
+        let model = try code("Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift")
+        XCTAssertFalse(model.contains("withAnimation"), "les étapes jouaient en plein sous « Réduire les animations »")
+        XCTAssertTrue(model.contains("reduceMotion: reducesMotion"))
+        XCTAssertTrue(try code("Meeshy/Features/Settings/Views/SecurityPhoneSection.swift").contains("phoneFlow.reducesMotion = reduceMotion"))
+    }
+
+    func test_securityErrors_fadeIn_insteadOfJumping() throws {
+        let phone = try code("Meeshy/Features/Settings/Views/SecurityPhoneSection.swift")
+        XCTAssertTrue(phone.contains("reduced: MeeshyMotion.reducedFade, value: phoneFlow.error)"))
+        let email = try code("Meeshy/Features/Settings/Views/SecurityEmailSection.swift")
+        XCTAssertTrue(email.contains("reduced: MeeshyMotion.reducedFade, value: emailError)"))
+        for source in [phone, email] {
+            XCTAssertTrue(source.contains(".transition(.opacity)"))
+        }
+    }
 }

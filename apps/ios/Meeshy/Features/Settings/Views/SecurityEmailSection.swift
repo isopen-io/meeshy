@@ -47,8 +47,10 @@ struct SecurityEmailSection: View {
                         .foregroundStyle(MeeshyColors.error)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .padding(.bottom, MeeshySpacing.smPlus)
+                        .transition(.opacity)
                 }
             }
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: emailError)
             .background(SettingsSectionBackground(tint: accentColor))
         }
         .onDisappear {

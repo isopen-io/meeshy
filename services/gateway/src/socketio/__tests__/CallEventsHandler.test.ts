@@ -1274,7 +1274,7 @@ describe('CallEventsHandler', () => {
       const offerSignal = { callId: CALL_ID, signal: { type: 'offer', from: USER_ID, to: 'target-user-id' } };
       await socket._trigger('call:signal', offerSignal, ack);
 
-      expect(ack).toHaveBeenCalledWith({ success: false });
+      expect(ack).toHaveBeenCalledWith({ success: false, error: { code: 'TARGET_NOT_FOUND', message: 'Target participant has no active connection' } });
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'TARGET_NOT_FOUND' }));
     });
 

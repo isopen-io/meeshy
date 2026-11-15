@@ -278,6 +278,10 @@
     <string name="kit_anchored_sheet_height_expanded">expanded</string>
     <string name="kit_anchored_sheet_height_reduced">collapsed</string>
     <string name="kit_color_dots_position">Color %1$s of %2$s</string>
+    <string name="kit_field_busy">In progress</string>
+    <string name="kit_field_clear">Clear</string>
+    <string name="kit_field_count">%1$s characters of %2$s</string>
+    <string name="kit_field_limit_reached">Character limit reached</string>
     <string name="kit_progress_ring_busy">In progress</string>
     <string name="language_strip_more">Other languages</string>
     <string name="lentille_mode_menu_selected">selected</string>

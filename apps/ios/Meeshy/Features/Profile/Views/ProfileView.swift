@@ -27,7 +27,6 @@ struct ProfileView: View {
     @State private var isEditing = false
     @State private var isSaving = false
     @State private var errorMessage: String?
-    @State private var showStats = false
     @State private var securityFocus: SettingsFocus?
     @State private var stats: UserStats?
     @State private var showSystemLanguagePicker = false
@@ -84,11 +83,8 @@ struct ProfileView: View {
             }
         }
         .background(InteractivePopEnabler())
-        .sheet(isPresented: $showStats) {
-            UserStatsView()
-        }
         .sheet(item: $securityFocus) { focus in
-            SecurityView(focus: focus).environmentObject(authManager)
+            SecurityView(focus: focus).environmentObject(authManager).closesForConversationOpening(.sheet)
         }
         .onAppear { loadUserData() }
         .task { await loadStats() }
@@ -291,27 +287,23 @@ struct ProfileView: View {
 
     private var bannerBlock: some View {
         ZStack(alignment: .bottomTrailing) {
-            bannerImage
-                .frame(height: 120)
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                .zoomTransitionSource(id: ProfileOwnBanner.openablePhoto(of: user) ?? "", in: photoZoomSpace)
-                .onTapGesture { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
-                .accessibilityElement()
-                .accessibilityLabel(ProfileImageCopy.bannerLabel)
-                .accessibilityHint(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? ProfileImageCopy.openFullscreenHint : "")
-                .accessibilityAddTraits(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? .isButton : [])
-                .accessibilityAction { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
-                .overlay {
-                    // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
-                    // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
-                    if !isEditing, let userId = user?.id {
-                        GameBannerBadge(userId: userId)
-                            .allowsHitTesting(false)
-                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                            .transition(.opacity)
+            photoButton(ProfileOwnBanner.openablePhoto(of: user)) {
+                bannerImage
+                    .frame(height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                    .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                    .overlay {
+                        // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
+                        // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
+                        if !isEditing, let userId = user?.id {
+                            GameBannerBadge(userId: userId)
+                                .allowsHitTesting(false)
+                                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                                .transition(.opacity)
+                        }
                     }
-                }
+            }
+            .accessibilityLabel(ProfileImageCopy.bannerLabel)
 
             if isEditing {
                 PhotosPicker(selection: $bannerItem, matching: .images) {
@@ -337,16 +329,13 @@ struct ProfileView: View {
 
     private var avatarBlock: some View {
         ZStack(alignment: .bottomTrailing) {
-            ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)
-            .overlay(
-                Circle()
-                    .stroke(theme.backgroundGradient, lineWidth: 4)
-            )
-            .zoomTransitionSource(id: user?.avatar ?? "", in: photoZoomSpace)
-            .onTapGesture { openFullscreen(user?.avatar) }
-            .accessibilityHint(opensFullscreen(user?.avatar) ? ProfileImageCopy.openFullscreenHint : "")
-            .accessibilityAddTraits(opensFullscreen(user?.avatar) ? .isButton : [])
-            .accessibilityAction { openFullscreen(user?.avatar) }
+            photoButton(user?.avatar) {
+                ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)
+                .overlay(
+                    Circle()
+                        .stroke(theme.backgroundGradient, lineWidth: 4)
+                )
+            }
 
             if isEditing {
                 let textPrimary = theme.textPrimary
@@ -473,14 +462,28 @@ struct ProfileView: View {
         }
     }
 
+    /// Mon activité est un écran de la pile, comme depuis toute autre porte : il entre dans l'historique et, sur iPad,
+    /// dans le panneau de droite.
     private func openActivity() {
-        showStats = true
+        router.push(.userStats)
     }
 
     /// L'entrée du tableau de bord des streaks & badges (#5698) — sous mon activité, là où l'utilisateur cherche « où
     /// j'en suis ». #10093 — plus de carte de jeu sur le profil : le niveau et le rang vivent sur la bannière.
     private var progressionEntry: some View {
         ProfileProgressionEntry { router.push(.progression) }
+    }
+
+    /// La bannière ou la photo, touchable quand elle s'ouvre en plein écran : elle s'enfonce sous le doigt (voile seul
+    /// sous « réduire les animations ») et s'agrandit depuis l'endroit touché. Sinon, ni toucher ni trait bouton.
+    private func photoButton<Label: View>(_ url: String?, @ViewBuilder label: () -> Label) -> some View {
+        let opens = opensFullscreen(url)
+        return Button { openFullscreen(url) } label: { label() }
+            .buttonStyle(PressableButtonStyle())
+            .allowsHitTesting(opens)
+            .zoomTransitionSource(id: url ?? "", in: photoZoomSpace)
+            .accessibilityHint(opens ? ProfileImageCopy.openFullscreenHint : "")
+            .accessibilityRemoveTraits(opens ? [] : .isButton)
     }
 
     /// Ouvre la bannière ou la photo en plein écran — hors édition, où toucher l'image sert à la changer.

@@ -33,6 +33,9 @@ export const config = '/api/v1/relations/config';
 /** GET /api/v1/relations/locations */
 export const locations = '/api/v1/relations/locations';
 
+/** GET /api/v1/relations/locations/mine */
+export const locationsMine = '/api/v1/relations/locations/mine';
+
 /** GET /api/v1/relations/now-playing */
 export const nowPlaying = '/api/v1/relations/now-playing';
 

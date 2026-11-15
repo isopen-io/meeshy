@@ -111,6 +111,17 @@ describe('/login?methode=password — e-mail inconnu ⇒ l’écran du code (#80
     expect(pendingVerificationFor('pseudo')).toBeNull();
   });
 
+  test('le refus entre en fondu en glissant depuis le haut, comme sur iOS (#18322)', async () => {
+    const stub = loginStub({ ok: false, status: 401, error: 'Invalid credentials', code: 'INVALID_CREDENTIALS' });
+    const el = mount(stub.login);
+
+    await signInWith(el, 'pseudo', 'secret-1');
+
+    const refusal = el.querySelector('[role="alert"]') as HTMLElement;
+    expect(refusal.hasAttribute('data-layer-motion')).toBe(true);
+    expect(refusal.style.getPropertyValue('--layer-shift')).toMatch(/^0 -/);
+  });
+
   test('le jeton d’attente (#8083) est retenu en MÉMOIRE pour l’écran du code — jamais dans l’adresse', async () => {
     const stub = loginStub({
       ok: true,

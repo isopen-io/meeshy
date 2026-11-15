@@ -89,39 +89,25 @@ type Divergence = {
 };
 
 /**
- * Les divergences CONNUES au 2026-11-14, chacune avec son issue et ce que la
- * mesure a dit de sa gravité. Ce n'est pas un baseline : l'invariant
- * « l'inventaire ne ment pas » rougit sur une entrée qui ne diverge PLUS, donc
- * une correction force sa sortie.
+ * **L'INVENTAIRE EST VIDE DEPUIS LE 2026-11-14 (#18115), ET C'EST UN ÉTAT À
+ * DÉFENDRE, PAS UN ÉTAT ATTEINT.** Quand ce cliquet tombe, la réparation est de
+ * compléter le contrat ET ses trois miroirs ET l'émetteur, ou de retirer le
+ * champ et réécrire son consommateur — jamais d'ajouter une ligne ici. #18124
+ * énonce les deux branches et dit pourquoi elles ne s'arbitrent pas de la même
+ * façon : un champ que le miroir LIT se complète, un champ que personne ne lit
+ * se retire.
  *
- * Aucune n'est corrigeable sans une décision hors de ce lot : soit compléter le
- * contrat ET ses trois miroirs ET l'émetteur, soit retirer le champ et réécrire
- * son consommateur. #18124 énonce les deux branches et dit pourquoi elles ne
- * s'arbitrent pas de la même façon.
+ * Ce n'est pas un baseline : l'invariant « l'inventaire ne ment pas » rougit sur
+ * une entrée qui ne diverge PLUS, donc une correction force sa sortie. Les
+ * quatre dernières entrées sont parties ainsi — trois en retirant la jumelle
+ * Kotlin MORTE de `message:attachment-updated` (#18115), une en POSANT le champ
+ * que le miroir vivant lisait déjà (#18124).
+ *
+ * Une entrée qu'on y ajouterait doit porter son issue ET ce que la mesure a dit
+ * de sa gravité : un champ mort laisse l'écran tel quel, un champ mal nommé en
+ * ÉCRASE la valeur juste (`likeCount` / `likesCount`, #18157).
  */
-const DIVERGENCES_CONNUES: readonly (Divergence & { readonly issue: string; readonly note: string })[] = [
-  {
-    className: 'AttachmentUpdatedEvent',
-    field: 'url',
-    events: ['message:attachment-updated'],
-    issue: '#18115',
-    note: "non lu — la jumelle Kotlin de cet événement est morte (#18115), et ces trois champs sont ce qui en reste.",
-  },
-  {
-    className: 'AttachmentUpdatedEvent',
-    field: 'status',
-    events: ['message:attachment-updated'],
-    issue: '#18115',
-    note: 'non lu — voir ci-dessus.',
-  },
-  {
-    className: 'AttachmentUpdatedEvent',
-    field: 'thumbnailUrl',
-    events: ['message:attachment-updated'],
-    issue: '#18115',
-    note: 'non lu — voir ci-dessus.',
-  },
-];
+const DIVERGENCES_CONNUES: readonly (Divergence & { readonly issue: string; readonly note: string })[] = [];
 
 const kotlin = readKotlin();
 const contract = readContract();

@@ -136,7 +136,10 @@
   height: 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--ios-indigo-300) 20%, transparent);
-  transition: flex-grow 500ms var(--onb-spring), background-color 300ms ease;
+  /* La largeur change d'un coup ; le segment rejoint sa nouvelle boîte par
+     translate et scale (`ProgressSegments`, #18322, M6). */
+  transform-origin: 0 50%;
+  transition: background-color 300ms ease;
 }
 
 .onb-progress-seg-on {
@@ -240,7 +243,7 @@
   font-size: 1.0625rem;
   font-weight: 700;
   box-shadow: 0 8px 22px color-mix(in srgb, var(--ios-indigo-500) 42%, transparent);
-  transition: transform 180ms var(--onb-spring), box-shadow 200ms ease, opacity 200ms ease;
+  transition: transform 180ms var(--onb-spring), opacity 200ms ease;
 }
 
 .onb-secondary,
@@ -836,20 +839,25 @@
 }
 
 /* 3 — l'anneau de story */
-@property --onb-ring {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 360deg;
-}
-
+/* L'anneau vit sur sa propre couche, qui tourne et fond (#18322, M6) : son
+ * fond n'est jamais repeint pendant la révélation. */
 .onb-story-ring {
-  --onb-ring: 360deg;
+  position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
   width: 108px;
   height: 108px;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, var(--ios-indigo-500), var(--ios-purple-500), var(--ios-warning) var(--onb-ring), color-mix(in srgb, var(--ios-indigo-300) 18%, transparent) var(--onb-ring));
+}
+
+.onb-story-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, var(--ios-indigo-500), var(--ios-purple-500), var(--ios-warning));
   animation: onb-ring 1600ms cubic-bezier(0.3, 0.8, 0.3, 1) 300ms both;
 }
 
@@ -1088,7 +1096,8 @@
 
 @keyframes onb-ring {
   from {
-    --onb-ring: 0deg;
+    rotate: -90deg;
+    opacity: 0;
   }
 }
 
@@ -1156,7 +1165,7 @@
     transform: rotateY(180deg);
   }
 
-  .onb-story-ring {
+  .onb-story-ring::before {
     animation: none;
   }
 

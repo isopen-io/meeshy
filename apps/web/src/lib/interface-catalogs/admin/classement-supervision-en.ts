@@ -2,7 +2,6 @@ import type { AdminCatalogFragment } from './fragment';
 import type fr from './classement-supervision-fr';
 
 const f = {
-  'admin.ranking.subtitle': 'The most active on the platform: members, conversations, messages and links, over the chosen period.',
 
   'admin.ranking.entity.label': 'What to rank',
   'admin.ranking.entity.users': 'Members',
@@ -87,7 +86,6 @@ const f = {
   'admin.ranking.empty.hint.all': 'Nothing has been counted yet for this criterion.',
   'admin.ranking.widen': 'See all time',
 
-  'admin.monitoring.subtitle': 'The health of the platform at a glance, and the real usage of the API addresses.',
   'admin.monitoring.tabs.label': 'Monitoring sections',
   'admin.monitoring.tab.health': 'Health',
   'admin.monitoring.tab.routes': 'Route usage',
@@ -101,7 +99,7 @@ const f = {
   'admin.monitoring.health.issue.redis': 'Redis is not responding: the cache and the rate limits are degraded.',
   'admin.monitoring.health.issue.translator': 'The translation service is unreachable.',
   'admin.monitoring.health.issue.breakersOpen': 'Open circuit breakers: {count}. Calls to these services are refused.',
-  'admin.monitoring.health.issue.breakersHalfOpen': 'Circuit breakers on trial: {count}. They let a few calls through to check that the service has recovered.',
+  'admin.monitoring.health.issue.breakersHalfOpen': 'Circuit breakers on trial: {count}',
 
   'admin.monitoring.gateway.title': 'Gateway',
   'admin.monitoring.gateway.uptime': 'Uptime',
@@ -143,13 +141,13 @@ const f = {
   'admin.monitoring.translator.uptime.caption': 'How long these statistics have been counted.',
 
   'admin.monitoring.breakers.title': 'Circuit breakers',
-  'admin.monitoring.breakers.intro': 'A circuit breaker protects the platform from a failing service: when open, it refuses calls while the service recovers.',
+  'admin.monitoring.breakers.intro': 'They protect the platform from a failing service.',
+  'admin.monitoring.breakers.detail': 'A circuit breaker protects the platform from a failing service: when open, it refuses calls while the service recovers. On trial, it lets a few calls through to check that the service has recovered.',
   'admin.monitoring.breakers.failures': 'Failures',
   'admin.monitoring.breakers.successes': 'Successes',
   'admin.monitoring.breakers.lastFailure': 'Last failure',
   'admin.monitoring.breakers.never': 'No failure',
   'admin.monitoring.breakers.empty': 'No circuit breaker registered',
-  'admin.monitoring.breakers.emptyHint': 'They appear as soon as a protected service is called.',
 
   'admin.monitoring.presence.title': 'Presence',
   'admin.monitoring.presence.total': 'Updates requested',
@@ -164,7 +162,7 @@ const f = {
   'admin.monitoring.routes.limit.label': 'Detail rows',
   'admin.monitoring.routes.limit.option': '{count} rows',
   'admin.monitoring.routes.notInstrumented': 'Measurement is not installed on this instance: the zeros below prove nothing.',
-  'admin.monitoring.routes.saturated': 'Measurement is saturated: {count} samples were not broken down by platform and version. Totals of the watched routes stay exact.',
+  'admin.monitoring.routes.saturated': 'Measurement is saturated: {count} samples not broken down by platform and version; totals of the watched routes stay exact.',
   'admin.monitoring.routes.truncated': '{shown} rows shown out of {total}. Narrow the filter to see the others.',
   'admin.monitoring.routes.observingSince': 'Observing since',
   'admin.monitoring.routes.observedFor': 'Time observed',
@@ -224,7 +222,8 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Other limit reported',
 
   'admin.monitoring.backups.title': 'Backups',
-  'admin.monitoring.backups.hint': 'A full backup — verified database, media, configuration — runs every night; “Next backup” says when. A check at 5 a.m., Paris time, alerts the administrators when something is wrong.',
+  'admin.monitoring.backups.hint': 'A full backup every night.',
+  'admin.monitoring.backups.detail': 'A full backup — verified database, media, configuration — runs every night; “Next backup” says when. A check at 5 a.m., Paris time, alerts the administrators when something is wrong.',
   'admin.monitoring.backups.state.ok': 'Succeeded',
   'admin.monitoring.backups.state.failed': 'Failed',
   'admin.monitoring.backups.state.stale': 'Too old',
