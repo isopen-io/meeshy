@@ -204,7 +204,17 @@ describe('l’onglet « Cercles », câblé', () => {
       <CirclesPanel language="fr" enabled={false} online now={NOW} received={received} sent={[]} accepted={accepted} requestHandlers={handlers} onRaise={noop} onFindContacts={noop} />
     );
     const realMatchMedia = window.matchMedia;
-    window.matchMedia = ((query: string) => ({ ...realMatchMedia.call(window, query), matches: query.includes('no-preference') })) as typeof window.matchMedia;
+    const proto = HTMLElement.prototype;
+    const realAnimate = proto.animate;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('no-preference'),
+      media: query,
+      addEventListener: noop,
+      removeEventListener: noop,
+    })) as unknown as typeof window.matchMedia;
+    proto.animate = function () {
+      return { finished: new Promise<void>(noop), cancel: noop } as unknown as Animation;
+    } as typeof proto.animate;
     try {
       const host = await mount(withReceived([first, second]));
       expect(host.querySelector('[data-circle-request="r-1"]')).not.toBeNull();
@@ -217,6 +227,7 @@ describe('l’onglet « Cercles », câblé', () => {
       expect(host.querySelector('[data-circle-requests-section]')?.textContent).toContain('Bob');
     } finally {
       window.matchMedia = realMatchMedia;
+      proto.animate = realAnimate;
     }
   });
 
