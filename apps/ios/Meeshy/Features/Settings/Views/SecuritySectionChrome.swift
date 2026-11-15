@@ -59,3 +59,22 @@ struct SecurityVerificationBadge: View {
                                 : String(localized: "settings.security.not_verified", defaultValue: "Non vérifié", bundle: .main))
     }
 }
+
+/// Le glyphe du bouton « Vérifier » d'un e-mail ou d'un numéro : le sceau au
+/// repos, une progression pendant l'envoi, pour que le toucher se voie avant
+/// que la passerelle réponde.
+struct SecurityVerifyGlyph: View {
+    let isSending: Bool
+
+    var body: some View {
+        if isSending {
+            ProgressView()
+                .controlSize(.mini)
+                .accessibilityLabel(String(localized: "settings.security.verify.sending", defaultValue: "Envoi en cours…", bundle: .main))
+        } else {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.caption.weight(.semibold))
+                .accessibilityHidden(true)
+        }
+    }
+}
