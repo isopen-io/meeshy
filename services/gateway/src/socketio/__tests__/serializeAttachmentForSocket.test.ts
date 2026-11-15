@@ -350,10 +350,13 @@ describe('serializeAttachmentForSocket', () => {
     const result = serializeAttachmentForSocket(attachment as Record<string, unknown>);
 
     expect(result.reactionSummary).toEqual({});
-    expect(result.currentUserReactions).toEqual([]);
+    // #18622 — la clé est ABSENTE en diffusion, pas vide : un `[]` servi dirait
+    // « il n'y en a pas » et effacerait, chez le client qui fusionne, les
+    // réactions du lecteur sur sa propre pièce.
+    expect('currentUserReactions' in result).toBe(false);
   });
 
-  it('currentUserReactions is empty when currentParticipantId not provided', () => {
+  it('currentUserReactions key is absent when currentParticipantId not provided', () => {
     const attachment = {
       id: 'att-6',
       messageId: 'msg-6',
@@ -370,8 +373,9 @@ describe('serializeAttachmentForSocket', () => {
 
     const result = serializeAttachmentForSocket(attachment as Record<string, unknown>);
 
+    // L'agrégat PARTAGÉ part quand même : c'est un compte, pas une appartenance.
     expect(result.reactionSummary).toEqual({ '😊': 1 });
-    expect(result.currentUserReactions).toEqual([]);
+    expect('currentUserReactions' in result).toBe(false);
   });
 });
 
