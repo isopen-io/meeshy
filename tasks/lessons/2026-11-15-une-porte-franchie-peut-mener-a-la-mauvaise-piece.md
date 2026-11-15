@@ -1,6 +1,6 @@
-## Une porte FRANCHIE peut mener à la mauvaise pièce (cycle 170, #18616)
+## Une porte FRANCHIE peut mener à la mauvaise pièce (cycle 171, #18616)
 
-*2026-11-15, cycle 170, #18616.*
+*2026-11-15, cycle 171, #18616.*
 
 ### Le fait
 

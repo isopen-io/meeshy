@@ -1,6 +1,6 @@
 ## 2026-11-15 : la file de remise hors ligne est UNE instance par processus, et un cliquet le dit
 
-*2026-11-15 — #18616, cycle 170.*
+*2026-11-15 — #18616, cycle 171.*
 
 ### Contexte
 

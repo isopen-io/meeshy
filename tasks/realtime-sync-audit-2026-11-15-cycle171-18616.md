@@ -1,4 +1,4 @@
-# Cycle 170 — deux doc-comments affirmaient l'unicité, et il y avait trois files
+# Cycle 171 — deux doc-comments affirmaient l'unicité, et il y avait trois files
 
 *2026-11-15. Branche `claude/exciting-planck-jgv7lx`, repartie de la tête de
 `dev` (`f02e978b4`).*
@@ -6,9 +6,14 @@
 **Livré** : #18616 — la file de remise hors ligne est UNE instance par
 processus, et c'est désormais un cliquet qui le dit.
 
-> *Le numéro de cycle est pris au moment de l'écriture. Les cycles sœurs
-> publient en parallèle ; si 170 est déjà sur `dev` à la fusion, ce journal se
-> renomme — c'est ce que le cycle 169 a fait pour 166 à 168.*
+> *Le nom de ce fichier porte le NUMÉRO **et** l'ISSUE, et c'est délibéré.
+> 170 était libre à l'ouverture du cycle et occupé à la fusion — un relevé
+> d'identifiant libre a la durée de vie d'un `fetch`. Le dépôt a déjà payé la
+> suite : deux sessions ont écrit `…-cycle163.md` le même jour et git a FUSIONNÉ
+> ligne à ligne deux journaux sans rapport, sans un conflit à voir
+> (`tasks/lessons/2026-11-15-un-identifiant-partage-utilise-comme-nom-de-fichier-fusionne-en-silence.md`).
+> Suffixer l'issue rend la collision impossible au lieu de la rendre
+> détectable.*
 
 ---
 
