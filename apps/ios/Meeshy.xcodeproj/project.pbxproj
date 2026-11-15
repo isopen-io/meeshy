@@ -3811,6 +3811,7 @@
 		CF67677C8801F53D6B00C598 /* ConversationHeaderFlame.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E8382F616E00427DD13AEC /* ConversationHeaderFlame.swift */; };
 		CF74D0A9DCC4FECCCBF36180 /* MeeshyShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F737DB4E37AC47B134665F21 /* MeeshyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CF99600287EB3F4FB464E583 /* ProfileCirclesSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F1AE412DB73E3D0737F1C2 /* ProfileCirclesSummaryTests.swift */; };
+		5A1C7E3B9D204F6A8B1C2D3F /* UserActivityCardsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1C7E3B9D204F6A8B1C2D3E /* UserActivityCardsTests.swift */; };
 		CFABAAA66C29FC97C65A04EE /* ComposerSceneFitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48846E0B07725C1EC57007F4 /* ComposerSceneFitTests.swift */; };
 		CFB402FE1E7C10DD94189529 /* ConversationViewRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3F529FB3DEB622D63C1E19 /* ConversationViewRules.swift */; };
 		CFB60B2A40DD7BD84741916D /* CallEffectLayers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 488C2B3A001C872ACF9BEF01 /* CallEffectLayers.swift */; };
@@ -6049,6 +6050,7 @@
 		44D26F6D3E558FD458D8DCA7 /* JSONStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONStub.swift; sourceTree = "<group>"; };
 		44E2E4BE5730D379F21B9041 /* PostDetailSheetHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailSheetHost.swift; sourceTree = "<group>"; };
 		44F1AE412DB73E3D0737F1C2 /* ProfileCirclesSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCirclesSummaryTests.swift; sourceTree = "<group>"; };
+		5A1C7E3B9D204F6A8B1C2D3E /* UserActivityCardsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserActivityCardsTests.swift; sourceTree = "<group>"; };
 		44FBF8B8EB22AD824BF1C5D3 /* AttachmentQuickLookPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentQuickLookPreview.swift; sourceTree = "<group>"; };
 		44FCC7E0D7D8B0953B0BBF59 /* VideoQualityLevel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoQualityLevel.swift; sourceTree = "<group>"; };
 		44FD2C7B55066F51949BB28D /* MessageDayLabelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDayLabelTests.swift; sourceTree = "<group>"; };
@@ -10742,6 +10744,7 @@
 			isa = PBXGroup;
 			children = (
 				44F1AE412DB73E3D0737F1C2 /* ProfileCirclesSummaryTests.swift */,
+				5A1C7E3B9D204F6A8B1C2D3E /* UserActivityCardsTests.swift */,
 				7DB7170CD5961695238B4039 /* ProfileCirclesViewModelTests.swift */,
 				5A58A84D1E3E80EC7A3B3A0F /* ProfileMembershipLineTests.swift */,
 				A2AAB3F225BDB623FB93C5B9 /* ProfileSectionsTests.swift */,
@@ -19986,6 +19989,7 @@
 				F085A724F6FE0F454D4B2EEA /* ProfileBringViewModelTests.swift in Sources */,
 				C1D563D342C56E9643FD3048 /* ProfileCircleViewModelTests.swift in Sources */,
 				CF99600287EB3F4FB464E583 /* ProfileCirclesSummaryTests.swift in Sources */,
+				5A1C7E3B9D204F6A8B1C2D3F /* UserActivityCardsTests.swift in Sources */,
 				3E39FB4A2108594DE3DC6FDF /* ProfileCirclesViewModelTests.swift in Sources */,
 				473ABF4212DCD16137C98F29 /* ProfileDecorModelTests.swift in Sources */,
 				7C5BB29BB3F3C1BDE9BBF7A5 /* ProfileDecorSheetParityGuardTests.swift in Sources */,
