@@ -4,8 +4,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
-import { useBackDismiss } from '@/lib/view/use-back-dismiss';
-
 import { GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { VIEWER_GLASS, type ViewerProbe } from './viewer-chrome';
