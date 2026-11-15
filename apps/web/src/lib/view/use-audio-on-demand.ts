@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useStore } from 'zustand';
 
 import { transcriptTranslationTracks } from '@meeshy/shared/types/attachment-audio';
 
 import { requestAttachmentTranscription, requestAttachmentTranslation } from '@/lib/api/attachment-processing';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import {
+  TRANSCRIPTION_STAGE,
+  TRANSLATIONS_STAGE,
+  failedStagesOf,
+  mediaProcessingFailures,
+  type MediaProcessingFailuresApi,
+} from '@/lib/api/media-processing-failures';
 import type { Attachment } from '@/lib/api/types';
 
 import { NOTHING_SUPPLIED, translationOffers, withSupplied, type SuppliedAudio } from './audio-on-demand';
@@ -54,6 +62,7 @@ export type AudioOnDemand = {
 };
 
 const TRANSCRIPTION_KEY = '#transcription';
+const NO_LANGUAGES: readonly string[] = [];
 
 export function useAudioOnDemand({
   attachment,
@@ -62,6 +71,7 @@ export function useAudioOnDemand({
   deps,
   stallAfterMs = ON_DEMAND_STALL_MS,
   transcribable = true,
+  failures = mediaProcessingFailures,
 }: {
   readonly attachment: Attachment;
   readonly fallbackLanguage: string;
@@ -70,6 +80,8 @@ export function useAudioOnDemand({
   readonly stallAfterMs?: number;
   /** Le serveur peut lire ce vocal (#10700) ; faux ⇒ « Transcrire » n'est pas offert. */
   readonly transcribable?: boolean;
+  /** Les pannes DITES par le temps réel (#18537) — injectable, le défaut est le magasin du processus. */
+  readonly failures?: MediaProcessingFailuresApi;
 }): AudioOnDemand {
   const [supplied, setSupplied] = useState<SuppliedAudio>(NOTHING_SUPPLIED);
   const [transcribeAsked, setTranscribeAsked] = useState(false);
@@ -83,6 +95,15 @@ export function useAudioOnDemand({
   };
   const unstall = (key: string): void => setStalled((current) => current.filter((k) => k !== key));
 
+  /**
+   * LES PANNES QUE LA PASSERELLE A DITES (#18537). Abonnement par PIÈCE, sur une
+   * référence stable à vide (`failedStagesOf`) : un sélecteur qui rendrait un
+   * tableau neuf à chaque rendu rendrait sans fin.
+   */
+  const failedStages = useStore(failures, (state) => failedStagesOf(state, attachment.id));
+  const transcriptionFailed = failedStages.includes(TRANSCRIPTION_STAGE);
+  const translationsFailed = failedStages.includes(TRANSLATIONS_STAGE);
+
   const served = useMemo(() => withSupplied(attachment, supplied), [attachment, supplied]);
   const originalLanguage = served.transcription?.language ?? fallbackLanguage;
   const versions = useMemo(
@@ -90,16 +111,40 @@ export function useAudioOnDemand({
     [originalLanguage, served.translations],
   );
   const offers = useMemo(() => translationOffers({ readerLanguages, versions }), [readerLanguages, versions]);
-  const pendingLanguages = requested.filter((code) => !versions.includes(code) && !stalled.includes(code));
-  const transcribing = transcribeAsked && served.transcription == null && !stalled.includes(TRANSCRIPTION_KEY);
+  /**
+   * L'ATTENTE SE LÈVE SUR DEUX FAITS DISJOINTS, et il faut les tenir tous les
+   * deux : une PREUVE de panne (le temps réel, en ~1 s) ou son ABSENCE prolongée
+   * (`stalled`, le plafond de 90 s — socket coupée, traducteur muet). Retirer le
+   * second parce que le premier existe rendrait le bouton figé pour toujours
+   * exactement quand le signal ne peut pas arriver.
+   */
+  const pendingLanguages = translationsFailed ? NO_LANGUAGES : requested.filter((code) => !versions.includes(code) && !stalled.includes(code));
+  const transcribing = transcribeAsked && served.transcription == null && !stalled.includes(TRANSCRIPTION_KEY) && !transcriptionFailed;
   const arrived = [...requested].reverse().find((code) => versions.includes(code)) ?? null;
   const transport = deps ?? apiDeps;
+
+  /**
+   * LA PHRASE DE LA PANNE — le `notice` qu'un refus de REQUÊTE posait déjà, servi
+   * désormais aussi par le temps réel. Le verdict du temps réel PRIME sur l'état
+   * local : il est la seule preuve d'une panne SURVENUE APRÈS la mise en file, et
+   * un `notice` local nul était l'état nominal d'une demande acceptée.
+   *
+   * La transcription d'abord : sans elle il n'y a rien à traduire, donc c'est
+   * elle que le lecteur doit relancer.
+   */
+  const servedNotice: AudioOnDemandNotice | null = transcriptionFailed
+    ? 'media.audio.transcribe_failed'
+    : translationsFailed
+      ? 'media.audio.translate_failed'
+      : notice;
 
   const transcribe = (): void => {
     if (transcribing) return;
     setNotice(null);
     setTranscribeAsked(true);
     unstall(TRANSCRIPTION_KEY);
+    /* Une demande NEUVE efface le verdict de la précédente, sinon le second essai n'affiche jamais son attente. */
+    failures.getState().cleared(attachment.id, TRANSCRIPTION_STAGE);
     void requestAttachmentTranscription({ ...transport, attachmentId: attachment.id }).then((result) => {
       if (!result.ok) {
         setTranscribeAsked(false);
@@ -116,6 +161,7 @@ export function useAudioOnDemand({
     if (pendingLanguages.includes(language)) return;
     setNotice(null);
     unstall(language);
+    failures.getState().cleared(attachment.id, TRANSLATIONS_STAGE);
     setRequested((current) => [...current.filter((code) => code !== language), language]);
     const sourceLanguage = served.transcription?.language;
     void requestAttachmentTranslation({
@@ -144,7 +190,7 @@ export function useAudioOnDemand({
     canTranscribe: transcribable && served.transcription == null,
     pendingLanguages,
     arrived,
-    notice,
+    notice: servedNotice,
     transcribe,
     requestTranslation,
   };

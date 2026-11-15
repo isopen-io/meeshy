@@ -88,6 +88,8 @@ import {
   isSocketMessage,
 } from './realtime-apply';
 import { applyTranscriptionReady, isTranscriptionReady } from './realtime-transcription-ready';
+import { mediaProcessingFailures } from './media-processing-failures';
+import { applyAudioTranslationFailed, applyTranscriptionFailed, isMediaProcessingFailed } from './realtime-media-processing-failed';
 import {
   applyMessageCountdownStarted,
   applyMessageExpired,
@@ -484,6 +486,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onTranscriptionReady = (payload: unknown): void => {
     if (!isTranscriptionReady(payload)) return;
     applyTranscriptionReady(deps.queryClient, payload);
+  };
+
+  /**
+   * `audio:transcription-failed` / `audio:translation-failed` (#18537) — L'AUTRE
+   * ISSUE DE LA MÊME DEMANDE.
+   *
+   * `onTranscriptionReady` ci-dessus porte la RÉUSSITE d'un travail mis en file.
+   * La PANNE voyage par ces deux noms, qu'iOS et Android lisent depuis toujours
+   * et que ce module ne portait pas : le lecteur attendait le plafond de SILENCE
+   * de 90 s (`ON_DEMAND_STALL_MS`) pour une panne que la passerelle avait dite
+   * en une seconde, puis rendait la main sans un mot.
+   */
+  const onTranscriptionFailed = (payload: unknown): void => {
+    if (!isMediaProcessingFailed(payload)) return;
+    applyTranscriptionFailed(mediaProcessingFailures, payload);
+  };
+
+  const onAudioTranslationFailed = (payload: unknown): void => {
+    if (!isMediaProcessingFailed(payload)) return;
+    applyAudioTranslationFailed(mediaProcessingFailures, payload);
   };
 
   /**
@@ -1112,6 +1134,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
   socket.on<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
+  socket.on<unknown>(SERVER_EVENTS.TRANSCRIPTION_FAILED, onTranscriptionFailed);
+  socket.on<unknown>(SERVER_EVENTS.AUDIO_TRANSLATION_FAILED, onAudioTranslationFailed);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
@@ -1212,6 +1236,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
+      socket.off<unknown>(SERVER_EVENTS.TRANSCRIPTION_FAILED, onTranscriptionFailed);
+      socket.off<unknown>(SERVER_EVENTS.AUDIO_TRANSLATION_FAILED, onAudioTranslationFailed);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
