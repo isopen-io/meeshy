@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { AuthBrandFooter, AuthSubmitButton, AuthTitle } from '@/components/auth-chrome';
+import { AuthBrandFooter, AuthRefusal, AuthSubmitButton, AuthTitle } from '@/components/auth-chrome';
 import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from '@/components/auth-column';
 import { Field } from '@/components/field';
 import { GlyphSvg } from '@/components/glyph';
@@ -394,11 +394,7 @@ export function LoginDoors({
               )}
             </Field>
 
-            {errorMessage !== null ? (
-              <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
-                {errorMessage}
-              </p>
-            ) : null}
+            {errorMessage !== null ? <AuthRefusal>{errorMessage}</AuthRefusal> : null}
 
             <AuthSubmitButton
               disabled={twoFactorCode.length < 6 || !online}
@@ -481,11 +477,7 @@ export function LoginDoors({
               )}
             </Field>
 
-            {errorMessage !== null ? (
-              <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
-                {errorMessage}
-              </p>
-            ) : null}
+            {errorMessage !== null ? <AuthRefusal>{errorMessage}</AuthRefusal> : null}
 
             {offersKeepSignedIn ? (
               <label data-keep-signed-in className="flex items-center gap-3 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { auth } from '@/lib/api/auth';
 import { isEmailValid } from '@/lib/signup-form';
@@ -12,11 +12,12 @@ import {
   type MagicLinkDeadline,
   type MagicLinkRequestOutcome,
 } from '@/lib/view/magic-link';
+import { layerMotion } from '@/lib/view/dialog-exit';
 import { useCountdown } from '@/lib/view/use-countdown';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
-import { AuthSubmitButton } from './auth-chrome';
+import { AuthRefusal, AuthSubmitButton } from './auth-chrome';
 import { EmailCodeForm, withStrongEmail } from './email-code-form';
 import { EmailSentNotice } from './email-sent-notice';
 import { Field } from './field';
@@ -135,6 +136,7 @@ export function MagicLinkPanel({
 }: MagicLinkPanelProps) {
   const online = useOnline();
   const [step, setStep] = useState<'input' | 'waiting'>('input');
+  const [stepChanged, setStepChanged] = useState(false);
   const [email, setEmail] = useState(initialEmail);
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<MagicLinkRequestOutcome | null>(null);
@@ -160,6 +162,7 @@ export function MagicLinkPanel({
       setPendingSessionToken(result.ok ? (result.data?.pendingSessionToken ?? null) : null);
       setDeadline({ startedAt: deps.now(), expiresInSeconds: resolved.expiresInSeconds });
       setStep('waiting');
+      setStepChanged(true);
       return;
     }
     setOutcome(resolved);
@@ -174,6 +177,7 @@ export function MagicLinkPanel({
 
   function cancel() {
     setStep('input');
+    setStepChanged(true);
     setPendingSessionToken(null);
     setCodeVerified(false);
     setOutcome(null);
@@ -183,6 +187,7 @@ export function MagicLinkPanel({
   const fieldError = outcome?.kind === 'invalid-email' ? translate(language, 'magicLink.email.invalid') : undefined;
   const banner = bannerFor(outcome, language);
   const hint = howItWorks(language);
+  const stepMotion = stepChanged ? layerMotion(false, { '--layer-shift': '0 0' } as CSSProperties) : null;
 
   if (step === 'waiting') {
     const expired = deadline !== null && remaining <= 0;
@@ -197,64 +202,66 @@ export function MagicLinkPanel({
        (`EmailCodeForm`, la machine de `/auth/verify-email`) ; il ouvre la
        session et mène là où une connexion mène. */
     return (
-      <EmailSentNotice
-        email={email}
-        lead={withStrongEmail(translate(language, 'emailSent.codeOrLink', { email }), email, 'var(--ios-indigo-400)')}
-        status={
-          <>
-            {expired ? (
-              <p role="alert" style={{ color: 'var(--ios-error)' }}>
-                {translate(language, 'magicLink.linkExpired')}
-              </p>
-            ) : (
-              <p
-                role="timer"
-                aria-live="off"
-                aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
-                className="font-bold tabular-nums text-screen"
-                style={{ color: 'var(--ios-indigo-600)' }}
-              >
-                {formatCountdown(remaining, locale)}
-              </p>
-            )}
-            {codeVerified ? (
-              <p role="status" className="text-title font-semibold" style={{ color: 'var(--ios-success)' }}>
-                {translate(language, 'verifyEmail.verified')}
-              </p>
-            ) : (
-              <EmailCodeForm
-                email={email}
-                next={next}
-                {...(deps.verifyEmail === undefined ? {} : { verifyEmail: deps.verifyEmail })}
-                {...(deps.verificationStatus === undefined ? {} : { verificationStatus: deps.verificationStatus })}
-                pendingSessionToken={pendingSessionToken}
-                onVerified={() => setCodeVerified(true)}
-              />
-            )}
-          </>
-        }
-      >
-        <button
-          type="button"
-          disabled={(!expired && remaining > 0) || submitting || !online}
-          aria-label={translate(language, 'magicLink.resend.label')}
-          onClick={send}
-          className="inline-flex items-center gap-2 font-semibold text-title"
-          style={{ minHeight: 44, color: expired ? 'var(--ios-indigo-400)' : 'var(--color-ios-ink-2)' }}
+      <div className="flex flex-1 flex-col" {...stepMotion}>
+        <EmailSentNotice
+          email={email}
+          lead={withStrongEmail(translate(language, 'emailSent.codeOrLink', { email }), email, 'var(--ios-indigo-400)')}
+          status={
+            <>
+              {expired ? (
+                <p role="alert" style={{ color: 'var(--ios-error)' }}>
+                  {translate(language, 'magicLink.linkExpired')}
+                </p>
+              ) : (
+                <p
+                  role="timer"
+                  aria-live="off"
+                  aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
+                  className="font-bold tabular-nums text-screen"
+                  style={{ color: 'var(--ios-indigo-600)' }}
+                >
+                  {formatCountdown(remaining, locale)}
+                </p>
+              )}
+              {codeVerified ? (
+                <p role="status" className="text-title font-semibold" style={{ color: 'var(--ios-success)' }}>
+                  {translate(language, 'verifyEmail.verified')}
+                </p>
+              ) : (
+                <EmailCodeForm
+                  email={email}
+                  next={next}
+                  {...(deps.verifyEmail === undefined ? {} : { verifyEmail: deps.verifyEmail })}
+                  {...(deps.verificationStatus === undefined ? {} : { verificationStatus: deps.verificationStatus })}
+                  pendingSessionToken={pendingSessionToken}
+                  onVerified={() => setCodeVerified(true)}
+                />
+              )}
+            </>
+          }
         >
-          <GlyphSvg glyph={AUTH_GLYPHS.arrowClockwise} size={18} />
-          {translate(language, 'magicLink.resend')}
-        </button>
+          <button
+            type="button"
+            disabled={(!expired && remaining > 0) || submitting || !online}
+            aria-label={translate(language, 'magicLink.resend.label')}
+            onClick={send}
+            className="inline-flex items-center gap-2 font-semibold text-title"
+            style={{ minHeight: 44, color: expired ? 'var(--ios-indigo-400)' : 'var(--color-ios-ink-2)' }}
+          >
+            <GlyphSvg glyph={AUTH_GLYPHS.arrowClockwise} size={18} />
+            {translate(language, 'magicLink.resend')}
+          </button>
 
-        <button
-          type="button"
-          onClick={cancel}
-          className="text-title font-medium"
-          style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
-        >
-          {translate(language, 'magicLink.cancel')}
-        </button>
-      </EmailSentNotice>
+          <button
+            type="button"
+            onClick={cancel}
+            className="text-title font-medium"
+            style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
+          >
+            {translate(language, 'magicLink.cancel')}
+          </button>
+        </EmailSentNotice>
+      </div>
     );
   }
 
@@ -265,7 +272,8 @@ export function MagicLinkPanel({
         void send();
       }}
       className="flex flex-1 flex-col content-center justify-center px-8"
-      style={{ gap: SECTION_GAP }}
+      {...stepMotion}
+      style={{ ...stepMotion?.style, gap: SECTION_GAP }}
       noValidate
     >
       <span aria-hidden="true" className="mx-auto" style={{ color: 'var(--ios-indigo-500)' }}>
@@ -312,11 +320,7 @@ export function MagicLinkPanel({
         )}
       </Field>
 
-      {banner !== null ? (
-        <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
-          {banner}
-        </p>
-      ) : null}
+      {banner !== null ? <AuthRefusal>{banner}</AuthRefusal> : null}
 
       <AuthSubmitButton
         disabled={!isEmailValid(email) || !online}

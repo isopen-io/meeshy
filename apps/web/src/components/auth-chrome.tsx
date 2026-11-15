@@ -1,7 +1,10 @@
 import { Glyph } from './glyph';
 import { BrandMark } from './brand-mark';
 import { useInterfaceLanguage } from './public-header';
+import type { CSSProperties, ReactNode } from 'react';
+
 import { BRAND_CREDIT, BRAND_CREDIT_LINK, BRAND_SIGNATURE_MASK_PATH, brandCreditHint, brandVersionLine } from '@/lib/brand';
+import { layerMotion } from '@/lib/view/dialog-exit';
 
 /**
  * LE CHROME PARTAGÉ DES ÉCRANS D'AUTHENTIFICATION (#5816, E1) — extrait de
@@ -157,5 +160,15 @@ export function AuthSubmitButton({
         label
       )}
     </button>
+  );
+}
+
+/** Un refus d'accès entre en fondu en glissant depuis le haut, comme `.transition(.opacity.combined(with: .move(edge: .top)))`
+ * de `LoginView.swift` et `MagicLinkView.swift` (#18322). */
+export function AuthRefusal({ children, className = 'text-center text-caption' }: { readonly children: ReactNode; readonly className?: string }) {
+  return (
+    <p role="alert" className={className} {...layerMotion(false, { '--layer-shift': '0 -6px', color: 'var(--ios-error)' } as CSSProperties)}>
+      {children}
+    </p>
   );
 }
