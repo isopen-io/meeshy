@@ -187,9 +187,8 @@ class MessageSocketManager @Inject constructor(
      * lifecycle emits besides its arrival, all plain-emitted by the gateway (no `_seq`,
      * `NotificationService.ts`'s `announceReadBulk`/`announceDeletedBulk`/`emitCountsUpdate`
      * doc-comments: estampiller ferait avancer un curseur sans lecteur). Mirrors iOS
-     * `MessageSocketManager` / web `notification-socketio.singleton.ts`'s
-     * `onNotificationRead`/`onNotificationReadBulk`/`onNotificationDeleted`/
-     * `onNotificationDeletedBulk`/`onCounts`.
+     * `MessageSocketRoutes+Notifications.swift` — the web mirror this paragraph used to
+     * name (`notification-socketio.singleton.ts`) left the repository at #7668.
      */
     val notificationRead: SharedFlow<NotificationReadSocketEvent> = _notificationRead.exposed()
     val notificationReadBulk: SharedFlow<NotificationReadBulkSocketEvent> = _notificationReadBulk.exposed()
@@ -249,11 +248,16 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.LOCATION_LIVE_STARTED, _liveLocationStarted)
         route(SocketEventNames.LOCATION_LIVE_UPDATED, _liveLocationUpdated)
         route(SocketEventNames.LOCATION_LIVE_STOPPED, _liveLocationStopped)
-        // SyncEngine — observer le `_seq` AVANT de livrer l'event, comme le web
-        // (`notification-socketio.singleton.ts`) : un trou prouve que des
-        // notifications ont été manquées. Le curseur suit le flux SERVEUR, donc il
-        // avance même si le décodage échoue ensuite (un décodage raté est notre
-        // bug, pas un trou d'émission) et même si aucun écran n'écoute.
+        // SyncEngine — observer le `_seq` AVANT de livrer l'event : un trou prouve
+        // que des notifications ont été manquées. Le curseur suit le flux SERVEUR,
+        // donc il avance même si le décodage échoue ensuite (un décodage raté est
+        // notre bug, pas un trou d'émission) et même si aucun écran n'écoute.
+        //
+        // Le miroir est iOS (`MessageSocketRoutes+Notifications.swift`), PAS le web :
+        // cette ligne a dit « comme le web (`notification-socketio.singleton.ts`) »
+        // jusqu'au 2026-11-14, en nommant un fichier du web LEGACY sorti du dépôt au
+        // #7668 — `apps/web` n'observe aucun curseur (#18601). Ce qui estampille et
+        // ce qui observe se lisent au cliquet `socket-seq-lockstep-gate` (#18602).
         route(SocketEventNames.NOTIFICATION_NEW, _notificationReceived) { raw ->
             syncSeqTracker.observe((raw.opt(SEQ_KEY) as? Number)?.toLong())
         }
