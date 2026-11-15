@@ -1,7 +1,7 @@
 import Foundation
 
 // LA BATTERIE DES PROCHES ET DES SANGS (#14147) — la lecture Swift du contrat `packages/shared/types/battery.ts` et
-// `battery-constants.ts`. Spec : `docs/superpowers/specs/2026-11-15-batterie-proches-design.md`.
+// `battery-constants.ts`. Spec : la conception de la batterie des proches (#14147).
 //
 // JAMAIS un message de conversation. Le serveur fait avancer l'épisode (`batteryEpisodeStep`) et décide du canal de
 // chaque lecteur : ce fichier ne porte que ce qui voyage. Les charges DESCENDANTES tolèrent un champ inconnu et une
@@ -357,25 +357,28 @@ public struct BatteryEmitterSettings: Codable, Sendable, Equatable {
     }
 }
 
-/// `BatteryPersonSettings` — `shared` : l'autre reçoit-il MA batterie, selon la loi maintenant ; `receive` : ce que
+/// `BatteryPersonSettings` — `isShared` (clé `shared`) : l'autre reçoit-il MA batterie, selon la loi maintenant ; `receive` : ce que
 /// je reçois de LA SIENNE.
 public struct BatteryPersonSettings: Sendable, Equatable, Codable {
     public let userId: String
-    public let shared: Bool
+    public let isShared: Bool
     public let receive: BatteryReceiveMode
 
-    public init(userId: String, shared: Bool, receive: BatteryReceiveMode) {
+    public init(userId: String, isShared: Bool, receive: BatteryReceiveMode) {
         self.userId = userId
-        self.shared = shared
+        self.isShared = isShared
         self.receive = receive
     }
 
-    private enum CodingKeys: String, CodingKey { case userId, shared, receive }
+    private enum CodingKeys: String, CodingKey {
+        case userId, receive
+        case isShared = "shared"
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         userId = try c.decode(String.self, forKey: .userId)
-        shared = (try? c.decodeIfPresent(Bool.self, forKey: .shared)) ?? false
+        isShared = (try? c.decodeIfPresent(Bool.self, forKey: .isShared)) ?? false
         let raw = (try? c.decodeIfPresent(String.self, forKey: .receive)) ?? nil
         receive = raw.flatMap(BatteryReceiveMode.init(rawValue:)) ?? .defaultMode
     }
@@ -383,20 +386,23 @@ public struct BatteryPersonSettings: Sendable, Equatable, Codable {
 
 /// `batteryPersonSettingsUpdateSchema` — au moins un des deux champs.
 public struct BatteryPersonSettingsUpdate: Encodable, Sendable, Equatable {
-    public let shared: Bool?
+    public let isShared: Bool?
     public let receive: BatteryReceiveMode?
 
-    public init?(shared: Bool? = nil, receive: BatteryReceiveMode? = nil) {
-        guard shared != nil || receive != nil else { return nil }
-        self.shared = shared
+    public init?(isShared: Bool? = nil, receive: BatteryReceiveMode? = nil) {
+        guard isShared != nil || receive != nil else { return nil }
+        self.isShared = isShared
         self.receive = receive
     }
 
-    private enum CodingKeys: String, CodingKey { case shared, receive }
+    private enum CodingKeys: String, CodingKey {
+        case receive
+        case isShared = "shared"
+    }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encodeIfPresent(shared, forKey: .shared)
+        try c.encodeIfPresent(isShared, forKey: .isShared)
         try c.encodeIfPresent(receive?.rawValue, forKey: .receive)
     }
 }

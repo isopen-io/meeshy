@@ -100,23 +100,9 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .contactJoined:
             return "\(actorName) a rejoint Meeshy"
         case .contactRecentlyActive:
-            return String(
-                format: String(
-                    localized: "notification.contactRecentlyActive.fallbackTitle",
-                    defaultValue: "%@ était sur Meeshy récemment",
-                    bundle: .main
-                ),
-                actorName
-            )
+            return String(format: String(localized: "notification.contactRecentlyActive.fallbackTitle", defaultValue: "%@ était sur Meeshy récemment", bundle: .main), actorName)
         case .deviceBattery:
-            return String(
-                format: String(
-                    localized: "notification.deviceBattery.fallbackTitle",
-                    defaultValue: "Batterie de %@",
-                    bundle: .main
-                ),
-                actorName
-            )
+            return String(format: String(localized: "notification.deviceBattery.fallbackTitle", defaultValue: "Batterie de %@", bundle: .main), actorName)
         case .gameDuoInvited:
             return String(
                 format: String(localized: "notification.game.duoInvited.fallbackTitle", defaultValue: "%@ t’invite à un duo", bundle: .main),

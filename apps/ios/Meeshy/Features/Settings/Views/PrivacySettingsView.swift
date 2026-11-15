@@ -42,6 +42,7 @@ struct PrivacySettingsView: View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
             visibilitySection
             locationSection
+            BatterySharingSettingsSection(accentColor: accentColor)
             dataSection
             callsSection
             encryptionSection

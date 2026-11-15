@@ -21,6 +21,9 @@ enum SyncPillDotStyle: Equatable, Sendable {
 /// pending outbox items (with concrete `source` for navigation),
 /// connection states (offline / disconnected / syncing — no source,
 /// label is the state name).
+/// Les annonces de batterie des proches (#14147) sont la seule famille
+/// d'ÉVÉNEMENTS : elles ont une échéance, s'éteignent seules et ne reviennent
+/// qu'avec un nouvel événement (`BatteryAnnouncementFeed`).
 ///
 /// The view layer (`SyncPill`) is agnostic to the entry's origin — it
 /// just rotates through the array, renders the label, and forwards taps

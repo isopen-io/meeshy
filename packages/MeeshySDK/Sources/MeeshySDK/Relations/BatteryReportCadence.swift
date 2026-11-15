@@ -14,7 +14,7 @@ public struct BatteryReading: Sendable, Equatable {
     }
 }
 
-/// QUAND le téléphone émetteur remonte un relevé (#14147, décision porteur du 2026-11-15). Le client n'exécute pas
+/// QUAND le téléphone émetteur remonte un relevé (#14147, décision du porteur). Le client n'exécute pas
 /// l'épisode — le serveur seul décide des paliers et des annonces ; cette loi ne dit que la CADENCE :
 ///
 /// - au-dessus de 30 %, à chaque changement de tranche de 5 % ;

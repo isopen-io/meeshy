@@ -73,7 +73,11 @@ struct BatteryContractDecodingTests {
     @Test func personSettings_decode_andTheUpdateNamesOnlyWhatChanges() throws {
         let settings = try decode(BatteryPersonSettings.self, #"{"userId":"u1","shared":true,"receive":"pill"}"#)
         #expect(settings.receive == .pill)
+        #expect(settings.isShared)
         #expect(BatteryPersonSettingsUpdate() == nil)
+
+        let sharing = try #require(BatteryPersonSettingsUpdate(isShared: false))
+        #expect(String(decoding: try JSONEncoder().encode(sharing), as: UTF8.self) == #"{"shared":false}"#)
 
         let update = try #require(BatteryPersonSettingsUpdate(receive: .critical))
         let body = String(decoding: try JSONEncoder().encode(update), as: UTF8.self)

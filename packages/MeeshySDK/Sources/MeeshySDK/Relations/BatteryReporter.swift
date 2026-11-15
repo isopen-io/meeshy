@@ -48,7 +48,7 @@ public final class BatteryReporter: BatteryReportingProviding {
     private let now: () -> Date
     private let sleep: @Sendable (TimeInterval) async -> Bool
     private var lastSent: BatteryReading?
-    private var changeSubscription: AnyCancellable?
+    private var changeSubscription: Set<AnyCancellable>?
     private var heartbeatTask: Task<Void, Never>?
     private var inFlight = false
 
@@ -80,16 +80,17 @@ public final class BatteryReporter: BatteryReportingProviding {
     public func start() {
         guard device.isTrackable, changeSubscription == nil else { return }
         device.enableMonitoring()
-        changeSubscription = device.changes
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                Task { @MainActor [weak self] in await self?.reportIfDue() }
-            }
+        var subscriptions = Set<AnyCancellable>()
+        let lane = OrderedEventLane()
+        device.changes
+            .relay(through: lane) { [weak self] _ in await self?.reportIfDue() }
+            .store(in: &subscriptions)
+        lane.store(in: &subscriptions)
+        changeSubscription = subscriptions
         Task { @MainActor [weak self] in await self?.reportIfDue() }
     }
 
     public func stop() {
-        changeSubscription?.cancel()
         changeSubscription = nil
         heartbeatTask?.cancel()
         heartbeatTask = nil
@@ -161,7 +162,8 @@ public final class UIDeviceBatteryReader: BatteryDeviceReading {
         self.center = center
     }
 
-    public var isTrackable: Bool { uiDevice.userInterfaceIdiom == .phone }
+    /// Le modèle générique dit « iPhone » sur un téléphone, « iPad » sur une tablette.
+    public var isTrackable: Bool { uiDevice.model.hasPrefix("iPhone") }
 
     /// Le modèle générique (« iPhone ») : jamais le nom que l'utilisateur a donné à son appareil.
     public var deviceLabel: String? { uiDevice.model }
@@ -191,13 +193,17 @@ public final class UIDeviceBatteryReader: BatteryDeviceReading {
         )
     }
 
-    public var changes: AnyPublisher<Void, Never> {
+    public var changes: AnyPublisher<Void, Never> { Self.changes(in: center) }
+
+    /// Hors de tout acteur : `NSProcessInfoPowerStateDidChange` peut être posté hors du fil principal, et un maillon
+    /// isolé au MainActor y piégerait l'app.
+    nonisolated static func changes(in center: NotificationCenter) -> AnyPublisher<Void, Never> {
         Publishers.MergeMany(
             center.publisher(for: UIDevice.batteryLevelDidChangeNotification),
             center.publisher(for: UIDevice.batteryStateDidChangeNotification),
             center.publisher(for: Notification.Name.NSProcessInfoPowerStateDidChange)
         )
-        .map { _ in () }
+        .map { @Sendable _ in () }
         .eraseToAnyPublisher()
     }
 }
