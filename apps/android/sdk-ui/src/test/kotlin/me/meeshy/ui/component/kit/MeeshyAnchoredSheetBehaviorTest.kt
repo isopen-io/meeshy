@@ -62,7 +62,7 @@ class MeeshyAnchoredSheetBehaviorTest {
 
     /** La hauteur de la fenêtre du test, en dp : les fractions de la feuille se comptent sur elle, quel que soit l'écran simulé. */
     private val window: Float
-        get() = compose.onRoot().getUnclippedBoundsInRoot().height.value
+        get() = compose.onRoot().getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
 
     @Composable
     private fun Rows(count: Int = 4) {
