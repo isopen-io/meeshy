@@ -185,9 +185,11 @@ export function AuditDetailSheet({
         <div className="flex items-start gap-3">
           <ActionGlyph glyph={action.glyph ?? 'scroll'} tone={action.tone} />
           <div className="grid min-w-0 gap-2">
-            <p data-admin-audit-explain className="text-body" style={{ color: INK }}>
-              {action.explain}
-            </p>
+            {action.explain === null ? null : (
+              <p data-admin-audit-explain className="text-body" style={{ color: INK }}>
+                {action.explain}
+              </p>
+            )}
             {action.sovereign ? <SovereignBadge language={language} /> : null}
           </div>
         </div>

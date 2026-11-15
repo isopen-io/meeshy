@@ -64,6 +64,13 @@ nonisolated enum ComposerInlineFamily: Equatable, Sendable {
     var modifiesInLevels: Bool {
         isBackground || self == .image || self == .video || self == .audio
     }
+
+    /// **Aucun niveau « Modifier » ne s'intercale entre la sélection et les
+    /// outils** (#18651) : le texte pose ses sections dans le rail de sa
+    /// sélection, comme les familles en niveaux y posent leur arbre.
+    var servesToolsFlat: Bool {
+        modifiesInLevels || self == .text
+    }
 }
 
 /// **L'édition en cours** — quel objet, de quelle famille, et quel sous-outil a
@@ -188,6 +195,15 @@ nonisolated enum ComposerInlineEditing {
             guard family != .audio else { return [] }
             return served.filter { $0 != .timing && $0 != .plan }
         }
+    }
+
+    /// **Les outils qu'une sélection pose à plat dans son rail** (#18651) — le
+    /// texte, ses sections de réglage ; les familles en niveaux posent leur
+    /// arbre ailleurs (`ComposerEditRailItems.flat`), les autres n'en ont pas.
+    static func flatTools(for family: ComposerInlineFamily,
+                          served: [ComposerObjectEditorSection]) -> [ComposerObjectEditorSection] {
+        guard family == .text else { return [] }
+        return chips(.modify, family: family, served: served)
     }
 
     /// **Toucher l'objet qu'on règle garde sa feuille** (#13839, L5) ; toucher

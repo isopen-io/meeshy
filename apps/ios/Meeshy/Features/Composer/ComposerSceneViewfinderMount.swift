@@ -17,7 +17,10 @@ struct ComposerSceneViewfinderMount<Contenu: View>: View {
                              allowsVideo: modes.contains(.video),
                              yieldsToScene: host.viewfinderYieldsToScene,
                              sceneObjects: ComposerViewfinderSceneCanvas.mounted(by: host),
-                             onDisarm: { host.disarmSceneCamera() },
+                             onDisarm: {
+                                 ComposerViewfinderTyping.endBeforeDisarm(host)
+                                 host.disarmSceneCamera()
+                             },
                              onDeliver: { host.poseSceneCapture($0) }) {
             contenu
         }

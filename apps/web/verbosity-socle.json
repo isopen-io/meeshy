@@ -89,8 +89,8 @@
       "firstScreen": 14
     },
     "auth-magic-link": {
-      "total": 14,
-      "firstScreen": 14
+      "total": 26,
+      "firstScreen": 26
     },
     "auth-magic-link-validate": {
       "total": 26,
@@ -193,16 +193,16 @@
       "firstScreen": 79
     },
     "links-tracking": {
-      "total": 38,
-      "firstScreen": 38
+      "total": 55,
+      "firstScreen": 55
     },
     "links-tracking-new": {
       "total": 37,
       "firstScreen": 37
     },
     "login": {
-      "total": 37,
-      "firstScreen": 37
+      "total": 50,
+      "firstScreen": 47
     },
     "me": {
       "total": 122,
@@ -312,6 +312,10 @@
       "total": 16,
       "firstScreen": 16
     },
+    "settings-securite": {
+      "total": 52,
+      "firstScreen": 52
+    },
     "settings-verify-email-change": {
       "total": 25,
       "firstScreen": 25
@@ -347,6 +351,44 @@
     "world": {
       "total": 25,
       "firstScreen": 25
+    }
+  },
+  "releves": {
+    "login": {
+      "de": {
+        "total": 37,
+        "firstScreen": 37
+      },
+      "a": {
+        "total": 50,
+        "firstScreen": 47
+      },
+      "motif": "L'avant-épure ne nommait pas l'écran et gardait le geste du lien e-mail derrière un (i) : le titre « Connexion » et la phrase du lien sont des repères, pas un retour du bavardage",
+      "issue": 17584
+    },
+    "auth-magic-link": {
+      "de": {
+        "total": 14,
+        "firstScreen": 14
+      },
+      "a": {
+        "total": 26,
+        "firstScreen": 26
+      },
+      "motif": "Même panneau que /login : la phrase du lien e-mail, absente avant l'épure, dit ce que le bouton déclenche",
+      "issue": 17584
+    },
+    "links-tracking": {
+      "de": {
+        "total": 38,
+        "firstScreen": 38
+      },
+      "a": {
+        "total": 55,
+        "firstScreen": 55
+      },
+      "motif": "L'avant-épure ne montrait que la création : une liste à surveiller montre aussi le dernier usage (dernier clic)",
+      "issue": 17584
     }
   }
 }

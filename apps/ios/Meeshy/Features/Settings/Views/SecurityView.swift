@@ -14,7 +14,7 @@ struct SecurityView: View {
     }
 
     @State private var showChangePassword = false
-    @State private var pinFocused = false
+    @State private var landing: SettingsFocus?
     @State private var showActiveSessions = false
 
     // 2FA
@@ -25,8 +25,11 @@ struct SecurityView: View {
 
     // Conversation lock PIN
     @ObservedObject private var lockManager: ConversationLockManager
-    init(lockManager: ConversationLockManager = .shared) {
+    /// La section désignée par celui qui ouvre l'écran (la rangée Contact de ma fiche, #18590).
+    private let initialFocus: SettingsFocus?
+    init(lockManager: ConversationLockManager = .shared, focus: SettingsFocus? = nil) {
         self.lockManager = lockManager
+        self.initialFocus = focus
     }
     @State private var showPinSetupSheet = false
     @State private var showPinChangeSheet = false
@@ -52,7 +55,7 @@ struct SecurityView: View {
                 backgroundColor: theme.backgroundPrimary
             ) {
                 sectionsContent
-            }.onAppear { focusMasterPinIfRequested(proxy) } }
+            }.onAppear { focusRequestedSection(proxy) } }
         }
         .sheet(isPresented: $showChangePassword) {
             ChangePasswordView()
@@ -133,7 +136,11 @@ struct SecurityView: View {
                 onEnable: { showTwoFactorSetupSheet = true }
             )
             SecurityEmailSection(user: user)
+                .id(SettingsFocus.securityEmail.rawValue)
+                .modifier(SettingsFocusHighlight(isActive: landing == .securityEmail))
             SecurityPhoneSection(user: user, phoneFlow: phoneFlow)
+                .id(SettingsFocus.securityPhone.rawValue)
+                .modifier(SettingsFocusHighlight(isActive: landing == .securityPhone))
             SecurityConversationLockSection(
                 lockManager: lockManager,
                 onSetup: { showPinSetupSheet = true },
@@ -142,7 +149,7 @@ struct SecurityView: View {
                 onRemove: { showPinRemoveSheet = true }
             )
             .id(SettingsFocus.masterPin.rawValue)
-            .modifier(SettingsFocusHighlight(isActive: pinFocused))
+            .modifier(SettingsFocusHighlight(isActive: landing == .masterPin))
             activeSessionsSection
             EncryptedDevicesEntry()
             Spacer().frame(height: 40)
@@ -151,13 +158,15 @@ struct SecurityView: View {
         .padding(.top, MeeshySpacing.lg)
     }
 
-    /// #16339 — l'invite « configurez un master PIN » a désigné ce réglage.
-    private func focusMasterPinIfRequested(_ proxy: ScrollViewProxy) {
-        guard SettingsFocusRequest.shared.consume(.masterPin) else { return }
-        pinFocused = true
+    /// #16339 — une invite (« configurez un master PIN ») ou la rangée Contact de ma fiche (#18590) a désigné une
+    /// section : l'écran s'y pose et la met en évidence.
+    private func focusRequestedSection(_ proxy: ScrollViewProxy) {
+        let requested = initialFocus == nil ? SettingsFocusRequest.shared.consumeSecurityFocus() : nil
+        guard let target = SettingsFocus.securityLanding(initial: initialFocus, requested: requested) else { return }
+        landing = target
         let reduce = reduceMotion
         Task { await DelayedUI.perform(after: .milliseconds(350)) {
-            meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduce) { proxy.scrollTo(SettingsFocus.masterPin.rawValue, anchor: .center) }
+            meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduce) { proxy.scrollTo(target.rawValue, anchor: .center) }
         } }
     }
 

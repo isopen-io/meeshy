@@ -6,6 +6,7 @@ import { TOGETHER_CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/tog
 import { mediaHubConversationKey } from '@/lib/api/media-hub-cache';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import type { SocketClient } from '@/lib/net/socket';
 import { createTogetherStore, decodeTogetherInvited, decodeTogetherStarted, type TogetherStoreApi } from '@/lib/together/together-live';
 import { createActMounter } from '@/test-support/act-mount';
@@ -88,6 +89,20 @@ function fakeSocket(ack: (event: string) => unknown = () => ({ success: true }))
   return { socket, emitted };
 }
 
+const waitExit = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+  });
+
+/** La couche retirée reste montée le temps de son fondu, inerte, puis s'en va. */
+const leavesInMotion = async (node: Element, selector: string): Promise<void> => {
+  const leaving = node.querySelector(selector);
+  expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+  expect(leaving?.hasAttribute('inert')).toBe(true);
+  await waitExit();
+  expect(node.querySelector(selector)).toBeNull();
+};
+
 const host = (store: TogetherStoreApi, socket: SocketClient = fakeSocket().socket) => (
   <TogetherHost
     language="fr"
@@ -122,7 +137,7 @@ describe('l’invitation reçue', () => {
     store.getState().invited(invitation());
     const node = await mount(host(store, live.socket));
     await click(node.querySelector<HTMLButtonElement>('[data-together-decline]'));
-    expect(node.querySelector('[data-together-invitation]')).toBeNull();
+    await leavesInMotion(node, '[data-together-invitation]');
     expect(live.emitted).toEqual([{ event: TOGETHER_CLIENT_EVENTS.TOGETHER_LEAVE, payload: { sessionId: SESSION } }]);
   });
 
@@ -141,6 +156,74 @@ describe('l’invitation reçue', () => {
     expect(video?.hasAttribute('controls')).toBe(true);
     expect(video?.currentTime).toBe(12);
     expect(node.querySelector(`[data-together-player="${SESSION}"]`)?.getAttribute('aria-label')).toBe('Ensemble avec Ada');
+  });
+
+  test('elle entre en mouvement, et le lecteur qui la remplace aussi', async () => {
+    const store = createTogetherStore();
+    const live = fakeSocket(() => ({ success: true, data: { ...startedAt(0), guestUserId: 'me' } }));
+    store.getState().invited(invitation());
+    const node = await mount(host(store, live.socket));
+    expect(node.querySelector('[data-together-invitation]')?.hasAttribute('data-layer-motion')).toBe(true);
+    await click(node.querySelector<HTMLButtonElement>('[data-together-join]'));
+    await settle();
+    expect(node.querySelector('[data-together-player]')?.hasAttribute('data-layer-motion')).toBe(true);
+    await leavesInMotion(node, '[data-together-invitation]');
+  });
+
+  test('un second toucher pendant l’accusé n’envoie pas une seconde demande, et le bouton dit qu’il attend', async () => {
+    const store = createTogetherStore();
+    const pending: { release: (value: unknown) => void } = { release: () => undefined };
+    const emitted: string[] = [];
+    const socket: SocketClient = {
+      connected: true,
+      connect: () => undefined,
+      disconnect: () => undefined,
+      on: () => undefined,
+      off: () => undefined,
+      emit: () => undefined,
+      emitWithAck: (event: string) => {
+        emitted.push(event);
+        return new Promise((resolve) => {
+          pending.release = resolve;
+        });
+      },
+    };
+    store.getState().invited(invitation());
+    const node = await mount(host(store, socket));
+    const join = node.querySelector<HTMLButtonElement>('[data-together-join]');
+    await click(join);
+    await click(join);
+    expect(emitted).toEqual([TOGETHER_CLIENT_EVENTS.TOGETHER_JOIN]);
+    expect(join?.disabled).toBe(true);
+    expect(join?.getAttribute('aria-busy')).toBe('true');
+    await act(async () => {
+      pending.release({ success: false, code: 'BOOM' });
+    });
+    await settle();
+    expect(node.querySelector<HTMLButtonElement>('[data-together-join]')?.disabled).toBe(false);
+  });
+
+  test('un échec se dit dans le bandeau, à voix haute et à l’écran, et le bandeau reste pour réessayer', async () => {
+    const store = createTogetherStore();
+    const live = fakeSocket(() => ({ success: false, code: 'BOOM' }));
+    store.getState().invited(invitation());
+    const node = await mount(host(store, live.socket));
+    await click(node.querySelector<HTMLButtonElement>('[data-together-join]'));
+    await settle();
+    const said = node.querySelector('[data-together-invitation] [data-together-join-error]');
+    expect(said?.textContent).toBe('La séance ne s’est pas ouverte. Réessayez.');
+    expect(said?.getAttribute('role')).toBe('alert');
+    expect(said?.classList.contains('sr-only')).toBe(false);
+  });
+
+  test('hors ligne, « Rejoindre » le dit dans le bandeau au lieu de ne rien faire', async () => {
+    const store = createTogetherStore();
+    const offline = { ...fakeSocket().socket, connected: false };
+    store.getState().invited(invitation());
+    const node = await mount(host(store, offline));
+    await click(node.querySelector<HTMLButtonElement>('[data-together-join]'));
+    await settle();
+    expect(node.querySelector('[data-together-join-error]')?.textContent).toBe('Hors ligne : la séance ne s’est pas ouverte.');
   });
 });
 
@@ -164,7 +247,7 @@ describe('la séance ouverte', () => {
     store.getState().started(startedAt(0), 'me');
     const node = await mount(host(store, live.socket));
     await click(node.querySelector<HTMLButtonElement>('[data-together-leave]'));
-    expect(node.querySelector('[data-together-player]')).toBeNull();
+    await leavesInMotion(node, '[data-together-player]');
     expect(live.emitted).toEqual([{ event: TOGETHER_CLIENT_EVENTS.TOGETHER_LEAVE, payload: { sessionId: SESSION } }]);
     expect(node.querySelector('[data-together-notice]')?.textContent).toBe('La séance ensemble est terminée.');
   });
@@ -188,7 +271,7 @@ describe('l’invitation envoyée', () => {
     const node = await mount(host(store, live.socket));
     expect(node.querySelector('[data-together-waiting]')?.textContent).toContain('En attente de Ada…');
     await click(node.querySelector<HTMLButtonElement>('[data-together-cancel]'));
-    expect(node.querySelector('[data-together-waiting]')).toBeNull();
+    await leavesInMotion(node, '[data-together-waiting]');
     expect(live.emitted).toEqual([{ event: TOGETHER_CLIENT_EVENTS.TOGETHER_LEAVE, payload: { sessionId: SESSION } }]);
   });
 });

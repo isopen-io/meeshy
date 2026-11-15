@@ -131,4 +131,25 @@ final class ConversationHeaderControlResponseTests: XCTestCase {
                       "en direct, toucher le titre ouvre les détails et l'appui long propose détails ou profil")
         XCTAssertFalse(title.contains(".contextMenu"))
     }
+
+    /// #18297 — l'avatar de l'en-tête répond au doigt comme le retour : l'état
+    /// pressé vient du style du bouton (au toucher, `springFast`, sans échelle
+    /// sous « Réduire les animations »), jamais d'une échelle posée dans
+    /// l'action, qui ne jouait qu'au relâcher. Son ombre ne suit plus le
+    /// dépliement de l'en-tête : une ombre ne s'anime pas image par image.
+    func test_avatar_answersAtTouchDown_andItsShadowIsNotAnimated() throws {
+        let helpers = try source(Self.views + "ConversationHelperViews.swift")
+        guard let start = helpers.range(of: "struct ThemedAvatarButton") else {
+            return XCTFail("ThemedAvatarButton introuvable")
+        }
+        let avatar = String(helpers[start.lowerBound...])
+        XCTAssertFalse(avatar.contains("isPressed = true"),
+                       "une échelle posée dans l'action ne joue qu'au relâcher")
+        XCTAssertFalse(avatar.contains(".settling($isPressed"),
+                       "l'état pressé ne se rembobine pas à la main : le style du bouton le porte")
+        XCTAssertTrue(avatar.contains(".buttonStyle(PressableButtonStyle())"),
+                      "l'avatar pose l'état pressé du design system, réduit sous « Réduire les animations »")
+        XCTAssertFalse(avatar.contains("radius: isExpanded"),
+                       "l'ombre suit le dépliement de l'en-tête : elle se repeint à chaque image")
+    }
 }

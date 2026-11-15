@@ -5,6 +5,8 @@ import MeeshySDK
 import MeeshyUI
 import Charts
 
+/// « Mon activité » (#18591, ex-Statistiques) : mes trois compteurs (`UserActivityCards`) puis la frise des trente
+/// derniers jours. Les badges ne s'y montrent plus : Ma Légende les porte, et les montrer ici en faisait deux vitrines.
 struct UserStatsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
@@ -27,7 +29,7 @@ struct UserStatsView: View {
             // geste : l'écran s'ouvre aussi depuis le Profil, une route et le
             // panneau droit iPad.
             CollapsibleHeaderPage(
-                title: String(localized: "user.stats.title", defaultValue: "Statistiques", bundle: .main),
+                title: String(localized: "user.stats.my_activity", defaultValue: "Mon activité", bundle: .main),
                 onBack: { back() },
                 titleColor: theme.textPrimary,
                 backArrowColor: Color(hex: accentColor),
@@ -64,7 +66,6 @@ struct UserStatsView: View {
             if !viewModel.timeline.isEmpty {
                 timelineChart
             }
-            achievementsSection
             Spacer().frame(height: 40)
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -75,26 +76,18 @@ struct UserStatsView: View {
 
     private var statsCards: some View {
         VStack(spacing: MeeshySpacing.md) {
-            HStack(spacing: MeeshySpacing.md) {
-                statCard(value: "\(viewModel.stats?.totalMessages ?? 0)", label: String(localized: "user.stats.messages", defaultValue: "Messages", bundle: .main), color: MeeshyColors.brandPrimaryHex, icon: "bubble.left.fill")
-                statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: String(localized: "user.stats.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.indigo300Hex, icon: "person.2.fill")
-            }
-            HStack(spacing: MeeshySpacing.md) {
-                statCard(value: "\(viewModel.stats?.totalTranslations ?? 0)", label: String(localized: "user.stats.translations", defaultValue: "Traductions", bundle: .main), color: MeeshyColors.indigo600Hex, icon: "globe")
-                statCard(value: "\(viewModel.stats?.languagesUsed ?? 0)", label: String(localized: "user.stats.languages", defaultValue: "Langues", bundle: .main), color: MeeshyColors.tileBlueHex, icon: "character.book.closed.fill")
-            }
-            HStack(spacing: MeeshySpacing.md) {
-                statCard(value: "\(viewModel.stats?.memberDays ?? 0)j", label: String(localized: "user.stats.member", defaultValue: "Membre", bundle: .main), color: MeeshyColors.tileSaffronHex, icon: "calendar")
-                statCard(value: "\(viewModel.stats?.friendRequestsReceived ?? 0)", label: String(localized: "user.stats.requests", defaultValue: "Demandes", bundle: .main), color: "E91E63", icon: "person.badge.plus")
+            ForEach(UserActivityCards.make(stats: viewModel.stats)) { card in
+                statCard(card)
             }
         }
     }
 
-    private func statCard(value: String, label: String, color: String, icon: String) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
+    private func statCard(_ card: UserActivityCards.Card) -> some View {
+        let color = card.colorHex
+        return HStack(spacing: MeeshySpacing.md) {
             // Icône figée : glyphe décoratif verrouillé dans une puce 36×36 à géométrie fixe
             // (doctrine 74i/83i — la valeur/label scalent, le chip ne bouge pas). Masqué VoiceOver.
-            Image(systemName: icon)
+            Image(systemName: card.icon)
                 .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xl, weight: .semibold))
                 .foregroundStyle(Color(hex: color))
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
@@ -105,11 +98,11 @@ struct UserStatsView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(value)
+                Text(card.value, format: .number)
                     .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(hex: color))
 
-                Text(label)
+                Text(card.label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundStyle(theme.textMuted)
             }
@@ -130,6 +123,11 @@ struct UserStatsView: View {
 
     // MARK: - Timeline Chart
 
+    /// La frise dit sa période, pas « ACTIVITÉ » : le titre de l'écran le dit déjà.
+    static var timelineHeader: String {
+        String(localized: "user.stats.last_30_days", defaultValue: "30 DERNIERS JOURS", bundle: .main)
+    }
+
     private var timelineChart: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack(spacing: MeeshySpacing.xsPlus) {
@@ -137,7 +135,7 @@ struct UserStatsView: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundStyle(MeeshyColors.info)
                     .accessibilityHidden(true)
-                Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITÉ", bundle: .main))
+                Text(Self.timelineHeader)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.info)
                     .tracking(1.2)
@@ -157,32 +155,6 @@ struct UserStatsView: View {
                                 .stroke(theme.border(tint: MeeshyColors.tileBlueHex), lineWidth: 1)
                         )
                 )
-        }
-    }
-
-    // MARK: - Achievements
-
-    private var achievementsSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: "trophy.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.warning)
-                    .accessibilityHidden(true)
-                Text(String(localized: "user.stats.badges", defaultValue: "BADGES", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                    .foregroundColor(MeeshyColors.warning)
-                    .tracking(1.2)
-            }
-            .padding(.leading, MeeshySpacing.xs)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(viewModel.stats?.achievements ?? []) { achievement in
-                    AchievementBadgeView(achievement: achievement)
-                }
-            }
         }
     }
 }
