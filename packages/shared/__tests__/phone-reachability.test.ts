@@ -45,6 +45,9 @@ const at = (minutes: number): string => new Date(Date.UTC(2026, 10, 15, 14, 0) +
 
 const seenAt = (minutes: number): PhoneReachabilityRecord => phoneReachabilityStep(null, { kind: 'alive', at: at(minutes) }).state;
 
+/** Un téléphone qui a déjà répondu à une sonde (il y a plus d'une heure) : sa version sait répondre. */
+const provenAt = (minutes: number): PhoneReachabilityRecord => ({ ...seenAt(minutes), lastAnsweredAt: at(minutes - 120) });
+
 describe('le téléphone injoignable dans la matrice des cercles (#18737)', () => {
   it('ouvre device.unreachable dès Proche', () => {
     expect(RELATION_FEATURES).toContain('device.unreachable');
@@ -102,7 +105,7 @@ describe('phoneReachabilityStep — deux sondes sans réponse font un téléphon
   });
 
   it('déclare injoignable DEPUIS le dernier signe de vie après la seconde sonde restée sans réponse', () => {
-    const one = phoneReachabilityStep(seenAt(0), { kind: 'tick', now: at(10), batteryLow: false }).state;
+    const one = phoneReachabilityStep(provenAt(0), { kind: 'tick', now: at(10), batteryLow: false }).state;
     const two = phoneReachabilityStep(one, { kind: 'tick', now: at(20), batteryLow: false }).state;
     const gone = phoneReachabilityStep(two, { kind: 'tick', now: at(30), batteryLow: false });
     expect(gone.probe).toBe(false);
@@ -112,13 +115,13 @@ describe('phoneReachabilityStep — deux sondes sans réponse font un téléphon
   });
 
   it('la cause probable est la batterie quand elle était critique ou éteinte', () => {
-    const one = phoneReachabilityStep(seenAt(0), { kind: 'tick', now: at(10), batteryLow: true }).state;
+    const one = phoneReachabilityStep(provenAt(0), { kind: 'tick', now: at(10), batteryLow: true }).state;
     const two = phoneReachabilityStep(one, { kind: 'tick', now: at(20), batteryLow: true }).state;
     expect(phoneReachabilityStep(two, { kind: 'tick', now: at(30), batteryLow: true }).state.cause).toBe('battery');
   });
 
   it('un téléphone injoignable ne se ré-annonce pas', () => {
-    const one = phoneReachabilityStep(seenAt(0), { kind: 'tick', now: at(10), batteryLow: false }).state;
+    const one = phoneReachabilityStep(provenAt(0), { kind: 'tick', now: at(10), batteryLow: false }).state;
     const two = phoneReachabilityStep(one, { kind: 'tick', now: at(20), batteryLow: false }).state;
     const gone = phoneReachabilityStep(two, { kind: 'tick', now: at(30), batteryLow: false }).state;
     const again = phoneReachabilityStep(gone, { kind: 'tick', now: at(90), batteryLow: false });
@@ -127,7 +130,7 @@ describe('phoneReachabilityStep — deux sondes sans réponse font un téléphon
   });
 
   it('un signe de vie annonce le retour et efface la cause', () => {
-    const one = phoneReachabilityStep(seenAt(0), { kind: 'tick', now: at(10), batteryLow: false }).state;
+    const one = phoneReachabilityStep(provenAt(0), { kind: 'tick', now: at(10), batteryLow: false }).state;
     const two = phoneReachabilityStep(one, { kind: 'tick', now: at(20), batteryLow: false }).state;
     const gone = phoneReachabilityStep(two, { kind: 'tick', now: at(30), batteryLow: false }).state;
     const back = phoneReachabilityStep(gone, { kind: 'alive', at: at(45) });
@@ -146,6 +149,18 @@ describe('phoneReachabilityStep — deux sondes sans réponse font un téléphon
   it('un signe de vie plus ancien que le dernier connu ne recule pas l\'horloge', () => {
     const state = seenAt(20);
     expect(phoneReachabilityStep(state, { kind: 'alive', at: at(5) }).state.lastSeenAt).toBe(at(20));
+  });
+
+  it('un téléphone qui n\'a jamais répondu à une sonde n\'est jamais déclaré : sa version ne sait peut-être pas répondre', () => {
+    const one = phoneReachabilityStep(seenAt(0), { kind: 'tick', now: at(10), batteryLow: false }).state;
+    const two = phoneReachabilityStep(one, { kind: 'tick', now: at(20), batteryLow: false }).state;
+    const third = phoneReachabilityStep(two, { kind: 'tick', now: at(30), batteryLow: false });
+    expect(third.announcement).toBeUndefined();
+    expect(third.state.unreachableSince).toBeNull();
+    expect(phoneReachabilityStep(third.state, { kind: 'tick', now: at(20 + config.reprobeAfterMinutes - 1), batteryLow: false }).probe).toBe(false);
+    const retry = phoneReachabilityStep(third.state, { kind: 'tick', now: at(20 + config.reprobeAfterMinutes), batteryLow: false });
+    expect(retry.probe).toBe(true);
+    expect(retry.state.probesSent).toBe(1);
   });
 
   it('sans aucun signe de vie connu, un balayage ne fait rien', () => {

@@ -65,6 +65,16 @@ const stepAlive = (state: PhoneReachabilityRecord, input: { readonly at: string;
 const cycleOpen = (state: PhoneReachabilityRecord, lastSeenAt: string, now: string, config: PhoneReachabilityConfig): boolean =>
   elapsed(lastSeenAt, now, config.quietMinutes) && (state.lastAnsweredAt === null || elapsed(state.lastAnsweredAt, now, config.reprobeAfterMinutes));
 
+/**
+ * Un téléphone qui n'a JAMAIS répondu à une sonde n'est pas déclaré : une version antérieure aux
+ * sondes les ignore, et la déclarer injoignable serait faux à chaque mise en poche. Il est re-sondé
+ * une fois par `reprobeAfterMinutes` ; sa première réponse le rend éligible.
+ */
+const stepUnproven = (state: PhoneReachabilityRecord, now: string, config: PhoneReachabilityConfig): PhoneReachabilityStepResult =>
+  state.lastProbeAt !== null && elapsed(state.lastProbeAt, now, config.reprobeAfterMinutes)
+    ? { state: { ...state, probesSent: 1, lastProbeAt: now }, probe: true }
+    : { state, probe: false };
+
 const stepTick = (state: PhoneReachabilityRecord, input: { readonly now: string; readonly batteryLow: boolean }, config: PhoneReachabilityConfig): PhoneReachabilityStepResult => {
   const idle: PhoneReachabilityStepResult = { state, probe: false };
   if (state.lastSeenAt === null || state.unreachableSince !== null) return idle;
@@ -75,6 +85,7 @@ const stepTick = (state: PhoneReachabilityRecord, input: { readonly now: string;
   if (state.probesSent < config.probesBeforeUnreachable) {
     return { state: { ...state, probesSent: state.probesSent + 1, lastProbeAt: input.now }, probe: true };
   }
+  if (state.lastAnsweredAt === null) return stepUnproven(state, input.now, config);
   return {
     state: { ...state, unreachableSince: state.lastSeenAt, cause: input.batteryLow ? 'battery' : 'network' },
     probe: false,

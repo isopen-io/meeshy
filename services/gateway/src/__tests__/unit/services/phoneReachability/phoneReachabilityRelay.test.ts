@@ -82,7 +82,7 @@ function monde(options: {
   const sondes: string[] = [];
   const retraits: Array<{ emitterId: string; readerId: string }> = [];
   const conversing = new Set(options.enConversation ?? []);
-  let now = T0;
+  let now = T0 - 70 * MIN;
   let connecte = options.connecte ?? false;
   const deps: PhoneReachabilityRelayDeps = {
     prisma: { ...world.prisma, relationFeatureSetting: settings } as unknown as PrismaClient,
@@ -110,9 +110,18 @@ function monde(options: {
   const avancer = (ms: number) => {
     now += ms;
   };
-  /** Le chemin nominal : un signe de vie à T0, puis deux sondes ignorées. */
-  const perdre = async () => {
+  /**
+   * Le téléphone a prouvé qu'il répond aux sondes (une réponse à T0 − 70 min), puis donne un signe
+   * de vie à T0 : c'est l'horloge de chaque témoin.
+   */
+  const prouver = async () => {
+    await vivant({ answer: true });
+    avancer(70 * MIN);
     await vivant();
+  };
+  /** Le chemin nominal : un téléphone prouvé, puis deux sondes ignorées. */
+  const perdre = async () => {
+    await prouver();
     avancer(10 * MIN);
     await balayer();
     avancer(10 * MIN);
@@ -132,6 +141,7 @@ function monde(options: {
     balayer,
     avancer,
     perdre,
+    prouver,
     poser: (otherId: string, unreachableShared: boolean) => {
       const row = settings.rows.find((r) => r.ownerId === EMETTEUR && r.otherId === otherId);
       if (row) row.unreachableShared = unreachableShared;
@@ -153,7 +163,7 @@ function monde(options: {
 describe('deux sondes sans réponse font un téléphone injoignable', () => {
   it('sonde après dix minutes de silence, puis dix minutes plus tard, puis déclare', async () => {
     const m = monde();
-    await m.vivant();
+    await m.prouver();
     m.avancer(9 * MIN);
     await m.balayer();
     expect(m.sondes).toEqual([]);
@@ -182,7 +192,7 @@ describe('deux sondes sans réponse font un téléphone injoignable', () => {
 
   it('un téléphone dont la socket est ouverte n\'est jamais sondé : sa connexion est un signe de vie', async () => {
     const m = monde({ connecte: true });
-    await m.vivant();
+    await m.prouver();
     m.avancer(45 * MIN);
     await m.balayer();
     m.avancer(45 * MIN);
@@ -193,7 +203,7 @@ describe('deux sondes sans réponse font un téléphone injoignable', () => {
 
   it('une réponse à la sonde le garde joignable, et espace la sonde suivante d\'une heure', async () => {
     const m = monde();
-    await m.vivant();
+    await m.prouver();
     m.avancer(10 * MIN);
     await m.balayer();
     m.avancer(MIN);
@@ -209,7 +219,7 @@ describe('deux sondes sans réponse font un téléphone injoignable', () => {
 
   it('un autre appareil que le téléphone suivi ne dit rien du téléphone', async () => {
     const m = monde();
-    await m.vivant();
+    await m.prouver();
     m.avancer(10 * MIN);
     await m.balayer();
     await m.vivant({ sessionId: 'tablette' });
@@ -225,6 +235,21 @@ describe('deux sondes sans réponse font un téléphone injoignable', () => {
     await m.perdre();
     expect(m.sondes).toEqual([]);
     expect(m.emissions).toEqual([]);
+  });
+});
+
+describe('une version qui ne répond pas aux sondes', () => {
+  it('n\'est jamais déclarée injoignable : seulement re-sondée, sans bruit', async () => {
+    const m = monde();
+    m.avancer(70 * MIN);
+    await m.vivant();
+    for (let i = 0; i < 12; i += 1) {
+      m.avancer(10 * MIN);
+      await m.balayer();
+    }
+    expect(m.pushes).toEqual([]);
+    expect(m.emissions).toEqual([]);
+    expect(m.sondes.length).toBeLessThanOrEqual(4);
   });
 });
 
@@ -298,7 +323,7 @@ describe('le rattrapage et la lecture', () => {
 
   it('un téléphone joignable ne sert rien', async () => {
     const m = monde();
-    await m.vivant();
+    await m.prouver();
     expect(await phoneReachabilitySnapshotFor(m.deps, SANG)).toEqual({ items: [] });
   });
 });
