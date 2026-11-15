@@ -460,6 +460,7 @@ describe('le passage d’une carte à la suivante — la carte qui part sort en 
     signIn();
     const { deps } = harness();
     const played: { readonly ghost: boolean; readonly frames: unknown }[] = [];
+    const own = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
     const native = HTMLElement.prototype.animate;
     HTMLElement.prototype.animate = function (this: HTMLElement, frames: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions) {
       played.push({ ghost: this.hasAttribute('data-onb-ghost'), frames });
@@ -477,7 +478,8 @@ describe('le passage d’une carte à la suivante — la carte qui part sort en 
       expect(ghost?.querySelector('[data-onb-action], [data-onb-card], [id]')).toBeNull();
       expect(JSON.stringify(played.filter((entry) => entry.ghost).map((entry) => entry.frames))).toContain('"opacity":0');
     } finally {
-      HTMLElement.prototype.animate = native;
+      if (own === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+      else Object.defineProperty(HTMLElement.prototype, 'animate', own);
     }
   });
 });
