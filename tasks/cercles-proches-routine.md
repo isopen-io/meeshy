@@ -1214,3 +1214,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   23 h 08 UTC) ; la fusion rend `405 Cannot change this locked branch`. Le verrou ne se lève que par un administrateur :
   la routine ne le contourne pas. La PR est prête à fusionner dès qu'il est levé.
 - Prochain lot recommandé : #18578 (iOS + Android se recalent sur la passerelle), puis #18580, puis #18431.
+
+## 2026-11-15 — réveil de 15 h : `dev` déverrouillée, la PR #18581 repart vers la fusion (#18389)
+
+- Reprise : `dev` n'est plus verrouillée (`lock_branch` désactivé, commits sur `dev` depuis 13 h UTC). La branche avait
+  déjà reçu `dev` à 13 h 37 UTC ; `dev` ayant encore avancé, `origin/dev` y est refusionné à la main : aucun conflit.
+- Gates locaux sur le résultat fusionné : gateway `jest` `sharedLocation` + handler + `relation-locations` 8 suites,
+  120 verts ; `tsc` gateway et web verts ; web `bun test` du lot 140/140 ; garde shared de parité des événements 5/5.
+- Rouge vu sur le commit précédent, étranger au lot : `Gardes iOS (texte)` — cliquet des couleurs `Color(hex:)` à 468
+  pour une référence de 466 ; la PR ne touche aucune couleur iOS (seul Swift : deux lignes de `RelationsEndpoint`).
+- Prochain lot recommandé : #18578 (iOS + Android se recalent sur la passerelle), puis #18580, puis #18431.
