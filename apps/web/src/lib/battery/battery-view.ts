@@ -1,7 +1,7 @@
 import type { BatteryAnnouncementKind } from '@meeshy/shared/types/battery-constants';
 import type { BatteryAnnouncement, BatteryReaderState } from '@meeshy/shared/types/battery';
 
-import { translateBattery, type BatteryCatalogKey } from '@/lib/i18n-battery-catalog';
+import { batteryTemplate, translateBattery, type BatteryCatalogKey } from '@/lib/i18n-battery-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { batteryToneOf, type BatteryTone } from './battery-tone';
@@ -40,7 +40,7 @@ export function batteryAnnouncementText(
   const who = name ?? translateBattery(language, 'battery.someone');
   const phrase = PHRASES[announcement.kind];
   const level = announcement.kind === 'threshold' ? (announcement.threshold ?? announcement.level) : announcement.level;
-  const text = translateBattery(language, level === null ? phrase.bare : phrase.withLevel);
+  const text = batteryTemplate(language, level === null ? phrase.bare : phrase.withLevel);
   return text.replace('{name}', who).replace('{level}', String(level ?? ''));
 }
 
@@ -64,12 +64,12 @@ export function batteryBadgeOf(state: BatteryReaderState, language: InterfaceLan
   return { tone, level: state.level, charging: state.charging, spoken };
 }
 
-const HEADLINE: Readonly<Record<BatteryReaderState['phase'], BatteryCatalogKey>> = {
+const HEADLINE = {
   low: 'battery.phase.low',
   critical: 'battery.phase.critical',
   off: 'battery.phase.off',
   charging: 'battery.phase.charging',
-};
+} as const satisfies Readonly<Record<BatteryReaderState['phase'], BatteryCatalogKey>>;
 
 /** « 45 min », « 1 h 35 min », « 2 h » — les unités de la langue, par `Intl`. */
 export function batteryDurationText(language: InterfaceLanguage, minutes: number): string {
@@ -118,7 +118,7 @@ export function batteryDetailOf(state: BatteryReaderState, language: InterfaceLa
   return {
     tone,
     headline: translateBattery(language, HEADLINE[state.phase]),
-    level: translateBattery(language, tone === 'off' ? 'battery.detail.lastLevel' : 'battery.detail.level', { level }),
+    level: tone === 'off' ? translateBattery(language, 'battery.detail.lastLevel', { level }) : translateBattery(language, 'battery.detail.level', { level }),
     lines,
   };
 }

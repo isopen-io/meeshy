@@ -7,6 +7,35 @@ import { BATTERY_TONE_COLOR as TONE_INK, type BatteryTone } from '@/lib/battery/
  * présumé éteint n'a qu'un contour. Toujours `aria-hidden` : l'hôte dit l'état avec des mots.
  */
 
+/** Sous cette taille d'avatar, l'icône ne se lirait plus : elle ne se pose pas, l'avatar la DIT quand même. */
+export const AVATAR_BATTERY_MIN_SIZE = 24;
+
+/**
+ * **L'ICÔNE BATTERIE SUR L'AVATAR** (#14147) — en haut, côté fin de ligne, sur une pastille de la surface : la
+ * présence et l'humeur occupent le bas. Cachée hors épisode (l'hôte ne la pose que si un état est servi).
+ */
+export function AvatarBatteryBadge({ badge, size }: { readonly badge: { readonly tone: BatteryTone; readonly level: number; readonly charging: boolean }; readonly size: number }) {
+  if (size < AVATAR_BATTERY_MIN_SIZE) return null;
+  const width = Math.max(14, Math.round(size * 0.36));
+  return (
+    <span
+      data-avatar-battery={badge.tone}
+      aria-hidden="true"
+      className="pointer-events-none absolute grid place-items-center rounded-chip"
+      style={{
+        top: -Math.round(size * 0.04),
+        insetInlineEnd: -Math.round(size * 0.1),
+        padding: '2px 3px',
+        background: 'var(--color-ios-surface)',
+        boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)',
+        color: 'var(--color-ios-ink)',
+      }}
+    >
+      <BatteryGlyph level={badge.level} tone={badge.tone} charging={badge.charging} width={width} />
+    </span>
+  );
+}
+
 const INNER_WIDTH = 16;
 const MIN_FILL = 1.5;
 

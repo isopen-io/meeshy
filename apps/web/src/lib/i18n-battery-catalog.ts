@@ -64,6 +64,15 @@ export function loadBatteryCatalog(language: InterfaceLanguage): Promise<Battery
   return request;
 }
 
+/** Le gabarit brut d'une clé, ses `{marques}` intactes : pour un appelant qui choisit sa clé parmi plusieurs. */
+export function batteryTemplate(language: InterfaceLanguage, key: BatteryCatalogKey): string {
+  const catalog = loaded.get(language);
+  if (catalog === undefined) {
+    throw new Error(`Catalogue de la batterie « ${language} » lu avant d'être chargé (loadBatteryCatalog).`);
+  }
+  return catalog[key];
+}
+
 export function translateBattery<K extends BatteryCatalogKey>(language: InterfaceLanguage, key: K, ...params: TranslateArgs<K>): string;
 export function translateBattery(language: InterfaceLanguage, key: BatteryCatalogKey, params?: Readonly<Record<string, string>>): string {
   const catalog = loaded.get(language);
