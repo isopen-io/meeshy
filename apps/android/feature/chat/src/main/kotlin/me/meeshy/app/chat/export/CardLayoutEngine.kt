@@ -113,14 +113,16 @@ object CardLayoutEngine {
         val replyWidth = if (geometry.bubbles) bubbleWidth - 2 * CardMetrics.BUBBLE_PAD_X else textWidth
         val quoted = input.quoted?.takeIf { CardText.nonBlank(it.text) != null }
         val hasQuote = quoted != null
-        val maxHeight = aspect.fixedHeight ?: CardLayout.MAX_HEIGHT
+        val viewportHeight = aspect.fixedHeight ?: CardLayout.MAX_HEIGHT
+        val maxHeight = if (input.unbounded) CardLayout.SCROLL_MAX_HEIGHT else viewportHeight
         val budget = maxHeight - 2 * padY
+        val mediaBudget = viewportHeight - 2 * padY
         val authorLine = CardMetrics.AUTHOR_LINE + CardMetrics.AUTHOR_GAP
         val hasReplyText = CardText.nonBlank(input.reply.text) != null
-        val mediaBlock = CardMediaLayout.plan(input.media, textWidth, budget)
+        val mediaBlock = CardMediaLayout.plan(input.media, textWidth, mediaBudget)
         val mediaGap = if (hasReplyText && mediaBlock.tiles.isNotEmpty()) CardMediaLayout.BLOCK_GAP else 0.0
         val heroWidth = width - 2 * CardHero.MARGIN
-        val heroHeight = input.hero?.let { CardHero.height(it.aspect, heroWidth, budget) } ?: 0.0
+        val heroHeight = input.hero?.let { CardHero.height(it.aspect, heroWidth, mediaBudget) } ?: 0.0
         val chrome = Chrome(
             header = if (title == null && date == null) 0.0 else
                 (if (title == null) 0.0 else CardMetrics.TITLE_LINE) + (if (date == null) 0.0 else CardMetrics.DATE_LINE) + CardMetrics.HEADER_GAP,
@@ -179,8 +181,13 @@ object CardLayoutEngine {
                 truncate(sized)
             }
             val content = contentHeight(sized)
-            val height = aspect.fixedHeight
-                ?: if (truncated) CardLayout.MAX_HEIGHT else minOf(CardLayout.MAX_HEIGHT, maxOf(CardLayout.MIN_HEIGHT, 2 * padY + content))
+            val natural = 2 * padY + content
+            val height = when {
+                input.unbounded -> if (truncated) maxHeight else minOf(maxHeight, maxOf(viewportHeight, natural))
+                aspect.fixedHeight != null -> aspect.fixedHeight
+                truncated -> CardLayout.MAX_HEIGHT
+                else -> minOf(CardLayout.MAX_HEIGHT, maxOf(CardLayout.MIN_HEIGHT, natural))
+            }
             return paint(sized, height, content, truncated)
         }
 
@@ -226,7 +233,21 @@ object CardLayoutEngine {
             val tilt = input.tilt.radians
             val contentOps: List<CardOp> = if (tilt == 0.0 || painter.ops.isEmpty()) painter.ops
             else listOf(CardOp.Group(tilt, width / 2, contentTop + (painter.y - contentTop) / 2, painter.ops.toList()))
-            return CardLayout(width, height, headerOps + contentOps, regions, CardLayout.watermark(input.handle), truncated)
+            return CardLayout(
+                width, height, headerOps + contentOps, regions, CardLayout.watermark(input.handle), truncated,
+                backdrop = backdropOps(if (input.unbounded) viewportHeight else height),
+                viewportHeight = if (input.unbounded) viewportHeight else null,
+            )
+        }
+
+        /** La photo choisie, peinte EN FOND sous un voile de la couleur de la palette (#18672). */
+        fun backdropOps(height: Double): List<CardOp> {
+            val chosen = input.backdrop ?: return emptyList()
+            val base = palette.background.firstOrNull()?.color ?: CardColor.hex("#000000")
+            return listOf(
+                CardOp.Picture(chosen.media.copy(kind = CardMediaKind.IMAGE), 0.0, 0.0, width, height, 0.0),
+                CardOp.Panel(0.0, 0.0, width, height, 0.0, base.copy(alpha = chosen.veil)),
+            )
         }
 
         /** Le visuel du support, pleine largeur avant tout texte ([CardHero]). */

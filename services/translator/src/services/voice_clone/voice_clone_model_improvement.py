@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
+from utils.voice_cache_guard import voice_cache_user_dir
+
 from .voice_metadata import VoiceModel
 
 if TYPE_CHECKING:
@@ -116,6 +118,7 @@ class VoiceCloneModelImprover:
         Note:
             Si la similarité est < 80%, retourne le modèle existant sans modification
         """
+        user_dir = voice_cache_user_dir(self._voice_cache_dir, existing_model.user_id) / "temp"
         logger.info(
             f"[MODEL_IMPROVER] 🔄 Vérification amélioration modèle "
             f"pour {existing_model.user_id}"
@@ -175,7 +178,6 @@ class VoiceCloneModelImprover:
         # =====================================================================
         # ÉTAPE 3: Extraire l'embedding du nouvel audio
         # =====================================================================
-        user_dir = self._voice_cache_dir / existing_model.user_id / "temp"
         user_dir.mkdir(parents=True, exist_ok=True)
 
         logger.debug(

@@ -19,6 +19,9 @@ public protocol RelationsProviding: Sendable {
     /// `GET /relations/locations?bbox=` — les positions qu'on me partage, à la précision qu'on m'a donnée (#16983).
     /// `nil` couvre toute la carte.
     func sharedLocations(within bounds: SharedLocationBounds?) async throws -> [SharedLocationChanged]
+    /// `GET /relations/locations/mine` — MON partage tel que la passerelle le sert : chacun de mes appareils s'y recale
+    /// (#18389, #18578). Jamais une position.
+    func ownSharedLocation() async throws -> SharedLocationOwnSnapshot
     func ritual(
         userId: String,
         phase: RelationRitualPhase,
@@ -78,6 +81,13 @@ public final class RelationsService: RelationsProviding, Sendable {
             RelationsEndpoint.locations, method: "GET", body: nil, queryItems: query
         )
         return response.data.items
+    }
+
+    public func ownSharedLocation() async throws -> SharedLocationOwnSnapshot {
+        let response: APIResponse<SharedLocationOwnSnapshot> = try await api.request(
+            RelationsEndpoint.locationsMine, method: "GET", body: nil, queryItems: nil
+        )
+        return response.data
     }
 
     /// `POST /relations/:userId/ritual` — `start` ouvre ou rejoint, `hold` se rejoue tant

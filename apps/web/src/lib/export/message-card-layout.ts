@@ -9,8 +9,11 @@ import {
   type CardMediaLayout,
 } from './message-card-arrangement';
 import { DEFAULT_AUDIO_STYLE, heroMediaOps, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock } from './message-card-media';
+import { decorateCard } from './message-card-decor';
+import type { CardDecor } from './message-card-models';
 import type { CardOp } from './message-card-ops';
 import { HERO_GAP, heroHeight, heroSpan } from './message-card-hero';
+import { SCROLL_MAX_HEIGHT } from './message-card-scroll';
 import { THREAD_SEPARATOR_ROW, threadLevel, threadRoom, threadSeparatorOps, threadShift } from './message-card-thread';
 import { GUILLEMET_FONT, canvasFont, templateOf, type CardLinkId, type CardPalette, type MessageCardTemplateId } from './message-card-templates';
 import { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
@@ -101,7 +104,25 @@ export type MessageCardInput = {
    * compte plus parmi les médias de la réponse (#10915).
    */
   readonly heroMedia?: number | null;
+  /** Le décor de la maquette (#18673) — centrage, cadre, panneau, ornement. */
+  readonly decor?: CardDecor;
+  /**
+   * La carte qui DÉFILE (#18671) : le texte garde sa taille et la carte
+   * s'allonge, jusqu'à `SCROLL_MAX_HEIGHT` ; le format n'en montre qu'une
+   * fenêtre, `viewportHeight`. Absent : la carte tient dans son format.
+   */
+  readonly unbounded?: boolean;
+  /**
+   * La photo ou la vidéo CHOISIE pour le fond (#18672) : ses pixels sont au
+   * rang `media.length` des sources, sous un voile de la palette d'opacité
+   * `veil` (bornée à `BACKDROP_VEIL_MAX`).
+   */
+  readonly chosenBackdrop?: ChosenBackdrop | null;
 };
+
+export type ChosenBackdrop = { readonly video: boolean; readonly veil: number };
+export const BACKDROP_VEIL_DEFAULT = 0.55;
+export const BACKDROP_VEIL_MAX = 0.9;
 
 /**
  * Les PARTIES d'une carte qu'un geste peut désigner sur l'aperçu : l'en-tête,
@@ -134,6 +155,10 @@ export type CardLayout = {
   readonly tilt: number;
   /** Le visuel peint EN FOND (#9236) — droit comme le fond, sous un voile de la palette ; `null` : aucun. */
   readonly backdrop: CardBackdrop | null;
+  /** Ce qui reste DROIT et FIXE au-dessus du fond : le cadre d'une maquette (#18673). */
+  readonly fixed?: readonly CardOp[];
+  /** La hauteur de la fenêtre d'une carte qui défile — absente : la carte entière est l'image. */
+  readonly viewportHeight?: number | null;
 };
 
 /** Le visuel de fond : son rang dans `MessageCardInput.media`, et le voile qui garde le texte lisible. */
@@ -240,10 +265,10 @@ function contentHeight(sized: Sized, hasQuote: boolean, chrome: Chrome): number 
 }
 
 /** Le voile d'un visuel de fond : la première teinte du fond, assez opaque pour que le texte se lise et que la carte garde sa couleur. */
-function veilOf(palette: CardPalette): string {
+function veilOf(palette: CardPalette, chosen?: number): string {
   const base = /^#([0-9a-f]{6})$/i.exec(palette.background[0]?.[1] ?? '')?.[1] ?? '000000';
   const channel = (at: number) => Number.parseInt(base.slice(at, at + 2), 16);
-  const alpha = palette.replyInk.toUpperCase() === '#FFFFFF' ? 0.6 : 0.72;
+  const alpha = chosen !== undefined ? Math.min(BACKDROP_VEIL_MAX, Math.max(0, Number.isFinite(chosen) ? chosen : BACKDROP_VEIL_DEFAULT)) : palette.replyInk.toUpperCase() === '#FFFFFF' ? 0.6 : 0.72;
   return `rgba(${channel(0)}, ${channel(2)}, ${channel(4)}, ${alpha})`;
 }
 
@@ -268,6 +293,9 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const geometry = LINK_GEOMETRY[template.link];
   const frame = input.frame ?? DEFAULT_CARD_FRAME;
   const { width, fixedHeight, budget } = canvasOf(input.aspect ?? 'auto');
+  const unbounded = input.unbounded === true;
+  /* Une carte qui défile ne réduit ni ne coupe son texte : il a toute la hauteur. Ses médias, eux, se mesurent à la fenêtre. */
+  const textBudget = unbounded ? SCROLL_MAX_HEIGHT - 2 * PAD_Y : budget;
   const textWidth = width - 2 * PAD_X;
   const bubbleWidth = textWidth - BUBBLE_OFFSET;
   const quoteWidth = geometry.bubbles ? bubbleWidth - 2 * BUBBLE_PAD_X : textWidth - QUOTE_INDENT;
@@ -363,20 +391,20 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const atFloor = (sized: Sized) => sized.replySize <= REPLY_FLOOR * typeface.replyScale && sized.quoteSize <= QUOTE_FLOOR;
   let step = 0;
   let sized = sizeAt(step);
-  while (total(sized) > budget && !atFloor(sized)) {
+  while (total(sized) > textBudget && !atFloor(sized)) {
     step += 1;
     sized = sizeAt(step);
   }
 
   let truncated = false;
-  if (total(sized) > budget) {
+  if (total(sized) > textBudget) {
     truncated = true;
     const quoteLH = quoteLineHeight(sized.quoteSize);
     const replyLH = replyLineHeight(sized.replySize);
     /* Une colonne de médias se pose À CÔTÉ des lignes : elle ne leur prend pas de place en hauteur. */
     const besideShare = beside ? Math.max(chrome.replyMeta, chrome.beside) - chrome.replyMeta : 0;
     const fixed = total({ ...sized, quoteLines: [], replyLines: [] }) - besideShare + (chrome.media > 0 && replyHasText ? MEDIA_GAP : 0);
-    const room = budget - fixed;
+    const room = textBudget - fixed;
     /* La citation cède d'abord : au plus un tiers de la place, deux lignes au moins. */
     const quoteKeep = hasQuote ? Math.min(sized.quoteLines.length, Math.max(2, Math.floor((room * 0.3) / quoteLH))) : 0;
     const fits = replyHasText ? Math.max(1, Math.floor((room - quoteKeep * quoteLH) / replyLH)) : 0;
@@ -393,7 +421,9 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   }
 
   const content = total(sized);
-  const height = fixedHeight ?? (truncated ? CARD_MAX_HEIGHT : Math.min(CARD_MAX_HEIGHT, Math.max(CARD_MIN_HEIGHT, 2 * PAD_Y + content)));
+  const natural = 2 * PAD_Y + content;
+  const viewport = fixedHeight ?? (truncated ? CARD_MAX_HEIGHT : Math.min(CARD_MAX_HEIGHT, Math.max(CARD_MIN_HEIGHT, natural)));
+  const height = unbounded ? Math.min(SCROLL_MAX_HEIGHT, Math.max(viewport, natural)) : viewport;
   /* Un texte court flotte au milieu de l'espace libre, jamais collé en haut. */
   let y = PAD_Y + Math.max(0, Math.floor((height - 2 * PAD_Y - content) / 2));
 
@@ -574,9 +604,25 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   });
   if (followUps.length > 0) region('replies', followTop, y);
 
+  const chosen = input.chosenBackdrop ?? null;
   const backdrop: CardBackdrop | null =
-    backdropIndex === null || backdropMedia === undefined ? null : { index: backdropIndex, video: backdropMedia.kind === 'video', veil: veilOf(palette) };
-  return { width, height, ops, regions, watermark: watermarkOf(input.handle), truncated, tilt: CARD_TILT_RADIANS[frame.tilt], backdrop };
+    chosen !== null
+      ? { index: media.length, video: chosen.video, veil: veilOf(palette, chosen.veil) }
+      : backdropIndex === null || backdropMedia === undefined
+        ? null
+        : { index: backdropIndex, video: backdropMedia.kind === 'video', veil: veilOf(palette) };
+  const laid: CardLayout = {
+    width,
+    height,
+    ops,
+    regions,
+    watermark: watermarkOf(input.handle),
+    truncated,
+    tilt: CARD_TILT_RADIANS[frame.tilt],
+    backdrop,
+    ...(unbounded ? { viewportHeight: height > viewport ? viewport : null } : {}),
+  };
+  return input.decor === undefined ? laid : decorateCard(laid, input.decor, palette);
 }
 
 /** Ce que la liaison peint dans son bloc, entre le bas de la citation (`y`) et la réponse. */

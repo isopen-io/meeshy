@@ -37,6 +37,13 @@ export type DatabaseBootstrapSteps = {
   ensureContactDeltaIndex(): Promise<void>;
   /** Index de la télémétrie v2 (#10510) — facultatif pour les doubles antérieurs. */
   ensureSocialEventIndexes?(): Promise<void>;
+  /**
+   * L'index unique PARTIEL du dedup d'envoi (#18621) — facultatif pour les
+   * doubles antérieurs. Il est posé ici, hors de la porte, parce que la base
+   * qui en a besoin est précisément celle que la porte ne laisse pas passer :
+   * une base PEUPLÉE, celle qui porte les messages à ne pas dupliquer.
+   */
+  ensureMessageDedupIndexes?(): Promise<void>;
   shouldInitialize(): Promise<boolean>;
   initializeDatabase(): Promise<void>;
   ensureSeedAccountsVerified(): Promise<void>;
@@ -55,6 +62,7 @@ export async function bootstrapDatabase(
   await steps.ensureFriendRequestIndexes();
   await steps.ensureContactDeltaIndex();
   await steps.ensureSocialEventIndexes?.();
+  await steps.ensureMessageDedupIndexes?.();
 
   if (await steps.shouldInitialize()) {
     logger.info(

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ensureSocialEventIndexesByCommand } from './social/socialEventIndexes';
+import { ensureMessageDedupIndexes as ensureMessageDedupIndexesByCommand } from './messaging/messageDedupIndex';
 import { AuthService } from './AuthService';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
@@ -406,6 +407,41 @@ export class InitService {
       if (conflicts.length > 0) logger.error(`[INIT] ❌ Index de télémétrie v2 en conflit, laissés en place : ${conflicts.join(', ')}`);
     } catch (error) {
       logger.error('[INIT] ❌ Index de télémétrie v2 non posés', error);
+    }
+  }
+
+  /**
+   * L'index unique PARTIEL `(conversationId, clientMessageId)` (#18621) — la
+   * SEULE chose qui ferme la fenêtre de concurrence du dedup d'envoi.
+   *
+   * Même raison que ses voisins, et un antécédent plus lourd : le
+   * `schema.prisma` décline `@@unique` à dessein (le connecteur MongoDB poserait
+   * un index NON partiel, cassant l'envoi pour les lignes historiques), l'index
+   * vit donc dans une migration `.mongodb.js` qu'AUCUN déploiement ne joue. Il
+   * a manqué deux mois en production sans que rien ne le détecte.
+   *
+   * Invariant de CHAQUE boot, jamais derrière `shouldInitialize()` : cette
+   * porte ne s'ouvre que sur une base VIDE, et la base qui porte les messages à
+   * ne pas dupliquer est par définition peuplée.
+   *
+   * Un conflit 85/86 est JOURNALISÉ et laissé en place — droper un index unique
+   * sous une base vivante est l'affaire d'une migration nommée. Toute autre
+   * erreur STOPPE le démarrage, comme chez les trois voisins : un `E11000` dit
+   * que des doublons existent déjà, c'est-à-dire exactement ce que l'index
+   * devait empêcher, et le taire ferait du démarrage le complice du défaut.
+   */
+  async ensureMessageDedupIndexes(): Promise<void> {
+    try {
+      const outcomes = Object.entries(await ensureMessageDedupIndexesByCommand(this.prisma));
+      const conflicts = outcomes.flatMap(([name, probe]) => probe.outcome === 'conflict' ? [`${name} (${probe.reason})`] : []);
+      const created = outcomes.filter(([, probe]) => probe.outcome === 'created').map(([name]) => name);
+      if (created.length > 0) logger.info(`[INIT] index de dedup d'envoi créé : ${created.join(', ')}`);
+      if (conflicts.length > 0) {
+        logger.error(`[INIT] ❌ Index de dedup d'envoi en CONFLIT, laissé en place — le dedup concurrent ne protège rien : ${conflicts.join(', ')}`);
+      }
+    } catch (error) {
+      logger.error('[INIT] ❌ Index de dedup d\'envoi non posé', error);
+      throw error;
     }
   }
 

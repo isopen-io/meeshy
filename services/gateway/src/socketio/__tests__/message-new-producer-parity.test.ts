@@ -637,6 +637,16 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
     return call?.[1] as Record<string, unknown> | undefined;
   }
 
+  /**
+   * La synchro de liste part APRÈS l'enfilage, dans le même passage, et ne
+   * porte aucune adresse de fichier : c'est elle qui atteste qu'une méthode est
+   * allée au bout, là où l'enfilage le faisait avant #18619 — au prix de ce
+   * qu'il écrivait.
+   */
+  function syncEmitted(): boolean {
+    return (ioState.toEmit.mock.calls as any[]).some((c) => c[0] === SERVER_EVENTS.CONVERSATION_UPDATED);
+  }
+
   beforeEach(async () => {
     jest.clearAllMocks();
     ioState = getIoState();
@@ -858,16 +868,44 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
       delete process.env.ATTACHMENT_URL_SIGNING_KEY;
     });
 
-    it('le producteur REST/ZMQ enfile même quand la lecture du plan TOMBE', async () => {
+    /**
+     * Ces deux témoins disaient « le producteur enfile même quand la lecture du
+     * plan TOMBE », pour une BONNE raison : `PLAN_UNAVAILABLE` ne doit pas être
+     * un `throw`, sans quoi « un `catch` de fin de méthode chez l'appelant
+     * emporterait l'enfilage durable qui SUIT l'émission » (`planOutcome.ts`).
+     * L'enfilage servait de PREUVE que la méthode était allée au bout.
+     *
+     * #18619 a montré que cette preuve coûtait ce qu'elle mesurait : la charge
+     * enfilée porte l'adresse NUE d'une pièce liée au lecteur, pour 48 h, dans
+     * le cas EXACT où le direct refuse de l'émettre. La preuve change donc de
+     * porteur sans disparaître — `CONVERSATION_UPDATED` part APRÈS l'enfilage
+     * dans le même passage et ne porte aucune adresse de fichier.
+     */
+    it('le producteur REST/ZMQ VA AU BOUT quand la lecture du plan tombe, sans enfiler d’adresse nue', async () => {
       await manager.broadcastMessage(protectedMessage() as any, CONVERSATION_ID);
 
-      expect(queuedFor('peer-userId')).toEqual(
-        expect.objectContaining({ messageId: 'msg-123456789012' })
-      );
+      // La méthode est allée au bout : le silence est CHOISI, pas une panne.
+      expect(syncEmitted()).toBe(true);
+      // Et rien de durable ne porte l'adresse nue de la pièce protégée.
+      expect(queuedFor('peer-userId')).toBeUndefined();
     });
 
-    it('le producteur WS enfile même quand la lecture du plan TOMBE', async () => {
+    it('le producteur WS VA AU BOUT quand la lecture du plan tombe, sans enfiler d’adresse nue', async () => {
       await messageHandler.broadcastNewMessage(protectedMessage() as any, CONVERSATION_ID);
+
+      expect(syncEmitted()).toBe(true);
+      expect(queuedFor('peer-userId')).toBeUndefined();
+    });
+
+    /**
+     * L'autre moitié, et sans elle le lot serait un correctif trop large : un
+     * message ORDINAIRE — aucune pièce liée au lecteur, donc plan `null` — doit
+     * continuer d'être enfilé. Retenir sur `null` casserait le rattrapage hors
+     * ligne de tout le produit, et aucun des deux témoins ci-dessus ne pourrait
+     * le voir.
+     */
+    it('un message SANS pièce liée au lecteur est toujours enfilé, plan ou pas', async () => {
+      await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
 
       expect(queuedFor('peer-userId')).toEqual(
         expect.objectContaining({ messageId: 'msg-123456789012' })
@@ -887,11 +925,11 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
       // une pièce établie comme liée au lecteur — l'adresse nue d'un secret.
       const live = (ioState.toEmit.mock.calls as any[]).filter((c) => c[0] === SERVER_EVENTS.MESSAGE_NEW);
       expect(live).toEqual([]);
-      // Et c'est bien le SILENCE choisi, pas la méthode tombée : la file est
-      // servie dans le même passage.
-      expect(queuedFor('peer-userId')).toEqual(
-        expect.objectContaining({ messageId: 'msg-123456789012' })
-      );
+      // Et c'est bien le SILENCE choisi, pas la méthode tombée : la synchro de
+      // liste part dans le même passage. Elle a remplacé l'enfilage comme
+      // porteur de cette preuve (#18619) — l'enfilage, lui, écrivait l'adresse
+      // nue de la pièce protégée dans Redis pour 48 h.
+      expect(syncEmitted()).toBe(true);
     });
   });
 

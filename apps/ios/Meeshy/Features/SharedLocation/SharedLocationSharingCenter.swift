@@ -91,6 +91,14 @@ private final class SharedLocationSerialGate {
 ///   garde « Arrêter » pour chaque personne que le serveur peut servir ; une échéance qui n'a pas pu se solder est
 ///   rejouée, et à chaque socket accrochée ; un « Arrêter » qui n'a pas pu partir devient un retrait en attente, gardé et
 ///   rejoué de la même façon (#18204).
+///
+/// PLUSIEURS APPAREILS, UN PARTAGE (#18389, #18578, iso `shared-location-sharing.ts` du web) : la passerelle n'en connaît
+/// qu'un par compte, et c'est lui qui fait foi. `sync()` relit ce qu'elle sert (à chaque socket accrochée et à chaque
+/// `location:share-own-changed`) et s'y recale, retraits en attente d'ici gagnants : un retrait fait ailleurs s'applique
+/// ici, un ajout fait ailleurs n'est plus effacé par la liste périmée de cet appareil. Une liste REÇUE d'un autre appareil
+/// ne fait jamais partir la position d'ici : ni suivi, ni reprise au lancement, et une échéance s'y solde sans rien
+/// envoyer — la passerelle tient l'échéance de chacun (#18205). Seul un geste d'ici (« Partager », « Arrêter ») envoie
+/// quelque chose ; « Partager » fait de cet appareil celui qui publie.
 @MainActor
 final class SharedLocationSharingCenter: ObservableObject {
 
@@ -109,9 +117,12 @@ final class SharedLocationSharingCenter: ObservableObject {
     private let wakes: SharedLocationWakeScheduling
     private let owner: String
     private let currentAccount: () -> String?
+    private let served: @MainActor () async -> SharedLocationOwnSnapshot?
     private let gate = SharedLocationSerialGate()
     private var abandoned = false
     private var lastSent: SharedLocationUpdateGate.Sent?
+    /// La liste vient d'un autre appareil du compte : celui-ci ne publie pas sa position (#18578).
+    private var received: Bool
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
     private var socketWatch = Set<AnyCancellable>()
@@ -129,7 +140,9 @@ final class SharedLocationSharingCenter: ObservableObject {
         owner: String = "",
         currentAccount: @escaping () -> String? = { nil },
         wakes: SharedLocationWakeScheduling = TaskSharedLocationWakeScheduler(),
-        socketReady: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher()
+        socketReady: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
+        ownChanged: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
+        served: @escaping @MainActor () async -> SharedLocationOwnSnapshot? = { nil }
     ) {
         self.emitter = emitter
         self.fixes = fixes
@@ -138,15 +151,23 @@ final class SharedLocationSharingCenter: ObservableObject {
         self.wakes = wakes
         self.owner = owner
         self.currentAccount = currentAccount
+        self.served = served
         let restored = store.load() ?? .empty
         roster = restored
+        received = store.loadReceived()
         let lane = OrderedEventLane()
         socketReady
-            .relay(through: lane) { [weak self] _ in await self?.reconcile() }
+            .relay(through: lane) { [weak self] _ in
+                await self?.sync()
+                await self?.reconcile()
+            }
+            .store(in: &socketWatch)
+        ownChanged
+            .relay(through: lane) { [weak self] _ in await self?.sync() }
             .store(in: &socketWatch)
         lane.store(in: &socketWatch)
         guard !restored.isEmpty else { return }
-        if restored.hasRecipients { startFollowing() }
+        if restored.hasRecipients, !received { startFollowing() }
         scheduleDeadline()
     }
 
@@ -173,7 +194,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             guard self.isLive else { return .refused(.failed) }
             let previous = self.roster
             let next = previous.pruned(now: self.now()).adding(userId: userId, precision: precision, duration: duration, now: self.now())
-            return await self.publish(next, fix: fix, previous: previous)
+            return await self.publish(next, fix: fix, previous: previous, claimsPublishing: true)
         }
     }
 
@@ -198,7 +219,13 @@ final class SharedLocationSharingCenter: ObservableObject {
             let pruned = self.roster.pruned(now: self.now())
             guard !pruned.isEmpty || self.roster.hasRecipients else {
                 self.adopt(.empty)
+                self.markReceived(false)
                 self.deadline = nil
+                return nil
+            }
+            if self.received, !pruned.hasPendingWithdrawals {
+                if pruned.isEmpty { self.wipe() } else { self.adopt(pruned) }
+                self.scheduleDeadline()
                 return nil
             }
             let problem = await self.withdrawingRepublish(pruned)
@@ -207,12 +234,32 @@ final class SharedLocationSharingCenter: ObservableObject {
         }
     }
 
+    /// Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une
+    /// relecture qui échoue (hors ligne, passerelle d'avant #18389) ne change rien.
+    func sync() async {
+        _ = await locked {
+            guard let truth = await self.served(), self.isLive else { return nil }
+            let before = self.roster
+            let next = before.withServed(truth, now: self.now())
+            guard next != before else { return nil }
+            self.adopt(next)
+            if !next.hasRecipients {
+                self.stopFollowingDevice()
+                self.markReceived(false)
+            } else if !before.hasRecipients {
+                self.markReceived(true)
+            }
+            self.scheduleDeadline()
+            return nil
+        }
+    }
+
     /// Un relevé de l'appareil pendant le partage ; sauté si une publication tient le verrou, le suivant passera. Rien ne
     /// part tant qu'un retrait attend : le serveur sert peut-être encore la personne retirée.
     func didMove(to fix: SharedLocationFix) async {
         guard gate.tryEnter() else { return }
         defer { gate.leave() }
-        guard isLive, roster.hasRecipients, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
+        guard isLive, !received, roster.hasRecipients, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
         lastSent = .init(fix: fix, at: now())
         let verdict = await emitter.update(fix)
         if isLive, case .refused(.notSharing) = verdict { wipe() }
@@ -274,7 +321,15 @@ final class SharedLocationSharingCenter: ObservableObject {
         }
     }
 
-    private func publish(_ wanted: SharedLocationRoster, fix: SharedLocationFix, previous: SharedLocationRoster) async -> SharedLocationShareProblem? {
+    /// `claimsPublishing` : le geste « Partager » d'ici fait de cet appareil celui qui publie — mais seulement une fois le
+    /// démarrage accepté (ou son accusé perdu) : un « Partager » refusé laisse un appareil qui n'a fait que RECEVOIR la
+    /// liste muet, même au prochain lancement.
+    private func publish(
+        _ wanted: SharedLocationRoster,
+        fix: SharedLocationFix,
+        previous: SharedLocationRoster,
+        claimsPublishing: Bool = false
+    ) async -> SharedLocationShareProblem? {
         let next = wanted.settled
         let instant = now()
         let recipients = next.deadlinedRecipients(now: instant)
@@ -286,9 +341,11 @@ final class SharedLocationSharingCenter: ObservableObject {
         guard isLive else { return .refused(.failed) }
         switch verdict {
         case .started:
+            if claimsPublishing { markReceived(false) }
             engage(next, fix: fix)
             return nil
         case .refused(.unconfirmed):
+            if claimsPublishing { markReceived(false) }
             engage(previous.union(next), fix: fix)
             return .refused(.unconfirmed)
         case .refused(let outcome):
@@ -316,7 +373,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     private func engage(_ next: SharedLocationRoster, fix: SharedLocationFix) {
         adopt(next)
         lastSent = .init(fix: fix, at: now())
-        startFollowing()
+        if next.hasRecipients, !received { startFollowing() }
         scheduleDeadline()
     }
 
@@ -354,8 +411,14 @@ final class SharedLocationSharingCenter: ObservableObject {
         }
     }
 
+    private func markReceived(_ next: Bool) {
+        received = next
+        store.saveReceived(next)
+    }
+
     private func wipe() {
         adopt(.empty)
+        markReceived(false)
         deadline = nil
         stopFollowingDevice()
     }
@@ -372,6 +435,10 @@ final class SharedLocationSharingCenter: ObservableObject {
 protocol SharedLocationRosterStoring: AnyObject {
     func load() -> SharedLocationRoster?
     func save(_ roster: SharedLocationRoster)
+    /// La liste vient-elle d'un autre appareil du compte (#18578) ? Survit au lancement : un appareil qui n'a fait que
+    /// RECEVOIR la liste ne se remet jamais à publier sa position en se relançant.
+    func loadReceived() -> Bool
+    func saveReceived(_ received: Bool)
 }
 
 /// La liste d'UN compte, dans ses réglages locaux.
@@ -396,6 +463,12 @@ final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
             return
         }
         defaults.set(data, forKey: key)
+    }
+
+    func loadReceived() -> Bool { defaults.bool(forKey: key + ".received") }
+
+    func saveReceived(_ received: Bool) {
+        if received { defaults.set(true, forKey: key + ".received") } else { defaults.removeObject(forKey: key + ".received") }
     }
 }
 
@@ -433,7 +506,9 @@ enum SharedLocationSharingHolder {
                 .removeDuplicates()
                 .filter { $0 }
                 .map { _ in () }
-                .eraseToAnyPublisher()
+                .eraseToAnyPublisher(),
+            ownChanged: SharedLocationEvents.ownChanged,
+            served: { try? await RelationsService.shared.ownSharedLocation() }
         )
         current = (userId, center)
         return center

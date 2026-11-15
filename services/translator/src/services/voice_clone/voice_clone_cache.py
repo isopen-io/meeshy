@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from services.redis_service import AudioCacheService
+from utils.voice_cache_guard import guard_voice_cache_id
 from .voice_metadata import VoiceModel, VoiceCharacteristics
 from .voice_fingerprint import VoiceFingerprint
 
@@ -57,6 +58,7 @@ class VoiceCloneCacheManager:
         Returns:
             VoiceModel si trouvé en cache, None sinon
         """
+        user_id = guard_voice_cache_id(user_id)
         try:
             cached_profile = await self.audio_cache.get_voice_profile(user_id)
 
