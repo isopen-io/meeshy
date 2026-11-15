@@ -23,6 +23,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case deleteAccountCancel
     case deleteAccountConfirm
     case deleteAccountDeleteNow
+    case deviceBattery
+    case deviceBatterySettings
     case engagement
     case export
     case gameChestClaim
@@ -92,6 +94,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .deleteAccountCancel: return "/api/v1/me/delete-account/cancel"
         case .deleteAccountConfirm: return "/api/v1/me/delete-account/confirm"
         case .deleteAccountDeleteNow: return "/api/v1/me/delete-account/delete-now"
+        case .deviceBattery: return "/api/v1/me/device/battery"
+        case .deviceBatterySettings: return "/api/v1/me/device/battery/settings"
         case .engagement: return "/api/v1/me/engagement"
         case .export: return "/api/v1/me/export"
         case .gameChestClaim: return "/api/v1/me/game/chest/claim"

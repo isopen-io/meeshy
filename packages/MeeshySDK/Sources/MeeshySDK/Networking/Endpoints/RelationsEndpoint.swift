@@ -12,7 +12,11 @@
 import Foundation
 
 public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
+    case battery
     case byUserId(userId: String)
+    case byUserIdBattery(userId: String)
+    case byUserIdBatteryPull(userId: String)
+    case byUserIdBatterySettings(userId: String)
     case byUserIdLevel(userId: String)
     case byUserIdLocationHistory(userId: String)
     case byUserIdRitual(userId: String)
@@ -24,7 +28,11 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
 
     public var path: String {
         switch self {
+        case .battery: return "/api/v1/relations/battery"
         case .byUserId(let userId): return "/api/v1/relations/\(userId)"
+        case .byUserIdBattery(let userId): return "/api/v1/relations/\(userId)/battery"
+        case .byUserIdBatteryPull(let userId): return "/api/v1/relations/\(userId)/battery/pull"
+        case .byUserIdBatterySettings(let userId): return "/api/v1/relations/\(userId)/battery/settings"
         case .byUserIdLevel(let userId): return "/api/v1/relations/\(userId)/level"
         case .byUserIdLocationHistory(let userId): return "/api/v1/relations/\(userId)/location/history"
         case .byUserIdRitual(let userId): return "/api/v1/relations/\(userId)/ritual"
