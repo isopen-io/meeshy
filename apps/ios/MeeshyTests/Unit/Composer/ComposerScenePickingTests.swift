@@ -180,41 +180,32 @@ final class ComposerOpeningPlanTests: XCTestCase {
 
     // MARK: - Le câblage
 
-    func test_host_appliesThePlan_andMountsTheHalfHeightLibrary() throws {
+    func test_host_appliesThePlan_andMountsTheOpeningLibrary() throws {
         let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(hote.contains("sceneServesCapture: sceneServesCapture"), "une citation n'arme rien")
         XCTAssertTrue(hote.contains("ComposerOpeningLibrarySheet(isPresented: $showsOpeningLibrary"))
         XCTAssertTrue(hote.contains("closeOpeningLibraryForPick(count: items.count)"), "choisir ferme la feuille et rend la scène")
-        let feuille = try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerOpeningLibrarySheet.swift")
-        XCTAssertTrue(feuille.contains(".photosPickerStyle(.inline)"))
         XCTAssertTrue(hote.contains("capturing: sceneCapture.holdStartedAt != nil"),
-                      "la feuille se retire dès que le doigt tient pour filmer")
+                      "la photothèque se retire dès que le doigt tient pour filmer")
+        let feuille = try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerOpeningLibrarySheet.swift")
         XCTAssertTrue(feuille.contains("if tient { isPresented = false }"))
-        XCTAssertTrue(feuille.contains(".presentationDetents([.medium, .large])"))
-        XCTAssertTrue(feuille.contains(".presentationBackgroundInteraction(.enabled(upThrough: .medium))"),
-                      "au cran moyen, la caméra derrière reste à portée du doigt")
     }
 
-    /// **L'en-tête et ses boutons se voient à MI-HAUTEUR comme déplié** (porteur
-    /// 2026-11-11, puis #18709 : sur iPhone SE, l'en-tête du sélecteur restait hors
-    /// écran au cran moyen). Le composer pose SON en-tête au-dessus du sélecteur, qui
-    /// ne valide plus rien lui-même : la sélection se compose en brouillon.
-    func test_openingLibrary_keepsItsHeaderAndButtons_atEveryDetent() throws {
+    /// **L'en-tête de la photothèque se voit et se touche à tout instant** (#18709, iPhone Pro
+    /// Max) : au cran moyen, celui du sélecteur en ligne disparaissait, et un en-tête du composer
+    /// posé dans la même feuille était rendu en haut de l'écran, hors de la feuille. Le porteur a
+    /// tranché : la photothèque s'ouvre DÉPLIÉE EN ENTIER, sous l'en-tête du système (Annuler ·
+    /// Ajouter), à l'ouverture du composer comme depuis la Galerie de la caméra.
+    func test_openingLibrary_opensFullyUnfolded_underTheSystemHeader() throws {
         let feuille = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerOpeningLibrarySheet.swift"))
-        XCTAssertTrue(feuille.contains(".photosPickerAccessoryVisibility(.visible, edges: .all)"))
-        XCTAssertTrue(feuille.contains(".photosPickerDisabledCapabilities(.selectionActions)"),
-                      "le ✓ du sélecteur ne valide plus : c'est l'en-tête du composer")
-        XCTAssertTrue(feuille.contains("PhotosPicker(selection: $draft"), "la sélection se compose en brouillon")
-        let entete = try XCTUnwrap(feuille.range(of: "ComposerLibraryHeader("))
-        let selecteur = try XCTUnwrap(feuille.range(of: "PhotosPicker(selection:"))
-        XCTAssertLessThan(entete.lowerBound, selecteur.lowerBound, "l'en-tête se pose AU-DESSUS du sélecteur")
-    }
-
-    func test_libraryHeader_validatesOnlyAChoice_andHandsItOverWhole() {
-        XCTAssertFalse(ComposerLibraryHeader.validates(count: 0), "rien de choisi : Valider se tait")
-        XCTAssertTrue(ComposerLibraryHeader.validates(count: 1))
-        XCTAssertTrue(ComposerLibraryHeader.validates(count: ComposerOpeningLibrarySheet.maxSelectionCount))
+        XCTAssertTrue(feuille.contains(".photosPicker(isPresented: $isPresented,\n                              selection: $selection,"),
+                      "le sélecteur système plein, son en-tête en tête")
+        XCTAssertFalse(feuille.contains(".photosPickerStyle(.inline)"), "plus de sélecteur en ligne à mi-hauteur")
+        XCTAssertFalse(feuille.contains(".presentationDetents("), "aucun cran où l'en-tête se perdrait")
+        XCTAssertFalse(feuille.contains("photosPickerDisabledCapabilities"), "Annuler et Ajouter restent au système")
+        let viseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift")
+        XCTAssertTrue(viseur.contains("showsOpeningLibrary = true"), "la Galerie de la caméra ouvre la même photothèque")
     }
 
     func test_settings_surfaceBothOpeningToggles() throws {
