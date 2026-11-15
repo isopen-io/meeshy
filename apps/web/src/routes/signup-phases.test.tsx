@@ -486,6 +486,13 @@ describe('l’inscription ne dit rien deux fois', () => {
     expect(el.textContent).not.toMatch(/Pourquoi mettre un mot de passe/u);
   });
 
+  test('le champ mot de passe paraît dans la carte par le ressort des barreaux, comme sur iOS (#18322)', () => {
+    const { el } = mount();
+    toCard(el);
+    const block = el.querySelector('[data-signup-password-block]') as HTMLElement;
+    expect(block.closest('[data-rung-reveal="open"]')?.classList.contains('signup-spring')).toBe(true);
+  });
+
   test('un mot de passe valable se DIT, pas seulement par la couleur du bord (règle 17) — et la phrase « sans mot de passe » se retire', () => {
     const { el } = mount();
     toCard(el);

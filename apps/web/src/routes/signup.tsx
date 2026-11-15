@@ -464,7 +464,7 @@ export default function SignupScreen({
                 ) : null
               }
               extra={
-                isPasswordRevealed ? (
+                <RungReveal shown={isPasswordRevealed}>
                   <SignupPasswordBlock
                     language={interfaceLanguage}
                     password={form.password}
@@ -475,7 +475,7 @@ export default function SignupScreen({
                     isStrong={isPasswordStrong}
                     error={feedback.fieldErrors.password}
                   />
-                ) : null
+                </RungReveal>
               }
               canValidate={formReady}
               isValidating={isValidating}
