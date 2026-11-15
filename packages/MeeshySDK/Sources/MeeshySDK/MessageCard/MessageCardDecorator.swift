@@ -144,9 +144,3 @@ struct MessageCardDecorator {
         regions.first { $0.part == .reply } ?? regions.first { $0.part == .quote }
     }
 }
-
-extension MessageCardColor {
-    func withAlpha(_ value: Double) -> MessageCardColor {
-        MessageCardColor(red: red, green: green, blue: blue, alpha: alpha * value)
-    }
-}
