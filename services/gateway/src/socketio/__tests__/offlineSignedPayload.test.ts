@@ -69,6 +69,22 @@ describe('offlineSignedPayload (#18619)', () => {
     expect(offlineSignedPayload({ plan: null, base }).kind).toBe('as-is');
   });
 
+  /**
+   * Sans plan MAIS avec une base qui diffère déjà par lecteur — transferts
+   * refusés, citation d'éphémère scellée — la charge reste par destinataire.
+   * Un seul hook par lecteur sur la file : deux se seraient exclus au site
+   * d'appel, et le premier câblé aurait décidé.
+   */
+  it('reste PAR DESTINATAIRE sans plan quand la base diffère déjà par lecteur', () => {
+    const parLecteur = jest.fn((key: string) => ({ id: 'm-1', pour: key }) as Record<string, unknown>);
+
+    const decision = offlineSignedPayload({ plan: null, base: parLecteur, basePerReader: true });
+
+    expect(decision.kind).toBe('per-reader');
+    if (decision.kind !== 'per-reader') throw new Error('forme attendue');
+    expect(decision.resolve('u-bob', 'p-bob')).toEqual({ id: 'm-1', pour: 'u-bob' });
+  });
+
   it('signe PAR DESTINATAIRE quand une pièce se lit par lecteur', () => {
     const decision = offlineSignedPayload({ plan: planSignant(), base });
 

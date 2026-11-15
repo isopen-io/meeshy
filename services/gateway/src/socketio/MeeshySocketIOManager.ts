@@ -48,6 +48,7 @@ import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSo
 import { emitMessageNewBestEffort } from './messageNewEmission';
 import { emitMessageNewByLanguage } from './messageNewByLanguage';
 import { readerSignedPlanBestEffort } from './readerSignedDelivery';
+import { offlineSignedPayload } from './offlineSignedPayload';
 import { flooredAudience, targetWithout } from './flooredAudience';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
@@ -3124,6 +3125,25 @@ export class MeeshySocketIOManager {
       // délégation par langue posait le SIEN, qui ne connaît que la `room`.
       const onLiveEmissionError = (error: unknown, audience: string) =>
         logger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, audience, error });
+      // #18619 — le plan est HISSÉ hors de l'appel d'émission : les DEUX canaux
+      // de ce message en dépendent, et le laisser en argument faisait que seul
+      // le direct l'interrogeait. L'enfilage, délégué plus bas à
+      // `syncConversationListOnNewMessage`, remettait l'adresse NUE d'une pièce
+      // liée au lecteur — y compris dans le cas exact où le direct décide
+      // délibérément de ne rien émettre.
+      const readerPlan = await readerSignedPlanBestEffort(
+        this.prisma,
+        { conversationId: normalizedId, message, attachments: broadcastPayload.attachments },
+        (error) => logger.error('reader-signed plan failed (REST/ZMQ send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+      );
+      // La charge de CE lecteur avant signature : le scellement d'une citation
+      // d'éphémère échu d'abord, signature ensuite — l'ordre inverse signerait
+      // ce que le lecteur n'a pas le droit de voir.
+      const offlineSigned = offlineSignedPayload({
+        plan: readerPlan,
+        base: (key) => sealedQuoteVariant(sealedQuote, key, broadcastPayload) as Record<string, unknown>,
+        basePerReader: sealedKeys.length > 0,
+      });
       emitMessageNewBestEffort({
         io: this.io,
         room,
@@ -3137,11 +3157,7 @@ export class MeeshySocketIOManager {
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
           ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion, onLiveEmissionError)
           : null,
-        readerSigned: await readerSignedPlanBestEffort(
-          this.prisma,
-          { conversationId: normalizedId, message, attachments: broadcastPayload.attachments },
-          (error) => logger.error('reader-signed plan failed (REST/ZMQ send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
-        ),
+        readerSigned: readerPlan,
       }, onLiveEmissionError);
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
@@ -3211,9 +3227,9 @@ export class MeeshySocketIOManager {
             message,
             broadcastPayload,
             resolvedSenderId, quotedDeaths: sealedQuote,
-            ...(sealedKeys.length > 0
-              ? { payloadForReader: (key: string) => sealedQuoteVariant(sealedQuote, key, broadcastPayload) }
-              : {}),
+            // UN seul hook par lecteur : la décision a composé le scellement et
+            // la signature, dans l'ordre qui les rend justes (#18619).
+            offlineSigned,
           }
         );
       } catch (syncError) {
