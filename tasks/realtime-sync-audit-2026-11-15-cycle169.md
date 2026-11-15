@@ -1,4 +1,4 @@
-# Cycle 166 — le site était gardé, et c'est le MOMENT qui ne l'était pas
+# Cycle 169 — le site était gardé, et c'est le MOMENT qui ne l'était pas
 
 *2026-11-15. Branche `claude/exciting-planck-jexwib`, repartie de la tête de
 `dev` (`c9de00aeec`).*

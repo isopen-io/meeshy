@@ -1,6 +1,6 @@
 ## Une lecture PARTAGÉE n'impose pas une posture PARTAGÉE — et un refus PROUVÉ ne se récupère pas comme un aveu d'IGNORANCE (2026-11-15, #18615)
 
-*Cycle 166 de la routine d'amélioration continue du temps réel.*
+*Cycle 169 de la routine d'amélioration continue du temps réel.*
 
 **La règle, en une phrase : quand deux gardes interrogent la même ligne, mutualiser la LECTURE est presque toujours juste ; mutualiser son `catch` est presque toujours faux.** L'unité qui lit rend un ÉTAT — « lu » ou « illisible » — et ne décide RIEN de ce qu'il faut en faire. Chaque consommateur arbitre chez lui.
 
