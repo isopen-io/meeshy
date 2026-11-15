@@ -32,6 +32,24 @@ MIN_PROFILE_AUDIO_DURATION_MS = 10000
 # Minimum similarity threshold for profile updates
 UPDATE_SIMILARITY_THRESHOLD = 0.80
 
+ACCEPTED_AUDIO_FORMATS = frozenset({
+    'wav', 'wave', 'x-wav',
+    'mp3', 'mpeg', 'mpga',
+    'ogg', 'oga', 'opus',
+    'webm', 'weba',
+    'm4a', 'x-m4a', 'mp4', 'aac',
+    'flac', 'caf', '3gp', '3gpp', 'amr',
+})
+
+UNSUPPORTED_AUDIO_FORMAT_ERROR = 'Unsupported audio format'
+
+
+def normalized_audio_extension(audio_format: Any) -> Optional[str]:
+    if not isinstance(audio_format, str):
+        return None
+    extension = audio_format.lower()
+    return extension if extension in ACCEPTED_AUDIO_FORMATS else None
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RESPONSE DATACLASSES
@@ -145,6 +163,15 @@ class VoiceProfileHandler:
             'ar': "مرحبا، هذه معاينة لصوتي المستنسخ."
         }
 
+    def _temp_audio_path(self, prefix: str, audio_format: Any) -> Optional[Path]:
+        extension = normalized_audio_extension(audio_format)
+        if extension is None:
+            return None
+        candidate = self.temp_dir / f"{prefix}{uuid.uuid4().hex}.{extension}"
+        if candidate.resolve().parent != self.temp_dir.resolve():
+            return None
+        return candidate
+
     def is_voice_profile_request(self, message_type: str) -> bool:
         """Check if message type is a voice profile request"""
         return message_type in [
@@ -241,6 +268,14 @@ class VoiceProfileHandler:
                     error='audio_data is required'
                 ).to_dict()
 
+            temp_file = self._temp_audio_path('profile_', audio_format)
+            if temp_file is None:
+                return VoiceProfileAnalysisResult(
+                    success=False,
+                    user_id=user_id,
+                    error=UNSUPPORTED_AUDIO_FORMAT_ERROR
+                ).to_dict()
+
             # Decode base64 audio
             import base64
             try:
@@ -252,8 +287,6 @@ class VoiceProfileHandler:
                     error=f'Invalid base64 audio data: {e}'
                 ).to_dict()
 
-            # Save to temp file
-            temp_file = self.temp_dir / f"{user_id}_{uuid.uuid4().hex}.{audio_format}"
             with open(temp_file, 'wb') as f:
                 f.write(audio_bytes)
 
@@ -470,10 +503,17 @@ class VoiceProfileHandler:
                     error='audio_data is required'
                 ).to_dict()
 
+            temp_file = self._temp_audio_path('verify_', audio_format)
+            if temp_file is None:
+                return VoiceProfileVerifyResult(
+                    success=False,
+                    user_id=user_id,
+                    error=UNSUPPORTED_AUDIO_FORMAT_ERROR
+                ).to_dict()
+
             import base64
             audio_bytes = base64.b64decode(audio_data)
 
-            temp_file = self.temp_dir / f"verify_{user_id}_{uuid.uuid4().hex}.{audio_format}"
             with open(temp_file, 'wb') as f:
                 f.write(audio_bytes)
 

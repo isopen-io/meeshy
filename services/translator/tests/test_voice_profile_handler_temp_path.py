@@ -186,3 +186,21 @@ async def test_missing_audio_format_defaults_to_wav(tmp_path, monkeypatch, site)
     paths = written_paths(site, service, verified)
     assert len(paths) == 1
     assert paths[0].suffix == '.wav'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('site', ['analyze', 'verify'])
+async def test_resolved_path_guard_refuses_escape_even_if_list_is_widened(tmp_path, monkeypatch, site):
+    import services.voice_profile_handler as module
+    monkeypatch.setattr(
+        module, 'ACCEPTED_AUDIO_FORMATS',
+        module.ACCEPTED_AUDIO_FORMATS | {'wav/../../escaped'},
+    )
+    handler, service, verified = make_handler(tmp_path, monkeypatch)
+
+    result = await run_site(handler, site, OBJECT_ID, 'wav/../../escaped')
+
+    assert result['success'] is False
+    assert result['error'] == 'Unsupported audio format'
+    assert written_paths(site, service, verified) == []
+    assert [p for p in tmp_path.rglob('*') if p.is_file()] == []
