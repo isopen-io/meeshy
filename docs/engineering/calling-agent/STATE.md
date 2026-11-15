@@ -1047,3 +1047,31 @@ socket jusqu'au client.
 2. #17133 et #18535.
 3. #18371, #18154 et #18497.
 4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 31 — 2026-11-14
+
+- **Base** : `origin/dev` @ `13484857`. Le lot du cycle 30 (#18436, PR #18572) y est fusionné.
+- **Branche** : `claude/determined-volta-vn6lrc`.
+- **Objectif** : #18571. Les handlers audio, transcription et voix du traducteur ne journalisent plus que le type d'une exception, et les erreurs qu'ils publient à la passerelle ne portent plus le message brut.
+- **Livré** (seul le traducteur change ; ni la passerelle, ni le routage, ni les types d'événements) :
+  - **Logs** : 19 sites des trois handlers passent à `type(e).__name__`, et les `traceback.print_exc()` disparaissent. Le site oublié par l'issue, le nettoyage du fichier temporaire de transcription, a été trouvé par la QA et suit la même règle.
+  - **Charges publiées** : le champ `error` devient un libellé fixe et non vide. `voice_api_error` porte « Voice API request failed », `voice_profile_error` « Voice profile request failed » avec `errorCode: 'INTERNAL_ERROR'` ajouté, `audio_process_error` « Audio processing failed » et `transcription_error` « Transcription failed ». Rien ne compare ce texte, ni dans la passerelle ni dans les clients. Le SDK iOS déclare `TranscriptionFailedEvent.error` non optionnel, et il reste satisfait. Avant ce lot, le message brut partait vers les logs de la passerelle, vers les réponses HTTP des routes voice et vers les sockets de conversation (`audio:transcription-failed`).
+  - **Base64 invalide** : le `ValueError` levé n'embarque plus le message de l'exception d'origine (`from e`).
+  - **Sites gardés** : `zmq_audio_handler.py` l.43, 66 et 83. Ce sont des `ImportError` au chargement du module, sans donnée de requête ; le diagnostic de démarrage a été voulu après l'incident du 2026-07-03.
+- **Tests** : `tests/test_handlers_exception_logging.py` (15). Le helper refuse aussi tout `exc_info` dans les logs.
+  - **Rouge** : `14 failed` avec les sources de `origin/dev`, que la QA a reproduit, puis `1 failed, 14 passed` pour le témoin du nettoyage.
+  - **Vert** : relancé par moi, `32 passed` sur ce fichier et les deux témoins de logs des cycles 27 et 30.
+  - **Suites voisines** : 30 fichiers `test_*{zmq,handler,voice,transcription}*` lancés fichier par fichier, avant et après. Les listes d'échecs sont identiques. Les échecs d'environnement préexistants sont `test_12` (5), `test_27` (1), `test_28_voice_api` (9 F et 43 E, `python-multipart` absent), `test_35` (3), et les 5 erreurs connues de `TestRealTranslatorIntegration`.
+  - **Mutations QA** : 22 sur 24 tuées. Le survivant équivalent est le message du `ValueError` base64, que le handler englobant ne ressort plus. Le survivant réel était `exc_info=True`, et le témoin le tue désormais.
+- **QA** : favorable avec réserves. Les deux réserves de fond sont corrigées dans le lot. Hors périmètre, deux issues ont été ouvertes :
+  - #18599 : une transcription demandée par `audioPath` seul lève `UnboundLocalError` sur `Path`, à cause d'imports locaux. La passerelle actuelle envoie toujours le binaire, donc le défaut est latent.
+  - #18600 : le balayage du reste du traducteur (341 sites dans 70 fichiers, à trier) et son cliquet. La règle doit réécrire le § « `except Exception` large » de `services/translator/CLAUDE.md`, qui fait encore du message brut le seul indice d'une erreur de programmation.
+- **Effet de bord assumé** : un appelant HTTP des routes voice reçoit désormais un libellé générique au lieu du message brut. Le diagnostic d'une panne passe par le type dans les logs du traducteur et par `errorCode`.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #17133 et #18535.
+2. #18599, puis #18600, à découper par répertoire.
+3. #18371, #18154 et #18497.
+4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
