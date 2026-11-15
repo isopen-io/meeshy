@@ -1126,3 +1126,35 @@ socket jusqu'au client.
 2. #18599 et #18600, les suites de #18571.
 3. #18371, #18154 et #18497.
 4. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 34 — 2026-11-15
+
+- **Base** : `origin/dev` @ `d12608dc`, puis `c9de00ae` après la fusion de #18612. Le cycle 33 n'a fait qu'un relevé, avec `dev` verrouillée. Le verrou a été levé depuis : #18603 et #18631 (cycles 31 et 32) sont fusionnées, et ce cycle a fusionné #18612 (cycle 31 bis, #18535), dont la CI était verte sur la tête qui porte le code.
+- **Branche** : `claude/determined-volta-02t5it`.
+- **Objectif** : #18628. Le traducteur ne lit un chemin audio reçu par ZMQ que sous une racine autorisée.
+- **Livré** (seul le traducteur change ; ni le protocole ZMQ, ni la passerelle, ni les modes binaire et base64) :
+  - **Garde unique** `src/utils/audio_path_guard.py`. Il applique `resolve(strict=True)`, puis `is_relative_to` d'une racine, puis `is_file`. Il refuse aussi l'octet nul et les valeurs qui ne sont pas des chaînes. Un refus lève `AudioPathRejected`, qui ne porte qu'une raison fixe, et le garde rend la cible résolue.
+  - **Six sites gardés** : `transcription_only` (seulement en mode fichier direct), le repli legacy d'`AudioFetcherService`, et dans la Voice API translate, translate_async, analyze, compare (`audioPath_1` et `audioPath_2`), profile_create, profile_update, ainsi que `extract_audio_paths`.
+  - **Refus publié** : `errorCode: AUDIO_PATH_REJECTED` avec le libellé fixe « Audio path rejected ». Ni le chemin refusé ni le chemin accepté n'apparaissent dans les journaux.
+  - **Racines** : `TRANSLATOR_AUDIO_PATH_ROOTS` (séparateur `os.pathsep`). Chaque entrée est nettoyée par `strip`. Les entrées relatives sont ignorées, comme celles qui se résolvent en `/`. Les racines retenues sont journalisées une seule fois. Par défaut, la seule racine est `UPLOAD_PATH` (`/app/uploads`).
+  - **`/tmp` exclu des racines par défaut**, comme l'a demandé l'audit : le traducteur y garde, sous des noms prévisibles, l'audio en cours de traitement des autres utilisateurs.
+- **Rétrocompatibilité** : seule la Voice API reçoit un `audioPath` de la passerelle (`AudioTranslateService.ts`, `path.join(UPLOAD_PATH, filePath)`). Aucun compose ne monte `/app/uploads` dans le traducteur, donc cette voie échouait déjà en « introuvable ». Le garde ne casse rien de ce qui marchait. Les modes binaire et base64 ne passent pas par le garde.
+- **Tests** : `tests/test_audio_path_guard.py` (47), et `test_transcription_audio_path_mode.py`, adapté pour déclarer sa racine.
+  - **Rouge** : `11 failed, 28 passed` sur les sites, puis `8 failed, 39 passed` pour les corrections d'audit.
+  - **Vert** : relancé par moi, `72 passed` sur ces fichiers, `test_handlers_exception_logging` et `test_shutdown_report_bounded_after_cancel`.
+  - **Suites voisines** (`*voice*`, `*zmq*`, transcription, audio) : la liste des échecs est identique avant et après. Les 25 échecs et 48 erreurs connus viennent de l'environnement : `test_28`, `test_35`, `test_12` et l'intégration ZMQ réelle.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - F1 (`/tmp`), F3 (racines non validées) et F4 (chemin accepté journalisé) sont corrigées dans le lot.
+  - F5, une mutation « rend le chemin brut » qui survivait, est tuée par un témoin ajouté.
+  - 15 mutations sur 16 sont tuées dès le premier passage, la seizième l'est ensuite.
+  - Hors diff, trois issues sont ouvertes : #18666 (SSRF par `audioUrl`), #18667 (écriture de profil vocal pilotée par `user_id`), #18668 (`str(e)` dans le `except` générique de la Voice API).
+  - L'audit rappelle que le garde ne remplace pas l'authentification du canal (CURVE, #18629).
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #18667, puis #18666, avec l'agent `auditeur-adversarial`. Puis #18668.
+2. #18629, avec l'agent `sre-infra` : c'est la vraie fermeture de la surface ZMQ.
+3. #17133 et #18611, puis #18600 à découper par répertoire, puis #18630.
+4. #18371, #18154 et #18497.
+5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

@@ -48,6 +48,7 @@ import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSo
 import { emitMessageNewBestEffort } from './messageNewEmission';
 import { emitMessageNewByLanguage } from './messageNewByLanguage';
 import { readerSignedPlanBestEffort } from './readerSignedDelivery';
+import { flooredAudience, targetWithout } from './flooredAudience';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { deliverTextTranslation, type TextTranslationReady } from './deliverTextTranslation';
@@ -120,6 +121,8 @@ import type { MessageMutationQueueParams } from './broadcastMessageMutation';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
+import { authorizeDrainedEntries } from './drainAuthorization';
+import { floorRefusalIsProven } from './drainHistoryFloor';
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
@@ -654,90 +657,6 @@ export class MeeshySocketIOManager {
     this.attachmentReactionHandler.setDeliveryQueue(queue);
   }
 
-  /**
-   * Retire du rejeu les entrées des conversations dont l'appartenance a pris
-   * fin PENDANT l'absence.
-   *
-   * L'audience de la file est décidée à la MISE EN FILE, par
-   * `enqueueForOfflineParticipants`, sur l'appartenance de cet instant-là.
-   * Entre cet instant et la LIVRAISON il y a précisément l'absence — c'est-à-dire
-   * la fenêtre pendant laquelle on quitte un groupe, s'en fait retirer, s'y fait
-   * bannir, ou le supprime pour soi. Les quatre routes qui écrivent ces
-   * transitions (`leave.ts`, `participants.ts`, `ban.ts`, `delete-for-me.ts`)
-   * sortent toutes les sockets de la cible de `conversation:<id>` : le canal
-   * VIVANT est fermé à l'instant même. Aucune ne touche cette file, qui garde
-   * jusqu'à `DELIVERY_QUEUE_TTL_SECONDS` (48 h) d'événements de cette même
-   * conversation — messages, éditions, réactions, traductions — et les rejouait
-   * intégralement à la reconnexion suivante : du contenu livré APRÈS la fin de
-   * l'autorisation qui le justifiait, et une conversation ressuscitée dans une
-   * liste dont ces mêmes routes viennent de la retirer.
-   *
-   * Une autorisation se lit donc contre l'autorité au dernier instant possible,
-   * jamais contre une copie prise à l'enfilement. C'est ce qui rend cette garde
-   * unique et non quadruple : elle vaut pour les quatre routes et pour toute
-   * transition future, sans qu'aucune ait à s'en souvenir.
-   *
-   * Échec OUVERT sur une PANNE, FERMÉ sur une RÉPONSE. Le drain est destructif —
-   * les entrées ont déjà quitté la file quand cette garde s'exécute. Une réponse
-   * « plus membre » fait autorité et l'entrée est jetée. Une absence de réponse
-   * n'autorise rien à conclure : jeter l'arriéré parce que la base n'a pas
-   * répondu échangerait une fuite rare (panne ET retrait ET arriéré simultanés)
-   * contre une perte de données probable, une tempête de reconnexions étant
-   * exactement le moment où la base est sous pression.
-   *
-   * `bannedAt` est filtré en JS, pas dans le `where` : sous MongoDB un
-   * `bannedAt: null` ne matche pas les documents où le champ est ABSENT (jamais
-   * écrit), et exclurait donc les lignes historiques — le piège que `ban.ts`
-   * documente déjà pour `leftAt` (audit C5).
-   *
-   * **PRÉCONDITION, tenue par l'appelant** : chaque entrée porte un
-   * `conversationId` de forme ObjectId (`isAddressableConversationId`). Elle
-   * n'est pas cosmétique — les ids sont AGRÉGÉS en un seul `in`, donc une seule
-   * entrée illisible fait lever la requête pour le lot ENTIER, et l'échec
-   * atterrit dans le `catch` ci-dessous, qui rejoue tout SANS FILTRE. Le
-   * fail-open y est délibéré et juste pour ce qu'il vise (une base qui ne répond
-   * pas) ; il ne peut simplement pas distinguer ce cas de « nous n'avons jamais
-   * posé de question valide », et sur ce second cas il transforme une entrée
-   * corrompue en désactivation du gate d'autorisation. La garde vit donc chez
-   * l'appelant, AVANT la requête : c'est le seul endroit où l'entrée fautive est
-   * encore nommable une par une.
-   */
-  private async _dropEndedMemberships(
-    userId: string,
-    isAnonymous: boolean,
-    drained: QueuedMessagePayload[]
-  ): Promise<QueuedMessagePayload[]> {
-    const conversationIds = [...new Set(drained.map(entry => entry.conversationId))];
-    try {
-      // Clé de file = `userId` pour un inscrit, `Participant.id` pour un invité
-      // de lien partagé — la convention exacte que `enqueueForOfflineParticipants`
-      // applique en enfilant (`p.userId ?? p.id`).
-      const rows = await this.prisma.participant.findMany({
-        where: isAnonymous
-          ? { id: userId, conversationId: { in: conversationIds }, isActive: true }
-          : { userId, conversationId: { in: conversationIds }, isActive: true },
-        select: { conversationId: true, bannedAt: true },
-      });
-      const live = new Set(
-        rows.filter(row => row.bannedAt == null).map(row => row.conversationId)
-      );
-      if (live.size === conversationIds.length) return drained;
-
-      const kept = drained.filter(entry => live.has(entry.conversationId));
-      logger.info('Dropped queued events for conversations the reader has left', {
-        userId,
-        dropped: drained.length - kept.length,
-        conversationIds: conversationIds.filter(id => !live.has(id)),
-      });
-      return kept;
-    } catch (error) {
-      logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
-        userId,
-        error,
-      });
-      return drained;
-    }
-  }
 
   private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {
     if (!this.deliveryQueue) return;
@@ -777,7 +696,7 @@ export class MeeshySocketIOManager {
       };
 
       // PREMIER refus, et il est en amont du gate d'autorisation par nécessité,
-      // pas par goût de l'ordre : `_dropEndedMemberships` AGRÈGE les
+      // pas par goût de l'ordre : `authorizeDrainedEntries` AGRÈGE les
       // `conversationId` du lot en un seul `conversationId: { in: [...] }`. Une
       // entrée dont l'id n'est pas interrogeable ne se contente donc pas de se
       // perdre elle-même — elle fait lever la requête pour TOUT le lot, et
@@ -804,12 +723,75 @@ export class MeeshySocketIOManager {
       if (addressable.length === 0) return;
 
       // Gate d'autorisation, avant toute émission : une entrée dont
-      // l'appartenance a pris fin n'est pas rejouée, et ne compte donc dans
-      // aucun des trois signaux ci-dessous (émission, `pending-messages:delivered`,
-      // accusé de réception). Un accusé affirme « ce message est arrivé chez son
-      // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
-      // mentirait à son auteur.
-      const authorized = await this._dropEndedMemberships(userId, isAnonymous, addressable);
+      // l'appartenance a pris fin — ou dont le message est passé sous le
+      // PLANCHER D'HISTOIRE du lecteur — n'est pas rejouée, et ne compte donc
+      // pas dans l'ÉMISSION ni dans l'accusé de réception. Un accusé affirme
+      // « ce message est arrivé chez son destinataire » — l'affirmer d'un
+      // message qu'on vient de refuser de livrer mentirait à son auteur.
+      //
+      // ⚠ Cette phrase décrit ce que CE chemin passe à l'accusé, pas ce que
+      // l'accusé ÉCRIT : `freezeMessageStatus` gèle `deliveredAt` par FENÊTRE
+      // DE TEMPS sur la conversation, pas sur la liste des messages remis, si
+      // bien qu'un message refusé ici peut quand même être marqué remis par
+      // l'avancée du curseur d'un message VOISIN. C'est #18614, antérieur à ce
+      // lot et hors de son périmètre — nommé ici pour que ce commentaire ne
+      // promette pas ce que `freezeMessageStatus` défait.
+      //
+      // Les DEUX questions se lisent sur la même ligne `Participant`, et
+      // `authorizeDrainedEntries` existe pour qu'elle ne soit lue qu'une fois.
+      // Il rend aussi les faits de message, que la garde de vivacité consomme
+      // plus bas sans relire la ligne.
+      const authorization = await authorizeDrainedEntries({
+        prisma: this.prisma,
+        reader: { key: userId, isAnonymous },
+        entries: addressable,
+        onParticipationReadFailure: (error) =>
+          logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
+            userId,
+            error,
+          }),
+      });
+      const facts = authorization.facts;
+      if (authorization.endedConversationIds.length > 0) {
+        logger.info('Dropped queued events for conversations the reader has left', {
+          userId,
+          dropped: authorization.endedEntryCount,
+          conversationIds: authorization.endedConversationIds,
+        });
+      }
+      // Les trois raisons ne sont PAS de même nature, et les confondre coûtait
+      // l'arriéré d'un lecteur borné sur une panne transitoire (#18615, audit
+      // adversarial) :
+      //
+      //  - un refus PROUVÉ (`below-history-floor`) ne nomme rien : aucune porte
+      //    REST ne sert ce message à ce lecteur, et un signal de récupération
+      //    qui ne désigne rien vaut moins que le silence ;
+      //  - une IGNORANCE (`floor-unreadable`, `message-date-unreadable`) est une
+      //    PERTE — le drain est destructif, l'entrée a déjà quitté Redis — et sa
+      //    conversation rejoint `undelivered`, donc `conversationIds`, pour que
+      //    le client la relise. La relecture passe par `historyFloorClause` :
+      //    elle ne peut pas servir ce que la garde vient de refuser.
+      for (const { entry, reason } of authorization.flooredRefusals) {
+        if (floorRefusalIsProven(reason)) {
+          logger.info('Dropped a queued entry the reader may no longer read', {
+            userId,
+            reason,
+            conversationId: entry.conversationId,
+            messageId: entry.messageId,
+            eventType: entry.eventType ?? 'new',
+          });
+          continue;
+        }
+        undelivered.push(entry);
+        logger.warn('Queued entry dropped without delivery — the reader floor could not be resolved', {
+          userId,
+          reason,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+        });
+      }
+      const authorized = authorization.kept;
       if (authorized.length === 0) return;
 
       // QUATRIÈME refus, et il vient APRÈS l'autorisation pour deux raisons qui
@@ -832,9 +814,9 @@ export class MeeshySocketIOManager {
       // relire. Ici il n'y a RIEN à relire — le serveur a détruit le contenu, et
       // le client n'en a jamais rien reçu : la convergence est déjà atteinte.
       // C'est la forme du gate d'appartenance, pas celle d'un échec d'émission.
-      const { kept: pending, refused } = await dropQueuedEntriesWhoseMessageDied({
-        prisma: this.prisma,
+      const { kept: pending, refused } = dropQueuedEntriesWhoseMessageDied({
         entries: authorized,
+        facts,
         onReadFailure: (error) =>
           logger.warn('Message liveness re-read failed on drain — replaying the backlog unfiltered', {
             userId,
@@ -1013,7 +995,7 @@ export class MeeshySocketIOManager {
    * `readerKey` porte la CLÉ DE FILE, pas un `User.id` : c'est `userId` pour un
    * inscrit et `Participant.id` pour un invité de lien partagé — la convention
    * exacte qu'`enqueueForOfflineParticipants` applique en enfilant
-   * (`p.userId ?? p.id`), et que `_dropEndedMemberships` lit déjà sous les deux
+   * (`p.userId ?? p.id`), et que `authorizeDrainedEntries` lit déjà sous les deux
    * colonnes. Le paramètre porte ce nom-là parce que le supposer utilisateur
    * est PRÉCISÉMENT ce qui a fait sauter l'accusé pour la moitié anonyme.
    */
@@ -1610,7 +1592,7 @@ export class MeeshySocketIOManager {
    * `readerKey` porte la CLÉ DE CONNEXION, pas un `User.id` : c'est `userId`
    * pour un inscrit et `Participant.id` pour un invité de lien partagé — même
    * convention que la file (`enqueueForOfflineParticipants` enfile sous
-   * `p.userId ?? p.id`), que `_dropEndedMemberships` et que
+   * `p.userId ?? p.id`), que `authorizeDrainedEntries` et que
    * `_emitDeliveryForDrainedMessages`. La résolution lisait auparavant la seule
    * colonne `userId`, donc rendait ZÉRO ligne pour un invité, donc sortait en
    * silence ; le site d'appel enterrait le trou sous un `if (!isAnonymous)` qui
@@ -2467,9 +2449,22 @@ export class MeeshySocketIOManager {
         processingTimeMs: data.processingTimeMs
       };
 
-      // Diffuser dans la room de conversation
-      this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
-      logger.info('transcription:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.transcription.language });
+      // #18623 — la transcription est le TEXTE du message : elle ne part qu'à
+      // qui a le droit de LIRE ce message. `_broadcastAttachmentUpdated`, sept
+      // lignes plus bas, applique déjà cette loi (#17025) ; ce canal-ci partait
+      // nu à toute la room, donc une milliseconde AVANT elle.
+      const audience = await flooredAudience(this.prisma, normalizedId, data.messageId, (error) =>
+        logger.error('transcription:ready readership unresolvable — not broadcast', error, { messageId: data.messageId, conversationId: normalizedId }),
+      );
+      const target = audience.kind === 'unknown' ? null : targetWithout(this.io.to(roomName), audience.exceptRooms);
+      if (target) {
+        target.emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
+        logger.info('transcription:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.transcription.language });
+      } else {
+        // La pièce enrichie reste servie par la relecture du fil, qui applique
+        // le plancher côté serveur : on perd une remise, jamais la vérité.
+        logger.warn('transcription:ready withheld — floored audience unresolved', { messageId: data.messageId, conversationId: normalizedId });
+      }
 
       // Generic attachment-updated delta : clients atomically replace the
       // attachment in their store and refresh derived metadata
@@ -2623,8 +2618,19 @@ export class MeeshySocketIOManager {
       // tuples et n'importe quelle charge de la famille passe sous n'importe
       // quel membre). Ce site AVAIT l'air gardé — il émet sur un `Server`
       // paramétré par `ServerToClientEvents` — et ne l'était pas.
-      emitServerEvent(this.io.to(roomName), eventConstant, translationData);
-      logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
+      // #18623 — la jumelle de `transcription:ready` : la charge porte le TEXTE
+      // traduit, ses `segments`, ET l'URL de la piste TTS. Même loi, même
+      // arbitrage.
+      const audience = await flooredAudience(this.prisma, normalizedId, data.messageId, (error) =>
+        logger.error('audio-translation readership unresolvable — not broadcast', error, { messageId: data.messageId, conversationId: normalizedId }),
+      );
+      const target = audience.kind === 'unknown' ? null : targetWithout(this.io.to(roomName), audience.exceptRooms);
+      if (target) {
+        emitServerEvent(target, eventConstant, translationData);
+        logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
+      } else {
+        logger.warn('audio-translation withheld — floored audience unresolved', { messageId: data.messageId, conversationId: normalizedId });
+      }
 
       // Generic attachment-updated delta : same rationale as the
       // transcription-ready branch. Clients receive the FULL re-serialized

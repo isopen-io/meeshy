@@ -1,12 +1,7 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
-import { isValidObjectId } from '@meeshy/shared/utils/object-id';
-import {
-  MESSAGE_LIVENESS_SELECT,
-  messageLivenessOf,
-  type MessageDeathCause,
-} from '../services/messages/message-liveness';
+import { messageLivenessOf, type MessageDeathCause } from '../services/messages/message-liveness';
 import { carriesMessageText } from './queuedEventContract';
+import type { QueuedMessageFacts } from './queuedMessageFacts';
 
 /**
  * La QUATRIÈME garde de la frontière de désérialisation du rejeu — et la seule
@@ -45,6 +40,12 @@ import { carriesMessageText } from './queuedEventContract';
  * fermer. Les ids sont donc filtrés sur la forme ObjectId AVANT d'entrer dans
  * la question, et une entrée non interrogeable rend `unknown` : elle passe,
  * faute de preuve.
+ *
+ * **Cette lecture ne vit plus ici** : elle est partagée avec le gate de
+ * PLANCHER D'HISTOIRE, qui interroge la même ligne pour une colonne de plus
+ * (`queuedMessageFacts`, #18615). Cette unité est donc redevenue PURE — elle
+ * reçoit les faits et rend un verdict — et son arbitrage d'échec est inchangé :
+ * fail-OPEN, décidé ICI et non par la lecture.
  */
 
 export type QueuedLivenessRefusal = {
@@ -64,36 +65,24 @@ export type QueuedLivenessOutcome = {
  * échec : « un message manqué se rattrape, un secret remis non » vaut dans les
  * deux sens, et c'est le second qui décide ici.
  */
-export async function dropQueuedEntriesWhoseMessageDied(params: {
-  readonly prisma: Pick<PrismaClient, 'message'>;
+export function dropQueuedEntriesWhoseMessageDied(params: {
   readonly entries: QueuedMessagePayload[];
+  readonly facts: QueuedMessageFacts;
   readonly onReadFailure?: (error: unknown) => void;
-}): Promise<QueuedLivenessOutcome> {
-  const { prisma, entries } = params;
+}): QueuedLivenessOutcome {
+  const { entries, facts } = params;
 
-  // Les entrées à INTERROGER : celles qui portent du texte ET dont l'id est
-  // interrogeable. Les autres ne sont pas « saines » — elles sont sans preuve,
-  // ce qui n'est pas la même chose et se traite pareil.
-  const interrogable = new Set<string>();
-  for (const entry of entries) {
-    if (!carriesMessageText(entry.eventType)) continue;
-    if (!isValidObjectId(entry.messageId)) continue;
-    interrogable.add(entry.messageId);
-  }
-  if (interrogable.size === 0) return { kept: entries, refused: [] };
-
-  let rows: Array<{ id: string; deletedAt: Date | null; expiresAt: Date | null }>;
-  try {
-    rows = (await prisma.message.findMany({
-      where: { id: { in: [...interrogable] } },
-      select: { id: true, ...MESSAGE_LIVENESS_SELECT },
-    })) as typeof rows;
-  } catch (error) {
+  if (facts.kind === 'unreadable') {
     // Même arbitrage que le `catch` du gate d'appartenance, et pour la même
     // raison écrite là-bas : « une absence de réponse n'autorise rien à
     // conclure ». Une tempête de reconnexions est exactement le moment où la
     // base est sous pression, et le drain est DESTRUCTIF.
-    params.onReadFailure?.(error);
+    //
+    // La lecture est désormais PARTAGÉE avec le gate de plancher (#18615), qui
+    // arbitre la même absence à l'OPPOSÉ : lui n'a pas la preuve d'un DROIT,
+    // celle-ci n'a pas la preuve d'une MORT. C'est le consommateur qui décide,
+    // pas la lecture.
+    params.onReadFailure?.(facts.error);
     return { kept: entries, refused: [] };
   }
 
@@ -101,9 +90,9 @@ export async function dropQueuedEntriesWhoseMessageDied(params: {
   // tomber de part et d'autre d'une échéance.
   const now = new Date();
   const dead = new Map<string, MessageDeathCause>();
-  for (const row of rows) {
+  for (const [id, row] of facts.byId) {
     const verdict = messageLivenessOf(row, now);
-    if (verdict.liveness === 'gone') dead.set(row.id, verdict.cause);
+    if (verdict.liveness === 'gone') dead.set(id, verdict.cause);
   }
   if (dead.size === 0) return { kept: entries, refused: [] };
 

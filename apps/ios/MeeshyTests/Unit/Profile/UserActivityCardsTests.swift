@@ -116,4 +116,111 @@ final class UserActivityCardsTests: XCTestCase {
         XCTAssertTrue(source.contains("StatsTimelineChart(timeline: viewModel.timeline"), "La frise d'activité reste.")
         XCTAssertTrue(source.contains("fetchTimeline(days: 30)"), "Le modèle de vue charge toujours les trente derniers jours.")
     }
+
+    // MARK: - La frise a sa propre loi de rafraîchissement
+
+    func test_needsTimelineFetch_withFreshStatsAndMissingTimeline_fetchesTheTimeline() {
+        XCTAssertTrue(UserActivityRefreshLaw.needsTimelineFetch(stats: .fresh, timeline: .missing),
+                      "La fiche enregistre les compteurs en passant : des compteurs frais ne disent rien de la frise.")
+        XCTAssertFalse(UserActivityRefreshLaw.needsStatsFetch(stats: .fresh))
+    }
+
+    func test_needsTimelineFetch_withFreshStatsAndStaleTimeline_revalidatesTheTimeline() {
+        XCTAssertTrue(UserActivityRefreshLaw.needsTimelineFetch(stats: .fresh, timeline: .stale))
+    }
+
+    func test_needsTimelineFetch_withBothFresh_asksNothing() {
+        XCTAssertFalse(UserActivityRefreshLaw.needsTimelineFetch(stats: .fresh, timeline: .fresh))
+        XCTAssertFalse(UserActivityRefreshLaw.needsStatsFetch(stats: .fresh))
+    }
+
+    func test_needsTimelineFetch_whenTheStatsAreRefetched_refetchesTheTimelineWithThem() {
+        for stats in [UserActivityRefreshLaw.Freshness.stale, .missing] {
+            XCTAssertTrue(UserActivityRefreshLaw.needsStatsFetch(stats: stats), "\(stats)")
+            XCTAssertTrue(UserActivityRefreshLaw.needsTimelineFetch(stats: stats, timeline: .fresh), "\(stats)")
+        }
+    }
+
+    func test_freshness_ofACachedEmptyTimeline_isMissing_soTheTimelineLoads() {
+        let empty: CacheResult<[TimelinePoint]> = .fresh([], age: 1)
+        let expired: CacheResult<[TimelinePoint]> = .expired
+
+        XCTAssertEqual(UserActivityRefreshLaw.freshness(of: empty), .missing)
+        XCTAssertEqual(UserActivityRefreshLaw.freshness(of: expired), .missing)
+        XCTAssertEqual(UserActivityRefreshLaw.freshness(of: CacheResult<[UserStats]>.stale([makeStats()], age: 1)), .stale)
+        XCTAssertEqual(UserActivityRefreshLaw.freshness(of: CacheResult<[UserStats]>.fresh([makeStats()], age: 1)), .fresh)
+    }
+
+    func test_userStatsView_loadsTheTimelineByItsOwnLaw() throws {
+        let source = try statsViewSource()
+
+        XCTAssertTrue(source.contains("UserActivityRefreshLaw.needsTimelineFetch("), "La frise ne dépend plus du seul cache des compteurs.")
+    }
+
+    // MARK: - Le nombre se lit sur sa carte
+
+    func test_valueHex_conversationsInLightMode_takesTheDarkerIndigo_whileTheCardKeepsItsTint() {
+        let conversations = UserActivityCards.make(stats: makeStats())[1]
+
+        XCTAssertEqual(conversations.valueHex(isDark: false), MeeshyColors.indigo600Hex)
+        XCTAssertEqual(conversations.colorHex, MeeshyColors.indigo300Hex)
+        XCTAssertEqual(conversations.valueHex(isDark: true), MeeshyColors.indigo300Hex)
+    }
+
+    func test_valueHex_conversationsNumber_readsAtLeast4_5To1OnItsLightCard() {
+        let conversations = UserActivityCards.make(stats: makeStats())[1]
+        let card = Self.tinted(conversations.colorHex, opacity: 0.08, over: "FFFFFF")
+
+        XCTAssertGreaterThanOrEqual(Self.contrast(conversations.valueHex(isDark: false), card), 4.5)
+    }
+
+    func test_valueHex_translationsNumber_readsAtLeast4_5To1OnItsDarkCard() {
+        let translations = UserActivityCards.make(stats: makeStats())[2]
+        let card = Self.tinted(translations.colorHex, opacity: 0.15, over: "09090B")
+
+        XCTAssertGreaterThanOrEqual(Self.contrast(translations.valueHex(isDark: true), card), 4.5)
+    }
+
+    func test_statsScreenAndProfileBand_paintTheNumberWithItsInk() throws {
+        XCTAssertTrue(try statsViewSource().contains("card.valueHex(isDark: theme.mode.isDark)"))
+        let band = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Profile/Views/ProfileActivityBand.swift"), encoding: .utf8)
+        XCTAssertTrue(band.contains("item.valueHex(isDark: theme.mode.isDark)"))
+    }
+
+    // MARK: - L'erreur et la frise paraissent en fondu
+
+    func test_userStatsView_errorAndTimeline_appearThroughATransition() throws {
+        let source = try statsViewSource()
+
+        XCTAssertTrue(source.contains("reduced: MeeshyMotion.reducedFade, value: viewModel.errorMessage)"))
+        XCTAssertTrue(source.contains("reduced: MeeshyMotion.reducedFade, value: viewModel.timeline.isEmpty)"))
+        XCTAssertTrue(source.contains("timelineChart\n                    .meeshyTransition(.opacity)"))
+    }
+
+    // MARK: - Contraste WCAG
+
+    private static func channels(_ hex: String) -> [Double] {
+        stride(from: 0, to: 6, by: 2).map { offset in
+            let start = hex.index(hex.startIndex, offsetBy: offset)
+            return Double(Int(hex[start..<hex.index(start, offsetBy: 2)], radix: 16) ?? 0) / 255
+        }
+    }
+
+    private static func tinted(_ tint: String, opacity: Double, over background: String) -> String {
+        zip(channels(tint), channels(background))
+            .map { String(format: "%02X", Int((($0 * opacity + $1 * (1 - opacity)) * 255).rounded())) }
+            .joined()
+    }
+
+    private static func luminance(_ hex: String) -> Double {
+        let linear = channels(hex).map { $0 <= 0.03928 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+
+    private static func contrast(_ first: String, _ second: String) -> Double {
+        let (light, dark) = (max(luminance(first), luminance(second)), min(luminance(first), luminance(second)))
+        return (light + 0.05) / (dark + 0.05)
+    }
 }

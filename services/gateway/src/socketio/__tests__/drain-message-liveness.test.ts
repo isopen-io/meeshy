@@ -2,7 +2,7 @@
  * Le rejeu hors ligne ne remet que ce qui est encore VIVANT (#16685).
  *
  * `enqueueForOfflineParticipants` écrit `payload: body` VERBATIM, et le drain
- * ne rejoue qu'un gate d'APPARTENANCE (`_dropEndedMemberships`, dont le
+ * ne rejoue qu'un gate d'APPARTENANCE (`authorizeDrainedEntries`, dont le
  * `select` ne lit que `{ conversationId, bannedAt }`). **Rien ne relit l'état
  * du MESSAGE.** Un message éphémère brûlé — `ExpiredMessagesCleanupService._burn`
  * pose `content: ''`, `encryptedContent: null`, `translations: null`,

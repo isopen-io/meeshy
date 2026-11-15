@@ -43,33 +43,42 @@ struct UserStatsView: View {
 
     // MARK: - Content
 
+    /// L'erreur et la frise paraissent en fondu à la réponse du réseau ; le contenu ne saute plus.
     private var statsContent: some View {
         VStack(spacing: MeeshySpacing.xl) {
             if let errorMessage = viewModel.errorMessage {
-                HStack(spacing: MeeshySpacing.md) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                        .foregroundStyle(MeeshyColors.error)
-                        .accessibilityHidden(true)
-                    Text(errorMessage)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundStyle(MeeshyColors.error)
-                    Spacer()
-                }
-                .padding(MeeshySpacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
-                )
+                errorBanner(errorMessage)
+                    .meeshyTransition(.move(edge: .top).combined(with: .opacity))
             }
             statsCards
             if !viewModel.timeline.isEmpty {
                 timelineChart
+                    .meeshyTransition(.opacity)
             }
             Spacer().frame(height: 40)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)
+        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: viewModel.errorMessage)
+        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: viewModel.timeline.isEmpty)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                .foregroundStyle(MeeshyColors.error)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(MeeshyColors.error)
+            Spacer()
+        }
+        .padding(MeeshySpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
+        )
     }
 
     // MARK: - Stats Cards
@@ -100,7 +109,7 @@ struct UserStatsView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(card.value, format: .number)
                     .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(hex: color))
+                    .foregroundStyle(Color(hex: card.valueHex(isDark: theme.mode.isDark)))
 
                 Text(card.label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
@@ -175,53 +184,59 @@ final class UserStatsViewModel: ObservableObject {
 
     private static let logger = MeeshyLog.logger(.stats)
 
+    /// Le cache se peint d'abord ; compteurs et frise se relisent chacun selon SON cache (`UserActivityRefreshLaw`).
     func load() async {
         let userId = AuthManager.shared.currentUser?.id ?? ""
-
-        // Load stats from cache
-        let cacheResult = await CacheCoordinator.shared.stats.load(for: userId)
-
-        // Load timeline from cache.
-        //
-        // SWR: timeline data only matters when it has rows to render — both
-        // fresh and stale variants satisfy the cache-first contract. The
-        // stats branch below already drives the network revalidation when
-        // appropriate, so we do not kick a separate refresh here.
-        let timelineCacheKey = "timeline_\(userId)"
-        let timelineCached = await CacheCoordinator.shared.timeline.load(for: timelineCacheKey)
-        switch timelineCached {
-        case .fresh(let cached, _), .stale(let cached, _):
-            if !cached.isEmpty { timeline = cached }
-        case .expired, .empty:
-            break
+        let cachedStats = await CacheCoordinator.shared.stats.load(for: userId)
+        let cachedTimeline = await CacheCoordinator.shared.timeline.load(for: Self.timelineKey(userId))
+        switch cachedStats {
+        case .fresh(let cached, _), .stale(let cached, _): stats = cached.first
+        case .expired, .empty: break
         }
+        switch cachedTimeline {
+        case .fresh(let cached, _), .stale(let cached, _): if !cached.isEmpty { timeline = cached }
+        case .expired, .empty: break
+        }
+        let statsFreshness = UserActivityRefreshLaw.freshness(of: cachedStats)
+        let fetchesStats = UserActivityRefreshLaw.needsStatsFetch(stats: statsFreshness)
+        let fetchesTimeline = UserActivityRefreshLaw.needsTimelineFetch(
+            stats: statsFreshness, timeline: UserActivityRefreshLaw.freshness(of: cachedTimeline)
+        )
+        guard fetchesStats || fetchesTimeline else { return }
+        isLoading = stats == nil
+        async let statsFailure = refreshStats(fetchesStats, userId: userId)
+        async let timelineFailure = refreshTimeline(fetchesTimeline, userId: userId)
+        let failures = await [statsFailure, timelineFailure].compactMap { $0 }
+        errorMessage = failures.first
+        isLoading = false
+    }
 
-        switch cacheResult {
-        case .fresh(let cached, _):
-            stats = cached.first
-        case .stale(let cached, _):
-            stats = cached.first
-            await refreshFromAPI(userId: userId)
-        case .expired, .empty:
-            isLoading = stats == nil
-            await refreshFromAPI(userId: userId)
+    private static func timelineKey(_ userId: String) -> String { "timeline_\(userId)" }
+
+    /// `nil` au succès (ou sans demande), le message d'erreur sinon.
+    private func refreshStats(_ fetches: Bool, userId: String) async -> String? {
+        guard fetches else { return nil }
+        do {
+            let served = try await StatsService.shared.fetchStats()
+            stats = served
+            await bestEffort("userStatsView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([served], for: userId) }
+            return nil
+        } catch {
+            UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
+            return error.localizedDescription
         }
     }
 
-    private func refreshFromAPI(userId: String) async {
+    private func refreshTimeline(_ fetches: Bool, userId: String) async -> String? {
+        guard fetches else { return nil }
         do {
-            async let statsTask = StatsService.shared.fetchStats()
-            async let timelineTask = StatsService.shared.fetchTimeline(days: 30)
-            let (s, t) = try await (statsTask, timelineTask)
-            stats = s
-            timeline = t
-            errorMessage = nil
-            await bestEffort("userStatsView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([s], for: userId) }
-            await bestEffort("userStatsView.timeline.save", category: .cache) { try await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)") }
+            let served = try await StatsService.shared.fetchTimeline(days: 30)
+            timeline = served
+            await bestEffort("userStatsView.timeline.save", category: .cache) { try await CacheCoordinator.shared.timeline.save(served, for: Self.timelineKey(userId)) }
+            return nil
         } catch {
-            UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
-            errorMessage = error.localizedDescription
+            UserStatsViewModel.logger.error("timeline refresh failed: \(error.localizedDescription)")
+            return error.localizedDescription
         }
-        isLoading = false
     }
 }
