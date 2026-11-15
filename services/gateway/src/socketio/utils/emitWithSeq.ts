@@ -32,14 +32,25 @@ import {
  *
  * LOCKSTEP avec les clients : le `_seq` est per-user GLOBAL, pas per-event. Un
  * client qui n'observe qu'un SOUS-ENSEMBLE des events estampillés voit un trou
- * à chaque event non observé. Étendre la liste des appelants ci-dessous oblige
- * donc à étendre l'observation dans le MÊME train de release, sur les TROIS
- * clients qui la portent : iOS (`SyncSeqTracker.observe`, MessageSocketManager),
- * web (`observeSyncSeq`, `notification-socketio.singleton`) et Android
- * (`SyncSeqTracker.observe`, `sdk-core/.../socket/MessageSocketManager.kt` —
- * câblé au cycle 108 ; avant ça Android jetait le champ et n'avait AUCUNE
- * détection de trou exacte, pendant que le contrat partagé affirmait le
- * contraire).
+ * à chaque event non observé — un curseur global observé partiellement est donc
+ * PIRE que pas de curseur : il fabrique des trous là où rien n'a été perdu, et
+ * chaque faux trou coûte une resynchronisation au client qui le croit. Étendre
+ * la liste des appelants ci-dessous oblige donc à étendre l'observation dans le
+ * MÊME train de release, sur chaque client qui la porte.
+ *
+ * Qui la porte ne se lit PAS ici : ce paragraphe a affirmé trois clients
+ * jusqu'au 2026-11-14 en nommant, pour le web, `notification-socketio.singleton`
+ * — un fichier de l'application web LEGACY, sortie du dépôt au #7668. Mesuré
+ * (cycle 163, #18602) : iOS observe (`MessageSocketRoutes+Notifications.swift`),
+ * Android observe (`sdk-core/.../socket/MessageSocketManager.kt`, câblé au
+ * cycle 108 ; avant ça il jetait le champ pendant que le contrat partagé
+ * affirmait le contraire), et `apps/web` n'observe AUCUN curseur (#18601).
+ *
+ * L'état se LIT donc au cliquet, jamais dans ce commentaire :
+ * `packages/shared/__tests__/ci/socket-seq-lockstep-gate.test.ts` dérive des
+ * sources les deux ensembles — ce que cette fonction estampille et ce que
+ * chaque client observe — et rougit sur l'écart, dans les deux sens. Ajouter un
+ * appelant ici fait tomber ce cliquet en nommant les plateformes à étendre.
  *
  * Ordering (SyncEngine A2, fix ordering) : `nextSeq` renvoie des valeurs
  * distinctes et strictement croissantes DANS L'ORDRE D'APPEL, mais deux appels
