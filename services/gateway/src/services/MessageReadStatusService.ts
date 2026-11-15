@@ -22,7 +22,7 @@ import { MessageMediaConsumptionService, type MediaConsumptionServed } from './M
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { unsetOrNull } from '../utils/prisma-unset';
-import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
+import { computeContiguousReadPrefix, computeRecipientCount, resolveCursorDeliveredAt, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
 import {
@@ -1323,10 +1323,11 @@ export class MessageReadStatusService {
         const avatarURL = resolveParticipantAvatar(participant);
 
         const cursor = cursorByParticipant.get(participantId);
-        const cursorDelivered =
-          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
-            ? cursor.lastDeliveredAt
-            : null;
+        const cursorDelivered = resolveCursorDeliveredAt({
+          cursorLastDeliveredAt: cursor?.lastDeliveredAt ?? null,
+          messageCreatedAt: message.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
         const frozen = frozenByParticipant.get(participantId);
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,
@@ -1655,10 +1656,11 @@ export class MessageReadStatusService {
 
         for (const participantId of evaluatedParticipantIds) {
           const cursor = cursorByParticipant.get(participantId);
-          const cursorDelivered =
-            cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt
-              ? cursor.lastDeliveredAt
-              : null;
+          const cursorDelivered = resolveCursorDeliveredAt({
+            cursorLastDeliveredAt: cursor?.lastDeliveredAt ?? null,
+            messageCreatedAt: msg.createdAt,
+            cutover: getExactReadTrackingCutover(),
+          });
           const frozen = frozenForMsg?.get(participantId);
           const readAt = resolveReadAt({
             frozenReadAt: frozen?.readAt ?? null,
@@ -1858,11 +1860,17 @@ export class MessageReadStatusService {
         if (!participant) continue; // orphan or inactive
 
         const cursor = cursorByParticipant.get(participantId);
-        const cursorDelivered =
-          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
-            ? cursor.lastDeliveredAt
-            : null;
+        const cursorDelivered = resolveCursorDeliveredAt({
+          cursorLastDeliveredAt: cursor?.lastDeliveredAt ?? null,
+          messageCreatedAt: message.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
         const frozen = frozenByParticipant.get(participantId);
+        // `deliveredAt` est SERVI tel quel, et gouverne le filtre « delivered »
+        // douze lignes plus bas : il voyage À CÔTÉ de `receivedAt` et porte le
+        // même repli, donc la même borne. Le corriger seul aurait laissé le
+        // panneau « Qui a vu » annoncer une date de remise que le compteur
+        // venait de retirer.
         const deliveredAt = frozen?.deliveredAt ?? cursorDelivered;
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,
@@ -2322,10 +2330,11 @@ export class MessageReadStatusService {
       let readCount = 0;
       for (const participantId of evaluatedParticipantIds) {
         const cursor = cursorByParticipant.get(participantId);
-        const cursorDelivered =
-          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= latestMessage.createdAt
-            ? cursor.lastDeliveredAt
-            : null;
+        const cursorDelivered = resolveCursorDeliveredAt({
+          cursorLastDeliveredAt: cursor?.lastDeliveredAt ?? null,
+          messageCreatedAt: latestMessage.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
         const frozen = frozenByParticipant.get(participantId);
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,

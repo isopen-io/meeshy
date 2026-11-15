@@ -23,7 +23,7 @@ import { MessageReadStatusService } from '../../../services/MessageReadStatusSer
 import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 
 const mockPrisma: any = {
-  message: { findFirst: jest.fn(), findUnique: jest.fn() },
+  message: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
   participant: { findMany: jest.fn() },
   conversationReadCursor: { findMany: jest.fn() },
   messageStatusEntry: { findMany: jest.fn() },
@@ -67,6 +67,9 @@ const arrangeDrainedWithoutEmission = (messageCreatedAt: Date) => {
   mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
   mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
   mockPrisma.messageAttachment.findMany.mockResolvedValue([]);
+  mockPrisma.message.findMany.mockResolvedValue([
+    { id: MESSAGE_ID, createdAt: messageCreatedAt, senderId: 'sender-participant' },
+  ]);
 };
 
 describe('Le statut SERVI ne retombe plus sur une horloge murale (#18701)', () => {
@@ -119,6 +122,16 @@ describe('Le statut SERVI ne retombe plus sur une horloge murale (#18701)', () =
     const status = await service.getMessageReadStatus(MESSAGE_ID);
 
     expect(status.receivedBy).toEqual([]);
+  });
+
+  it('getConversationReadStatuses ne compte pas remis le message refusé', async () => {
+    arrangeDrainedWithoutEmission(new Date('2026-10-01T10:00:00.000Z'));
+    const service = new MessageReadStatusService(mockPrisma as any);
+
+    const statuses = await service.getConversationReadStatuses(CONVERSATION_ID, [MESSAGE_ID]);
+
+    expect(statuses.get(MESSAGE_ID)?.receivedCount).toBe(0);
+    expect(statuses.get(MESSAGE_ID)?.deliveredToAllAt).toBeNull();
   });
 
   it('getMessageStatusDetails sert `deliveredAt: null`, et le filtre « delivered » l\'exclut', async () => {
