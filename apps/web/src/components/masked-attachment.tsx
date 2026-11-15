@@ -116,7 +116,7 @@ export function MaskedAttachment({
         {...ratio}
         aria-label={libelle}
         aria-describedby={hintId}
-        className={`${className} cursor-pointer appearance-none border-0 p-0`}
+        className={`btn-press ${className} cursor-pointer appearance-none border-0 p-0`}
         style={style}
         onClick={(event) => {
           event.stopPropagation();
@@ -139,7 +139,7 @@ export function MaskedAttachment({
         data-protected-attachment="hidden"
         {...ratio}
         aria-label={`${libelle}, ${translate(language, 'attachment.protected.open.hint')}`}
-        className={`${className} cursor-pointer appearance-none border-0 p-0`}
+        className={`btn-press ${className} cursor-pointer appearance-none border-0 p-0`}
         style={style}
         onClick={(event) => {
           event.stopPropagation();

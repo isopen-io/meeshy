@@ -2,6 +2,7 @@ import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import {
@@ -309,6 +310,30 @@ describe('ViewerMenu', () => {
     } finally {
       window.removeEventListener('keydown', onViewerKey);
     }
+  });
+});
+
+function ViewerBelow({ onClose }: { readonly onClose: () => void }) {
+  useBackDismiss(onClose);
+  return null;
+}
+
+describe('ViewerMenu — le menu ouvert est la couche du dessus (#18326)', () => {
+  test('menu ouvert, le retour Android ou Précédent ferme le MENU seul : la visionneuse dessous reste ouverte', async () => {
+    const journal: string[] = [];
+    const view = await mount(
+      <>
+        <ViewerBelow onClose={() => journal.push('viewer-closed')} />
+        <ViewerMenu label="Plus d’options" onOpenChange={(open) => journal.push(`open:${open}`)} items={[{ key: 'save', label: 'Enregistrer', glyph: glyph('save'), onSelect: () => undefined }]} />
+      </>,
+    );
+    await click(view.querySelector('[data-viewer-menu-button]'));
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(view.querySelector('[role="menu"]')).toBeNull();
+    expect(journal).toEqual(['open:true', 'open:false']);
   });
 });
 

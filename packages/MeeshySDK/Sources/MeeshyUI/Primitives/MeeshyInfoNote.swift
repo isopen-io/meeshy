@@ -73,6 +73,11 @@ public struct MeeshyInfoNoted<Label: View>: View {
     @Binding private var openNoteID: String?
     private let tint: Color
     private let label: Label
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     public init(note: MeeshyInfoNote?, openNoteID: Binding<String?>, tint: Color = .secondary, @ViewBuilder label: () -> Label) {
         self.note = note
@@ -95,7 +100,9 @@ public struct MeeshyInfoNoted<Label: View>: View {
             HStack(spacing: MeeshySpacing.xs) {
                 label
                 MeeshyInfoNoteButton(note: note, isExpanded: isExpanded, tint: tint) {
-                    openNoteID = MeeshyInfoNote.toggled(open: openNoteID, tapped: note.id)
+                    meeshyWithAnimation(MeeshyAnimation.springFast, reduceMotion: reduceMotion) {
+                        openNoteID = MeeshyInfoNote.toggled(open: openNoteID, tapped: note.id)
+                    }
                 }
             }
             if isExpanded {
@@ -104,6 +111,7 @@ public struct MeeshyInfoNoted<Label: View>: View {
                     .foregroundStyle(tint)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityHidden(true)
+                    .transition(.opacity)
             }
         }
         .accessibilityAction(.escape) {

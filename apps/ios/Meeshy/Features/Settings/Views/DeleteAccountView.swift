@@ -5,6 +5,11 @@ import MeeshyUI
 
 struct DeleteAccountView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var confirmationText = ""
@@ -178,7 +183,7 @@ struct DeleteAccountView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.xl))
                             .foregroundStyle(MeeshyColors.success)
-                            .transition(.scale.combined(with: .opacity))
+                            .meeshyTransition(.scale.combined(with: .opacity))
                             // Decorative confirmation: its meaning is carried by the
                             // field's accessibilityValue, so hide it to avoid a
                             // dangling unlabeled element for VoiceOver.
@@ -201,7 +206,7 @@ struct DeleteAccountView: View {
                         }
                     }
                 )
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: confirmationText == requiredPhrase)
+                .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: confirmationText == requiredPhrase)
 
                 // La preuve de PRÉSENCE, distincte de la phrase de confirmation :
                 // celle-ci prouve qu'on a compris, celui-là qu'on est bien là.
@@ -283,7 +288,7 @@ struct DeleteAccountView: View {
                 // La confirmation ne défile pas : l'en-tête s'y montre déplié,
                 // quel que soit le repli laissé par le formulaire quitté.
                 scrollRelay.offset = 0
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
                     showEmailConfirmation = true
                 }
                 isDeleting = false
@@ -354,7 +359,7 @@ struct DeleteAccountView: View {
 
             Spacer()
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .meeshyTransition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
     // MARK: - Helpers
