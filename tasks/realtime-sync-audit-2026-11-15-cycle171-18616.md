@@ -137,6 +137,77 @@ garde est donc un DOUBLE futur, déclaré sous la projection et sourd au
 scellement — un piège armé, pas une panne, et il se ferme par une déclaration
 honnête plutôt que par un témoin qui ne peut pas exister.
 
+## L'audit adversarial, et ce qu'il a changé
+
+Le lot touche la purge d'un contenu détruit : il passe par `auditeur-adversarial`
+avant fusion. Verdict : **ACCEPTABLE AVEC RÉSERVES**, aucun blocage de
+confidentialité ni de disponibilité.
+
+**Il a d'abord DISCULPÉ le risque que je lui avais désigné comme le plus
+probable.** Je craignais qu'un des quatre consommateurs déstructure `mediaDeps`
+et fige le getter ; mesuré, aucun ne le fait — `ready-listener.ts:66` lit
+`deps.deliveryQueue` À L'INTÉRIEUR de la flèche, donc par événement. Aucun
+chemin de production ne fait tourner le pipeline avant l'enregistrement (le
+collecteur de manifeste n'appelle pas `setupSocketIO`), aucun sceau n'est perdu,
+rien n'a été retiré en silence.
+
+Trois constats ont été SOLDÉS dans le même lot, et les trois portent sur ce que
+le lot lui-même affirmait :
+
+| # | constat | ce qui a changé |
+|---|---|---|
+| F1 | le cliquet ne voyait **aucune** des SIX façons de construire une seconde file autrement que par `new RedisDeliveryQueue(` — alias d'import, liaison locale, parenthèses, `Reflect.construct`, **sous-classe**, fichier `.mts` ; la vraie fonction a rendu `[]` sur les six | quatre formes refusées, `.mts`/`.cts` lus, les scripts de la passerelle balayés, et une fixture par forme |
+| F2 | l'invariant « résolu PAR USAGE » n'était tenu qu'au LITTÉRAL : déstructurer `deps` dans le VRAI `mediaReadyPorts` laissait `tsc` à `EXIT=0` et 197 suites socket au vert | un témoin fait tourner le vrai consommateur et tombe sous cette capture |
+| F3 | la branche `undefined` que le lot AJOUTE au job de nettoyage n'avait aucun témoin | témoin posé — et **la première rédaction ne pouvait pas tomber**, le `try/catch` avalant le `TypeError` : il assert sur le JOURNAL, seul effet observable |
+
+### F5 — et le fichier que je réécrivais citait un témoin qui n'existe pas
+
+`delivery-queue-registry.ts` affirme depuis sa création que l'instance de
+production porte `enqueue` « par PREUVE DU COMPILATEUR, non par confiance :
+`delivery-queue-registry-capabilities.test.ts` affirme … ». **Ce fichier
+n'existait pas** — sa seule occurrence dans le dépôt était le doc-comment qui le
+citait, et `SharedDeliveryQueue` déclare `enqueue` sous un `Partial`, donc
+l'enregistrement n'en était pas la preuve non plus.
+
+> C'est la classe de défaut que ce lot existe pour fermer, dans le fichier que
+> ce lot réécrit — et le lot y avait ajouté DEUX doc-comments sans la voir. La
+> réponse n'est pas de retirer la phrase : c'est de la rendre vraie.
+
+Il existe désormais, et c'est lui qui tient le troisième paramètre
+(`{ sealAtRest }`) **par son ARITÉ**, l'assignabilité étant bivariante. Écrire
+ce témoin a produit la leçon la plus nette du cycle : **sa première rédaction a
+créé une affirmation fausse de plus, deux paragraphes sous le récit de la
+précédente.** Elle créditait `ts-jest` de tenir `TS2344` — vrai de sa liste
+d'amnistie, et sans objet depuis #10203, qui lui a retiré le typecheck. Mesuré :
+sous la mutation, `npx jest` est VERT et c'est le **gate A**
+(`tsc -p tsconfig.test.json`) qui rougit, portant son compte de 76 à 77.
+
+### Les deux affirmations du lot corrigées À LA BAISSE
+
+| affirmation | ce qui est vrai |
+|---|---|
+| « le scellement au repos se perdrait sans qu'une ligne ne rougisse » | **non** : le type qui gouverne l'appel scellant est celui du SITE D'APPEL (`OfflineParticipantQueueDeps`, trois paramètres), et l'objet résolu est la vraie file, qui honore l'option quoi qu'en dise sa projection. C'est un piège DÉSAMORCÉ pour un double futur, pas une garde porteuse |
+| « la résolution par accesseur » présentée comme un correctif | c'est une garantie de CONCEPTION : l'ordre de démarrage réel figerait de toute façon la bonne valeur |
+
+### Le seul constat que ce lot ne solde pas, et il est devenu une issue
+
+**#18707** — la tranche MÉMOIRE est désormais PARTAGÉE entre la famille média et
+la famille message, et ses deux bornes sont par instance (50 entrées par
+lecteur, éviction des plus anciennes). Sous un hoquet Redis, les enrichissements
+de messages anciens — le balayage des pièces `pending` n'a aucune borne
+temporelle basse — peuvent évincer un `message:new` du début de la panne, jamais
+rejoué. C'est la **seule régression de disponibilité introduite par le lot**, et
+elle est assumée : avant lui, 100 % des entrées média de cette tranche étaient
+perdues. La refermer demande un sous-budget par famille ou une priorité
+d'éviction — une décision, pas un correctif.
+
+### Une note de PROCESS, parce qu'elle se reproduira
+
+Le lot tel que commité à `37cab576f` **ne typecheckait pas** : les deux fixtures
+importaient à la mauvaise profondeur. La réparation a voyagé dans un commit
+étiqueté `docs(…)`. Une correction de compilation sous une étiquette `docs` est
+invisible à quiconque relit l'historique par ses étiquettes.
+
 ## Ce que le cycle a CÉDÉ ou n'a pas pris
 
 | # | ce que c'est | pourquoi pas ce lot |
@@ -147,6 +218,7 @@ honnête plutôt que par un témoin qui ne peut pas exister.
 | #18618 | rien n'ordonne le direct contre le drain | demande une décision de contrat |
 | #18680 | une perte de rejeu n'est récupérable que sur le WEB | lot client, trois plateformes |
 | #18681 | le rejeu révèle l'EXISTENCE d'un message sous plancher | verdict de produit, pas un correctif |
+| **#18707** | la tranche mémoire partagée entre familles | **ouverte par ce cycle**, depuis son propre audit |
 
 ## La leçon du cycle
 

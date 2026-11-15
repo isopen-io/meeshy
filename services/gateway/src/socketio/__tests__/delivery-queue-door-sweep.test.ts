@@ -123,12 +123,39 @@ describe("file de remise hors ligne — une seule INSTANCE, celle du processus",
     expect([...QUEUE_CONSTRUCTION_SITES]).toEqual(['server.ts']);
   });
 
-  /** Un balayage qui ne trouve jamais rien rend un inventaire vide pour la mauvaise raison. */
-  it('le balayage VOIT la construction qu’il prétend interdire', () => {
+  /**
+   * Un balayage qui ne trouve jamais rien rend un inventaire vide pour la
+   * mauvaise raison — et il faut lui montrer TOUTE la famille, pas la forme
+   * qu'on avait en tête.
+   *
+   * La première rédaction ne cherchait que `new RedisDeliveryQueue(`. L'audit
+   * adversarial a fait tourner la VRAIE fonction sur six contre-exemples et
+   * elle n'en a vu **aucun** : le vert du cliquet était alors plus faible que
+   * ce que son doc-comment affirmait. Chaque forme a désormais sa fixture, et
+   * la plus réaliste des six — la SOUS-CLASSE, qui porte sa propre tranche
+   * mémoire — vit dans un `.mts`, que le balayage ne lisait pas non plus.
+   */
+  it('le balayage VOIT les quatre formes qu’il prétend interdire', () => {
     const found = sweepDeliveryQueueConstructions(join(__dirname, 'fixtures', 'second-delivery-queue'));
 
-    expect(found.map((c) => c.file)).toEqual(['holder.ts']);
-    expect(found[0].call).toContain('new RedisDeliveryQueue(');
+    expect([...found.map((c) => c.file)].sort()).toEqual([
+      'aliased.ts',
+      'holder.ts',
+      'rebound.ts',
+      'rebound.ts',
+      'subclass.mts',
+      'subclass.mts',
+    ]);
+  });
+
+  /**
+   * Les scripts de la passerelle vivent HORS de `src/`, et plusieurs PURGENT
+   * des données. Un balayage borné au répertoire qui a l'air concerné déclare
+   * l'inventaire vide en en laissant une vivante — c'est la leçon de la
+   * huitième porte d'émission (cycle 105), et elle vaut ici d'un répertoire.
+   */
+  it('les scripts de la passerelle ne construisent pas de file non plus', () => {
+    expect(sweepDeliveryQueueConstructions(join(SRC_DIR, '..', 'scripts'))).toEqual([]);
   });
 
   /** Et il ne prend pas une RÉSOLUTION par le registre pour une construction. */

@@ -92,3 +92,60 @@ sous la forme narrow.
 > forme « interface » du `select` trop étroit : **la projection est la seule des
 > conditions qu'aucun témoin de comportement ne peut voir**, parce que l'objet
 > de production fait la bonne chose quoi qu'en dise son type.
+
+### Corollaire mesuré : le cliquet qu'on écrit est lui-même une affirmation
+
+Le balayage livré avec ce lot déclarait, dans son doc-comment, geler `server.ts`
+comme **seul** site de construction de production. L'audit adversarial a fait
+tourner la VRAIE fonction sur six contre-exemples — alias d'import, liaison
+locale, parenthèses autour du constructeur, `Reflect.construct`, sous-classe,
+fichier `.mts` — et elle n'en a vu **aucun**.
+
+C'est la règle du cycle 105 (« chercher une forme fautive par son NOM de
+déclaration, c'est manquer tous les sites qui l'obtiennent autrement »)
+retournée contre l'instrument écrit pour l'appliquer.
+
+> **Un cliquet neuf n'hérite d'aucune présomption.** Son vert est une mesure de
+> l'instrument avant d'être une mesure du dépôt, et la seule façon de savoir
+> lequel des deux on lit est de lui montrer la famille, pas l'exemplaire qu'on
+> avait en tête. La question à poser au balayage qu'on vient d'écrire est
+> **« par quelles autres formes cette chose peut-elle arriver ? »**, et elle se
+> répond en les écrivant toutes en fixtures.
+
+Deux des six portent leur propre leçon : la **sous-classe** est la forme
+réaliste (une file consciente du scellement, instrumentée pour les métriques,
+est un refactor ordinaire) et elle porte bien une seconde tranche mémoire ; et
+l'**alias** se ferme sans être suivi — interdire le renommage de l'identifiant
+clôt la famille à la ligne, là où la résoudre ferait du cliquet un
+demi-résolveur de modules.
+
+### Corollaire plus coûteux : j'ai écrit l'affirmation fausse DANS le lot qui ferme cette classe
+
+Le registre citait depuis sa création un `delivery-queue-registry-capabilities.test.ts`
+qui n'a jamais existé — sa seule occurrence dans le dépôt était le doc-comment
+qui le citait. Ce lot a ajouté **deux doc-comments à ce fichier** sans la voir.
+
+Puis, en écrivant le témoin manquant pour rendre la phrase vraie, son préambule
+a crédité `ts-jest` de tenir `TS2344` : exact de sa liste d'amnistie, et sans
+objet depuis #10203, qui lui a retiré le typecheck. Mesuré : sous la mutation,
+`npx jest` est **vert**, et c'est le gate A (`tsc -p tsconfig.test.json`) qui
+rougit.
+
+> **Une affirmation fausse ne se reconnaît pas à ce qu'elle a l'air faux** —
+> elle se reconnaît à ce qu'elle nomme une chose VÉRIFIABLE que personne n'a
+> vérifiée. Les deux ci-dessus nomment un FICHIER et un OUTIL : deux commandes,
+> jamais lancées. Écrire un lot sur cette classe de défaut n'immunise pas contre
+> elle ; le relevé mécanique, si.
+
+### Corollaire : un invariant se garde au CONSOMMATEUR, pas au littéral
+
+« La dépendance est résolue par ACCESSEUR, donc relue à chaque usage » est vrai
+du littéral et ne dit rien de qui le lit. Mesuré : ajouter
+`const { deliveryQueue } = deps;` en tête du vrai consommateur laisse
+`tsc --noEmit` à `EXIT=0` et 197 suites au vert.
+
+> Un accesseur ne garantit une relecture que si quelqu'un relit. La question
+> n'est pas « le site résout-il à l'usage ? » mais **« le CONSOMMATEUR
+> redemande-t-il ? »** — et elle se répond en faisant tourner le consommateur,
+> jamais son double. Un témoin qui capture les dépendances depuis un
+> consommateur MOQUÉ prouve la forme de l'objet, pas l'usage qu'on en fait.

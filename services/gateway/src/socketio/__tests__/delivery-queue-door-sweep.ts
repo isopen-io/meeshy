@@ -37,7 +37,7 @@ function walk(dir: string, out: string[] = []): string[] {
       walk(full, out);
       continue;
     }
-    if (entry.endsWith('.ts') && !entry.endsWith('.d.ts')) out.push(full);
+    if (/\.(ts|mts|cts)$/.test(entry) && !entry.endsWith('.d.ts')) out.push(full);
   }
   return out;
 }
@@ -116,7 +116,35 @@ export interface DeliveryQueueConstruction {
   readonly call: string;
 }
 
-const QUEUE_CONSTRUCTION = /new\s+RedisDeliveryQueue\s*\(/;
+/**
+ * Les QUATRE formes par lesquelles une seconde instance peut naître.
+ *
+ * La première rédaction n'en cherchait qu'une — `new RedisDeliveryQueue(` —
+ * et l'audit adversarial du lot a fait tourner la VRAIE fonction sur SIX
+ * contre-exemples : alias d'import, liaison locale, parenthèses autour du
+ * constructeur, `Reflect.construct`, sous-classe, fichier `.mts`. **Elle n'en
+ * a vu aucun.** C'est la règle du cycle 105 appliquée au balayage que ce lot
+ * écrivait lui-même : chercher une forme fautive par son NOM de déclaration,
+ * c'est manquer tous les sites qui l'obtiennent autrement.
+ *
+ * Les deux dernières ferment la famille SANS résoudre un seul nom, et c'est
+ * ce qui les rend complètes : `new Ctor(` ne peut pas exister sans qu'un
+ * `as` ou un `=` ait d'abord REBAPTISÉ l'identifiant, et les deux se voient
+ * à la ligne. Un balayage qui devrait suivre les alias serait un
+ * demi-résolveur de modules ; celui-ci interdit l'alias.
+ */
+const QUEUE_CONSTRUCTION = /new\s+\(?\s*RedisDeliveryQueue\s*\)?\s*\(/;
+const QUEUE_SUBCLASS = /extends\s+RedisDeliveryQueue\b/;
+const QUEUE_REFLECT = /Reflect\s*\.\s*construct\s*\(\s*RedisDeliveryQueue\b/;
+/** `import { RedisDeliveryQueue as Q }` et `const Ctor = RedisDeliveryQueue;`. */
+const QUEUE_REBOUND = /(?:RedisDeliveryQueue\s+as\s+\w+|=\s*RedisDeliveryQueue\s*(?:[;,)\]}]|$))/;
+
+const QUEUE_FORMS: ReadonlyArray<RegExp> = [
+  QUEUE_CONSTRUCTION,
+  QUEUE_SUBCLASS,
+  QUEUE_REFLECT,
+  QUEUE_REBOUND,
+];
 
 /**
  * Le SEUL site de production qui a le droit de construire la file.
@@ -168,7 +196,7 @@ export function sweepDeliveryQueueConstructions(srcDir: string): DeliveryQueueCo
     if (QUEUE_CONSTRUCTION_SITES.includes(relative)) continue;
 
     for (const line of stripComments(readFileSync(file, 'utf8')).split('\n')) {
-      if (!QUEUE_CONSTRUCTION.test(line)) continue;
+      if (!QUEUE_FORMS.some((form) => form.test(line))) continue;
       found.push({ file: relative, call: line.trim() });
     }
   }
