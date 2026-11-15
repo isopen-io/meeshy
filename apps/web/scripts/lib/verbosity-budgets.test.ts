@@ -134,4 +134,27 @@ describe('le relèvement motivé d’un budget', () => {
     expect(socleProblems({ socle, previousSocle: socle })).toEqual([]);
     expect(socleProblems({ socle, previousSocle: null })).toEqual([]);
   });
+
+  test('le plafond lui-même se relève, motivé : un repère légitime que l’avant-épure ne portait pas', () => {
+    const de = { total: 86, firstScreen: 86 };
+    const a = { total: 90, firstScreen: 88 };
+    const raised = { ...measure({ links: a }), releves: { links: { de, a, motif: 'L’écran se nomme', issue: 17584 } } };
+    expect(socleProblems({ socle: raised, previousSocle: socle })).toEqual([]);
+  });
+
+  test('un relèvement du plafond sans motif, sans issue, ou qui ne part pas du plafond de la base est refusé', () => {
+    const de = { total: 86, firstScreen: 86 };
+    const a = { total: 90, firstScreen: 88 };
+    const withReleve = (releve: object) => ({ ...measure({ links: a }), releves: { links: releve } });
+    expectOne(socleProblems({ socle: withReleve({ de, a, motif: ' ', issue: 17584 }), previousSocle: socle }), 'sans motif');
+    expectOne(socleProblems({ socle: withReleve({ de, a, motif: 'L’écran se nomme', issue: 0 }), previousSocle: socle }), 'sans issue');
+    expectOne(socleProblems({ socle: withReleve({ de: { total: 80, firstScreen: 80 }, a, motif: 'L’écran se nomme', issue: 17584 }), previousSocle: socle }), 'part de');
+    expectOne(socleProblems({ socle: withReleve({ de, a: { total: 95, firstScreen: 88 }, motif: 'L’écran se nomme', issue: 17584 }), previousSocle: socle }), 'annonce');
+  });
+
+  test('un plafond ne BAISSE pas, même sous couvert d’un relèvement', () => {
+    const de = { total: 86, firstScreen: 86 };
+    const a = { total: 80, firstScreen: 86 };
+    expectOne(socleProblems({ socle: { ...measure({ links: a }), releves: { links: { de, a, motif: 'Autre', issue: 17584 } } }, previousSocle: socle }), 'links');
+  });
 });
