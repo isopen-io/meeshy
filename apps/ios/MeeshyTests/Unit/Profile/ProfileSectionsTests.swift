@@ -18,7 +18,10 @@ final class ProfileSectionsTests: XCTestCase {
     // MARK: - Mes cercles
 
     func test_pillAccessibilityLabel_namesTheCircleThenItsPeople() {
-        XCTAssertEqual(ProfileCirclesSection.pillAccessibilityLabel(title: "Ami", count: 3), "Ami, 3 personnes")
+        let expected = String.localizedStringWithFormat(served("profile.circles.pill.a11y"), "Ami", 3)
+        XCTAssertEqual(ProfileCirclesSection.pillAccessibilityLabel(title: "Ami", count: 3), expected)
+        XCTAssertTrue(expected.hasPrefix("Ami, "), "le cercle d'abord, puis ses personnes : \(expected)")
+        XCTAssertTrue(expected.contains("3"), expected)
     }
 
     func test_requestsText_withNothingToAnswer_isAbsent() {
@@ -26,11 +29,13 @@ final class ProfileSectionsTests: XCTestCase {
     }
 
     func test_requestsText_withRequests_saysHowManyToAnswer() {
-        XCTAssertEqual(ProfileCirclesSection.requestsText(count: 2), "2 demandes à répondre")
+        let expected = String.localizedStringWithFormat(served("profile.circles.requests"), 2)
+        XCTAssertEqual(ProfileCirclesSection.requestsText(count: 2), expected)
+        XCTAssertTrue(expected.hasPrefix("2 "), expected)
     }
 
     func test_emptyPhrase_isSaidOnlyWhenNoCircleHasAnyone() {
-        XCTAssertEqual(ProfileCirclesSection.emptyPhrase(for: .empty, hasServedLinks: true), "Tes cercles se remplissent à mesure que tu échanges")
+        XCTAssertEqual(ProfileCirclesSection.emptyPhrase(for: .empty, hasServedLinks: true), served("profile.circles.empty"))
         let filled = ProfileCirclesSummary.make(links: [RelationLink(userId: "a", effectiveLevel: .friend, grantedByMe: .friend)], pendingCount: 0)
         XCTAssertNil(ProfileCirclesSection.emptyPhrase(for: filled, hasServedLinks: true))
     }
@@ -58,9 +63,9 @@ final class ProfileSectionsTests: XCTestCase {
 
         let label = ProfileActivityBand.accessibilityLabel(stats: stats)
 
-        XCTAssertTrue(label.contains("12 Messages"), label)
-        XCTAssertTrue(label.contains("3 Conversations"), label)
-        XCTAssertTrue(label.contains("40 Traductions"), label)
+        XCTAssertTrue(label.contains("12 " + served("user.stats.messages")), label)
+        XCTAssertTrue(label.contains("3 " + served("user.stats.conversations")), label)
+        XCTAssertTrue(label.contains("40 " + served("user.stats.translations")), label)
         XCTAssertFalse(label.contains("9"), "un compteur de demandes n'est pas une statistique : \(label)")
     }
 
@@ -220,4 +225,7 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(list.contains("onTapAuthor: { authorId in openAuthor(authorId, of: post) }"))
         XCTAssertFalse(list.contains("withAnimation(.spring("))
     }
+
+    /// La valeur SERVIE par le catalogue pour la langue du simulateur : le témoin tient en français comme en anglais (CI).
+    private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
 }

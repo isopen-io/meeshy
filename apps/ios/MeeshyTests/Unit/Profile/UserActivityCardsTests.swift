@@ -91,7 +91,8 @@ final class UserActivityCardsTests: XCTestCase {
     }
 
     func test_timelineHeader_doesNotRepeatTheScreenTitle_butSaysItsPeriod() throws {
-        XCTAssertEqual(UserStatsView.timelineHeader, "30 DERNIERS JOURS")
+        XCTAssertEqual(UserStatsView.timelineHeader, Bundle.main.localizedString(forKey: "user.stats.last_30_days", value: nil, table: nil))
+        XCTAssertTrue(UserStatsView.timelineHeader.contains("30"), "la période se lit dans toutes les langues")
         XCTAssertFalse(try statsViewSource().contains("\"user.stats.activity\""), "« ACTIVITÉ » répétait le titre « Mon activité ».")
     }
 

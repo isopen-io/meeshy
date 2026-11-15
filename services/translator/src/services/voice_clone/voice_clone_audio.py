@@ -24,6 +24,8 @@ try:
 except ImportError:
     AUDIO_PROCESSING_AVAILABLE = False
 
+from utils.voice_cache_guard import guard_voice_cache_id
+
 from .voice_metadata import AudioQualityMetadata
 
 logger = logging.getLogger(__name__)
@@ -157,6 +159,7 @@ class VoiceCloneAudioProcessor:
             return audio_paths[0]
 
         try:
+            output_name = f"{guard_voice_cache_id(user_id)}_combined_audio.wav"
             combined = AudioSegment.empty()
             valid_count = 0
 
@@ -175,7 +178,7 @@ class VoiceCloneAudioProcessor:
 
             # Save combined audio
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = output_dir / f"{user_id}_combined_audio.wav"
+            output_path = output_dir / output_name
             combined.export(str(output_path), format="wav")
 
             logger.info(
