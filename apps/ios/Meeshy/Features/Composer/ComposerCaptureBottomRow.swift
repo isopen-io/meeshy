@@ -14,11 +14,10 @@ import MeeshyUI
 /// qu'on ne peut pas ouvrir n'est montré ni à l'œil ni à VoiceOver, et il
 /// revient dès que les segments sont supprimés.
 ///
-/// **En édition, les outils seuls, sous la scène posée sur le sol** (#9352,
-/// porteur 2026-10-07, #9567, 2026-10-09 #9754) : « Filtres », « Cadres »,
-/// « Recadrer » et, pour une vidéo, « Couper » et « Son », en rangée ; au-dessus
-/// d'eux les panneaux des outils ACTIFS, tous ensemble à l'entrée — les
-/// proportions, le spectre du son, la piste de découpe (#9353) —, ou la bande
+/// **En édition, les outils gardent la colonne du viseur** (#18638, qui retourne la rangée
+/// de #9567) : « Filtres », « Effets », « Cadres », « Recadrer », « Texte » et, pour une
+/// vidéo, « Couper » et « Son », en colonne en bas à gauche, sur la prise ; sous elle les
+/// panneaux des outils ACTIFS — le spectre du son, la piste de découpe (#9353) —, ou la bande
 /// ouverte (ses miniatures se peignent sur le média retouché), qui les replie.
 /// Ni miniature seule, ni zoom, ni phrase du geste ; « Terminé » est en haut,
 /// aligné sur la croix.
@@ -118,7 +117,7 @@ struct ComposerCaptureBottomRow: View {
                         ComposerViewfinderRailSeparator()
                     }
                     if ComposerCaptureGesture.offersRail(context) {
-                        ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                        ComposerLookRail(open: session.openFamily) { famille in
                             session.toggleFamily(famille)
                         }
                         .transition(.opacity)
@@ -142,12 +141,11 @@ struct ComposerCaptureBottomRow: View {
             .transition(.opacity)
     }
 
-    /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
-    /// #9754) — un panneau par outil ACTIF, empilés : les proportions, la
-    /// piste de découpe portant le spectre du son (#10341), ou le spectre seul
-    /// quand la coupe est retirée. Puis « Filtres », « Effets », « Cadres », « Recadrer »,
-    /// « Couper », « Son » : chaque outil se retire ou revient d'un toucher,
-    /// sans fermer les autres. Une famille ouverte prend la place de tout cela,
+    /// **Au bas de la retouche : la colonne des outils, puis les panneaux** (#18638,
+    /// #9754) — « Filtres », « Effets », « Cadres », « Recadrer », « Texte », « Couper »,
+    /// « Son » à gauche : chaque outil se retire ou revient d'un toucher, sans fermer les
+    /// autres. Dessous, un panneau par outil ACTIF : la piste de découpe portant le spectre
+    /// du son (#10341), ou le spectre seul quand la coupe est retirée. Une famille ouverte prend la place de tout cela,
     /// sa bande au niveau de son rail (#10311).
     private var editTools: some View {
         VStack(spacing: ComposerEditScene.gap) {
@@ -162,6 +160,7 @@ struct ComposerCaptureBottomRow: View {
 
     @ViewBuilder
     private var editPanelsAndTools: some View {
+        ComposerEditRailGate(board: session.retouchTexts) { editRail }
         ForEach(session.editPanels, id: \.self) { panneau in
             switch panneau {
             case .trim:
@@ -189,16 +188,19 @@ struct ComposerCaptureBottomRow: View {
                 EmptyView()
             }
         }
-        ComposerEditRailFit(rail: editRail)
-            .frame(height: ComposerEditScene.toolsRow)
     }
 
-    private var editRail: ComposerLookRail {
-        ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
-                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) },
-                         fitsLabels: true) { famille in
+    /// **La colonne du viseur, gardée après la prise** (#18638, porteur 2026-11-15) : Filtres ·
+    /// Effets · Cadres puis les outils de la retouche, en bas à gauche, posés SUR la prise comme
+    /// le rail de la capture — plus de rangée en bas.
+    private var editRail: some View {
+        ComposerLookRail(open: session.openFamily, editTools: session.editTools,
+                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
             session.toggleFamily(famille)
         }
+        .padding(.leading, MeeshySpacing.mdPlus)
+        .padding(.bottom, ComposerEditScene.railBottomInset(framed: session.editFramesScene))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// **La famille ouverte, au niveau de son rail** (#10311) : Filtres · Effets
@@ -208,7 +210,7 @@ struct ComposerCaptureBottomRow: View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 // Le haut de la colonne sur le haut des cases (#10339).
-                ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                ComposerLookRail(open: session.openFamily) { famille in
                     session.toggleFamily(famille)
                 }
                 .padding(.leading, MeeshySpacing.mdPlus)
@@ -289,22 +291,15 @@ struct ComposerCaptureGestureHint: View {
     }
 }
 
-/// **Le rail entier, ou qui défile — jamais un libellé coupé** (porteur
-/// 2026-10-20) : à son idéal s'il tient, sinon il défile jusqu'aux bords.
-///
-/// Un type à lui seul (#11411) : `ViewThatFits` mesure ses candidats sur le
-/// rendu asynchrone d'iOS 26, et un candidat posé au fil d'un membre de la
-/// rangée y emportait tout ce que ce membre construit avant lui — pistes de
-/// coupe et de son, bande des familles. Ici, il ne voit que le rail.
-struct ComposerEditRailFit: View {
-    let rail: ComposerLookRail
+/// **La colonne cède à la barre du texte** (#18638) : pendant qu'un texte de la retouche se
+/// saisit, sa barre de style prend le bas — comme au viseur, où le rail se retire à la frappe.
+struct ComposerEditRailGate<Rail: View>: View {
+    @ObservedObject var board: ComposerRetouchTextBoard
+    @ViewBuilder let rail: Rail
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            rail
-            ScrollView(.horizontal, showsIndicators: false) {
-                rail.padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
-            }
+        if ComposerViewfinderScene.servesCaptureControls(typing: board.typingId != nil) {
+            rail.transition(.opacity)
         }
     }
 }

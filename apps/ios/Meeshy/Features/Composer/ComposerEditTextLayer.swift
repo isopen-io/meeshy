@@ -22,7 +22,15 @@ struct ComposerEditTextLayer: View {
     @State private var controlsTopY: CGFloat = .greatestFiniteMagnitude
     @State private var topBarBottomY: CGFloat = .greatestFiniteMagnitude
 
+    /// Le texte remis au canvas UNE passe après son montage (#18638) : monté à l'instant où
+    /// l'outil s'ouvre, il n'a encore ni calque ni fenêtre, et le clavier ne monterait pas.
+    @State private var mountedTypingId: String?
+
     private var textShown: Bool { session.shownEditTools.contains(.text) }
+
+    private var editingTextId: String? {
+        board.typingId == mountedTypingId ? mountedTypingId : nil
+    }
 
     var body: some View {
         ZStack {
@@ -48,6 +56,7 @@ struct ComposerEditTextLayer: View {
             }
         }
         .adaptiveOnChange(of: board.fingerprint) { _, _ in session.objectWillChange.send() }
+        .task(id: board.typingId) { mountedTypingId = board.typingId }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
             .merge(with: NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification))) { note in
             let trame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
@@ -69,7 +78,7 @@ struct ComposerEditTextLayer: View {
             slide: slide,
             onItemTapped: { id, _ in board.tap(id) },
             editableKinds: [.text],
-            editingTextId: board.typingId,
+            editingTextId: editingTextId,
             onInlineTextChanged: { id, texte in board.write(texte, in: id) },
             onInlineTextEditEnded: { _ in board.endTyping() },
             selectedItemId: board.typingId,

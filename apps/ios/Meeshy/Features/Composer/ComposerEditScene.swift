@@ -43,8 +43,6 @@ nonisolated enum ComposerEditScene {
 
     /// La rangée haute, au-dessus du sol : (X) et « Terminé ».
     static let topBand: CGFloat = 64
-    /// La rangée des outils : Filtres, Cadres, Recadrer, Couper, Son.
-    static let toolsRow: CGFloat = 64
     static let margin: CGFloat = 16
     static let gap: CGFloat = 8
     /// En deçà, les crochets se toucheraient.
@@ -78,11 +76,20 @@ nonisolated enum ComposerEditScene {
 
     /// Ce que le bas retient sous la scène : les outils, et chaque panneau
     /// montré — les outils composent (#9754), leurs panneaux s'empilent. La
-    /// bande d'une famille, elle, remplace la rangée des outils (#10311).
+    /// bande d'une famille, elle, remplace les panneaux (#10311).
     static func bottomReserve(_ panels: [ComposerEditPanel]) -> CGFloat {
         guard panels != [.band] else { return familyRow + gap * 2 }
         let montes = panels.map(panelHeight).filter { $0 > 0 }
-        return toolsRow + montes.map { $0 + gap }.reduce(0, +) + gap * 2
+        return montes.map { $0 + gap }.reduce(0, +) + gap * 2
+    }
+
+    /// **La colonne des outils, à gauche, SUR la prise** (#18638) : elle ne retient aucune
+    /// hauteur sous le cadre ; les formats du recadrage commencent à sa droite.
+    static let railColumnWidth: CGFloat = 112
+
+    /// Sous un cadre de recadrage, la colonne laisse libre son crochet du bas.
+    static func railBottomInset(framed: Bool) -> CGFloat {
+        framed ? MeeshyControlSize.tapTarget + gap : 0
     }
 
     /// La zone où la scène tient, dans un conteneur dont `top` et `bottom`
@@ -192,7 +199,8 @@ nonisolated enum ComposerEditPresetsLayout {
         let gap = ComposerEditScene.gap
         let porte = scene.height >= 2 * crochet + hauteur + 2 * gap
         let y = porte ? scene.maxY - crochet - gap - hauteur : scene.maxY + gap
-        return CGRect(x: 0, y: y, width: max(0, scene.midX * 2), height: hauteur)
+        let gauche = ComposerEditScene.railColumnWidth
+        return CGRect(x: gauche, y: y, width: max(0, scene.midX * 2 - gauche), height: hauteur)
     }
 
     /// Le retrait de tête des bandes défilantes : la première case s'aligne sur
