@@ -6,7 +6,7 @@ import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminEntityChip, AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
-import { AdminNoted } from '@/components/admin/info-note';
+import { AdminNoted } from '@/components/admin/admin-glyph';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';

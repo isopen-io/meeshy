@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { INK2 } from '@/components/admin/tone';
 import {
   ABUSE_FIELDS,

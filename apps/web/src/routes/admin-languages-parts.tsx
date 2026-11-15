@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { EDGE, INK, INK2, INK3, SURFACE } from '@/components/admin/tone';
 import { accuracyConfidenceText, accuracyQuality, growthView, languageTitle, pairConfidenceText, pairLabel } from '@/lib/admin/languages-view';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';

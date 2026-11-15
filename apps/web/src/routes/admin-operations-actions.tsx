@@ -1,4 +1,4 @@
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 

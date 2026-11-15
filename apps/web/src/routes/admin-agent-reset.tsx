@@ -1,6 +1,6 @@
 import { AdminButton } from '@/components/admin/button';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { INK2 } from '@/components/admin/tone';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';

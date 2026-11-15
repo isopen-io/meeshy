@@ -3,7 +3,7 @@ import { SEASON_COPY_LOCALES, SEASON_STEP_POINTS_MAX, SEASON_STEP_POINTS_MIN, SE
 import type { LeagueMoment } from '@meeshy/shared/utils/game/league';
 
 import { AdminSelect, AdminTextArea, AdminTextInput } from '@/components/admin/form';
-import { AdminNoted } from '@/components/admin/info-note';
+import { AdminNoted } from '@/components/admin/admin-glyph';
 import { INK2 } from '@/components/admin/tone';
 import {
   COPY_FIELDS,

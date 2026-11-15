@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { AdminFormActions, AdminFormError, AdminFormStatus, AdminTextArea } from '@/components/admin/form';
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { hasIssues, draftOfRow, editBody, validateDraft, type DraftIssues, type SeasonDraft, ADMIN_SEASON_CALENDAR_QUERY_KEY } from '@/lib/admin/game-season-form';
 import type { AdminDeps } from '@/lib/api/admin';

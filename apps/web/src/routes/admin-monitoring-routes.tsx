@@ -1,4 +1,4 @@
-import { AdminNoted } from '@/components/admin/info-note';
+import { AdminNoted } from '@/components/admin/admin-glyph';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 

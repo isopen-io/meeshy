@@ -8,7 +8,7 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { AdminSparkline } from './charts/sparkline';
 import { AdminGlyph } from './admin-glyph';
 import { AdminLink } from './entity-chip';
-import { AdminNoted } from './info-note';
+import { AdminNoted } from './admin-glyph';
 import { BRAND, EDGE, INK, INK2, INK3, SURFACE, TONE_COLOR } from './tone';
 
 export type AdminDelta = {

@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminNoted } from '@/components/admin/info-note';
+import { AdminNoted } from '@/components/admin/admin-glyph';
 import { AdminSwitch } from '@/components/admin/form';
 import { AdminInlineNotice } from '@/components/admin/states';
 import { BRAND } from '@/components/admin/tone';

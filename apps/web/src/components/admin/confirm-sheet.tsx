@@ -5,7 +5,7 @@ import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminGlyph } from './admin-glyph';
-import { AdminInfoAlone } from './info-note';
+import { AdminInfoAlone } from './admin-glyph';
 import { AdminFormError, motiveState } from './form';
 import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
 

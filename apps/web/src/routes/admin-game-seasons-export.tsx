@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { AdminFormActions, AdminFormError } from '@/components/admin/form';
 import { INK2 } from '@/components/admin/tone';
 import { copyText, downloadTextFile } from '@/lib/admin/download-text';

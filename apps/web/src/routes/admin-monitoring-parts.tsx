@@ -1,4 +1,4 @@
-import { AdminNoted } from '@/components/admin/info-note';
+import { AdminNoted } from '@/components/admin/admin-glyph';
 import type { ReactNode } from 'react';
 
 import { AdminGlyph } from '@/components/admin/admin-glyph';

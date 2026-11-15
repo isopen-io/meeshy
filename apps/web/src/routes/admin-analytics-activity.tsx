@@ -3,7 +3,7 @@ import { peakOf } from '@/components/admin/charts/chart-scale';
 import { AdminShareChart } from '@/components/admin/charts/share-chart';
 import { AdminTimelineChart } from '@/components/admin/charts/timeline-chart';
 import { AdminStatGrid } from '@/components/admin/stat-card';
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { INK3 } from '@/components/admin/tone';
 import { interpretActivityBucket, interpretMessageType } from '@/lib/admin/interpret/enums';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';

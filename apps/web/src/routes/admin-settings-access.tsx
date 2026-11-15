@@ -1,7 +1,7 @@
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminBadge, AdminRoleBadge } from '@/components/admin/badges';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminNoted } from '@/components/admin/info-note';
+import { AdminNoted } from '@/components/admin/admin-glyph';
 import { AdminMetaRow } from '@/components/admin/meta';
 import { BRAND, INK, INK2, INK3, TONE_COLOR } from '@/components/admin/tone';
 import { interpretRole } from '@/lib/admin/interpret/enums';

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminOfflineNotice } from '@/components/admin/states';
 import { AdminSummaryGrid } from '@/components/admin/summary-card';
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';

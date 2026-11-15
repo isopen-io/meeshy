@@ -1,7 +1,7 @@
 import { useQuery, type QueryKey, type UseQueryResult } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import { AdminNoted } from '@/components/admin/info-note';
+import { AdminNoted } from '@/components/admin/admin-glyph';
 import { AdminStatCard } from '@/components/admin/stat-card';
 import { AdminDeniedInline, AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
 import { INK, INK2 } from '@/components/admin/tone';

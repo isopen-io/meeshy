@@ -2,7 +2,7 @@ import { ENGAGEMENT_STREAK_ACTS, ENGAGEMENT_STREAK_TIER_LABEL_MAX } from '@meesh
 
 import { AdminButton } from '@/components/admin/button';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminNoted } from '@/components/admin/info-note';
+import { AdminNoted } from '@/components/admin/admin-glyph';
 import { AdminInlineNotice } from '@/components/admin/states';
 import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
 import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';

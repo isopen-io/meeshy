@@ -4,7 +4,7 @@ import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminBarChart } from '@/components/admin/charts/bar-chart';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminInfoAlone } from '@/components/admin/info-note';
+import { AdminInfoAlone } from '@/components/admin/admin-glyph';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
 import { AdminTabPanel, AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { EDGE, INK, INK2 } from '@/components/admin/tone';
