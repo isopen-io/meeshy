@@ -259,13 +259,21 @@ async function tickLocked(deps: PhoneReachabilityRelayDeps, emitterId: string): 
       if (!(await stillDeclared(deps, served))) return;
       await forgetPushedReaders(deps.cache, emitterId);
       const pushed = await fanOutUnreachable(deps, served, announcement, readers);
-      if (await stillDeclared(deps, served)) await rememberPushedReaders(deps.cache, emitterId, pushed);
-      else await retract(deps, pushed.map((readerId) => ({ emitterId, readerId })));
+      if (await stillDeclared(deps, served)) {
+        await rememberPushedReaders(deps.cache, emitterId, pushed);
+        return;
+      }
+      readers.forEach((readerId) => emitReachable(deps, readerId, emitterId));
+      await retract(deps, pushed.map((readerId) => ({ emitterId, readerId })));
     },
   };
 }
 
-/** Un retour arrivé entre la déclaration et l'éventail l'annule : rien de périmé ne part. */
+/**
+ * Un retour arrivé entre la déclaration et l'éventail l'annule : rien de périmé ne part ; s'il arrive
+ * PENDANT l'éventail, le dernier mot chez chaque lecteur atteint est l'effacement, et les notifications
+ * poussées se retirent.
+ */
 async function stillDeclared(deps: PhoneReachabilityRelayDeps, served: PhoneReachabilityState): Promise<boolean> {
   return servedPhoneReachability(served.userId, await readReachability(deps.cache, served.userId))?.unreachableSince === served.unreachableSince;
 }

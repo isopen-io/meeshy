@@ -85,6 +85,8 @@ function monde(options: {
   let now = T0 - 70 * MIN;
   let connecte = options.connecte ?? false;
   let suivie: string | null = 's1';
+  let pendantLePush: (() => Promise<unknown>) | null = null;
+  let pendantLeContexte: (() => Promise<unknown>) | null = null;
   const lectures = { count: 0 };
   const compter = <T extends object>(target: T): T =>
     new Proxy(target, {
@@ -103,9 +105,13 @@ function monde(options: {
     cache: batteryCacheInMemory(),
     io: { to: (room: string) => ({ emit: (event: string, data: Record<string, unknown>) => emissions.push({ room, event, data }) }) } as unknown as PhoneReachabilityRelayDeps['io'],
     now: () => now,
-    context: async ({ readerIds }) => new Map(readerIds.map((id) => [id, { roomOpen: conversing.has(id), lastExchangeAt: null, awaitingReply: false }])),
+    context: async ({ readerIds }) => {
+      await pendantLeContexte?.();
+      return new Map(readerIds.map((id) => [id, { roomOpen: conversing.has(id), lastExchangeAt: null, awaitingReply: false }]));
+    },
     push: async (push) => {
       pushes.push(push);
+      await pendantLePush?.();
       return true;
     },
     probe: async (emitterId) => {
@@ -170,6 +176,12 @@ function monde(options: {
     couper: () => {
       const row = world.users.rows.find((r) => r.id === EMETTEUR);
       if (row) row.unreachableSharingDisabledAt = new Date(T0);
+    },
+    pendantLePush: (action: (() => Promise<unknown>) | null) => {
+      pendantLePush = action;
+    },
+    pendantLeContexte: (action: (() => Promise<unknown>) | null) => {
+      pendantLeContexte = action;
     },
     suivre: (sessionId: string | null) => {
       suivie = sessionId;
@@ -302,6 +314,30 @@ describe('la preuve appartient au téléphone suivi, même quand il change sans 
       await m.balayer();
     }
     expect(m.pushes).toEqual([]);
+  });
+});
+
+describe('un retour qui dépasse l\'éventail', () => {
+  it('le dernier mot chez chaque lecteur est « joignable », et la notification poussée se retire', async () => {
+    const m = monde();
+    await m.prouver();
+    m.avancer(10 * MIN);
+    await m.balayer();
+    m.avancer(10 * MIN);
+    await m.balayer();
+    m.avancer(10 * MIN);
+    let revenu = false;
+    m.pendantLeContexte(async () => {
+      if (revenu) return;
+      revenu = true;
+      await m.vivant();
+    });
+    await m.balayer();
+    m.pendantLeContexte(null);
+    for (const lecteur of [SANG, PROCHE_CONSENTI]) {
+      expect(m.vers(lecteur).at(-1)?.event).toBe(SERVER_EVENTS.PHONE_REACHABLE);
+    }
+    expect(m.retraits).toEqual(expect.arrayContaining([{ emitterId: EMETTEUR, readerId: SANG }, { emitterId: EMETTEUR, readerId: PROCHE_CONSENTI }]));
   });
 });
 
