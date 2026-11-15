@@ -1,8 +1,8 @@
-# Une porte franchie peut mener à la mauvaise pièce
+## Une porte FRANCHIE peut mener à la mauvaise pièce (cycle 170, #18616)
 
 *2026-11-15, cycle 170, #18616.*
 
-## Le fait
+### Le fait
 
 Le dépôt garde la file de remise hors ligne par un cliquet d'ENFILAGE
 (`delivery-queue-door-sweep`) : aucun transport n'a le droit d'écrire lui-même
@@ -16,7 +16,7 @@ l'unité partagée. Elle respecte le contrat `(eventType, payload)`. Elle suit l
 clé `userId ?? id`. **Elle est irréprochable à tous les cliquets du dépôt, et
 c'est une autre file.**
 
-## Pourquoi c'est une famille, et pas un oubli
+### Pourquoi c'est une famille, et pas un oubli
 
 Le dépôt a déjà écrit deux formes de cette question :
 
@@ -31,7 +31,7 @@ Les deux premières demandent « qui appelle quoi ». La troisième demande
 porte cette question. Un balayage d'appels mesure des SITES ; l'unicité est une
 propriété des INSTANCES.
 
-## Ce qui l'a tenue invisible
+### Ce qui l'a tenue invisible
 
 **Le substrat partagé.** La tranche Redis est commune à toutes les instances,
 donc le cas nominal marche, et chaque témoin de comportement du pipeline média
@@ -43,7 +43,7 @@ regarde.
 > voit que sur le chemin de PANNE.** C'est le pire endroit où mettre une
 > divergence : il n'est exercé qu'au moment où tout le reste va déjà mal.
 
-## Et les deux doc-comments disaient faux
+### Et les deux doc-comments disaient faux
 
 `server.ts:273` et `delivery-queue-registry.ts` AFFIRMENT tous les deux l'unicité
 — « la seule dont la tranche MÉMOIRE porte des entrées de message », « la seule
@@ -56,7 +56,7 @@ l'affirmation était fausse, mais **elle était la raison pour laquelle personne
 n'allait chercher.** Une phrase posée au point de vérification remplace la
 vérification.
 
-## La règle
+### La règle
 
 > Devant un doc-comment qui affirme qu'une chose est UNIQUE, poser deux
 > questions : **(1) qu'est-ce qui le MESURE ?** et **(2) la propriété porte-t-elle
@@ -69,7 +69,7 @@ d'unicité tombe, la réparation est de **RÉSOUDRE** la dépendance par son
 registre, jamais d'ajouter une ligne à l'inventaire — il n'y a pas de seconde
 file légitime dans un processus.
 
-## Corollaire : la résolution est un ACCESSEUR, pas une capture
+### Corollaire : la résolution est un ACCESSEUR, pas une capture
 
 Un registre résolu UNE FOIS au câblage a l'air équivalent et ne l'est pas. En
 production l'enregistrement précède le câblage, donc une capture unique passe
@@ -81,7 +81,7 @@ silence.
 ne décrit aucun ordre de production ; il décrit ce dont le consommateur n'a pas
 le droit de dépendre.
 
-## Corollaire : une projection de capacité déclare la signature RÉELLE
+### Corollaire : une projection de capacité déclare la signature RÉELLE
 
 `QueuedEntryEnqueuer.enqueue` porte `{ sealAtRest }`, le troisième paramètre qui
 décide du scellement au repos. Mesuré : une projection à deux paramètres reste

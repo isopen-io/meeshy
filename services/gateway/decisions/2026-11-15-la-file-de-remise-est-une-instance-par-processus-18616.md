@@ -1,8 +1,8 @@
-# La file de remise hors ligne est UNE instance par processus, et un cliquet le dit
+## 2026-11-15 : la file de remise hors ligne est UNE instance par processus, et un cliquet le dit
 
 *2026-11-15 — #18616, cycle 170.*
 
-## Contexte
+### Contexte
 
 `server.ts` construit `RedisDeliveryQueue`, l'enregistre
 (`setSharedDeliveryQueue`) et DÉCLARE sur place que c'est « la seule dont la
@@ -15,7 +15,7 @@ construisait une seconde pour les quatre déclencheurs de
 translator l'est ; `jobs/index.ts` en construisait une troisième, dégénérée, en
 repli d'un paramètre optionnel.
 
-## Décision
+### Décision
 
 1. **Un seul site de production construit la file : `server.ts`**, et c'est le
    couple *construire + enregistrer* qui fait d'une instance « la file du
@@ -37,7 +37,7 @@ repli d'un paramètre optionnel.
 5. **Un objet nul se dit en ne faisant rien.** `DeliveryQueueCleanupJob` accepte
    `undefined` et n'agit pas, plutôt que de recevoir une file dégénérée.
 
-## Ce qui tient la décision
+### Ce qui tient la décision
 
 `socketio/__tests__/delivery-queue-door-sweep.ts` →
 `sweepDeliveryQueueConstructions`, inventaire de sites **figé à `server.ts`**,
@@ -50,7 +50,7 @@ Et `socketio/__tests__/media-pipeline-delivery-queue-instance.test.ts`, qui part
 du déclencheur MÉDIA — le chemin dont la tranche n'était pas purgée — et prouve
 que la transcription qu'il enfile est purgeable par le site de destruction.
 
-## Ce qui a été écarté
+### Ce qui a été écarté
 
 **Faire descendre la file en PARAMÈTRE jusqu'au pipeline média.** C'est
 l'arbitrage que le préambule du registre a déjà instruit, et il ne change pas :
