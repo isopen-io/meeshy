@@ -216,7 +216,6 @@
     <string name="contact_card_state_request_received">أرسل إليك طلبًا</string>
     <string name="contact_card_state_request_sent">تم إرسال الطلب</string>
     <string name="contact_card_toast_request_failed">تعذر إرسال الطلب</string>
-    <string name="context_invite_friends">دعوة أصدقائي</string>
     <string name="conversation_accessRevoked">تم إلغاء الوصول إلى هذه المحادثة</string>
     <string name="conversation_analysis_title">تحليل بالذكاء الاصطناعي</string>
     <string name="conversation_analysis_trait_communication">التواصل</string>
@@ -428,7 +427,6 @@
     <string name="export_card_default_save">استخدام كتنسيق افتراضي</string>
     <string name="export_card_gallery_close">إغلاق المعرض</string>
     <string name="export_card_gallery_count">%1$d نمطًا</string>
-    <string name="export_card_gallery_open">عرض الكل</string>
     <string name="export_card_gallery_placeholder">ريشة، داكن، فقاعات…</string>
     <string name="export_card_gallery_title">كل الأنماط</string>
     <string name="export_card_hint">المس جزءًا من البطاقة لضبطه</string>

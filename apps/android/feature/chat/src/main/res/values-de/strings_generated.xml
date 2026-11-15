@@ -196,7 +196,6 @@
     <string name="contact_card_state_request_received">Hat dir eine Anfrage gesendet</string>
     <string name="contact_card_state_request_sent">Anfrage gesendet</string>
     <string name="contact_card_toast_request_failed">Anfrage konnte nicht gesendet werden</string>
-    <string name="context_invite_friends">Meine Freunde einladen</string>
     <string name="conversation_accessRevoked">Der Zugriff auf diese Unterhaltung wurde widerrufen</string>
     <string name="conversation_analysis_title">KI-Analyse</string>
     <string name="conversation_analysis_trait_communication">Kommunikation</string>
@@ -404,7 +403,6 @@
     <string name="export_card_default_save">Als Standardformat verwenden</string>
     <string name="export_card_gallery_close">Galerie schließen</string>
     <string name="export_card_gallery_count">%1$d Stile</string>
-    <string name="export_card_gallery_open">Alle ansehen</string>
     <string name="export_card_gallery_placeholder">Feder, dunkel, Blasen …</string>
     <string name="export_card_gallery_title">Alle Stile</string>
     <string name="export_card_hint">Tippe auf einen Teil der Karte, um ihn anzupassen</string>

@@ -201,7 +201,6 @@
     <string name="contact_card_state_request_received">Vous a envoyé une demande</string>
     <string name="contact_card_state_request_sent">Demande envoyée</string>
     <string name="contact_card_toast_request_failed">Impossible d\'envoyer la demande</string>
-    <string name="context_invite_friends">Inviter mes amis</string>
     <string name="conversation_accessRevoked">Accès révoqué à cette conversation</string>
     <string name="conversation_analysis_title">Analyse IA</string>
     <string name="conversation_analysis_trait_communication">Communication</string>
@@ -410,7 +409,6 @@
     <string name="export_card_default_save">Utiliser comme format par défaut</string>
     <string name="export_card_gallery_close">Fermer la galerie</string>
     <string name="export_card_gallery_count">%1$d styles</string>
-    <string name="export_card_gallery_open">Tout voir</string>
     <string name="export_card_gallery_placeholder">Plume, sombre, bulles…</string>
     <string name="export_card_gallery_title">Tous les styles</string>
     <string name="export_card_hint">Touchez une partie de la carte pour la régler</string>

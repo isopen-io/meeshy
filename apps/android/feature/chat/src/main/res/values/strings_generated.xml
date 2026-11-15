@@ -196,7 +196,6 @@
     <string name="contact_card_state_request_received">Sent you a request</string>
     <string name="contact_card_state_request_sent">Request sent</string>
     <string name="contact_card_toast_request_failed">Couldn\'t send the request</string>
-    <string name="context_invite_friends">Invite my friends</string>
     <string name="conversation_accessRevoked">Access to this conversation was revoked</string>
     <string name="conversation_analysis_title">AI analysis</string>
     <string name="conversation_analysis_trait_communication">Communication</string>
@@ -404,7 +403,6 @@
     <string name="export_card_default_save">Use as default format</string>
     <string name="export_card_gallery_close">Close the gallery</string>
     <string name="export_card_gallery_count">%1$d styles</string>
-    <string name="export_card_gallery_open">See all</string>
     <string name="export_card_gallery_placeholder">Quill, dark, bubbles…</string>
     <string name="export_card_gallery_title">All styles</string>
     <string name="export_card_hint">Tap a part of the card to style it</string>
