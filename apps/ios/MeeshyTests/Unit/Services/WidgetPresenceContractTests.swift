@@ -196,13 +196,18 @@ final class WidgetPresenceContractTests: XCTestCase {
     // MARK: - Balayage
 
     private func widgetSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let folder = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("MeeshyWidgets/MeeshyWidgets.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("MeeshyWidgets", isDirectory: true)
+        let files = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+            .filter { $0.hasSuffix(".swift") }
+            .sorted()
+        let source = try files
+            .map { try String(contentsOf: folder.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
         XCTAssertFalse(source.isEmpty, "source du widget introuvable — balayage vide")
         return source
     }

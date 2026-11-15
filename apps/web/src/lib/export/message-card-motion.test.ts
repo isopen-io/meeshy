@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { MessageCardInput } from './message-card-layout';
-import { recordCardGif, recordCardVideo } from './message-card-motion';
+import { recordCardGif, recordCardVideo, recordLivingCard } from './message-card-motion';
 
 const input: MessageCardInput = {
   quoted: null,
@@ -33,6 +33,18 @@ describe('l’export animé — ce qui manque rend null, jamais une exception', 
       track: { url: 'blob:v', kind: 'video', index: 0 },
       durationMs: 1000,
       env: { doc: unusedDocument, requestFrame: () => undefined, MediaRecorder: Recorder, AudioContext: undefined },
+    });
+    expect(blob).toBeNull();
+  });
+
+  test('sans enregistreur, ni défilement ni fond vidéo ne se filment (#18671)', async () => {
+    const blob = await recordLivingCard({
+      input,
+      sources: [null],
+      plan: { travel: 540, scrollDuration: 10, duration: 13.5 },
+      durationMs: 13_500,
+      backdropVideoUrl: null,
+      env: { doc: unusedDocument, requestFrame: () => undefined, MediaRecorder: undefined, AudioContext: undefined },
     });
     expect(blob).toBeNull();
   });

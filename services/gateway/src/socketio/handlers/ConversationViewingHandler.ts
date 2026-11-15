@@ -38,6 +38,7 @@ import { SocketViewingActivitySchema, SocketViewingSchema } from '../../validati
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { setConversationViewingProbe } from '../conversationViewingProbe';
 
 const logger = enhancedLogger.child({ module: 'ConversationViewingHandler' });
 
@@ -132,6 +133,8 @@ export class ConversationViewingHandler {
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
     this.now = deps.now ?? (() => Date.now());
+    // #14147 — la batterie des Proches demande « a-t-il la conversation ouverte ? ».
+    setConversationViewingProbe((userId, conversationId) => this.isHere(userId, conversationId));
   }
 
   /**

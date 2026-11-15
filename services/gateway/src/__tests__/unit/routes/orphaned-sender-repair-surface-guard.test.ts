@@ -206,6 +206,7 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
 
 /** `services/` — même règle, troisième racine. */
 const SERVICE_SURFACES: Record<string, Classification> = {
+  'battery/batteryContext.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 2 },
   // #17076 — DEUX lectures, UNE réparation, et l'écart est une DÉCISION.
   // `recompute()` est le chemin AUTORITATIF : il répare. `foldFlooredWindow`

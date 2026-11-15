@@ -7143,7 +7143,7 @@ describe('MeeshySocketIOManager', () => {
 
       await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-priv', convId, 'msg-1');
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-priv', convId, 'msg-1', { messageIds: ['msg-1'] });
     });
 
     it('emits no receipt when showReadReceipts is false', async () => {
@@ -7221,7 +7221,7 @@ describe('MeeshySocketIOManager', () => {
       // `row.userId === key` ne matche AUCUNE ligne pour ce lecteur : sans le
       // branchement, la boucle sortait sur zéro conversation et personne
       // n'apprenait rien.
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith(participantId, convId, 'msg-anon');
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith(participantId, convId, 'msg-anon', { messageIds: ['msg-anon'] });
     });
 
     /**
@@ -7318,7 +7318,7 @@ describe('MeeshySocketIOManager', () => {
       );
 
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(1);
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-mine', convId, 'msg-c');
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-mine', convId, 'msg-c', { messageIds: ['msg-c'] });
     });
 
     it('marks received and emits READ_STATUS_UPDATED per conversation when showReadReceipts is true', async () => {
@@ -7343,8 +7343,8 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(2);
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-1', convId1, 'msg-a');
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-2', convId2, 'msg-b');
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-1', convId1, 'msg-a', { messageIds: ['msg-a'] });
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-2', convId2, 'msg-b', { messageIds: ['msg-b'] });
       expect(ioState.toEmit).toHaveBeenCalledWith(
         SERVER_EVENTS.READ_STATUS_UPDATED,
         expect.objectContaining({ conversationId: convId1, userId, type: 'received' })
@@ -7392,7 +7392,7 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       // Receipt marked on the reconnecting recipient's participant row.
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-recipient', convId, 'msg-away');
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-recipient', convId, 'msg-away', { messageIds: ['msg-away'] });
       // The emit must target the conversation room AND both participants' user
       // rooms — otherwise the away sender never sees "delivered".
       expect(ioState.to).toHaveBeenCalledWith(`conversation:${convId}`);
@@ -7453,7 +7453,11 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(1);
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-dedup', convId, 'msg-latest');
+      // #18614 — le CURSEUR ne retient que le plus récent, la LISTE nomme les
+      // trois : ce sont deux questions, et ce témoin garde désormais les deux.
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-dedup', convId, 'msg-latest', {
+        messageIds: ['msg-old-1', 'msg-old-2', 'msg-latest'],
+      });
     });
 
     it('does not propagate when markMessagesAsReceived throws (Promise.allSettled)', async () => {
@@ -7535,7 +7539,7 @@ describe('MeeshySocketIOManager', () => {
 
       await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-link', convId, 'msg-from-guest');
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-link', convId, 'msg-from-guest', { messageIds: ['msg-from-guest'] });
       expect(ioState.toEmit).toHaveBeenCalledWith(
         SERVER_EVENTS.READ_STATUS_UPDATED,
         expect.objectContaining({ conversationId: convId, userId, type: 'received' })
@@ -7573,7 +7577,9 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(1);
-      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-mixed', convId, 'msg-link-later');
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-mixed', convId, 'msg-link-later', {
+        messageIds: ['msg-nominal', 'msg-link-later'],
+      });
     });
 
     /**

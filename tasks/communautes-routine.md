@@ -23,6 +23,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-14 | Une image de profil ou de communauté ne désigne qu'un hôte Meeshy (passerelle) | voir réveil 38 | #16809 | voir réveil 38 |
 | 2026-11-14 | Le détail Android d'une communauté dit « N en ligne », comme iOS et le web | voir réveil 40 | #18026 | voir réveil 40 |
 | 2026-11-14 | Sur Android, la notification « ajouté à la communauté » ouvre la communauté | voir réveil 43 | #18061 | voir réveil 43 |
+| 2026-11-15 | Sur Android, toucher la bannière in-app « ajouté à la communauté » ouvre la communauté | voir réveil du 2026-11-15 17:38 | #18670 | voir réveil du 2026-11-15 17:38 |
 
 ## 2026-11-07 — lot 1
 
@@ -404,3 +405,36 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Hors lot : la bannière in-app (`NotificationBannerHost`) n'ouvre que conversation, publication ou jeu ; un toucher sur la bannière d'un ajout reste sans effet, comme avant.
 - Témoins : `PushTapDestinationTest` (+4), `PushPayloadTest` (+1), `NotificationDestinationResolverTest` (+3), `LaunchRouterTest` (+2), `PushTapIntentFactoryTest` (+1). Preuve : `android.yml` sur la PR (`jvm-check` ne tourne pas en conteneur, `libsignal-client` refusé par le proxy).
 - Prochain lot recommandé : #18439 (iOS et Android consomment `community:updated`), puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-15 — réveil 17:38 UTC
+
+- Début du run : #18682 (iOS consomme `community:updated`, #18439) est ouverte et a reçu une poussée à 17:32, donc vivante : cédée à sa session. #18568 (#18061) fusionnée.
+- Lot : #18670 (Android). `InAppBanner.communityId`, posé quand `NotificationDestinationResolver` (la table de la cloche et du push) élit `Community` ; l'ordre du toucher devient la fonction pure `InAppBanner.tapTarget()` (`BannerTapTarget.kt`) : jeu, communauté, conversation, publication. `NotificationBannerHost.onOpenCommunity` → `CommunityRoutes.detail` dans `MeeshyApp`. Un message qui nomme seulement une communauté ouvre toujours sa conversation.
+- Témoins : `BannerTapTargetTest` (5), `NotificationBannerViewModelTest` (+2). Preuve : `android.yml` sur la PR (Gradle ne joint pas `dl.google.com` en conteneur).
+- Prochain lot recommandé : le volet Android de #18439 une fois #18682 fusionnée, puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+## 2026-11-14/15 — réveils 44 à 51 (rattrapage)
+
+- Runs consacrés à fusionner #18568 (#18061, la notification « ajouté à la communauté » ouvre la communauté sur Android) : `dev` verrouillé plusieurs heures, puis rouges Android étrangers ; fusion `17a816d67` une fois `dev` réparé. Suppression de branche refusée par le proxy (API 403). Suivi ouvert : #18670 (la bannière in-app Android n'ouvre pas la communauté).
+
+## 2026-11-15 — réveil 52 (15:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte, `dev` déverrouillé.
+- Lot : #18439, volet iOS (la référence). `community:updated` est décodé par le SDK (`CommunityUpdatedEvent`, `Sockets/CommunityUpdateChannel.swift`, canal hors de `MessageSocketManager` comme `ConversationObsolescenceChannel`), routé (`SocketEvent.communityUpdated`, table des conversations) et servi par `MessageSocketProviding.communityUpdated`. Une seule règle d'application (`Models/CommunityUpdatedEvent+Apply.swift`) pour le modèle d'écran (`MeeshyCommunity.applying`) et la ligne persistée (`APICommunity.applying`) : autre communauté ⇒ rien, événement plus ancien que la copie ⇒ rien, rôle du lecteur, « N en ligne », emoji et nombre de canaux gardés, empreinte floue d'une image qui change oubliée. Appliqué sans relance réseau à `CacheCoordinator.communities` (toutes clés, `repaintEverywhere`), à `CommunityListViewModel` et à `CommunityDetailViewModel` (flux injecté, défaut `CommunityUpdateChannel.live`).
+- Témoins : SDK `CommunityUpdatedEventTests` (6, décodage clé par clé depuis la charge de l'émetteur), `SocketInboundRouteTableTests` (+1 route, relevé figé +1 nom), `CacheCoordinatorCommunityUpdatesTests` (2) ; app `CommunityListViewModelTests` (+3), `CommunityDetailViewModelTests` (+2). Preuve : CI iOS de la PR (pas de Swift en conteneur).
+- Gates locaux : shared `ios-socket-event-enum-parity`, `socket-event-name-gate`, `socket-payload-shape`, `socket-event-orphan-gate` verts ; cliquets maison iOS identiques à `dev` (ses rouges `fixed-font`/`kit-glass-*` et la suite non enregistrée `UserActivityCardsTests` sont étrangers).
+- Reste de #18439 : le volet Android (#18439 reste ouverte) ; la rangée Communautés de la liste des conversations relit le cache réécrit à son prochain chargement, sans rafraîchissement en direct.
+
+## 2026-11-15 — réveil 19:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #18682 (iOS) et #18693 (#18670) fusionnées.
+- Lot : #18439, volet Android (le dernier). `CommunityUpdatedEvent` (`core/model`, miroir de `CommunityUpdatedEventData`) et la règle d'application `ApiCommunity.applying` / `List<ApiCommunity>.applying`, mêmes règles qu'iOS : autre communauté ⇒ rien, événement plus ancien que la copie ⇒ rien (date illisible ⇒ appliqué), membres, créateur, « N en ligne » et nombre de canaux gardés. `SocketEventNames.COMMUNITY_UPDATED`. `CommunityUpdateBinding` (`sdk-core/community`, `RealtimeBinding` en `@IntoSet`, modèle de `ConversationCreatedBinding`) installe la route sur le routeur série et applique chaque événement sous le compte auquel il est ARRIVÉ (`collectArrived`) à `CommunityCacheRepository.applyUpdate`, qui réécrit la fiche et la première page DÉJÀ tenues sans rajeunir l'instant de lecture : la liste et le détail, qui lisent ce cache, se ré-émettent sans relance réseau. Aucun ViewModel touché.
+- Cliquets partagés : `community:updated` sort de l'inventaire d'asymétrie de `socket-event-platform-parity-gate` (lu par les trois clients) ; `SWEPT_EVENTS_AT_LAST_MEASURE` 125 → 126 (la forme de la charge est désormais confrontée au miroir Kotlin). `packages/shared/__tests__/ci/` 24 fichiers, 204 tests verts.
+- Témoins : `CommunityUpdatedEventTest` (8), `CommunityCacheRepositoryTest` (+3), `CommunityUpdateBindingTest` (4). Preuve : `android.yml` sur la PR (`jvm-check` refusé en conteneur : `libsignal-client` 403).
+- Reste : les pages 2+ et la recherche de la liste Android ne sont pas réécrites (elles relisent au prochain chargement), comme la rangée Communautés de la liste des conversations iOS.
+- Prochain lot recommandé : le reste de #16857 (membres rejoint/parti/rôle, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-15 — réveil 21:38 UTC
+
+- Début du run : #18718 (#18439, volet Android) ouverte, dernière poussée à 20:11, donc inactive : run consacré à la mener à la fusion.
+- État : fusionnable sans conflit avec `dev`, mais `dev` est verrouillé (`lock_branch` actif) : fusion impossible. Le second `android.yml` lancé à la main sur `472a2325b` (21:08) a été annulé à la main à 21:28 pendant les tests unitaires, après un `assembleDebug` vert, comme celui de 19:46. Pas de nouveau lancement : la preuve Android manque toujours.
+- Prochain lot recommandé : fusionner #18718 dès que `dev` est déverrouillé et qu'un `android.yml` va au bout ; ensuite le reste de #16857 (membres, suppression).

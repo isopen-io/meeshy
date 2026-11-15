@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { captureBatteryBefore, refreshBatteryAfter } from '../../services/battery/batteryDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
@@ -111,6 +112,9 @@ export async function bloquer(
   // #13934 — ce que chacun voit de l'écoute de l'autre, capturé AVANT : seul qui voyait reçoit l'effacement.
   const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, '[BLOCKS] Now playing not cleared after block', error) };
   const ecouteAvant = dejaBloque ? new Map() : await captureNowPlayingBefore(ecoute, { userA: moi, userB: cibleId });
+  // #14147 — de même pour la batterie.
+  const batterie = { ...ecoute, report: (error: unknown) => logError(fastify.log, '[BLOCKS] Battery not cleared after block', error) };
+  const batterieAvant = dejaBloque ? new Map() : await captureBatteryBefore(batterie, { userA: moi, userB: cibleId });
   // #16980 — de même pour la position partagée à l'autre.
   const position = { ...ecoute, report: (error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not cleared after block', error) };
   const positionAvant = dejaBloque ? new Map() : await captureSharedLocationBefore(position, { userA: moi, userB: cibleId });
@@ -153,6 +157,9 @@ export async function bloquer(
   // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
   refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));
+  // La batterie (#14147) : ce que chacun voyait de la batterie de l'autre s'efface.
+  refreshBatteryAfter(batterie, { userA: moi, userB: cibleId, before: batterieAvant })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Battery not refreshed after block', error));
   // La position partagée (#16980) : ce que chacun voyait de la position de l'autre s'efface.
   refreshSharedLocationAfter(position, { userA: moi, userB: cibleId, before: positionAvant })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not refreshed after block', error));

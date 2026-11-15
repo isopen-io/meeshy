@@ -325,6 +325,13 @@ struct ConversationInfoSheet: View {
             muteIndicator
                 .padding(.top, MeeshySpacing.xsPlus)
 
+            // La batterie du pair d'un direct (#14147) : le détail pendant un épisode, rien hors épisode.
+            if let peer = ConversationRowListening.userId(for: conversation) {
+                BatteryDetailSection(userId: peer)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.sm)
+            }
+
             Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundStyle(theme.textMuted)

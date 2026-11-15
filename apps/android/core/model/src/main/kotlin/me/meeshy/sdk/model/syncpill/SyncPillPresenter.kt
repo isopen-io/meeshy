@@ -9,7 +9,7 @@ import me.meeshy.sdk.model.sync.OutboxUiIcon
 enum class SyncPillDotStyle { BRAND, WARNING, SUCCESS, ERROR }
 
 /** Le pictogramme de tête d'une rangée ; [NONE] laisse le point pulsant seul (le texte courant reste discret). */
-enum class SyncPillGlyph { NONE, WIFI_OFF, WIFI, MIC, PHOTO, PLAY, ATTACH, MOOD }
+enum class SyncPillGlyph { NONE, WIFI_OFF, WIFI, MIC, PHOTO, PLAY, ATTACH, MOOD, BATTERY }
 
 /** La taille de la capsule : compacte au repos, grande tant qu'un ami écrit. */
 enum class SyncPillSize { COMPACT, TYPING }
@@ -74,7 +74,7 @@ object SyncPillPresenter {
     const val RESERVED_DOTS: String = "..."
 
     fun rows(pill: ConnectionPill, entries: List<SyncPillEntry>): List<SyncPillRow> {
-        val connection = connectionRow(pill, hasOperations = entries.any { !it.isTyping })
+        val connection = connectionRow(pill, hasOperations = entries.any { !it.isTyping && !it.isAnnouncement })
         return listOfNotNull(connection) + entries.map(::entryRow)
     }
 
@@ -112,9 +112,9 @@ object SyncPillPresenter {
         id = entry.id,
         labelKey = entry.labelKey,
         literalLabel = entry.literalLabel,
-        glyph = glyphFor(entry.icon),
+        glyph = entry.glyph ?: glyphFor(entry.icon),
         dotStyle = if (entry.isError) SyncPillDotStyle.ERROR else SyncPillDotStyle.BRAND,
-        showsActivityDots = !entry.isError,
+        showsActivityDots = !entry.isError && !entry.isAnnouncement,
         target = entry.target,
         retryOutboxId = entry.retryOutboxId,
         isTyping = entry.isTyping,

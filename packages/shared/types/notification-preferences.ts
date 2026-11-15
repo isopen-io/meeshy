@@ -31,6 +31,7 @@ export interface NotificationPreference {
   readonly memberJoinedEnabled: boolean;
   /** « Quand un contact revient sur Meeshy » (#8285) — absent = reçu. */
   readonly contactActivityEnabled?: boolean;
+  readonly deviceBatteryEnabled?: boolean;
   /** « Jeu » (#9490) — absent = reçu. */
   readonly gameEnabled?: boolean;
   /** « Moments à immortaliser » (#10175, D8) : le push d'une étape franchie app fermée — absent = reçu. */
@@ -158,6 +159,8 @@ export function isNotificationTypeEnabled(
       return prefs.contactRequestEnabled;
     case 'contact_recently_active':
       return prefs.contactActivityEnabled !== false;
+    case 'device_battery':
+      return prefs.deviceBatteryEnabled !== false;
     case 'game_duo_invited':
     case 'game_duo_accepted':
     case 'game_league_result':

@@ -17,12 +17,13 @@ const DEMARRER = { recipients: [{ userId: AMI }], durationMinutes: 60, position:
 
 function porte(options: { readonly isAnonymous?: boolean; readonly within?: boolean } = {}) {
   const cache = sharedLocationKvEnMemoire();
+  const emissions: { readonly room: string; readonly event: string; readonly data: unknown }[] = [];
   const world = messagingWorld({ users: [{ id: MOI }, { id: AMI }], links: [[MOI, AMI, 'FRIEND']] });
   const deps: SharedLocationHandlerDeps = {
     relay: {
       prisma: world.prisma as unknown as PrismaClient,
       cache,
-      io: undefined,
+      io: { to: (room: string) => ({ emit: (event: string, data: unknown) => emissions.push({ room, event, data }) }) } as unknown as SharedLocationHandlerDeps['relay']['io'],
       now: () => Date.parse('2026-11-08T12:00:00.000Z'),
     },
     callerOf: () => ({ userId: MOI, isAnonymous: options.isAnonymous ?? false }),
@@ -32,7 +33,8 @@ function porte(options: { readonly isAnonymous?: boolean; readonly within?: bool
   listenSharedLocation({ id: 'sock', on: (event, listener) => { handlers.set(event, listener); } }, deps);
   const call = (event: string, payload: unknown) =>
     new Promise<Record<string, unknown>>((resolve) => handlers.get(event)!(payload, resolve));
-  return { cache, entries: cache.entries, etats: () => cache.etatsDe(MOI), call };
+  const annonces = () => emissions.filter((e) => e.event === 'location:share-own-changed');
+  return { cache, entries: cache.entries, etats: () => cache.etatsDe(MOI), call, emissions, annonces };
 }
 
 describe('SharedLocationHandler — la porte', () => {
@@ -71,6 +73,44 @@ describe('SharedLocationHandler — la porte', () => {
     expect(p.etats()).toHaveLength(1);
     expect(await p.call('location:share-stop', {})).toEqual({ success: true });
     expect(p.etats()).toEqual([]);
+  });
+});
+
+describe('tous les appareils du compte apprennent que mon partage a changé (#18389)', () => {
+  it('un démarrage accepté l\'annonce à ma room, sans aucune charge', async () => {
+    const p = porte();
+    await p.call('location:share-start', DEMARRER);
+    expect(p.annonces()).toEqual([{ room: `user:${MOI}`, event: 'location:share-own-changed', data: {} }]);
+  });
+
+  it('un arrêt accepté l\'annonce aussi', async () => {
+    const p = porte();
+    await p.call('location:share-start', DEMARRER);
+    await p.call('location:share-stop', {});
+    expect(p.annonces()).toHaveLength(2);
+  });
+
+  it('une mise à jour de position ne l\'annonce pas : la liste n\'a pas changé', async () => {
+    const p = porte();
+    await p.call('location:share-start', DEMARRER);
+    await p.call('location:share-update', { latitude: 48.86, longitude: 2.34 });
+    expect(p.annonces()).toHaveLength(1);
+  });
+
+  it('un refus (charge illisible, débit, invité) n\'annonce rien', async () => {
+    const illisible = porte();
+    await illisible.call('location:share-start', { ...DEMARRER, durationMinutes: 90 });
+    const limitee = porte({ within: false });
+    await limitee.call('location:share-start', DEMARRER);
+    const invite = porte({ isAnonymous: true });
+    await invite.call('location:share-start', DEMARRER);
+    expect([...illisible.annonces(), ...limitee.annonces(), ...invite.annonces()]).toEqual([]);
+  });
+
+  it('l\'annonce ne porte jamais ni position ni destinataire', async () => {
+    const p = porte();
+    await p.call('location:share-start', DEMARRER);
+    expect(JSON.stringify(p.annonces())).not.toMatch(/48\.85|2\.35|a2/);
   });
 });
 

@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "battery_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_a11y_charging",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_autonomy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_charging",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_consent_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_consent_checkbox",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_consent_confirm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_consent_later",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_consent_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_card_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_level",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_low_power",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_measured_ago",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_measured_now",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_back_on",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_charging",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_critical",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_critical_drop",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_ended",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_generic",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_low",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_probably_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_recharged",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pill_threshold",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pull",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pull_episode_only",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pull_forbidden",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pull_sent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pull_too_soon",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_pull_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_receive_all",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_receive_critical",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_receive_none",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_receive_pill",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_receive_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_share_global_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_share_global_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_share_person",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_share_person_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_someone",
+          "status": "android-only"
+        },
+        {
+          "androidName": "battery_unavailable",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

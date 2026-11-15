@@ -12,25 +12,35 @@
 import Foundation
 
 public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
+    case battery
     case byUserId(userId: String)
+    case byUserIdBattery(userId: String)
+    case byUserIdBatteryPull(userId: String)
+    case byUserIdBatterySettings(userId: String)
     case byUserIdLevel(userId: String)
     case byUserIdLocationHistory(userId: String)
     case byUserIdRitual(userId: String)
     case byUserIdSettings(userId: String)
     case config
     case locations
+    case locationsMine
     case nowPlaying
     case root
 
     public var path: String {
         switch self {
+        case .battery: return "/api/v1/relations/battery"
         case .byUserId(let userId): return "/api/v1/relations/\(userId)"
+        case .byUserIdBattery(let userId): return "/api/v1/relations/\(userId)/battery"
+        case .byUserIdBatteryPull(let userId): return "/api/v1/relations/\(userId)/battery/pull"
+        case .byUserIdBatterySettings(let userId): return "/api/v1/relations/\(userId)/battery/settings"
         case .byUserIdLevel(let userId): return "/api/v1/relations/\(userId)/level"
         case .byUserIdLocationHistory(let userId): return "/api/v1/relations/\(userId)/location/history"
         case .byUserIdRitual(let userId): return "/api/v1/relations/\(userId)/ritual"
         case .byUserIdSettings(let userId): return "/api/v1/relations/\(userId)/settings"
         case .config: return "/api/v1/relations/config"
         case .locations: return "/api/v1/relations/locations"
+        case .locationsMine: return "/api/v1/relations/locations/mine"
         case .nowPlaying: return "/api/v1/relations/now-playing"
         case .root: return "/api/v1/relations"
         }

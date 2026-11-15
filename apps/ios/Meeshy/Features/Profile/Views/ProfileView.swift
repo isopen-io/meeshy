@@ -253,6 +253,8 @@ struct ProfileView: View {
                     )
                     languagesSection
                     activitySection
+                    // Partager ma batterie, pour tous (#14147) : la coupure globale, côté émetteur, dans MON profil.
+                    BatterySharingSettingsSection(accentColor: accentColor)
                     if ProfilePackShortcuts.isShown(viewerId: authManager.currentUser?.id, profileUserId: user?.id) {
                         ProfileSavedContentRows(accentHex: accentColor, onOpen: open)
                     }

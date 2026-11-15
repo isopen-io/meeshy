@@ -5,6 +5,8 @@ import {
   type SharedLocationPrecision,
 } from '@meeshy/shared/types/shared-location-constants';
 
+import type { SharedLocationOwnSnapshot } from '@meeshy/shared/types/shared-location';
+
 import type { SharedLocationRecipient } from './shared-location-sending';
 
 /**
@@ -73,6 +75,25 @@ export const rosterOps = {
       { ...a.entries, ...b.entries },
       Object.fromEntries([...new Set([...Object.keys(a.withdrawals), ...Object.keys(b.withdrawals)])].map((id) => [id, Math.max(a.withdrawals[id] ?? 0, b.withdrawals[id] ?? 0)])),
     ),
+  /**
+   * La liste recalée sur le partage que la passerelle SERT (#18389) : elle seule sait ce qu'un autre appareil du
+   * compte a ajouté, prolongé ou retiré. Ses personnes, à la précision et à l'échéance servies ; une personne en
+   * retrait ICI n'est jamais reprise (le retrait se rejoue), et un retrait que le serveur ne sert déjà plus est
+   * soldé. Une personne servie déjà échue n'est pas reprise.
+   */
+  withServed: (roster: SharedLocationRoster, served: SharedLocationOwnSnapshot, now: number): SharedLocationRoster => {
+    const servedIds = new Set(served.recipients.map((recipient) => recipient.userId.toLowerCase()));
+    const entries = Object.fromEntries(
+      served.recipients.flatMap((recipient) => {
+        const id = recipient.userId.toLowerCase();
+        const until = Date.parse(recipient.expiresAt);
+        if (!OBJECT_ID.test(id) || !Number.isFinite(until) || until <= now || id in roster.withdrawals) return [];
+        const precision = PRECISIONS.has(recipient.precision) ? recipient.precision : 'city';
+        return [[id, { precision, until }] as const];
+      }),
+    );
+    return rosterOf(entries, filtered(roster.withdrawals, (id) => servedIds.has(id)));
+  },
   /** Sans ceux dont l'échéance est passée, ni les retraits que plus aucun partage serveur ne peut servir. */
   pruned: (roster: SharedLocationRoster, now: number): SharedLocationRoster =>
     rosterOf(

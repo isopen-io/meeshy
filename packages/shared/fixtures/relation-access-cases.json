@@ -3392,6 +3392,329 @@
         "reason": "blocked",
         "requiresConsent": false
       }
+    },
+    {
+      "id": "battery-close-consented",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "battery-close-without-consent",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "battery-close-consent-unknown",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "battery-friend-gets-nothing",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "battery-blood-default-granted",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "battery-blocked-blood-gets-nothing",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": true,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "blocked",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "battery-self-reads-own",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "self",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-analyst-moderator-device-battery",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "ANALYST",
+        "targetRole": "MODERATOR",
+        "feature": "device.battery",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "team-admin-user-device-battery-nothing",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "ADMIN",
+        "targetRole": "USER",
+        "feature": "device.battery",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "battery-pull-blood",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery.pull",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "battery-pull-close-refused",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery.pull",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "battery-pull-blood-consent-withdrawn",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery.pull",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "BLOOD",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "battery-pull-not-self",
+      "matrix": "Batterie (#14147)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.battery.pull",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "self",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-moderator-admin-device-battery-pull",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "MODERATOR",
+        "targetRole": "ADMIN",
+        "feature": "device.battery.pull",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
     }
   ]
 }

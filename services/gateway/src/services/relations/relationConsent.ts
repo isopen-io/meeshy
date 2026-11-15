@@ -103,3 +103,48 @@ export async function relationConsentCounterpartsOf(
   })) as ReadonlyArray<Record<string, unknown>>;
   return rows.map((row) => String(row[other]));
 }
+
+/**
+ * Les consentements TRI-ÉTAT (#14147) : la colonne garde ce que l'émetteur a DIT — `true`,
+ * `false` — ou rien (`null`), et c'est `resolveEmitterConsent` (partagé) qui en tire le
+ * défaut du niveau effectif. La batterie et son relevé à la demande lisent la même colonne.
+ */
+export const STORED_CONSENT_FEATURES = ['device.battery', 'device.battery.pull'] as const;
+export type StoredConsentFeature = (typeof STORED_CONSENT_FEATURES)[number];
+
+const STORED_COLUMN = {
+  'device.battery': 'batteryShared',
+  'device.battery.pull': 'batteryShared',
+} as const satisfies Record<StoredConsentFeature, string>;
+
+const storedValue = (value: unknown): boolean | null => (value === true || value === false ? value : null);
+
+/** Ce que `ownerId` a stocké pour chacun des `otherIds` (absent ou illisible : `null`), en UNE lecture. */
+export async function relationStoredConsentAmong(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly ownerId: string; readonly otherIds: readonly string[]; readonly feature: StoredConsentFeature },
+): Promise<ReadonlyMap<string, boolean | null>> {
+  if (params.otherIds.length === 0) return new Map();
+  const column = STORED_COLUMN[params.feature];
+  const rows = (await prisma.relationFeatureSetting.findMany({
+    where: { ownerId: params.ownerId, otherId: { in: [...params.otherIds] } },
+    select: { otherId: true, [column]: true } as Record<'otherId' | typeof column, true>,
+  })) as ReadonlyArray<Record<string, unknown>>;
+  const found = new Map(rows.map((row) => [String(row.otherId), storedValue(row[column])]));
+  return new Map(params.otherIds.map((id) => [id, found.get(id) ?? null]));
+}
+
+/** Ce que chacun des `ownerIds` a stocké pour `otherId` — le sens du lecteur (rattrapage). */
+export async function relationStoredConsentBy(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly ownerIds: readonly string[]; readonly otherId: string; readonly feature: StoredConsentFeature },
+): Promise<ReadonlyMap<string, boolean | null>> {
+  if (params.ownerIds.length === 0) return new Map();
+  const column = STORED_COLUMN[params.feature];
+  const rows = (await prisma.relationFeatureSetting.findMany({
+    where: { ownerId: { in: [...params.ownerIds] }, otherId: params.otherId },
+    select: { ownerId: true, [column]: true } as Record<'ownerId' | typeof column, true>,
+  })) as ReadonlyArray<Record<string, unknown>>;
+  const found = new Map(rows.map((row) => [String(row.ownerId), storedValue(row[column])]));
+  return new Map(params.ownerIds.map((id) => [id, found.get(id) ?? null]));
+}

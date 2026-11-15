@@ -1,4 +1,8 @@
-import { SHARED_LOCATION_CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/shared-location-event-names';
+import type { SharedLocationOwnSnapshot } from '@meeshy/shared/types/shared-location';
+import { SHARED_LOCATION_CLIENT_EVENTS, SHARED_LOCATION_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/shared-location-event-names';
+
+import { apiDeps } from '@/lib/api/deps';
+import { loadOwnSharedLocation } from '@/lib/api/shared-locations';
 
 import { sessionStore, type SessionStoreApi } from '@/lib/api/session';
 import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
@@ -98,15 +102,19 @@ const accountOf = (session: SessionStoreApi): string | null => {
 
 /**
  * Le centre du compte connecté : un autre compte repart d'une liste vide, et le centre du
- * compte quitté est abandonné. Chaque socket accrochée (connexion, reconnexion) solde les
- * échéances passées pendant que l'onglet dormait ou était hors ligne, et un autre onglet
- * du même compte qui change la liste (événement `storage`) la fait relire ici.
+ * compte quitté est abandonné. Chaque socket accrochée (connexion, reconnexion) recale
+ * d'abord la liste sur le partage que la passerelle sert, puis solde les échéances passées
+ * et rejoue les retraits en attente : un appareil revenu en ligne ne republie jamais une
+ * liste qu'un autre a changée entre-temps (#18389). `location:share-own-changed` (un autre
+ * appareil du compte a démarré ou arrêté) recale aussi. Un autre onglet du même compte qui
+ * change la liste (événement `storage`) la fait relire ici.
  */
 export function createSharedLocationSharingHolder({
   session,
   watch,
   fixes = browserSharedLocationFixSource(),
   storage = safeLocalStorage(),
+  served = () => loadOwnSharedLocation(apiDeps),
   schedule = (delay, run) => {
     const id = setTimeout(run, delay);
     return () => clearTimeout(id);
@@ -116,6 +124,7 @@ export function createSharedLocationSharingHolder({
   readonly watch: WatchRealtime;
   readonly fixes?: SharedLocationFixSource;
   readonly storage?: SafeStorage;
+  readonly served?: () => Promise<SharedLocationOwnSnapshot | null>;
   readonly schedule?: (delayMs: number, run: () => void) => () => void;
 }) {
   let current: { readonly userId: string; readonly center: SharedLocationSharingCenter; readonly unwatch: () => void } | null = null;
@@ -136,6 +145,7 @@ export function createSharedLocationSharingHolder({
       schedule,
       owner: userId,
       currentAccount: () => accountOf(session),
+      served,
     });
     const key = rosterKey(userId);
     const onStorage = (event: StorageEvent): void => {
@@ -144,11 +154,14 @@ export function createSharedLocationSharingHolder({
     globalThis.addEventListener?.('storage', onStorage);
     const unwatchSocket = watch((live) => {
       socket = live;
-      const ready = (): void => void center.reconcile();
+      const ready = (): void => void center.sync().then(() => center.reconcile());
+      const changedElsewhere = (): void => void center.sync();
       live.on('connect', ready);
+      live.on(SHARED_LOCATION_SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED, changedElsewhere);
       if (live.connected) ready();
       return () => {
         live.off('connect', ready);
+        live.off(SHARED_LOCATION_SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED, changedElsewhere);
         if (socket === live) socket = null;
       };
     });

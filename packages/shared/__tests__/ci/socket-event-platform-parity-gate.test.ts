@@ -109,13 +109,19 @@ const ASYMETRIES: readonly {
       + 'notification) ; la parité par socket est une question produit, pas une dette mesurée.',
     events: [
       'admin-metrics:sample',
-      'community:updated',
       'error',
       'friend-request:accepted',
       'friend-request:new',
       'media:alt-translation-updated',
       'sticker:library-updated',
     ],
+  },
+  {
+    absents: ['android'],
+    raison:
+      "plusieurs appareils d'un compte, un partage de position (#18389) : le web et iOS se recalent sur le partage "
+      + 'servi (#18578) ; Android le portera avec son centre de partage.',
+    events: ['location:share-own-changed'],
   },
   {
     absents: ['web', 'ios'],
