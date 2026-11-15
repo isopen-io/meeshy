@@ -1,9 +1,8 @@
 package me.meeshy.app.notifications
 
-import io.mockk.mockk
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.sdk.model.ApiNotification
 import io.mockk.mockk
+import me.meeshy.sdk.model.ApiNotification
 import org.junit.Test
 
 /** Où mène le toucher d'une bannière in-app : la même table que la ligne de la cloche et le push (#18670). */
