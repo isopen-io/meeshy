@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.DraggableState
@@ -91,6 +90,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -261,7 +261,7 @@ private fun BoxWithConstraintsScope.Sheet(
     var settling by remember { mutableStateOf<Job?>(null) }
     val restOffsetPx = animateFloatAsState(
         targetValue = layout.restOffset * density,
-        animationSpec = if (motion.isImmediate) snap() else spring(dampingRatio = motion.dampingFraction, stiffness = motion.stiffness),
+        animationSpec = if (motion.isImmediate) snap() else MeeshyMotion.springFor(motion.response, motion.dampingFraction),
         label = "meeshyAnchoredSheetRest",
     )
     val latestLayout = rememberUpdatedState(layout)
@@ -284,7 +284,7 @@ private fun BoxWithConstraintsScope.Sheet(
                 animate(
                     initialValue = dragPx,
                     targetValue = 0f,
-                    animationSpec = spring(dampingRatio = motion.dampingFraction, stiffness = motion.stiffness),
+                    animationSpec = MeeshyMotion.springFor(motion.response, motion.dampingFraction),
                 ) { value, _ -> dragPx = value }
             }
         }

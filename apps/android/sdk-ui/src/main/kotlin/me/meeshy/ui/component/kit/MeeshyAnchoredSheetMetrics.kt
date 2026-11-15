@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.kit
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.ui.theme.MeeshyMotion
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -62,11 +63,7 @@ public data class MeeshyAnchoredSheetMotion(
     public val durationMilliseconds: Int,
 ) {
     /** `(2π / response)²` : la raideur du ressort dont la période propre est [response]. */
-    public val stiffness: Float get() = (TWO_PI / response).let { it * it }
-
-    private companion object {
-        const val TWO_PI: Float = 6.2831855f
-    }
+    public val stiffness: Float get() = MeeshyMotion.stiffnessForResponse(response)
 }
 
 /**
