@@ -8,6 +8,7 @@
 import { describe, it, expect } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { batteryAccessAmong, batteryCandidatesOf, isServed } from '../../../../services/battery/batteryAccess';
+import { withdrawRitualSharesOfUser, withdrawSharesAfterDrop, withdrawSharesTheLinkDoesNotOpen } from '../../../../services/relations/ritualShareWithdrawal';
 import { ADULT_BIRTH, messagingWorld, table, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
 
 const EMETTEUR = '6300000000000000000000e1';
@@ -45,12 +46,13 @@ function monde(options: { readonly settings?: readonly Row[]; readonly emetteur?
       ...(id === EMETTEUR ? options.emetteur ?? {} : {}),
     })),
   });
-  const settings = table([
+  const rows = table([
     { ownerId: EMETTEUR, otherId: PROCHE_CONSENTI, batteryShared: true },
     { ownerId: EMETTEUR, otherId: SANG_REFUSE, batteryShared: false },
     { ownerId: EMETTEUR, otherId: AMI, batteryShared: true },
     ...(options.settings ?? []),
   ]);
+  const settings = { ...rows, findUnique: (args: { where: Row; select?: Record<string, unknown> }) => rows.findUnique({ ...args, where: (args.where.ownerId_otherId as Row | undefined) ?? args.where }) };
   return { prisma: { ...world.prisma, relationFeatureSetting: settings } as unknown as PrismaClient };
 }
 
@@ -131,5 +133,62 @@ describe('le relevé à la demande — Sang seulement', () => {
       feature: 'device.battery.pull',
     });
     expect([SANG, PROCHE_CONSENTI, SANG_REFUSE].filter((id) => access.get(id)?.allowed)).toEqual([SANG]);
+  });
+});
+
+describe('un accord donné à un Proche ne survit pas au cercle d\'en dessous', () => {
+  const remonte = (settings: ReturnType<typeof table>) => {
+    const world = messagingWorld({
+      links: [[EMETTEUR, PROCHE_CONSENTI, 'CLOSE']],
+      users: [EMETTEUR, PROCHE_CONSENTI].map((id) => ({ id, birthDate: ADULT_BIRTH, role: 'USER' })),
+    });
+    return { ...world.prisma, relationFeatureSetting: settings } as unknown as PrismaClient;
+  };
+  const voit = async (prisma: PrismaClient) =>
+    (await batteryAccessAmong(prisma as never, { subjectId: EMETTEUR, otherIds: [PROCHE_CONSENTI], subjectIs: 'target', now })).get(PROCHE_CONSENTI)?.allowed;
+
+  it('baisse sous Proche puis remontée : refusé sans nouvel accord', async () => {
+    const m = monde();
+    const settings = (m.prisma as unknown as { relationFeatureSetting: ReturnType<typeof table> }).relationFeatureSetting;
+    await withdrawSharesAfterDrop(m.prisma as never, { actorId: EMETTEUR, otherId: PROCHE_CONSENTI, level: 'FRIEND', at: now });
+    expect(await voit(remonte(settings))).toBe(false);
+  });
+
+  it('daté chez l\'acteur, sans date chez l\'autre ; un refus garde sa valeur', async () => {
+    const m = monde({ settings: [
+      { ownerId: PROCHE_CONSENTI, otherId: EMETTEUR, batteryShared: true },
+      { ownerId: EMETTEUR, otherId: PROCHE, batteryShared: false },
+    ] });
+    const rows = (m.prisma as unknown as { relationFeatureSetting: ReturnType<typeof table> }).relationFeatureSetting.rows;
+    await withdrawSharesAfterDrop(m.prisma as never, { actorId: EMETTEUR, otherId: PROCHE_CONSENTI, level: 'ACQUAINTANCE', at: now });
+    await withdrawSharesAfterDrop(m.prisma as never, { actorId: EMETTEUR, otherId: PROCHE, level: 'FRIEND', at: now });
+    const row = (owner: string, other: string) => rows.find((r) => r.ownerId === owner && r.otherId === other);
+    expect(row(EMETTEUR, PROCHE_CONSENTI)).toMatchObject({ batteryShared: null, batteryWithdrawnAt: now });
+    expect(row(PROCHE_CONSENTI, EMETTEUR)?.batteryShared).toBeNull();
+    expect(row(PROCHE_CONSENTI, EMETTEUR)?.batteryWithdrawnAt).toBeUndefined();
+    expect(row(EMETTEUR, PROCHE)?.batteryShared).toBe(false);
+  });
+
+  it('une baisse qui reste au Proche garde l\'accord', async () => {
+    const m = monde();
+    await withdrawSharesAfterDrop(m.prisma as never, { actorId: EMETTEUR, otherId: PROCHE_CONSENTI, level: 'CLOSE', at: now });
+    expect(await servis(m, EMETTEUR, [PROCHE_CONSENTI])).toEqual([PROCHE_CONSENTI]);
+  });
+
+  it('un compte qui part éteint les accords qu\'il a donnés et reçus ; une réactivation ne les rallume pas', async () => {
+    const m = monde({ settings: [{ ownerId: SANG, otherId: EMETTEUR, batteryShared: true }] });
+    const settings = (m.prisma as unknown as { relationFeatureSetting: ReturnType<typeof table> }).relationFeatureSetting;
+    await withdrawRitualSharesOfUser(m.prisma as never, { userId: EMETTEUR });
+    expect(await voit(remonte(settings))).toBe(false);
+    expect(settings.rows.find((r) => r.ownerId === SANG)?.batteryShared).toBeNull();
+    expect(settings.rows.find((r) => r.otherId === SANG_REFUSE)?.batteryShared).toBe(false);
+  });
+
+  it('la fin d\'un accord d\'équipe éteint l\'accord que le lien réel n\'ouvre pas, et garde celui qu\'il ouvre', async () => {
+    const m = monde();
+    const settings = (m.prisma as unknown as { relationFeatureSetting: ReturnType<typeof table> }).relationFeatureSetting;
+    await withdrawSharesTheLinkDoesNotOpen(m.prisma as never, { userId: EMETTEUR, at: now });
+    expect(settings.rows.find((r) => r.otherId === AMI)).toMatchObject({ batteryShared: null, batteryWithdrawnAt: now });
+    expect(settings.rows.find((r) => r.otherId === PROCHE_CONSENTI)?.batteryShared).toBe(true);
   });
 });
