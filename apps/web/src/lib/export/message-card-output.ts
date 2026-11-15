@@ -13,9 +13,13 @@ import type { CardMedia } from './message-card-media';
 export const CARD_OUTPUTS = ['image', 'gif', 'video'] as const;
 export type CardOutput = (typeof CARD_OUTPUTS)[number];
 
-export function cardOutputsOf(media: readonly CardMedia[]): readonly CardOutput[] {
+/**
+ * Une carte qui DÉFILE (#18671) ou posée sur une VIDÉO choisie en fond
+ * (#18672) offre aussi la vidéo, même sans média temporel.
+ */
+export function cardOutputsOf(media: readonly CardMedia[], living: { readonly scrolls: boolean; readonly backdropVideo: boolean } = { scrolls: false, backdropVideo: false }): readonly CardOutput[] {
   if (media.some((item) => item.kind === 'video')) return ['image', 'gif', 'video'];
-  if (media.some((item) => item.kind === 'audio')) return ['image', 'video'];
+  if (media.some((item) => item.kind === 'audio') || living.scrolls || living.backdropVideo) return ['image', 'video'];
   return ['image'];
 }
 
