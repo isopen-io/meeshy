@@ -667,8 +667,7 @@ final class ComposerEditToolsTests: XCTestCase {
     /// largeur entière de son nom.
     func test_theEditRail_neverTruncatesALabel_at375And440() async {
         let (session, _) = await videoSession()
-        let noms = ComposerLookFamily.allCases.map(ComposerCaptureCopy.familyName)
-            + session.editTools.map(ComposerCaptureCopy.editToolName)
+        let noms = [ComposerCaptureCopy.looksName] + session.editTools.map(ComposerCaptureCopy.editToolName)
         for largeur in [CGFloat(375), 440] {
             let ecran = RenderedScreen(ComposerCaptureBottomRow(session: session, context: session.gestureContext)
                                         .frame(width: largeur),

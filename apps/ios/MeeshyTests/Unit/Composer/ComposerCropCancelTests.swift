@@ -3,10 +3,11 @@ import UIKit
 import MeeshyUI
 @testable import Meeshy
 
-/// **Le recadrage s'annule d'un geste et montre l'image voilée hors du cadre**
-/// (#15355). « Annuler » rend le cadre et le placement d'avant l'entrée dans
-/// Recadrer, sans abandonner la retouche ; la prise entière dépasse du cadre,
-/// voilée, et seul le cadre part.
+/// **Le recadrage n'a plus de bouton « Annuler »** (#18639, porteur 2026-11-15) :
+/// chaque format et chaque crochet s'appliquent à l'instant, retoucher
+/// « Recadrer » ou ouvrir un autre outil referme le recadrage, et les formats
+/// portent la puce de tri de la bande. La prise entière dépasse du cadre,
+/// voilée, et seul le cadre part (#15355).
 @MainActor
 final class ComposerCropCancelTests: XCTestCase {
 
@@ -17,85 +18,27 @@ final class ComposerCropCancelTests: XCTestCase {
         return session
     }
 
-    private static func videoSession() async -> ComposerCaptureSession {
-        let session = ComposerCaptureSession(stage: .armed,
-                                             loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
-        await session.beginEditing(video: FileManager.default.temporaryDirectory
-            .appendingPathComponent("clip_\(UUID().uuidString).mov"))
-        return session
-    }
+    // MARK: - Refermer le recadrage
 
-    // MARK: - Annuler
-
-    func test_cancel_afterResizingAndPlacing_restoresTheFrameAndPlacementOfTheEntry() {
+    func test_retappingCrop_closesIt_keepingTheChosenFormat() {
         let session = Self.photoSession()
-        let cadre = session.editAspect
-        let placement = session.framing
         session.toggleEditTool(.crop)
         ComposerCropFlow.apply(.square, to: session)
-        session.rezoom(from: session.framing, scale: 2)
-        session.reframe(from: session.framing, translation: CGSize(width: 40, height: 60),
-                        viewSize: CGSize(width: 300, height: 300))
-        XCTAssertNotEqual(session.editAspect, cadre)
-        XCTAssertNotEqual(session.framing, placement)
-        ComposerCropFlow.cancel(session)
-        XCTAssertEqual(session.editAspect, cadre, "le cadre d'avant l'entrée revient")
-        XCTAssertEqual(session.framing, placement, "et le placement de l'image avec lui")
+        session.toggleEditTool(.crop)
         XCTAssertFalse(session.activeEditTools.contains(.crop), "Recadrer se referme")
-    }
-
-    func test_cancel_closesOnlyTheCrop_andKeepsTheRetouch() async {
-        let session = await Self.videoSession()
-        session.toggleEditTool(.trim)
-        session.toggleEditTool(.crop)
-        ComposerCropFlow.apply(.landscape, to: session)
-        ComposerCropFlow.cancel(session)
-        XCTAssertTrue(session.phase.isEditing, "la retouche n'est pas abandonnée")
-        XCTAssertEqual(session.activeEditTools, [.trim], "la coupe reste ouverte")
-        XCTAssertFalse(session.showsCropBrackets)
-        XCTAssertFalse(session.editFramesScene, "la prise reprend tout l'écran")
-    }
-
-    func test_cancel_bringsBackTheTopRow_whenNoOtherToolIsShown() {
-        let session = Self.photoSession()
-        session.toggleEditTool(.crop)
-        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: session.shownEditTools))
-        ComposerCropFlow.cancel(session)
+        XCTAssertEqual(try XCTUnwrap(session.editAspect), 1, accuracy: 0.0001, "le carré choisi reste")
         XCTAssertTrue(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: session.shownEditTools),
                       "✕ et « Terminé » reviennent")
     }
 
-    func test_cancel_afterAValidatedCrop_restoresTheValidatedFrame() {
-        let session = Self.photoSession()
-        session.toggleEditTool(.crop)
-        ComposerCropFlow.apply(.square, to: session)
-        session.toggleEditTool(.crop)
-        XCTAssertEqual(try XCTUnwrap(session.editAspect), 1, accuracy: 0.0001, "retoucher Recadrer valide le carré")
-        session.toggleEditTool(.crop)
-        ComposerCropFlow.apply(.landscape, to: session)
-        ComposerCropFlow.cancel(session)
-        XCTAssertEqual(try XCTUnwrap(session.editAspect), 1, accuracy: 0.0001, "Annuler revient au carré validé")
-    }
-
-    func test_cancel_withoutTheCropOpen_changesNothing() {
+    func test_openingAnotherTool_closesTheCrop_keepingTheChosenFormat() {
         let session = Self.photoSession()
         session.toggleEditTool(.crop)
         ComposerCropFlow.apply(.square, to: session)
         session.toggleEditTool(.text)
-        XCTAssertFalse(session.activeEditTools.contains(.crop), "Texte range Recadrer en gardant son cadre")
-        ComposerCropFlow.cancel(session)
-        XCTAssertEqual(try XCTUnwrap(session.editAspect), 1, accuracy: 0.0001, "rien à annuler hors du recadrage")
-        XCTAssertEqual(session.activeEditTools, [.text])
-    }
-
-    func test_cancel_whileTheRenderRuns_changesNothing() {
-        let session = Self.photoSession()
-        session.toggleEditTool(.crop)
-        ComposerCropFlow.apply(.square, to: session)
-        session.isRenderingLook = true
-        ComposerCropFlow.cancel(session)
-        XCTAssertEqual(try XCTUnwrap(session.editAspect), 1, accuracy: 0.0001, "ce qui part est ce qu'on voyait en validant")
-        XCTAssertTrue(session.activeEditTools.contains(.crop))
+        XCTAssertFalse(session.activeEditTools.contains(.crop), "Texte range Recadrer")
+        XCTAssertEqual(try XCTUnwrap(session.editAspect), 1, accuracy: 0.0001)
+        XCTAssertFalse(session.showsCropBrackets)
     }
 
     func test_presets_readAndApplyTheFrameOfTheSession() {
@@ -107,29 +50,16 @@ final class ComposerCropCancelTests: XCTestCase {
         XCTAssertEqual(ComposerCropFlow.preset(of: session), .square)
     }
 
-    func test_cancelButton_isA44ptTarget_withItsOwnVoiceOverLabel() {
-        XCTAssertGreaterThanOrEqual(ComposerCropCancelButton.minSide, 44)
-        XCTAssertFalse(ComposerCaptureCopy.cancelCrop.isEmpty)
-        XCTAssertNotEqual(ComposerCaptureCopy.cancelCrop, ComposerCaptureCopy.cancelEdit,
-                          "VoiceOver dit ce qu'Annuler annule : le recadrage, pas la retouche")
-    }
+    // MARK: - Les formats en puces, sans « Annuler »
 
-    func test_cancelLabel_isTranslatedInTheSevenLanguages() throws {
-        let racine = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-        let donnees = try Data(contentsOf: racine.appendingPathComponent("Meeshy/Localizable.xcstrings"))
-        let catalogue = try XCTUnwrap(JSONSerialization.jsonObject(with: donnees) as? [String: Any])
-        let chaines = try XCTUnwrap(catalogue["strings"] as? [String: Any])
-        let entree = try XCTUnwrap(chaines["composer.capture.crop.cancel.a11y"] as? [String: Any])
-        let langues = try XCTUnwrap(entree["localizations"] as? [String: Any])
-        XCTAssertEqual(Set(langues.keys), ["ar", "de", "en", "es", "fr", "it", "pt-BR"])
-    }
-
-    func test_chrome_mountsCancelBesideTheFormats() throws {
+    func test_formats_wearTheBandSortingChip_withoutCancel() throws {
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCropBrackets.swift")
+        XCTAssertTrue(barre.contains("CallFrameMoodChip(title: preset.label, isSelected: selected == preset)"),
+                      "la puce des pilules Élégant · Jovial · Corporate")
+        XCTAssertFalse(barre.contains("ComposerCropCancelButton"))
         let vues = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(vues.contains("ComposerCropCancelButton {"), "Annuler se pose avec les formats, sur le cadre")
-        XCTAssertTrue(vues.contains("ComposerCropFlow.cancel(session)"))
+        XCTAssertFalse(vues.contains("ComposerCropCancelButton"), "plus d'« Annuler » à côté des formats")
+        XCTAssertTrue(vues.contains("ComposerCropPresetBar(selected: ComposerCropFlow.preset(of: session))"))
     }
 
     // MARK: - L'image voilée hors du cadre

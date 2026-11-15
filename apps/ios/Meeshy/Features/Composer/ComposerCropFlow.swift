@@ -1,25 +1,9 @@
 import CoreGraphics
 import MeeshyUI
 
-/// **Le cadre et le placement d'avant l'entrée dans Recadrer** (#15355) : ce
-/// qu'« Annuler » rend.
-nonisolated struct ComposerCropEntry: Equatable, Sendable {
-    let aspect: CGFloat?
-    let framing: ComposerFraming
-
-    /// Le relevé après un toucher d'outil : ouvrir Recadrer relève le cadre du
-    /// moment ; le refermer — le valider, ou le ranger sous Texte — l'oublie ;
-    /// tout autre toucher le garde.
-    static func after(_ kept: ComposerCropEntry?, before: Set<ComposerEditTool>, after: Set<ComposerEditTool>,
-                      current: ComposerCropEntry) -> ComposerCropEntry? {
-        guard after.contains(.crop) else { return nil }
-        return before.contains(.crop) ? kept : current
-    }
-}
-
-/// **Les commandes du recadrage** (#9567, #15355) : les formats, et « Annuler »,
-/// qui rend le cadre d'avant l'entrée dans Recadrer en un geste et referme
-/// l'outil sans abandonner la retouche. Valider, c'est retoucher « Recadrer ».
+/// **Les commandes du recadrage** (#9567, #18639) : les formats, en puces, sans
+/// « Annuler » — chaque format et chaque crochet s'appliquent à l'instant ;
+/// retoucher « Recadrer » ou ouvrir un autre outil referme le recadrage.
 @MainActor
 enum ComposerCropFlow {
 
@@ -30,17 +14,6 @@ enum ComposerCropFlow {
     /// Le preset que la scène réalise ; `nil` pour un recadrage libre.
     static func preset(of session: ComposerCaptureSession) -> ComposerCropPreset? {
         session.editAspect.flatMap { ComposerCropPreset.matching($0, source: session.editExtent?.size ?? .zero) }
-    }
-
-    /// Hors du recadrage, ou pendant le rendu de « Terminé », rien ne bouge.
-    static func cancel(_ session: ComposerCaptureSession) {
-        guard session.phase.isEditing, !session.isRenderingLook, session.activeEditTools.contains(.crop),
-              let avant = session.cropEntry else { return }
-        session.editAspect = avant.aspect
-        session.framing = avant.framing
-        session.activeEditTools.remove(.crop)
-        session.cropEntry = nil
-        HapticFeedback.light()
     }
 }
 

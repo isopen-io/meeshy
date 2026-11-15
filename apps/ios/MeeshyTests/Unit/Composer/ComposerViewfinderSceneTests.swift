@@ -259,7 +259,7 @@ final class ComposerViewfinderSceneTests: XCTestCase {
         XCTAssertFalse(rangee.contains("ComposerEditRailFit("))
         let debut = try XCTUnwrap(rangee.range(of: "private var editRail"))
         let fin = try XCTUnwrap(rangee.range(of: "private var familyRow", range: debut.upperBound..<rangee.endIndex))
-        XCTAssertTrue(rangee[debut.upperBound..<fin.lowerBound].contains("ComposerLookRail(open: session.openFamily, editTools:"),
+        XCTAssertTrue(rangee[debut.upperBound..<fin.lowerBound].contains("ComposerLookRail(open: session.openFamily != nil, editTools:"),
                       "les outils de retouche prennent la colonne du viseur")
         XCTAssertTrue(rangee[debut.upperBound..<fin.lowerBound].contains("alignment: .leading"))
         XCTAssertTrue(rangee.contains("ComposerEditRailGate(board: session.retouchTexts) { editRail }"),
