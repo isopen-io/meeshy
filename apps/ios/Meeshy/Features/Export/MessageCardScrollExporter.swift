@@ -117,8 +117,7 @@ nonisolated enum MessageCardScrollExporter {
         var painted = pictures
         for loop in loops {
             let moment = CMTime(seconds: time.truncatingRemainder(dividingBy: loop.duration), preferredTimescale: 600)
-            nonisolated(unsafe) let generator = loop.generator
-            if let still = try? await generator.image(at: moment).image {
+            if let still = await MessageCardMotionExporter.still(from: loop.generator, at: moment) {
                 painted = painted.replacing(loop.id, with: still)
             }
         }

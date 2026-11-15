@@ -69,6 +69,13 @@ nonisolated enum MessageCardMotionExporter {
     // MARK: - Images
 
     /// L'image `index` de la carte, à l'instant où elle s'affiche : la vidéo donne son image du même instant de l'extrait.
+    /// Une image de la vidéo à `time`. Le générateur n'est lu que par la tâche
+    /// d'encodage, une image après l'autre : jamais deux appels à la fois.
+    static func still(from generator: AVAssetImageGenerator, at time: CMTime) async -> CGImage? {
+        nonisolated(unsafe) let sequentialGenerator = generator
+        return try? await sequentialGenerator.image(at: time).image
+    }
+
     private static func frame(
         _ index: Int,
         input: MessageCardInput,
@@ -82,8 +89,7 @@ nonisolated enum MessageCardMotionExporter {
         var painted = pictures
         if let generator, let videoID {
             let time = CMTime(seconds: plan.start + plan.time(ofFrame: index), preferredTimescale: 600)
-            nonisolated(unsafe) let sequentialGenerator = generator
-            if let still = try? await sequentialGenerator.image(at: time).image {
+            if let still = await still(from: generator, at: time) {
                 painted = pictures.replacing(videoID, with: still)
             }
         }
