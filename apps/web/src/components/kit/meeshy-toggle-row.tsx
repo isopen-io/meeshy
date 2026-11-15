@@ -83,7 +83,7 @@ function Accessory({ accessory, valueId }: { readonly accessory: MeeshyToggleRow
   if (accessory.type === 'checkbox')
     return (
       <svg {...ICON} className="kit-row__box" data-checked={accessory.isChecked ? '' : undefined}>
-        <rect x="3" y="3" width="18" height="18" fill={accessory.isChecked ? 'currentColor' : 'none'} />
+        <path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z" fill={accessory.isChecked ? 'currentColor' : 'none'} />
         {accessory.isChecked ? <path d="M7 12.5l3.5 3.5L17 9" stroke="var(--color-on-media)" /> : null}
       </svg>
     );
@@ -110,32 +110,30 @@ function Body({ resolved }: { readonly resolved: Resolved }) {
   const subtitle = meeshyToggleRowVisibleSubtitle(content.subtitle);
   return (
     <>
+      <span className="kit-row__veil" aria-hidden="true" />
       {content.showsDivider === true ? <span className="kit-row__divider" aria-hidden="true" /> : null}
-      <span className="kit-row__body">
-        <span className="kit-row__line">
+      <span className="kit-row__line">
+        <span className="kit-row__main">
           {content.leading === undefined || content.leading === null ? null : (
-            <span className="kit-row__lead" aria-hidden="true">
+            <span className="kit-row__lead kit-row__dimmed" aria-hidden="true">
               {content.leading}
             </span>
           )}
           <span className="kit-row__text">
             <span className="kit-row__title-line">
-              <span className="kit-row__title">
-                {content.title}
-              </span>
+              <span className="kit-row__title kit-row__dimmed">{content.title}</span>
               {content.titleAccessory === undefined || content.titleAccessory === null ? null : (
                 <span aria-hidden="true">{content.titleAccessory}</span>
               )}
             </span>
             {subtitle === null ? null : <span className="kit-row__subtitle">{subtitle}</span>}
           </span>
-          <span className="kit-row__accessories" aria-hidden="true">
-            {content.trailing === undefined || content.trailing === null ? null : <span>{content.trailing}</span>}
-            <Accessory accessory={accessory} valueId={valueId} />
-          </span>
+        </span>
+        <span className="kit-row__accessories kit-row__dimmed" aria-hidden="true">
+          {content.trailing === undefined || content.trailing === null ? null : <span>{content.trailing}</span>}
+          <Accessory accessory={accessory} valueId={valueId} />
         </span>
       </span>
-      <span className="kit-row__veil" aria-hidden="true" />
     </>
   );
 }

@@ -70,17 +70,18 @@ Non vérifié localement : aucun compilateur Swift dans le conteneur. La compila
 La fiche ne disait rien du web : elle est complétée ici, dans le même lot.
 
 - **API** : `MeeshyToggleRow` (la ligne entière est un `<button>`, `onAction` part une fois au relâcher, `haptic` `light` | `none`, `disabled`) et `MeeshyToggleRowFace` (dessin seul, `isPressed` pour la capture). Mêmes entrées que iOS : `title`, `subtitle`, `accessory` (`none`, `toggle`, `check`, `checkbox`, `chevron`, `value`), `kind`, `showsDivider`, `tone` (type K01, sinon le ton de l'hôte `MeeshyGlassScope`), `tint`, `leading`, `titleAccessory`, `trailing` (ReactNode opaques : l'icône SF devient l'icône que l'appelant passe).
-- **Recette** : `meeshy-toggle-row-recipe.ts`, pure, en encres CSS. Aucune couleur en dur : `var(--color-ios-ink)`, `var(--color-on-media)`, `var(--ios-on-media-3)`, `var(--ios-indigo-500)`, `var(--ios-error)`. Mesures : hauteur 46, case 24, désactivé 0,62, voile d'appui 0,15, de survol 0,08, filet à 8 %, sous-titre à 70 %.
-- **Voile** : une opacité sur l'encre, pilotée par `:active` (appui instantané) et `:hover` sous `(hover: hover)` (fondu de 0,2 s au relâcher). `data-pressed` le force pour la capture. Seule l'opacité s'anime.
+- **Recette** : `meeshy-toggle-row-recipe.ts`, pure, en encres CSS. Aucune couleur en dur : `var(--color-ios-ink)`, `var(--color-on-media)`, `var(--ios-on-media-3)`, `var(--ios-indigo-500)`, `var(--ios-error)`, `var(--ios-error-ink)` (destructif du ton `theme` en clair, `MeeshyColors.errorInk`, ajouté au générateur `generate-from-ios.mjs` par ce lot). Mesures : hauteur 46, case 24, désactivé 0,62, voile d'appui 0,15, de survol 0,08, filet à 8 %, sous-titre à 70 %.
+- **Voile** : une opacité sur l'encre, pilotée par `:active` (appui instantané) et `:hover` sous `(hover: hover)` (fondu de 0,2 s au relâcher). `data-pressed` le force pour la capture. Seule l'opacité s'anime. Il se peint SOUS le contenu et le filet (`isolation: isolate` sur la ligne, `z-index: -1` sur le voile), comme le fond du bouton iOS.
+- **Désactivé** : la tête, le titre et l'accessoire passent à 62 % (`.kit-row__dimmed`) ; la raison (sous-titre) garde son encre, comme sur iOS.
 - **Bascule** : dessin inerte (`role="switch"`, `aria-checked`), pas de contrôle natif dans la ligne. Le navigateur lit « activé / désactivé » : aucune chaîne à localiser.
 - **Accessibilité** : libellé « titre, sous-titre » (`aria-label`) ; une valeur textuelle est décrite par `aria-describedby` ; coche = `aria-pressed` ; case = `role="checkbox"`. Les emplacements décoratifs sont `aria-hidden`.
 - **Clavier et pointeur** : bouton natif (Tab, Entrée, Espace), anneau de focus visible, cible pleine ligne, 46 px minimum.
-- **Dynamic Type** : sur le web, la zone de texte passe sous l'accessoire par `flex-wrap` quand le texte s'élargit (pas de seuil de taille JavaScript).
+- **Dynamic Type** : la tête et le texte forment un bloc (`.kit-row__main`, `flex: 1 1 0`) qui réserve `min(10em, 100%)` à la taille du corps. Un texte long passe à la ligne À CÔTÉ de l'accessoire ; l'accessoire ne passe dessous, en entier et aligné au début, que lorsque la police grandit au point que 10em ne tiennent plus à côté de lui (vers 135 % sur un téléphone de 390 px). Écart imposé par la plateforme : le web n'expose pas de seuil `isAccessibilitySize`, le bloc en tient lieu sans JavaScript.
 - **RTL** : propriétés logiques ; le chevron se retourne sous `:dir(rtl)`, la bascule aussi.
 - **Mode clair / sombre** : `:root.light` (classe posée par `scheme.ts`), défaut sombre.
 - **Haptique** : `impact('light')` de `@/lib/view/haptics`, un par action active.
 
 Écarts assumés (décisions prises en mode autonome, consignées dans l'issue `décision-produit` du lot) :
-1. Le destructif du thème clair prend `--ios-error-dark` (#991b1b) : l'iOS `errorInk` (#C81E1E) n'est pas mappé par `generate-from-ios.mjs`. La correction est un ajout au générateur, pas une couleur en dur ici.
+1. ~~Le destructif du thème clair prend `--ios-error-dark`~~ — soldé à la relecture : `errorInk` est mappé par `generate-from-ios.mjs` (`--ios-error-ink`, #C81E1E), la ligne prend la même encre qu'iOS (#18646 fermée).
 2. L'accent (mention) est `--ios-indigo-300` en sombre et `--ios-indigo-600` en clair, déclaré dans `kit-toggle-row.css` : `MeeshyColors.mentionColor` n'a pas de jeton.
 3. Aucun jumeau rebranché (§ 7) : le lot est un kit, il ne change aucun écran.

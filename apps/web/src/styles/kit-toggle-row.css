@@ -2,7 +2,9 @@
    titre, sous-titre, accessoire, filet, variante. `meeshy-toggle-row.tsx` écrit
    les encres et la hauteur en variables ; ce fichier dessine. Aucune couleur ni
    rayon en dur : jetons de packages/design-tokens. Le voile d'appui est une
-   opacité (le fondu de 0,2 s au relâcher ; l'appui est instantané). */
+   opacité (le fondu de 0,2 s au relâcher ; l'appui est instantané), peinte
+   sous le contenu. La tête et le texte forment un bloc qui réserve 10em :
+   l'accessoire ne passe dessous, en entier, que lorsque la police grandit. */
 
 .kit-row {
   position: relative;
@@ -16,6 +18,7 @@
   font: inherit;
   text-align: start;
   cursor: default;
+  isolation: isolate;
 }
 
 .kit-row--action {
@@ -34,9 +37,7 @@
   background: var(--kit-row-divider);
 }
 
-.kit-row__body {
-  position: relative;
-  display: block;
+.kit-row__dimmed {
   opacity: var(--kit-row-opacity, 1);
 }
 
@@ -47,7 +48,16 @@
   min-block-size: var(--kit-row-min, 46px);
   padding-inline: var(--ios-space-lg);
   padding-block: var(--ios-space-xs);
-  gap: var(--ios-space-xs) var(--ios-space-md);
+  gap: var(--ios-space-xs) var(--ios-space-sm);
+}
+
+.kit-row__main {
+  display: flex;
+  flex: 1 1 0;
+  min-inline-size: min(10em, 100%);
+  align-items: center;
+  gap: var(--ios-space-md);
+  font-size: var(--ios-font-body);
 }
 
 .kit-row__lead {
@@ -88,7 +98,6 @@
   flex: none;
   align-items: center;
   gap: var(--ios-space-md);
-  margin-inline-start: auto;
   color: var(--kit-row-accessory);
 }
 
@@ -159,6 +168,7 @@
   background: var(--kit-row-ink);
   opacity: 0;
   pointer-events: none;
+  z-index: -1;
   transition: opacity 200ms ease-out;
 }
 
@@ -174,13 +184,14 @@
   transition: none;
 }
 
-.kit-row[data-disabled] {
+.kit-row[data-disabled],
+.kit-row--action:disabled {
   cursor: not-allowed;
 }
 
 :root.light .kit-row {
   --kit-row-mention: var(--ios-indigo-600);
-  --kit-row-destructive-theme: var(--ios-error-dark);
+  --kit-row-destructive-theme: var(--ios-error-ink);
 }
 
 :root:not(.light) .kit-row {
