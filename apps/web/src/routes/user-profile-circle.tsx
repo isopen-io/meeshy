@@ -114,6 +114,9 @@ export const ProfileCircleRowView = memo(function ProfileCircleRowView({
           </button>
         ) : null}
       </div>
+      <p data-profile-circle-intro className="px-1 text-caption" style={{ color: INK_2 }}>
+        {translateCircles(language, 'circles.intro')}
+      </p>
       {demotion === null ? null : (
         <button
           type="button"

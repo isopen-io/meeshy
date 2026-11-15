@@ -2167,6 +2167,66 @@ l'inventaire à VIDE. Son discriminant est ÉTROIT par décision — `import typ
 `ServerEmitIOWithRooms` si le porteur lit aussi ses rooms), jamais d'ajouter une
 ligne à un inventaire — il n'y a pas de `Server` nu légitime pour émettre.
 
+### La QUATRIÈME forme : la porte est juste, et c'est l'ARGUMENT qu'on caste
+
+Les trois formes ci-dessus décrivent une porte MAL OBTENUE — une signature
+réécrite, un cast du porteur, le `Server` NU pris chez la dépendance. **Leurs
+trois discriminants portent sur le RECEVEUR de `.emit(`.** Aucun ne regarde ce
+qu'on lui PASSE, et c'est par là que deux sites sont passés (#18649, cycle 163) :
+
+```ts
+io?.to(ROOMS.user(userId)).emit(event as never, data as never);   // togetherRelay — porteur `ServerEmitIO`
+emitter.emit(event as keyof ServerToClientEvents, data as any);   // MeeshySocketIOManager
+```
+
+Les deux importent la BONNE porte. `as never` étant assignable à tout, le couple
+`(événement, charge)` n'est confronté **ni sur le nom ni sur la forme** — c'est
+exactement la liberté du `Server` nu du cycle 108, obtenue autrement, donc
+invisible aux deux cliquets, **qui étaient verts**. Les quatre émissions
+d'« Ensemble » voyageaient ainsi hors de tout contrat, sur un canal qui n'a
+aucun sérialiseur pour rattraper l'écart.
+
+> **La règle du cycle 105 vaut de l'ARGUMENT comme elle valait du PORTEUR** :
+> chercher une forme fautive par son NOM de déclaration, c'est manquer tous les
+> sites qui l'obtiennent autrement. Un cliquet qui garde un RECEVEUR ne dit rien
+> de ce qu'on lui remet.
+
+**Et le second site portait un commentaire qui ÉNONÇAIT la contrainte** —
+« event is always SERVER_EVENTS.TYPING_STOP » — sous un cast qui l'empêchait
+d'être vérifiée. C'est une AFFIRMATION (cycle 94) : mesurée vraie, elle devient
+un TYPE (`broadcastFn` déclare `typeof SERVER_EVENTS.TYPING_STOP` et
+`TypingEvent`) et le cast disparaît. Une contrainte qu'on écrit en prose à côté
+du code qui l'annule est le symptôme, pas la documentation.
+
+**Réparer, c'est NARROWER jusqu'au site d'appel, jamais déplacer le cast** : un
+paramètre générique `E extends ServerEventName` porte la corrélation jusqu'où un
+nom CONCRET la vérifie (`emitTo` dans `togetherRelay.ts`), et l'unique effacement
+sanctionné du dépôt reste dans `emitServerEvent`, une fois, documenté sur place.
+
+Cliquet : `sweepErasingEmitArgumentCasts` (`socketio/__tests__/server-emit-door-sweep.ts`),
+inventaire **VIDE**. Son discriminant ne retient que les cibles qui EFFACENT —
+`never`, `any`, `unknown`, `keyof ServerToClientEvents` — **ancrées en fin
+d'argument de premier niveau** :
+
+| forme | compté ? | pourquoi |
+|---|---|---|
+| `event as never` / `data as any` | **oui** | plus aucune confrontation au contrat |
+| `event as keyof ServerToClientEvents` | **oui** | la corrélation s'effondre (cycle 104) |
+| `{ code, message } as CallError` | non | cast vers le type que le canal DÉCLARE — la porte vérifie ensuite |
+| `{ id: id as any }` | non | cast de CHAMP, pas de canal — autre question |
+| un `as any` sur le 3e argument (ack) | non | ni le canal ni la charge |
+
+Le premier relevé, sur « un `as` au premier niveau », rendait **44 sites dont 40
+`as CallError`** : il mesurait la POPULARITÉ d'un idiome, pas une propriété —
+l'erreur du cycle 107, dont le balayage fut JETÉ plutôt que gelé. Narrower le
+discriminant l'a ramené à **4** (deux sites, leurs deux arguments chacun).
+
+**Mesure du lot** : les quatre charges d'« Ensemble » étaient JUSTES contre leurs
+types déclarés — la discipline tenait. Ce lot ne répare donc aucune panne : il
+rend vérifiable ce qui ne l'était pas, et le `tsc` vert APRÈS retrait des casts
+est le résultat, pas l'absence de résultat. Le ROUGE est prouvé dans les trois
+sens (champ inconnu `TS2561`, couple décorrélé `TS2353`, canal étranger `TS2345`).
+
 ### Un lot peut rendre un contournement INUTILE sans le faire disparaître
 
 Variante douce de « le lot qui rend une chose possible doit relire les

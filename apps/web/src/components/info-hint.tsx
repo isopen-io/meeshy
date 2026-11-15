@@ -103,7 +103,7 @@ export function InfoHintButton({
       aria-expanded={state.isOpen}
       aria-controls={state.id}
       aria-label={hint.label}
-      className={showsLabel ? 'inline-flex items-center gap-1.5 text-caption font-medium' : 'grid shrink-0 place-items-center rounded-full'}
+      className={`btn-press ${showsLabel ? 'inline-flex items-center gap-1.5 text-caption font-medium' : 'grid shrink-0 place-items-center rounded-full'}`}
       style={{ minWidth: 44, minHeight: 44, color: 'var(--color-ios-ink-3)', ...style }}
     >
       <GlyphSvg glyph={hint.glyph} size={18} />

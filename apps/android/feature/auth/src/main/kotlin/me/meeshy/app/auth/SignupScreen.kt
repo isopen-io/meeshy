@@ -109,6 +109,7 @@ private val PHASE_GAP = MeeshySpacing.xl
 fun SignupScreen(
     onClose: () -> Unit,
     onRegistered: () -> Unit,
+    onSignIn: () -> Unit = onClose,
     onOpenTerms: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
     onOpenSignInLink: () -> Unit = {},
@@ -128,7 +129,7 @@ fun SignupScreen(
             onPasswordChange = viewModel::onPasswordChange,
             onSubmit = viewModel::onPrimary,
             onValidateNow = viewModel::validateNow,
-            onSignIn = { viewModel.onSwitchToLogin(); onClose() },
+            onSignIn = { viewModel.onSwitchToLogin(); onSignIn() },
         )
     }
 
@@ -197,7 +198,7 @@ fun SignupScreen(
                 }
                 SignupPrimaryButton(state = state, onClick = viewModel::onPrimary, modifier = Modifier.padding(top = PHASE_GAP))
                 LegalNotice(onOpenTerms = onOpenTerms, onOpenPrivacy = onOpenPrivacy)
-                SignInPrompt(enabled = !state.isSubmitting, onSignIn = { viewModel.onSwitchToLogin(); onClose() })
+                SignInPrompt(enabled = !state.isSubmitting, onSignIn = { viewModel.onSwitchToLogin(); onSignIn() })
             }
         }
     }

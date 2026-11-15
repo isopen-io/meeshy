@@ -32,6 +32,27 @@ final class SettingsFocusTests: XCTestCase {
         XCTAssertNil(request.pending)
     }
 
+    // MARK: - Le pli des annexes (#18589)
+
+    func test_settingsAnchor_isTheAnchorOfTheBlockHoldingItsDestination() {
+        for focus in SettingsFocus.allCases {
+            XCTAssertEqual(focus.settingsAnchor, SettingsLayout.block(containing: focus.destination)?.id.anchor, "\(focus)")
+        }
+    }
+
+    func test_unfoldsAnnex_followsTheStratumOfItsDestination() {
+        for focus in SettingsFocus.allCases {
+            XCTAssertEqual(focus.unfoldsAnnex, SettingsLayout.unfoldsAnnex(toReach: focus.destination), "\(focus)")
+        }
+        XCTAssertFalse(SettingsFocus.masterPin.unfoldsAnnex, "le master PIN vit dans Compte, en haut")
+    }
+
+    func test_annexUnfolded_aFocusOnAnAnnexDestination_unfoldsBeforeScrolling() {
+        XCTAssertTrue(SettingsLayout.annexUnfolded(current: false, reaching: .storage))
+        XCTAssertTrue(SettingsLayout.annexUnfolded(current: true, reaching: .privacy), "un pli ouvert le reste")
+        XCTAssertFalse(SettingsLayout.annexUnfolded(current: false, reaching: .transcriptionMine))
+    }
+
     /// Les invites du dépôt passent par la demande — plus aucune n'ouvre les
     /// Réglages « en haut de page ». Garde de source : la seule mesure d'une
     /// fermeture passée à un bouton.
