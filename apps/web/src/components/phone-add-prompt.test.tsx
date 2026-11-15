@@ -80,7 +80,7 @@ describe('la proposition d’ajouter son numéro (#8843)', () => {
   test('à l’étape du code, « Modifier le numéro » rend le numéro saisi à corriger, sans quitter l’invite', async () => {
     const { calls, deps } = recorder();
     const host = await mounter.mount(<PhoneAddPrompt language="fr" deps={deps} onDismiss={() => undefined} onVerified={() => undefined} />);
-    await mounter.click(buttonNamed(host, 'Ajouter mon numéro'));
+    await mounter.click(buttonNamed(host, 'Ajouter'));
     mounter.type(host, '#activation-phone', '+33 6 12 34 56 7');
     await mounter.click(buttonNamed(host, 'Envoyer le code'));
     await mounter.click(buttonNamed(host, 'Modifier le numéro'));
@@ -94,7 +94,7 @@ describe('la proposition d’ajouter son numéro (#8843)', () => {
   test('à l’étape du code, « Renvoyer le code » redemande un SMS au même numéro et garde l’étape', async () => {
     const { calls, deps } = recorder();
     const host = await mounter.mount(<PhoneAddPrompt language="fr" deps={deps} onDismiss={() => undefined} onVerified={() => undefined} />);
-    await mounter.click(buttonNamed(host, 'Ajouter mon numéro'));
+    await mounter.click(buttonNamed(host, 'Ajouter'));
     mounter.type(host, '#activation-phone', '+33 6 12 34 56 78');
     await mounter.click(buttonNamed(host, 'Envoyer le code'));
     await mounter.click(buttonNamed(host, 'Renvoyer le code'));
