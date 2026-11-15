@@ -1,0 +1,134 @@
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { act } from 'react';
+
+import { createActMounter } from '@/test-support/act-mount';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { DIALOG_FADE_MS, SHEET_MOTION_CURVE } from './dialog-exit';
+import { LAYER_MOTION_MS, layerMotion, useLayerPresence } from './layer-presence';
+
+/**
+ * UNE COUCHE MONTÉE SOUS CONDITION ENTRE ET SORT EN MOUVEMENT (#18327) — menu ancré, bandeau, toast,
+ * liste flottante : la valeur qui la montait reste tenue le temps du fondu de sortie, la couche porte
+ * `data-leaving` pendant ce temps, puis s'en va. Sous « Réduire les animations », le retrait est immédiat.
+ */
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(() => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+const mounter = createActMounter();
+let originalMatchMedia: typeof window.matchMedia;
+beforeAll(() => {
+  originalMatchMedia = window.matchMedia;
+});
+afterEach(() => {
+  mounter.unmountAll();
+  window.matchMedia = originalMatchMedia;
+});
+
+const reduceMotion = (): void => {
+  window.matchMedia = ((query: string) => ({ ...originalMatchMedia.call(window, query), matches: query.includes('reduce') })) as typeof window.matchMedia;
+};
+
+function Toast({ text }: { readonly text: string | null }) {
+  const shown = useLayerPresence(text);
+  if (shown.value === null) return null;
+  return (
+    <p data-toast {...layerMotion(shown.leaving)}>
+      {shown.value}
+    </p>
+  );
+}
+
+const wait = (ms: number) =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  });
+
+describe('useLayerPresence', () => {
+  test('la couche fermée reste montée, en sortie, avec sa dernière valeur, puis s’en va après le fondu', async () => {
+    const host = await mounter.mount(<Toast text="Envoyé à Ana" />);
+    expect(host.querySelector('[data-toast]')?.hasAttribute('data-leaving')).toBe(false);
+
+    await mounter.rerender(host, <Toast text={null} />);
+    const leaving = host.querySelector('[data-toast]');
+    expect(leaving?.textContent).toBe('Envoyé à Ana');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+
+    await wait(LAYER_MOTION_MS + 30);
+    expect(host.querySelector('[data-toast]')).toBeNull();
+  });
+
+  test('rouverte pendant sa sortie, la couche reprend sans remonter', async () => {
+    const host = await mounter.mount(<Toast text="A" />);
+    const first = host.querySelector('[data-toast]');
+    await mounter.rerender(host, <Toast text={null} />);
+    await mounter.rerender(host, <Toast text="B" />);
+    await wait(LAYER_MOTION_MS + 30);
+    const again = host.querySelector('[data-toast]');
+    expect(again).toBe(first);
+    expect(again?.textContent).toBe('B');
+    expect(again?.hasAttribute('data-leaving')).toBe(false);
+  });
+
+  test('sous « Réduire les animations », le retrait est immédiat', async () => {
+    reduceMotion();
+    const host = await mounter.mount(<Toast text="A" />);
+    await mounter.rerender(host, <Toast text={null} />);
+    expect(host.querySelector('[data-toast]')).toBeNull();
+  });
+
+  test('la durée et la courbe sont celles des modales, posées sur la couche pour la feuille de style', () => {
+    expect(LAYER_MOTION_MS).toBe(DIALOG_FADE_MS);
+    expect(layerMotion(false).style).toEqual({ '--dialog-fade-ms': `${DIALOG_FADE_MS}ms`, '--dialog-motion-curve': SHEET_MOTION_CURVE });
+  });
+
+  test('l’entrée et la sortie ne jouent que l’opacité, translate et scale, et rien sous réduction', () => {
+    const css = readFileSync(new URL('../../styles/sheet-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const motion = css.slice(css.indexOf('@media (prefers-reduced-motion: no-preference)'));
+    expect(motion).toContain('[data-layer-motion]');
+    expect(motion).toMatch(/\[data-layer-motion\]\[data-leaving\]\s*\{\s*animation-name:\s*layer-out/);
+    expect(css.slice(0, css.indexOf('@media'))).toMatch(/\[data-layer-motion\]\[data-leaving\]\s*\{\s*pointer-events:\s*none/);
+    const layerKeyframes = [...css.matchAll(/@keyframes layer-(?:in|out)\s*\{([\s\S]*?\})\s*\}/g)].map((match) => match[1] ?? '');
+    expect(layerKeyframes.length).toBe(2);
+    for (const body of layerKeyframes) {
+      const properties = [...body.matchAll(/([a-z-]+)\s*:/g)].map((match) => match[1]);
+      expect(properties.every((property) => ['opacity', 'translate', 'scale'].includes(property ?? ''))).toBe(true);
+    }
+    expect(readFileSync(new URL('./layer-presence.ts', import.meta.url), 'utf8')).toContain("import '@/styles/sheet-motion.css'");
+  });
+});
+
+describe('les couches du kit qui sortent en mouvement (#18327)', () => {
+  const SITES = [
+    'components/app-update-banner.tsx',
+    'components/send-toast-host.tsx',
+    'components/mention-suggestions.tsx',
+    'components/rail-title-slot.tsx',
+    'components/emoji-tone-menu.tsx',
+    'components/protected-content.tsx',
+    'components/collapsible-section.tsx',
+    'components/viewer-chrome-menu.tsx',
+    'components/publication-menu-panel.tsx',
+    'components/reading-mode-chip.tsx',
+    'components/row-actions.tsx',
+    'components/publish-split-button.tsx',
+    'components/summary/summary-entry-menu.tsx',
+  ] as const;
+
+  test('chaque site pose le mouvement de couche sur ce qu’il monte', () => {
+    const muets = SITES.filter((site) => !/\blayerMotion\(/.test(readFileSync(new URL(`../../${site}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')));
+    expect(muets).toEqual([]);
+  });
+});

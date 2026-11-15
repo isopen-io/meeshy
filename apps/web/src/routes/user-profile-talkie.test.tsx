@@ -225,4 +225,24 @@ describe('ProfileTalkieRow', () => {
       'Disponible pour vos très proches. À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan.',
     );
   });
+
+  test('le (i) entre en fondu et, refermé, reste le temps de sa sortie, inerte (#18320)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    const { row } = harness({ success: true, data: { talkieId: 'a'.repeat(24), maxDurationMs: 30_000, maxChunkBytes: 16_384 } });
+    const node = await mount(row);
+    await settle();
+    const info = node.querySelector<HTMLButtonElement>('[data-talkie-info]');
+    await act(async () => {
+      info?.click();
+    });
+    const text = () => node.querySelector('[data-talkie-info-text]');
+    expect(text()?.hasAttribute('data-layer-motion')).toBe(true);
+    expect(text()?.hasAttribute('data-leaving')).toBe(false);
+    await act(async () => {
+      info?.click();
+    });
+    expect(info?.getAttribute('aria-expanded')).toBe('false');
+    expect(text()?.hasAttribute('data-leaving')).toBe(true);
+    expect(text()?.hasAttribute('inert')).toBe(true);
+  });
 });

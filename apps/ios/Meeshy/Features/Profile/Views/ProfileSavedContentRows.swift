@@ -14,7 +14,7 @@ struct ProfileSavedContentRows: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "tray.full.fill", title: Self.title, colorHex: MeeshyColors.warningHex)
+            ProfileSectionHeader(icon: "tray.full.fill", title: Self.title, color: MeeshyColors.warning)
             VStack(spacing: 0) {
                 ForEach(Item.allCases, id: \.self) { item in
                     ProfileNavigationRow(icon: item.icon, title: item.title, hint: item.hint,

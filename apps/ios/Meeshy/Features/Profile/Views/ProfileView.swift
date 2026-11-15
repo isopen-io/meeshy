@@ -248,7 +248,7 @@ struct ProfileView: View {
                                           accentHex: accentColor, onOpen: open)
                     ProfileIdentitySection(
                         isEditing: isEditing, firstName: $firstName, lastName: $lastName,
-                        displayName: $displayName, bio: $bio, username: user?.username, accentHex: accentColor
+                        displayName: $displayName, bio: $bio, username: user?.username, accentColor: accentColor
                     )
                     ProfileContactSection(
                         email: user?.email, isEmailVerified: user?.emailVerifiedAt != nil,
@@ -406,7 +406,7 @@ struct ProfileView: View {
 
     private var languagesSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), colorHex: MeeshyColors.errorHex)
+            ProfileSectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), color: MeeshyColors.error)
 
             Text(String(localized: "profile.language.intro", defaultValue: "Meeshy te montre tout dans ta langue principale, sinon dans la suivante.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
@@ -466,7 +466,7 @@ struct ProfileView: View {
     /// Légende et mon décor, là où je cherche « où j'en suis ».
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "chart.bar.fill", title: ProfileActivityBand.title, colorHex: MeeshyColors.indigo300Hex)
+            ProfileSectionHeader(icon: "chart.bar.fill", title: ProfileActivityBand.title, color: MeeshyColors.indigo300)
             ProfileActivityBand(stats: stats, onOpen: openActivity)
             progressionEntry
             ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
