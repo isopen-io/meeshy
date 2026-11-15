@@ -21,9 +21,24 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
     private var searchTask: Task<Void, Never>?
     private let service: CommunityServiceProviding
     private let log = MeeshyLog.logger(.ui)
+    private var liveUpdates: AnyCancellable?
 
-    init(service: CommunityServiceProviding = CommunityService.shared) {
+    /// `communityUpdates` : `community:updated` (#18439) réécrit la ligne
+    /// d'une communauté renommée ou réglée ailleurs, sans relance réseau.
+    init(
+        service: CommunityServiceProviding = CommunityService.shared,
+        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live
+    ) {
         self.service = service
+        self.liveUpdates = communityUpdates
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.apply(event) }
+    }
+
+    func apply(_ event: CommunityUpdatedEvent) {
+        guard let index = communities.firstIndex(where: { $0.id == event.communityId }),
+              let updated = communities[index].applying(event) else { return }
+        communities[index] = updated
     }
 
     func loadIfNeeded() async {

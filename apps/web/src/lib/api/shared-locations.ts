@@ -1,6 +1,6 @@
 import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
 import { SHARED_LOCATION_DEFAULT_PRECISION, SHARED_LOCATION_PRECISIONS } from '@meeshy/shared/types/shared-location-constants';
-import type { SharedLocationChangedEventData } from '@meeshy/shared/types/shared-location';
+import type { SharedLocationChangedEventData, SharedLocationOwnRecipient, SharedLocationOwnSnapshot } from '@meeshy/shared/types/shared-location';
 
 import { bboxQuery, type GeoBbox } from '@/lib/map/slippy';
 
@@ -59,6 +59,35 @@ export async function loadSharedLocations(deps: SharedLocationDeps & { readonly 
   if (!result.ok) return result;
   const items = objectOf(result.data)?.items;
   return { ok: true, data: Array.isArray(items) ? items.flatMap((row) => decodeSharedLocation(row) ?? []) : [] };
+}
+
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+
+const decodeOwnRecipient = (raw: unknown): SharedLocationOwnRecipient | null => {
+  const wire = objectOf(raw);
+  const userId = textOf(wire?.userId);
+  const expiresAt = instantOf(wire?.expiresAt);
+  if (wire === null || userId === null || !OBJECT_ID.test(userId) || expiresAt === null) return null;
+  const precision = SHARED_LOCATION_PRECISIONS.find((candidate) => candidate === wire.precision) ?? SHARED_LOCATION_DEFAULT_PRECISION;
+  return { userId: userId.toLowerCase(), precision, expiresAt };
+};
+
+/**
+ * MON partage, tel que la passerelle le sert (`GET /relations/locations/mine`, #18389). Une réponse
+ * sans liste lisible vaut `null` (« je ne sais pas ») : le centre garde alors la sienne, plutôt que de
+ * lire une panne comme « plus aucun partage ». Une ligne illisible se saute.
+ */
+export function decodeOwnSharedLocation(raw: unknown): SharedLocationOwnSnapshot | null {
+  const wire = objectOf(raw);
+  if (wire === null || !Array.isArray(wire.recipients)) return null;
+  return { recipients: wire.recipients.flatMap((row) => decodeOwnRecipient(row) ?? []), expiresAt: instantOf(wire.expiresAt) };
+}
+
+/** `null` : hors ligne, refus, passerelle d'avant (404) ou données de démonstration — rien n'est conclu. */
+export async function loadOwnSharedLocation(deps: SharedLocationDeps): Promise<SharedLocationOwnSnapshot | null> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return null;
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: relationsEndpoints.locationsMine });
+  return result.ok ? decodeOwnSharedLocation(result.data) : null;
 }
 
 /**

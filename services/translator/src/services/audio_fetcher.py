@@ -22,6 +22,8 @@ from datetime import datetime
 
 import aiohttp
 
+from utils.audio_path_guard import guard_requested_audio_path
+
 logger = logging.getLogger(__name__)
 
 # Timeout pour le téléchargement HTTP (en secondes)
@@ -104,7 +106,8 @@ class AudioFetcherService:
             audio_base64: Données audio encodées en base64
             audio_mime_type: Type MIME de l'audio
             audio_url: URL publique pour télécharger l'audio
-            audio_path: Chemin local (legacy, pour compatibilité)
+            audio_path: Chemin local (legacy). Lu seulement sous une racine
+                autorisée (utils.audio_path_guard) ; sinon AudioPathRejected.
 
         Returns:
             Tuple (chemin_local, source) où source est 'binary', 'base64', 'url', 'path' ou 'error'
@@ -153,17 +156,18 @@ class AudioFetcherService:
             except Exception as e:
                 logger.warning(f"[AudioFetcher] ⚠️ Erreur téléchargement URL: {e}")
 
-        # 3. Fallback: chemin local (legacy)
-        if audio_path and os.path.exists(audio_path):
-            logger.info(f"[AudioFetcher] ✅ Audio trouvé localement (legacy): {Path(audio_path).name}")
-            return audio_path, "path"
+        # 3. Fallback: chemin local (legacy). Venu d'un socket non authentifié,
+        # il n'est lu que sous une racine autorisée (#18628) : un refus lève
+        # AudioPathRejected, que le handler publie en AUDIO_PATH_REJECTED.
+        if audio_path:
+            return guard_requested_audio_path(audio_path), "path"
 
         # Aucune source valide
         logger.error(
             f"[AudioFetcher] ❌ Impossible d'acquérir l'audio: "
             f"base64={'yes' if audio_base64 else 'no'}, "
-            f"url={audio_url or 'none'}, "
-            f"path={audio_path or 'none'}"
+            f"url={'yes' if audio_url else 'none'}, "
+            f"path={'yes' if audio_path else 'none'}"
         )
         return None, "error"
 

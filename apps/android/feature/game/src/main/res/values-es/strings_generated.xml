@@ -430,7 +430,7 @@
     <string name="game_concept_points_name">Chispas</string>
     <string name="game_concept_points_tip_1">Vuelve cada día: una Llama encendida alimenta tus chispas.</string>
     <string name="game_concept_points_tip_2">Activa un impulso para multiplicar tus chispas.</string>
-    <string name="game_concept_points_use">Acuñar una Meesh fija una parte en la moneda: tu luz, y con ella tu nivel, baja otro tanto.</string>
+    <string name="game_concept_points_use">Acuñar una Meesh fija una parte en la moneda, guardada para siempre en tu Legado; tu nivel sigue la luz que te queda.</string>
     <string name="game_concept_prestige_name">El Renacimiento</string>
     <string name="game_concept_prestige_tip_1">Lleva tu luz hasta el nivel 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -678,10 +678,10 @@
     <string name="game_guide_moment_first_level_next">%1$s hasta el nivel %2$s.</string>
     <string name="game_guide_moment_first_level_short">Nivel %1$s · %2$s hasta el siguiente.</string>
     <string name="game_guide_moment_first_level_what">Tu luz crece: primer nivel cruzado.</string>
-    <string name="game_guide_moment_first_mint_means">Una parte de tu luz se ha fijado en la moneda: tu nivel bajó otro tanto, tu rango nunca.</string>
+    <string name="game_guide_moment_first_mint_means">Una parte de tu luz se ha fijado en la moneda, guardada para siempre; tu gloria ha crecido, y tu nivel sigue la luz que te queda.</string>
     <string name="game_guide_moment_first_mint_next">Lo recibido sigue recibido: cada nueva chispa hace crecer de nuevo tu luz.</string>
-    <string name="game_guide_moment_first_mint_possible_means_drop">Acuñar fija %1$s de tu luz en una moneda: tu nivel baja otro tanto, y ganas +%2$s de gloria.</string>
-    <string name="game_guide_moment_first_mint_possible_means_free">Acuñar fija %1$s de tu luz en una moneda, sin hacerte perder un nivel, y ganas +%2$s de gloria.</string>
+    <string name="game_guide_moment_first_mint_possible_means_drop">Acuñar fija %1$s de tu luz en una moneda guardada para siempre, y ganas +%2$s de gloria; tu nivel sigue la luz que te queda.</string>
+    <string name="game_guide_moment_first_mint_possible_means_free">Acuñar fija %1$s de tu luz en una moneda, sin cambiar tu nivel, y ganas +%2$s de gloria.</string>
     <string name="game_guide_moment_first_mint_possible_next">Acuña ahora, o deja antes que tu luz crezca.</string>
     <string name="game_guide_moment_first_mint_possible_short">Una Meesh fija %1$s de tu luz.</string>
     <string name="game_guide_moment_first_mint_possible_what">Puedes acuñar tu primera Meesh.</string>
@@ -745,7 +745,7 @@
     <string name="game_guide_step_levels_means">Cada nivel pide un poco más de chispas que el anterior.</string>
     <string name="game_guide_step_levels_next">En el nivel 5, tus ancestros te envían tu primer sueño.</string>
     <string name="game_guide_step_levels_what">Veinte estados de tu luz, y niveles que tu rango abre.</string>
-    <string name="game_guide_step_mint_means">Acuñar fija una parte de tu luz en la moneda: tu nivel baja otro tanto, tu rango nunca, y cada acuñación te trae gloria.</string>
+    <string name="game_guide_step_mint_means">Acuñar fija una parte de tu luz en la moneda, guardada para siempre, y cada acuñación te trae gloria que hace avanzar tu rango; tu nivel sigue la luz que te queda.</string>
     <string name="game_guide_step_mint_next">Tu gloria te da tu nombre: tu rango.</string>
     <string name="game_guide_step_mint_what">Cuando tu luz es lo bastante grande, se acuña una Meesh.</string>
     <string name="game_guide_step_missions_means">Hazlos realidad para que aparezca la Ofrenda y alimentar tu Llama.</string>

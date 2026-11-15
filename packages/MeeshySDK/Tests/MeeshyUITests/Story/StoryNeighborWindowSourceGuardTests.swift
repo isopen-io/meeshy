@@ -29,7 +29,7 @@ final class StoryNeighborWindowSourceGuardTests: XCTestCase {
         let compact = viewer.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "\n", with: "")
 
         XCTAssertTrue(
-            compact.contains("guardready,letid=currentStory?.idelse{return}slideTimer.markContentReady(slideId:id)prepareNeighborWindow()"),
+            compact.contains("guardready,letid=currentStory?.idelse{return}StoryNavigationTrace.shared?.firstFrame(storyId:id)slideTimer.markContentReady(slideId:id)prepareNeighborWindow()"),
             "le signal de première image du canvas visible (isContentReady) doit armer prepareNeighborWindow()"
         )
         XCTAssertTrue(
