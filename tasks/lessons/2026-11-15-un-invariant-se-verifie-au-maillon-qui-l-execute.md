@@ -1,0 +1,19 @@
+## Un invariant se vérifie au MAILLON qui l'exécute, jamais à l'étage où on le décide — et un double posé là où la garantie se rompt rend le témoin tautologique (2026-11-15, #18614)
+
+*Cycle 167 de la routine d'amélioration continue du temps réel.*
+
+**La règle : un invariant énoncé à l'étage où on le DÉCIDE ne dit rien de l'étage où on l'APPLIQUE.** La question à poser n'est pas « cette unité tient-elle sa promesse ? » mais **« à qui remet-elle le soin de la tenir, et cette unité-là sait-elle qu'elle a une promesse à tenir ? »**
+
+Ce qui a produit la règle : le drain hors ligne va à de vraies longueurs pour tenir les entrées REFUSÉES hors de `delivered` — quatre refus nommés, un journal par entrée, trois signaux séparés — sous un invariant écrit noir sur blanc : « un accusé affirme *ce message est arrivé chez son destinataire* — l'affirmer d'un message qu'on vient de refuser de livrer mentirait à son auteur ». Trois couches le respectaient scrupuleusement. La quatrième le défaisait : `markMessagesAsReceived` ne recevait que le PLUS RÉCENT id et appelait `freezeMessageStatus` sans `messageIds`, qui résout alors une PLAGE `createdAt > curseur` — donc estampille `deliveredAt` sur tout message de la conversation créé depuis, y compris ceux que le drain venait de refuser. L'écriture est write-once : rien ne la défait.
+
+**Aucune des trois couches justes ne pouvait voir la quatrième**, parce que chacune est correcte de son côté. Le maillon fautif n'était pas négligent : il ne RECEVAIT PAS assez d'information pour distinguer « tout ce qui précède » de « ces trois-là ». Un invariant qui dépend d'une distinction que le callee ne peut pas faire n'est pas un invariant, c'est un vœu.
+
+Deux déclencheurs, et le second n'exige aucune panne : une émission qui lève, et le plafond de la file (les entrées évincées ne sont jamais drainées mais restent dans la fenêtre). Le second est le plus coûteux à raconter — rien à diagnostiquer, pas d'exception, pas de log, seulement une coche qui dit « remis » pour un message qui ne l'a jamais été.
+
+**La seconde moitié : un double posé À L'ENDROIT EXACT où la garantie se rompt transforme le témoin en tautologie.** Le témoin qui portait précisément ce nom — « n'accuse pas la remise d'une entrée qu'il n'a pas su diffuser » — mockait la méthode d'accusé et n'assertait que le tableau qu'on lui passait. Il prouvait le FILTRE, qui était juste, et n'exerçait jamais l'EFFET, qui ne l'était pas. Devant un témoin qui mocke la couche suivante, demander : **la propriété que je garde vit-elle au-dessus ou au-dessous de ce double ?**
+
+C'est la forme du cycle 122 (« la question n'est pas seulement *élit-il le bon rang ?* mais *qui AFFICHE ce qu'il élit ?* ») déplacée du RENDU vers la PERSISTANCE : ici personne n'affiche rien, une colonne est écrite une fois pour toutes.
+
+Corollaire de correction, et il décide de la forme : **le paramètre qui porte le savoir doit être OPTIONNEL quand les autres appelants ont raison de ne pas l'avoir.** Quatre sites appellent la même méthode en voulant dire « tout ce qui précède est arrivé » — un lecteur en ligne, dans le fil — et la fenêtre est leur sémantique juste. Seul le rejeu sait qu'il a livré un sous-ensemble STRICT. Omettre la clé garde leur comportement à l'octet près ; une liste VIDE, elle, dit « j'ai livré, et rien » et ne doit jamais se relire comme « je n'ai pas calculé » — distinction `bridgeComputed` / `bridgeNotComputed`, un étage plus bas.
+
+Et une note de harnais, trouvée dans le fichier même de ce lot : `jest.clearAllMocks()` efface les APPELS, pas les IMPLÉMENTATIONS. Un `mockImplementation` qui met en scène une PANNE survit aux témoins suivants et devient le décor par défaut du fichier — le troisième témoin tombait pour la bonne raison apparente et la mauvaise cause réelle. Un double qui met en scène une panne se désarme explicitement.

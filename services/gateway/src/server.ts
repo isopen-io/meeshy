@@ -277,6 +277,15 @@ class MeeshyServer {
     // (`applyMessageRemovalEffects`, la purge de vue unique) : aucun d'eux ne
     // reçoit la file en paramètre, et une purge qu'un appelant peut omettre
     // n'est pas une purge.
+    //
+    // #18616 — cette phrase a été FAUSSE pendant tout ce temps :
+    // `MeeshySocketIOHandler.startMediaPipelines` construisait une seconde
+    // instance pour les quatre déclencheurs de `message:attachment-updated`.
+    // Elle est désormais tenue par un cliquet, parce qu'un doc-comment posé à
+    // l'endroit exact où l'on irait vérifier est une AFFIRMATION et ne rougit
+    // jamais : `socketio/__tests__/delivery-queue-door-sweep.ts`
+    // (`sweepDeliveryQueueConstructions`) gèle `server.ts` comme SEUL site de
+    // construction de production.
     setSharedDeliveryQueue(this.deliveryQueue);
 
     // Initialiser les background jobs (cleanup, digest, etc.)
