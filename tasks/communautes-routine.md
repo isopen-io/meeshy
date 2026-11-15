@@ -432,3 +432,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `CommunityUpdatedEventTest` (8), `CommunityCacheRepositoryTest` (+3), `CommunityUpdateBindingTest` (4). Preuve : `android.yml` sur la PR (`jvm-check` refusé en conteneur : `libsignal-client` 403).
 - Reste : les pages 2+ et la recherche de la liste Android ne sont pas réécrites (elles relisent au prochain chargement), comme la rangée Communautés de la liste des conversations iOS.
 - Prochain lot recommandé : le reste de #16857 (membres rejoint/parti/rôle, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-15 — réveil 21:38 UTC
+
+- Début du run : #18718 (#18439, volet Android) ouverte, dernière poussée à 20:11, donc inactive : run consacré à la mener à la fusion.
+- État : fusionnable sans conflit avec `dev`, mais `dev` est verrouillé (`lock_branch` actif) : fusion impossible. Le second `android.yml` lancé à la main sur `472a2325b` (21:08) a été annulé à la main à 21:28 pendant les tests unitaires, après un `assembleDebug` vert, comme celui de 19:46. Pas de nouveau lancement : la preuve Android manque toujours.
+- Prochain lot recommandé : fusionner #18718 dès que `dev` est déverrouillé et qu'un `android.yml` va au bout ; ensuite le reste de #16857 (membres, suppression).
