@@ -190,7 +190,7 @@ struct ComposerCaptureBottomRow: View {
         }
     }
 
-    /// **La colonne du viseur, gardée après la prise** (#18638, #18654, porteur 2026-11-15) :
+    /// **La colonne du viseur, gardée après la prise** (#18638, #18654) :
     /// Galerie · Texte · Stickers · Son, un trait, Effets · Recadrer · Couper, en bas à gauche,
     /// posés SUR la prise comme le rail de la capture — plus de rangée en bas.
     private var editRail: some View {
@@ -293,7 +293,7 @@ struct ComposerCaptureGestureHint: View {
     }
 }
 
-/// **« Annuler », à la place de « Terminé », pendant le recadrage** (porteur 2026-11-15, #18654) :
+/// **« Annuler », à la place de « Terminé », pendant le recadrage** (#18654) :
 /// il rend le format et le cadrage d'avant l'outil et le range. Fermer l'outil les garde.
 struct ComposerCropCancelButton: View {
     @ObservedObject var session: ComposerCaptureSession

@@ -222,7 +222,7 @@ nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Senda
     case text
     case background
     case sticker
-    /// Un son pour la scène (porteur 2026-11-15, #18654) : sa feuille se pose sur le viseur vivant.
+    /// Un son pour la scène (#18654) : sa feuille se pose sur le viseur vivant.
     case sound
 
     /// Ce que l'entrée fait de la caméra.
