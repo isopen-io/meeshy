@@ -86,6 +86,32 @@ class StatusesViewModelPublishGuardTest {
     }
 
     @Test
+    fun `another mood published while the first is still leaving is not lost`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<StatusEntry>>()
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } coAnswers { gate.await() }
+
+        val vm = viewModel()
+        vm.setStatus(emoji = "🔥", content = "hello")
+        vm.setStatus(emoji = "🎉", content = "encore")
+        gate.complete(NetworkResult.Success(StatusEntry(id = "new", userId = "me-id", moodEmoji = "🔥")))
+
+        coVerify(exactly = 1) { repository.create("🔥", "hello", any(), any(), any(), any()) }
+        coVerify(exactly = 1) { repository.create("🎉", "encore", any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `the same mood published again once the first has left publishes again`() = runTest {
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
+            NetworkResult.Success(StatusEntry(id = "new", userId = "me-id", moodEmoji = "🔥"))
+
+        val vm = viewModel()
+        vm.setStatus(emoji = "🔥", content = "hello")
+        vm.setStatus(emoji = "🔥", content = "hello")
+
+        coVerify(exactly = 2) { repository.create("🔥", "hello", any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `once the first mood has left, a new one publishes`() = runTest {
         coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
             NetworkResult.Success(StatusEntry(id = "new", userId = "me-id", moodEmoji = "🔥"))
