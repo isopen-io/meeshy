@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 
 import { RAIL_TITLE_SLOT } from '@/components/rail-tile';
 import { StoryRail, type StoryRailProps } from '@/components/story-rail';
 import { HIDDEN_CHROME_EASE_OUT_MS } from '@/lib/reading-mode/metrics';
+import { layerMotion, useLayerPresence } from '@/lib/view/layer-presence';
 
 /**
  * **LA FENTE DU TITRE, OÙ LA BANDE ÉPINGLÉE PREND SA PLACE** — extraite de
@@ -29,7 +30,8 @@ import { HIDDEN_CHROME_EASE_OUT_MS } from '@/lib/reading-mode/metrics';
  *
  * Le croisement titre ↔ bande est un fondu d'OPACITÉ sur
  * `HIDDEN_CHROME_EASE_OUT_MS` (règle 32 de la charte — jamais la géométrie),
- * coupé sous `motion-reduce`. iOS l'anime sur une rampe de défilement
+ * coupé sous `motion-reduce` : le titre par sa transition, la bande par
+ * `useLayerPresence`, qui la tient montée le temps de son fondu (#18327). iOS l'anime sur une rampe de défilement
  * continue ; cet en-tête reste statique, écart assumé (`targets/lentille.md`
  * § 3.1).
  */
@@ -44,12 +46,14 @@ export function RailTitleSlot({
 }) {
   const lastFocusedIdRef = useRef<string | null>(null);
   const wasPinnedRef = useRef(pinned);
+  const band = useLayerPresence(pinned ? true : null, HIDDEN_CHROME_EASE_OUT_MS);
 
   useEffect(() => {
     const id = lastFocusedIdRef.current;
     if (wasPinnedRef.current && !pinned && id !== null) {
       lastFocusedIdRef.current = null;
-      const orphelin = document.activeElement === null || document.activeElement === document.body;
+      const actif = document.activeElement;
+      const orphelin = actif === null || actif === document.body || actif.closest('[data-rail="pinned"]') !== null;
       if (orphelin) {
         const jumelle = document.querySelector<HTMLElement>(`[data-rail="grande"] [data-story-author="${CSS.escape(id)}"]`);
         jumelle?.focus();
@@ -86,8 +90,9 @@ export function RailTitleSlot({
       >
         {title}
       </h1>
-      {pinned ? (
+      {band.value !== null ? (
         <div
+          {...layerMotion(band.leaving, { '--layer-ms': `${HIDDEN_CHROME_EASE_OUT_MS}ms`, '--layer-shift': '0 0' } as CSSProperties)}
           className="absolute inset-0 flex items-center"
           onFocusCapture={(e) => {
             const cible = e.target instanceof Element ? e.target.closest('[data-story-author]') : null;

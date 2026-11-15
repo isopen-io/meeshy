@@ -1,6 +1,7 @@
 import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -37,6 +38,10 @@ afterAll(async () => {
 });
 
 const mounter = createActMounter();
+const finFondu = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+  });
 afterEach(() => mounter.unmountAll());
 
 const bascule = (host: ParentNode): HTMLButtonElement => {
@@ -91,11 +96,29 @@ describe('CollapsibleSection — le titre est un geste', () => {
 
     await mounter.click(bascule(host));
     expect(bascule(host).getAttribute('aria-expanded')).toBe('false');
+    await finFondu();
     expect(host.querySelector('[data-contenu]')).toBe(null);
 
     await mounter.click(bascule(host));
     expect(bascule(host).getAttribute('aria-expanded')).toBe('true');
     expect(host.querySelector('[data-contenu]')).not.toBe(null);
+  });
+
+  test('le contenu replié SORT en fondu, inerte, avant d’être démonté ; le chevron tourne au fondu de K13 (#18327)', async () => {
+    const host = await mounter.mount(
+      <CollapsibleSection id="s" title="Conversations">
+        <p data-contenu>ce qu’on vient voir</p>
+      </CollapsibleSection>,
+    );
+    const chevron = bascule(host).querySelector<HTMLElement>('svg');
+    expect(chevron?.style.transition).toContain(`${LAYER_MOTION_MS}ms`);
+
+    await mounter.click(bascule(host));
+    const sortant = host.querySelector('[data-contenu]')?.closest('[data-layer-motion]');
+    expect(sortant?.hasAttribute('data-leaving')).toBe(true);
+    expect(sortant?.hasAttribute('inert')).toBe(true);
+    await finFondu();
+    expect(host.querySelector('[data-contenu]')).toBe(null);
   });
 
   test('SE PLIE ET SE DÉPLIE AU CLAVIER — Entrée puis Espace', async () => {

@@ -4,6 +4,7 @@ import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engage
 
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
+import { useLayerPresence } from '@/lib/view/layer-presence';
 import { useMinute } from '@/lib/view/use-minute';
 import { Link } from '@/routes/route-table';
 
@@ -58,6 +59,7 @@ export function EngagementPill({
 }) {
   const minute = useMinute();
   const [cardOpen, setCardOpen] = useState(false);
+  const card = useLayerPresence(cardOpen ? true : null);
   const cardId = useId();
   const interfaceLanguage = language ?? currentInterfaceLanguage();
   const today = localDayOf(now === undefined ? minute * 60_000 : now());
@@ -99,10 +101,11 @@ export function EngagementPill({
         >
           <span className={className}>{body}</span>
         </button>
-        {cardOpen ? (
+        {card.value !== null ? (
           <Suspense fallback={null}>
             <FlameCard
               id={cardId}
+              leaving={card.leaving}
               snapshot={snapshot}
               day={today}
               language={interfaceLanguage}
