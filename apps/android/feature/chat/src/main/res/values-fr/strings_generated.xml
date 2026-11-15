@@ -392,6 +392,11 @@
     <string name="export_card_aspect_portrait">Portrait</string>
     <string name="export_card_aspect_square">Carré</string>
     <string name="export_card_aspect_story">Story</string>
+    <string name="export_card_backdrop_change">Changer le fond</string>
+    <string name="export_card_backdrop_failed">Impossible d’utiliser ce fond</string>
+    <string name="export_card_backdrop_pick">Photo ou vidéo en fond</string>
+    <string name="export_card_backdrop_remove">Retirer le fond</string>
+    <string name="export_card_backdrop_veil">Voile</string>
     <string name="export_card_cancel">Annuler</string>
     <string name="export_card_decor_center">Centré</string>
     <string name="export_card_decor_frame_border">Cadre</string>
@@ -427,6 +432,9 @@
     <string name="export_card_option_handles">Pseudo au lieu du nom</string>
     <string name="export_card_option_times">Heures des messages</string>
     <string name="export_card_option_title">Titre de la conversation</string>
+    <string name="export_card_output_image">Image</string>
+    <string name="export_card_output_label">Enregistrer en</string>
+    <string name="export_card_output_video">Vidéo</string>
     <string name="export_card_part_background">Fond</string>
     <string name="export_card_part_header">En-tête</string>
     <string name="export_card_part_link">Liaison</string>
@@ -435,6 +443,9 @@
     <string name="export_card_random">Au hasard</string>
     <string name="export_card_rendering">Préparation de l’image…</string>
     <string name="export_card_save">Enregistrer</string>
+    <string name="export_card_scroll_duration">Durée de la vidéo</string>
+    <string name="export_card_scroll_speed">Vitesse du défilement</string>
+    <string name="export_card_scroll_title">Vidéo qui défile</string>
     <string name="export_card_share">Partager</string>
     <string name="export_card_tab_details">Détails</string>
     <string name="export_card_tab_format">Format</string>

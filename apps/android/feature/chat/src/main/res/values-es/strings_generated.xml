@@ -392,6 +392,11 @@
     <string name="export_card_aspect_portrait">Vertical</string>
     <string name="export_card_aspect_square">Cuadrado</string>
     <string name="export_card_aspect_story">Historia</string>
+    <string name="export_card_backdrop_change">Cambiar el fondo</string>
+    <string name="export_card_backdrop_failed">No se puede usar este fondo</string>
+    <string name="export_card_backdrop_pick">Foto o vídeo de fondo</string>
+    <string name="export_card_backdrop_remove">Quitar el fondo</string>
+    <string name="export_card_backdrop_veil">Velo</string>
     <string name="export_card_cancel">Cancelar</string>
     <string name="export_card_decor_center">Centrado</string>
     <string name="export_card_decor_frame_border">Marco</string>
@@ -427,6 +432,9 @@
     <string name="export_card_option_handles">Usuario en lugar del nombre</string>
     <string name="export_card_option_times">Horas de los mensajes</string>
     <string name="export_card_option_title">Título de la conversación</string>
+    <string name="export_card_output_image">Imagen</string>
+    <string name="export_card_output_label">Guardar como</string>
+    <string name="export_card_output_video">Vídeo</string>
     <string name="export_card_part_background">Fondo</string>
     <string name="export_card_part_header">Encabezado</string>
     <string name="export_card_part_link">Enlace</string>
@@ -435,6 +443,9 @@
     <string name="export_card_random">Al azar</string>
     <string name="export_card_rendering">Preparando la imagen…</string>
     <string name="export_card_save">Guardar</string>
+    <string name="export_card_scroll_duration">Duración del vídeo</string>
+    <string name="export_card_scroll_speed">Velocidad de desplazamiento</string>
+    <string name="export_card_scroll_title">Vídeo con desplazamiento</string>
     <string name="export_card_share">Compartir</string>
     <string name="export_card_tab_details">Detalles</string>
     <string name="export_card_tab_format">Formato</string>

@@ -103,12 +103,31 @@ object CardRenderer {
         )
         val canvas = Canvas(bitmap)
         canvas.scale(scale.toFloat(), scale.toFloat())
-        val palette = input.template.palette.palette
-        paintBackground(canvas, layout, palette)
-        paintWatermark(canvas, layout, palette, fonts)
-        val painter = OpPainter(fonts, palette, pictures)
-        layout.ops.forEach { painter.paint(canvas, it) }
+        paint(canvas, layout, input, fonts, pictures, offset = null)
         return bitmap
+    }
+
+    /**
+     * Une image de la carte : le fond, le fond choisi et le cadre restent sous la fenêtre ; le filigrane passe au-dessus
+     * d'eux ; le contenu, décalé de [offset] quand la carte défile (#18671), ne peint que ce que la fenêtre montre.
+     * [offset] `null` : la carte entière.
+     */
+    internal fun paint(canvas: Canvas, layout: CardLayout, input: CardInput, fonts: Fonts, pictures: Map<String, Bitmap>, offset: Double?) {
+        val palette = input.template.palette.palette
+        val window = if (offset == null) layout else layout.copy(height = layout.viewportHeight ?: layout.height)
+        paintBackground(canvas, window, palette)
+        val painter = OpPainter(fonts, palette, pictures)
+        layout.backdrop.forEach { painter.paint(canvas, it) }
+        paintWatermark(canvas, window, palette, fonts)
+        if (offset == null) {
+            layout.ops.forEach { painter.paint(canvas, it) }
+            return
+        }
+        canvas.save()
+        canvas.clipRect(0f, 0f, window.width.toFloat(), window.height.toFloat())
+        canvas.translate(0f, -offset.toFloat())
+        layout.opsBetween(offset, offset + window.height).forEach { painter.paint(canvas, it) }
+        canvas.restore()
     }
 
     private fun paintBackground(canvas: Canvas, layout: CardLayout, palette: CardPalette) {

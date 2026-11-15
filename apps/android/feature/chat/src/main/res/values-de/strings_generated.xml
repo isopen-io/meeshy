@@ -386,6 +386,11 @@
     <string name="export_card_aspect_portrait">Hochformat</string>
     <string name="export_card_aspect_square">Quadrat</string>
     <string name="export_card_aspect_story">Story</string>
+    <string name="export_card_backdrop_change">Hintergrund ändern</string>
+    <string name="export_card_backdrop_failed">Dieser Hintergrund kann nicht verwendet werden</string>
+    <string name="export_card_backdrop_pick">Foto oder Video als Hintergrund</string>
+    <string name="export_card_backdrop_remove">Hintergrund entfernen</string>
+    <string name="export_card_backdrop_veil">Schleier</string>
     <string name="export_card_cancel">Abbrechen</string>
     <string name="export_card_decor_center">Zentriert</string>
     <string name="export_card_decor_frame_border">Rahmen</string>
@@ -421,6 +426,9 @@
     <string name="export_card_option_handles">Benutzername statt Name</string>
     <string name="export_card_option_times">Uhrzeiten der Nachrichten</string>
     <string name="export_card_option_title">Titel der Unterhaltung</string>
+    <string name="export_card_output_image">Bild</string>
+    <string name="export_card_output_label">Speichern als</string>
+    <string name="export_card_output_video">Video</string>
     <string name="export_card_part_background">Hintergrund</string>
     <string name="export_card_part_header">Kopfzeile</string>
     <string name="export_card_part_link">Verbindung</string>
@@ -429,6 +437,9 @@
     <string name="export_card_random">Zufällig</string>
     <string name="export_card_rendering">Bild wird vorbereitet…</string>
     <string name="export_card_save">Speichern</string>
+    <string name="export_card_scroll_duration">Videolänge</string>
+    <string name="export_card_scroll_speed">Laufgeschwindigkeit</string>
+    <string name="export_card_scroll_title">Laufendes Video</string>
     <string name="export_card_share">Teilen</string>
     <string name="export_card_tab_details">Details</string>
     <string name="export_card_tab_format">Format</string>

@@ -71,6 +71,8 @@ internal class CardTrayActions(
     val onLanguage: (String?) -> Unit,
     val onGallery: () -> Unit,
     val onHaptic: () -> Unit,
+    /** Le fond choisi, sous les palettes (#18672). */
+    val backdrop: @Composable () -> Unit = {},
 )
 
 /**
@@ -159,12 +161,15 @@ private fun Panel(tab: CardTab, state: CardTrayState, actions: CardTrayActions) 
             }
         }
         CardTab.FRAME -> FramePanel(state, ::change)
-        CardTab.PALETTE -> LazyRowOf {
-            CardPaletteId.entries.forEach { id ->
-                CardTile(id.palette.name, id == format.template.palette, { change(format.copy(template = format.template.with(palette = id))) }) {
-                    CardSwatch(id.palette, Modifier.size(40.dp))
+        CardTab.PALETTE -> Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+            LazyRowOf {
+                CardPaletteId.entries.forEach { id ->
+                    CardTile(id.palette.name, id == format.template.palette, { change(format.copy(template = format.template.with(palette = id))) }) {
+                        CardSwatch(id.palette, Modifier.size(40.dp))
+                    }
                 }
             }
+            actions.backdrop()
         }
         CardTab.TYPEFACE -> TypefacePanel(state, ::change)
         CardTab.LINK -> LazyRowOf {

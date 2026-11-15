@@ -5,7 +5,8 @@ import kotlin.math.abs
 /**
  * LE DÉCOR D'UNE MAQUETTE, POSÉ SUR LA CARTE (#18673) — miroir de `MessageCardDecorator` (iOS).
  * Après la mise en page commune, sans la refaire : le texte se centre, un cadre ou un panneau
- * entoure le contenu, un ornement le signe. Tout est peint SOUS le contenu.
+ * entoure le contenu, un ornement le signe. Tout est peint SOUS le contenu ; le cadre, qui dépend du
+ * FORMAT, reste fixe sous la fenêtre d'une carte qui défile, le panneau et l'ornement suivent le texte.
  */
 class CardDecorator(private val input: CardInput) {
 
@@ -19,7 +20,8 @@ class CardDecorator(private val input: CardInput) {
         val quote = layout.regions.firstOrNull { it.part == CardPartId.QUOTE }
         val content = if (decor.alignment == CardDecor.Alignment.CENTER) layout.ops.mapNotNull { centered(it, centerX, quote) } else layout.ops
         val behind = tilted(panelOps(decor.frame, bounds, layout.width) + ornamentOps(decor, bounds, centerX), bounds, layout.width)
-        return layout.copy(ops = frameOps(decor.frame, layout.width, layout.height) + behind + content)
+        val framed = frameOps(decor.frame, layout.width, layout.viewportHeight ?: layout.height)
+        return layout.copy(backdrop = layout.backdrop + framed, ops = behind + content)
     }
 
     /**

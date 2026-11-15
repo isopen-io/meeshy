@@ -386,6 +386,11 @@
     <string name="export_card_aspect_portrait">Portrait</string>
     <string name="export_card_aspect_square">Square</string>
     <string name="export_card_aspect_story">Story</string>
+    <string name="export_card_backdrop_change">Change background</string>
+    <string name="export_card_backdrop_failed">This background can’t be used</string>
+    <string name="export_card_backdrop_pick">Photo or video background</string>
+    <string name="export_card_backdrop_remove">Remove background</string>
+    <string name="export_card_backdrop_veil">Veil</string>
     <string name="export_card_cancel">Cancel</string>
     <string name="export_card_decor_center">Centered</string>
     <string name="export_card_decor_frame_border">Frame</string>
@@ -421,6 +426,9 @@
     <string name="export_card_option_handles">Username instead of name</string>
     <string name="export_card_option_times">Message times</string>
     <string name="export_card_option_title">Conversation title</string>
+    <string name="export_card_output_image">Image</string>
+    <string name="export_card_output_label">Save as</string>
+    <string name="export_card_output_video">Video</string>
     <string name="export_card_part_background">Background</string>
     <string name="export_card_part_header">Header</string>
     <string name="export_card_part_link">Link</string>
@@ -429,6 +437,9 @@
     <string name="export_card_random">Surprise me</string>
     <string name="export_card_rendering">Preparing image…</string>
     <string name="export_card_save">Save</string>
+    <string name="export_card_scroll_duration">Video length</string>
+    <string name="export_card_scroll_speed">Scroll speed</string>
+    <string name="export_card_scroll_title">Scrolling video</string>
     <string name="export_card_share">Share</string>
     <string name="export_card_tab_details">Details</string>
     <string name="export_card_tab_format">Format</string>

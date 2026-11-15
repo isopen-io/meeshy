@@ -155,11 +155,11 @@ private fun CardExportSheet(
     val thumbnails = remember { CardThumbnailStore() }
     DisposableEffect(thumbnails) { onDispose { thumbnails.clear() } }
     val permissions = rememberPermissionFlow()
-    val thumbs = remember(state.format.copy(template = CardTemplates.defaultId), state.exportLanguage, subject, state.pictures) {
+    val thumbs = remember(state.format.copy(template = CardTemplates.defaultId), state.exportLanguage, subject, state.painted, state.backdrop) {
         state.thumbSource(thumbnails, subject)
     }
     val neutralModel = CardModels.model(CardModels.DEFAULT_ID)?.applied(state.format) ?: state.format
-    val modelThumbs = remember(neutralModel, state.exportLanguage, subject, state.pictures) {
+    val modelThumbs = remember(neutralModel, state.exportLanguage, subject, state.painted, state.backdrop) {
         state.modelThumbSource(thumbnails, subject)
     }
     val haptic = LocalHapticFeedback.current
@@ -180,6 +180,7 @@ private fun CardExportSheet(
             Stage(state, Modifier.weight(1f), haptic)
             Notice(state)
             CardExportTray(trayState(state, subject, modelThumbs), trayActions(state, haptic))
+            CardVideoRow(state) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
             ActionRow(state, subject, permissions, announcer, onDismiss, haptic)
         }
         PermissionFlowHost(permissions)
@@ -208,13 +209,17 @@ private fun trayState(state: CardExportState, subject: CardSubject, modelThumbs:
     languages = state.languages, exportLanguage = state.exportLanguage, modelThumbs = modelThumbs,
 )
 
-private fun trayActions(state: CardExportState, haptic: HapticFeedback) = CardTrayActions(
-    onTab = state::openTab,
-    onFormat = { state.format = it },
-    onLanguage = { state.exportLanguage = it },
-    onGallery = { state.galleryOpen = true },
-    onHaptic = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
-)
+private fun trayActions(state: CardExportState, haptic: HapticFeedback): CardTrayActions {
+    val onHaptic = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+    return CardTrayActions(
+        onTab = state::openTab,
+        onFormat = { state.format = it },
+        onLanguage = { state.exportLanguage = it },
+        onGallery = { state.galleryOpen = true },
+        onHaptic = onHaptic,
+        backdrop = { CardBackdropRow(state, onHaptic) },
+    )
+}
 
 @Composable
 private fun Header(state: CardExportState, haptic: HapticFeedback, announcer: ExportAnnouncer, onClose: () -> Unit) {
@@ -299,8 +304,14 @@ private fun ActionRow(
         state.busy = true
         state.outcome = null
         val input = state.inputFor(state.format, subject)
-        scope.launch { finish(if (output(input).isSuccess) done else CardOutcome.FAILED) }
+        scope.launch {
+            val result = output(input)
+            state.progress = null
+            finish(if (result.isSuccess) done else CardOutcome.FAILED)
+        }
     }
+    val asVideo = state.video && state.scrollPlan != null
+    val onProgress: (Double) -> Unit = { done -> scope.launch { state.progress = done } }
     val enabled = state.ready && !state.busy && !state.preparing
     Row(Modifier.fillMaxWidth().padding(bottom = MeeshySpacing.md), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
         Button(
@@ -308,7 +319,10 @@ private fun ActionRow(
                 state.busy = true
                 scope.launch {
                     if (permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = false)) {
-                        run({ CardOutput.saveToGallery(context, it, state.pictures) }, CardOutcome.GALLERY)
+                        run({
+                            if (asVideo) CardVideoOutput.saveToGallery(context, it, state.speed, state.painted, onProgress)
+                            else CardOutput.saveToGallery(context, it, state.painted)
+                        }, CardOutcome.GALLERY)
                     } else {
                         finish(CardOutcome.DENIED)
                     }
@@ -321,7 +335,12 @@ private fun ActionRow(
             Text(stringResource(R.string.export_card_save), modifier = Modifier.padding(start = MeeshySpacing.sm), fontWeight = FontWeight.SemiBold)
         }
         FilledTonalButton(
-            onClick = { run({ CardOutput.share(context, it, shareTitle, state.pictures) }, CardOutcome.SHARED) },
+            onClick = {
+                run({
+                    if (asVideo) CardVideoOutput.share(context, it, state.speed, shareTitle, state.painted, onProgress)
+                    else CardOutput.share(context, it, shareTitle, state.painted)
+                }, CardOutcome.SHARED)
+            },
             enabled = enabled, modifier = Modifier.weight(1f).height(50.dp), shape = CircleShape,
         ) {
             Icon(MeeshyIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp))

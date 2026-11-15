@@ -410,6 +410,11 @@
     <string name="export_card_aspect_portrait">عمودي</string>
     <string name="export_card_aspect_square">مربّع</string>
     <string name="export_card_aspect_story">قصة</string>
+    <string name="export_card_backdrop_change">تغيير الخلفية</string>
+    <string name="export_card_backdrop_failed">تعذّر استخدام هذه الخلفية</string>
+    <string name="export_card_backdrop_pick">صورة أو فيديو كخلفية</string>
+    <string name="export_card_backdrop_remove">إزالة الخلفية</string>
+    <string name="export_card_backdrop_veil">الغشاء</string>
     <string name="export_card_cancel">إلغاء</string>
     <string name="export_card_decor_center">في المنتصف</string>
     <string name="export_card_decor_frame_border">إطار</string>
@@ -445,6 +450,9 @@
     <string name="export_card_option_handles">اسم المستخدم بدل الاسم</string>
     <string name="export_card_option_times">أوقات الرسائل</string>
     <string name="export_card_option_title">عنوان المحادثة</string>
+    <string name="export_card_output_image">صورة</string>
+    <string name="export_card_output_label">حفظ بصيغة</string>
+    <string name="export_card_output_video">فيديو</string>
     <string name="export_card_part_background">الخلفية</string>
     <string name="export_card_part_header">الترويسة</string>
     <string name="export_card_part_link">الربط</string>
@@ -453,6 +461,9 @@
     <string name="export_card_random">عشوائي</string>
     <string name="export_card_rendering">جارٍ تجهيز الصورة…</string>
     <string name="export_card_save">حفظ</string>
+    <string name="export_card_scroll_duration">مدة الفيديو</string>
+    <string name="export_card_scroll_speed">سرعة التمرير</string>
+    <string name="export_card_scroll_title">فيديو متحرك النص</string>
     <string name="export_card_share">مشاركة</string>
     <string name="export_card_tab_details">التفاصيل</string>
     <string name="export_card_tab_format">الصيغة</string>

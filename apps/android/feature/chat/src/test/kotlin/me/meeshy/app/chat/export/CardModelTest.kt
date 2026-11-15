@@ -109,7 +109,7 @@ class CardModelTest {
     @Test
     fun `a border frames the whole card behind the content`() {
         val card = decorated(input(CardDecor(frame = CardDecor.Frame.BORDER)))
-        val edges = card.ops.take(4).filterIsInstance<CardOp.Bar>()
+        val edges = card.backdrop.filterIsInstance<CardOp.Bar>()
         assertThat(edges).hasSize(4)
         assertThat(edges.first().x).isEqualTo(CardDecorator.BORDER_INSET)
         assertThat(edges.first().width).isEqualTo(card.width - 2 * CardDecorator.BORDER_INSET)

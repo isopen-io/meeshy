@@ -56,6 +56,10 @@ data class CardInput(
     val hero: CardMedia? = null,
     /** Le décor de la maquette, posé après la mise en page commune ([CardDecorator]). */
     val decor: CardDecor = CardDecor.NONE,
+    /** Une carte SANS PLAFOND (#18671) : le texte garde sa taille, la vidéo le fait défiler sous la fenêtre du format. */
+    val unbounded: Boolean = false,
+    /** Le fond choisi (#18672) — sinon le dégradé de la palette. */
+    val backdrop: CardBackdrop? = null,
 ) {
     companion object {
         /**
@@ -108,6 +112,10 @@ data class CardLayout(
     val watermark: String,
     /** Vrai quand, au plancher des polices, un texte a dû être coupé. */
     val truncated: Boolean,
+    /** Ce qui reste FIXE sous la fenêtre quand la carte défile : le fond choisi, le cadre. */
+    val backdrop: List<CardOp> = emptyList(),
+    /** La hauteur de la fenêtre d'une carte sans plafond — `null` : la carte entière est l'image. */
+    val viewportHeight: Double? = null,
 ) {
     /**
      * La même carte, LISIBLE à petite échelle : les traits, filets et points sont portés à
@@ -145,6 +153,8 @@ data class CardLayout(
         const val CARD_WIDTH = 1080.0
         const val MIN_HEIGHT = 1080.0
         const val MAX_HEIGHT = 1920.0
+        /** La plus haute carte qu'on fait défiler. */
+        const val SCROLL_MAX_HEIGHT = 40_000.0
 
         /** « Meeshy @pseudo » — le pseudo sans son éventuel « @ », la marque seule quand il manque. */
         fun watermark(handle: String?): String {
