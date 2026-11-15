@@ -280,6 +280,10 @@
     <string name="kit_anchored_sheet_height_expanded">agrandie</string>
     <string name="kit_anchored_sheet_height_reduced">réduite</string>
     <string name="kit_color_dots_position">Couleur %1$s sur %2$s</string>
+    <string name="kit_field_busy">En cours</string>
+    <string name="kit_field_clear">Effacer</string>
+    <string name="kit_field_count">%1$s caractères sur %2$s</string>
+    <string name="kit_field_limit_reached">Limite de caractères atteinte</string>
     <string name="kit_progress_ring_busy">En cours</string>
     <string name="language_strip_more">Autres langues</string>
     <string name="lentille_mode_menu_selected">sélectionné</string>
