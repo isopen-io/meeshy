@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -53,13 +54,15 @@ internal class CardTrayState(
     val tabs: List<CardTab>,
     val focus: CardPartId?,
     val format: CardFormat,
-    val popular: List<CardTemplateId>,
+    val models: List<CardModel>,
+    /** Les liaisons de la maquette choisie — toutes sans maquette. */
+    val links: List<CardLinkId>,
     val hasQuote: Boolean,
     val hasTitle: Boolean,
     val hasHandles: Boolean,
     val languages: List<CardLanguage>,
     val exportLanguage: String?,
-    val thumbs: CardThumbSource,
+    val modelThumbs: CardModelThumbSource,
 )
 
 internal class CardTrayActions(
@@ -141,12 +144,13 @@ private fun Panel(tab: CardTab, state: CardTrayState, actions: CardTrayActions) 
     val format = state.format
     fun change(next: CardFormat) { actions.onHaptic(); actions.onFormat(next) }
     when (tab) {
-        CardTab.STYLES -> LazyRowOf {
-            state.popular.forEach { id ->
-                CardThumb(id, state.thumbs, id == format.template, 72.dp, { change(format.copy(template = id)) })
-            }
-            AllStylesTile(actions)
-        }
+        CardTab.STYLES -> CardModelRow(
+            models = state.models,
+            selectedId = format.model,
+            source = state.modelThumbs,
+            onPick = { model -> change(model.applied(format)) },
+            onCombinations = { actions.onHaptic(); actions.onGallery() },
+        )
         CardTab.FORMAT -> LazyRowOf {
             CardAspect.entries.forEach { aspect ->
                 CardTile(CardLabels.aspect(aspect), aspect == format.aspect, { change(format.copy(aspect = aspect)) }) {
@@ -164,7 +168,7 @@ private fun Panel(tab: CardTab, state: CardTrayState, actions: CardTrayActions) 
         }
         CardTab.TYPEFACE -> TypefacePanel(state, ::change)
         CardTab.LINK -> LazyRowOf {
-            CardLinkId.entries.forEach { id ->
+            state.links.forEach { id ->
                 CardTile(CardLabels.link(id), id == format.template.link, { change(format.copy(template = format.template.with(link = id))) }) {
                     Text(linkGlyph(id), color = MeeshyTheme.tokens.textPrimary, style = MaterialTheme.typography.titleLarge)
                 }
@@ -189,35 +193,41 @@ private fun Panel(tab: CardTab, state: CardTrayState, actions: CardTrayActions) 
 }
 
 @Composable
-private fun AllStylesTile(actions: CardTrayActions) {
-    val tokens = MeeshyTheme.tokens
-    Column(
-        modifier = Modifier
-            .size(72.dp, 76.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(tokens.controlFill)
-            .semantics { role = Role.Button }
-            .clickable { actions.onHaptic(); actions.onGallery() },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("${CardTemplates.all.size}", color = tokens.textPrimary, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-        Text(stringResource(R.string.export_card_gallery_open), color = tokens.textSecondary, style = MaterialTheme.typography.labelSmall)
+private fun FramePanel(state: CardTrayState, change: (CardFormat) -> Unit) {
+    val format = state.format
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+        LazyRowOf {
+            format.frameToggles(state.hasHandles).forEach { toggle ->
+                CardPill(CardLabels.toggle(toggle), format[toggle], { change(format.with(toggle, !format[toggle])) })
+            }
+            CardAuthorPlacement.entries.forEach { placement ->
+                CardPill(CardLabels.placement(placement), placement == format.authorPlacement, { change(format.copy(authorPlacement = placement)) })
+            }
+            CardTilt.entries.forEach { tilt ->
+                CardPill(CardLabels.tilt(tilt), tilt == format.tilt, { change(format.copy(tilt = tilt)) })
+            }
+        }
+        DecorRow(format, change)
     }
 }
 
+/** Le décor (#18673) : centrer, encadrer, signer — les mêmes briques qu'une maquette combine. */
 @Composable
-private fun FramePanel(state: CardTrayState, change: (CardFormat) -> Unit) {
-    val format = state.format
-    LazyRowOf {
-        format.frameToggles(state.hasHandles).forEach { toggle ->
-            CardPill(CardLabels.toggle(toggle), format[toggle], { change(format.with(toggle, !format[toggle])) })
-        }
-        CardAuthorPlacement.entries.forEach { placement ->
-            CardPill(CardLabels.placement(placement), placement == format.authorPlacement, { change(format.copy(authorPlacement = placement)) })
-        }
-        CardTilt.entries.forEach { tilt ->
-            CardPill(CardLabels.tilt(tilt), tilt == format.tilt, { change(format.copy(tilt = tilt)) })
+private fun DecorRow(format: CardFormat, change: (CardFormat) -> Unit) {
+    val decor = format.decor
+    val label = stringResource(R.string.export_card_decor_label)
+    Box(Modifier.semantics { contentDescription = label }) {
+        LazyRowOf {
+            CardPill(stringResource(R.string.export_card_decor_center), decor.alignment == CardDecor.Alignment.CENTER, {
+                val next = if (decor.alignment == CardDecor.Alignment.CENTER) CardDecor.Alignment.START else CardDecor.Alignment.CENTER
+                change(format.copy(decor = decor.copy(alignment = next)))
+            })
+            CardDecor.Frame.entries.forEach { frame ->
+                CardPill(CardLabels.frame(frame), frame == decor.frame, { change(format.copy(decor = decor.copy(frame = frame))) })
+            }
+            CardDecor.Ornament.entries.forEach { ornament ->
+                CardPill(CardLabels.ornament(ornament), ornament == decor.ornament, { change(format.copy(decor = decor.copy(ornament = ornament))) })
+            }
         }
     }
 }

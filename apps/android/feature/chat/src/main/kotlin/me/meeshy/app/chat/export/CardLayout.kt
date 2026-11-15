@@ -54,6 +54,8 @@ data class CardInput(
     val media: List<CardMedia> = emptyList(),
     /** Le visuel du support, pleine largeur avant tout texte ([CardHero]). */
     val hero: CardMedia? = null,
+    /** Le décor de la maquette, posé après la mise en page commune ([CardDecorator]). */
+    val decor: CardDecor = CardDecor.NONE,
 ) {
     companion object {
         /**
@@ -91,6 +93,7 @@ data class CardInput(
                 replyTime = if (format.showTimes) formatTime(subject.sentAtMillis) else null,
                 media = subject.media,
                 hero = subject.hero,
+                decor = format.decor,
             )
         }
     }

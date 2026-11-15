@@ -387,6 +387,14 @@
     <string name="export_card_aspect_square">Square</string>
     <string name="export_card_aspect_story">Story</string>
     <string name="export_card_cancel">Cancel</string>
+    <string name="export_card_decor_center">Centered</string>
+    <string name="export_card_decor_frame_border">Frame</string>
+    <string name="export_card_decor_frame_none">No frame</string>
+    <string name="export_card_decor_frame_panel">Panel</string>
+    <string name="export_card_decor_label">Decoration</string>
+    <string name="export_card_decor_ornament_accentRule">Accent line</string>
+    <string name="export_card_decor_ornament_none">No ornament</string>
+    <string name="export_card_decor_ornament_quoteMark">Quote mark</string>
     <string name="export_card_default_current">Default format</string>
     <string name="export_card_default_save">Use as default format</string>
     <string name="export_card_gallery_close">Close the gallery</string>
@@ -403,6 +411,7 @@
     <string name="export_card_link_guillemets">Quotes</string>
     <string name="export_card_link_orbite">Orbit</string>
     <string name="export_card_link_silence">Silence</string>
+    <string name="export_card_models_combinations">Combinations</string>
     <string name="export_card_names_above">Names above</string>
     <string name="export_card_names_after">Names at the end</string>
     <string name="export_card_option_anonymizeQuoted">Anonymize quoted message</string>

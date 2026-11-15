@@ -411,6 +411,14 @@
     <string name="export_card_aspect_square">مربّع</string>
     <string name="export_card_aspect_story">قصة</string>
     <string name="export_card_cancel">إلغاء</string>
+    <string name="export_card_decor_center">في المنتصف</string>
+    <string name="export_card_decor_frame_border">إطار</string>
+    <string name="export_card_decor_frame_none">بدون إطار</string>
+    <string name="export_card_decor_frame_panel">لوحة</string>
+    <string name="export_card_decor_label">زخرفة</string>
+    <string name="export_card_decor_ornament_accentRule">خط</string>
+    <string name="export_card_decor_ornament_none">بدون زخرفة</string>
+    <string name="export_card_decor_ornament_quoteMark">علامة اقتباس</string>
     <string name="export_card_default_current">التنسيق الافتراضي</string>
     <string name="export_card_default_save">استخدام كتنسيق افتراضي</string>
     <string name="export_card_gallery_close">إغلاق المعرض</string>
@@ -427,6 +435,7 @@
     <string name="export_card_link_guillemets">علامات اقتباس</string>
     <string name="export_card_link_orbite">مدار</string>
     <string name="export_card_link_silence">صمت</string>
+    <string name="export_card_models_combinations">تركيبات</string>
     <string name="export_card_names_above">الأسماء في الأعلى</string>
     <string name="export_card_names_after">الأسماء في النهاية</string>
     <string name="export_card_option_anonymizeQuoted">إخفاء هوية كاتب الرسالة المقتبسة</string>

@@ -75,7 +75,8 @@ object CardRenderer {
         val measure: CardMeasure = { text, font -> paint(font).measureText(text).toDouble() }
     }
 
-    fun layout(input: CardInput, fonts: Fonts = Fonts()): CardLayout = CardLayoutEngine.layout(input, fonts.measure)
+    fun layout(input: CardInput, fonts: Fonts = Fonts()): CardLayout =
+        CardDecorator(input).decorated(CardLayoutEngine.layout(input, fonts.measure))
 
     /**
      * L'aperçu et l'export : la carte peinte à [targetWidth] pixels de large (la taille de la carte si `null`). [pictures] porte

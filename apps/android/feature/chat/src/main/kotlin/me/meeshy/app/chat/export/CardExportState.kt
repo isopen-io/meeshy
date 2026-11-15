@@ -122,6 +122,18 @@ internal class CardExportState(
         )
     }
 
+    /** Les maquettes : chacune peinte sur le message courant, habillée de ce qu'elle impose (#18673). */
+    fun modelThumbSource(store: CardThumbnailStore, subject: CardSubject): CardModelThumbSource {
+        val neutral = (CardModels.model(CardModels.DEFAULT_ID)?.applied(format) ?: format).serialized
+        val shown = pictures
+        return CardModelThumbSource(
+            store = store,
+            keyOf = { model -> "model:${model.id}|$neutral|${exportLanguage.orEmpty()}|${shown.keys.sorted().joinToString(",")}" },
+            inputOf = { model -> inputFor(model.applied(format), subject) },
+            pictures = shown,
+        )
+    }
+
     companion object {
         const val PREVIEW_WIDTH = 720
     }

@@ -387,6 +387,14 @@
     <string name="export_card_aspect_square">Quadrat</string>
     <string name="export_card_aspect_story">Story</string>
     <string name="export_card_cancel">Abbrechen</string>
+    <string name="export_card_decor_center">Zentriert</string>
+    <string name="export_card_decor_frame_border">Rahmen</string>
+    <string name="export_card_decor_frame_none">Ohne Rahmen</string>
+    <string name="export_card_decor_frame_panel">Feld</string>
+    <string name="export_card_decor_label">Dekor</string>
+    <string name="export_card_decor_ornament_accentRule">Akzentlinie</string>
+    <string name="export_card_decor_ornament_none">Ohne Verzierung</string>
+    <string name="export_card_decor_ornament_quoteMark">Anführungszeichen</string>
     <string name="export_card_default_current">Standardformat</string>
     <string name="export_card_default_save">Als Standardformat verwenden</string>
     <string name="export_card_gallery_close">Galerie schließen</string>
@@ -403,6 +411,7 @@
     <string name="export_card_link_guillemets">Anführungszeichen</string>
     <string name="export_card_link_orbite">Orbit</string>
     <string name="export_card_link_silence">Stille</string>
+    <string name="export_card_models_combinations">Kombinationen</string>
     <string name="export_card_names_above">Namen oben</string>
     <string name="export_card_names_after">Namen am Ende</string>
     <string name="export_card_option_anonymizeQuoted">Zitierte Nachricht anonymisieren</string>

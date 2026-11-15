@@ -393,6 +393,14 @@
     <string name="export_card_aspect_square">Quadrato</string>
     <string name="export_card_aspect_story">Storia</string>
     <string name="export_card_cancel">Annulla</string>
+    <string name="export_card_decor_center">Centrato</string>
+    <string name="export_card_decor_frame_border">Cornice</string>
+    <string name="export_card_decor_frame_none">Senza cornice</string>
+    <string name="export_card_decor_frame_panel">Pannello</string>
+    <string name="export_card_decor_label">Decorazione</string>
+    <string name="export_card_decor_ornament_accentRule">Linea</string>
+    <string name="export_card_decor_ornament_none">Senza ornamento</string>
+    <string name="export_card_decor_ornament_quoteMark">Virgolette</string>
     <string name="export_card_default_current">Formato predefinito</string>
     <string name="export_card_default_save">Usa come formato predefinito</string>
     <string name="export_card_gallery_close">Chiudi la galleria</string>
@@ -409,6 +417,7 @@
     <string name="export_card_link_guillemets">Virgolette</string>
     <string name="export_card_link_orbite">Orbita</string>
     <string name="export_card_link_silence">Silenzio</string>
+    <string name="export_card_models_combinations">Combinazioni</string>
     <string name="export_card_names_above">Nomi sopra</string>
     <string name="export_card_names_after">Nomi alla fine</string>
     <string name="export_card_option_anonymizeQuoted">Anonimizza il messaggio citato</string>

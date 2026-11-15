@@ -393,6 +393,14 @@
     <string name="export_card_aspect_square">Carré</string>
     <string name="export_card_aspect_story">Story</string>
     <string name="export_card_cancel">Annuler</string>
+    <string name="export_card_decor_center">Centré</string>
+    <string name="export_card_decor_frame_border">Cadre</string>
+    <string name="export_card_decor_frame_none">Sans cadre</string>
+    <string name="export_card_decor_frame_panel">Panneau</string>
+    <string name="export_card_decor_label">Décor</string>
+    <string name="export_card_decor_ornament_accentRule">Trait</string>
+    <string name="export_card_decor_ornament_none">Sans ornement</string>
+    <string name="export_card_decor_ornament_quoteMark">Guillemet</string>
     <string name="export_card_default_current">Format par défaut</string>
     <string name="export_card_default_save">Utiliser comme format par défaut</string>
     <string name="export_card_gallery_close">Fermer la galerie</string>
@@ -409,6 +417,7 @@
     <string name="export_card_link_guillemets">Guillemets</string>
     <string name="export_card_link_orbite">Orbite</string>
     <string name="export_card_link_silence">Silence</string>
+    <string name="export_card_models_combinations">Combinaisons</string>
     <string name="export_card_names_above">Noms au-dessus</string>
     <string name="export_card_names_after">Noms à la fin</string>
     <string name="export_card_option_anonymizeQuoted">Anonymiser le message cité</string>

@@ -158,6 +158,10 @@ private fun CardExportSheet(
     val thumbs = remember(state.format.copy(template = CardTemplates.defaultId), state.exportLanguage, subject, state.pictures) {
         state.thumbSource(thumbnails, subject)
     }
+    val neutralModel = CardModels.model(CardModels.DEFAULT_ID)?.applied(state.format) ?: state.format
+    val modelThumbs = remember(neutralModel, state.exportLanguage, subject, state.pictures) {
+        state.modelThumbSource(thumbnails, subject)
+    }
     val haptic = LocalHapticFeedback.current
     // La fin d'un export s'annonce APRÈS la feuille, par l'annonceur de l'application : le bandeau du compositeur (#14557).
     val announcer = rememberExportAnnouncer()
@@ -175,7 +179,7 @@ private fun CardExportSheet(
             Header(state, haptic, sheetAnnouncer, onDismiss)
             Stage(state, Modifier.weight(1f), haptic)
             Notice(state)
-            CardExportTray(trayState(state, subject, thumbs), trayActions(state, haptic))
+            CardExportTray(trayState(state, subject, modelThumbs), trayActions(state, haptic))
             ActionRow(state, subject, permissions, announcer, onDismiss, haptic)
         }
         PermissionFlowHost(permissions)
@@ -186,17 +190,22 @@ private fun CardExportSheet(
             usage = state.usage,
             selected = state.format.template,
             source = thumbs,
-            onPick = { id -> state.format = state.format.copy(template = id); state.galleryOpen = false },
+            onPick = { id ->
+                val inModel = CardModels.model(state.format.model)?.accepts(id.link) == true
+                state.format = state.format.copy(template = id, model = state.format.model.takeIf { inModel })
+                state.galleryOpen = false
+            },
             onClose = { state.galleryOpen = false },
         )
     }
 }
 
-private fun trayState(state: CardExportState, subject: CardSubject, thumbs: CardThumbSource) = CardTrayState(
+private fun trayState(state: CardExportState, subject: CardSubject, modelThumbs: CardModelThumbSource) = CardTrayState(
     tab = state.tab, tabs = state.tabs, focus = state.focus, format = state.format,
-    popular = CardUsage.popular(state.usage, 8),
+    models = CardModels.builtIn,
+    links = CardModels.model(state.format.model)?.offeredLinks ?: CardLinkId.entries,
     hasQuote = subject.quoted != null, hasTitle = state.title != null, hasHandles = subject.hasHandles,
-    languages = state.languages, exportLanguage = state.exportLanguage, thumbs = thumbs,
+    languages = state.languages, exportLanguage = state.exportLanguage, modelThumbs = modelThumbs,
 )
 
 private fun trayActions(state: CardExportState, haptic: HapticFeedback) = CardTrayActions(
@@ -222,7 +231,9 @@ private fun Header(state: CardExportState, haptic: HapticFeedback, announcer: Ex
         )
         IconButton(onClick = {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            state.format = state.format.copy(template = CardTemplates.random())
+            val random = CardTemplates.random()
+            val link = CardModels.model(state.format.model)?.link ?: random.link
+            state.format = state.format.copy(template = random.with(link = link))
         }) {
             Icon(MeeshyIcons.Shuffle, contentDescription = stringResource(R.string.export_card_random), tint = tokens.textPrimary)
         }
