@@ -5,7 +5,7 @@ import { conversationEngagementForDay, type ConversationEngagementSnapshot } fro
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { compactCount } from '@/lib/view/compact-count';
 import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
-import { useLayerPresence } from '@/lib/view/layer-presence';
+import { useLayerPresence } from '@/lib/view/dialog-exit';
 import { useMinute } from '@/lib/view/use-minute';
 
 import { Glyph } from './glyph';

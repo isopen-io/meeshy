@@ -2,7 +2,7 @@ import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
-import { layerMotion, useLayerPresence } from '@/lib/view/layer-presence';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 import { mentionOptionId, type MentionField } from '@/lib/view/use-mention-field';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 

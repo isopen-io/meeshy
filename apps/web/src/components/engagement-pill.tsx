@@ -4,7 +4,7 @@ import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engage
 
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
-import { useLayerPresence } from '@/lib/view/layer-presence';
+import { useLayerPresence } from '@/lib/view/dialog-exit';
 import { useMinute } from '@/lib/view/use-minute';
 import { Link } from '@/routes/route-table';
 

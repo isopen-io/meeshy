@@ -8,7 +8,7 @@ import { isContextMenuKey } from '@/lib/view/long-press';
 import { initialDetent, peekSheetFrame, type PeekDetent, type PeekOrigin, type PeekSheetFrame } from '@/lib/view/peek-sheet';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
-import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import {

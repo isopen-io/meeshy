@@ -5,7 +5,7 @@ import { Glyph } from './glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
-import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { placePopover } from '@/lib/view/popover';
 import { findFocusableIndex, useRovingMenu } from '@/lib/view/roving-menu';
 

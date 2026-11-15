@@ -3,7 +3,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import { RAIL_TITLE_SLOT } from '@/components/rail-tile';
 import { StoryRail, type StoryRailProps } from '@/components/story-rail';
 import { HIDDEN_CHROME_EASE_OUT_MS } from '@/lib/reading-mode/metrics';
-import { layerMotion, useLayerPresence } from '@/lib/view/layer-presence';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 /**
  * **LA FENTE DU TITRE, OÙ LA BANDE ÉPINGLÉE PREND SA PLACE** — extraite de
@@ -92,7 +92,7 @@ export function RailTitleSlot({
       </h1>
       {band.value !== null ? (
         <div
-          {...layerMotion(band.leaving, { '--layer-ms': `${HIDDEN_CHROME_EASE_OUT_MS}ms`, '--layer-shift': '0 0' } as CSSProperties)}
+          {...layerMotion(band.leaving, { '--dialog-fade-ms': `${HIDDEN_CHROME_EASE_OUT_MS}ms`, '--layer-shift': '0 0' } as CSSProperties)}
           className="absolute inset-0 flex items-center"
           onFocusCapture={(e) => {
             const cible = e.target instanceof Element ? e.target.closest('[data-story-author]') : null;

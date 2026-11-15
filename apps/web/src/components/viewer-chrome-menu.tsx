@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
-import { layerMotion, useLayerPresence } from '@/lib/view/layer-presence';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 import { GlyphSvg } from './glyph';

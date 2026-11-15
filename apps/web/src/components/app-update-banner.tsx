@@ -6,7 +6,7 @@ import { appUpdateController, type RegistrationLike } from '@/lib/app-update/ser
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { layerMotion, useLayerPresence } from '@/lib/view/layer-presence';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 import { Glyph } from './glyph';
 

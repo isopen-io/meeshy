@@ -5,7 +5,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { SendQueue } from '@/lib/send/send-queue';
 import { sendQueue } from '@/lib/send/send-queue-instance';
 import { sendToastOf, type SendToast } from '@/lib/send/send-toast';
-import { layerMotion, useLayerPresence } from '@/lib/view/layer-presence';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 import { href, navigate } from '@/routes/route-table';
 
 import { BUTTON } from './ui-chrome';

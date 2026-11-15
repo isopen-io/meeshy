@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
-import '@/styles/layer-motion.css';
+import '@/styles/sheet-motion.css';
 
-import { DIALOG_FADE_MS } from './dialog-exit';
 import { prefersReducedMotion } from './reduced-motion';
 
 /**
@@ -11,13 +10,19 @@ import { prefersReducedMotion } from './reduced-motion';
  * paraissait en mouvement et partait d'un coup. Ici, la valeur qui la montait reste TENUE le temps du
  * fondu de sortie (`leaving`), puis s'en va ; rouverte pendant ce temps, la couche reprend sans remonter.
  *
- * Le mouvement lui-même est dans `styles/layer-motion.css`, posé par `layerMotion(leaving)` : un fondu
+ * Le mouvement lui-même est dans `styles/sheet-motion.css`, posé par `layerMotion(leaving)` : un fondu
  * avec un léger déplacement (`--layer-shift`, `--layer-scale`), à l'entrée comme à la sortie. Sous
  * « Réduire les animations », le retrait est immédiat et la feuille ne joue rien.
+ *
+ * Les écrans l'importent de `./dialog-exit`, qui le réexporte : une seule tranche pour la sortie des
+ * modales et celle des couches, sans un fichier de plus dans la carte des dépendances du premier pixel.
  */
 
-/** Le fondu de K13 (200 ms), celui des fenêtres centrées : une couche ancrée n'a pas de fiche à elle. */
-export const LAYER_MOTION_MS = DIALOG_FADE_MS;
+/** Le fondu de K01, K02 et K13 (200 ms), celui des fenêtres centrées : une couche ancrée n'a pas de fiche à elle. */
+export const LAYER_MOTION_MS = 200;
+
+/** La courbe des feuilles (`SHEET_MOTION_CURVE`), que les couches partagent. */
+export const LAYER_MOTION_CURVE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
 export type LayerPresence<T> = { readonly value: T | null; readonly leaving: boolean };
 
@@ -45,6 +50,6 @@ export function layerMotion(leaving: boolean, style?: CSSProperties) {
     'data-layer-motion': '',
     'data-leaving': leaving ? '' : undefined,
     inert: leaving || undefined,
-    style: { '--layer-ms': `${LAYER_MOTION_MS}ms`, ...style } as CSSProperties,
+    style: { '--dialog-fade-ms': `${LAYER_MOTION_MS}ms`, '--dialog-motion-curve': LAYER_MOTION_CURVE, ...style } as CSSProperties,
   };
 }

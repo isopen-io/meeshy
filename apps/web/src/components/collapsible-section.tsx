@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 
-import { layerMotion, LAYER_MOTION_MS, useLayerPresence } from '@/lib/view/layer-presence';
+import { layerMotion, LAYER_MOTION_MS, useLayerPresence } from '@/lib/view/dialog-exit';
 
 import { Glyph } from './glyph';
 import { SECTION_BRAND_INK, SECTION_CARD_STYLE } from './grouped-section';

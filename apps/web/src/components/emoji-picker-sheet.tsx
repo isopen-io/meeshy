@@ -23,7 +23,7 @@ import { readEmojiRecents, recordEmojiRecent } from '@/lib/emoji-recents';
 import { emojiPickerText, loadEmojiPickerCatalog, type EmojiPickerCatalogKey } from '@/lib/i18n-emoji-picker-catalog';
 import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { useLayerPresence } from '@/lib/view/layer-presence';
+import { useLayerPresence } from '@/lib/view/dialog-exit';
 import { useLongPress } from '@/lib/view/long-press';
 import { EXTENDED_REACTIONS } from '@/lib/view/message-actions';
 

@@ -20,7 +20,23 @@
   pointer-events: none;
 }
 
+/* UNE COUCHE MONTÉE SOUS CONDITION (#18327), posée par `layerMotion()` (`lib/view/layer-presence.ts`) :
+   sa sortie ne prend aucun toucher. Le mouvement joue `translate` et `scale`, jamais `transform`, pour ne
+   pas écraser le placement d'une couche qui se positionne par lui ; la sortie change de NOM d'animation,
+   rejouer le même en sens inverse ne relancerait rien (#18460). */
+[data-layer-motion][data-leaving] {
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  [data-layer-motion] {
+    animation: layer-in var(--dialog-fade-ms) var(--dialog-motion-curve) both;
+  }
+
+  [data-layer-motion][data-leaving] {
+    animation-name: layer-out;
+  }
+
   dialog[data-sheet-presentation][open],
   dialog[data-confirm-dialog][open],
   dialog[data-dialog-fade][open] {
@@ -125,5 +141,21 @@
   }
   to {
     opacity: 0;
+  }
+}
+
+@keyframes layer-in {
+  from {
+    opacity: 0;
+    translate: var(--layer-shift, 0 4px);
+    scale: var(--layer-scale, 1);
+  }
+}
+
+@keyframes layer-out {
+  to {
+    opacity: 0;
+    translate: var(--layer-shift, 0 4px);
+    scale: var(--layer-scale, 1);
   }
 }

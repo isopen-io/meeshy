@@ -25,7 +25,7 @@ import { captureShield } from '@/lib/capture/capture-shield';
 import { useCaptureShield } from '@/lib/capture/use-capture-shield';
 import type { Attachment } from '@/lib/api/types';
 import { purgeViewOnceMedia, viewOnceMediaUrlsOf } from '@/lib/api/view-once';
-import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';

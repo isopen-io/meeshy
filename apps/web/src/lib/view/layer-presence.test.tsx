@@ -5,7 +5,7 @@ import { act } from 'react';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { DIALOG_FADE_MS } from './dialog-exit';
+import { DIALOG_FADE_MS, SHEET_MOTION_CURVE } from './dialog-exit';
 import { LAYER_MOTION_MS, layerMotion, useLayerPresence } from './layer-presence';
 
 /**
@@ -89,23 +89,24 @@ describe('useLayerPresence', () => {
     expect(host.querySelector('[data-toast]')).toBeNull();
   });
 
-  test('la durée est le fondu de K13, posée sur la couche pour la feuille de style', () => {
+  test('la durée et la courbe sont celles des modales, posées sur la couche pour la feuille de style', () => {
     expect(LAYER_MOTION_MS).toBe(DIALOG_FADE_MS);
-    expect(layerMotion(false).style).toEqual({ '--layer-ms': `${DIALOG_FADE_MS}ms` });
+    expect(layerMotion(false).style).toEqual({ '--dialog-fade-ms': `${DIALOG_FADE_MS}ms`, '--dialog-motion-curve': SHEET_MOTION_CURVE });
   });
 
   test('l’entrée et la sortie ne jouent que l’opacité, translate et scale, et rien sous réduction', () => {
-    const css = readFileSync(new URL('../../styles/layer-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = readFileSync(new URL('../../styles/sheet-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     const motion = css.slice(css.indexOf('@media (prefers-reduced-motion: no-preference)'));
     expect(motion).toContain('[data-layer-motion]');
     expect(motion).toMatch(/\[data-layer-motion\]\[data-leaving\]\s*\{\s*animation-name:\s*layer-out/);
-    const keyframes = [...css.matchAll(/@keyframes[^{]+\{([\s\S]*?\})\s*\}/g)].map((match) => match[1] ?? '');
-    expect(keyframes.length).toBe(2);
-    for (const body of keyframes) {
+    expect(css.slice(0, css.indexOf('@media'))).toMatch(/\[data-layer-motion\]\[data-leaving\]\s*\{\s*pointer-events:\s*none/);
+    const layerKeyframes = [...css.matchAll(/@keyframes layer-(?:in|out)\s*\{([\s\S]*?\})\s*\}/g)].map((match) => match[1] ?? '');
+    expect(layerKeyframes.length).toBe(2);
+    for (const body of layerKeyframes) {
       const properties = [...body.matchAll(/([a-z-]+)\s*:/g)].map((match) => match[1]);
       expect(properties.every((property) => ['opacity', 'translate', 'scale'].includes(property ?? ''))).toBe(true);
     }
-    expect(readFileSync(new URL('./layer-presence.ts', import.meta.url), 'utf8')).toContain("import '@/styles/layer-motion.css'");
+    expect(readFileSync(new URL('./layer-presence.ts', import.meta.url), 'utf8')).toContain("import '@/styles/sheet-motion.css'");
   });
 });
 
