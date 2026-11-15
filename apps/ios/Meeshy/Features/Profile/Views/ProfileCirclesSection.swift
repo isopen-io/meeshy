@@ -26,11 +26,11 @@ struct ProfileCirclesSection: View {
                     emptyLine(phrase).meeshyTransition(.opacity)
                 }
                 if let requests = Self.requestsText(count: summary.pendingCount) {
-                    ProfileNavigationRow(icon: "person.badge.plus", title: requests, hint: Self.requestsHint,
+                    ProfileNavigationRow(icon: "person.badge.plus", title: requests, hint: nil,
                                          identifier: "profile.circles.requests", accentHex: accentHex) { onOpen(.requests) }
                         .meeshyTransition(.opacity)
                 }
-                ProfileNavigationRow(icon: "person.crop.circle.badge.plus", title: Self.inviteTitle, hint: Self.inviteHint,
+                ProfileNavigationRow(icon: "person.crop.circle.badge.plus", title: Self.inviteTitle, hint: nil,
                                      identifier: "profile.circles.invite", accentHex: accentHex) { onOpen(.invite) }
             }
             .background(ProfileSectionCard(tintHex: accentHex))
@@ -96,16 +96,8 @@ struct ProfileCirclesSection: View {
         String(localized: "profile.circles.open.hint", defaultValue: "Ouvre Mes cercles", bundle: .main)
     }
 
-    private static var requestsHint: String {
-        String(localized: "profile.circles.requests.hint", defaultValue: "Ouvre les demandes qui attendent ta réponse", bundle: .main)
-    }
-
     private static var inviteTitle: String {
         String(localized: "profile.circles.invite", defaultValue: "Inviter", bundle: .main)
-    }
-
-    private static var inviteHint: String {
-        String(localized: "profile.circles.invite.hint", defaultValue: "Ouvre le parrainage pour inviter quelqu'un sur Meeshy", bundle: .main)
     }
 }
 

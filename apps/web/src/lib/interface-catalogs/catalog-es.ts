@@ -459,8 +459,9 @@ const es = {
   'settings.delete_account': 'Eliminar cuenta',
   'settings.privacy.title': 'Privacidad',
   'settings.privacy.online_status': 'Estado en línea',
-  'settings.privacy.online_status.info':
-    'El punto verde en tu avatar indica que estás activo. Desactivado, nadie lo ve, pero escribir en una conversación sigue delatando tu actividad.',
+  'settings.privacy.online_status.info': 'El punto verde en tu avatar indica que estás activo.',
+  'settings.privacy.online_status.question': '¿Qué pasa si lo desactivo?',
+  'settings.privacy.online_status.more': 'Nadie ve ya ese punto. Pero escribir en una conversación sigue delatando tu actividad.',
   'settings.privacy.last_seen': 'Último inicio de sesión',
   'settings.privacy.read_receipts': 'Confirmaciones de lectura',
   'settings.privacy.read_receipts.info':
@@ -474,6 +475,7 @@ const es = {
   'settings.interface_language': 'Idioma de la interfaz',
   'settings.interface_language.automatic': 'Automático',
   'settings.content_languages': 'Idiomas de traducción',
+  'settings.content_languages.info': 'Todo el contenido se lee en tu idioma, traducido automáticamente.',
   'settings.section.notifications': 'Notificaciones',
   'settings.notifications.title': 'Notificaciones',
   'settings.notif.sounds': 'Sonidos',

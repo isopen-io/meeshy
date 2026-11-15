@@ -30,7 +30,6 @@ struct ProfileActivityBand: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(stats: stats))
-        .accessibilityHint(Self.openHint)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("profile.activity")
     }
@@ -62,10 +61,6 @@ struct ProfileActivityBand: View {
 
     static var title: String {
         String(localized: "profile.section.activity", defaultValue: "MON ACTIVITÉ", bundle: .main)
-    }
-
-    static var openHint: String {
-        String(localized: "profile.activity.open.hint", defaultValue: "Ouvre Mon activité", bundle: .main)
     }
 
     /// Avant la réponse du serveur, la bande dit zéro : elle ne garde ni n'estime rien.

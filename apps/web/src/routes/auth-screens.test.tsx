@@ -104,7 +104,7 @@ describe('WelcomeScreen', () => {
 
   test('« Meeshy » et sa tagline sont rendus', () => {
     expect(html).toContain('Meeshy');
-    expect(html).toContain('Écrivez dans votre langue');
+    expect(html).toContain('Chaque message, dans votre langue.');
   });
 
   test('les deux portes sont des ANCRES vers /signup et /login', () => {

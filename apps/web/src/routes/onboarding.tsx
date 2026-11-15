@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import type { OnboardingStepOutcome, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import '@/styles/onboarding.css';
@@ -71,6 +71,7 @@ import {
 import { AgeCard, type AgeSubmit } from './onboarding-age';
 import type { ProfileImageUpload } from './onboarding-profile';
 import { RecapCard, type RecapNumbers } from './onboarding-recap';
+import { useLeavesAsGhost } from './onboarding-stage-exit';
 import { PointsPill, ProgressSegments } from './onboarding-visuals';
 import { href, navigate } from './route-table';
 
@@ -553,31 +554,31 @@ export function OnboardingJourney({
           {step === 'recap' ? (
             <span />
           ) : (
-            <span className="onb-pill-anchor">
+            <LeavingSpan className="onb-pill-anchor">
               <PointsPill points={Math.max(0, sessionPoints - travelling)} bump={bump} showsCount={!GAUGE_STEPS.has(step)} label={translateOnboarding(lang, 'onboarding.points.announce', { points: String(sessionPoints) })} />
               {flight === null ? null : (
                 <span key={flight.key} data-onb-flight className="onb-flight" dir="ltr" aria-hidden="true">
                   {translateOnboarding(lang, 'onboarding.points.gained', { points: String(flight.points) })}
                 </span>
               )}
-            </span>
+            </LeavingSpan>
           )}
           {step === 'recap' ? null : (
-            <button type="button" data-onb-action="skipAll" className="onb-skip" onClick={() => leave(href('list'))}>
-              {translateOnboarding(lang, 'onboarding.skipAll')}
-            </button>
+            <SkipAllButton label={translateOnboarding(lang, 'onboarding.skipAll')} onSkip={() => leave(href('list'))} />
           )}
         </div>
         {step === 'recap' ? null : (
-          <ProgressSegments
-            position={position}
-            count={count}
-            label={translateOnboarding(lang, 'onboarding.progress', { current: String(position), total: String(count) })}
-          />
+          <LeavingDiv>
+            <ProgressSegments
+              position={position}
+              count={count}
+              label={translateOnboarding(lang, 'onboarding.progress', { current: String(position), total: String(count) })}
+            />
+          </LeavingDiv>
         )}
       </header>
 
-      <div key={step} className="onb-stage">
+      <LeavingStage key={step}>
         {step === 'languages' ? (
           <LanguagesCard
             host={host}
@@ -665,12 +666,46 @@ export function OnboardingJourney({
             onGame={() => leave(href('progression'))}
           />
         )}
-      </div>
+      </LeavingStage>
 
       <p className="offscreen" aria-live="polite" data-onb-announce>
         {announcement}
       </p>
     </main>
+  );
+}
+
+/** La scène d'une étape : remontée par `key={step}`, elle sort en mouvement (#18322). */
+function LeavingStage({ children }: { readonly children: ReactNode }) {
+  const ref = useLeavesAsGhost<HTMLDivElement>();
+  return (
+    <div ref={ref} className="onb-stage">
+      {children}
+    </div>
+  );
+}
+
+/** Ce que l'en-tête retire à l'arrivée du récapitulatif sort en mouvement, lui aussi (#18322). */
+function LeavingSpan({ className, children }: { readonly className: string; readonly children: ReactNode }) {
+  const ref = useLeavesAsGhost<HTMLSpanElement>();
+  return (
+    <span ref={ref} className={className}>
+      {children}
+    </span>
+  );
+}
+
+function LeavingDiv({ children }: { readonly children: ReactNode }) {
+  const ref = useLeavesAsGhost<HTMLDivElement>();
+  return <div ref={ref}>{children}</div>;
+}
+
+function SkipAllButton({ label, onSkip }: { readonly label: string; readonly onSkip: () => void }) {
+  const ref = useLeavesAsGhost<HTMLButtonElement>();
+  return (
+    <button ref={ref} type="button" data-onb-action="skipAll" className="onb-skip" onClick={onSkip}>
+      {label}
+    </button>
   );
 }
 
