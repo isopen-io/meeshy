@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,8 +69,11 @@ class NotificationsExitMotionTest {
         var current by mutableStateOf(initial)
         compose.setContent {
             CompositionLocalProvider(LocalReduceMotion provides reduce) {
-                NotificationBannerTransition(banner = current, reduceMotion = reduce) { shown ->
-                    Box(Modifier.size(320.dp, 72.dp)) { Text(shown.notificationId) }
+                NotificationBannerTransition(banner = current, reduceMotion = reduce) { shown, live ->
+                    Box(Modifier.size(320.dp, 72.dp)) {
+                        Text(shown.notificationId)
+                        if (!live) Text("${shown.notificationId}:inert")
+                    }
                 }
             }
         }
@@ -111,6 +115,35 @@ class NotificationsExitMotionTest {
         compose.mainClock.advanceTimeBy(480)
 
         compose.onNodeWithText("n-spring").assertExists()
+    }
+
+    @Test
+    fun `a leaving banner is only an image and no longer takes a tap or a swipe`() {
+        val set = showBanner(reduce = false, initial = banner("n-inert"))
+        compose.onNodeWithText("n-inert:inert").assertDoesNotExist()
+
+        compose.mainClock.autoAdvance = false
+        change { set(null) }
+        compose.mainClock.advanceTimeBy(48)
+
+        compose.onNodeWithText("n-inert:inert").assertExists()
+    }
+
+    @Test
+    fun `a banner swiped away leaves from where the finger let go and the next one starts at rest`() {
+        var current by mutableStateOf<InAppBanner?>(banner("n-swiped"))
+        lateinit var lift: MutableFloatState
+        compose.setContent { lift = rememberBannerLift(current) }
+        compose.waitForIdle()
+
+        change { lift.floatValue = -40f }
+        change { current = null }
+        compose.waitForIdle()
+        assertThat(lift.floatValue).isEqualTo(-40f)
+
+        change { current = banner("n-next") }
+        compose.waitForIdle()
+        assertThat(lift.floatValue).isEqualTo(0f)
     }
 
     private fun showHeader(reduce: Boolean, initialUnread: Int): (Int) -> Unit {
