@@ -127,6 +127,24 @@ public struct EmojiReactionPicker: View {
     public var onDismiss: (() -> Void)?
     /// When nil, the "+" expand button is hidden.
     public var onExpandFullPicker: (() -> Void)?
+    /// **Une tuile d'action posée APRÈS le « + »** — un glyphe et une action que l'hôte
+    /// nomme ; le composant ne sait pas ce qu'elle fait (il reste agnostique : la
+    /// conversation y met « Imager », une autre surface y mettra autre chose). Même
+    /// disque que le « + », même vague d'entrée, un cran après lui. Elle ne publie pas
+    /// de cadre de scrub : on la touche, on ne glisse pas dessus.
+    /// `nonisolated` : une tuile est une VALEUR que l'hôte compose où il veut (même règle
+    /// que `EmojiReactionPickerChrome`) ; seul le composant, sur le MainActor, l'appelle.
+    public nonisolated struct ExtraTile {
+        public let symbol: String
+        public let accessibilityLabel: String
+        public let accessibilityIdentifier: String?
+        public let action: () -> Void
+        public init(symbol: String, accessibilityLabel: String, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
+            self.symbol = symbol; self.accessibilityLabel = accessibilityLabel
+            self.accessibilityIdentifier = accessibilityIdentifier; self.action = action
+        }
+    }
+    public var extraTile: ExtraTile?
     /// Index de la tuile survolée par le scrub (piloté par l'app) — ×1.35 rebond.
     public var highlightedIndex: Int?
     /// Nom du coordinateSpace dans lequel publier les cadres des tuiles.
@@ -151,8 +169,10 @@ public struct EmojiReactionPicker: View {
         onExpandFullPicker: (() -> Void)? = nil,
         highlightedIndex: Int? = nil,
         scrubFrameSpace: String? = nil,
-        onTileFrames: (([Int: CGRect]) -> Void)? = nil
+        onTileFrames: (([Int: CGRect]) -> Void)? = nil,
+        extraTile: ExtraTile? = nil
     ) {
+        self.extraTile = extraTile
         self.quickEmojis = quickEmojis; self.style = style; self.scale = scale
         self.scrollable = scrollable
         self.chrome = chrome
@@ -238,6 +258,31 @@ public struct EmojiReactionPicker: View {
         }
     }
 
+    /// La tuile supplémentaire de l'hôte, à droite du « + » : même disque, un cran plus
+    /// tard dans la vague ; elle répond à l'appui par le style du kit.
+    @ViewBuilder
+    private var extraTileButton: some View {
+        if let extraTile {
+            Button {
+                HapticFeedback.light()
+                extraTile.action()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.light) : Color.gray.opacity(MeeshyOpacity.light))
+                        .frame(width: 32 * scale, height: 32 * scale)
+                    Image(systemName: extraTile.symbol)
+                        .font(MeeshyFont.relative(14 * scale, weight: .bold))
+                        .foregroundStyle(style == .dark ? Color.white.opacity(MeeshyOpacity.intense) : Color.gray)
+                }
+            }
+            .buttonStyle(PressableButtonStyle())
+            .accessibilityLabel(extraTile.accessibilityLabel)
+            .accessibilityIdentifier(extraTile.accessibilityIdentifier ?? "")
+            .modifier(WaveTileModifier(index: quickEmojis.count + 1, hasEntered: hasEntered))
+        }
+    }
+
     /// **Le point de décision UNIQUE de l'habillage.** Les deux rangées passent
     /// par lui — sans quoi `chrome: .none` retirerait la capsule d'une seule des
     /// deux, et le défaut ne se verrait que dans le mode qu'on n'a pas relu.
@@ -256,6 +301,7 @@ public struct EmojiReactionPicker: View {
             HStack(spacing: 6 * scale) {
                 emojiList
                 expandButton
+                extraTileButton
             }
             .padding(.horizontal, 10 * scale)
             .padding(.vertical, 6 * scale)

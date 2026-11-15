@@ -24,12 +24,13 @@ nonisolated struct ComposerOpeningPreferences: Equatable, Sendable {
 }
 
 /// **L'ouverture d'un composer vierge : la caméra armée derrière, la photothèque
-/// à mi-hauteur devant** (#17269). On ne touche plus la scène pour armer : la
+/// devant** (#17269, dépliée en entier depuis #18709). On ne touche plus la scène pour armer : la
 /// caméra l'est déjà, et l'appui long sur la scène filme.
 nonisolated struct ComposerOpeningPlan: Equatable, Sendable {
-    /// **Comment la photothèque d'ouverture se présente** : à mi-hauteur, la
-    /// caméra visible derrière, dès que le système sait le faire (iOS 17, le
-    /// sélecteur en ligne) ; avant, en plein écran.
+    /// **Quelle photothèque s'ouvre** : celle du composer (`ComposerOpeningLibrarySheet`,
+    /// qui se retire quand le doigt tient pour filmer) dès iOS 17, le sélecteur des portails
+    /// avant. Les deux se montrent dépliées en entier depuis #18709 ; le nom du cas garde
+    /// la valeur de #17269.
     nonisolated enum Library: Equatable, Sendable {
         case halfHeight
         case fullScreen
@@ -59,15 +60,24 @@ nonisolated struct ComposerOpeningPlan: Equatable, Sendable {
                                    library: preferences.opensLibrary ? presentation : nil)
     }
 
-    /// **Choisir dans la photothèque d'ouverture rend la scène** : la caméra armée
-    /// à l'ouverture se retire, sans quoi elle couvrirait les scènes fondées. Elle
-    /// reste si l'auteur filme ou a des segments en attente : rien ne part en silence.
-    /// **En retouche, l'élément choisi REMPLACE la prise** (#18654) :
-    /// la Galerie de la colonne est le geste qui la change.
-    static func disarmsCameraOnLibraryPick(openingPick: Bool,
-                                           stage: ComposerSceneCameraStage,
-                                           pendingSegments: Int,
-                                           editing: Bool) -> Bool {
-        openingPick && (editing || (stage == .armed && pendingSegments == 0))
+    /// **Ce que fait un choix dans la photothèque** (#17269, #18710).
+    nonisolated enum LibraryPick: Equatable, Sendable {
+        /// Les médias fondent la scène ; la caméra s'arrête si `disarms`.
+        case foundsScenes(disarms: Bool)
+        /// Les médias se posent PAR-DESSUS — la prise ou le viseur vivant —, en objets de premier
+        /// plan, caméra armée : ce que prendra le viseur passera dessous.
+        case overlay
+    }
+
+    /// **Choisir dans la photothèque d'ouverture rend la scène** : la caméra armée à l'ouverture
+    /// se retire, sans quoi elle couvrirait les scènes fondées. Elle reste si l'auteur filme ou a
+    /// des segments en attente : rien ne part en silence.
+    /// **La Galerie de la caméra pose PAR-DESSUS** (#18710) : en retouche, les
+    /// images choisies se posent sur la prise, qu'elles ne remplacent plus ; au viseur, UNE image
+    /// devient le fond, PLUSIEURS se posent sur le viseur vivant.
+    static func libraryPick(count: Int, fromViewfinder: Bool, openingPick: Bool,
+                            stage: ComposerSceneCameraStage, pendingSegments: Int, editing: Bool) -> LibraryPick {
+        if fromViewfinder && (editing || (stage == .armed && count >= 2)) { return .overlay }
+        return .foundsScenes(disarms: openingPick && !editing && stage == .armed && pendingSegments == 0)
     }
 }

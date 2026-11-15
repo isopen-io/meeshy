@@ -27,7 +27,7 @@ extension StoryComposerViewModel {
     ///
     /// ## Ce que ce verbe ne décide pas
     ///
-    /// Ni où poser, ni quand. `StoryObjectPlacement` porte la cascade,
+    /// Ni où poser, ni quand. `StoryObjectPlacement` porte le point de pose,
     /// l'appelant porte le geste — c'est la règle de partage du SDK : des
     /// briques aux paramètres opaques ici, la décision produit chez l'app.
     ///

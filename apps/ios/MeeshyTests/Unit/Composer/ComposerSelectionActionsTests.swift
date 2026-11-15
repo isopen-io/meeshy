@@ -242,35 +242,20 @@ final class ComposerSelectionActionsTests: XCTestCase {
     }
 }
 
-/// **Le sticker se pose À CÔTÉ de ce qui existe, et se remplace EN PLACE**
+/// **Le sticker se pose au centre, et se remplace EN PLACE**
 /// (#13839, L5, inventaire H5 et H6).
 @MainActor
 final class SceneStickerSelectionTests: XCTestCase {
 
-    func test_spot_sceneWithATextAtTheCentre_avoidsIt() {
-        let point = SceneStickerSpot.spot(avoiding: [CGPoint(x: 0.5, y: 0.5)])
-        let ecart = hypot(point.x - 0.5, point.y - 0.5)
-        XCTAssertGreaterThanOrEqual(ecart, SceneStickerSpot.clearance)
-    }
-
-    func test_spot_emptyScene_isTheCentre() {
-        XCTAssertEqual(SceneStickerSpot.spot(avoiding: []), CGPoint(x: 0.5, y: 0.5))
-    }
-
-    func test_spot_crowdedScene_takesTheFarthestCandidate() {
-        let partout = SceneStickerSpot.candidates
-        let point = SceneStickerSpot.spot(avoiding: partout)
-        XCTAssertTrue(partout.contains(point), "à défaut de place libre, une place connue plutôt qu'un point au hasard")
-    }
-
-    func test_pose_emojiOverACentredText_landsOffTheText() throws {
+    /// Décision porteur du 2026-11-15 (#18719) : le sticker se pose au
+    /// centre, même par-dessus un texte ; l'auteur le déplace d'un doigt.
+    func test_pose_emojiOverACentredText_landsAtTheCentre() throws {
         let vm = StoryComposerViewModel()
-        let texte = try XCTUnwrap(vm.addText())
+        _ = try XCTUnwrap(vm.addText())
         let id = try XCTUnwrap(SceneStickerPose.pose(.emoji("😎"), on: vm))
         let sticker = try XCTUnwrap(vm.currentEffects.stickerObjects?.first { $0.id == id })
-        let ecart = hypot(sticker.x - texte.x, sticker.y - texte.y)
-        XCTAssertGreaterThanOrEqual(ecart, Double(SceneStickerSpot.clearance) - 0.001,
-                                    "le sticker ne se pose plus par-dessus le texte")
+        XCTAssertEqual(sticker.x, 0.5)
+        XCTAssertEqual(sticker.y, 0.5)
     }
 
     func test_replacing_keepsPlacementAndTimingOfTheOldSticker() throws {
