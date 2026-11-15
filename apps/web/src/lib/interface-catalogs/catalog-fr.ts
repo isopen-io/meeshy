@@ -162,7 +162,7 @@ const fr = {
   'bookmarks.offline.body': 'Vos enregistrements s’afficheront à la reconnexion.',
   'bookmarks.allLoaded': 'Toutes vos publications enregistrées sont chargées',
   'bookmarks.filter.all': 'Tout',
-  'bookmarks.filter.posts': 'Postes',
+  'bookmarks.filter.posts': 'Publications',
   'bookmarks.filter.reels': 'Réels',
   'bookmarks.filter.a11y': 'Filtrer les enregistrements',
   'settings.tools.bookmarks': 'Publications enregistrées',
@@ -456,8 +456,9 @@ const fr = {
   'settings.delete_account': 'Supprimer le compte',
   'settings.privacy.title': 'Confidentialité',
   'settings.privacy.online_status': 'Statut en ligne',
-  'settings.privacy.online_status.info':
-    "La pastille verte sur votre avatar indique que vous êtes actif. Désactivée, personne ne voit ce point — mais écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs.",
+  'settings.privacy.online_status.info': 'La pastille verte sur votre avatar indique que vous êtes actif.',
+  'settings.privacy.online_status.question': 'Que se passe-t-il si je le désactive ?',
+  'settings.privacy.online_status.more': "Personne ne voit plus ce point. Mais écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs.",
   'settings.privacy.last_seen': 'Dernière connexion',
   'settings.privacy.read_receipts': 'Accusés de lecture',
   'settings.privacy.read_receipts.info':
@@ -471,6 +472,7 @@ const fr = {
   'settings.interface_language': "Langue de l'interface",
   'settings.interface_language.automatic': 'Automatique',
   'settings.content_languages': 'Langues de traduction',
+  'settings.content_languages.info': 'Tout le contenu se lit dans votre langue, traduit automatiquement.',
   'settings.section.notifications': 'Notifications',
   'settings.notifications.title': 'Notifications',
   'settings.notif.sounds': 'Sons',

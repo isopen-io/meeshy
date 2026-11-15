@@ -26,10 +26,7 @@ extension StoryComposerViewModel {
         guard let targetSlideIndex = slideIndex(pinnedTo: toSlideId) else { return nil }
         guard admits(kind == .video ? .video : .image, in: slides[targetSlideIndex].effects) else { return nil }
 
-        // La slide CIBLE, pas la courante : ce site peut poser sur une autre
-        // slide, et cascader d'après les objets de la mauvaise donnerait un
-        // décalage sans rapport avec ce que l'auteur voit.
-        let center = nextObjectPosition(in: slides[targetSlideIndex].effects)
+        // La slide CIBLE, pas la courante : la cascade se lit sur ses objets.
         var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
         // inclus : resolvedBackgroundMedia retombe sur le 1er existant). Un fond
@@ -39,6 +36,8 @@ extension StoryComposerViewModel {
         // synthetic-clip injecté par loadCurrentSlideIntoTimeline.
         let hasSlideLevelBgImage = slideImages[slides[targetSlideIndex].id] != nil
         let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil && !hasSlideLevelBgImage
+        // Un fond couvre la scène, centré comme `promoteBackgroundMedia` le promeut (#18652).
+        let center = shouldBeBackground ? StoryObjectPlacement.center : nextObjectPosition(in: targetEffects)
         let obj = StoryMediaObject(
             id: id,
             postMediaId: "",

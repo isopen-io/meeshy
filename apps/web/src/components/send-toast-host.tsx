@@ -5,6 +5,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { SendQueue } from '@/lib/send/send-queue';
 import { sendQueue } from '@/lib/send/send-queue-instance';
 import { sendToastOf, type SendToast } from '@/lib/send/send-toast';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 import { href, navigate } from '@/routes/route-table';
 
 import { BUTTON } from './ui-chrome';
@@ -56,31 +57,33 @@ export function SendToastHost({ queue = sendQueue }: { readonly queue?: SendQueu
     return () => clearTimeout(timer);
   }, [toast]);
 
-  if (toast === null) return null;
+  const shown = useLayerPresence(toast);
+  if (shown.value === null) return null;
+  const said = shown.value;
   const language = currentInterfaceLanguage();
   const text =
-    toast.kind === 'one'
-      ? translateSendSheet(language, 'sendSheet.toast.sent', { name: toast.name })
-      : toast.kind === 'failed'
+    said.kind === 'one'
+      ? translateSendSheet(language, 'sendSheet.toast.sent', { name: said.name })
+      : said.kind === 'failed'
         ? translateSendSheet(language, 'sendSheet.toast.failed')
-        : translateSendSheet(language, 'sendSheet.toast.sentMany', { count: String(toast.count) });
+        : translateSendSheet(language, 'sendSheet.toast.sentMany', { count: String(said.count) });
   return (
-    <div role="status" aria-live="polite" data-send-toast={toast.kind} className="send-toast fixed inset-x-4 bottom-6 z-50 mx-auto flex max-w-md items-center gap-3 rounded-card px-4 py-3 shadow-lg" style={{ backgroundColor: 'var(--color-ios-ink)', color: 'var(--color-ios-card)' }}>
+    <div role="status" aria-live="polite" data-send-toast={said.kind} className="send-toast fixed inset-x-4 bottom-6 z-50 mx-auto flex max-w-md items-center gap-3 rounded-card px-4 py-3 shadow-lg" {...layerMotion(shown.leaving, { backgroundColor: 'var(--color-ios-ink)', color: 'var(--color-ios-card)' })}>
       <span className="min-w-0 flex-1 truncate text-body font-medium">{text}</span>
-      {toast.kind === 'one' ? (
+      {said.kind === 'one' ? (
         <button
           type="button"
           data-send-toast-open=""
           onClick={() => {
             setToast(null);
-            navigate(href('thread', { conversation: toast.conversationId }));
+            navigate(href('thread', { conversation: said.conversationId }));
           }}
           className={`${BUTTON.secondary} shrink-0`}
         >
           {translateSendSheet(language, 'sendSheet.toast.open')}
         </button>
       ) : null}
-      {toast.kind === 'failed' && toast.retryable ? (
+      {said.kind === 'failed' && said.retryable ? (
         <button
           type="button"
           data-send-toast-retry=""

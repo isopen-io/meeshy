@@ -69,6 +69,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { waitForValueSettled } from './lib/settle-value.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const served = await startDistServer(DIST, { serviceWorker: false });
@@ -676,7 +677,10 @@ try {
       // ------------------------------------------------ 8 bis. les cadres de capture (#8742, #8743)
       await page.click('[data-call-effects-category="frames"]');
       check(await appears(page, '[data-call-frame-moods] [data-call-frame-mood]:nth-child(2)'), `${label} : les puces d'ambiance se montrent`);
-      const chips = await page.$$eval('[data-call-frame-moods] [data-call-frame-mood]', (buttons) => buttons.map((button) => { const box = button.getBoundingClientRect(); return { id: button.getAttribute('data-call-frame-mood'), label: button.textContent, pressed: button.getAttribute('aria-pressed'), width: box.width, height: box.height }; }));
+      /* Mesurées AU REPOS : la rangée arrive par le moteur des modes (fondu et montée) — une lecture prise
+         pendant l'entrée lit une boîte transitoire, et le témoin rougissait au hasard des runs. */
+      const chips =
+        (await waitForValueSettled(page, () => [...document.querySelectorAll('[data-call-frame-moods] [data-call-frame-mood]')].map((button) => { const box = button.getBoundingClientRect(); return { id: button.getAttribute('data-call-frame-mood'), label: button.textContent, pressed: button.getAttribute('aria-pressed'), width: box.width, height: box.height }; }))) ?? [];
       check(chips[0]?.id === 'classics' && chips[0]?.label === 'Classiques' && chips[0]?.pressed === 'true' && chips.length > 2, `${label} : « Classiques » d'abord et choisie, puis ${chips.length - 1} ambiances (${chips.map((chip) => chip.label).join(' · ')})`);
       check(chips.every((chip) => chip.height >= TAP_FLOOR && chip.width >= TAP_FLOOR), `${label} : chaque puce fait ${TAP_FLOOR} au moins`);
       const classics = await page.$$eval('[data-call-mode="montage"] [data-carousel-item]', (items) => items.map((item) => item.getAttribute('data-carousel-item')));

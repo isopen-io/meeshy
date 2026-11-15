@@ -92,11 +92,13 @@ describe('l’onglet Appels — la fiabilité, mesurée sur la télémétrie des
     expect(host.querySelector('[data-admin-stats-section="calls-reliability"]')?.textContent).toContain('Période : 30 derniers jours');
   });
 
-  test('un échantillon plafonné se dit : « Échantillon plafonné à 5 000 appels »', async () => {
+  test('un échantillon plafonné se dit en une ligne, période comprise, sans (i) qui la répéterait', async () => {
     const { deps } = statsGateway({ '/api/v1/admin/analytics/calls': { ok: true, data: callsWith({ sampled: true }) } });
     const host = await openTab(deps);
 
-    expect(host.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('Échantillon plafonné à 5 000 appels');
+    const notice = host.querySelector('[data-admin-notice="warning"]');
+    expect(notice?.textContent).toContain('Échantillon : les 5 000 appels les plus récents de la période');
+    expect(notice?.querySelector('button')).toBeNull();
   });
 
   test('sans plafond, aucune notice', async () => {

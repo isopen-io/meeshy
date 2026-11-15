@@ -119,8 +119,8 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
     static let rest = ComposerEditRailStack(levels: [])
 
     /// Un objet posé : ses actions, puis le niveau de l'option ouverte. Le fond,
-    /// une image, une vidéo ou un son posés n'ont PAS de niveau « Modifier »
-    /// (#14048) : leurs outils sont À PLAT dans le premier
+    /// une image, une vidéo, un son ou un TEXTE posés n'ont PAS de niveau
+    /// « Modifier » (#14048, #18651) : leurs outils sont À PLAT dans le premier
     /// niveau, et seul le N2 que leur chemin pose (`ComposerBackgroundModify.levels`)
     /// se pose par-dessus.
     static func of(family: ComposerInlineFamily?, editing purpose: ComposerInlineEditPurpose?,
@@ -128,7 +128,7 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
         guard let family, !typing else { return .rest }
         let base: [ComposerEditRailLevel] = [family.isBackground ? .background : .actions]
         guard let purpose else { return ComposerEditRailStack(levels: base) }
-        guard family.modifiesInLevels, purpose == .modify else {
+        guard family.servesToolsFlat, purpose == .modify else {
             return ComposerEditRailStack(levels: base + [.options(purpose)] + above)
         }
         return ComposerEditRailStack(levels: base + above)
@@ -218,6 +218,7 @@ nonisolated enum ComposerEditRailItems {
     static func items(for level: ComposerEditRailLevel,
                       actions: [ComposerSelectionAction],
                       backgroundActions: [ComposerBackgroundEditAction] = [],
+                      tools: [ComposerObjectEditorSection] = [],
                       sections: [ComposerObjectEditorSection],
                       extras: [ComposerSelectionMediaExtra],
                       keyframes: Bool,
@@ -227,7 +228,10 @@ nonisolated enum ComposerEditRailItems {
         switch level {
         case .actions:
             let outils = flat(backgroundEntries, sound: sound)
-            return outils + actions.filter { outils.isEmpty || $0 != .modify }.map(ComposerEditRailItem.action)
+            let servies = actions.filter { outils.isEmpty || $0 != .modify }
+            return outils + servies.filter { $0 == .modify }.map(ComposerEditRailItem.action)
+                + tools.map(ComposerEditRailItem.section)
+                + servies.filter { $0 != .modify }.map(ComposerEditRailItem.action)
         case .background:
             return flat(backgroundEntries, sound: []) + backgroundActions.filter { backgroundEntries.isEmpty || $0 != .modify }
                 .map(ComposerEditRailItem.background)

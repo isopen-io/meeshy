@@ -76,6 +76,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { waitForValueSettled } from './lib/settle-value.mjs';
 import { writeOnStage } from './lib/stage-typing.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
@@ -666,7 +667,9 @@ async function runScheme(colorScheme) {
     await pagesPage.click('[data-publish-kind-choice="POST"]');
     await pagesPage.waitForSelector('[data-publish-layout-choice="sine"]', { timeout: 4000 });
     await twoFrames(pagesPage);
-    const layoutMenu = await pagesPage.evaluate(() => {
+    /* Le menu se lit AU REPOS : son entrée glisse encore de quelques dixièmes de pixel deux images
+       après son apparition, et la comparaison clair / sombre ci-dessous rougissait au hasard des runs. */
+    const layoutMenu = (await waitForValueSettled(pagesPage, () => {
       const menu = document.querySelector('[data-publish-kind-menu]');
       const capsule = document.querySelector('[data-publish-split]')?.getBoundingClientRect();
       const rows = Array.from(document.querySelectorAll('[data-publish-layout-choice]')).map((el) => ({
@@ -677,7 +680,7 @@ async function runScheme(colorScheme) {
       return r === undefined || capsule === undefined
         ? null
         : { menuTop: r.top, menuBottom: r.bottom, capsuleTop: capsule.top, capsuleBottom: capsule.bottom, innerHeight, rows };
-    });
+    })) ?? null;
     check(
       layoutMenu !== null && layoutMenu.rows.map((row) => row.mode).join(',') === 'carousel,reel,hero,wave,sine',
       `${tag} : les cinq agencements, dans l'ordre iOS (ComposerMosaicChoice.ordered) — ${JSON.stringify(layoutMenu?.rows)}`,

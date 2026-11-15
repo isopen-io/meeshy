@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// **Clavier OU options, jamais les deux** (règle #6156 de l'éditeur plein
@@ -28,6 +29,29 @@ nonisolated enum ComposerKeyboardOrOptions {
     }
 
     static func textTouched(_ input: Input) -> Input { .keyboard }
+
+    /// Ce que le doigt fait sur une commande de la barre.
+    enum Gesture: Equatable, Sendable {
+        case tap
+        case longPress
+    }
+
+    enum Outcome: Equatable, Sendable {
+        /// La valeur suivante de l'outil, rendue tout de suite : le clavier reste.
+        case cycle(TextEditTool)
+        case show(Input)
+    }
+
+    /// **Toucher change vite, l'appui long ouvre toutes les options** (#18640, porteur
+    /// 2026-11-15) : le toucher fait tourner l'outil premier de la famille sans quitter le
+    /// clavier ; l'appui long remplace le clavier par le panneau, et le referme. Panneau ouvert,
+    /// toucher sa commande rend le clavier.
+    static func outcome(_ gesture: Gesture, on family: ComposerKeyboardStyleFamily, in input: Input) -> Outcome {
+        switch gesture {
+        case .longPress: return .show(tapped(family, in: input))
+        case .tap: return input == .options(family) ? .show(.keyboard) : .cycle(family.quickTool)
+        }
+    }
 
     /// Ce que prend le panneau quand aucun clavier n'a encore été mesuré
     /// (clavier matériel, première ouverture) : la hauteur d'un clavier

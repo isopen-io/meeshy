@@ -69,6 +69,9 @@ struct ComposerSceneSelectionRelay {
             actions: ComposerSelectionActions.served(family: selection.family, offered: offered(selection.id),
                                                      isLocked: isLocked(selection.id)),
             backgroundActions: backgroundActions(selection.id),
+            tools: ComposerInlineEditing.flatTools(for: selection.family,
+                                                   served: host.inlineSections(for: selection.id,
+                                                                               family: selection.family)),
             sections: edition.map { ComposerInlineEditing.chips($0.purpose, family: $0.family,
                                                                 served: host.inlineSections(for: $0.objectId,
                                                                                             family: $0.family)) } ?? [],
@@ -155,6 +158,9 @@ struct ComposerSceneSelectionRelay {
             performBackgroundAction(action, on: id)
         case .back:
             goBack(rail: true)
+        case .section(let section) where host.activeInlineEdit == nil:
+            host.beginInlineEdit(id, section: section)
+            HapticFeedback.light()
         case .section(let section):
             host.tapInlineSection(section)
         case .extra(let extra):

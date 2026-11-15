@@ -1,5 +1,5 @@
 import type { RelationRequestLevel } from '@meeshy/shared/types/relation';
-import { memo, useState, type ReactNode } from 'react';
+import { memo, useRef, useState, type ReactNode } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import { Sheet } from '@/components/sheet';
@@ -11,6 +11,7 @@ import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { progressSummary, raiseOffer, requestedLevelOf, type CircleLevel } from '@/lib/relations/circles';
 import { relationLevelIcon } from '@/lib/relations/level-labels';
+import { useExitMotion } from '@/lib/view/exit-presence';
 import { levelTitle, progressText } from '@/lib/relations/progress-text';
 import { CircleReceptionBlockSwitch, receptionBlocksFor } from '@/routes/circle-reception-block';
 import { PERSON_ROW_HEIGHT, PersonAvatar, PersonText } from '@/routes/discover-parts';
@@ -128,7 +129,7 @@ export const CircleLinkRow = memo(function CircleLinkRow({
           data-circle-raise={offer.target}
           aria-label={translateCircles(language, 'circles.action.requestLabel', { level: levelTitle(language, offer.target), name })}
           onClick={() => onRaise(link, offer.target)}
-          className={`grid shrink-0 place-items-center rounded-chip ${FOCUS}`}
+          className={`btn-press grid shrink-0 place-items-center rounded-chip ${FOCUS}`}
           style={{ minHeight: 44, outlineColor: BRAND }}
         >
           <span className="flex h-[30px] items-center rounded-chip px-3 text-caption font-semibold text-ios-on-brand" style={{ backgroundColor: BRAND_FILL }}>
@@ -159,7 +160,7 @@ function RoundButton({ data, label, tone, onClick, children }: { readonly data: 
               'linear-gradient(135deg, color-mix(in srgb, var(--color-success) 78%, var(--color-media-backdrop)), color-mix(in srgb, var(--color-success) 58%, var(--color-media-backdrop)))',
           };
   return (
-    <button type="button" data-circle-request-action={data} aria-label={label} onClick={onClick} className={`grid size-11 shrink-0 place-items-center rounded-full ${FOCUS}`} style={{ ...style, outlineColor: BRAND }}>
+    <button type="button" data-circle-request-action={data} aria-label={label} onClick={onClick} className={`btn-press grid size-11 shrink-0 place-items-center rounded-full ${FOCUS}`} style={{ ...style, outlineColor: BRAND }}>
       {children}
     </button>
   );
@@ -188,13 +189,15 @@ export const CircleRequestRow = memo(function CircleRequestRow({
   const isBlood = level === 'BLOOD';
   const otherId = direction === 'incoming' ? request.senderId : request.receiverId;
   const caption = translateCircles(language, direction === 'incoming' ? 'circles.requests.incoming' : 'circles.requests.outgoing', { level: levelTitle(language, level) });
+  const ref = useRef<HTMLLIElement>(null);
+  useExitMotion(ref);
   const ritual = (
     <RoundButton data="ritual" tone="blood" label={translateCircles(language, 'circles.requests.ritualLabel', { name })} onClick={() => handlers.onRitual(otherId, person)}>
       <span aria-hidden="true">{relationLevelIcon('BLOOD')}</span>
     </RoundButton>
   );
   return (
-    <li data-circle-request={request.id} data-circle-request-direction={direction} className="flex items-center gap-3 px-5 py-2.5" style={{ minHeight: PERSON_ROW_HEIGHT }}>
+    <li ref={ref} data-circle-request={request.id} data-circle-request-direction={direction} className="flex items-center gap-3 px-5 py-2.5" style={{ minHeight: PERSON_ROW_HEIGHT }}>
       <PersonAvatar person={person} name={name} />
       <PersonText person={person} name={name}>
         <span data-circle-request-level={level} className="line-clamp-2 text-caption" style={{ color: INK_2 }}>
@@ -226,6 +229,25 @@ export const CircleRequestRow = memo(function CircleRequestRow({
   );
 });
 
+/**
+ * La section « Demandes » : quand sa dernière demande part, elle se replie avec elle (`ExitPresence`),
+ * au lieu de disparaître d'un coup et de faire remonter les cercles d'un bond.
+ */
+export function CircleRequestsSection({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useExitMotion(ref);
+  return (
+    <div ref={ref} data-circle-requests-section="">
+      <h2 className="px-5 pt-4 pb-1.5 text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+        {title}
+      </h2>
+      <ul data-circle-requests className="flex flex-col">
+        {children}
+      </ul>
+    </div>
+  );
+}
+
 /** Le cache reste affiché ; l'échec de la relecture se dit au-dessus, discrètement, avec « Réessayer ». */
 export function CirclesErrorBanner({ language, onRetry }: { readonly language: InterfaceLanguage; readonly onRetry: () => void }) {
   return (
@@ -236,7 +258,7 @@ export function CirclesErrorBanner({ language, onRetry }: { readonly language: I
       <span className="min-w-0 flex-1 text-caption" style={{ color: INK_2 }}>
         {translateCircles(language, 'circles.error.load')}
       </span>
-      <button type="button" data-circles-retry onClick={onRetry} className={`grid shrink-0 place-items-center rounded-chip px-2 text-caption font-semibold ${FOCUS}`} style={{ minHeight: 44, color: BRAND, outlineColor: BRAND }}>
+      <button type="button" data-circles-retry onClick={onRetry} className={`btn-press grid shrink-0 place-items-center rounded-chip px-2 text-caption font-semibold ${FOCUS}`} style={{ minHeight: 44, color: BRAND, outlineColor: BRAND }}>
         {translate(language, 'discover.retry')}
       </button>
     </div>

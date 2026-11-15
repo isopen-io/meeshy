@@ -145,6 +145,40 @@ final class ComposerSelectionChromeTests: XCTestCase {
                        [.back, .section(.media(.filter)), .extra(.setAsBackground)])
     }
 
+    // MARK: - Le texte pose ses outils à plat (#18651)
+
+    func test_stack_aTextBeingModified_staysFlat_noModifyLevelOnTop() {
+        XCTAssertEqual(ComposerEditRailStack.of(family: .text, editing: .modify, typing: false).levels, [.actions],
+                       "toucher un outil du texte ouvre ses propriétés sans niveau « Modifier » par-dessus")
+        XCTAssertEqual(ComposerEditRailStack.of(family: .text, editing: .time, typing: false).levels,
+                       [.actions, .options(.time)], "Temps garde son niveau")
+    }
+
+    func test_items_aText_servesWriteThenItsToolsThenItsActions_inOneRail() {
+        let actions: [ComposerSelectionAction] = [.modify, .duplicate, .time, .remove]
+        let outils: [ComposerObjectEditorSection] = [.tool(.style), .tool(.color)]
+        XCTAssertEqual(ComposerEditRailItems.items(for: .actions, actions: actions, tools: outils, sections: [],
+                                                   extras: [], keyframes: false),
+                       [.action(.modify), .section(.tool(.style)), .section(.tool(.color)),
+                        .action(.duplicate), .action(.time), .action(.remove)])
+    }
+
+    func test_flatTools_onlyTheTextServesItsSections_withoutTimeOrPlan() {
+        let servies: [ComposerObjectEditorSection] = [.tool(.style), .tool(.color), .timing, .plan]
+        XCTAssertEqual(ComposerInlineEditing.flatTools(for: .text, served: servies), [.tool(.style), .tool(.color)])
+        XCTAssertEqual(ComposerInlineEditing.flatTools(for: .sticker, served: [.timing, .plan]), [])
+        XCTAssertEqual(ComposerInlineEditing.flatTools(for: .image, served: [.media(.crop), .timing]), [],
+                       "l'image pose ses outils par l'arbre, jamais par ses sections")
+    }
+
+    func test_selectionColumn_centersItsGlyphsOnTheUndoRedoAxis() throws {
+        XCTAssertEqual(ComposerSelectionColumn.itemWidth / 2 - ComposerSelectionColumn.glyphInset,
+                       ComposerSceneRoundGlyph.size / 2,
+                       "le centre d'un glyphe du rail tombe sur celui de ↶ ↷")
+        XCTAssertTrue(try source("ComposerSceneOverlayChrome.swift")
+                        .contains(".padding(.trailing, -ComposerSelectionColumn.glyphInset)"))
+    }
+
     func test_items_onlyTheOpenSectionIsLit() {
         XCTAssertTrue(ComposerEditRailItems.isOn(.section(.timing), openSection: .timing))
         XCTAssertFalse(ComposerEditRailItems.isOn(.section(.plan), openSection: .timing))
