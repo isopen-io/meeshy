@@ -729,13 +729,15 @@ export class MeeshySocketIOManager {
       // « ce message est arrivé chez son destinataire » — l'affirmer d'un
       // message qu'on vient de refuser de livrer mentirait à son auteur.
       //
-      // ⚠ Cette phrase décrit ce que CE chemin passe à l'accusé, pas ce que
-      // l'accusé ÉCRIT : `freezeMessageStatus` gèle `deliveredAt` par FENÊTRE
-      // DE TEMPS sur la conversation, pas sur la liste des messages remis, si
-      // bien qu'un message refusé ici peut quand même être marqué remis par
-      // l'avancée du curseur d'un message VOISIN. C'est #18614, antérieur à ce
-      // lot et hors de son périmètre — nommé ici pour que ce commentaire ne
-      // promette pas ce que `freezeMessageStatus` défait.
+      // ⚠ Cette phrase décrit ce que CE chemin passe à l'accusé, et ce que
+      // l'accusé ÉCRIT — plus ce qu'un lecteur en VOIT. Le gel par message est
+      // désormais borné aux ids réellement livrés (#18614) ; mais le statut
+      // SERVI retombe, en l'absence d'entrée figée, sur
+      // `ConversationReadCursor.lastDeliveredAt` — l'horloge MURALE — par le
+      // dernier repli de `resolveReceivedAt`. Un message refusé ici est donc
+      // encore RENDU « remis » à son auteur, pour une raison qui n'est plus le
+      // gel mais le repli. C'est #18701, et c'est la moitié de la chaîne que ce
+      // lot ne ferme pas.
       //
       // Les DEUX questions se lisent sur la même ligne `Participant`, et
       // `authorizeDrainedEntries` existe pour qu'elle ne soit lue qu'une fois.
@@ -1042,9 +1044,45 @@ export class MeeshySocketIOManager {
 
     // Group by conversationId, keeping the last (newest) messageId per conv
     // so we call markMessagesAsReceived once per conversation.
+    //
+    // #18614 — et la LISTE de ce qui est parti, à côté du plus récent. Les deux
+    // disent deux choses : le dernier id avance le CURSEUR (monotone, par
+    // conversation), la liste borne le GEL par message. Ne garder que le
+    // premier laissait `freezeMessageStatus` résoudre une PLAGE `createdAt`,
+    // c'est-à-dire estampiller `deliveredAt` sur tout message créé depuis le
+    // curseur précédent — y compris ceux que ce drain vient de REFUSER, et ceux
+    // que le plafond de 500 de la file a évincés sans qu'ils soient jamais
+    // drainés. L'écriture est write-once : rien ne la défait.
+    //
+    // `arrivals` est déjà le bon ensemble : il descend de `delivered`, qui ne
+    // retient que ce qui est RÉELLEMENT parti, et il est cadré par
+    // `announcesMessageArrival` — une mutation rejouée n'attendait aucune coche.
     const convLatest = new Map<string, string>();
+    const convDelivered = new Map<string, string[]>();
     for (const entry of arrivals) {
+      // `messageId` sort d'un `JSON.parse(…) as QueuedMessagePayload` NON
+      // validé, sur des octets vieux de 48 h — et rien ne le garde sur ce
+      // chemin, à la différence de `conversationId`
+      // (`isAddressableConversationId`). Une entrée sans id ferait partir
+      // `id: { in: [undefined, …] }` à Prisma, dont la levée est avalée par le
+      // `catch` de `freezeMessageStatus` qui rend 0 : **plus aucun gel pour
+      // tout le lot**, y compris les entrées saines.
+      //
+      // C'est l'isolation que `parseRawEntries` PROMET (« so one corrupt entry
+      // can never poison a whole drain/peek ») reprise d'une main et rendue de
+      // l'autre, une couche plus haut — le défaut que le drain documente déjà
+      // sur son tri d'adressabilité. L'id non conforme ne prive que LUI-MÊME
+      // de son gel.
+      if (typeof entry.messageId !== 'string' || entry.messageId.length === 0) continue;
+      // La garde est en TÊTE de boucle, avant `convLatest` : posée après, une
+      // entrée corrompue arrivée en DERNIER devenait le « plus récent » id de
+      // sa conversation, `latestMessageId` sortait `undefined`, et le `return`
+      // qui suit privait d'accusé TOUTES les entrées saines du lot. L'ordre
+      // n'est pas cosmétique — mesuré par le témoin de ce fichier.
       convLatest.set(entry.conversationId, entry.messageId);
+      const named = convDelivered.get(entry.conversationId) ?? [];
+      named.push(entry.messageId);
+      convDelivered.set(entry.conversationId, named);
     }
 
     // Batch-resolve ALL active participants for the affected conversations in a
@@ -1085,7 +1123,9 @@ export class MeeshySocketIOManager {
         const latestMessageId = convLatest.get(conversationId);
         if (!latestMessageId) return;
 
-        await this.readStatusService.markMessagesAsReceived(own.id, conversationId, latestMessageId);
+        await this.readStatusService.markMessagesAsReceived(own.id, conversationId, latestMessageId, {
+          messageIds: convDelivered.get(conversationId) ?? [],
+        });
         if (!mayBroadcastReceipt) return;
 
         const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
