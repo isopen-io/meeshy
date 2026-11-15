@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 
 import type { MessageCardDelivery } from '@/lib/export/deliver-message-card';
 import type { MessageCardInput } from '@/lib/export/message-card-layout';
@@ -85,6 +86,8 @@ const mountSheet = async (
     readonly subject?: MessageCardSubject;
     readonly loadSources?: SourcesLoader;
     readonly recordMotion?: MotionRecorder;
+    readonly scrollHeights?: { readonly contentHeight: number; readonly viewportHeight: number };
+    readonly living?: { readonly calls: { readonly durationMs: number; readonly scrollDuration: number | null; readonly backdropVideoUrl: string | null }[] };
   } = {},
 ) => {
   const harness: Harness = { painted: [], delivered: [], intents: [], announced: [], closed: { count: 0 }, thumbnails: [] };
@@ -93,6 +96,12 @@ const mountSheet = async (
       subject={options.subject ?? subject}
       loadSources={options.loadSources ?? (async () => ({ sources: [], failed: [], dispose: () => undefined }))}
       {...(options.recordMotion === undefined ? {} : { recordMotion: options.recordMotion })}
+      measureScroll={async () => options.scrollHeights ?? null}
+      loadBackdrop={async () => ({ width: 1200, height: 800 }) as unknown as CanvasImageSource}
+      recordLiving={async ({ durationMs, plan, backdropVideoUrl }) => {
+        options.living?.calls.push({ durationMs, scrollDuration: plan?.scrollDuration ?? null, backdropVideoUrl });
+        return new Blob(['film'], { type: 'video/mp4' });
+      }}
       handle="jacques"
       {...(options.languages === true ? { exportLanguages } : {})}
       conversationTitle={options.title === undefined ? 'Soirée de lancement' : options.title}
@@ -767,5 +776,70 @@ describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
     } finally {
       globalThis.IntersectionObserver = original;
     }
+  });
+});
+
+describe('le fond choisi et la vidéo qui défile (#18672, #18671)', () => {
+  const pickFile = async (host: HTMLElement, file: File) => {
+    const input = host.querySelector<HTMLInputElement>('[data-export-backdrop-file]');
+    if (input === null) throw new Error('champ de fichier absent');
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await mounter.settle();
+    await mounter.settle();
+  };
+
+  test('une photo choisie dans « Fond » passe sous la carte, voilée ; « Retirer le fond » la retire', async () => {
+    const { host, harness } = await mountSheet();
+    await openTab(host, 'palette');
+    expect(host.querySelector('[data-export-backdrop-pick]')?.textContent).toBe('Photo ou vidéo en fond');
+    await pickFile(host, new File(['x'], 'plage.jpg', { type: 'image/jpeg' }));
+    expect(harness.painted.at(-1)?.chosenBackdrop).toEqual({ video: false, veil: 0.55 });
+    expect(host.querySelector('[data-export-backdrop-pick]')?.textContent).toBe('Changer le fond');
+    expect(host.querySelector('[data-export-backdrop-veil]')).not.toBeNull();
+    await mounter.click(host.querySelector('[data-export-backdrop-remove]'));
+    await mounter.settle();
+    expect(harness.painted.at(-1)?.chosenBackdrop).toBeUndefined();
+  });
+
+  test('un fichier qui n’est ni une photo ni une vidéo est refusé, et le dit', async () => {
+    const { host, harness } = await mountSheet();
+    await openTab(host, 'palette');
+    await pickFile(host, new File(['x'], 'notes.txt', { type: 'text/plain' }));
+    expect(host.querySelector('[data-export-backdrop-failed]')?.textContent).toBe('Impossible d’utiliser ce fond');
+    expect(harness.painted.at(-1)?.chosenBackdrop).toBeUndefined();
+  });
+
+  test('une vidéo choisie en fond offre l’export en vidéo', async () => {
+    const living = { calls: [] as { durationMs: number; scrollDuration: number | null; backdropVideoUrl: string | null }[] };
+    const { host, harness } = await mountSheet({ living });
+    expect(host.querySelector('[data-export-output="video"]')).toBeNull();
+    await openTab(host, 'palette');
+    await pickFile(host, new File(['x'], 'mer.mp4', { type: 'video/mp4' }));
+    await mounter.click(host.querySelector('[data-export-output="video"]'));
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    expect(living.calls[0]?.backdropVideoUrl).toBe('blob:card');
+    expect(living.calls[0]?.scrollDuration).toBeNull();
+    expect(harness.delivered[0]?.endsWith('.mp4')).toBe(true);
+  });
+
+  test('une carte trop longue défile en vidéo, à la vitesse choisie, et sa durée se lit avant d’enregistrer', async () => {
+    const living = { calls: [] as { durationMs: number; scrollDuration: number | null; backdropVideoUrl: string | null }[] };
+    const { host } = await mountSheet({ scrollHeights: { contentHeight: 1920 + 540, viewportHeight: 1920 }, living });
+    expect(host.querySelector('[data-export-scroll]')).toBeNull();
+    await mounter.click(host.querySelector('[data-export-output="video"]'));
+    expect(host.querySelectorAll('[data-export-scroll-speed]').length).toBe(9);
+    expect(host.querySelector('[data-export-scroll-speed="1"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(host.querySelector('[data-export-scroll-duration]')?.textContent).toContain('14');
+    await mounter.click(host.querySelector('[data-export-scroll-speed="2"]'));
+    expect(host.querySelector('[data-export-scroll-duration]')?.textContent).toContain('9');
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    expect(living.calls[0]?.scrollDuration).toBeCloseTo(5, 5);
+    expect(living.calls[0]?.durationMs).toBeCloseTo(8500, 5);
+    expect(living.calls[0]?.backdropVideoUrl).toBeNull();
   });
 });

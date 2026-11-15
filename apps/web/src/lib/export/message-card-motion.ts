@@ -3,6 +3,7 @@ import { layoutMessageCard, type CardLayout, type MessageCardInput } from './mes
 import { videoAt } from './message-card-media-load';
 import { GIF_FPS, pickRecorderType } from './message-card-output';
 import { loadCardFonts, paintMessageCard, strokeFloorAt, type CardSource } from './message-card-paint';
+import { SCROLL_FPS, scrollOffsetAt, type ScrollPlan } from './message-card-scroll';
 import { measuredInput } from './message-card-sticker';
 import { templateOf, type MessageCardTemplate } from './message-card-templates';
 
@@ -63,7 +64,7 @@ async function stageOf(input: MessageCardInput, sources: readonly (CardSource | 
   });
   const scale = width === null ? 1 : width / layout.width;
   canvas.width = Math.max(2, Math.round((layout.width * scale) / 2) * 2);
-  canvas.height = Math.max(2, Math.round((layout.height * scale) / 2) * 2);
+  canvas.height = Math.max(2, Math.round(((layout.viewportHeight ?? layout.height) * scale) / 2) * 2);
   return { canvas, ctx, layout, template, scale };
 }
 
@@ -189,4 +190,78 @@ export async function recordCardGif(params: {
   }
   const gif = encodeGif(stage.canvas.width, stage.canvas.height, frames);
   return new Blob([gif], { type: 'image/gif' });
+}
+
+/**
+ * **LA VIDÉO D'UNE CARTE QUI VIT** (#18671, #18672) : le contenu glisse sous la
+ * fenêtre du format au rythme de `plan`, et/ou la vidéo choisie en fond joue
+ * en boucle, muette. Filmée en temps réel (`captureStream`), comme
+ * `recordCardVideo` — `null` si le navigateur ne sait pas enregistrer.
+ */
+export async function recordLivingCard(params: {
+  readonly input: MessageCardInput;
+  readonly sources: readonly (CardSource | null)[];
+  /** Le défilement — `null` : la carte tient, seul le fond bouge. */
+  readonly plan: ScrollPlan | null;
+  readonly durationMs: number;
+  /** L'URL de la vidéo choisie en fond, peinte au rang `input.media.length`. */
+  readonly backdropVideoUrl: string | null;
+  readonly onProgress?: (progress: number) => void;
+  readonly env?: MotionEnvironment;
+}): Promise<Blob | null> {
+  const env = params.env ?? browserMotionEnvironment();
+  const Recorder = env.MediaRecorder;
+  if (Recorder === undefined) return null;
+  const type = pickRecorderType((candidate) => Recorder.isTypeSupported(candidate));
+  if (type === null) return null;
+  const input: MessageCardInput = params.plan === null ? params.input : { ...params.input, unbounded: true };
+  const stage = await stageOf(input, params.sources, env.doc, null);
+  if (stage === null || typeof stage.canvas.captureStream !== 'function') return null;
+  const backdropIndex = (input.media ?? []).length;
+  const video = params.backdropVideoUrl === null ? null : await videoAt(params.backdropVideoUrl, env.doc, 0);
+  const sources = video === null ? params.sources : Array.from({ length: Math.max(params.sources.length, backdropIndex + 1) }, (_, i) => (i === backdropIndex ? video : (params.sources[i] ?? null)));
+  const paint = (seconds: number) => {
+    stage.ctx.setTransform(stage.scale, 0, 0, stage.scale, 0, 0);
+    paintMessageCard(stage.ctx, stage.layout, stage.template, {
+      sources,
+      ...(params.plan === null ? {} : { scrollOffset: scrollOffsetAt(params.plan, seconds) }),
+    });
+  };
+
+  const stream = stage.canvas.captureStream(SCROLL_FPS);
+  const chunks: Blob[] = [];
+  const recorder = new Recorder(stream, { mimeType: type });
+  recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) chunks.push(event.data);
+  };
+  const stopped = new Promise<void>((resolve) => {
+    recorder.onstop = () => resolve();
+  });
+  paint(0);
+  if (video !== null) {
+    video.loop = true;
+    video.currentTime = 0;
+    await video.play().catch(() => undefined);
+  }
+  recorder.start(250);
+  const started = performance.now();
+  await new Promise<void>((resolve) => {
+    const tick = () => {
+      const elapsed = performance.now() - started;
+      const progress = Math.min(1, elapsed / params.durationMs);
+      paint(elapsed / 1000);
+      params.onProgress?.(progress);
+      if (progress >= 1) {
+        resolve();
+        return;
+      }
+      env.requestFrame(tick);
+    };
+    env.requestFrame(tick);
+  });
+  video?.pause();
+  recorder.stop();
+  await stopped;
+  for (const track of stream.getTracks()) track.stop();
+  return chunks.length === 0 ? null : new Blob(chunks, { type: type.split(';')[0] ?? type });
 }

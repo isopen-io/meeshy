@@ -172,6 +172,8 @@ export type ExportTrayProps = {
   readonly onLanguage: (code: string | null) => void;
   /** Les choix de contenu de la carte (#16393) — absents : pas d'onglet « Contenu ». */
   readonly content?: ReactNode;
+  /** La photo ou la vidéo choisie en fond (#18672), sous les palettes. */
+  readonly backdrop?: ReactNode;
 };
 
 const STACKED: readonly ExportTab[] = ['content', 'frame', 'media'];
@@ -259,8 +261,10 @@ export function ExportTray(props: ExportTrayProps) {
           />
         ) : null}
 
-        {tab === 'palette'
-          ? CARD_PALETTE_IDS.map((palette) => (
+        {tab === 'palette' ? (
+          <div className="flex w-full min-w-0 flex-col gap-1">
+            <div className="flex min-w-0 gap-2 overflow-x-auto py-1">
+              {CARD_PALETTE_IDS.map((palette) => (
               <button
                 key={palette}
                 type="button"
@@ -278,8 +282,11 @@ export function ExportTray(props: ExportTrayProps) {
                   boxShadow: palette === current.paletteId ? '0 0 0 3px var(--color-ios-surface), 0 0 0 5px var(--color-ios-ink)' : undefined,
                 }}
               />
-            ))
-          : null}
+              ))}
+            </div>
+            {props.backdrop}
+          </div>
+        ) : null}
 
         {tab === 'typeface'
           ? CARD_TYPEFACE_IDS.map((typeface) => (
