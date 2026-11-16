@@ -26,7 +26,10 @@ final class ConversationViewModelAfterReadTests: XCTestCase {
         try await super.tearDown()
     }
 
-    private func makeSUT(consumer: MockAfterReadConsumer = MockAfterReadConsumer()) async throws
+    private func makeSUT(
+        consumer: MockAfterReadConsumer = MockAfterReadConsumer(),
+        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared
+    ) async throws
         -> (sut: ConversationViewModel, messageService: MockMessageService) {
         await CacheCoordinator.shared.messages.invalidate(for: conversationId)
         let auth = MockAuthManager()
@@ -41,6 +44,7 @@ final class ConversationViewModelAfterReadTests: XCTestCase {
             conversationService: MockConversationService(),
             reactionService: MockReactionService(),
             reportService: MockReportService(),
+            syncEngine: syncEngine,
             messageSocket: MockMessageSocket(),
             dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)),
             networkMonitor: FakeNetworkMonitor(isOnline: true),
@@ -152,6 +156,148 @@ final class ConversationViewModelAfterReadTests: XCTestCase {
 
         XCTAssertTrue(consumer.calls.isEmpty)
     }
+
+    // MARK: - #18556 — toute sortie consomme ce qui a été affiché
+
+    /// Ouverte en REGARD par la bannière tirée (#18721) : rien n'est marqué lu,
+    /// mais la flamme a été AFFICHÉE — la sortie la consomme.
+    func test_ouverteEnRegard_flammeAffichéePuisSortie_consomme() async throws {
+        PeekOpeningRequests.request(conversationId)
+        let consumer = MockAfterReadConsumer()
+        let (sut, _) = try await makeSUT(consumer: consumer)
+        sut.messages = [message("m1", afterRead: true)]
+
+        sut.markAsRead(messageIds: ["m1"], visibleIds: ["m1"])
+        sut.consumeAfterReadOnExit()
+
+        XCTAssertEqual(consumer.calls.map(\.messageIds), [["m1"]])
+    }
+
+    /// Le fil vide ses lectures acquises AU DÉMONTAGE, après la porte de sortie.
+    func test_lectureVidéeAprèsLaSortie_partAvecElle() async throws {
+        let consumer = MockAfterReadConsumer()
+        let (sut, _) = try await makeSUT(consumer: consumer)
+        sut.messages = [message("m1", afterRead: true)]
+
+        sut.consumeAfterReadOnExit()
+        sut.markAsRead(messageIds: ["m1"], visibleIds: ["m1"])
+
+        XCTAssertEqual(consumer.calls.map(\.messageIds), [["m1"]])
+        XCTAssertFalse(sut.messages.contains { $0.id == "m1" })
+    }
+
+    /// Quitter depuis le Résumé rattrape APRÈS la porte (`leaveConversationByNavigation`).
+    func test_sortieDuRésumé_rattrapageAprèsLaPorte_consomme() async throws {
+        let consumer = MockAfterReadConsumer()
+        let (sut, _) = try await makeSUT(consumer: consumer)
+        sut.messages = [message("m1", afterRead: true)]
+
+        sut.consumeAfterReadOnExit()
+        sut.markCaughtUpFromSummaryOrRiver()
+
+        XCTAssertEqual(consumer.calls.map(\.messageIds), [["m1"]])
+    }
+
+    /// Revenu à l'écran, une flamme lue reste sous les yeux jusqu'à la sortie suivante.
+    func test_retourÀLÉcran_flammeLueEnsuite_attendLaSortieSuivante() async throws {
+        let consumer = MockAfterReadConsumer()
+        let (sut, _) = try await makeSUT(consumer: consumer)
+        sut.messages = [message("m1", afterRead: true)]
+        sut.consumeAfterReadOnExit()
+
+        sut.start()
+        sut.markAsRead(messageIds: ["m1"], visibleIds: ["m1"])
+
+        XCTAssertTrue(consumer.calls.isEmpty)
+        sut.consumeAfterReadOnExit()
+        XCTAssertEqual(consumer.calls.map(\.messageIds), [["m1"]])
+    }
+
+    /// Quitter vers la liste rend la conversation aux bannières in-app, même
+    /// si son modèle reste retenu : un message entrant s'y signale de nouveau.
+    func test_écranQuitté_modèleRetenu_laConversationNEstPlusOuverte() async throws {
+        let (sut, _) = try await makeSUT()
+        XCTAssertTrue(NotificationToastManager.shared.isConversationOpen(conversationId))
+
+        sut.noteScreenLeft()
+
+        XCTAssertFalse(NotificationToastManager.shared.isConversationOpen(conversationId))
+        XCTAssertNotEqual(NotificationToastManager.shared.activeConversationId, conversationId)
+    }
+
+    /// Le moteur de synchro aussi : la ligne de la liste recompte ses non-lus
+    /// dès qu'on l'a quittée, pas quand le modèle meurt.
+    func test_écranQuittéPuisRevenu_leMoteurFermeEtRouvre() async throws {
+        let engine = MockConversationSyncEngine()
+        let (sut, _) = try await makeSUT(syncEngine: engine)
+        XCTAssertEqual(engine.openConversationIds, [conversationId])
+
+        sut.noteScreenLeft()
+        XCTAssertEqual(engine.openConversationIds, [])
+
+        sut.start()
+        XCTAssertEqual(engine.openConversationIds, [conversationId])
+        sut.noteScreenLeft()
+        sut.noteScreenLeft()
+        XCTAssertEqual(engine.openConversationIds, [])
+    }
+
+    /// L'écran revenu (`.task` rejoué) se déclare de nouveau ouvert.
+    func test_écranRevenu_laConversationEstDeNouveauOuverte() async throws {
+        let (sut, _) = try await makeSUT()
+        sut.noteScreenLeft()
+
+        sut.start()
+
+        XCTAssertTrue(NotificationToastManager.shared.isConversationOpen(conversationId))
+        sut.noteScreenLeft()
+    }
+
+    func test_visit_lectureTardive_horsDeLaFenêtre_attendLaSortieSuivante() {
+        let flame = message("m1", afterRead: true)
+        let left = Date()
+        var visit = AfterReadVisit()
+        _ = visit.leave(at: left)
+
+        visit.note(displayed: ["m1"], among: [flame])
+
+        XCTAssertEqual(visit.takeLate(at: left.addingTimeInterval(AfterReadVisit.lateReadWindow + 1)), [])
+        XCTAssertEqual(visit.takeLate(at: left.addingTimeInterval(1)), ["m1"])
+    }
+
+    /// L'accusé DURABLE part avant l'effet local : une app tuée pendant
+    /// l'effet local ne perd plus la consommation.
+    func test_consumption_enfileLAccuséAvantLEffetLocal() async {
+        let journal = ConsumptionJournal()
+        let consumption = AfterReadConsumption(
+            enqueue: { journal.steps.append("enqueue:\($0.messageIds.joined())") },
+            expireLocally: { _, _ in journal.steps.append("expire") },
+            flush: { journal.steps.append("flush") }
+        )
+
+        await consumption.run(conversationId: conversationId, messageIds: ["m1"])
+
+        XCTAssertEqual(journal.steps, ["enqueue:m1", "expire", "flush"])
+    }
+
+    /// Un échec d'écriture de l'outbox n'empêche pas l'effet local.
+    func test_consumption_enfilementEnÉchec_effetLocalQuandMême() async {
+        let journal = ConsumptionJournal()
+        let consumption = AfterReadConsumption(
+            enqueue: { _ in throw OfflineQueueError.poolNotConfigured },
+            expireLocally: { _, _ in journal.steps.append("expire") },
+            flush: { journal.steps.append("flush") }
+        )
+
+        await consumption.run(conversationId: conversationId, messageIds: ["m1"])
+
+        XCTAssertEqual(journal.steps, ["expire", "flush"])
+    }
+}
+
+@MainActor
+private final class ConsumptionJournal {
+    var steps: [String] = []
 }
 
 @MainActor
