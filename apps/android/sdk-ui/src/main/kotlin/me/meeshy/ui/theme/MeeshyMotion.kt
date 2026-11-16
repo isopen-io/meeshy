@@ -37,6 +37,14 @@ public object MeeshyMotion {
     public fun <T> springBouncy(): SpringSpec<T> =
         spring(dampingRatio = 0.6f, stiffness = stiffnessForResponse(0.5f))
 
+    /** iOS `bannerPullReturn` — response 0.36, damping 0.66: the pulled banner springs back, with the elastic overshoot (#18721). */
+    public fun <T> bannerPullReturn(): SpringSpec<T> =
+        spring(dampingRatio = 0.66f, stiffness = stiffnessForResponse(0.36f))
+
+    /** iOS `bannerPullMorph` — response 0.42, damping 0.92: the banner grows into the conversation without trembling (#18721). */
+    public fun <T> bannerPullMorph(): SpringSpec<T> =
+        spring(dampingRatio = 0.92f, stiffness = stiffnessForResponse(0.42f))
+
     /**
      * A spring from an iOS `(response, dampingFraction)` pair, for a component whose law owns its pair (the kit's anchored
      * sheet, K15: 0.32 / 0.88) — the same conversion as the three springs above, never a local `spring(...)` literal.
