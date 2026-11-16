@@ -272,7 +272,8 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         ("Components/MessagePieceOverlay.swift", "{}"),
         ("Components/UniversalComposerBar+Layout.swift", "focusTextField"),
         ("Views/MoodSpotlight/MoodSpotlightView.swift", "replyFocused = false"),
-        ("Components/MiniAudioPlayerBar.swift", "openConversation(for: context)")
+        ("Components/MiniAudioPlayerBar.swift", "openConversation(for: context)"),
+        ("Views/Bubble/BubbleCarouselView.swift", "guard presentation.opensFullscreen")
     ]
 
     private static let featuresMainIconOnlyExceptions: Set<String> = ["Components/ConversationPreferencesTab.swift"]
