@@ -125,6 +125,13 @@ public enum MeeshyAnimation {
         response: FloatingMenuLadderFollow.firstRungResponse + 2 * FloatingMenuLadderFollow.responseStepPerRung,
         dampingFraction: FloatingMenuLadderFollow.dampingFraction
     )
+    /// L'aperçu tiré qui décroche en ligne déplaçable (#18724) : la ligne saute vers le doigt et le suit comme le premier barreau de la chaîne élastique franche — elle colle presque, dépasse un peu sa place, puis s'y pose.
+    public nonisolated static let peekDetach = Animation.spring(
+        response: FloatingMenuLadderFollow.firstRungResponse,
+        dampingFraction: FloatingMenuLadderFollow.dampingFraction
+    )
+    /// L'aperçu tiré puis relâché avant le décrochage revient à sa place : un ressort court qui fait sentir l'élastique sans trembler.
+    public nonisolated static let peekDetachReturn = Animation.spring(response: 0.32, dampingFraction: 0.72)
 }
 
 // MARK: - iPad Layout

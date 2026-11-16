@@ -217,14 +217,11 @@ extension ConversationListView {
         }
     }
 
-    /// Progression du morph drag-n-drop pendant le drag vers le bas sur la
-    /// carte (0 = menu ouvert, 1 = carte devenue chip draggable) : le blur du
-    /// fond s'efface, le menu se dissout, la carte rétrécit et suit le doigt.
-    /// Tout dérive de `dragOffsetY` — le snap-back du geste restaure tout.
-    /// Une fois LATCHÉE (`chipModeLatched`), la chip reste chip même si le
-    /// doigt remonte (pour viser un header de section au-dessus).
+    /// Progression de la traction (0 = aperçu, 1 = ligne déplaçable, #18724) :
+    /// voile et menu s'effacent, la carte se comprime en résistant. Décrochée
+    /// (`chipModeLatched`), la ligne le reste même si le doigt remonte.
     var dragMorphProgress: CGFloat {
-        chipModeLatched ? 1 : ConversationPeekPullDown.progress(translation: dragOffsetY)
+        ConversationPeekPullDown.stage(translation: dragOffsetY, velocity: 0, isLatched: chipModeLatched).progress
     }
 
     /// L'aperçu naît de la ligne pressée (#18722) — tick 1 : la carte se pose
@@ -270,7 +267,7 @@ extension ConversationListView {
                         reduceMotion: reduceMotion,
                         menuChrome: peekMenuChrome(),
                         morphProgress: previewMorphProgress,
-                        card: { heights in peekCard(for: conversation, heights: heights) },
+                        card: { heights in peekCard(for: conversation, heights: heights, reduceMotion: reduceMotion) },
                         menu: peekMenu(for: conversation),
                         onChipDragChanged: { handleCardChipDrag($0) },
                         onChipDragEnded: { endCardChipDrag($0) },
@@ -295,13 +292,15 @@ extension ConversationListView {
     /// La carte de l'aperçu d'appui long (#18722) : elle NAÎT du cadre de la
     /// rangée pressée et s'étend jusqu'à la carte des DERNIERS MESSAGES —
     /// face de la rangée sur la première moitié, aperçu fondu dans la seconde
-    /// (`ConversationPreviewMorphCard`). Pendant le morph vers le bas, elle
-    /// rétrécit en pastille et suit le doigt (`dragMorphProgress`).
-    func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights) -> some View {
+    /// (`ConversationPreviewMorphCard`). Tirée vers le bas, elle résiste, se
+    /// comprime en ligne, puis décroche et suit le doigt (`dragMorphProgress`).
+    func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights, reduceMotion: Bool) -> some View {
         let isDark = theme.mode.isDark
         let accentColor = conversation.displayPalette(isDark: isDark).primary
         return ConversationPreviewMorphCard(
             progress: previewMorphProgress,
+            detach: dragMorphProgress,
+            grab: chipGrabPoint,
             source: contextMenuSourceFrame,
             accent: Color(hex: accentColor),
             surface: MeeshyColors.backgroundSecondary(isDark: isDark),
@@ -312,8 +311,7 @@ extension ConversationListView {
         .contentShape(Rectangle())
         .onTapGesture { handlePeekTouch(.card, on: conversation) }
         .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { handlePeekTouch(.card, on: conversation) }
-        .scaleEffect(1 - 0.45 * dragMorphProgress, anchor: .bottom)
-        .offset(x: dragOffsetX, y: dragOffsetY)
+        .modifier(ConversationPeekCardDrag(offset: CGSize(width: dragOffsetX, height: dragOffsetY), isLatched: chipModeLatched, reduceMotion: reduceMotion))
         .opacity(ConversationPreviewMorph.cardOpacity(isAppeared: contextMenuAppeared, progress: previewMorphProgress))
     }
 
@@ -387,13 +385,11 @@ extension ConversationListView {
         return ConversationPeekMenuChrome(offset: 40 * dragMorphProgress, opacity: Double(1 - dragMorphProgress), blur: 6 * dragMorphProgress)
     }
 
-    /// Glisser la carte vers le BAS depuis le cran compact : morph drag-n-drop
-    /// — la carte suit le doigt (x et y), rétrécit en pastille, le voile
-    /// s'efface et le menu se dissout (`dragMorphProgress`). Une fois LATCHÉE,
-    /// la pastille suit le doigt partout pour viser un en-tête de section.
-    /// Les lignes de la liste ne portent AUCUN DragGesture : ici le ScrollView
-    /// est masqué par l'overlay, zéro contention de scroll possible.
+    /// Glisser la carte vers le BAS depuis le cran compact : elle résiste et
+    /// se comprime en ligne sous le doigt ; tirée franchement, elle DÉCROCHE
+    /// (`ConversationPeekPullDown.stage`) et le suit pour viser une section.
     func handleCardChipDrag(_ value: DragGesture.Value) {
+        if chipGrabPoint != value.startLocation { chipGrabPoint = value.startLocation }
         if chipModeLatched {
             dragOffsetY = value.translation.height
             dragOffsetX = value.translation.width
@@ -403,11 +399,10 @@ extension ConversationListView {
         }
         dragOffsetY = max(0, value.translation.height)
         dragOffsetX = value.translation.width * dragMorphProgress
-        guard dragMorphProgress >= 1 else { return }
-        // Morph complet → verrouille le mode pastille ; l'auto-scroll de bord
-        // s'arme ici pour viser les en-têtes hors écran.
-        chipModeLatched = true
-        HapticFeedback.light()
+        guard ConversationPeekPullDown.latches(wasLatched: chipModeLatched, stage: ConversationPeekPullDown.stage(translation: dragOffsetY, velocity: value.peekPullVelocity)) else { return }
+        // Une fois par geste : haptique rigide, la ligne saute sous le doigt.
+        meeshyWithAnimation(MeeshyAnimation.peekDetach, reduced: nil, reduceMotion: ConversationPreviewEntranceMotion.isReducedNow) { chipModeLatched = true }
+        HapticFeedback.rigid()
         updateChipDropTarget(at: value.location)
         chipAutoScrollDriver.onScrollTick = { location in
             updateChipDropTarget(at: location)
@@ -417,14 +412,15 @@ extension ConversationListView {
 
     /// Lâcher : la pastille se dépose, ou `ConversationPeekPullDown` ferme / remet en place (#17258).
     func endCardChipDrag(_ value: DragGesture.Value) {
-        switch ConversationPeekPullDown.release(predictedEndTranslation: value.predictedEndTranslation.height, isLatched: chipModeLatched) {
+        switch ConversationPeekPullDown.release(predictedEndTranslation: value.predictedEndTranslation.height, isLatched: chipModeLatched,
+                                                velocity: value.peekPullVelocity) {
         case .drop:
             chipAutoScrollDriver.stop()
             handleChipDrop(at: value.location)
         case .dismiss:
             dismissContextMenu()
         case .restore:
-            withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) { dragOffsetY = 0; dragOffsetX = 0 }
+            ConversationPeekDetachMotion.animateReturn { dragOffsetY = 0; dragOffsetX = 0 }
         }
     }
 
@@ -536,9 +532,15 @@ enum ConversationPreviewEntranceMotion {
 /// fois à sa taille de repos et le cadre ne fait que le découper : rien ne se
 /// remet en page pendant l'animation. Toutes les valeurs rendues dérivent de
 /// la seule `progress`, interpolée image par image par des modificateurs
-/// animables — ni la liste ni l'aperçu ne sont ré-évalués.
+/// animables — ni la liste ni l'aperçu ne sont ré-évalués. Tirée vers le bas,
+/// la carte refait le chemin à l'envers vers une forme de ligne (`detach`).
 struct ConversationPreviewMorphCard<RowFace: View, Preview: View>: View {
     let progress: CGFloat
+    /// La compression vers la ligne pendant la traction (#18724) : 0 ⇒ la
+    /// carte, 1 ⇒ une rangée — avatar à gauche, titre — prête à décrocher.
+    var detach: CGFloat = 0
+    /// Le point GLOBAL où le doigt a saisi la carte : la ligne s'y resserre.
+    var grab: CGPoint? = nil
     /// Le cadre GLOBAL de la rangée pressée ; nil ⇒ la carte ne part que d'elle-même.
     let source: CGRect?
     let accent: Color
@@ -549,18 +551,22 @@ struct ConversationPreviewMorphCard<RowFace: View, Preview: View>: View {
     var body: some View {
         GeometryReader { geometry in
             let rest = CGRect(origin: .zero, size: geometry.size)
-            let from = ConversationPreviewMorph.sourceInSlot(source, slot: geometry.frame(in: .global)) ?? rest
+            let slot = geometry.frame(in: .global)
+            let from = ConversationPreviewMorph.sourceInSlot(source, slot: slot) ?? rest
+            let grabY = ConversationPeekPullDown.grabY(grab, slot: slot, shift: geometry.frame(in: .named(ConversationPeekCardDrag.restSpace)).origin)
+            let row = ConversationPeekPullDown.rowFrame(size: ConversationPeekPullDown.rowSize(source: source, cardWidth: rest.width), in: rest, grabY: grabY)
             // Calé en tête et à gauche : la face garde son avatar et son titre
             // pendant que le cadre se resserre, et l'aperçu tombe pile à sa place.
             ZStack(alignment: .topLeading) {
                 rowFace
                     .frame(width: from.width, height: from.height)
-                    .modifier(ConversationPreviewMorphFade(progress: progress, layer: .rowFace))
+                    .modifier(ConversationPreviewMorphFade(progress: progress, detach: detach, layer: .rowFace))
                 preview
                     .frame(width: rest.width, height: rest.height, alignment: .top)
-                    .modifier(ConversationPreviewMorphFade(progress: progress, layer: .preview))
+                    .modifier(ConversationPreviewMorphFade(progress: progress, detach: detach, layer: .preview))
             }
-            .modifier(ConversationPreviewMorphFrame(progress: progress, from: from, to: rest, accent: accent, surface: surface))
+            .modifier(ConversationPreviewMorphFrame(progress: progress, detach: detach, from: from, to: rest, row: row,
+                                                    accent: accent, surface: surface))
         }
     }
 }
@@ -631,25 +637,31 @@ struct ConversationPeekRowFace: View {
 }
 
 /// Le cadre, le rayon, le fond et l'ombre de la carte, interpolés par SwiftUI
-/// à chaque image du ressort : le contenu reste opaque à ce modificateur.
+/// à chaque image du ressort : le contenu reste opaque à ce modificateur. La
+/// traction (`detach`) comprime le cadre vers la ligne et rouvre ses coins de
+/// rangée ; le fond et l'ombre restent, la ligne flotte au-dessus de la liste.
 struct ConversationPreviewMorphFrame: ViewModifier, Animatable {
     var progress: CGFloat
+    var detach: CGFloat
     let from: CGRect
     let to: CGRect
+    let row: CGRect
     let accent: Color
     let surface: Color
 
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(progress, detach) }
+        set { progress = newValue.first; detach = newValue.second }
     }
 
     func body(content: Content) -> some View {
-        let frame = ConversationPreviewMorph.frame(progress: progress, from: from, to: to)
+        let born = ConversationPreviewMorph.frame(progress: progress, from: from, to: to)
+        let frame = ConversationPeekPullDown.compressed(born, toward: row, detach: detach)
+        let faces = ConversationPeekPullDown.faceProgress(morph: progress, detach: detach)
         // Coins du même style que ceux de `ConversationPreviewView` : au repos,
         // les deux découpes se confondent.
         let shape = RoundedRectangle(
-            cornerRadius: ConversationPreviewMorph.cornerRadius(progress: progress, from: MeeshyRadius.md, to: MeeshyRadius.xl),
+            cornerRadius: ConversationPreviewMorph.cornerRadius(progress: faces, from: MeeshyRadius.md, to: MeeshyRadius.xl),
             style: .circular
         )
         content
@@ -668,18 +680,81 @@ struct ConversationPreviewMorphFrame: ViewModifier, Animatable {
     }
 }
 
-/// L'opacité d'une face de la carte, interpolée image par image.
+/// L'opacité d'une face de la carte, interpolée image par image : la face de
+/// la rangée revient quand la traction refait de la carte une ligne.
 struct ConversationPreviewMorphFade: ViewModifier, Animatable {
     var progress: CGFloat
+    var detach: CGFloat
     let layer: ConversationPreviewMorph.Layer
 
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(progress, detach) }
+        set { progress = newValue.first; detach = newValue.second }
     }
 
     func body(content: Content) -> some View {
-        content.opacity(ConversationPreviewMorph.opacity(of: layer, progress: progress))
+        let faces = ConversationPeekPullDown.faceProgress(morph: progress, detach: detach)
+        return content.opacity(ConversationPreviewMorph.opacity(of: layer, progress: faces))
+    }
+}
+
+// MARK: - Le décrochage en ligne déplaçable (#18724)
+
+/// La carte sous le doigt pendant la traction : elle résiste tant qu'elle
+/// tient (`ConversationPeekPullDown.cardOffset`), puis, décrochée, suit le
+/// doigt d'un ressort court — le saut vers le doigt au décrochage en est le
+/// premier pas. Seules les images du geste reçoivent ce ressort : un retour
+/// ou un retrait animés gardent le leur.
+struct ConversationPeekCardDrag: ViewModifier {
+    /// La carte AU REPOS, hors du décalage : la carte y lit ce que le geste
+    /// l'a déplacée, pour garder la ligne sous le point saisi.
+    nonisolated static let restSpace = "conversation.peek.card.rest"
+
+    let offset: CGSize
+    let isLatched: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: offset.width, y: ConversationPeekPullDown.cardOffset(translation: offset.height, isLatched: isLatched))
+            .transaction(follow)
+            .coordinateSpace(name: ConversationPeekCardDrag.restSpace)
+    }
+
+    private var follow: (inout Transaction) -> Void {
+        let follow = ConversationPeekDetachMotion.follow(isLatched: isLatched, reduceMotion: reduceMotion)
+        return { transaction in
+            guard transaction.animation == nil, !transaction.disablesAnimations else { return }
+            transaction.animation = follow
+        }
+    }
+}
+
+/// Les mouvements du décrochage : le ressort qui porte la ligne décrochée, et
+/// le retour en aperçu d'une carte relâchée avant de décrocher. Sous Réduire
+/// les animations, la ligne suit le doigt à l'image et le retour est un fondu.
+nonisolated enum ConversationPeekDetachMotion {
+    static func follow(isLatched: Bool, reduceMotion: Bool) -> Animation? {
+        isLatched && !reduceMotion ? MeeshyAnimation.peekDetach : nil
+    }
+
+    /// Le retour reste annulable : un nouveau glissement le reprend où il en est.
+    @MainActor
+    static func animateReturn(_ body: () -> Void) {
+        meeshyWithAnimation(MeeshyAnimation.peekDetachReturn, reduced: MeeshyMotion.reducedFade,
+                            reduceMotion: ConversationPreviewEntranceMotion.isReducedNow, body)
+    }
+}
+
+extension DragGesture.Value {
+    /// La vitesse verticale du doigt, en points par seconde : servie dès
+    /// iOS 17, retrouvée dans la fin prédite avant.
+    var peekPullVelocity: CGFloat {
+        guard #available(iOS 17.0, *) else {
+            return ConversationPeekPullDown.velocity(translation: translation.height,
+                                                     predictedEndTranslation: predictedEndTranslation.height)
+        }
+        return velocity.height
     }
 }
 

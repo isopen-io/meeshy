@@ -215,6 +215,8 @@ struct ConversationListView: View {
     /// RESTE une chip qui suit librement le doigt (y compris vers le haut,
     /// pour viser un header au-dessus) jusqu'au relâchement — drop ou dismiss.
     @State var chipModeLatched = false
+    /// Le point GLOBAL où le doigt a saisi la carte : la ligne s'y resserre (#18724).
+    @State var chipGrabPoint: CGPoint? = nil
     /// Auto-scroll de bord pendant le drag de la chip (Phase 3) : stationner
     /// près du haut/bas du viewport fait défiler la liste pour atteindre les
     /// headers de section hors écran. Armé au verrouillage de la chip
