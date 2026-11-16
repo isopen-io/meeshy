@@ -1,0 +1,173 @@
+/* LA PASTILLE (K41, #18874) — surface, genre, hauteur. Le VERRE de la surface `glass`
+   vient de K01 (`glass-kit.css`) ; ici il n'y a ni flou ni ombre portée : une liste de
+   500 rangées porte 500 pastilles. Chaque valeur chiffrée vient de
+   `meeshy-badge-recipe.ts`, qui la pose en propriétés `--kit-badge-*`. Seuls
+   `transform` et `opacity` s'animent. */
+@layer components {
+  .kit-badge {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    gap: var(--kit-badge-gap);
+    min-inline-size: var(--kit-badge-min-w);
+    block-size: var(--kit-badge-h);
+    padding: 0 var(--kit-badge-pad);
+    border: var(--kit-badge-border) solid var(--kit-badge-tone);
+    border-radius: var(--kit-badge-radius);
+    color: var(--kit-badge-ink);
+    font: inherit;
+    font-size: var(--kit-badge-font);
+    font-weight: var(--kit-badge-weight);
+    line-height: 1;
+    white-space: nowrap;
+    opacity: var(--kit-badge-opacity);
+    isolation: isolate;
+    transition: transform 120ms var(--motion-reduced);
+  }
+
+  .kit-badge[data-surface='tonal'],
+  .kit-badge[data-surface='solid'] {
+    border-color: transparent;
+  }
+
+  .kit-badge[data-surface='tonal']::before,
+  .kit-badge[data-surface='solid']::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background-color: var(--kit-badge-tone);
+    opacity: var(--kit-badge-fill-opacity);
+  }
+
+  .kit-badge[data-surface='glass'] {
+    border-color: transparent;
+    color: var(--color-on-media);
+  }
+
+  .kit-badge[data-stale] {
+    filter: saturate(0.4);
+  }
+
+  .kit-badge[data-current] {
+    outline: 1.5px solid var(--accent, var(--color-ios-brand));
+    outline-offset: 0;
+  }
+}
+
+button.kit-badge {
+  cursor: pointer;
+  background-color: transparent;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button.kit-badge::after {
+  content: '';
+  position: absolute;
+  inset-block: calc(-1 * var(--kit-badge-slack));
+  inset-inline: min(0px, calc((var(--kit-badge-h) - 2.75rem) / 2));
+}
+
+button.kit-badge[data-pressed] {
+  transform: scale(var(--kit-badge-scale-pressed));
+}
+
+button.kit-badge[aria-disabled='true'] {
+  cursor: default;
+}
+
+button.kit-badge:focus-visible {
+  outline: 2px solid var(--kit-badge-tone);
+  outline-offset: 3px;
+}
+
+.kit-badge__content {
+  font-variant-numeric: tabular-nums;
+}
+
+.kit-badge__content[data-content='code'],
+.kit-badge__content[data-content='time'] {
+  font-family: var(--ios-font-mono, ui-monospace, monospace);
+  font-feature-settings: 'tnum';
+}
+
+.kit-badge__lead {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--kit-badge-glyph);
+  block-size: var(--kit-badge-glyph);
+}
+
+.kit-badge__lead[data-dot] {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: var(--ios-radius-full);
+  background-color: currentcolor;
+}
+
+.kit-badge__lead[data-dot='live'] {
+  position: relative;
+}
+
+.kit-badge__lead[data-dot='live']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: currentcolor;
+  animation: kit-motion-pulse var(--motion-pulse-duration) var(--motion-pulse) infinite;
+  animation-play-state: var(--motion-pulse-play);
+}
+
+.kit-badge__lead > svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.kit-badge-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.kit-badge-anchor__badge {
+  position: absolute;
+  z-index: 1;
+  border-radius: var(--ios-radius-full);
+  box-shadow: 0 0 0 var(--kit-badge-cutout-ring, 3px) var(--kit-badge-cutout, transparent);
+}
+
+.kit-badge-anchor[data-alignment='topEnd'] > .kit-badge-anchor__badge {
+  inset-block-start: calc(-1 * var(--kit-badge-offset));
+  inset-inline-end: calc(-1 * var(--kit-badge-offset));
+}
+
+.kit-badge-anchor[data-alignment='topStart'] > .kit-badge-anchor__badge {
+  inset-block-start: calc(-1 * var(--kit-badge-offset));
+  inset-inline-start: calc(-1 * var(--kit-badge-offset));
+}
+
+.kit-badge-anchor[data-alignment='bottomEnd'] > .kit-badge-anchor__badge {
+  inset-block-end: calc(-1 * var(--kit-badge-offset));
+  inset-inline-end: calc(-1 * var(--kit-badge-offset));
+}
+
+.kit-badge-anchor[data-alignment='bottomStart'] > .kit-badge-anchor__badge {
+  inset-block-end: calc(-1 * var(--kit-badge-offset));
+  inset-inline-start: calc(-1 * var(--kit-badge-offset));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-badge__lead[data-dot='live']::after {
+    animation: none;
+  }
+
+  button.kit-badge[data-pressed] {
+    transform: none;
+  }
+}
