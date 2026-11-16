@@ -109,7 +109,7 @@ export function bookmarkedPostsInfiniteOptions(deps: BookmarkedPostsDeps) {
       unwrap(
         await loadBookmarkedPostsPage({
           ...deps,
-          ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          ...(pageParam != null ? { cursor: pageParam } : {}),
           ...(signal !== undefined ? { signal } : {}),
         }),
       ),

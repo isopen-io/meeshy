@@ -97,6 +97,29 @@ function isPersistedCache(value: unknown): value is PersistedCache {
   return typeof value === 'object' && value !== null && typeof (value as { buster?: unknown }).buster === 'string';
 }
 
+/**
+ * **LE PREMIER CURSEUR D'UNE REQUÊTE INFINIE SURVIT AU DISQUE** (#18819).
+ *
+ * `JSON.stringify` écrit `null` à la place d'un `undefined` dans un tableau :
+ * `pageParams: [undefined]` (toute requête à `initialPageParam: undefined`,
+ * dont la liste et le fil) revenait `[null]`, TanStack rejouait ce `null` au
+ * rafraîchissement, et l'URL partait en `?before=null` — refusée en 400 en
+ * production le 2026-11-16, la liste et le fil restant figés sur le cache.
+ *
+ * Remplacer `null` par `undefined` à la relecture n'est pas permis : d'autres
+ * requêtes ont `initialPageParam: null` et leurs chargeurs testent
+ * `cursor !== null`. L'absence s'écrit donc par un MARQUEUR, que la relecture
+ * rend `undefined` : chaque absence revient telle qu'elle est partie.
+ */
+const ABSENT_PAGE_PARAM = '\u0000absent-page-param';
+
+const mapPageParams = (key: string, value: unknown, from: unknown, to: unknown): unknown =>
+  key === 'pageParams' && Array.isArray(value) ? value.map((param: unknown) => (param === from ? to : param)) : value;
+
+const keepAbsentPageParams = (key: string, value: unknown): unknown => mapPageParams(key, value, undefined, ABSENT_PAGE_PARAM);
+
+const reviveAbsentPageParams = (key: string, value: unknown): unknown => mapPageParams(key, value, ABSENT_PAGE_PARAM, undefined);
+
 export type AppQueryClient = QueryClient & {
   persist: () => void;
   /**
@@ -216,7 +239,7 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   const restoreFrom = (raw: string | null, expected: string): boolean => {
     if (raw === null) return false;
     try {
-      const parsed: unknown = JSON.parse(raw);
+      const parsed: unknown = JSON.parse(raw, reviveAbsentPageParams);
       if (!isPersistedCache(parsed) || parsed.buster !== expected) return false;
       // UN ÉPHÉMÈRE PARTI NE RESSUSCITE PAS (#8900) : le cache a pu être
       // écrit avant son échéance — il est jugé à l'instant de la relecture.
@@ -236,7 +259,7 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   const serialize = (sealedWith: string): string => {
     const state = pruneGoneEphemerals(dehydrate(client, { shouldDehydrateQuery: persistableQuery }), now());
     const reactions = reactionStore.getState().mine;
-    return JSON.stringify({ buster: sealedWith, state, reactions });
+    return JSON.stringify({ buster: sealedWith, state, reactions }, keepAbsentPageParams);
   };
 
   const removeActive = (): void => {

@@ -116,7 +116,7 @@ export function starredListInfiniteOptions(deps: StarredMessagesDeps) {
       unwrap(
         await loadStarredMessagesPage({
           ...deps,
-          ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          ...(pageParam != null ? { cursor: pageParam } : {}),
           ...(signal !== undefined ? { signal } : {}),
         }),
       ),

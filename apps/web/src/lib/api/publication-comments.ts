@@ -653,7 +653,7 @@ export function commentsInfiniteOptions(deps: CommentDeps & { readonly postId: s
         source: deps.source,
         transport: deps.transport,
         postId: deps.postId,
-        ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+        ...(pageParam != null ? { cursor: pageParam } : {}),
         ...(signal !== undefined ? { signal } : {}),
       });
       if (!result.ok) throw new Error(result.error);

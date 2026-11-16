@@ -198,7 +198,7 @@ export function notificationsInfiniteOptions(deps: NotificationsDeps, category: 
         await loadNotificationsPage({
           ...deps,
           category,
-          ...(pageParam === undefined ? {} : { cursor: pageParam }),
+          ...(pageParam == null ? {} : { cursor: pageParam }),
           ...(signal === undefined ? {} : { signal }),
         }),
       ),

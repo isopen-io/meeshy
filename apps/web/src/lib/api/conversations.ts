@@ -193,7 +193,7 @@ export function conversationsInfiniteOptions(deps: ConversationsDeps) {
   return {
     queryKey: CONVERSATIONS_QUERY_KEY,
     queryFn: async ({ pageParam, signal, client }: { readonly pageParam?: ConversationsPageParam; readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
-      if (pageParam === undefined) return loadFirstPage(client, deps, signal);
+      if (pageParam == null) return loadFirstPage(client, deps, signal);
       return (
         takeMergedPage(client, pageParam) ??
         unwrap(await loadConversationsPage({ ...deps, before: pageParam, ...(signal !== undefined ? { signal } : {}) }))
