@@ -446,10 +446,9 @@ struct ConversationView: View {
         viewModel.start()
         viewModel.observeSync()
         await viewModel.loadMessages()
-        // Ouvrir une conversation, c'est en regarder le bas. Le signal near-bottom
-        // ne se déclenche pas ici (l'état naît déjà « au bas », donc sans
-        // transition) — d'où cette demande explicite, reprise au réveil suivant
-        // si les cellules n'ont pas encore paru.
+        if previewMode { ConversationOpeningPaint.announce(.painted, for: conversation?.id) }
+        // Ouvrir une conversation, c'est en regarder le bas : l'état naît « au bas »,
+        // sans transition near-bottom — d'où cette demande, reprise au réveil suivant.
         scrollState.flushSeenTrigger += 1
         MessageSocketManager.shared.connect()
         await consumePendingHighlightMessage()

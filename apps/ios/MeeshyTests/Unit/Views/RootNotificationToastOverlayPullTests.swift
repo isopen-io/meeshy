@@ -15,6 +15,12 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
         return String(source[start.lowerBound..<end.lowerBound])
     }
 
+    private func host() throws -> String {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.path))
+        let start = try XCTUnwrap(source.range(of: "struct BannerMorphHost: View"))
+        return String(source[start.lowerBound...])
+    }
+
     private func body(of signature: String, in source: String) throws -> String {
         let start = try XCTUnwrap(source.range(of: signature), "signature introuvable : \(signature)")
         let rest = source[start.upperBound...]
@@ -81,9 +87,10 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
     func test_morph_growsAfterItsFirstFrame() throws {
         let source = try overlay()
 
-        XCTAssertTrue(source.contains(".task(id: morph?.id)"), "la croissance part d'une image déjà peinte")
+        XCTAssertTrue(source.contains(".task(id: morphId)"), "le relais part une fois l'enveloppe posée")
         XCTAssertFalse(try body(of: "private func beginMorph(", in: source).contains("progress = 1"),
                        "grandir dans le tour qui pose l'enveloppe n'a aucune image de départ")
+        XCTAssertTrue(try host().contains(".task(id: morph.id)"), "la croissance part d'une image déjà peinte")
     }
 
     /// Le bouton de la bannière émet son toucher à la levée, même après une
@@ -116,12 +123,61 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
         XCTAssertTrue(begin.contains("NotificationSheetGeometry.topGap"))
     }
 
+    /// Mesuré au simulateur (iPhone 17 Pro, iOS 27) : la feuille au cran
+    /// grand pose son haut SUR la zone sûre (62 pt), coins de ~38 pt. Avec
+    /// 10 pt d'écart, l'enveloppe s'arrêtait plus bas que la feuille réelle.
+    func test_sheetGeometry_isTheMeasuredLargeDetent() {
+        XCTAssertEqual(NotificationSheetGeometry.topGap, 0)
+        XCTAssertEqual(NotificationSheetGeometry.cornerRadius, 38)
+    }
+
     /// Arrivée au plein écran, l'enveloppe s'efface en fondu au lieu de
     /// disparaître d'une image.
     func test_morph_fadesOut_beforeLeaving() throws {
         let run = try body(of: "private func runMorph(", in: try overlay())
 
-        XCTAssertTrue(run.contains("morph?.opacity = 0"), "le fondu porte sur une valeur rendue")
-        XCTAssertTrue(run.contains("MeeshyAnimation.bannerMorphFade"))
+        XCTAssertTrue(run.contains("stage.fading = true"), "le fondu porte sur une valeur rendue")
+        XCTAssertTrue(try host().contains("MeeshyAnimation.bannerMorphFade"))
+    }
+
+    /// Mesuré : l'enveloppe s'effaçait 120 ms après la demande de feuille,
+    /// qui paraissait 0,4 s plus tard avec son squelette — une seconde d'écran
+    /// vide. Elle reste désormais jusqu'à ce que la feuille ait PEINT.
+    func test_envelope_leavesOnlyOnceTheSheetHasPainted() throws {
+        let run = try body(of: "private func runMorph(", in: try overlay())
+
+        XCTAssertTrue(run.contains("NotificationBannerHandoff.releasesEnvelope("))
+        XCTAssertTrue(run.contains("ConversationOpeningPaint.reached(.painted"))
+        XCTAssertTrue(run.contains("ConversationOpeningPaint.reached(.shown"), "le voile de l'enveloppe cède à celui de la feuille")
+    }
+
+    /// La feuille est une présentation : posée dans la racine, l'enveloppe
+    /// passait DESSOUS. Elle vit dans sa propre fenêtre passe-plat.
+    func test_envelope_livesAboveTheSheet_inAPassthroughWindow() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.path))
+
+        XCTAssertTrue(source.contains("CallPassthroughWindow(windowScene:"))
+        XCTAssertTrue(try overlay().contains("BannerMorphWindow.shared.show("))
+    }
+
+    /// Le vide se remplit par le CACHE : l'enveloppe peint les derniers
+    /// messages servis par l'aperçu de liste, chargés dès que le tiroir arme.
+    func test_envelope_paintsTheCachedLastMessages() throws {
+        let source = try overlay()
+
+        XCTAssertTrue(source.contains("onPullBegan(toast)"), "le cache se charge pendant la traction")
+        XCTAssertTrue(try host().contains("NotificationEnvelopeMessages("))
+    }
+
+    /// Les deux annonces que l'enveloppe attend : la feuille à l'écran, puis
+    /// ses messages peints.
+    func test_previewSheet_announcesShownThenPainted() throws {
+        let layers = try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift")
+        XCTAssertTrue(layers.contains("ConversationOpeningPaint.announce(.shown"))
+
+        let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
+        let startup = try body(of: "private func runConversationStartup(", in: view)
+        let afterLoad = try XCTUnwrap(startup.components(separatedBy: "await viewModel.loadMessages()").last)
+        XCTAssertTrue(afterLoad.contains("ConversationOpeningPaint.announce(.painted"))
     }
 }

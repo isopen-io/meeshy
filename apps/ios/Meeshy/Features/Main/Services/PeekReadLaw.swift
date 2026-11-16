@@ -103,3 +103,35 @@ final class ConversationReadGate {
         return true
     }
 }
+
+// MARK: - L'ouverture d'une feuille, vue du tiroir qui la précède
+
+/// Où en est la feuille d'une conversation ouverte depuis la bannière : à
+/// l'écran, puis peinte de ses messages. L'enveloppe du tiroir ne s'efface
+/// qu'une fois la feuille peinte — sinon l'écran reste vide entre les deux.
+enum ConversationOpeningStage: Int, Comparable {
+    case shown
+    case painted
+
+    static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
+}
+
+@MainActor
+enum ConversationOpeningPaint {
+    private static var reachedStages: [String: ConversationOpeningStage] = [:]
+
+    static func announce(_ stage: ConversationOpeningStage, for conversationId: String?) {
+        guard let conversationId, !conversationId.isEmpty else { return }
+        let current = reachedStages[conversationId]
+        guard current.map({ $0 < stage }) ?? true else { return }
+        reachedStages[conversationId] = stage
+    }
+
+    static func reached(_ stage: ConversationOpeningStage, for conversationId: String) -> Bool {
+        reachedStages[conversationId].map { $0 >= stage } ?? false
+    }
+
+    static func forget(_ conversationId: String) {
+        reachedStages[conversationId] = nil
+    }
+}

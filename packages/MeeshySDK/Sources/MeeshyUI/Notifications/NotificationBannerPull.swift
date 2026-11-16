@@ -198,4 +198,10 @@ public nonisolated enum NotificationBannerHandoff {
     public static func releasesEnvelope(morphSettled: Bool, sheetPainted: Bool, waited: TimeInterval) -> Bool {
         morphSettled && (sheetPainted || waited >= ceiling)
     }
+
+    /// L'identité de l'enveloppe s'éteint d'un coup au relais : la feuille
+    /// peinte porte déjà la sienne, et deux noms ne se croisent jamais.
+    public static func identityOpacity(fading: Bool) -> Double {
+        fading ? 0 : 1
+    }
 }

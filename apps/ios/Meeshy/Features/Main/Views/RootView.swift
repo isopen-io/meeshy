@@ -749,7 +749,14 @@ struct RootView: View {
             suppressToastTap: suppressToastTap,
             onTap: handleSocketNotificationTap,
             onPreview: { openNotificationPreview(for: $0) },
-            onPulledOpen: { openNotificationPreview(for: $0, pulled: true) }
+            onPulledOpen: { openNotificationPreview(for: $0, pulled: true) },
+            onPullBegan: { event in
+                guard let id = event.conversationId, !id.isEmpty else { return }
+                Task { await conversationViewModel.loadPreviewMessages(for: id) }
+            },
+            envelopeSource: BannerEnvelopeSource(loader: conversationViewModel.previewLoader) { id in
+                conversationViewModel.conversations.first { $0.id == id }
+            }
         )
     }
 

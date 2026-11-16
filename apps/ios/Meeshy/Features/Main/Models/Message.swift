@@ -70,10 +70,15 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
 
     var nature: ContentExitLaw.Nature { law.nature }
 
-    /// Le verdict de capture d'écran, tel que la loi le rend : `blocked` (vue
-    /// unique) se rend dans la couche sécurisée (#9574), `announced` (les deux
-    /// flammes) reste capturable et se déclare (#9617), `free` ne fait rien.
-    var capture: ContentExitLaw.CaptureVerdict { law.capture }
+    /// Le verdict de capture d'écran RENDU : celui de la loi — `blocked` (vue
+    /// unique) et `announced` (les deux flammes) sortent NOIRS (#9574, #18831),
+    /// les flammes se déclarant en plus (#9617) — et `blocked` pour un message
+    /// FLOUTÉ que la loi laisse libre : son contenu révélé sort noir lui aussi
+    /// (#18831). Ce qui se DÉCLARE à la passerelle lit `law.capture`, jamais ce
+    /// verdict : le flou n'a rien à annoncer.
+    var capture: ContentExitLaw.CaptureVerdict {
+        law.capture == .free && holdsBlur ? .blocked : law.capture
+    }
 
     func offers(_ exit: MessageExit) -> Bool {
         // D8 (#10949): un flouté se TRANSFÈRE, son flou

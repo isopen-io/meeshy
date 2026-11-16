@@ -73,7 +73,7 @@ nonisolated enum ContentCaptureVisibility {
             return [ContentCaptureCandidate(
                 conversationId: message.conversationId,
                 messageId: serverId ?? message.id,
-                capture: message.exitOffer.capture,
+                capture: law.capture,
                 isMine: message.isMe
             )]
         }()
@@ -112,7 +112,7 @@ nonisolated enum ContentCaptureVisibility {
         return [ContentCaptureCandidate(
             conversationId: carrier.conversationId,
             messageId: carrier.id,
-            capture: carrier.exitOffer.capture,
+            capture: carrier.contentExitLaw.capture,
             isMine: carrier.isMe
         )]
     }
