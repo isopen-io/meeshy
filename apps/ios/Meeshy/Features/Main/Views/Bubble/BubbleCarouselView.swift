@@ -246,19 +246,23 @@ struct BubbleCarouselView: View {
         let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
         if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
-            OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
-                ProgressiveCachedImage(
-                    thumbHash: attachment.thumbHash,
-                    thumbnailUrl: thumbUrl,
-                    fullUrl: fullUrl ?? thumbUrl,
-                    onFullImageLoaded: { _ = landedImageIds.insert(attachment.id) },
-                    reloadToken: originalLanded,
-                    byteSize: attachment.fileSize
-                ) {
-                    Color(hex: attachment.thumbnailColor).shimmer()
+            AnimatedAttachmentImage(mimeType: currentPageID == attachment.id ? attachment.mimeType : "",
+                                    fileUrl: attachment.fileUrl, pointSize: containerWidth,
+                                    byteSize: attachment.fileSize, contentMode: .fit) {
+                OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+                    ProgressiveCachedImage(
+                        thumbHash: attachment.thumbHash,
+                        thumbnailUrl: thumbUrl,
+                        fullUrl: fullUrl ?? thumbUrl,
+                        onFullImageLoaded: { _ = landedImageIds.insert(attachment.id) },
+                        reloadToken: originalLanded,
+                        byteSize: attachment.fileSize
+                    ) {
+                        Color(hex: attachment.thumbnailColor).shimmer()
+                    }
+                    .aspectRatio(contentMode: .fit)
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 }
-                .aspectRatio(contentMode: .fit)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             }
         } else {
             Color(hex: attachment.thumbnailColor)

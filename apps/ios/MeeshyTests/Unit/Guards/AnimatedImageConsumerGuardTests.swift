@@ -95,4 +95,79 @@ final class AnimatedImageConsumerGuardTests: XCTestCase {
                           "\(host) doit rendre la vue animée transparente aux touchers — sinon l'appui long de la bulle ne part plus.")
         }
     }
+    // MARK: - #4984 — une image animée envoyée en PIÈCE JOINTE joue
+
+    /// **Une photo ne paie rien.** JPEG, PNG, HEIC : jamais le chemin animé,
+    /// donc jamais une seconde lecture d'octets ni un décodage de N images.
+    func test_aStillPhoto_neverTakesTheAnimatedPath() {
+        for mime in ["image/jpeg", "image/png", "image/heic", "video/mp4", "", "application/octet-stream"] {
+            XCTAssertEqual(AttachmentAnimationRule.presentation(mimeType: mime, inGrid: false), .still, mime)
+            XCTAssertEqual(AttachmentAnimationRule.presentation(mimeType: mime, inGrid: true), .still, mime)
+        }
+    }
+
+    func test_aGIFAloneAtItsPlace_animates() {
+        XCTAssertEqual(AttachmentAnimationRule.presentation(mimeType: "image/gif", inGrid: false), .animated)
+        XCTAssertEqual(AttachmentAnimationRule.presentation(mimeType: "IMAGE/GIF; charset=binary", inGrid: false), .animated)
+        XCTAssertEqual(AttachmentAnimationRule.presentation(mimeType: "image/webp", inGrid: false), .animated)
+        XCTAssertEqual(AttachmentAnimationRule.presentation(mimeType: "image/apng", inGrid: false), .animated)
+    }
+
+    /// En grille : figé, marqué « GIF » ; un WebP, qui peut être fixe, n'est
+    /// pas marqué — la pastille ne ment jamais.
+    func test_aGIFInAGrid_staysStillAndIsMarked() {
+        XCTAssertEqual(AttachmentAnimationRule.presentation(mimeType: "image/gif", inGrid: true), .stillMarkedGIF)
+        XCTAssertEqual(AttachmentAnimationRule.presentation(mimeType: "image/webp", inGrid: true), .still)
+    }
+
+    func test_theAnimatedPath_readsTheOriginal_neverAnEmptyURL() {
+        XCTAssertNil(AttachmentAnimationRule.animatedSourceURL(fileUrl: ""))
+        XCTAssertEqual(AttachmentAnimationRule.animatedSourceURL(fileUrl: "file:///tmp/sent.gif"), "file:///tmp/sent.gif")
+        XCTAssertEqual(AttachmentAnimationRule.animatedSourceURL(fileUrl: "https://cdn.test/a.gif"), "https://cdn.test/a.gif")
+    }
+
+    /// Une bulle suit la politique de téléchargement de l'image fixe ; un plein
+    /// écran ouvert, un fichier local ou un original déjà là passent toujours.
+    func test_theAnimatedPath_followsTheDownloadPolicyInline() {
+        XCTAssertFalse(AttachmentAnimationRule.mayFetch(explicitOpen: false, isLocalFile: false, isOnDevice: false, policyAllows: false))
+        XCTAssertTrue(AttachmentAnimationRule.mayFetch(explicitOpen: true, isLocalFile: false, isOnDevice: false, policyAllows: false))
+        XCTAssertTrue(AttachmentAnimationRule.mayFetch(explicitOpen: false, isLocalFile: true, isOnDevice: false, policyAllows: false))
+        XCTAssertTrue(AttachmentAnimationRule.mayFetch(explicitOpen: false, isLocalFile: false, isOnDevice: true, policyAllows: false))
+        XCTAssertTrue(AttachmentAnimationRule.mayFetch(explicitOpen: false, isLocalFile: false, isOnDevice: false, policyAllows: true))
+    }
+
+    /// **Chaque surface d'une pièce jointe monte l'enveloppe UNIQUE** : bulle
+    /// (seule et grille), focal, aperçu du menu, aperçu d'une pièce, carrousel,
+    /// galerie plein écran, fil, carrousel du fil, détail du post, réels.
+    func test_everyAttachmentSurface_mountsTheSingleAnimatedWrapper() throws {
+        let sites = [
+            "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
+            "Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
+            "Meeshy/Features/Main/Components/MessageOverlayPreviewMedia.swift",
+            "Meeshy/Features/Main/Components/MessagePieceOverlay.swift",
+            "Meeshy/Features/Main/Views/Bubble/BubbleCarouselView.swift",
+            "Meeshy/Features/Main/Views/ConversationMediaGalleryView+Pages.swift",
+            "Meeshy/Features/Main/Views/FeedPostCard+Media.swift",
+            "Meeshy/Features/Main/Views/FeedPostCardCarousel.swift",
+            "Meeshy/Features/Main/Views/PostDetailView+Media.swift",
+            "Meeshy/Features/Main/Views/ReelFeedCard.swift",
+            "Meeshy/Features/Main/Views/ReelsPlayerView+Carousel.swift",
+        ]
+        for site in sites {
+            let source = try appSource(site)
+            XCTAssertTrue(source.contains("AnimatedAttachmentImage(") || source.contains("FeedMediaImage("),
+                          "\(site) doit monter l'enveloppe animée des pièces jointes.")
+            XCTAssertFalse(source.contains("AnimatedCachedImage("), "\(site) ne doit pas réécrire le chemin animé : une seule enveloppe.")
+        }
+    }
+
+    /// L'enveloppe ne monte le décodeur que dans son cas animé, et garde le
+    /// chemin fixe en repli.
+    func test_theWrapper_mountsTheDecoderOnce_andKeepsTheStillFallback() throws {
+        let wrapper = try appSource("Meeshy/Features/Main/Components/AnimatedAttachmentImage.swift")
+        XCTAssertEqual(wrapper.components(separatedBy: "AnimatedCachedImage(").count - 1, 1)
+        XCTAssertTrue(wrapper.contains("AttachmentAnimationRule.presentation("))
+        XCTAssertEqual(wrapper.components(separatedBy: "AnimatedAttachmentImage(mimeType:").count - 1, 1,
+                       "l'image d'un média de fil passe par la même enveloppe, jamais une seconde.")
+    }
 }

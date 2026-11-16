@@ -155,14 +155,18 @@ struct OverlayPreviewMediaGrid: View {
             MaskedMediaTile()
                 .frame(width: size.width, height: size.height)
         } else {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil,
-                fullUrl: attachment.fileUrl.isEmpty ? attachment.thumbnailUrl : attachment.fileUrl
-            ) {
-                Color(hex: attachment.thumbnailColor).opacity(0.3)
+            AnimatedAttachmentImage(mimeType: attachment.mimeType, fileUrl: attachment.fileUrl,
+                                    pointSize: max(size.width, size.height),
+                                    inGrid: attachments.count > 1, byteSize: attachment.fileSize) {
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil,
+                    fullUrl: attachment.fileUrl.isEmpty ? attachment.thumbnailUrl : attachment.fileUrl
+                ) {
+                    Color(hex: attachment.thumbnailColor).opacity(0.3)
+                }
+                .aspectRatio(contentMode: .fill)
             }
-            .aspectRatio(contentMode: .fill)
             .frame(width: size.width, height: size.height)
             .clipped()
         }

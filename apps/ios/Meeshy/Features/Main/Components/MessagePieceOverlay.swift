@@ -295,15 +295,19 @@ private struct MessagePiecePage: View {
         } else if piece.type == .video {
             ConversationVideoPoster(attachment: piece, accentHex: accentHex, playButtonDiameter: 64)
         } else {
-            ProgressiveCachedImage(
-                thumbHash: piece.thumbHash,
-                thumbnailUrl: piece.thumbnailUrl?.isEmpty == false ? piece.thumbnailUrl : nil,
-                fullUrl: piece.fileUrl.isEmpty ? piece.thumbnailUrl : piece.fileUrl,
-                targetSize: size
-            ) {
-                Color(hex: piece.thumbnailColor).opacity(0.3)
+            AnimatedAttachmentImage(mimeType: piece.mimeType, fileUrl: piece.fileUrl,
+                                    pointSize: max(size.width, size.height),
+                                    byteSize: piece.fileSize, contentMode: .fit) {
+                ProgressiveCachedImage(
+                    thumbHash: piece.thumbHash,
+                    thumbnailUrl: piece.thumbnailUrl?.isEmpty == false ? piece.thumbnailUrl : nil,
+                    fullUrl: piece.fileUrl.isEmpty ? piece.thumbnailUrl : piece.fileUrl,
+                    targetSize: size
+                ) {
+                    Color(hex: piece.thumbnailColor).opacity(0.3)
+                }
+                .aspectRatio(contentMode: .fit)
             }
-            .aspectRatio(contentMode: .fit)
         }
     }
 }

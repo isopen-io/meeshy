@@ -322,16 +322,7 @@ struct ReelFeedCard: View, Equatable {
             }
         case .imageOnly:
             if let media, media.thumbnailUrl != nil || media.url != nil || media.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url,
-                    autoLoad: true
-                ) {
-                    Color(hex: media.thumbnailColor)
-                        .shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
+                FeedMediaImage(media: media, pointSize: max(width, height))
                 .frame(width: width, height: height)
                 .clipped()
             } else {
