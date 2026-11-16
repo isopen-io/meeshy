@@ -1,4 +1,5 @@
 import CoreGraphics
+import MeeshyUI
 
 /// L'aperçu d'appui long d'une conversation NAÎT de la ligne pressée (#18722).
 ///
@@ -9,8 +10,9 @@ import CoreGraphics
 /// connaît ni vue ni ressort, et chaque valeur rendue se dérive d'elle, ce qui
 /// laisse SwiftUI l'interpoler image par image sans recomposer la liste.
 ///
-/// Bornée : le dépassement d'un ressort ne déforme jamais la carte au-delà de
-/// ses deux cadres, et ne la fait jamais passer sous la ligne au retour.
+/// Le cadre laisse passer le léger dépassement du ressort de fin
+/// (`PreviewSettleSpring`, retour porteur, #18722) : c'est le rebond
+/// qu'on voit. Il reste borné, et le retour ne passe jamais sous la ligne.
 nonisolated enum ConversationPreviewMorph {
 
     /// Le menu attend que la carte soit presque posée : avant, il volerait
@@ -53,9 +55,10 @@ nonisolated enum ConversationPreviewMorph {
         min(1, max(0, progress))
     }
 
-    /// Le cadre de la carte : 0 ⇒ celui de la rangée, 1 ⇒ celui de l'aperçu.
+    /// Le cadre de la carte : 0 ⇒ celui de la rangée, 1 ⇒ celui de l'aperçu,
+    /// un peu au-delà pendant le rebond de fin.
     static func frame(progress: CGFloat, from: CGRect, to: CGRect) -> CGRect {
-        let t = clamped(progress)
+        let t = PreviewSettleSpring.bounded(progress)
         return CGRect(
             x: interpolate(from.minX, to.minX, t),
             y: interpolate(from.minY, to.minY, t),

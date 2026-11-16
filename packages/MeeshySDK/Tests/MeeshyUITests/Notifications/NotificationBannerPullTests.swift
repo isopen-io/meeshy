@@ -2,7 +2,7 @@ import XCTest
 @testable import MeeshyUI
 
 /// #18721 — tirer la bannière vers le bas la transforme en conversation : la
-/// carte suit le doigt, résiste au-delà du seuil, s'étire, et la levée décide
+/// carte s'ouvre comme un tiroir (`NotificationBannerDrawerTests`), et la levée décide
 /// d'ouvrir ou de revenir. Le balayage vers le HAUT ne change pas.
 final class NotificationBannerPullTests: XCTestCase {
 
@@ -26,52 +26,6 @@ final class NotificationBannerPullTests: XCTestCase {
 
     func test_progress_halfway_isHalf() {
         XCTAssertEqual(NotificationBannerPull.progress(translation: NotificationBannerPull.commitDistance / 2), 0.5, accuracy: 0.0001)
-    }
-
-    // MARK: - Élasticité
-
-    func test_elasticOffset_belowTheThreshold_followsTheFingerOneForOne() {
-        XCTAssertEqual(NotificationBannerPull.elasticOffset(translation: 40), 40)
-    }
-
-    func test_elasticOffset_pulledUp_neverDescends() {
-        XCTAssertEqual(NotificationBannerPull.elasticOffset(translation: -30), 0)
-    }
-
-    func test_elasticOffset_beyondTheThreshold_resists() {
-        let beyond = NotificationBannerPull.commitDistance + 100
-        XCTAssertLessThan(NotificationBannerPull.elasticOffset(translation: beyond), beyond)
-        XCTAssertGreaterThan(NotificationBannerPull.elasticOffset(translation: beyond), NotificationBannerPull.commitDistance)
-    }
-
-    func test_elasticOffset_isMonotonic() {
-        let samples = stride(from: CGFloat(0), through: 2_000, by: 7).map { NotificationBannerPull.elasticOffset(translation: $0) }
-        XCTAssertEqual(samples, samples.sorted(), "la carte ne recule jamais quand le doigt avance")
-    }
-
-    func test_elasticOffset_isBounded() {
-        let ceiling = NotificationBannerPull.commitDistance + NotificationBannerPull.elasticReach
-        XCTAssertLessThan(NotificationBannerPull.elasticOffset(translation: 100_000), ceiling)
-    }
-
-    func test_cardOffset_pulledUp_followsTheFingerForTheDismissSwipe() {
-        XCTAssertEqual(NotificationBannerPull.cardOffset(translation: -25), -25)
-    }
-
-    // MARK: - Étirement
-
-    func test_stretch_atRest_isIdentity() {
-        XCTAssertEqual(NotificationBannerPull.stretch(progress: 0), .rest)
-    }
-
-    func test_stretch_atFullPull_widensAndStretchesWithinTheirMaximum() {
-        let full = NotificationBannerPull.stretch(progress: 1)
-        XCTAssertEqual(full.width, 1 + NotificationBannerPull.maximumWiden, accuracy: 0.0001)
-        XCTAssertEqual(full.height, 1 + NotificationBannerPull.maximumStretch, accuracy: 0.0001)
-    }
-
-    func test_stretch_beyondFull_isBounded() {
-        XCTAssertEqual(NotificationBannerPull.stretch(progress: 4), NotificationBannerPull.stretch(progress: 1))
     }
 
     // MARK: - Décision à la levée
@@ -133,8 +87,8 @@ final class NotificationBannerPullTests: XCTestCase {
     }
 
     func test_morphCornerRadius_opensFromTheCardToSquare() {
-        XCTAssertEqual(NotificationBannerMorph.cornerRadius(progress: 0, from: 22), 22)
-        XCTAssertEqual(NotificationBannerMorph.cornerRadius(progress: 1, from: 22), 0)
+        XCTAssertEqual(NotificationBannerMorph.cornerRadius(progress: 0, from: 22, to: 0), 22)
+        XCTAssertEqual(NotificationBannerMorph.cornerRadius(progress: 1, from: 22, to: 0), 0)
     }
 
     // MARK: - Une traction n'est jamais un toucher
@@ -166,8 +120,35 @@ final class NotificationBannerPullTests: XCTestCase {
     func test_tapLatch_aDeliberateTapLater_opensAgain() {
         let start = Date(timeIntervalSinceReferenceDate: 1_000)
         let latch = NotificationBannerTapLatch().notingPull(translation: 53, at: start)
+            .notingRelease(at: start)
 
         XCTAssertTrue(latch.admitsTap(at: start.addingTimeInterval(NotificationBannerTapLatch.window + 0.01)))
+    }
+
+    /// Mesuré au simulateur le 2026-11-16 : un doigt TENU au bout du tiroir
+    /// plus longtemps que la fenêtre laissait expirer le verrou, et la levée
+    /// poussait la conversation (consommée, donc lue) sous la feuille.
+    func test_tapLatch_aFingerHeldStillAtTheEndOfThePull_stillSwallowsTheReleaseTap() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        let latch = NotificationBannerTapLatch().notingPull(translation: 215, at: start)
+
+        XCTAssertFalse(latch.admitsTap(at: start.addingTimeInterval(3)))
+    }
+
+    func test_tapLatch_theWindowRunsFromTheRelease_notFromTheLastMove() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        let released = start.addingTimeInterval(2)
+        let latch = NotificationBannerTapLatch().notingPull(translation: 215, at: start)
+            .notingRelease(at: released)
+
+        XCTAssertFalse(latch.admitsTap(at: released.addingTimeInterval(0.05)))
+        XCTAssertTrue(latch.admitsTap(at: released.addingTimeInterval(NotificationBannerTapLatch.window + 0.01)))
+    }
+
+    func test_tapLatch_aReleaseWithoutAPull_leavesTheTapAlone() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+
+        XCTAssertTrue(NotificationBannerTapLatch().notingRelease(at: start).admitsTap(at: start.addingTimeInterval(0.05)))
     }
 
     func test_tapLatch_untouched_admitsTheTap() {

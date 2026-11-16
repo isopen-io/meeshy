@@ -433,6 +433,12 @@ struct MessageOverlayMenu: View {
                 previewViewport(
                     touch: touch, containerSize: geometry.size, previewSize: CGSize(width: previewW, height: previewH),
                     fit: fit)
+                // Le léger rebond de fin (retour porteur, #18723) : la
+                // bulle grandit jusqu'à sa taille et la dépasse d'un rien avant
+                // de s'y poser. Sous « Réduire les animations », elle est
+                // déjà posée : aucune échelle.
+                .scaleEffect(settled ? 1 : PreviewSettleSpring.messageStartScale)
+                .animation(reduceMotion ? nil : MeeshyAnimation.messagePreviewPop, value: settled)
                 // #9043 — transformation de RENDU seule (aucune passe de
                 // layout par image) : le haut et le bord natif restent fixes.
                 .scaleEffect(revealSplit.factor, anchor: message.isMe ? .topTrailing : .topLeading)
@@ -475,11 +481,12 @@ struct MessageOverlayMenu: View {
     /// **L'entrée de l'overlay** (#11208). Aucune haptique : le geste
     /// (`ConditionalBubbleLongPress`) a déjà vibré, et une seconde secousse
     /// dans la même demi-seconde se lisait comme deux événements. Le ressort
-    /// d'entrée (courbe de réponse iMessage) devient un fondu sous « Réduire
+    /// d'entrée (courbe de réponse iMessage, avec le léger rebond de fin de
+    /// `PreviewSettleSpring`) devient un fondu sous « Réduire
     /// les animations ». La cascade d'emojis est jouée par
     /// `EmojiReactionPicker` lui-même via `WaveTileModifier`.
     private func enter() {
-        meeshyWithAnimation(.spring(response: 0.42, dampingFraction: 0.74),
+        meeshyWithAnimation(MeeshyAnimation.messagePreviewSettle,
                             reduced: .easeOut(duration: Self.reducedMotionFadeDuration),
                             reduceMotion: reduceMotion) {
             isVisible = true
