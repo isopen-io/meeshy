@@ -82029,7 +82029,7 @@
         }
       }
     },
-    "kit.key_hint.spoken_prefix": {
+    "kit.key_shortcut.spoken_prefix": {
       "comment": "K55 — mot posé avant la combinaison dite : « raccourci : Commande M ».",
       "extractionState": "manual",
       "localizations": {

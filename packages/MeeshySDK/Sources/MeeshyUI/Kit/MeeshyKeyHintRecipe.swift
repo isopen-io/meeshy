@@ -220,7 +220,7 @@ public enum MeeshyKeyHintWords {
     }
 
     static func prefix(bundle: Bundle, locale: Locale) -> String {
-        String(localized: "kit.key_hint.spoken_prefix", defaultValue: "raccourci", bundle: bundle, locale: locale)
+        String(localized: "kit.key_shortcut.spoken_prefix", defaultValue: "raccourci", bundle: bundle, locale: locale)
     }
 }
 
