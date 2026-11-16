@@ -56,12 +56,16 @@ export const AFTER_READ_VIEW_STOP_GRACE_MS = 60_000;
  * se réexamine à cet intervalle fixe…
  */
 export const AFTER_READ_RECHECK_MS = 20_000;
-/** …au plus ce nombre de fois (48 h) : au-delà, la rétention des flammes a déjà fait son œuvre. */
-export const AFTER_READ_MAX_WAITS = 8_640;
-/** Un départ en ÉCHEC (vérification ou consommation qui lève) se redemande à intervalle doublé jusqu'à ce plafond… */
+/**
+ * Plafond DUR de toute retenue (appel, autre appareil, vérification en échec), compté depuis la fin de la
+ * grâce d'origine : au-delà, le départ BRÛLE. Rien ne garde une flamme lue indéfiniment.
+ */
+export const AFTER_READ_MAX_HOLD_MS = 10 * 60_000;
+/**
+ * Un départ en ÉCHEC (vérification ou consommation qui lève) se redemande à intervalle doublé jusqu'à ce
+ * plafond, sans jamais être oublié : une consommation qui échoue se redemande tant que la base refuse.
+ */
 export const AFTER_READ_MAX_RETRY_DELAY_MS = 10 * 60_000;
-/** …et au plus ce nombre de fois (≈ 48 h). */
-export const AFTER_READ_MAX_DEPARTURE_RETRIES = 300;
 /** Au-delà, les regards les plus ANCIENS sont oubliés : ce qu'ils ont montré attend la sortie déclarée par le client. */
 export const AFTER_READ_MAX_PERIODS = 32;
 /** Conversations dont un socket garde des regards non consommés ; au-delà, les plus anciennes sont oubliées. */
@@ -84,9 +88,19 @@ type PendingDeparture = {
   readonly timer: ReturnType<typeof setTimeout>;
   readonly dueAt: number;
   readonly yieldsTo: string | null;
+  /** La socket dont l'arrière-plan ou la déconnexion a armé l'échéance : les répéter ne la repousse pas. */
+  readonly armedBy: string | null;
+  /** Une sortie déclarée (`conversation:leave`) qui se redemande reste insensible aux appels. */
+  readonly holdable: boolean;
 };
 
-type Arming = { readonly yieldsTo?: string; readonly by?: string };
+type Arming = {
+  readonly yieldsTo?: string;
+  readonly by?: string;
+  readonly holdable?: boolean;
+  /** Une consommation en échec APRÈS le plafond se redemande à son propre intervalle, sans boucle à 0 ms. */
+  readonly unbounded?: boolean;
+};
 
 const EMPTY: SocketState = { views: new Map(), touched: new Map() };
 const NO_REGARD: Regard = { closed: [], openedAt: null };
@@ -154,7 +168,12 @@ export class AfterReadDepartureTracker {
   private readonly pendingOpenings = new Map<string, ReadonlySet<string>>();
   private readonly pendingDepartures = new Map<string, PendingDeparture>();
   private readonly departureRetries = new Map<string, number>();
-  private readonly departureWaits = new Map<string, number>();
+  /**
+   * La fin de la PREMIÈRE grâce armée depuis que le dernier regard s'est clos : la base du plafond dur. Aucun
+   * réarmement (appel, autre appareil, échec, arrière-plans alternés) ne la déplace ; jamais posée pendant un
+   * regard, elle repart à chaque clôture.
+   */
+  private readonly holdSince = new Map<string, number>();
   /** Les clés dont le départ a été retenu par un appel : à sa fin, une grâce entière se rouvre. */
   private readonly heldByCall = new Set<string>();
   private readonly queueBySocket = new Map<string, Promise<void>>();
@@ -286,22 +305,24 @@ export class AfterReadDepartureTracker {
       return;
     }
     this.viewers.delete(key);
+    this.holdSince.delete(key);
     const regard = this.regards.get(key);
     if (!regard?.openedAt) return;
     const closed = [...regard.closed, { from: regard.openedAt, to: this.now() }].slice(-AFTER_READ_MAX_PERIODS);
     this.regards.set(key, { closed, openedAt: null });
   }
 
-  /** Un socket évincé ne contribue plus : sans autre contributeur, ses regards sont oubliés. */
+  /** Un socket évincé ne contribue plus : sans autre contributeur, ce qu'il a regardé part aussitôt, sans être oublié. */
   private withdraw(socketId: string, reader: AfterReadReader): void {
     this.lookAway(socketId, reader);
     const key = keyOf(reader);
     const remaining = withoutMember(this.contributors.get(key), socketId);
-    if (remaining.size > 0) {
-      this.contributors.set(key, remaining);
-      return;
-    }
-    this.forget(key);
+    this.contributors.set(key, remaining);
+    if (remaining.size > 0) return;
+    this.cancelPending(key);
+    void this.depart(reader, { holdable: false })
+      .then(() => this.settle(key))
+      .catch((error: unknown) => this.onError(error));
   }
 
   private async heldBy(
@@ -317,52 +338,87 @@ export class AfterReadDepartureTracker {
   /**
    * Une échéance déjà armée plus TARD n'est jamais raccourcie — une déconnexion garde sa grâce entière —,
    * sauf celle d'un `viewing:stop`, que l'arrière-plan ou la déconnexion de la MÊME socket (`by`)
-   * ramènent à leur propre grâce.
+   * ramènent à leur propre grâce. Une échéance n'est jamais repoussée par la socket qui l'a armée, ni au-delà
+   * du plafond dur d'un départ déjà retenu.
    */
-  private departAfterGrace(reader: AfterReadReader, afterMs: number, { yieldsTo, by }: Arming = {}): void {
+  private departAfterGrace(reader: AfterReadReader, afterMs: number, arming: Arming = {}): void {
     const key = keyOf(reader);
     if (!this.regards.has(key)) return;
-    const dueAt = this.now().getTime() + afterMs;
+    if (!this.holdSince.has(key) && !this.isViewedHere(key)) this.holdSince.set(key, this.now().getTime() + afterMs);
+    const delayMs = arming.unbounded ? afterMs : this.boundedByHold(key, afterMs);
+    const dueAt = this.now().getTime() + delayMs;
     const armed = this.pendingDepartures.get(key);
-    const yieldsHere = armed?.yieldsTo != null && armed.yieldsTo === by;
+    const yieldsHere = armed?.yieldsTo != null && armed.yieldsTo === arming.by;
     if (armed && armed.dueAt > dueAt && !yieldsHere) return;
+    if (armed && armed.armedBy !== null && armed.armedBy === arming.by && armed.dueAt <= dueAt) return;
+    const holdable = (arming.holdable ?? true) && (armed?.holdable ?? true);
     this.cancelPending(key);
     const timer = guardedTimeout({
       name: 'after-read-departure',
-      afterMs,
+      afterMs: delayMs,
       logger: { error: (_message, error) => this.onError(error) },
       run: () => {
         this.pendingDepartures.delete(key);
-        void this.depart(reader, { holdable: true }).catch((error: unknown) => this.onError(error));
+        void this.depart(reader, { holdable }).catch((error: unknown) => this.onError(error));
       },
     });
     timer.unref?.();
-    this.pendingDepartures.set(key, { timer, dueAt, yieldsTo: yieldsTo ?? null });
+    this.pendingDepartures.set(key, {
+      timer,
+      dueAt,
+      yieldsTo: arming.yieldsTo ?? null,
+      armedBy: arming.yieldsTo === undefined ? arming.by ?? null : null,
+      holdable,
+    });
   }
 
   /**
-   * `holdable` : un départ ATTENDU (grâce écoulée) cède à un appel vivant ; une sortie déclarée, jamais.
+   * `holdable` : un départ ATTENDU (grâce écoulée) cède à un appel établi ; une sortie déclarée, jamais.
    * Une échéance armée PENDANT la vérification de l'appel (le lecteur est revenu puis reparti) reprend la main.
+   * Au plafond dur (`AFTER_READ_MAX_HOLD_MS`), plus rien ne retient : appel, autre appareil, vérification en
+   * échec — le départ BRÛLE.
    */
   private async depart(reader: AfterReadReader, { holdable }: { readonly holdable: boolean }): Promise<void> {
     const key = keyOf(reader);
-    if (this.isViewedHere(key)) return;
+    const overdue = this.holdRemaining(key) <= 0;
+    if (!overdue && this.isViewedHere(key)) return;
     if ((this.regards.get(key)?.closed.length ?? 0) === 0) return;
-    const held = holdable && (await this.isHeld(reader));
-    if (holdable && this.pendingDepartures.has(key)) return;
-    if (held) {
-      if (this.isViewedHere(key) || !this.regards.has(key)) return;
-      this.heldByCall.add(key);
-      this.waitAgain(reader);
-      return;
-    }
-    if (holdable && this.heldByCall.delete(key)) {
-      if (!this.isViewedHere(key)) this.departAfterGrace(reader, this.viewStopGraceMs);
-      return;
-    }
+    if (holdable && !overdue && !(await this.mayLeaveNow(reader))) return;
     const periods = this.takePeriods(key);
     if (periods.length === 0) return;
+    if (!overdue && !(await this.noOtherDeviceViews(reader, periods))) return;
 
+    try {
+      await this.onDeparture({ ...reader, periods });
+    } catch (error) {
+      this.onError(error);
+      this.restorePeriods(key, periods);
+      this.retryLater(reader, { holdable });
+      return;
+    }
+    this.forgetAttempts(key);
+    this.settle(key);
+  }
+
+  /** Le départ attendu peut-il partir ? Sinon il s'est déjà réarmé (appel établi, grâce d'après-appel). */
+  private async mayLeaveNow(reader: AfterReadReader): Promise<boolean> {
+    const key = keyOf(reader);
+    const held = await this.isHeld(reader);
+    if (this.pendingDepartures.has(key)) return false;
+    if (held) {
+      if (this.isViewedHere(key) || !this.regards.has(key)) return false;
+      this.heldByCall.add(key);
+      this.waitAgain(reader);
+      return false;
+    }
+    if (!this.heldByCall.delete(key)) return true;
+    if (!this.isViewedHere(key)) this.departAfterGrace(reader, this.boundedByHold(key, this.viewStopGraceMs));
+    return false;
+  }
+
+  /** Aucun appareil du lecteur ne regarde, ici ou ailleurs ? Sinon les périodes sont rendues et le départ réarmé. */
+  private async noOtherDeviceViews(reader: AfterReadReader, periods: readonly AfterReadPeriod[]): Promise<boolean> {
+    const key = keyOf(reader);
     let elsewhere: boolean | 'unknown';
     try {
       elsewhere = await this.viewedElsewhere(reader);
@@ -370,24 +426,27 @@ export class AfterReadDepartureTracker {
       this.onError(error);
       elsewhere = 'unknown';
     }
-    if (elsewhere !== false || this.isViewedHere(key)) {
-      this.restorePeriods(key, periods);
-      if (this.isViewedHere(key)) return;
-      if (elsewhere === 'unknown') this.retryLater(reader);
-      else this.waitAgain(reader);
-      return;
-    }
+    if (elsewhere === false && !this.isViewedHere(key)) return true;
+    this.restorePeriods(key, periods);
+    if (this.isViewedHere(key)) return false;
+    if (elsewhere === 'unknown') this.retryLater(reader);
+    else this.waitAgain(reader);
+    return false;
+  }
 
-    try {
-      await this.onDeparture({ ...reader, periods });
-    } catch (error) {
-      this.onError(error);
-      this.restorePeriods(key, periods);
-      this.retryLater(reader);
-      return;
-    }
-    this.forgetAttempts(key);
-    this.settle(key);
+  /** Le temps qui reste avant le plafond dur ; une clé que rien ne retient en a tout son plafond. */
+  private holdRemaining(key: string): number {
+    const since = this.holdSince.get(key);
+    if (since === undefined) return AFTER_READ_MAX_HOLD_MS;
+    return since + AFTER_READ_MAX_HOLD_MS - this.now().getTime();
+  }
+
+  private boundedByHold(key: string, delayMs: number): number {
+    return Math.max(0, Math.min(delayMs, this.holdRemaining(key)));
+  }
+
+  private startHold(key: string): void {
+    if (!this.holdSince.has(key)) this.holdSince.set(key, this.now().getTime());
   }
 
   private async isHeld(reader: AfterReadReader): Promise<boolean> {
@@ -418,31 +477,27 @@ export class AfterReadDepartureTracker {
     this.regards.set(key, { closed, openedAt: regard.openedAt });
   }
 
-  /** Un départ en attente (appel, autre appareil) se réexamine à intervalle fixe et court. */
+  /** Un départ en attente (appel, autre appareil) se réexamine à intervalle fixe et court, jusqu'au plafond dur. */
   private waitAgain(reader: AfterReadReader): void {
     const key = keyOf(reader);
     if (!this.regards.has(key)) return;
-    const waits = (this.departureWaits.get(key) ?? 0) + 1;
-    if (waits > AFTER_READ_MAX_WAITS) {
-      this.forget(key);
-      return;
-    }
-    this.departureWaits.set(key, waits);
-    this.departAfterGrace(reader, AFTER_READ_RECHECK_MS);
+    this.startHold(key);
+    this.departAfterGrace(reader, this.boundedByHold(key, AFTER_READ_RECHECK_MS));
   }
 
-  /** Un départ en échec se redemande à intervalle doublé. */
-  private retryLater(reader: AfterReadReader): void {
+  /**
+   * Un départ en échec se redemande à intervalle doublé : une vérification jusqu'au plafond dur, puis il brûle
+   * sans elle ; une consommation, tant qu'elle échoue — jamais oubliée.
+   */
+  private retryLater(reader: AfterReadReader, { holdable = true }: { readonly holdable?: boolean } = {}): void {
     const key = keyOf(reader);
     if (!this.regards.has(key)) return;
+    const overdue = this.holdRemaining(key) <= 0;
+    this.startHold(key);
     const attempts = (this.departureRetries.get(key) ?? 0) + 1;
-    if (attempts > AFTER_READ_MAX_DEPARTURE_RETRIES) {
-      this.forget(key);
-      return;
-    }
     this.departureRetries.set(key, attempts);
     const delay = Math.min(this.graceMs * 2 ** Math.min(attempts - 1, 20), AFTER_READ_MAX_RETRY_DELAY_MS);
-    this.departAfterGrace(reader, delay);
+    this.departAfterGrace(reader, delay, { holdable, unbounded: overdue });
   }
 
   /** Un regard vide (rien de clos, rien d'ouvert) libère ses contributeurs. */
@@ -454,7 +509,7 @@ export class AfterReadDepartureTracker {
   /** Les regards CLOS d'une clé sont oubliés ; un regard encore ouvert garde son début. */
   private forgetAttempts(key: string): void {
     this.departureRetries.delete(key);
-    this.departureWaits.delete(key);
+    this.holdSince.delete(key);
     this.heldByCall.delete(key);
   }
 

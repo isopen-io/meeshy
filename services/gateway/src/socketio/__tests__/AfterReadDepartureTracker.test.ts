@@ -12,8 +12,9 @@ import {
   AFTER_READ_MAX_PERIODS,
   AFTER_READ_VIEW_STOP_GRACE_MS,
   AFTER_READ_MAX_RETRY_DELAY_MS,
-  AFTER_READ_MAX_DEPARTURE_RETRIES,
   AFTER_READ_RECHECK_MS,
+  AFTER_READ_MAX_HOLD_MS,
+  AFTER_READ_MAX_TOUCHED,
   type AfterReadDeparture,
   type AfterReadReader,
 } from '../AfterReadDepartureTracker';
@@ -33,6 +34,8 @@ type Options = {
   holdsDeparture?: (reader: AfterReadReader) => Promise<boolean>;
   onDeparture?: (departure: AfterReadDeparture) => Promise<void>;
   viewStopGraceMs?: number;
+  /** L'horloge suit les faux minuteurs (`jest.useFakeTimers({ now: T0 })`) : le plafond de retenue se mesure. */
+  followTimers?: boolean;
 };
 
 function buildTracker(options: Options = {}) {
@@ -52,7 +55,7 @@ function buildTracker(options: Options = {}) {
     viewStopGraceMs: options.viewStopGraceMs,
     markViewing: (socketId, marked, viewing) => marks.push({ socketId, conversationId: marked.conversationId, viewing }),
     graceMs: GRACE_MS,
-    now: () => clock.now,
+    now: () => (options.followTimers ? new Date(Date.now()) : clock.now),
   });
   return { tracker, departures, marks, clock };
 }
@@ -67,6 +70,14 @@ const periodsOf = (departure: AfterReadDeparture) =>
 afterEach(() => {
   jest.useRealTimers();
 });
+
+/** Avance les faux minuteurs par pas, en laissant les départs asynchrones se résoudre à chaque pas. */
+async function elapse(ms: number, step: number = AFTER_READ_RECHECK_MS / 4): Promise<void> {
+  for (let done = 0; done < ms; done += step) {
+    jest.advanceTimersByTime(Math.min(step, ms - done));
+    await settle();
+  }
+}
 
 describe('AfterReadDepartureTracker — le regard borne ce qui a été vu (#18556)', () => {
   it('un regard clos puis une déconnexion : le départ porte la période du regard, après la grâce', async () => {
@@ -483,26 +494,6 @@ describe('AfterReadDepartureTracker — le regard borne ce qui a été vu (#1855
     expect(attempts).toHaveLength(3);
   });
 
-  it('AUDIT C3 — après le dernier essai, le départ en échec cesse de se redemander', async () => {
-    jest.useFakeTimers();
-    let attempts = 0;
-    const { tracker } = buildTracker({
-      onDeparture: async () => {
-        attempts += 1;
-        throw new Error('mongo down');
-      },
-    });
-
-    await tracker.viewStart('s-1', 'conv-1');
-    await tracker.close('s-1', 'conv-1');
-    for (let i = 0; i < AFTER_READ_MAX_DEPARTURE_RETRIES + 20; i += 1) {
-      jest.advanceTimersByTime(AFTER_READ_MAX_RETRY_DELAY_MS);
-      await settle();
-    }
-
-    expect(attempts).toBe(1 + AFTER_READ_MAX_DEPARTURE_RETRIES);
-  });
-
   it('AUDIT C4 — un départ réussi remet le compteur d’essais à zéro', async () => {
     jest.useFakeTimers();
     const failures = { left: 3 };
@@ -868,3 +859,245 @@ describe('AfterReadDepartureTracker — les événements du socket', () => {
     expect(marks).toEqual([]);
   });
 });
+
+describe('AfterReadDepartureTracker — aucune retenue n’est éternelle : au plafond, on BRÛLE (#18556, revue de sécurité)', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('un appel actif au-delà du plafond brûle : grâce d’origine + AFTER_READ_MAX_HOLD_MS au plus', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => true, followTimers: true });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStop('s-1', 'conv-1');
+    await elapse(AFTER_READ_VIEW_STOP_GRACE_MS + AFTER_READ_MAX_HOLD_MS - AFTER_READ_RECHECK_MS);
+    expect(departures).toEqual([]);
+
+    await elapse(AFTER_READ_RECHECK_MS * 2);
+    expect(departures).toHaveLength(1);
+  });
+
+  it('l’arrière-plan pendant un appel interminable (CallKit, écran verrouillé) brûle au même plafond', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => true, followTimers: true });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.background('s-1');
+    await elapse(GRACE_MS + AFTER_READ_MAX_HOLD_MS + AFTER_READ_RECHECK_MS);
+
+    expect(departures).toHaveLength(1);
+  });
+
+  it('une vérification d’appel qui lève en continu brûle après le plafond', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({
+      holdsDeparture: async () => {
+        throw new Error('mongo down');
+      },
+      followTimers: true,
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.background('s-1');
+    await elapse(GRACE_MS + AFTER_READ_MAX_HOLD_MS - AFTER_READ_RECHECK_MS);
+    expect(departures).toEqual([]);
+
+    await elapse(AFTER_READ_RECHECK_MS * 2);
+    expect(departures).toHaveLength(1);
+  });
+
+  it('un autre appareil qui regarde sans fin ne retient les flammes que jusqu’au plafond', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ viewedElsewhere: async () => true, followTimers: true });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    await elapse(AFTER_READ_MAX_HOLD_MS - AFTER_READ_RECHECK_MS);
+    expect(departures).toEqual([]);
+
+    await elapse(AFTER_READ_RECHECK_MS * 2);
+    expect(departures).toHaveLength(1);
+  });
+
+  it('une vérification inter-nœuds qui lève en continu brûle après le plafond', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({
+      viewedElsewhere: async () => {
+        throw new Error('redis down');
+      },
+      followTimers: true,
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.disconnecting('s-1');
+    await elapse(GRACE_MS + AFTER_READ_MAX_HOLD_MS - AFTER_READ_RECHECK_MS, 1_000);
+    expect(departures).toEqual([]);
+
+    await elapse(AFTER_READ_RECHECK_MS, 1_000);
+    expect(departures).toHaveLength(1);
+  });
+
+  it('une consommation en échec au-delà des redemandes n’est jamais oubliée : elle brûle quand la base revient', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const base = { down: true };
+    let attempts = 0;
+    const { tracker, departures } = buildTracker({
+      onDeparture: async () => {
+        attempts += 1;
+        if (base.down) throw new Error('mongo down');
+      },
+      followTimers: true,
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    for (let i = 0; i < 320; i += 1) {
+      jest.advanceTimersByTime(AFTER_READ_MAX_RETRY_DELAY_MS);
+      await settle();
+    }
+    expect(attempts).toBeGreaterThan(300);
+
+    base.down = false;
+    jest.advanceTimersByTime(AFTER_READ_MAX_RETRY_DELAY_MS);
+    await settle();
+    expect(departures).toHaveLength(1);
+  });
+
+  it('AUDIT 4.1 — un arrière-plan répété pendant un appel ne repousse pas le plafond', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => true, followTimers: true });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.background('s-1');
+    for (let t = 0; t < GRACE_MS + AFTER_READ_MAX_HOLD_MS + 2 * AFTER_READ_RECHECK_MS; t += 25_000) {
+      await elapse(25_000, 5_000);
+      await tracker.background('s-1');
+    }
+
+    expect(departures).toHaveLength(1);
+  });
+
+  it('AUDIT 4.1 — sans appel, un arrière-plan répété par la même socket ne repousse pas sa grâce', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ followTimers: true });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.background('s-1');
+    await elapse(20_000, 5_000);
+    await tracker.background('s-1');
+    await elapse(GRACE_MS - 20_000, 5_000);
+
+    expect(departures).toHaveLength(1);
+  });
+
+  it('AUDIT 4.1 — un autre appareil qui part juste avant le plafond ne le repousse pas', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => true, followTimers: true });
+
+    await tracker.viewStart('s-2', 'conv-1');
+    await tracker.viewStop('s-2', 'conv-1');
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStop('s-1', 'conv-1');
+    await elapse(AFTER_READ_VIEW_STOP_GRACE_MS + AFTER_READ_MAX_HOLD_MS - 2_000, 1_000);
+    expect(departures).toEqual([]);
+
+    await tracker.disconnecting('s-2');
+    await elapse(3_000, 1_000);
+    expect(departures).toHaveLength(1);
+  });
+
+  it('AUDIT 4.3 — une conversation évincée du registre de la socket BRÛLE, elle n’est pas oubliée', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => true, followTimers: true });
+
+    await tracker.viewStart('s-1', 'conv-0');
+    await tracker.viewStop('s-1', 'conv-0');
+    for (let i = 1; i <= AFTER_READ_MAX_TOUCHED; i += 1) {
+      await tracker.viewStart('s-1', `conv-${i}`);
+      await tracker.viewStop('s-1', `conv-${i}`);
+    }
+    await elapse(AFTER_READ_VIEW_STOP_GRACE_MS + AFTER_READ_MAX_HOLD_MS + 2 * AFTER_READ_RECHECK_MS, 10_000);
+
+    expect(departures.map((departure) => departure.conversationId)).toContain('conv-0');
+  });
+
+  it('AUDIT 4.4 — une sortie déclarée qui échoue se redemande sans qu’un appel la retienne', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const failures = { left: 1 };
+    const { tracker, departures } = buildTracker({
+      holdsDeparture: async () => true,
+      onDeparture: async () => {
+        if (failures.left > 0) {
+          failures.left -= 1;
+          throw new Error('mongo down');
+        }
+      },
+      followTimers: true,
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    await elapse(GRACE_MS + 1_000, 1_000);
+
+    expect(departures).toHaveLength(1);
+  });
+
+  it('après le plafond, une consommation qui échoue se redemande SANS que l’appel la retienne de nouveau', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const failures = { left: 1 };
+    const { tracker, departures } = buildTracker({
+      holdsDeparture: async () => true,
+      onDeparture: async () => {
+        if (failures.left > 0) {
+          failures.left -= 1;
+          throw new Error('mongo down');
+        }
+      },
+      followTimers: true,
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.background('s-1');
+    await elapse(GRACE_MS + AFTER_READ_MAX_HOLD_MS + AFTER_READ_RECHECK_MS, 1_000);
+    expect(departures).toEqual([]);
+
+    await elapse(GRACE_MS + 1_000, 1_000);
+    expect(departures).toHaveLength(1);
+  });
+
+  it.each([
+    ['sans appel', async () => false],
+    ['pendant un appel', async () => true],
+  ])('AUDIT 4.1 — deux appareils qui alternent l’arrière-plan ne repoussent pas le plafond (%s)', async (_label, holds) => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ holdsDeparture: holds, followTimers: true });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStart('s-2', 'conv-1');
+    await tracker.background('s-1');
+    await tracker.background('s-2');
+    for (let t = 0, turn = 0; t < GRACE_MS + AFTER_READ_MAX_HOLD_MS + 2 * AFTER_READ_RECHECK_MS; t += 25_000, turn += 1) {
+      await elapse(25_000, 5_000);
+      await tracker.background(turn % 2 === 0 ? 's-1' : 's-2');
+    }
+
+    expect(departures).toHaveLength(1);
+  });
+
+  it.each([
+    ['sans appel', async () => false],
+    ['pendant un appel décroché', async () => true],
+  ])('AUDIT H — une vieille socket qui part pendant que la nouvelle regarde n’ancre aucun plafond (%s)', async (_label, holds) => {
+    jest.useFakeTimers({ now: T0 });
+    const { tracker, departures } = buildTracker({ holdsDeparture: holds, followTimers: true });
+
+    await tracker.viewStart('s-old', 'conv-1');
+    await tracker.viewStart('s-new', 'conv-1');
+    await tracker.disconnecting('s-old');
+    await elapse(15 * 60_000, 30_000);
+    await tracker.viewStop('s-new', 'conv-1');
+    await elapse(AFTER_READ_VIEW_STOP_GRACE_MS - 1_000, 1_000);
+
+    expect(departures).toEqual([]);
+  });
+});
+
