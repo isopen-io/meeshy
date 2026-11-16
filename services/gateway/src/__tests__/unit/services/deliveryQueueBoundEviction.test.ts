@@ -73,12 +73,15 @@ function makeCacheStore(redis: unknown = null): CacheStore {
 }
 
 /** Un double Redis dont le `eval` répond PAR SCRIPT : drain, enfilage, remise. */
-function makeRedis(answers: { enqueue?: unknown; drain?: unknown; restore?: unknown }) {
+function makeRedis(answers: { enqueue?: unknown; drain?: unknown; restore?: unknown; restoreThrows?: boolean }) {
   const scripts: string[] = [];
   const evalFn = jest.fn(async (...args: unknown[]) => {
     const script = String(args[0]);
     scripts.push(script);
-    if (script.includes('LPUSH')) return answers.restore ?? 0;
+    if (script.includes('LPUSH')) {
+      if (answers.restoreThrows) throw new Error('conn reset');
+      return answers.restore ?? 0;
+    }
     if (script.includes('RPUSH')) return answers.enqueue ?? 1;
     return answers.drain ?? [];
   });
@@ -92,6 +95,16 @@ function makeRedis(answers: { enqueue?: unknown; drain?: unknown; restore?: unkn
     },
   };
 }
+
+/** N entrées SCELLÉES, telles que le drain les relit de Redis. */
+const sealedRaw = (count: number): string[] =>
+  Array.from({ length: count }, (_, i) => JSON.stringify({
+    messageId: `507f1f77bcf86cd7994${String(39011 + i).padStart(5, '0')}`,
+    conversationId: '507f1f77bcf86cd799439022',
+    payload: {},
+    sealedPayload: { v: 'delivery-queue:v2' },
+    enqueuedAt: new Date().toISOString(),
+  }));
 
 /** Un sceau dont l'ouverture échoue POUR UNE RAISON PASSAGÈRE : le drain remet en file. */
 const transientSealer: DeliveryQueueSealer = {
@@ -178,10 +191,16 @@ describe("L'éviction au plafond de la file de remise se NOMME (#18733)", () => 
    * pas observée : `0` dit « je n'ai pas mesuré », jamais « la file est vide ».
    */
   test('enfilage REDIS — un entier NU ne prouve aucune éviction', async () => {
-    const { redis } = makeRedis({ enqueue: 1 });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+    // Le `1` est la forme d'avant ce lot, celle que rendent tous les doubles.
+    const legacy = makeRedis({ enqueue: 1 });
+    await new RedisDeliveryQueue(makeCacheStore(legacy.redis)).enqueue('user-entier', makePayload());
 
-    await queue.enqueue('user-entier', makePayload());
+    // Et la seconde valeur est celle qui FAIT TOMBER ce témoin si quelqu'un
+    // lit un entier nu comme une longueur : au-dessus du plafond, une telle
+    // lecture annoncerait une destruction que rien n'a observée. Sans elle le
+    // témoin ne pourrait pas tomber, puisque `1` est sous tous les plafonds.
+    const confusable = makeRedis({ enqueue: DELIVERY_QUEUE_MAX_PER_USER + 1 });
+    await new RedisDeliveryQueue(makeCacheStore(confusable.redis)).enqueue('user-confus', makePayload());
 
     expect(evictionTraces()).toEqual([]);
     expect(sink.warn).not.toHaveBeenCalled();
@@ -195,20 +214,33 @@ describe("L'éviction au plafond de la file de remise se NOMME (#18733)", () => 
    * Et son `LPUSH` rend déjà la longueur : la mesure n'y coûte rien non plus.
    */
   test('remise REDIS — le plafond de la remise nomme ce qu\'il détruit', async () => {
-    const sealed = Array.from({ length: 4 }, (_, i) => JSON.stringify({
-      messageId: `507f1f77bcf86cd79943901${i}`,
-      conversationId: '507f1f77bcf86cd799439022',
-      payload: {},
-      sealedPayload: { v: 'delivery-queue:v2' },
-      enqueuedAt: new Date().toISOString(),
-    }));
-    const { redis } = makeRedis({ drain: sealed, restore: [4, DELIVERY_QUEUE_MAX_PER_USER + 2] });
+    const { redis } = makeRedis({ drain: sealedRaw(4), restore: [4, DELIVERY_QUEUE_MAX_PER_USER + 2] });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis), transientSealer);
 
     await queue.drain('user-remise');
 
     expect(evictionTraces()).toEqual([
       expect.objectContaining({ userId: 'user-remise', destroyed: 2, cap: DELIVERY_QUEUE_MAX_PER_USER, slice: 'redis', scope: 'restore' }),
+    ]);
+  });
+
+  /**
+   * Le pire des quatre chemins, et il n'était pas dans l'issue : Redis DRAINE
+   * puis sa remise ÉCHOUE. Le repli mémoire reçoit alors jusqu'à 500 entrées
+   * scellées — la borne de la tranche Redis — dans une tranche qui en garde
+   * 50 : une panne passagère sur la remise détruisait 450 entrées en silence,
+   * à l'instant précis où le drain venait de les retirer de Redis. Et
+   * `slice(-50)` garde les DERNIÈRES, donc ce qui part est pris en tête :
+   * la remise détruit exactement ce qu'elle remet.
+   */
+  test('remise MÉMOIRE — une remise Redis qui échoue dit ce que la tranche mémoire détruit', async () => {
+    const { redis } = makeRedis({ drain: sealedRaw(MEMORY_CAP + 10), restoreThrows: true });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis), transientSealer);
+
+    await queue.drain('user-repli');
+
+    expect(evictionTraces()).toEqual([
+      expect.objectContaining({ userId: 'user-repli', destroyed: 10, cap: MEMORY_CAP, slice: 'memory', scope: 'restore' }),
     ]);
   });
 
