@@ -88,7 +88,10 @@ describe('le départ d’un lecteur resté connecté, câblé sur la gateway (#1
     mockConsume.mockReset();
   });
 
-  function wired(clock: { now: Date }, call: { liveFor: readonly string[] } = { liveFor: [] }) {
+  function wired(
+    clock: { now: Date },
+    call: { liveFor: readonly string[]; status?: string; answered?: boolean } = { liveFor: [] },
+  ) {
     const callQueries: unknown[] = [];
     const readAt = new Date(T0.getTime() + 30_000);
     const prisma = {
@@ -102,7 +105,11 @@ describe('le départ d’un lecteur resté connecté, câblé sur la gateway (#1
           callQueries.push(query);
           return query.where.participantId.in
             .filter((id) => call.liveFor.includes(id))
-            .map((id) => ({ participantId: id, callSession: { status: 'active' } }));
+            .map((id) => ({
+              participantId: id,
+              answeredAt: call.answered === false ? null : T0,
+              callSession: { status: call.status ?? 'active' },
+            }));
         },
       },
       messageStatusEntry: { findMany: async () => [{ messageId: FLAME, exactReadAt: readAt }] },
@@ -193,6 +200,20 @@ describe('le départ d’un lecteur resté connecté, câblé sur la gateway (#1
     expect(mockConsume).not.toHaveBeenCalled();
   });
 
+  it('un appel qui SONNE seulement ne retient rien : les flammes brûlent après la grâce', async () => {
+    jest.useFakeTimers();
+    const clock = { now: T0 };
+    const { tracker } = wired(clock, { liveFor: ['p-1'], status: 'ringing', answered: false });
+
+    await tracker.viewStart('s-1', CONV);
+    clock.now = new Date(T0.getTime() + 60_000);
+    await tracker.viewStop('s-1', CONV);
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS);
+    await settle();
+
+    expect(mockConsume).toHaveBeenCalledTimes(1);
+  });
+
   it('un appel CLOS ne retient rien', async () => {
     jest.useFakeTimers();
     const clock = { now: T0 };
@@ -208,7 +229,14 @@ describe('le départ d’un lecteur resté connecté, câblé sur la gateway (#1
   });
 });
 
-type CallRow = { readonly participantId: string; readonly leftAt?: Date | null; readonly status: string };
+const ANSWERED = new Date('2026-11-16T09:59:00.000Z');
+
+type CallRow = {
+  readonly participantId: string;
+  readonly leftAt?: Date | null;
+  readonly answeredAt?: Date | null;
+  readonly status: string;
+};
 type CallWhere = {
   readonly OR?: ReadonlyArray<{ readonly leftAt: null | { readonly isSet: boolean } }>;
   readonly participantId: { readonly in: readonly string[] };
@@ -233,7 +261,7 @@ function prismaHolding(rows: readonly CallRow[], accounts: Record<string, readon
       findMany: async ({ where }: { where: CallWhere }) =>
         rows
           .filter((row) => where.participantId.in.includes(row.participantId) && isLive(row, where))
-          .map((row) => ({ callSession: { status: row.status } })),
+          .map((row) => ({ answeredAt: row.answeredAt, callSession: { status: row.status } })),
     },
   };
   return { prisma: prisma as unknown as Parameters<typeof isInLiveCall>[0], participantLookups };
@@ -243,7 +271,7 @@ describe('isInLiveCall — ce qui retient un départ (#18556, audit A6)', () => 
   const ACCOUNT = { participantId: 'p-1', readerKey: 'u-1' };
 
   it('un appel ACTIF sur une autre conversation du compte retient', async () => {
-    const { prisma } = prismaHolding([{ participantId: 'p-y', leftAt: null, status: 'active' }], { 'u-1': ['p-1', 'p-y'] });
+    const { prisma } = prismaHolding([{ participantId: 'p-y', leftAt: null, answeredAt: ANSWERED, status: 'active' }], { 'u-1': ['p-1', 'p-y'] });
     await expect(isInLiveCall(prisma, ACCOUNT)).resolves.toBe(true);
   });
 
@@ -253,17 +281,17 @@ describe('isInLiveCall — ce qui retient un départ (#18556, audit A6)', () => 
   });
 
   it('un appel QUITTÉ (leftAt posé) ne retient rien, même si la session vit encore', async () => {
-    const { prisma } = prismaHolding([{ participantId: 'p-1', leftAt: new Date(), status: 'active' }], { 'u-1': ['p-1'] });
+    const { prisma } = prismaHolding([{ participantId: 'p-1', leftAt: new Date(), answeredAt: ANSWERED, status: 'active' }], { 'u-1': ['p-1'] });
     await expect(isInLiveCall(prisma, ACCOUNT)).resolves.toBe(false);
   });
 
   it('une participation sans leftAt du tout (champ absent) compte comme vivante', async () => {
-    const { prisma } = prismaHolding([{ participantId: 'p-1', status: 'active' }], { 'u-1': ['p-1'] });
+    const { prisma } = prismaHolding([{ participantId: 'p-1', answeredAt: ANSWERED, status: 'active' }], { 'u-1': ['p-1'] });
     await expect(isInLiveCall(prisma, ACCOUNT)).resolves.toBe(true);
   });
 
   it('l’appel d’un AUTRE compte ne retient rien', async () => {
-    const { prisma } = prismaHolding([{ participantId: 'p-other', leftAt: null, status: 'active' }], {
+    const { prisma } = prismaHolding([{ participantId: 'p-other', leftAt: null, answeredAt: ANSWERED, status: 'active' }], {
       'u-1': ['p-1'],
       'u-2': ['p-other'],
     });
@@ -272,7 +300,7 @@ describe('isInLiveCall — ce qui retient un départ (#18556, audit A6)', () => 
 
   it('un INVITÉ n’est cherché que par son propre Participant, sans lecture de compte', async () => {
     const guest = { participantId: 'p-guest', readerKey: 'p-guest' };
-    const { prisma, participantLookups } = prismaHolding([{ participantId: 'p-guest', leftAt: null, status: 'active' }]);
+    const { prisma, participantLookups } = prismaHolding([{ participantId: 'p-guest', leftAt: null, answeredAt: ANSWERED, status: 'active' }]);
 
     await expect(isInLiveCall(prisma, guest)).resolves.toBe(true);
     expect(participantLookups).toEqual([]);
@@ -280,7 +308,31 @@ describe('isInLiveCall — ce qui retient un départ (#18556, audit A6)', () => 
 
   it('un invité ne voit pas l’appel d’un autre Participant', async () => {
     const guest = { participantId: 'p-guest', readerKey: 'p-guest' };
-    const { prisma } = prismaHolding([{ participantId: 'p-1', leftAt: null, status: 'active' }]);
+    const { prisma } = prismaHolding([{ participantId: 'p-1', leftAt: null, answeredAt: ANSWERED, status: 'active' }]);
     await expect(isInLiveCall(prisma, guest)).resolves.toBe(false);
+  });
+
+  it.each(['initiated', 'ringing', 'connecting'])('un appel « %s » ne retient rien, même décroché', async (status) => {
+    const { prisma } = prismaHolding([{ participantId: 'p-1', leftAt: null, answeredAt: ANSWERED, status }], { 'u-1': ['p-1'] });
+    await expect(isInLiveCall(prisma, ACCOUNT)).resolves.toBe(false);
+  });
+
+  it('un appel actif que le lecteur n’a pas décroché (il sonne seulement) ne retient rien', async () => {
+    const { prisma } = prismaHolding([{ participantId: 'p-1', leftAt: null, answeredAt: null, status: 'active' }], {
+      'u-1': ['p-1'],
+    });
+    await expect(isInLiveCall(prisma, ACCOUNT)).resolves.toBe(false);
+  });
+
+  it('une participation écrite avant le suivi du décroché (answeredAt absent) ne retient rien', async () => {
+    const { prisma } = prismaHolding([{ participantId: 'p-1', leftAt: null, status: 'active' }], { 'u-1': ['p-1'] });
+    await expect(isInLiveCall(prisma, ACCOUNT)).resolves.toBe(false);
+  });
+
+  it('un appel en reconnexion, décroché, retient encore', async () => {
+    const { prisma } = prismaHolding([{ participantId: 'p-1', leftAt: null, answeredAt: ANSWERED, status: 'reconnecting' }], {
+      'u-1': ['p-1'],
+    });
+    await expect(isInLiveCall(prisma, ACCOUNT)).resolves.toBe(true);
   });
 });
