@@ -54,12 +54,17 @@ const BRING_STOPPED_FLOORS: Readonly<Record<PushRoutingClient, string | null>> =
  */
 /**
  * `talkie_incoming` (#17142) : un réveil qui n'est utile qu'à un client qui sait émettre `talkie:join` et jouer la voix
- * depuis la notification ; un ancien client n'en ferait qu'une bannière vide (Android data-only) ou inutile. Aucun
- * client publié ne le route encore : chaque lot client pose ici sa première version. La porte du talkie lit la MÊME
- * table (`talkieWakeChannel`) — sans appareil capable, la voix se replie en message vocal au lieu d'attendre en vain.
+ * depuis la notification ; un ancien client n'en ferait qu'une bannière vide (Android data-only) ou inutile. Chaque lot
+ * client pose ici sa première version. iOS le route depuis la 1.1.7. L'Android natif depuis la 3.1.0 (#17144) : son
+ * `PushMessageDispatcher` passe le data-only à `TalkieWakeHandler` AVANT le chemin des messages, et
+ * `TalkieWakePushRouter` lit les clés que `buildTalkieWakePushes` pose (`type`, `talkieId`, `fromUserId`, `fromName`,
+ * `title`, `body`, `phase`, `audioUrl`, `attachmentUrl`) pour démarrer `TalkieWakeService` (premier plan
+ * `mediaPlayback`, `talkie:join`) ; c'est aussi la première native qui déclare `appVersion` + `bundleId` sur son jeton.
+ * La coque et le navigateur ne le routent pas encore. La porte du talkie lit la MÊME table (`talkieWakeChannel`) —
+ * sans appareil capable, la voix se replie en message vocal au lieu d'attendre en vain.
  */
 const TALKIE_INCOMING_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
-  ios: '1.1.7', 'android-native': null, 'android-shell': null, web: null,
+  ios: '1.1.7', 'android-native': '3.1.0', 'android-shell': null, web: null,
 };
 
 /**

@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { TALKIE_NOT_ALLOWED, judgeTalkie, type TalkieGateDb } from '../../../../services/talkie/talkieGate';
+import { talkieWakeChannel } from '../../../../services/talkie/talkiePush';
 import { TALKIE_ERROR_CODES, TALKIE_FALLBACK_VOICE_MESSAGE } from '@meeshy/shared/types/talkie';
 import { relationStore } from '../../../helpers/user-relation-store';
 import { matchesMongoWhere } from '../../../helpers/mongo-where';
@@ -319,6 +320,27 @@ describe('#17142 — un Proche sans socket mais joignable par push : la voix le 
     const visible = ({ verdict }: { verdict: { ok: boolean; code?: string; message?: string } }) => ({ code: verdict.code, message: verdict.message });
 
     expect(visible(manque)).toEqual(visible(sansRaison));
+  });
+
+  it('#17144 — un Proche sur l’Android natif 3.1.0, hors ligne : la voix le réveille par push au lieu de se replier', async () => {
+    const tokens = { pushToken: {
+      findMany: jest.fn(async () => [{ type: 'fcm', platform: 'android', appVersion: '3.1.0', bundleId: 'me.meeshy.app' }]),
+      deleteMany: jest.fn(async () => ({ count: 0 })),
+    }, userSession: { findMany: jest.fn(async () => []) } };
+    const verdict = await judgeTalkie(
+      {
+        prisma: db({ level: 'CLOSE' }) as unknown as TalkieGateDb,
+        now: () => NOW,
+        recipientConnected: async () => false,
+        presenceServed: async () => true,
+        wakeChannel: (userId) => talkieWakeChannel(tokens as never, userId, NOW),
+      },
+      MOI,
+      AUTRE,
+      { sealed: false },
+    );
+
+    expect(verdict).toEqual({ ok: true, delivery: 'waking', channel: 'push' });
   });
 
   it('le repli porte le message informatif du porteur', async () => {
