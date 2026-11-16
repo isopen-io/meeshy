@@ -92,7 +92,7 @@ export function feedInfiniteOptions(deps: FeedDeps) {
       unwrap(
         await loadFeedPage({
           ...deps,
-          ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          ...(pageParam != null ? { cursor: pageParam } : {}),
           ...(signal !== undefined ? { signal } : {}),
         }),
       ),

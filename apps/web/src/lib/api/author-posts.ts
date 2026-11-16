@@ -95,7 +95,7 @@ export function authorPostsInfiniteOptions(deps: AuthorPostsDeps & { readonly au
     staleTime: AUTHOR_POSTS_STALE_TIME,
     initialPageParam: undefined as FeedPageParam,
     queryFn: ({ pageParam, signal }: { readonly pageParam: FeedPageParam; readonly signal: AbortSignal }) =>
-      loadAuthorPosts({ ...deps, ...(pageParam === undefined ? {} : { cursor: pageParam }), signal }).then(unwrap),
+      loadAuthorPosts({ ...deps, ...(pageParam == null ? {} : { cursor: pageParam }), signal }).then(unwrap),
     /* LA MÊME garde « zéro progrès » que le fil — site UNIQUE, jamais une
        boucle réécrite : `hasMore` faux, curseur absent, curseur STAGNANT, page
        VIDE, aucune ligne neuve (`feed-pages.ts:182-206`). */

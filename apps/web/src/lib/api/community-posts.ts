@@ -77,7 +77,7 @@ export function communityPostsInfiniteOptions(deps: CommunityPostsDeps & { reado
     staleTime: COMMUNITY_POSTS_STALE_TIME,
     initialPageParam: undefined as FeedPageParam,
     queryFn: ({ pageParam, signal }: { readonly pageParam: FeedPageParam; readonly signal: AbortSignal }) =>
-      loadCommunityPosts({ ...deps, ...(pageParam === undefined ? {} : { cursor: pageParam }), signal }).then(unwrap),
+      loadCommunityPosts({ ...deps, ...(pageParam == null ? {} : { cursor: pageParam }), signal }).then(unwrap),
     getNextPageParam: nextFeedCursor,
   };
 }

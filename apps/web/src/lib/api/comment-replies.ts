@@ -90,7 +90,7 @@ export function repliesInfiniteOptions(deps: CommentDeps & { readonly postId: st
         transport: deps.transport,
         postId: deps.postId,
         parentId: deps.parentId,
-        ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+        ...(pageParam != null ? { cursor: pageParam } : {}),
         ...(signal !== undefined ? { signal } : {}),
       });
       if (!result.ok) throw new Error(result.error);
