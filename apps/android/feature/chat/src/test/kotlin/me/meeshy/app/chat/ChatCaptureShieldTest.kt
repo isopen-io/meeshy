@@ -29,4 +29,18 @@ class ChatCaptureShieldTest {
     fun `un fil vide ne protege rien`() {
         assertThat(ChatCaptureShield.shields(emptyList())).isFalse()
     }
+
+    @Test
+    fun `le fil qui sort ne retire pas la protection du fil qui entre`() {
+        val holds = SecureHolds()
+        assertThat(holds.acquire()).isTrue()
+        assertThat(holds.acquire()).isFalse()
+        assertThat(holds.release()).isFalse()
+        assertThat(holds.release()).isTrue()
+    }
+
+    @Test
+    fun `une liberation de trop ne retire rien`() {
+        assertThat(SecureHolds().release()).isFalse()
+    }
 }

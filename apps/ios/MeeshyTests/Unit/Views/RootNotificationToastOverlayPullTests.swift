@@ -1,4 +1,5 @@
 import XCTest
+@testable import Meeshy
 
 /// #18721 — tirer la bannière vers le bas l'ouvre comme un tiroir, puis la
 /// transforme en la feuille de sa conversation, ouverte EN REGARD. Ce témoin garde le CÂBLAGE de l'overlay :
@@ -126,7 +127,7 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
     /// Mesuré au simulateur (iPhone 17 Pro, iOS 27) : la feuille au cran
     /// grand pose son haut SUR la zone sûre (62 pt), coins de ~38 pt. Avec
     /// 10 pt d'écart, l'enveloppe s'arrêtait plus bas que la feuille réelle.
-    func test_sheetGeometry_isTheMeasuredLargeDetent() {
+    @MainActor func test_sheetGeometry_isTheMeasuredLargeDetent() {
         XCTAssertEqual(NotificationSheetGeometry.topGap, 0)
         XCTAssertEqual(NotificationSheetGeometry.cornerRadius, 38)
     }

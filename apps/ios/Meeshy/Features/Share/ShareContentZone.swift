@@ -20,6 +20,15 @@ nonisolated enum ShareMessagePreview {
         return count > 1 ? "\(kind) · \(count)" : kind
     }
 
+    /// La capture de « Ce qui part » (#18831) : noire pour un contenu qui
+    /// disparaît ET pour un message flouté (par le message ou une pièce). Écrit
+    /// sur les seuls membres du SDK : ce fichier est aussi compilé dans
+    /// l'extension de partage, qui n'a pas `Message.exitOffer`.
+    static func shieldsCapture(_ message: Message) -> Bool {
+        message.contentExitLaw.capture.shieldsCapture()
+            || message.isBlurred || message.attachments.contains { $0.declaresBlur }
+    }
+
     static func kindLabel(_ attachment: MessageAttachment) -> String {
         switch attachment.kind {
         case .image: return String(localized: "forward.preview.image", defaultValue: "Photo", bundle: .meeshyShare)
@@ -166,7 +175,7 @@ struct ShareContentZone: View {
                     .fill(Color(hex: accentColor))
                     .frame(width: 3, height: 32)
                 if let first = message.attachments.first, withdrawn == nil {
-                    thumbnail(first).captureShield(message.exitOffer.capture.shieldsCapture())
+                    thumbnail(first).captureShield(ShareMessagePreview.shieldsCapture(message))
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(message.senderName ?? "?")
@@ -177,7 +186,7 @@ struct ShareContentZone: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundStyle(theme.textMuted)
                         .lineLimit(2)
-                        .captureShield(message.exitOffer.capture.shieldsCapture())
+                        .captureShield(ShareMessagePreview.shieldsCapture(message))
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
