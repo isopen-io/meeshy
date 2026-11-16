@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mes adresses — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.fi{flex:1;min-width:0;width:100%;background:none;border:0;outline:0;padding:0;margin:0;color:var(--ink);font:inherit}
+.fi::placeholder{color:var(--ink3)}
+.field{display:flex;align-items:center;gap:8px;min-height:54px;padding:0 16px;border-radius:18px;background:var(--field);border:1px solid var(--line)}
+.field.on{border-color:var(--brand-soft);box-shadow:0 0 0 4px rgba(99,102,241,.22)}
+.pst{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;flex:none;background:color-mix(in oklab,var(--brand) 22%,transparent);color:var(--ink2)}
+.grip{display:inline-flex;align-items:center;justify-content:center;width:32px;height:44px;flex:none;color:var(--ink3);cursor:grab}
+.lift{animation:adrLift 3.2s ease-in-out infinite}
+.slot{border:2px dashed var(--brand-soft);border-radius:22px;background:color-mix(in oklab,var(--brand) 9%,transparent)}
+.pick{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.pick>b{display:flex;align-items:center;justify-content:center;width:54px;height:54px;border-radius:50%;background:var(--field);border:1px solid var(--line);color:var(--ink2)}
+.pick>span{font-size:11.5px;font-weight:600;color:var(--ink3)}
+.pick.on>b{background:var(--ink);color:var(--ground);border-color:transparent;box-shadow:0 0 0 4px rgba(238,242,255,.16)}
+.pick.on>span{color:var(--ink)}
+.caret{display:inline-block;width:2px;height:20px;border-radius:1px;background:var(--brand-soft);animation:adrBlink 1.1s steps(2,jump-none) infinite}
+@keyframes adrLift{0%,100%{transform:translate(8px,-9px) rotate(2deg)}50%{transform:translate(8px,-13px) rotate(2deg)}}
+@keyframes adrBlink{0%{opacity:1}100%{opacity:0}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<header style="position: relative; overflow: hidden; padding: 54px 16px 0">
+<div class="orb" style="width: 200px; height: 200px; right: -70px; top: -70px; background: #6366F1; opacity: .42"></div>
+<div class="orb" style="width: 150px; height: 150px; left: -60px; top: 40px; background: #A855F7; opacity: .26; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 12px">
+<button class="ib g" aria-label="Retour">[[ic:caret-left]]</button>
+<div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0">
+<h1 class="d" style="font-size: 20px; white-space: nowrap">Mes adresses</h1>
+</div>
+<button class="btn g sm" style="padding: 0 12px; gap: 6px">[[ic:eye s]]<span>Aperçu</span></button>
+</div>
+<p style="position: relative; padding: 22px 4px 6px; font-size: 16px; line-height: 1.45; color: var(--ink); text-wrap: pretty">Ces adresses apparaissent sur ta vitrine. Tu choisis qui les voit.</p>
+</header>
+
+<section class="rise" style="padding: 18px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span style="display: inline-flex; align-items: center; gap: 8px"><span class="tag">3 adresses · 546 clics</span><span class="new">Nouveau</span></span>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink3)">[[ic:dots-six-vertical s]]<span>Glisse</span></span>
+</div>
+
+<article class="ticket" style="--cut: 70px; z-index: 1">
+<div style="display: flex; align-items: center; gap: 10px; height: 70px; padding: 0 14px 0 6px">
+<button class="grip" aria-label="Déplacer l'adresse Site">[[ic:dots-six-vertical]]</button>
+<span class="pst">[[ic:globe-hemisphere-west]]</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; color: var(--ink3)"><input class="fi d" aria-label="Titre de l'adresse" value="Site" style="flex: none; width: 40px; font-size: 17px">[[ic:pencil-simple s]]</span>
+<span class="mono" style="color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">aissandiaye.studio</span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Afficher l'adresse Site sur ma vitrine"></button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 16px">
+<button class="chip">[[ic:globe s]]<span>Public</span>[[ic:caret-down s]]</button>
+<span style="display: inline-flex; align-items: baseline; gap: 5px"><span class="d" style="font-size: 20px">128</span><span style="font-size: 12.5px; color: var(--ink2)">clics</span></span>
+</div>
+</article>
+
+<div style="position: relative; height: 124px">
+<div class="slot" style="position: absolute; inset: 0"></div>
+<article class="ticket lift" style="--cut: 70px; position: absolute; left: 0; right: 0; top: 0; z-index: 3; background: #1C1930; border-color: var(--brand-soft); box-shadow: 0 30px 56px rgba(0,0,0,.72), 0 10px 22px rgba(99,102,241,.38)">
+<div style="display: flex; align-items: center; gap: 10px; height: 70px; padding: 0 14px 0 6px">
+<button class="grip" aria-label="Déplacer l'adresse Musique" style="color: var(--ink); cursor: grabbing">[[ic:dots-six-vertical]]</button>
+<span class="pst" style="background: var(--brand-fill); color: #fff">[[ic:vinyl-record]]</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; color: var(--ink3)"><input class="fi d" aria-label="Titre de l'adresse" value="Musique" style="flex: none; width: 76px; font-size: 17px">[[ic:pencil-simple s]]</span>
+<span class="mono" style="color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">soundcloud.com/aissa</span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Afficher l'adresse Musique sur ma vitrine"></button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 16px">
+<button class="chip">[[ic:globe s]]<span>Public</span>[[ic:caret-down s]]</button>
+<span style="display: inline-flex; align-items: baseline; gap: 5px"><span class="d" style="font-size: 20px">342</span><span style="font-size: 12.5px; color: var(--ink2)">clics</span></span>
+</div>
+</article>
+</div>
+
+<article class="ticket" style="--cut: 70px">
+<div style="display: flex; align-items: center; gap: 10px; height: 70px; padding: 0 14px 0 6px">
+<button class="grip" aria-label="Déplacer l'adresse Photos">[[ic:dots-six-vertical]]</button>
+<span class="pst">[[ic:camera]]</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; color: var(--ink3)"><input class="fi d" aria-label="Titre de l'adresse" value="Photos" style="flex: none; width: 62px; font-size: 17px">[[ic:pencil-simple s]]</span>
+<span class="mono" style="color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">instagram.com/aissa.snd</span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Afficher l'adresse Photos sur ma vitrine"></button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 16px">
+<button class="chip">[[ic:globe s]]<span>Public</span>[[ic:caret-down s]]</button>
+<span style="display: inline-flex; align-items: baseline; gap: 5px"><span class="d" style="font-size: 20px">76</span><span style="font-size: 12.5px; color: var(--ink2)">clics</span></span>
+</div>
+</article>
+</section>
+
+<section class="rise" style="animation-delay: .1s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Ajouter une adresse</h2>
+<button class="ib" aria-label="Replier le formulaire" aria-expanded="true" style="color: var(--ink2)">[[ic:caret-up]]</button>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 20px; padding: 18px 16px 20px">
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label class="tag" for="adr-url">Adresse</label>
+<div class="field on">
+<span class="mono" style="font-size: 14px; color: var(--ink3)">https://</span>
+<input class="fi mono" id="adr-url" value="youtube.com/@aissa.snd" style="flex: none; width: 186px; font-size: 14px">
+<span class="caret" aria-hidden="true" style="margin-left: -8px"></span>
+<span style="margin-left: auto; color: var(--ok)">[[ic:check-circle-fill]]</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label class="tag" for="adr-titre">Titre</label>
+<div class="field">
+<input class="fi" id="adr-titre" value="Vidéos" style="font-size: 16px; font-weight: 600">
+<span style="font-size: 12px; color: var(--ink3)">6 / 24</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<span class="tag">Icône</span>
+<div role="radiogroup" aria-label="Icône de l'adresse" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 4px">
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:globe-hemisphere-west]]</b><span>Site</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:vinyl-record]]</b><span>Musique</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:camera]]</b><span>Photos</span></button>
+<button class="pick on" role="radio" aria-checked="true"><b>[[ic:film-reel-fill]]</b><span>Vidéos</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:storefront]]</b><span>Boutique</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:envelope-simple]]</b><span>Contact</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:calendar-blank]]</b><span>Agenda</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:heart]]</b><span>Favori</span></button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="tag">Qui la voit</span>
+<div role="radiogroup" aria-label="Qui voit cette adresse" style="display: flex; flex-wrap: wrap; gap: 8px">
+<button class="chip on" role="radio" aria-checked="true" style="min-height: 44px">[[ic:globe s]]<span>Public</span></button>
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px">[[ic:users-three s]]<span>Communauté</span></button>
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px">[[ic:hand-waving s]]<span>Connaissance</span></button>
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px">[[ic:handshake s]]<span>Ami</span></button>
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px">[[ic:fire s]]<span>Proche</span></button>
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px">[[ic:drop s]]<span>Sang</span></button>
+</div>
+<span style="font-size: 12.5px; color: var(--ink3)">Tout le monde, même sans compte.</span>
+</div>
+
+<div class="sep" style="margin: 0"></div>
+
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="pst" style="background: color-mix(in oklab, var(--l-track) 26%, transparent)">[[ic:cursor-click]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="font-size: 15.5px; font-weight: 600">Compter les clics</span>
+<span style="font-size: 12.5px; color: var(--ink2)">Crée un lien de suivi <span class="mono" style="font-size: 12px; color: var(--ink3)">meeshy.me/l/…</span></span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Compter les clics"></button>
+</div>
+
+<button class="btn p" style="width: 100%; min-height: 54px; font-size: 16px">[[ic:plus]]<span>Ajouter</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .2s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Sur ta vitrine</h2>
+<span class="chip">[[ic:eye s]]<span>Vue par : Public</span></span>
+</div>
+<div style="position: relative; overflow: hidden; border-radius: 28px; border: 1px solid var(--line); padding: 22px 16px 20px; background: linear-gradient(160deg, #6D28D9 0%, #3B1A78 52%, #150F2A 100%); display: flex; flex-direction: column; gap: 18px">
+<div class="orb" style="width: 170px; height: 170px; left: -50px; top: -50px; background: #A855F7; opacity: .7"></div>
+<div class="orb" style="width: 140px; height: 140px; right: -40px; bottom: -50px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 12px">
+<span class="av" style="width: 52px; height: 52px; font-size: 19px; box-shadow: 0 0 0 3px rgba(255,255,255,.28)">AN</span>
+<div style="display: flex; flex-direction: column; gap: 1px">
+<span class="d" style="font-size: 19px">Aïssa Ndiaye</span>
+<span class="mono" style="color: var(--accent-ink)">@aissa</span>
+</div>
+</div>
+<div style="position: relative; display: flex; flex-wrap: wrap; gap: 8px">
+<a href="#" class="chip glass" style="min-height: 44px; color: var(--ink)">[[ic:vinyl-record s]]<span>Musique</span></a>
+<a href="#" class="chip glass" style="min-height: 44px; color: var(--ink)">[[ic:globe-hemisphere-west s]]<span>Site</span></a>
+<a href="#" class="chip glass" style="min-height: 44px; color: var(--ink)">[[ic:camera s]]<span>Photos</span></a>
+</div>
+</div>
+</section>
+
+<p style="display: flex; align-items: flex-start; gap: 8px; padding: 18px 20px 34px; font-size: 12.5px; line-height: 1.45; color: var(--ink3)">[[ic:shield-check s]]<span>Les visiteurs voient un avertissement avant de quitter Meeshy.</span></p>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1862}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

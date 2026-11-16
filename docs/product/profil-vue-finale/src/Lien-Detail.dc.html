@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Lien de suivi — détail — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.act{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;font-size:11.5px;font-weight:600;color:var(--ink2)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:128px}
+.bars>i{display:block;flex:1;min-height:3px;border-radius:4px 4px 2px 2px;background:var(--l-track);opacity:.62;transform-origin:bottom;animation:ldGrow .9s cubic-bezier(.2,.9,.25,1) both}
+.bars>i.pk{opacity:1;background:linear-gradient(180deg,#A5B4FC,var(--l-track));box-shadow:0 0 18px rgba(129,140,248,.6)}
+.bub{position:absolute;display:flex;align-items:center;justify-content:center;border-radius:50%;transform:translate(-50%,-50%);background:color-mix(in oklab,var(--l-track) 46%,transparent);border:1.5px solid rgba(165,180,252,.75);color:var(--ink);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;animation:ldBreath 5s ease-in-out infinite}
+.cc{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;flex:none;background:var(--deep);border:1px solid var(--line);color:var(--ink);font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:12px;font-weight:700}
+.lg{display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;color:var(--ink2)}
+.lg>b{margin-left:auto;font-weight:700;color:var(--ink)}
+.lg>em{width:9px;height:9px;border-radius:50%;flex:none}
+@keyframes ldGrow{from{transform:scaleY(.05)}to{transform:none}}
+@keyframes ldBreath{0%,100%{box-shadow:0 0 0 0 rgba(129,140,248,.35)}50%{box-shadow:0 0 0 7px rgba(129,140,248,0)}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 460px; overflow: hidden; pointer-events: none">
+<div class="orb" style="width: 260px; height: 260px; left: -90px; top: -60px; background: #4F46E5; opacity: .42"></div>
+<div class="orb" style="width: 200px; height: 200px; right: -80px; top: 150px; background: #818CF8; opacity: .22; animation-delay: -4s"></div>
+</div>
+
+<header style="position: relative; display: flex; align-items: center; gap: 12px; padding: 54px 16px 0">
+<button class="ib g" aria-label="Retour à mes liens">[[ic:caret-left]]</button>
+<h1 class="d" style="font-size: 20px; flex: 1; min-width: 0">Lien de suivi</h1>
+<button class="ib g" aria-label="Plus d'options">[[ic:dots-three]]</button>
+</header>
+
+<section class="rise" style="position: relative; padding: 20px 20px 0">
+<article class="ticket" style="--cut: 175px; background: linear-gradient(160deg, color-mix(in oklab, var(--l-track) 46%, var(--raised)), var(--raised) 72%); border-color: rgba(129,140,248,.42); box-shadow: 0 18px 40px rgba(67,56,202,.32)">
+<div style="display: flex; flex-direction: column; justify-content: center; gap: 10px; height: 174px; padding: 0 18px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="ib" style="background: var(--brand-fill); color: #fff; box-shadow: 0 6px 16px rgba(99,102,241,.5)">[[ic:cursor-click]]</span>
+<h2 class="d" style="font-size: 24px; flex: 1; min-width: 0">Réel Dakar la nuit</h2>
+</div>
+<span class="mono" style="font-size: 11.5px; color: var(--ink3); white-space: nowrap">campagne dakar-nuit-nov · source instagram</span>
+<a href="#" class="mono" style="font-size: 18px; font-weight: 700; color: var(--ink); white-space: nowrap">meeshy.me/l/<span style="color: #C7D2FE">dkr-nuit</span></a>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink2)">[[ic:film-reel s]]<span>Réel · publié le 2 nov.</span></span>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: flex-start; gap: 2px; padding: 16px 10px 16px">
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:copy]]</span><span>Copier</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:qr-code]]</span><span>QR</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:export]]</span><span>Partager</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:pencil-simple]]</span><span>Modifier</span></button>
+<button class="act" role="switch" aria-checked="true" aria-label="Lien actif"><span style="display: flex; align-items: center; height: 52px"><span class="sw on"></span></span><span style="color: var(--ok)">Actif</span></button>
+</div>
+</article>
+</section>
+
+<section class="rise" style="animation-delay: .08s; position: relative; padding: 30px 20px 0; display: grid; grid-template-columns: 1.15fr 1.25fr .8fr; gap: 0">
+<div style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 34px">1 284</span><span style="font-size: 12.5px; color: var(--ink2)">clics</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px; padding-left: 16px; border-left: 1px solid var(--line)"><span class="d" style="font-size: 34px; color: #C7D2FE">912</span><span style="font-size: 12.5px; color: var(--ink2)">visiteurs uniques</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px; padding-left: 16px; border-left: 1px solid var(--line)"><span class="d" style="font-size: 34px">31</span><span style="font-size: 12.5px; color: var(--ink2)">pays</span></div>
+</section>
+
+<section class="rise" style="animation-delay: .14s; padding: 30px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+<h2 class="d" style="font-size: 22px">Les clics</h2>
+<div role="group" aria-label="Période" style="display: flex; gap: 6px">
+<button class="chip" style="min-height: 44px">7 j</button>
+<button class="chip on" aria-pressed="true" style="min-height: 44px">30 j</button>
+<button class="chip" style="min-height: 44px">Tout</button>
+</div>
+</div>
+<div class="card" style="padding: 18px 16px 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="position: relative">
+<div class="bars" role="img" aria-label="Clics par jour sur 30 jours, du 18 octobre au 16 novembre. Pic le 3 novembre : 214 clics.">
+<i style="height: 0%"></i><i style="height: 0%; animation-delay: .03s"></i><i style="height: 0%; animation-delay: .06s"></i><i style="height: 0%; animation-delay: .09s"></i><i style="height: 0%; animation-delay: .12s"></i><i style="height: 0%; animation-delay: .15s"></i><i style="height: 0%; animation-delay: .18s"></i><i style="height: 0%; animation-delay: .21s"></i><i style="height: 0%; animation-delay: .24s"></i><i style="height: 0%; animation-delay: .27s"></i><i style="height: 0%; animation-delay: .3s"></i><i style="height: 0%; animation-delay: .33s"></i><i style="height: 0%; animation-delay: .36s"></i><i style="height: 0%; animation-delay: .39s"></i><i style="height: 0%; animation-delay: .42s"></i><i style="height: 45%; animation-delay: .45s"></i><i class="pk" style="height: 100%; animation-delay: .48s"></i><i style="height: 79%; animation-delay: .51s"></i><i style="height: 57%; animation-delay: .54s"></i><i style="height: 41%; animation-delay: .57s"></i><i style="height: 30%; animation-delay: .6s"></i><i style="height: 24%; animation-delay: .63s"></i><i style="height: 22%; animation-delay: .66s"></i><i style="height: 18%; animation-delay: .69s"></i><i style="height: 14%; animation-delay: .72s"></i><i style="height: 13%; animation-delay: .75s"></i><i style="height: 21%; animation-delay: .78s"></i><i style="height: 27%; animation-delay: .81s"></i><i style="height: 17%; animation-delay: .84s"></i><i style="height: 11%; animation-delay: .87s"></i>
+</div>
+<div style="position: absolute; right: 150px; top: -2px; display: flex; align-items: center; gap: 6px">
+<span class="glass" style="display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--ink)">3 nov. <span style="color: var(--ink3)">·</span> <span class="d" style="font-size: 15px; color: #C7D2FE">214</span></span>
+<span style="width: 14px; height: 0; border-top: 1.5px dashed #A5B4FC"></span>
+</div>
+</div>
+<div class="mono" style="display: flex; justify-content: space-between; font-size: 11px; color: var(--ink3)"><span>18 oct.</span><span>28 oct.</span><span>7 nov.</span><span>16 nov.</span></div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .2s; padding: 32px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px">
+<h2 class="d" style="font-size: 22px">Carte des visiteurs</h2>
+<span class="new">Nouveau</span>
+</div>
+<div style="position: relative; overflow: hidden; height: 240px; border-radius: 26px; border: 1px solid var(--line)">
+[[map]]
+<div style="position: absolute; inset: 0; background: radial-gradient(120% 90% at 30% 60%, rgba(9,9,11,0) 40%, rgba(9,9,11,.5))"></div>
+<span class="bub" style="left: 27%; top: 58%; width: 78px; height: 78px; font-size: 20px">488</span>
+<span class="bub" style="left: 58%; top: 28%; width: 64px; height: 64px; font-size: 17px; animation-delay: -1s">308</span>
+<span class="bub" style="left: 47%; top: 76%; width: 50px; height: 50px; font-size: 14px; animation-delay: -2s">141</span>
+<span class="bub" style="left: 40%; top: 27%; width: 42px; height: 42px; font-size: 13px; animation-delay: -3s">77</span>
+<span class="bub" style="left: 87%; top: 28%; width: 38px; height: 38px; font-size: 12px; animation-delay: -1.6s">52</span>
+<span class="bub" style="left: 9%; top: 47%; width: 34px; height: 34px; font-size: 12px; animation-delay: -3.6s">34</span>
+<span class="glass" style="position: absolute; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--ink)">[[ic:flag-banner s]]<span>31 pays · 30 j</span></span>
+<button class="btn g sm" style="position: absolute; right: 12px; bottom: 12px; padding: 0 14px; color: var(--ink)">[[ic:arrows-out s]]<span>Agrandir</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .26s; padding: 32px 20px 0; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">D'où ils viennent</h2>
+<a href="#" style="font-size: 13.5px; font-weight: 700; color: var(--ink2); min-height: 44px; display: inline-flex; align-items: center; gap: 4px">Les 31 pays[[ic:caret-right s]]</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="cc" style="background: var(--brand-fill); color: #fff; border-color: transparent">SN</span>
+<div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-weight: 600">Sénégal</span><span class="d" style="font-size: 17px">38 %</span></div>
+<span class="bar"><i style="width: 38%; background: var(--l-track)"></i></span>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="cc">FR</span>
+<div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-weight: 600">France</span><span class="d" style="font-size: 17px">24 %</span></div>
+<span class="bar"><i style="width: 24%; background: var(--l-track)"></i></span>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="cc">CI</span>
+<div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-weight: 600">Côte d'Ivoire</span><span class="d" style="font-size: 17px">11 %</span></div>
+<span class="bar"><i style="width: 11%; background: var(--l-track)"></i></span>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="cc">PT</span>
+<div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-weight: 600">Portugal</span><span class="d" style="font-size: 17px">6 %</span></div>
+<span class="bar"><i style="width: 6%; background: var(--l-track)"></i></span>
+</div>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .32s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px">Avec quoi</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+
+<div class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 14px">
+<span class="tag">Appareils</span>
+<div style="position: relative; align-self: center; width: 104px; height: 104px">
+<svg viewBox="0 0 42 42" width="104" height="104" role="img" aria-label="Téléphone 81 %, ordinateur 16 %, tablette 3 %" style="display: block; transform: rotate(-90deg)">
+<circle cx="21" cy="21" r="15.915" fill="none" stroke="#1A1730" stroke-width="5"></circle>
+<circle cx="21" cy="21" r="15.915" fill="none" stroke="#6366F1" stroke-width="5" stroke-linecap="round" stroke-dasharray="78 22" stroke-dashoffset="0"></circle>
+<circle cx="21" cy="21" r="15.915" fill="none" stroke="#A5B4FC" stroke-width="5" stroke-linecap="round" stroke-dasharray="11 89" stroke-dashoffset="-83.5"></circle>
+<circle cx="21" cy="21" r="15.915" fill="none" stroke="#EEF2FF" stroke-width="5" stroke-linecap="round" stroke-dasharray="0.5 99.5" stroke-dashoffset="-98.5"></circle>
+</svg>
+<span style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--ink2)">[[ic:device-mobile]]<span class="d" style="font-size: 17px; color: var(--ink)">81 %</span></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 9px">
+<span class="lg"><em style="background: #6366F1"></em>[[ic:device-mobile s]]<span>Téléphone</span><b>81 %</b></span>
+<span class="lg"><em style="background: #A5B4FC"></em>[[ic:desktop s]]<span>Ordinateur</span><b>16 %</b></span>
+<span class="lg"><em style="background: #EEF2FF"></em>[[ic:device-tablet s]]<span>Tablette</span><b>3 %</b></span>
+</div>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 14px">
+<span class="tag">Source</span>
+<div style="position: relative; align-self: center; width: 104px; height: 104px">
+<svg viewBox="0 0 42 42" width="104" height="104" role="img" aria-label="Instagram 44 %, WhatsApp 29 %, direct 27 %" style="display: block; transform: rotate(-90deg)">
+<circle cx="21" cy="21" r="15.915" fill="none" stroke="#1A1730" stroke-width="5"></circle>
+<circle cx="21" cy="21" r="15.915" fill="none" stroke="#6366F1" stroke-width="5" stroke-linecap="round" stroke-dasharray="39 61" stroke-dashoffset="-2.5"></circle>
+<circle cx="21" cy="21" r="15.915" fill="none" stroke="#A5B4FC" stroke-width="5" stroke-linecap="round" stroke-dasharray="24 76" stroke-dashoffset="-46.5"></circle>
+<circle cx="21" cy="21" r="15.915" fill="none" stroke="#EEF2FF" stroke-width="5" stroke-linecap="round" stroke-dasharray="22 78" stroke-dashoffset="-75.5"></circle>
+</svg>
+<span style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px"><span class="d" style="font-size: 17px">44 %</span><span style="font-size: 10.5px; font-weight: 600; color: var(--ink2)">Instagram</span></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 9px">
+<span class="lg"><em style="background: #6366F1"></em><span>Instagram</span><b>44 %</b></span>
+<span class="lg"><em style="background: #A5B4FC"></em><span>WhatsApp</span><b>29 %</b></span>
+<span class="lg"><em style="background: #EEF2FF"></em><span>Direct</span><b>27 %</b></span>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .38s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px">
+<h2 class="d" style="font-size: 22px">Derniers clics</h2>
+<span class="dot on" style="border-color: var(--ground)"></span>
+</div>
+<div class="card" style="display: flex; flex-direction: column; overflow: hidden">
+<div class="row" style="padding: 8px 16px">
+<span class="cc">PT</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-weight: 600">Lisbonne, Portugal</span><span style="font-size: 12.5px; color: var(--ink2)">iPhone · Instagram</span></div>
+<span style="font-size: 12.5px; font-weight: 600; color: var(--ok); white-space: nowrap">il y a 2 min</span>
+</div>
+<div class="sep" style="margin: 0 16px"></div>
+<div class="row" style="padding: 8px 16px">
+<span class="cc">SN</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-weight: 600">Dakar, Sénégal</span><span style="font-size: 12.5px; color: var(--ink2)">Android · WhatsApp</span></div>
+<span style="font-size: 12.5px; color: var(--ink3); white-space: nowrap">il y a 9 min</span>
+</div>
+<div class="sep" style="margin: 0 16px"></div>
+<div class="row" style="padding: 8px 16px">
+<span class="cc">FR</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-weight: 600">Lyon, France</span><span style="font-size: 12.5px; color: var(--ink2)">Ordinateur · Direct</span></div>
+<span style="font-size: 12.5px; color: var(--ink3); white-space: nowrap">il y a 24 min</span>
+</div>
+<div class="sep" style="margin: 0 16px"></div>
+<div class="row" style="padding: 8px 16px">
+<span class="cc">CI</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-weight: 600">Abidjan, Côte d'Ivoire</span><span style="font-size: 12.5px; color: var(--ink2)">Android · Instagram</span></div>
+<span style="font-size: 12.5px; color: var(--ink3); white-space: nowrap">il y a 41 min</span>
+</div>
+</div>
+</section>
+
+<footer style="padding: 36px 20px 24px; display: flex; flex-direction: column">
+<button class="btn x">[[ic:trash]]<span>Supprimer ce lien</span></button>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2116}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

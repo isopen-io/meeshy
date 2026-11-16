@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Les liens de Léo — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.qr{position:relative;width:76px;height:76px;border-radius:14px;flex:none;border:6px solid #EEF2FF;box-shadow:0 10px 24px rgba(0,0,0,.35);background:conic-gradient(#1E1B4B 25%,#0000 0 50%,#1E1B4B 0 75%,#0000 0) 0 0/8px 8px,linear-gradient(90deg,#1E1B4B 33%,#0000 0) 4px 0/12px 20px,linear-gradient(#1E1B4B 25%,#0000 0 60%,#1E1B4B 0 80%,#0000 0) 0 4px/28px 20px,#EEF2FF}
+.qr>em{position:absolute;width:22px;height:22px;border:4px solid #1E1B4B;border-radius:6px;background:#EEF2FF;box-shadow:0 0 0 2px #EEF2FF}
+.qr>em::after{content:"";position:absolute;inset:2px;border-radius:2px;background:#0F766E}
+.qr>b{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px #EEF2FF}
+.act{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0;font-size:12px;font-weight:600;line-height:1.2;text-align:center;color:var(--ink2)}
+.rail{display:flex;overflow-x:auto;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.who{display:flex;flex-direction:column;align-items:center;gap:7px;flex:none;width:62px;font-size:12px;font-weight:600;color:var(--ink2)}
+.tail{position:absolute;left:-6px;bottom:0;width:18px;height:18px;background:var(--raised);border-left:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0 0 0 16px;clip-path:polygon(0 30%,36% 30%,36% 100%,0 100%)}
+.sheet{animation:alSheet 5s cubic-bezier(.3,1.3,.4,1) infinite}
+@keyframes alSheet{0%{transform:translateY(26px);opacity:0}9%,100%{transform:none;opacity:1}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+
+<header style="position: relative; height: 150px; overflow: hidden; background: linear-gradient(170deg, #4338CA 0%, #2A2480 46%, #09090B 100%)">
+<div class="orb" style="width: 170px; height: 170px; right: -50px; top: -46px; background: #4ECDC4; opacity: .5"></div>
+<div class="orb" style="width: 140px; height: 140px; left: -50px; top: 50px; background: #6366F1; opacity: .6; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 70px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 12px; padding: 60px 16px 0 20px">
+<span class="av" style="width: 40px; height: 40px; font-size: 15px; box-shadow: 0 0 0 2px rgba(255,255,255,.3)">LM</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<h1 class="d" style="font-size: 34px">Ses liens</h1>
+<span style="font-size: 13.5px; font-weight: 600; color: var(--ink2)">Léo Marchetti · où le trouver</span>
+</div>
+<button class="ib g" aria-label="Scanner un QR">[[ic:scan]]</button>
+</div>
+</header>
+
+<section class="rise" style="padding: 6px 20px 0; display: flex; flex-direction: column">
+<article class="ticket" style="--cut: 125px; background: linear-gradient(160deg, #1E1B4B, var(--raised) 70%); border-color: rgba(129,140,248,.38); box-shadow: 0 18px 40px rgba(67,56,202,.28)">
+<div style="display: flex; align-items: center; gap: 12px; height: 124px; padding: 0 18px">
+<div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0">
+<span class="tag">Son lien de profil</span>
+<a href="#" class="mono" style="font-size: 20px; font-weight: 700; color: var(--ink); white-space: nowrap">meeshy.me/<span style="color: var(--accent-ink)">@leo.m</span></a>
+<span style="font-size: 12.5px; color: var(--ink2)">Ouvre sa vitrine, vue Public</span>
+</div>
+<button class="qr" aria-label="Agrandir le QR de Léo">
+<em style="left: 0; top: 0"></em><em style="right: 0; top: 0"></em><em style="left: 0; bottom: 0"></em><b></b>
+</button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: flex-start; gap: 4px; padding: 18px 10px 16px">
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:copy]]</span><span>Copier</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:qr-code]]</span><span>QR</span></button>
+<button class="act"><span class="ib" style="width: 52px; height: 52px; background: var(--accent); color: #0B0B12; box-shadow: 0 8px 22px rgba(78,205,196,.35)">[[ic:paper-plane-tilt]]</span><span style="color: var(--ink)">Envoyer à un ami</span><span class="new" style="position: absolute; top: -9px; left: 50%; transform: translateX(-50%)">Nouveau</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:contactless-payment]]</span><span>Sans contact</span></button>
+</div>
+</article>
+</section>
+
+<section class="rise" style="animation-delay: .08s; padding: 32px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Ses adresses</h2>
+<span style="font-size: 13px; font-weight: 600; color: var(--ink3)">3 visibles pour toi</span>
+</div>
+
+<a href="#" class="ticket" style="--cut: 38px; display: flex; align-items: center; gap: 10px; height: 76px; padding: 0 8px 0 16px; color: var(--ink)">
+<span class="ib" style="background: var(--deep); color: var(--ink2)">[[ic:globe-hemisphere-west]]</span>
+<span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">Portfolio</span><span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">leomarchetti.photo</span></span>
+<span style="align-self: stretch; border-left: 1.5px dashed var(--line); margin: 12px 0"></span>
+<span class="ib" style="color: var(--brand-soft)">[[ic:arrow-square-out]]</span>
+</a>
+
+<a href="#" class="ticket" style="--cut: 38px; display: flex; align-items: center; gap: 10px; height: 76px; padding: 0 8px 0 16px; color: var(--ink)">
+<span class="ib" style="background: var(--deep); color: var(--ink2)">[[ic:storefront]]</span>
+<span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">Tirages</span><span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">leomarchetti.photo/boutique</span></span>
+<span style="align-self: stretch; border-left: 1.5px dashed var(--line); margin: 12px 0"></span>
+<span class="ib" style="color: var(--brand-soft)">[[ic:arrow-square-out]]</span>
+</a>
+
+<a href="#" class="ticket" style="--cut: 38px; display: flex; align-items: center; gap: 10px; height: 76px; padding: 0 8px 0 16px; color: var(--ink)">
+<span class="ib" style="background: var(--deep); color: var(--ink2)">[[ic:envelope-simple]]</span>
+<span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">Newsletter</span><span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">leomarchetti.photo/lettre</span></span>
+<span style="align-self: stretch; border-left: 1.5px dashed var(--line); margin: 12px 0"></span>
+<span class="ib" style="color: var(--brand-soft)">[[ic:arrow-square-out]]</span>
+</a>
+
+<div style="display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 18px; border: 1.5px dashed var(--line); border-radius: 22px; color: var(--ink3)">
+<span class="ib" style="width: 36px; height: 36px; background: var(--field)">[[ic:lock-simple s]]</span>
+<span style="flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600">1 adresse réservée à ses Sang</span>
+[[ic:drop s]]
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .16s; padding: 32px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<h2 class="d" style="font-size: 22px">Ses communautés ouvertes</h2>
+
+<article class="ticket" style="--cut: 44px; display: flex; align-items: center; gap: 10px; height: 88px; padding: 0 12px 0 16px; border-color: color-mix(in oklab, var(--l-comm) 34%, transparent); background: linear-gradient(120deg, color-mix(in oklab, var(--l-comm) 12%, var(--raised)), var(--raised) 62%)">
+<span class="ib" style="background: color-mix(in oklab, var(--l-comm) 20%, transparent); color: var(--l-comm)">[[ic:users-four]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">Photo de rue</span><span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">meeshy.me/c/photo-rue</span><span style="font-size: 12.5px; color: var(--ink2)"><b style="color: var(--l-comm); font-weight: 700">1 204</b> membres</span></span>
+<button class="btn sm" style="background: var(--l-comm); color: #0B0B12; padding: 0 14px">Rejoindre</button>
+</article>
+
+<article class="ticket" style="--cut: 44px; display: flex; align-items: center; gap: 10px; height: 88px; padding: 0 8px 0 16px; border-color: color-mix(in oklab, var(--l-comm) 34%, transparent)">
+<span class="ib" style="background: color-mix(in oklab, var(--l-comm) 20%, transparent); color: var(--l-comm)">[[ic:users-four]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">Lusophones</span><span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">meeshy.me/c/lusophones</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ok)">[[ic:check s]]<span>Tu en fais partie</span></span></span>
+<a href="#" class="ib" aria-label="Ouvrir Lusophones" style="color: var(--ink3)">[[ic:caret-right]]</a>
+</article>
+</section>
+
+<section class="rise" style="animation-delay: .24s; padding: 32px 0 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 3px; padding: 0 20px">
+<h2 class="d" style="font-size: 22px">Envoyer son profil</h2>
+<span style="font-size: 13.5px; color: var(--ink2)">Voilà ce que ton ami recevra.</span>
+</div>
+
+<div style="display: flex; align-items: flex-end; gap: 8px; padding: 0 20px">
+<span class="av" style="--accent: #A855F7; width: 30px; height: 30px; font-size: 11px">AN</span>
+<div style="position: relative; flex: 1; min-width: 0; max-width: 296px">
+<span class="tail" aria-hidden="true"></span>
+<article class="card" style="position: relative; overflow: hidden; border-radius: 24px 24px 24px 8px; box-shadow: 0 18px 40px rgba(0,0,0,.4)">
+<div style="position: relative; height: 68px; overflow: hidden; background: linear-gradient(165deg, #0F766E 0%, #134E4A 55%, #13111C 100%)">
+<div class="orb" style="width: 110px; height: 110px; left: -30px; top: -40px; background: #4ECDC4; opacity: .7"></div>
+<div class="orb" style="width: 90px; height: 90px; right: -20px; top: 10px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 0 16px 16px; margin-top: -26px; position: relative">
+<span style="position: relative; align-self: flex-start; display: inline-flex">
+<span class="av" style="width: 56px; height: 56px; font-size: 20px; box-shadow: 0 0 0 4px var(--raised)">LM</span>
+<span class="dot on" style="position: absolute; right: -2px; bottom: -2px; border-color: var(--raised)"></span>
+</span>
+<div style="display: flex; flex-direction: column; gap: 1px">
+<span class="d" style="font-size: 20px">Léo Marchetti</span>
+<span class="mono" style="font-size: 13px; color: var(--accent-ink)">@leo.m</span>
+</div>
+<p style="font-size: 14px; line-height: 1.4; color: var(--ink)">Photographe de rue. Lyon ⇄ Lisbonne.</p>
+<button class="btn a sm" style="align-self: stretch">[[ic:user-focus s]]<span>Voir la vitrine</span></button>
+</div>
+</article>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="tag" style="padding: 0 20px">Suggestions</span>
+<div class="rail" style="gap: 10px; padding: 4px 20px 2px">
+<button class="who" aria-pressed="true" style="color: var(--ink)">
+<span style="position: relative; display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--ground), 0 0 0 4px var(--brand-soft)">
+<span class="av" style="--accent: #FF6B6B; width: 54px; height: 54px; font-size: 18px">MO</span>
+<span style="position: absolute; right: -5px; bottom: -5px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--brand-fill); color: #fff; border: 2.5px solid var(--ground)">[[ic:check s]]</span>
+</span>
+<span>Mina</span>
+</button>
+<button class="who"><span class="av" style="--accent: #F8B500; width: 54px; height: 54px; font-size: 18px">TR</span><span>Tomás</span></button>
+<button class="who"><span class="av" style="--accent: #3498DB; width: 54px; height: 54px; font-size: 18px">YT</span><span>Yuki</span></button>
+<button class="who"><span class="av" style="--accent: #2ECC71; width: 54px; height: 54px; font-size: 18px">SB</span><span>Sofia</span></button>
+<button class="who"><span class="ib" style="width: 54px; height: 54px; background: var(--deep); color: var(--ink2); border: 1px solid var(--line)">[[ic:chats-circle]]</span><span>Studio</span></button>
+<button class="who"><span class="ib g" style="width: 54px; height: 54px; color: var(--ink)">[[ic:magnifying-glass]]</span><span>Chercher</span></button>
+</div>
+</div>
+
+<div style="padding: 4px 20px 0">
+<button class="btn p" style="width: 100%">[[ic:paper-plane-tilt]]<span>Envoyer à Mina</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .32s; padding: 32px 20px 0; display: flex; flex-direction: column">
+<div style="position: relative; overflow: hidden; border-radius: 30px; border: 1px solid var(--line); background: #0C0B14; padding: 18px 12px 12px; display: flex; flex-direction: column; gap: 18px">
+<div class="orb" style="width: 160px; height: 160px; left: -40px; bottom: -30px; background: #4338CA; opacity: .75"></div>
+<div class="orb" style="width: 130px; height: 130px; right: -30px; bottom: 30px; background: #4ECDC4; opacity: .4; animation-delay: -5s"></div>
+
+<div aria-hidden="true" style="position: relative; display: flex; align-items: center; gap: 12px; height: 64px; margin: 0 6px; padding: 0 16px; border-radius: 20px; background: var(--raised); border: 1px solid var(--line); opacity: .45">
+<span class="ib" style="width: 36px; height: 36px; background: var(--deep); color: var(--ink2)">[[ic:globe-hemisphere-west s]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1"><span class="d" style="font-size: 15px">Portfolio</span><span class="mono" style="font-size: 11.5px; color: var(--ink2)">leomarchetti.photo</span></span>
+<span style="color: var(--brand-soft)">[[ic:arrow-square-out s]]</span>
+</div>
+
+<div class="glass sheet" role="alertdialog" aria-label="Tu quittes Meeshy" style="position: relative; border-radius: 26px; padding: 10px 18px 18px; display: flex; flex-direction: column; gap: 16px">
+<span aria-hidden="true" style="align-self: center; width: 38px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.34)"></span>
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="ib" style="width: 48px; height: 48px; background: color-mix(in oklab, var(--brand-soft) 26%, transparent); color: var(--ink)">[[ic:arrow-square-out]]</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span class="d" style="font-size: 20px">Tu quittes Meeshy</span>
+<span class="mono" style="font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">leomarchetti.photo</span>
+</div>
+</div>
+<p style="font-size: 13px; color: var(--ink2)">Ce site n'est pas géré par Meeshy. Il s'ouvre dans ton navigateur.</p>
+<div style="display: flex; gap: 10px">
+<button class="btn g" style="flex: 1; padding: 0 12px">Annuler</button>
+<button class="btn p" style="flex: 1; padding: 0 12px"><span>Continuer</span>[[ic:arrow-square-out s]]</button>
+</div>
+</div>
+</div>
+</section>
+
+<nav aria-label="Faces du profil" style="position: sticky; bottom: 0; margin-top: 28px; padding: 28px 12px 24px; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.92) 46%)">
+<div class="seg glass">
+<button>[[ic:user-focus]]<span>Vitrine</span></button>
+<button class="on" aria-current="page">[[ic:link-fill]]<span>Liens</span></button>
+<button>[[ic:lightning]]<span>Actions</span></button>
+</div>
+<button class="ib" aria-label="Envoyer le profil de Léo" style="width: 56px; height: 56px; background: var(--brand-fill); color: #fff; box-shadow: 0 8px 22px rgba(79,70,229,.5)">[[ic:paper-plane-tilt]]</button>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2092}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

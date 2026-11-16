@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Fiche d'un inconnu — cercle Public — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.know{display:flex;align-items:center;gap:14px;width:100%;min-height:76px;padding:12px 16px 12px 12px;border-radius:24px;background:var(--raised);border:1px solid var(--line);transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
+.know:active{transform:scale(.97)}
+.know>i{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;flex:none;background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent-ink)}
+.know.open{border-color:color-mix(in oklab,var(--accent) 60%,transparent);border-radius:24px 24px 8px 8px}
+.know.open>i{background:var(--accent);color:#0B0B12}
+.ask{border-radius:8px 8px 24px 24px;background:var(--raised);border:1px solid color-mix(in oklab,var(--accent) 60%,transparent);border-top:0;animation:askOpen .7s cubic-bezier(.2,.9,.25,1) both .3s}
+.ask textarea{display:block;width:100%;resize:none;border:1px solid var(--line);border-radius:18px;background:var(--field);color:var(--ink);font:inherit;font-size:16px;line-height:1.45;padding:14px 16px;outline:none}
+.ask textarea:focus{border-color:var(--accent)}
+.ghost{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 16px 8px 14px;border-radius:20px;border:1.5px dashed var(--line);color:var(--ink3)}
+@keyframes askOpen{from{opacity:0;transform:translateY(-10px) scaleY(.92);transform-origin:top}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column; --accent:#9CA3AF; --accent-ink:#D1D5DB">
+
+<header style="position: relative; height: 290px; overflow: hidden; background: linear-gradient(165deg, #4B5563 0%, #1F2937 48%, #09090B 100%)">
+<div class="orb" style="width: 220px; height: 220px; left: -50px; top: 20px; background: #9CA3AF; opacity: .5"></div>
+<div class="orb" style="width: 180px; height: 180px; right: -40px; top: 100px; background: #6B7280; opacity: .5; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 120px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 54px 16px 0">
+<button class="ib g" aria-label="Fermer la fiche">[[ic:x]]</button>
+<div style="display: flex; align-items: center; gap: 8px">
+<button class="ib g" aria-label="Envoyer le profil de Rui">[[ic:paper-plane-tilt]]</button>
+<button class="ib g" aria-label="Plus">[[ic:dots-three]]</button>
+</div>
+</div>
+</header>
+
+<section class="rise" style="position: relative; margin-top: -86px; padding: 0 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<span class="av" style="width: 122px; height: 122px; font-size: 40px; border: 5px solid var(--ground)">RS</span>
+<span class="chip" style="margin-bottom: 14px; background: transparent; border: 1.5px solid var(--glass-line); color: var(--ink)">[[ic:globe s]]<span>Public</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 class="d" style="font-size: 36px">Rui Santos</h1>
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@rui.s</span>
+<span style="font-size: 13px; color: var(--ink3)">Porto</span>
+</div>
+</div>
+
+<p style="font-size: 16px; line-height: 1.45; color: var(--ink); text-wrap: pretty">Luthier. Je répare ce qui chante.</p>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:translate s]]<span>Portugais</span></span>
+<span class="chip">Anglais</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; padding: 30px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Sa voix</h2>
+<span class="chip">[[ic:globe s]]<span>Publique</span></span>
+</div>
+<div class="card" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px 14px 14px">
+<button class="ib lg" aria-label="Écouter l'échantillon de la voix de Rui" style="background: var(--accent); color: #0B0B12">[[ic:play-fill]]</button>
+<div class="wave" style="flex: 1; height: 40px; justify-content: space-between">
+<i style="height: 40%"></i><i style="height: 70%"></i><i style="height: 55%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 30%"></i><i style="height: 80%"></i><i style="height: 100%"></i><i style="height: 50%"></i><i style="height: 75%"></i><i style="height: 35%"></i><i style="height: 90%"></i><i style="height: 60%"></i><i style="height: 45%"></i><i style="height: 85%"></i><i style="height: 55%"></i><i style="height: 30%"></i><i style="height: 70%"></i><i style="height: 50%"></i><i style="height: 80%"></i><i style="height: 40%"></i><i style="height: 25%"></i>
+</div>
+<span class="mono" style="color: var(--ink2)">0:09</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .16s; padding: 30px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Publications</h2>
+<span style="font-size: 13px; color: var(--ink3)">3 publiques</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<button class="ph" aria-label="Ouvrir le réel de 18 secondes" style="height: 168px">réel 0:18</button>
+<button class="ph" aria-label="Ouvrir la photo de l'atelier" style="height: 168px">photo · atelier</button>
+<button class="ph" aria-label="Ouvrir la photo de la guitare" style="height: 168px">photo · guitare</button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .24s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 10px">
+<h2 class="d" style="font-size: 26px; margin-bottom: 6px">Faire connaissance</h2>
+
+<div style="display: flex; flex-direction: column">
+<button class="know open" aria-expanded="true">
+<i>[[ic:chat-circle-fill]]</i>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">Demander à lui écrire</span><span style="font-size: 13px; line-height: 1.35; color: var(--ink2)">Ton premier message arrive dans ses demandes</span></span>
+<span style="color: var(--accent-ink)">[[ic:caret-down s]]</span>
+</button>
+
+<div class="ask" style="display: flex; flex-direction: column; gap: 12px; padding: 14px">
+<label for="ask-msg" class="tag" style="padding: 2px 4px 0">Ta demande de message</label>
+<textarea id="ask-msg" rows="3" maxlength="300">Bonjour Rui, j'ai une kora à faire réparer.</textarea>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px">
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--accent-ink)">[[ic:translate s]]<span>Il le lira en portugais</span></span>
+<span class="mono" style="font-size: 12px; color: var(--ink3)">43 / 300</span>
+</div>
+<button class="btn p" style="width: 100%">[[ic:paper-plane-tilt]]<span>Envoyer la demande</span></button>
+</div>
+</div>
+
+<button class="know">
+<i>[[ic:phone]]</i>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">L'appeler</span><span style="font-size: 13px; line-height: 1.35; color: var(--ink2)">Ça sonnera chez lui, il peut ne pas répondre</span></span>
+<span style="color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+
+<button class="know">
+<i>[[ic:user-plus]]</i>
+<span class="d" style="font-size: 17px; flex: 1; min-width: 0">Demander à être amis</span>
+<span style="color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+</section>
+
+<section class="rise" style="animation-delay: .32s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 10px">
+<h2 class="d" style="font-size: 22px; margin-bottom: 4px">Pas encore ouvert</h2>
+<div class="ghost">
+<span class="dot id" style="border: 0; margin: 0 4px; opacity: .7"></span>
+<span style="flex: 1; min-width: 0; font-size: 15px; font-weight: 600">Présence</span>
+<span style="font-size: 13px">dès Ami</span>
+[[ic:lock-simple s]]
+</div>
+<div class="ghost">
+[[ic:radio]]
+<span style="flex: 1; min-width: 0; font-size: 15px; font-weight: 600">Talkie, Ensemble</span>
+<span style="font-size: 13px">dès Proche</span>
+[[ic:lock-simple s]]
+</div>
+<div class="ghost">
+[[ic:map-trifold]]
+<span style="flex: 1; min-width: 0; font-size: 15px; font-weight: 600">Carte</span>
+<span style="font-size: 13px">dès Ami</span>
+[[ic:lock-simple s]]
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .4s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+<span class="tag">Si vous partagez une communauté</span>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+<div class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 16px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="av" style="width: 48px; height: 48px">RS</span>
+<span style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; align-items: flex-start">
+<span class="d" style="font-size: 17px">Rui Santos</span>
+<span class="chip" style="min-height: 30px; padding: 0 11px; font-size: 12.5px; background: transparent; border: 1.5px solid var(--l-comm); color: var(--ink)"><span style="display: inline-flex; color: var(--l-comm)">[[ic:users-three s]]</span><span>Communauté · Luthiers du monde</span></span>
+</span>
+</div>
+<div style="height: 1px; background: var(--line)"></div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="display: inline-flex; color: var(--ink2)">[[ic:eye]]</span>
+<span style="font-size: 14px; line-height: 1.4; color: var(--ink2); flex: 1; min-width: 0">Rui voit ton nom quand tu regardes ses stories</span>
+</div>
+</div>
+</section>
+
+<nav aria-label="Faces du profil" style="position: sticky; bottom: 0; margin-top: 28px; padding: 28px 12px 24px; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.92) 46%)">
+<div class="seg glass">
+<button class="on" aria-current="page">[[ic:user-focus-fill]]<span>Vitrine</span></button>
+<button>[[ic:link]]<span>Liens</span></button>
+<button>[[ic:lightning]]<span>Actions</span></button>
+</div>
+<button class="ib" aria-label="Demander à écrire à Rui" style="width: 56px; height: 56px; background: var(--brand-fill); color: #fff; box-shadow: 0 8px 22px rgba(79,70,229,.5)">[[ic:chat-circle]]</button>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2111}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

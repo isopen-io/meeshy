@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Prototype — les trois faces de Léo et la carte</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.stage{position:absolute;inset:0;overflow:hidden;--spring:cubic-bezier(.3,1.4,.4,1)}
+
+.hdr{position:absolute;left:0;right:0;top:0;height:304px;overflow:hidden;transition:height .55s var(--spring)}
+.hdr>.bg{position:absolute;inset:0;transition:opacity .5s ease}
+.hdr>.bg-v{background:linear-gradient(165deg,#12A39B 0%,#0B4F57 48%,#09090B 100%)}
+.hdr>.bg-l{background:linear-gradient(165deg,#4F46E5 0%,#1E1B4B 52%,#09090B 100%);opacity:0}
+.hdr>.bg-a{background:linear-gradient(165deg,#34344A 0%,#191923 52%,#09090B 100%);opacity:0}
+.hdr>.fade{position:absolute;left:0;right:0;bottom:0;height:110px;background:linear-gradient(180deg,rgba(9,9,11,0),#09090B)}
+.hdr .o1{width:220px;height:220px;left:-50px;top:20px;background:#4ECDC4;opacity:.7;transition:background-color .5s ease,opacity .5s ease}
+.hdr .o2{width:180px;height:180px;right:-40px;top:100px;background:#34D399;opacity:.5;animation-delay:-4s;transition:background-color .5s ease,opacity .5s ease}
+.stage.f-liens .hdr,.stage.f-actions .hdr{height:172px}
+.stage.f-liens .bg-v,.stage.f-actions .bg-v{opacity:0}
+.stage.f-liens .bg-l{opacity:1}
+.stage.f-actions .bg-a{opacity:1}
+.stage.f-liens .o1{background:#6366F1}
+.stage.f-liens .o2{background:#818CF8;opacity:.55}
+.stage.f-actions .o1{background:#8D92CB;opacity:.22}
+.stage.f-actions .o2{background:#4ECDC4;opacity:.16}
+
+.faces{position:absolute;left:0;top:0;width:1170px;height:844px;display:flex;transition:transform .55s var(--spring)}
+.faces>section{width:390px;height:844px;flex:none}
+.stage.f-liens .faces{transform:translateX(-390px)}
+.stage.f-actions .faces{transform:translateX(-780px)}
+
+.top{position:absolute;left:0;right:0;top:54px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;pointer-events:none}
+.top>*{pointer-events:auto}
+.who{position:absolute;left:126px;top:56px;display:flex;flex-direction:column;gap:1px;opacity:0;transform:translateX(-14px);transition:opacity .3s ease,transform .5s var(--spring)}
+.stage.f-liens .who,.stage.f-actions .who{opacity:1;transform:none;transition-delay:.12s}
+
+.hero{position:absolute;left:0;top:0;width:114px;height:114px;transform-origin:0 0;transform:translate(20px,136px) scale(1);transition:transform .6s var(--spring);pointer-events:none}
+.hero>.dot{position:absolute;right:8px;bottom:8px;width:20px;height:20px;border-width:4px}
+.stage.f-liens .hero,.stage.f-actions .hero{transform:translate(68px,52px) scale(.42)}
+.stage.is-map .hero{transform:translate(166.5px,283.5px) scale(.5)}
+
+.mx .seg.faces-seg{position:relative}
+.mx .seg.faces-seg>.thumb{position:absolute;top:5px;left:5px;width:102px;height:46px;min-height:0;padding:0;border-radius:999px;background:var(--ink);box-shadow:0 6px 16px rgba(0,0,0,.3);transition:left .5s var(--spring),width .5s var(--spring)}
+.stage.f-liens .seg.faces-seg>.thumb{left:109px;width:88px}
+.stage.f-actions .seg.faces-seg>.thumb{left:199px;width:104px}
+.mx .seg.faces-seg>button{position:relative;padding:0;transition:color .3s ease}
+.mx .seg.faces-seg>button.on{background:none;box-shadow:none;color:var(--ground)}
+.seg.faces-seg>button>.ic+.ic{display:none}
+.seg.faces-seg>button.on>.ic{display:none}
+.seg.faces-seg>button.on>.ic+.ic{display:block}
+.stage.f-vitrine .seg.faces-seg>button.on,.stage.f-liens .seg.faces-seg>button.on,.stage.f-actions .seg.faces-seg>button.on{color:var(--ground)}
+.stage:not(.f-liens):not(.f-actions) .seg.faces-seg>button:first-of-type{color:var(--ground)}
+.fab{transition:transform .5s var(--spring),opacity .3s ease}
+.stage.f-actions .fab{transform:scale(.6);opacity:0;pointer-events:none}
+
+.flipbox{perspective:1100px;height:232px}
+.flip{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .6s var(--spring)}
+.flip>.ticket{position:absolute;inset:0;-webkit-backface-visibility:hidden;backface-visibility:hidden}
+.flip>.back{transform:rotateY(180deg)}
+.stage.is-qr .flip{transform:rotateY(180deg)}
+.qr{display:grid;grid-template-columns:repeat(21,6px);grid-template-rows:repeat(21,6px);padding:10px;border-radius:16px;background:#EEF2FF;flex:none;position:relative}
+.qr>i{background:#0B0B12;border-radius:1.5px}
+.qr>b{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:var(--accent);border:3px solid #EEF2FF;display:flex;align-items:center;justify-content:center;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:12px;color:#0B0B12}
+
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;text-align:center}
+.act>.ib{width:64px;height:64px}
+.act>span+span{font-size:12px;font-weight:600;line-height:1.2;color:var(--ink)}
+.mx .act.live>.ib{background:color-mix(in oklab,var(--accent) 24%,transparent);border-color:color-mix(in oklab,var(--accent) 60%,transparent);color:var(--accent-ink)}
+
+.maplayer{position:absolute;inset:0;overflow:hidden;background:#0F0D19;transform:translateY(102%);transition:transform .6s cubic-bezier(.2,.9,.25,1)}
+.stage.is-map .maplayer{transform:none}
+.blur{position:absolute;left:195px;top:312px;width:210px;height:210px;margin:-105px 0 0 -105px;border-radius:50%;background:color-mix(in oklab,var(--accent) 18%,transparent);border:1.5px solid color-mix(in oklab,var(--accent) 70%,transparent);transform:scale(0);opacity:0;transition:transform .6s var(--spring),opacity .3s ease}
+.stage.is-map .blur{transform:scale(1);opacity:1;transition-delay:.3s}
+.radar{position:absolute;left:195px;top:312px;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;border:2px solid var(--accent);animation:mxPing 2.4s ease-out infinite}
+.radar.r2{animation-delay:-1.2s}
+.maptop{position:absolute;left:16px;right:16px;top:54px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.label{position:absolute;left:195px;top:356px;transform:translateX(-50%);opacity:0;transition:opacity .3s ease}
+.stage.is-map .label{opacity:1;transition-delay:.5s}
+.mx .sheet{position:absolute;left:12px;right:12px;bottom:24px;border-radius:32px;padding:10px 18px 18px;display:flex;flex-direction:column;gap:14px;background:rgba(19,17,28,.72);transform:translateY(130%);transition:transform .6s var(--spring)}
+.stage.is-map .sheet{transform:none;transition-delay:.22s}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; height: 844px; overflow: hidden; position: relative; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div class="{{ stage }}">
+
+<header class="hdr">
+<div class="bg bg-v"></div>
+<div class="bg bg-l"></div>
+<div class="bg bg-a"></div>
+<div class="orb o1"></div>
+<div class="orb o2"></div>
+<div class="fade"></div>
+</header>
+
+<div class="faces">
+
+<section aria-label="Vitrine de Léo" style="display: flex; flex-direction: column; gap: 14px; padding: 266px 20px 0">
+<div style="position: absolute; left: 146px; top: 196px; display: flex; gap: 8px">
+<span class="chip glass" style="color: var(--ink)">[[ic:smiley s]]<span>En vadrouille</span></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 class="d" style="font-size: 36px">Léo Marchetti</h1>
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@leo.m</span>
+<span style="font-size: 13px; color: var(--ink3)">Lisbonne · en ligne</span>
+</div>
+</div>
+<p style="font-size: 16px; line-height: 1.45; text-wrap: pretty">Photographe de rue. Lyon ⇄ Lisbonne.</p>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:translate s]]<span>Italien</span></span>
+<span class="chip">Français</span>
+<span class="chip">Portugais</span>
+<span class="chip" style="color: var(--accent-ink); border-color: color-mix(in oklab, var(--accent) 45%, transparent)">[[ic:fire s]]<span>Proche</span></span>
+</div>
+
+<div class="card" style="display: flex; align-items: center; gap: 14px; padding: 12px 18px 12px 12px; margin-top: 8px">
+<span class="ib" style="width: 48px; height: 48px; background: var(--accent); color: #0B0B12">[[ic:music-notes]]</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0">
+<span class="tag">Écoute en ce moment</span>
+<span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Fado da Mouraria</span>
+</div>
+<div class="wave" style="height: 28px">
+<i style="height: 40%"></i><i style="height: 90%"></i><i style="height: 60%"></i><i style="height: 100%"></i><i style="height: 50%"></i><i style="height: 75%"></i>
+</div>
+</div>
+
+<div class="card" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 18px 6px; text-align: center">
+<span style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 26px">6</span><span style="font-size: 12px; color: var(--ink2)">Conversations</span></span>
+<span style="display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); border-right: 1px solid var(--line)"><span class="d" style="font-size: 26px">3</span><span style="font-size: 12px; color: var(--ink2)">Communautés</span></span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 26px; color: var(--accent-ink)">12</span><span style="font-size: 12px; color: var(--ink2)">Amis en commun</span></span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="ph" style="height: 84px">photo · Alfama</div>
+<div class="ph" style="height: 84px">réel 0:18</div>
+<div class="ph" style="height: 84px">photo · Lyon</div>
+</div>
+</section>
+
+<section aria-label="Liens de Léo" style="display: flex; flex-direction: column; gap: 14px; padding: 132px 20px 0">
+<h2 class="d" style="font-size: 28px">Ses liens</h2>
+
+<div class="flipbox">
+<div class="flip">
+
+<div class="ticket" style="--cut: 152px; display: flex; flex-direction: column">
+<div style="height: 152px; padding: 18px 20px 0; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px; color: var(--brand-soft)">[[ic:link s]]<span>Lien de profil</span></span>
+<span class="new">Nouveau</span>
+</div>
+<span class="mono" style="font-size: 23px; font-weight: 700; color: var(--ink)">meeshy.me/@leo.m</span>
+<span style="font-size: 13.5px; color: var(--ink2)">Son adresse courte. Elle ouvre sa vitrine, même sans l'app.</span>
+</div>
+<div class="cut"></div>
+<div style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 16px">
+<button class="btn q sm" style="flex: 1">[[ic:copy s]]<span>Copier</span></button>
+<button class="btn p sm" style="flex: 1.3" onClick="{{ toggleQr }}">[[ic:qr-code s]]<span>Voir le QR</span></button>
+</div>
+</div>
+
+<div class="ticket back" style="--cut: 116px; display: flex; align-items: center; gap: 16px; padding: 0 20px">
+<div class="qr" role="img" aria-label="QR du profil de Léo">
+<i style="grid-area: 1 / 1"></i><i style="grid-area: 1 / 2"></i><i style="grid-area: 1 / 3"></i><i style="grid-area: 1 / 4"></i><i style="grid-area: 1 / 5"></i><i style="grid-area: 1 / 6"></i><i style="grid-area: 1 / 7"></i><i style="grid-area: 1 / 9"></i><i style="grid-area: 1 / 11"></i><i style="grid-area: 1 / 12"></i><i style="grid-area: 1 / 15"></i><i style="grid-area: 1 / 16"></i><i style="grid-area: 1 / 17"></i><i style="grid-area: 1 / 18"></i><i style="grid-area: 1 / 19"></i><i style="grid-area: 1 / 20"></i><i style="grid-area: 1 / 21"></i><i style="grid-area: 2 / 1"></i><i style="grid-area: 2 / 7"></i><i style="grid-area: 2 / 9"></i><i style="grid-area: 2 / 15"></i><i style="grid-area: 2 / 21"></i><i style="grid-area: 3 / 1"></i><i style="grid-area: 3 / 3"></i><i style="grid-area: 3 / 4"></i><i style="grid-area: 3 / 5"></i><i style="grid-area: 3 / 7"></i><i style="grid-area: 3 / 9"></i><i style="grid-area: 3 / 12"></i><i style="grid-area: 3 / 15"></i><i style="grid-area: 3 / 17"></i><i style="grid-area: 3 / 18"></i><i style="grid-area: 3 / 19"></i><i style="grid-area: 3 / 21"></i><i style="grid-area: 4 / 1"></i><i style="grid-area: 4 / 3"></i><i style="grid-area: 4 / 4"></i><i style="grid-area: 4 / 5"></i><i style="grid-area: 4 / 7"></i><i style="grid-area: 4 / 11"></i><i style="grid-area: 4 / 13"></i><i style="grid-area: 4 / 15"></i><i style="grid-area: 4 / 17"></i><i style="grid-area: 4 / 18"></i><i style="grid-area: 4 / 19"></i><i style="grid-area: 4 / 21"></i><i style="grid-area: 5 / 1"></i><i style="grid-area: 5 / 3"></i><i style="grid-area: 5 / 4"></i><i style="grid-area: 5 / 5"></i><i style="grid-area: 5 / 7"></i><i style="grid-area: 5 / 10"></i><i style="grid-area: 5 / 13"></i><i style="grid-area: 5 / 15"></i><i style="grid-area: 5 / 17"></i><i style="grid-area: 5 / 18"></i><i style="grid-area: 5 / 19"></i><i style="grid-area: 5 / 21"></i><i style="grid-area: 6 / 1"></i><i style="grid-area: 6 / 7"></i><i style="grid-area: 6 / 10"></i><i style="grid-area: 6 / 11"></i><i style="grid-area: 6 / 13"></i><i style="grid-area: 6 / 15"></i><i style="grid-area: 6 / 21"></i><i style="grid-area: 7 / 1"></i><i style="grid-area: 7 / 2"></i><i style="grid-area: 7 / 3"></i><i style="grid-area: 7 / 4"></i><i style="grid-area: 7 / 5"></i><i style="grid-area: 7 / 6"></i><i style="grid-area: 7 / 7"></i><i style="grid-area: 7 / 9"></i><i style="grid-area: 7 / 11"></i><i style="grid-area: 7 / 13"></i><i style="grid-area: 7 / 15"></i><i style="grid-area: 7 / 16"></i><i style="grid-area: 7 / 17"></i><i style="grid-area: 7 / 18"></i><i style="grid-area: 7 / 19"></i><i style="grid-area: 7 / 20"></i><i style="grid-area: 7 / 21"></i><i style="grid-area: 9 / 4"></i><i style="grid-area: 9 / 6"></i><i style="grid-area: 9 / 7"></i><i style="grid-area: 9 / 15"></i><i style="grid-area: 9 / 19"></i><i style="grid-area: 9 / 20"></i><i style="grid-area: 10 / 1"></i><i style="grid-area: 10 / 2"></i><i style="grid-area: 10 / 3"></i><i style="grid-area: 10 / 4"></i><i style="grid-area: 10 / 15"></i><i style="grid-area: 10 / 17"></i><i style="grid-area: 10 / 19"></i><i style="grid-area: 10 / 20"></i><i style="grid-area: 10 / 21"></i><i style="grid-area: 11 / 1"></i><i style="grid-area: 11 / 3"></i><i style="grid-area: 11 / 5"></i><i style="grid-area: 11 / 6"></i><i style="grid-area: 11 / 7"></i><i style="grid-area: 11 / 15"></i><i style="grid-area: 11 / 19"></i><i style="grid-area: 12 / 1"></i><i style="grid-area: 12 / 2"></i><i style="grid-area: 12 / 3"></i><i style="grid-area: 12 / 4"></i><i style="grid-area: 12 / 5"></i><i style="grid-area: 12 / 21"></i><i style="grid-area: 13 / 7"></i><i style="grid-area: 13 / 17"></i><i style="grid-area: 13 / 18"></i><i style="grid-area: 13 / 19"></i><i style="grid-area: 13 / 21"></i><i style="grid-area: 14 / 15"></i><i style="grid-area: 14 / 16"></i><i style="grid-area: 14 / 17"></i><i style="grid-area: 14 / 18"></i><i style="grid-area: 14 / 19"></i><i style="grid-area: 15 / 1"></i><i style="grid-area: 15 / 2"></i><i style="grid-area: 15 / 3"></i><i style="grid-area: 15 / 4"></i><i style="grid-area: 15 / 5"></i><i style="grid-area: 15 / 6"></i><i style="grid-area: 15 / 7"></i><i style="grid-area: 15 / 9"></i><i style="grid-area: 15 / 10"></i><i style="grid-area: 15 / 13"></i><i style="grid-area: 15 / 14"></i><i style="grid-area: 15 / 19"></i><i style="grid-area: 15 / 20"></i><i style="grid-area: 15 / 21"></i><i style="grid-area: 16 / 1"></i><i style="grid-area: 16 / 7"></i><i style="grid-area: 16 / 10"></i><i style="grid-area: 16 / 11"></i><i style="grid-area: 16 / 12"></i><i style="grid-area: 16 / 15"></i><i style="grid-area: 16 / 16"></i><i style="grid-area: 16 / 17"></i><i style="grid-area: 16 / 19"></i><i style="grid-area: 17 / 1"></i><i style="grid-area: 17 / 3"></i><i style="grid-area: 17 / 4"></i><i style="grid-area: 17 / 5"></i><i style="grid-area: 17 / 7"></i><i style="grid-area: 17 / 13"></i><i style="grid-area: 17 / 14"></i><i style="grid-area: 17 / 19"></i><i style="grid-area: 17 / 21"></i><i style="grid-area: 18 / 1"></i><i style="grid-area: 18 / 3"></i><i style="grid-area: 18 / 4"></i><i style="grid-area: 18 / 5"></i><i style="grid-area: 18 / 7"></i><i style="grid-area: 18 / 9"></i><i style="grid-area: 18 / 10"></i><i style="grid-area: 18 / 13"></i><i style="grid-area: 18 / 17"></i><i style="grid-area: 18 / 19"></i><i style="grid-area: 18 / 20"></i><i style="grid-area: 19 / 1"></i><i style="grid-area: 19 / 3"></i><i style="grid-area: 19 / 4"></i><i style="grid-area: 19 / 5"></i><i style="grid-area: 19 / 7"></i><i style="grid-area: 19 / 9"></i><i style="grid-area: 19 / 11"></i><i style="grid-area: 19 / 12"></i><i style="grid-area: 19 / 13"></i><i style="grid-area: 19 / 15"></i><i style="grid-area: 19 / 16"></i><i style="grid-area: 19 / 17"></i><i style="grid-area: 19 / 18"></i><i style="grid-area: 20 / 1"></i><i style="grid-area: 20 / 7"></i><i style="grid-area: 20 / 12"></i><i style="grid-area: 20 / 13"></i><i style="grid-area: 20 / 14"></i><i style="grid-area: 20 / 15"></i><i style="grid-area: 20 / 16"></i><i style="grid-area: 20 / 17"></i><i style="grid-area: 20 / 19"></i><i style="grid-area: 20 / 20"></i><i style="grid-area: 20 / 21"></i><i style="grid-area: 21 / 1"></i><i style="grid-area: 21 / 2"></i><i style="grid-area: 21 / 3"></i><i style="grid-area: 21 / 4"></i><i style="grid-area: 21 / 5"></i><i style="grid-area: 21 / 6"></i><i style="grid-area: 21 / 7"></i><i style="grid-area: 21 / 10"></i><i style="grid-area: 21 / 11"></i><i style="grid-area: 21 / 20"></i>
+<b>LM</b>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1">
+<span class="tag" style="color: var(--brand-soft)">QR de Léo</span>
+<span style="font-size: 13.5px; line-height: 1.35; color: var(--ink2)">Scanne pour ouvrir sa vitrine.</span>
+<button class="btn q sm" style="padding: 0 12px" onClick="{{ toggleQr }}">[[ic:arrows-clockwise s]]<span>Retourner</span></button>
+</div>
+</div>
+
+</div>
+</div>
+
+<span class="tag" style="margin-top: 10px">Ses adresses</span>
+
+<a href="#" class="ticket" style="--cut: 50%; display: flex; align-items: center; gap: 14px; padding: 14px 18px; color: var(--ink)">
+<span class="ib" style="background: color-mix(in oklab, var(--brand) 22%, transparent); color: var(--brand-soft)">[[ic:globe-hemisphere-west]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span style="font-weight: 600">Portfolio</span><span class="mono" style="color: var(--ink2)">leomarchetti.photo</span></span>
+<span style="color: var(--ink3)">[[ic:arrow-square-out s]]</span>
+</a>
+
+<a href="#" class="ticket" style="--cut: 50%; display: flex; align-items: center; gap: 14px; padding: 14px 18px; color: var(--ink)">
+<span class="ib" style="background: color-mix(in oklab, var(--brand) 22%, transparent); color: var(--brand-soft)">[[ic:storefront]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span style="font-weight: 600">Tirages</span><span class="mono" style="color: var(--ink2)">leomarchetti.photo/boutique</span></span>
+<span style="color: var(--ink3)">[[ic:arrow-square-out s]]</span>
+</a>
+
+<button class="btn q" style="margin-top: 8px">[[ic:export]]<span>Partager son lien</span></button>
+</section>
+
+<section aria-label="Actions avec Léo" style="display: flex; flex-direction: column; gap: 18px; padding: 132px 20px 0">
+<h2 class="d" style="font-size: 28px">Avec Léo</h2>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 6px; align-items: start">
+<button class="act"><span class="ib g">[[ic:chat-circle l]]</span><span>Écrire</span></button>
+<button class="act"><span class="ib g">[[ic:phone l]]</span><span>Appeler</span></button>
+<button class="act"><span class="ib g">[[ic:video-camera l]]</span><span>Vidéo</span></button>
+<button class="act"><span class="ib g">[[ic:radio l]]</span><span>Talkie</span></button>
+<button class="act"><span class="ib g">[[ic:monitor-play l]]</span><span>Ensemble</span></button>
+<button class="act"><span class="ib g">[[ic:hand-waving l]]</span><span>Bring</span></button>
+<button class="act live" onClick="{{ toggleMap }}"><span class="ib g">[[ic:map-trifold l]]</span><span>Carte</span></button>
+<button class="act"><span class="ib g">[[ic:paper-plane-tilt l]]</span><span>Envoyer le profil</span></button>
+</div>
+
+<button class="card" onClick="{{ toggleMap }}" aria-label="Voir Léo sur la carte" style="position: relative; overflow: hidden; height: 96px; display: block; width: 100%">
+[[map]]
+<span style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(19,17,28,.96) 0%, rgba(19,17,28,.82) 52%, rgba(19,17,28,.1) 100%)"></span>
+<span style="position: absolute; right: 44px; top: 48px; width: 16px; height: 16px">
+<span class="pin" style="left: 8px; top: 8px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent)"></span>
+</span>
+<span style="position: absolute; left: 18px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px">
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px; color: var(--accent-ink)">[[ic:map-pin s]]<span>Sa position</span></span>
+<span class="d" style="font-size: 19px">Alfama, Lisbonne</span>
+<span style="font-size: 12.5px; color: var(--ink2)">Quartier · encore 42 min</span>
+</span>
+</button>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:battery-medium s]]<span>64 %</span></span>
+<span class="chip">[[ic:lock-key s]]<span>Chiffré de bout en bout</span></span>
+</div>
+
+<div class="sep" style="margin: 4px 0 0"></div>
+<div style="display: flex; gap: 8px">
+<button class="btn x sm" style="flex: 1">[[ic:prohibit s]]<span>Bloquer</span></button>
+<button class="btn x sm" style="flex: 1">[[ic:flag s]]<span>Signaler</span></button>
+</div>
+</section>
+
+</div>
+
+<div class="top">
+<button class="ib g" aria-label="Retour">[[ic:caret-left]]</button>
+<button class="ib g" aria-label="Plus">[[ic:dots-three]]</button>
+</div>
+<div class="who" aria-hidden="true">
+<span class="d" style="font-size: 18px">Léo Marchetti</span>
+<span style="font-size: 12.5px; color: var(--ink2)">@leo.m · en ligne</span>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 132px; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.94) 52%); pointer-events: none"></div>
+<nav aria-label="Faces du profil" style="position: absolute; left: 0; right: 0; bottom: 24px; display: flex; align-items: center; justify-content: center; gap: 8px">
+<div class="seg glass faces-seg">
+<span class="thumb"></span>
+<button class="{{ vOn }}" style="width: 102px" onClick="{{ goV }}">[[ic:user-focus]][[ic:user-focus-fill]]<span>Vitrine</span></button>
+<button class="{{ lOn }}" style="width: 88px" onClick="{{ goL }}">[[ic:link]][[ic:link-fill]]<span>Liens</span></button>
+<button class="{{ aOn }}" style="width: 104px" onClick="{{ goA }}">[[ic:lightning]][[ic:lightning-fill]]<span>Actions</span></button>
+</div>
+<button class="ib fab" aria-label="Écrire à Léo" style="width: 56px; height: 56px; background: var(--brand-fill); color: #fff; box-shadow: 0 8px 22px rgba(79,70,229,.5)">[[ic:chat-circle]]</button>
+</nav>
+
+<div class="maplayer">
+[[map]]
+<div class="blur"></div>
+<div class="radar"></div>
+<div class="radar r2"></div>
+<span class="chip glass label" style="color: var(--ink); min-height: 30px">Léo</span>
+<div class="maptop">
+<button class="ib g" aria-label="Fermer la carte" onClick="{{ toggleMap }}">[[ic:x]]</button>
+<span class="chip glass" style="color: var(--ink)">[[ic:fire s]]<span>Partagée avec ses Proches</span></span>
+<button class="ib g" aria-label="Recentrer sur Léo">[[ic:crosshair]]</button>
+</div>
+<div class="sheet glass">
+<span style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: var(--glass-line)"></span>
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="ib" style="width: 48px; height: 48px; background: var(--accent); color: #0B0B12">[[ic:map-pin]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<h2 class="d" style="font-size: 24px">Alfama, Lisbonne</h2>
+<span style="font-size: 13px; color: var(--ink2)">Léo partage sa position avec toi</span>
+</div>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:circle-dashed s]]<span>Précision quartier</span></span>
+<span class="chip">[[ic:timer s]]<span>Encore 42 min</span></span>
+</div>
+<span class="bar" style="height: 6px"><i style="width: 70%"></i></span>
+<div style="display: flex; gap: 8px">
+<button class="btn a" style="flex: 1; padding: 0 12px">[[ic:navigation-arrow]]<span>Itinéraire</span></button>
+<button class="btn g" style="flex: 1.2; padding: 0 12px" onClick="{{ toggleMap }}">[[ic:x s]]<span>Fermer la carte</span></button>
+</div>
+</div>
+</div>
+
+<div class="hero">
+<span class="ring" style="background: var(--ground)">
+<span class="av" style="width: 104px; height: 104px; font-size: 38px">LM</span>
+</span>
+<span class="dot on"></span>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+state = { face: 'vitrine', map: false, qr: false };
+renderVals() {
+const face = this.state.face;
+const map = this.state.map;
+const qr = this.state.qr;
+return {
+stage: 'stage f-' + face + (map ? ' is-map' : '') + (qr ? ' is-qr' : ''),
+vOn: face === 'vitrine' ? 'on' : '',
+lOn: face === 'liens' ? 'on' : '',
+aOn: face === 'actions' ? 'on' : '',
+goV: () => this.setState({ face: 'vitrine', map: false }),
+goL: () => this.setState({ face: 'liens', map: false }),
+goA: () => this.setState({ face: 'actions', map: false, qr: false }),
+toggleMap: () => this.setState({ map: !this.state.map }),
+toggleQr: () => this.setState({ qr: !this.state.qr })
+};
+}
+}
+</script>
+</body>
+</html>

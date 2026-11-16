@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ma vitrine, « Voir comme » — Android</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.tb{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:16px;flex:none;background:var(--field);color:var(--ink);transition:border-radius .3s cubic-bezier(.3,1.6,.5,1)}
+.mx .tb:active{border-radius:24px}
+.ac{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:12px;background:var(--field);border:1px solid var(--line);font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.m3{background:var(--raised);border-radius:28px}
+.cookie{position:relative;display:flex;align-items:center;justify-content:center;width:56px;height:56px;flex:none;isolation:isolate}
+.cookie::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--ck,var(--field));clip-path:polygon(100.0% 50.0%,98.4% 54.2%,94.3% 57.8%,90.1% 60.7%,87.6% 63.7%,87.6% 67.5%,89.0% 72.5%,89.8% 77.8%,88.3% 82.1%,84.3% 84.3%,78.9% 84.5%,73.8% 84.0%,70.0% 84.6%,67.5% 87.6%,65.4% 92.3%,62.6% 96.9%,58.7% 99.2%,54.2% 98.4%,50.0% 95.0%,46.4% 91.3%,43.1% 89.4%,39.3% 90.1%,34.6% 92.3%,29.5% 94.0%,25.0% 93.3%,22.2% 89.8%,21.1% 84.5%,20.7% 79.3%,19.4% 75.7%,16.0% 73.8%,11.0% 72.5%,6.0% 70.5%,3.0% 67.1%,3.1% 62.6%,5.7% 57.8%,8.7% 53.6%,10.0% 50.0%,8.7% 46.4%,5.7% 42.2%,3.1% 37.4%,3.0% 32.9%,6.0% 29.5%,11.0% 27.5%,16.0% 26.2%,19.4% 24.3%,20.7% 20.7%,21.1% 15.5%,22.2% 10.2%,25.0% 6.7%,29.5% 6.0%,34.6% 7.7%,39.3% 9.9%,43.1% 10.6%,46.4% 8.7%,50.0% 5.0%,54.2% 1.6%,58.7% 0.8%,62.6% 3.1%,65.4% 7.7%,67.5% 12.4%,70.0% 15.4%,73.8% 16.0%,78.9% 15.5%,84.3% 15.7%,88.3% 17.9%,89.8% 22.2%,89.0% 27.5%,87.6% 32.5%,87.6% 36.3%,90.1% 39.3%,94.3% 42.2%,98.4% 45.8%);animation:amCookie 14s ease-in-out infinite}
+.cc{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0}
+.cc>.cookie{width:62px;height:62px;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:18px;color:var(--ink)}
+.cc>span:last-child{font-family:Inter,system-ui,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:-.02em;color:var(--ink2)}
+.rd{display:flex;align-items:center;gap:14px;width:100%;min-height:64px;padding:10px 16px 10px 12px;border-radius:8px;background:var(--field);font-family:Inter,system-ui,sans-serif;color:var(--ink)}
+.rg>.rd:first-child{border-top-left-radius:24px;border-top-right-radius:24px}
+.rg>.rd:last-child{border-bottom-left-radius:24px;border-bottom-right-radius:24px}
+.rd>.lead{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;border-radius:14px;background:color-mix(in oklab,var(--accent) 17%,var(--field));color:var(--accent-ink)}
+.rd>.tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;line-height:1.3}
+.rd>.tx>b{font-size:15px;font-weight:700}
+.rd>.tx>span{font-size:12.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rd>.rb{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;border-radius:50%;border:2px solid var(--ink3)}
+.mx .rd.on{background:color-mix(in oklab,var(--accent) 20%,var(--field))}
+.mx .rd.on>.lead{background:var(--accent);color:#0B0B12;border-radius:20px}
+.mx .rd.on>.rb{border-color:var(--accent-ink)}
+.mx .rd.on>.rb::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--accent-ink);animation:amDot .5s cubic-bezier(.3,1.6,.5,1) both}
+.sheet{animation:amSheet .7s cubic-bezier(.2,.9,.25,1) both}
+.fbar{display:inline-flex;align-items:center;gap:2px;padding:6px;border-radius:32px;background:var(--field);border:1px solid var(--line);box-shadow:0 10px 26px rgba(0,0,0,.5)}
+.fbar>button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:52px;min-height:52px;padding:0 14px;border-radius:26px;font-family:Inter,system-ui,sans-serif;font-weight:700;font-size:13.5px;color:var(--ink2)}
+.mx .fbar>.on{position:relative;isolation:isolate;padding:0 18px 0 8px;color:var(--ink)}
+.mx .fbar>.on::before{content:"";position:absolute;inset:0;z-index:-1;background:color-mix(in oklab,var(--accent) 22%,var(--field));animation:axPill 5s cubic-bezier(.4,0,.2,1) infinite}
+.mx .fbar>.on>.cookie{width:40px;height:40px;color:#0B0B12;--ck:var(--accent)}
+@keyframes axPill{0%,100%{border-radius:26px}25%{border-radius:26px 12px 26px 12px}50%{border-radius:16px}75%{border-radius:12px 26px 12px 26px}}
+@keyframes amCookie{0%,100%{transform:rotate(0) scale(1)}50%{transform:rotate(.25turn) scale(.88)}}
+@keyframes amDot{from{transform:scale(0)}to{transform:none}}
+@keyframes amSheet{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div class="mx" style="width: 412px; min-height: 915px; display: flex; flex-direction: column; font-family: Nunito, system-ui, sans-serif">
+
+<header style="position: relative; height: 310px; overflow: hidden; background: linear-gradient(165deg, #6D28D9 0%, #3B1A78 48%, #09090B 100%)">
+<div class="orb" style="width: 230px; height: 230px; left: -50px; top: 20px; background: #A855F7; opacity: .75"></div>
+<div class="orb" style="width: 190px; height: 190px; right: -40px; top: 100px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 120px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 40px 16px 0">
+<button class="tb" aria-label="Réglages">[[ic:gear-six]]</button>
+<div style="display: flex; align-items: center; gap: 8px">
+<button class="tb" aria-haspopup="dialog" aria-expanded="true" style="width: auto; padding: 0 12px 0 14px; gap: 8px; font-family: Inter, system-ui, sans-serif; font-size: 13.5px; font-weight: 700; background: color-mix(in oklab, var(--accent) 22%, var(--field))"><span style="color: var(--accent-ink); display: inline-flex">[[ic:eye s]]</span><span>Vue par : Moi</span>[[ic:caret-down s]]</button>
+<button class="tb" aria-label="Plus d'options">[[ic:dots-three]]</button>
+</div>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; bottom: 98px; display: flex; justify-content: flex-end; gap: 8px">
+<button class="ac" style="color: var(--ink)"><span style="color: var(--accent-ink); display: inline-flex">[[ic:sparkle-fill s]]</span><span>Niv. 24 · 1 860</span></button>
+<button class="ac" style="color: var(--ink)"><span style="color: var(--warn); display: inline-flex">[[ic:trophy-fill s]]</span><span>Or III</span></button>
+</div>
+</header>
+
+<section class="rise" style="position: relative; margin-top: -88px; padding: 0 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; gap: 12px">
+<button class="ring" aria-label="Voir ma story" style="background: var(--ground)">
+<span class="av" style="width: 112px; height: 112px; font-size: 40px">AN</span>
+<span class="dot on" style="position: absolute; right: 8px; bottom: 8px; width: 20px; height: 20px; border-width: 4px"></span>
+</button>
+<button class="ac" aria-label="Mon statut : En studio. Changer" style="margin-bottom: 14px; color: var(--ink); border-radius: 16px 16px 16px 4px">[[ic:smiley s]]<span>En studio</span></button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 class="d" style="font-size: 36px">Aïssa Ndiaye</h1>
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@aissa</span>
+<span style="font-family: Inter, system-ui, sans-serif; font-size: 13px; color: var(--ink3)">Dakar · sur Meeshy depuis mars 2026</span>
+</div>
+</div>
+
+<p style="font-family: Inter, system-ui, sans-serif; font-size: 16px; line-height: 1.45; color: var(--ink); text-wrap: pretty">Designer sonore à Dakar. Je parle wolof, j'écris en français, je rêve en anglais.</p>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="ac">[[ic:translate s]]<span>Français</span></span>
+<span class="ac">Wolof</span>
+<span class="ac">Anglais</span>
+<span class="ac">[[ic:lock-key s]]<span>Chiffrement activé</span></span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; padding: 30px 20px 0; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+<h2 class="d" style="font-size: 24px">Mes cercles</h2>
+<button class="ac" style="min-height: 44px; color: var(--accent-ink); background: color-mix(in oklab, var(--accent) 17%, var(--field)); border-color: transparent"><span>2 demandes à répondre</span>[[ic:caret-right s]]</button>
+</div>
+<div style="display: flex; gap: 2px">
+<button class="cc"><span class="cookie" style="--ck: color-mix(in oklab, var(--accent) 14%, var(--field))">128</span><span>Communauté</span></button>
+<button class="cc"><span class="cookie" style="--ck: color-mix(in oklab, var(--accent) 28%, var(--field))">46</span><span>Connaissance</span></button>
+<button class="cc"><span class="cookie" style="--ck: color-mix(in oklab, var(--accent) 44%, var(--field))">31</span><span>Ami</span></button>
+<button class="cc"><span class="cookie" style="--ck: color-mix(in oklab, var(--accent) 62%, var(--field))">9</span><span>Proche</span></button>
+<button class="cc"><span class="cookie" style="--ck: var(--accent); color: #0B0B12">3</span><span>Sang</span></button>
+</div>
+<button class="btn sm" style="align-self: flex-start; min-height: 48px; padding: 0 20px 0 16px; background: color-mix(in oklab, var(--accent) 24%, var(--field)); color: var(--ink)"><span style="color: var(--accent-ink); display: inline-flex">[[ic:user-plus]]</span><span>Inviter quelqu'un</span></button>
+</section>
+
+<section class="rise" style="animation-delay: .16s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 24px">Mon activité</h2>
+<button class="m3" aria-label="Voir mes statistiques" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 22px 6px; text-align: center">
+<span style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 26px">12 480</span><span style="font-family: Inter, system-ui, sans-serif; font-size: 12px; color: var(--ink2)">Messages</span></span>
+<span style="display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); border-right: 1px solid var(--line)"><span class="d" style="font-size: 26px">86</span><span style="font-family: Inter, system-ui, sans-serif; font-size: 12px; color: var(--ink2)">Conversations</span></span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 26px; color: var(--accent-ink)">9 310</span><span style="font-family: Inter, system-ui, sans-serif; font-size: 12px; color: var(--ink2)">Traductions</span></span>
+</button>
+</section>
+
+<section class="rise" style="animation-delay: .24s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 24px">Ma Légende</h2>
+<button class="m3" aria-label="Ouvrir Ma Légende" style="display: flex; flex-direction: column; gap: 16px; padding: 22px 20px; text-align: left">
+<span style="display: flex; align-items: center; gap: 16px">
+<span class="cookie d" style="width: 72px; height: 72px; font-size: 28px; color: #0B0B12; --ck: linear-gradient(140deg, var(--accent), #6366F1)">24</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span class="tag" style="font-family: Inter, system-ui, sans-serif">Niveau 24 · rang</span>
+<span class="d" style="font-size: 24px">Or III</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-family: Inter, system-ui, sans-serif; font-size: 13.5px; font-weight: 600; color: var(--accent-ink)">[[ic:sparkle-fill s]]1 860 étincelles</span>
+</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</span>
+<span class="bar" style="display: block" role="img" aria-label="Progression vers le niveau 25 : 68 %"><i style="width: 68%"></i></span>
+<span style="font-family: Inter, system-ui, sans-serif; font-size: 12.5px; color: var(--ink3)">640 étincelles avant le niveau 25</span>
+</button>
+</section>
+
+<section class="rise" style="animation-delay: .32s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 class="d" style="font-size: 24px">Ma voix</h2>
+<span class="ac">[[ic:globe s]]<span>Publique</span></span>
+</div>
+<div class="m3" style="display: flex; align-items: center; gap: 14px; padding: 16px 20px 16px 16px">
+<button aria-label="Écouter l'échantillon de ma voix" style="display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; flex: none; border-radius: 20px; background: var(--accent); color: #0B0B12">[[ic:play-fill]]</button>
+<div class="wave" style="flex: 1; height: 40px; justify-content: space-between">
+<i style="height: 30%"></i><i style="height: 60%"></i><i style="height: 90%"></i><i style="height: 45%"></i><i style="height: 75%"></i><i style="height: 100%"></i><i style="height: 55%"></i><i style="height: 35%"></i><i style="height: 80%"></i><i style="height: 60%"></i><i style="height: 95%"></i><i style="height: 40%"></i><i style="height: 70%"></i><i style="height: 50%"></i><i style="height: 85%"></i><i style="height: 30%"></i><i style="height: 65%"></i><i style="height: 45%"></i><i style="height: 75%"></i><i style="height: 35%"></i><i style="height: 55%"></i><i style="height: 25%"></i>
+</div>
+<span class="mono" style="color: var(--ink2)">0:12</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .4s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 class="d" style="font-size: 24px">Publications</h2>
+<a href="#" style="font-family: Inter, system-ui, sans-serif; font-size: 13.5px; font-weight: 700; color: var(--accent-ink); min-height: 44px; display: inline-flex; align-items: center; gap: 4px">Tout voir[[ic:caret-right s]]</a>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="ph" style="height: 168px; border-radius: 20px; font-family: Inter, system-ui, sans-serif">réel 0:24</div>
+<div class="ph" style="height: 168px; border-radius: 20px; font-family: Inter, system-ui, sans-serif">photo</div>
+<div class="ph" style="height: 168px; border-radius: 20px; font-family: Inter, system-ui, sans-serif">story à la une</div>
+</div>
+</section>
+
+<section class="sheet" role="dialog" aria-labelledby="vc-titre" style="position: relative; margin-top: 44px; padding: 0 12px 6px; border-radius: 28px 28px 0 0; background: var(--raised); border-top: 1px solid var(--line); box-shadow: 0 -18px 44px rgba(0,0,0,.6); display: flex; flex-direction: column">
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 100%; height: 260px; pointer-events: none; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.62) 80%)"></div>
+<div aria-hidden="true" style="align-self: center; width: 36px; height: 4px; margin: 14px 0 6px; border-radius: 2px; background: var(--ink3)"></div>
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 8px 16px 12px">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<h2 id="vc-titre" class="d" style="font-size: 26px; display: inline-flex; align-items: center; gap: 10px">Voir comme<span class="new" style="font-family: Inter, system-ui, sans-serif">Nouveau</span></h2>
+<p style="font-family: Inter, system-ui, sans-serif; font-size: 14px; color: var(--ink2)">Ta vitrine, telle que chaque cercle la voit.</p>
+</div>
+<button class="tb" aria-label="Fermer">[[ic:x]]</button>
+</div>
+
+<div class="rg" role="radiogroup" aria-labelledby="vc-titre" style="display: flex; flex-direction: column; gap: 2px">
+<button class="rd on" role="radio" aria-checked="true"><span class="lead">[[ic:globe-fill]]</span><span class="tx"><b>Public</b><span>Nom, bio, voix, publications publiques</span></span><span class="rb"></span></button>
+<button class="rd" role="radio" aria-checked="false"><span class="lead">[[ic:users-three]]</span><span class="tx"><b>Communauté</b><span>Ton nom dans « qui a vu »</span></span><span class="rb"></span></button>
+<button class="rd" role="radio" aria-checked="false"><span class="lead">[[ic:hand-waving]]</span><span class="tx"><b>Connaissance</b><span>Message direct, lecture et frappe</span></span><span class="rb"></span></button>
+<button class="rd" role="radio" aria-checked="false"><span class="lead">[[ic:handshake]]</span><span class="tx"><b>Ami</b><span>En ligne ou rien, niveau et rang</span></span><span class="rb"></span></button>
+<button class="rd" role="radio" aria-checked="false"><span class="lead">[[ic:fire]]</span><span class="tx"><b>Proche</b><span>Présence détaillée, batterie, étincelles</span></span><span class="rb"></span></button>
+<button class="rd" role="radio" aria-checked="false"><span class="lead">[[ic:drop]]</span><span class="tx"><b>Sang</b><span>Position continue, historique 30 jours</span></span><span class="rb"></span></button>
+</div>
+
+<button class="btn a" style="margin: 18px 4px 0; min-height: 56px">[[ic:eye]]<span>Aperçu</span></button>
+</section>
+
+<nav aria-label="Faces du profil" style="position: sticky; bottom: 0; z-index: 8; padding: 22px 12px 24px; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(180deg, rgba(19,17,28,0), #13111C 40%)">
+<div class="fbar">
+<button class="on" aria-current="page"><span class="cookie">[[ic:user-focus-fill]]</span><span>Vitrine</span></button>
+<button aria-label="Liens">[[ic:link]]</button>
+<button aria-label="Actions">[[ic:lightning]]</button>
+</div>
+<button style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 56px; padding: 0 22px 0 18px; flex: none; border-radius: 18px; background: var(--brand-fill); color: #fff; font-family: Inter, system-ui, sans-serif; font-size: 15px; font-weight: 700; box-shadow: 0 8px 22px rgba(79,70,229,.5)">[[ic:pencil-simple]]<span>Modifier</span></button>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":412,"height":2402}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

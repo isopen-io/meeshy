@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K52 MeeshyReorderList</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:120px;gap:16px}
+.lst{display:flex;flex-direction:column;gap:10px;width:342px;max-width:100%}
+.f{display:flex;flex-direction:column;gap:4px;min-height:68px;padding:12px 16px;border-radius:18px;background:var(--field);border:1px solid transparent;justify-content:center}
+.f.rw{flex-direction:row;align-items:center;gap:12px;padding-right:6px}
+.f.first{border-color:color-mix(in oklab,var(--accent) 50%,transparent)}
+.rk{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;flex:none;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;font-size:15px;line-height:1;background:color-mix(in oklab,var(--accent) 34%,transparent);color:var(--ink)}
+.rk.r1{background:var(--accent);color:#0B0B12}
+.rk.r3{background:color-mix(in oklab,var(--accent) 16%,transparent)}
+.tx{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.tx>b{font-size:17px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx>small{font-size:13px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx .hd{color:var(--ink3);cursor:grab}
+.grip{display:inline-flex;align-items:center;justify-content:center;width:32px;height:44px;flex:none;color:var(--ink3);cursor:grab}
+.pst{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;flex:none;background:color-mix(in oklab,var(--brand) 22%,transparent);color:var(--ink2)}
+.fi{flex:1;min-width:0;width:100%;background:none;border:0;outline:0;padding:0;margin:0;color:var(--ink);font:inherit}
+.slot{border:2px dashed var(--brand-soft);border-radius:22px;background:color-mix(in oklab,var(--brand) 9%,transparent)}
+.slot.s18{border-radius:18px;min-height:68px}
+.mx .f.hold{transform:scale(1.02);border-color:var(--brand-soft);box-shadow:0 12px 26px rgba(0,0,0,.5)}
+.mx .f.up{position:relative;z-index:3;transform:translate(8px,-9px) rotate(2deg);background:color-mix(in oklab,var(--brand) 16%,var(--field));border-color:var(--brand-soft);box-shadow:0 30px 56px rgba(0,0,0,.72),0 10px 22px rgba(99,102,241,.38)}
+.mx .f.up .hd,.mx .f.hold .hd{color:var(--ink);cursor:grabbing}
+.mx .f.land{border-color:var(--brand-soft);box-shadow:0 0 0 4px color-mix(in oklab,var(--brand) 26%,transparent)}
+.mx[data-theme=light] .f.up{box-shadow:0 24px 44px rgba(67,56,202,.30),0 8px 18px rgba(99,102,241,.22)}
+.mx[data-theme=light] .f.hold{box-shadow:0 10px 22px rgba(67,56,202,.22)}
+.lift{animation:adrLift 3.2s ease-in-out infinite}
+.f.fo{outline:2px solid var(--ink);outline-offset:3px}
+.hd.fo{outline:2px solid var(--ink);outline-offset:-4px}
+.off .hd{opacity:.32;cursor:default}
+.hint{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink3)}
+.say{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.kbd{display:inline-flex;align-items:center;justify-content:center;gap:2px;height:26px;min-width:26px;padding:0 7px;border-radius:8px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);font-size:12.5px;font-weight:700;color:var(--ink)}
+.act{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;border-radius:14px;background:var(--field);border:1px solid var(--line);font-size:14px;font-weight:600}
+.caps{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px 0 11px;border-radius:999px;font-size:12.5px;font-weight:700;color:var(--ink);align-self:center}
+.pend{display:inline-flex;color:var(--warn);animation:rlPend 2.4s ease-in-out infinite}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.pit{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:30px 24px;border-radius:22px;background:var(--raised);border:1px solid var(--line);flex:1;min-width:0}
+.swap{display:inline-grid}
+.swap>*{grid-area:1/1}
+.live{position:relative;width:342px;height:224px;animation:rlLoop 7s linear infinite}
+.live>.f,.live>.slot{position:absolute;left:0;right:0}
+.live>.mv-a{top:156px;z-index:3;animation:rlFly 7s cubic-bezier(.3,.9,.3,1) infinite}
+.live>.mv-b{top:78px;animation:rlYield 7s cubic-bezier(.3,1.3,.5,1) infinite}
+.live>.slot{top:156px;animation:rlSlot 7s ease-in-out infinite}
+.mv-a .hd{animation:rlInk 7s linear infinite}
+.tap{position:absolute;right:6px;top:12px;width:44px;height:44px;border-radius:50%;background:rgba(238,242,255,.5);opacity:0;pointer-events:none;animation:rlTap 7s ease-out infinite}
+.o{animation:rlOld 7s linear infinite}
+.n{animation:rlNew 7s linear infinite}
+.mv-a .rk{animation:rlPop 7s cubic-bezier(.3,1.6,.5,1) infinite}
+.trk{position:relative;height:30px;border-radius:10px;background:var(--field);border:1px solid var(--line);overflow:hidden}
+.trk>span{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;font-weight:700;color:#0B0B12}
+.trk>i{position:absolute;top:0;bottom:0;width:2px;background:var(--warn);animation:rlHead 7s linear infinite}
+@keyframes adrLift{0%,100%{transform:translate(8px,-9px) rotate(2deg)}50%{transform:translate(8px,-13px) rotate(2deg)}}
+@keyframes rlPend{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes rlLoop{0%,90%{opacity:1}94%,97%{opacity:0}100%{opacity:1}}
+@keyframes rlFly{0%,10%{transform:none;box-shadow:0 0 0 rgba(0,0,0,0);border-color:transparent;background:var(--field)}14%,20%{transform:scale(1.03) rotate(2deg);box-shadow:0 30px 56px rgba(0,0,0,.72),0 10px 22px rgba(99,102,241,.38);border-color:var(--brand-soft);background:color-mix(in oklab,var(--brand) 16%,var(--field))}44%,50%{transform:translateY(-78px) scale(1.03) rotate(2deg);box-shadow:0 30px 56px rgba(0,0,0,.72),0 10px 22px rgba(99,102,241,.38);border-color:var(--brand-soft);background:color-mix(in oklab,var(--brand) 16%,var(--field))}55%{transform:translateY(-78px) scale(.985);box-shadow:0 0 0 4px rgba(99,102,241,.3);border-color:var(--brand-soft);background:var(--field)}59%{transform:translateY(-78px);box-shadow:0 0 0 4px rgba(99,102,241,.3);border-color:var(--brand-soft);background:var(--field)}70%,95.9%{transform:translateY(-78px);box-shadow:0 0 0 0 rgba(99,102,241,0);border-color:transparent;background:var(--field)}96%,100%{transform:none;box-shadow:0 0 0 rgba(0,0,0,0);border-color:transparent;background:var(--field)}}
+@keyframes rlYield{0%,30%{transform:none}38%,95.9%{transform:translateY(78px)}96%,100%{transform:none}}
+@keyframes rlSlot{0%,11%{opacity:0;transform:none}15%,30%{opacity:1;transform:none}36%,50%{opacity:1;transform:translateY(-78px)}56%,100%{opacity:0;transform:translateY(-78px)}}
+@keyframes rlInk{0%,10%{color:var(--ink3)}14%,50%{color:var(--ink)}56%,100%{color:var(--ink3)}}
+@keyframes rlTap{0%,8%{opacity:0;transform:scale(.6)}12%,50%{opacity:.45;transform:scale(1)}56%,100%{opacity:0;transform:scale(1.5)}}
+@keyframes rlOld{0%,52%{opacity:1}55%,95.9%{opacity:0}96%,100%{opacity:1}}
+@keyframes rlNew{0%,52%{opacity:0}55%,95.9%{opacity:1}96%,100%{opacity:0}}
+@keyframes rlPop{0%,52%{transform:none}56%{transform:scale(1.3)}62%,100%{transform:none}}
+@keyframes rlHead{0%{left:0}94%,100%{left:100%}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #6366F1; opacity: .24"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #A855F7; opacity: .16; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K52 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyReorderList</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un ordre qui compte se règle en glissant des rangées pleines, avec leur rang et une alternative sans geste</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">Les langues du Prisme dans l'édition du profil, les adresses de la vitrine. Deux écrans, deux poignées, un seul état soulevé dessiné. K52 en fait une liste : une poignée de 44, un rang qui se lit, une rangée qui se soulève, un emplacement en pointillé, et « monter » et « descendre » pour qui ne glisse pas.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il porte le geste, il rend deux index</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Empile <b>deux à douze</b> rangées verticales et pose sur chacune une poignée de 44. Le contenu de la rangée est celui de l'hôte, sans retouche.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Soulève la rangée saisie : <b>penchée de 2°</b>, ombre forte, bord de marque. Sa place d'arrivée se lit en pointillé, les voisines s'écartent.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Écrit le <b>rang</b> quand il a un sens (1, 2, 3) et met la première rangée en avant quand le premier gagne.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Offre <b>la même chose sans glisser</b> : actions « monter » et « descendre » à la voix, flèches au clavier, et le nouveau rang annoncé.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>L'ordre horizontal de vignettes (diapos du rail, médias) : <b>K20</b> <code>MeeshyThumbnailRow</code>. Les cibles « dupliquer » et « retirer » de la scène : <b>K25</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le contenu d'une rangée : la ligne à bascule est <b>K06</b>, le billet <b>K30</b>, la personne <b>K39</b>. La pastille de rang est l'ordinal de <b>K41</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Ranger dans une autre section, supprimer d'un glisser de côté, trier par règle : <b>l'app</b>, par le menu <b>K18</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Enregistrer l'ordre, le mettre en file hors ligne, le défaire au refus du serveur : <b>l'app</b>. La pilule « hors ligne » est <b>K14</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; flex: none; background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-ink)">[[ic:arrows-down-up l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : tout ordre réglable au doigt l'est aussi sans le doigt</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Le glisser, les actions de la voix et les flèches du clavier appellent le même <code>onMove(from, to)</code>, avec les mêmes bornes et la même annonce. Une liste qui ne se range qu'en glissant n'est pas K52.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une rangée, une poignée, un rang, une place qui attend</h2><p>Les langues du Prisme de Moi-Edition, agrandies deux fois, avec l'état soulevé de Mes-Adresses posé sur la deuxième rangée. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="padding: 44px 40px">
+<div style="position: relative; width: 640px">
+<div style="zoom: 2; width: 320px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; justify-content: space-between; height: 20px"><span class="tag">3 langues</span><span class="hint">[[ic:dots-six-vertical s]]<span>Glisse</span></span></div>
+<div class="f rw first"><span class="rk r1">1</span><span class="tx"><span class="tag">Principale</span><b>Français</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div style="position: relative; height: 68px">
+<div class="slot s18" style="position: absolute; inset: 0"></div>
+<div class="f rw up" style="position: absolute; left: 0; right: 0; top: 0"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+<div class="f rw"><span class="rk r3">3</span><span class="tx"><span class="tag">3e choix</span><b>Wolof</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+<span class="kan" style="left: -11px; top: 429px">1</span>
+<span class="kan" style="left: 573px; top: 373px">2</span>
+<span class="kan" style="left: 51px; top: 49px">3</span>
+<span class="kan" style="left: 330px; top: 187px">4</span>
+<span class="kan" style="left: -11px; top: 336px">5</span>
+<span class="kan" style="left: 462px; top: 9px">6</span>
+<span class="kan" style="left: -11px; top: 117px">7</span>
+</div>
+</div>
+<div class="card" style="padding: 26px; align-self: start">
+<div class="lgd">
+<span class="kan">1</span><div><b>Rangée hôte</b><span>Emplacement <code>row</code>. Ici le champ de 68 de haut, rayon 18, fond <code>field</code>. K52 n'y ajoute ni marge ni fond : il la déplace entière.</span></div>
+<span class="kan">2</span><div><b>Poignée de glisser</b><span>Cible 44 × 44 au bord de fin (32 × 44 sur un billet, au bord de début). Glyphe six points de 22, encre <code>ink3</code>, <code>ink</code> une fois saisie. Jeton <code>reorder.handle</code>.</span></div>
+<span class="kan">3</span><div><b>Pastille de rang</b><span>Optionnelle. Ordinal K41 de 30, Nunito 800 de 15. Aplat d'accent au rang 1, 34 % au rang 2, 16 % ensuite. Elle suit la position, jamais l'élément.</span></div>
+<span class="kan">4</span><div><b>État soulevé</b><span>Rotation 2°, décalage 8 / −9, bord 1 px <code>brand-soft</code>, ombre 30/56 à 72 % et halo de marque 10/22. Au-dessus de tout, <code>reorder.lift</code>.</span></div>
+<span class="kan">5</span><div><b>Emplacement cible</b><span>Pointillé 2 px <code>brand-soft</code>, fond de marque à 9 %, au rayon et à la hauteur de la rangée soulevée. Il dit où elle tombera si on lâche.</span></div>
+<span class="kan">6</span><div><b>Indice de découverte</b><span>En tête de liste, au bord de fin : six points de 16 et un mot (« Glisse »), 12,5 px, <code>ink3</code>. Décoratif : la voix lit les actions, pas l'indice.</span></div>
+<span class="kan">7</span><div style="border-bottom: 0; padding-bottom: 0"><b>Première rangée</b><span>Avec <code>emphasizesFirst</code> : bord 1 px d'accent à 50 %. La mise en avant tient à la place : la rangée qui arrive en tête la prend.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Deux formes, six états, trois façons de déplacer</h2><p>Tout est à taille réelle, dans les 342 px qu'un téléphone laisse à la liste. Les spécimens sont ceux de Moi-Edition et de Mes-Adresses : mêmes classes, mêmes mesures.</p></header>
+
+<span class="tag">Formes</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 22px">
+<div class="stage">
+<div class="lst" role="list" aria-label="Langues du Prisme">
+<div class="f rw first" role="listitem"><span class="rk r1">1</span><span class="tx"><span class="tag">Principale</span><b>Français</b></span><button class="ib hd" aria-label="Déplacer Français, rang 1 sur 3">[[ic:dots-six-vertical]]</button></div>
+<div class="f rw" role="listitem"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Wolof</b></span><button class="ib hd" aria-label="Déplacer Wolof, rang 2 sur 3">[[ic:dots-six-vertical]]</button></div>
+<div class="f rw" role="listitem"><span class="rk r3">3</span><span class="tx"><span class="tag">3e choix</span><b>Anglais</b></span><button class="ib hd" aria-label="Déplacer Anglais, rang 3 sur 3">[[ic:dots-six-vertical]]</button></div>
+</div>
+</div>
+<div class="cp"><b>Avec rang, première en avant</b><span class="kcap"><code>showsRank</code> et <code>emphasizesFirst</code>. L'ordre est une priorité : il s'écrit. Moi-Edition, langues du Prisme.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px">
+<div class="stage">
+<div class="lst" role="list" aria-label="Packs d'autocollants">
+<div class="f rw" role="listitem" style="padding-left: 12px"><span class="pst">[[ic:cat]]</span><span class="tx" style="gap: 2px"><b style="font-weight: 600">Chats ronds</b><small>24 autocollants</small></span><button class="ib hd" aria-label="Déplacer Chats ronds">[[ic:dots-six-vertical]]</button></div>
+<div class="f rw" role="listitem" style="padding-left: 12px"><span class="pst">[[ic:moon-stars]]</span><span class="tx" style="gap: 2px"><b style="font-weight: 600">Dakar la nuit</b><small>18 autocollants</small></span><button class="ib hd" aria-label="Déplacer Dakar la nuit">[[ic:dots-six-vertical]]</button></div>
+<div class="f rw" role="listitem" style="padding-left: 12px"><span class="pst">[[ic:sparkle]]</span><span class="tx" style="gap: 2px"><b style="font-weight: 600">Étincelles</b><small>30 autocollants</small></span><button class="ib hd" aria-label="Déplacer Étincelles">[[ic:dots-six-vertical]]</button></div>
+</div>
+</div>
+<div class="cp"><b>Sans rang</b><span class="kcap">Le défaut. L'ordre range, il ne classe pas : aucune pastille, aucune rangée en avant. La voix dit quand même « 2 sur 3 ».</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px 22px 22px 26px">
+<div class="stage">
+<div class="lst">
+<article class="ticket" style="--cut: 70px">
+<div style="display: flex; align-items: center; gap: 10px; height: 70px; padding: 0 14px 0 6px">
+<button class="grip" aria-label="Déplacer l'adresse Site">[[ic:dots-six-vertical]]</button>
+<span class="pst">[[ic:globe-hemisphere-west]]</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; color: var(--ink3)"><input class="fi d" aria-label="Titre de l'adresse Site" value="Site" style="flex: none; width: 40px; font-size: 17px">[[ic:pencil-simple s]]</span>
+<span class="mono" style="color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">aissandiaye.studio</span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Afficher l'adresse Site sur ma vitrine"></button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 16px">
+<button class="chip">[[ic:globe s]]<span>Public</span>[[ic:caret-down s]]</button>
+<span style="display: inline-flex; align-items: baseline; gap: 5px"><span class="d" style="font-size: 20px">128</span><span style="font-size: 12.5px; color: var(--ink2)">clics</span></span>
+</div>
+</article>
+<div style="position: relative; height: 124px">
+<div class="slot" style="position: absolute; inset: 0"></div>
+<article class="ticket lift" style="--cut: 70px; position: absolute; left: 0; right: 0; top: 0; z-index: 3; background: #1C1930; border-color: var(--brand-soft); box-shadow: 0 30px 56px rgba(0,0,0,.72), 0 10px 22px rgba(99,102,241,.38)">
+<div style="display: flex; align-items: center; gap: 10px; height: 70px; padding: 0 14px 0 6px">
+<button class="grip" aria-label="Déplacer l'adresse Musique" style="color: var(--ink); cursor: grabbing">[[ic:dots-six-vertical]]</button>
+<span class="pst" style="background: var(--brand-fill); color: #fff">[[ic:vinyl-record]]</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; color: var(--ink3)"><input class="fi d" aria-label="Titre de l'adresse Musique" value="Musique" style="flex: none; width: 76px; font-size: 17px">[[ic:pencil-simple s]]</span>
+<span class="mono" style="color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">soundcloud.com/aissa</span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Afficher l'adresse Musique sur ma vitrine"></button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 16px">
+<button class="chip">[[ic:globe s]]<span>Public</span>[[ic:caret-down s]]</button>
+<span style="display: inline-flex; align-items: baseline; gap: 5px"><span class="d" style="font-size: 20px">342</span><span style="font-size: 12.5px; color: var(--ink2)">clics</span></span>
+</div>
+</article>
+</div>
+</div>
+</div>
+<div class="cp"><b>Rangée billet</b><span class="kcap">Le billet K30 de Mes-Adresses en emplacement <code>row</code>, poignée au bord de début (<code>handleEdge: leading</code>, 32 × 44) : le bord de fin est pris par la bascule.</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 10px">États</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 22px">
+<div class="stage">
+<div class="lst">
+<div class="f rw"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Wolof</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw"><span class="rk r3">3</span><span class="tx"><span class="tag">3e choix</span><b>Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Repos</b><span class="kcap">Poignée <code>ink3</code>, aucune ombre. Rien ne dit « édition » : la liste se range à tout moment, sans mode.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px">
+<div class="stage">
+<div class="lst">
+<div class="f rw"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Wolof</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw hold"><span class="rk r3">3</span><span class="tx"><span class="tag">3e choix</span><b>Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Saisie</b><span class="kcap">Le doigt est sur la poignée, rien n'a bougé. Échelle 1,02, bord de marque, ombre 12/26, poignée <code>ink</code>. Un tic haptique. Lâcher ici ne change rien.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px">
+<div class="stage">
+<div class="lst">
+<div style="position: relative; height: 68px">
+<div class="slot s18" style="position: absolute; inset: 0"></div>
+<div class="f rw up lift" style="position: absolute; left: 0; right: 0; top: 0"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+<div class="f rw"><span class="rk r3">3</span><span class="tx"><span class="tag">3e choix</span><b>Wolof</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+<div class="cp"><b>En vol</b><span class="kcap">Penchée de 2°, ombre forte, bord de marque. L'emplacement en pointillé a déjà pris le rang 2 ; Wolof est descendue. La pastille montre le rang d'arrivée.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px">
+<div class="stage" style="flex-direction: column; gap: 14px">
+<div class="lst">
+<div class="f rw land"><span class="rk" style="transform: scale(1.18)">2</span><span class="tx"><span class="tag">2e choix</span><b>Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw"><span class="rk r3">3</span><span class="tx"><span class="tag">3e choix</span><b>Wolof</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+<span class="say">[[ic:speaker-high s]]<span>« Anglais, rang 2 sur 3 »</span></span>
+</div>
+<div class="cp"><b>Déposée</b><span class="kcap">Elle se redresse et se pose par <code>motion.rise</code>. Un halo de marque de 4 px s'éteint en 600 ms, la pastille saute. Haptique moyen, rang annoncé.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px">
+<div class="stage">
+<div class="lst off">
+<div class="f rw"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Wolof</b></span><button class="ib hd" disabled aria-label="Déplacer Wolof. Indisponible">[[ic:dots-six-vertical]]</button></div>
+<div class="f rw"><span class="rk r3">3</span><span class="tx"><span class="tag">3e choix</span><b>Anglais</b></span><button class="ib hd" disabled aria-label="Déplacer Anglais. Indisponible">[[ic:dots-six-vertical]]</button></div>
+</div>
+</div>
+<div class="cp"><b>Désactivée</b><span class="kcap"><code>isEnabled: false</code>, ou une seule rangée. Poignées à 32 %, sans geste ni action de voix. Le contenu reste plein : il se lit et se touche.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px">
+<div class="stage" style="flex-direction: column; gap: 14px">
+<span class="caps glass">[[ic:cloud-slash s]]<span>Hors ligne · ordre gardé ici</span></span>
+<div class="lst">
+<div class="f rw"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Anglais</b></span><span class="pend" role="img" aria-label="En attente d'envoi">[[ic:clock-countdown s]]</span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw"><span class="rk r3">3</span><span class="tx"><span class="tag">3e choix</span><b>Wolof</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Hors ligne</b><span class="kcap">L'ordre s'applique tout de suite. La rangée déplacée porte une marque d'attente (<code>pendingIDs</code>) jusqu'à la confirmation ; la pilule est K14, posée par l'app.</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 10px">Sans le geste, et en clair</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 22px">
+<div class="stage" style="flex-direction: column; gap: 12px">
+<div class="lst">
+<div class="f rw fo"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Wolof</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 342px; max-width: 100%">
+<span class="act">[[ic:arrow-up s]]<span>Monter</span></span>
+<span class="act">[[ic:arrow-down s]]<span>Descendre</span></span>
+</div>
+<span class="say">[[ic:speaker-high s]]<span>« Wolof, 2e choix, rang 2 sur 3. Actions disponibles. »</span></span>
+</div>
+<div class="cp"><b>Lecteur d'écran</b><span class="kcap">La rangée est un seul élément. Deux actions nommées, « Monter » et « Descendre » ; celle qui sort des bornes n'est pas offerte. Le nouveau rang est annoncé.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px">
+<div class="stage" style="flex-direction: column; gap: 14px">
+<div class="lst">
+<div class="f rw hold"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Wolof</b></span><span class="ib hd fo">[[ic:dots-six-vertical]]</span></div>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: 12.5px; color: var(--ink2)">
+<span style="display: inline-flex; align-items: center; gap: 6px"><span class="kbd">Espace</span><span>saisir, poser</span></span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span class="kbd">[[ic:arrow-up s]]</span><span class="kbd">[[ic:arrow-down s]]</span><span>déplacer</span></span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span class="kbd">Échap</span><span>annuler</span></span>
+</div>
+</div>
+<div class="cp"><b>Clavier</b><span class="kcap">La poignée est un bouton dans l'ordre de tabulation. Espace saisit, les flèches déplacent d'un rang, Espace pose, Échap rend l'ordre de départ. Les touches sont dessinées par K55.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="display: flex; align-items: center; justify-content: center; padding: 26px 22px 22px; flex: 1">
+<div class="lst">
+<div class="f rw first"><span class="rk r1" style="color: #fff">1</span><span class="tx"><span class="tag">Principale</span><b>Français</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div style="position: relative; height: 68px">
+<div class="slot s18" style="position: absolute; inset: 0"></div>
+<div class="f rw up" style="position: absolute; left: 0; right: 0; top: 0"><span class="rk">2</span><span class="tx"><span class="tag">2e choix</span><b>Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+</div>
+<div class="cp" style="padding: 0 22px 22px"><b>Thème clair</b><span class="kcap">Mêmes mesures. L'ombre du vol passe à l'indigo à 30 %, le pointillé à <code>brand-soft</code> clair. Le bord tient 3:1 sur la surface.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Elle se soulève, les autres s'écartent, elle se pose</h2><p>Trois temps, trois jetons de K26. La saisie est un <code>motion.morph</code> : la rangée grossit et se penche. Les voisines changent de place par <code>motion.travel</code> dès que la moitié de leur hauteur est franchie. Le dépôt est un <code>motion.rise</code> : elle se redresse, se pose, la pastille saute.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div class="pit" style="padding: 44px 24px 30px">
+<div class="live">
+<div class="f rw first" style="top: 0"><span class="rk r1">1</span><span class="tx"><span class="tag">Principale</span><b>Français</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="slot s18"></div>
+<div class="f rw mv-b"><span class="rk swap"><span class="o">2</span><span class="n">3</span></span><span class="tx"><span class="tag swap"><span class="o">2e choix</span><span class="n">3e choix</span></span><b>Wolof</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw mv-a"><span class="rk swap"><span class="o">3</span><span class="n">2</span></span><span class="tx"><span class="tag swap"><span class="o">3e choix</span><span class="n">2e choix</span></span><b>Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span><span class="tap"></span></div>
+</div>
+<span class="say">[[ic:speaker-high s]]<span class="swap"><span class="o">« Anglais, rang 3 sur 3 »</span><span class="n">« Anglais, rang 2 sur 3 »</span></span></span>
+<div style="display: flex; flex-direction: column; gap: 8px; align-self: stretch">
+<div class="trk">
+<span style="left: 10.6%; width: 10.7%; background: var(--brand-soft)">morph</span>
+<span style="left: 21.3%; width: 31.9%; background: var(--accent-ink)">travel</span>
+<span style="left: 53.2%; width: 9.6%; background: var(--ok)">rise</span>
+<i></i>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--ink3)"><span>repos</span><span>saisie · en vol · déposée</span><span>ordre nouveau</span></div>
+</div>
+</div>
+<span class="spec">durée : saisie 180 ms (motion.morph) · voisines 350 ms chacune (motion.travel) · dépôt 320 ms (motion.rise), halo éteint en 600 ms · courbe : ressorts de K26, la rangée en vol suit le doigt sans ressort · déclencheur : le doigt posé sur la poignée, ou 350 ms d'appui sur la rangée si l'hôte l'autorise ; seuil de bascule à la moitié de la voisine · haptique : léger à la saisie, sélection à chaque rang franchi, moyen au dépôt, rien à l'annulation · mouvement réduit : ni rotation ni voyage, la rangée garde son bord de marque et les places changent en fondu de 120 ms</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 14px; min-height: 0; flex: 1; justify-content: center">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Le doigt saisit la poignée</b></div>
+<div style="display: flex; align-items: center; gap: 18px"><div class="f rw hold" style="width: 168px; flex: none; min-height: 56px; padding: 8px 2px 8px 12px"><span class="rk r3">3</span><span class="tx"><b style="font-size: 15px">Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div><span class="kcap"><code>motion.morph</code> : échelle 1,02, bord de marque, ombre. La liste cesse de défiler sous le doigt. Tic léger.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px; min-height: 0; flex: 1; justify-content: center">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Elle vole, la place s'ouvre</b></div>
+<div style="display: flex; align-items: center; gap: 18px"><div style="position: relative; width: 168px; height: 56px; flex: none"><div class="slot s18" style="position: absolute; inset: 0; min-height: 0"></div><div class="f rw up" style="position: absolute; inset: 0; min-height: 56px; padding: 8px 2px 8px 12px; transform: translate(6px,-7px) rotate(2deg)"><span class="rk">2</span><span class="tx"><b style="font-size: 15px">Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div></div><span class="kcap">2° de penché. Le pointillé saute au rang visé, la voisine le quitte par <code>motion.travel</code>. Un tic par rang franchi.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px; min-height: 0; flex: 1; justify-content: center">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Elle se pose, le rang se dit</b></div>
+<div style="display: flex; align-items: center; gap: 18px"><div class="f rw land" style="width: 168px; flex: none; min-height: 56px; padding: 8px 2px 8px 12px"><span class="rk" style="transform: scale(1.18)">2</span><span class="tx"><b style="font-size: 15px">Anglais</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div><span class="kcap"><code>motion.rise</code> : redressée, posée, halo de 4 px. <code>onMove(2, 1)</code> part une fois. Haptique moyen, annonce.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Des identifiants, un contenu de rangée rendu par l'hôte, deux index en retour. Aucune signature ne nomme une langue, une adresse, une conversation ou un pack : l'hôte tient la liste et la renvoie rangée.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyReorderList.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-reorder-list.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyReorderList(label:items:id:onMove:…row:)</code></span><span><code>MeeshyReorderList(label, items, key, onMove, modifier, …, row)</code></span><span><code>&lt;MeeshyReorderList label items getId onMove … row /&gt;</code></span>
+<span><b>Poignée seule</b></span><span><code>MeeshyReorderHandle(label:phase:)</code>, pour une rangée qui la place elle-même</span><span><code>MeeshyReorderHandle(label, phase)</code></span><span><code>&lt;MeeshyReorderHandle label phase /&gt;</code></span>
+<span><b>Rang</b></span><span><code>MeeshyReorderRank { hidden, ordinal }</code></span><span><code>enum class</code> identique</span><span><code>'hidden' | 'ordinal'</code></span>
+<span><b>Phase d'une rangée</b></span><span><code>MeeshyReorderPhase { rest, grabbed, flying, dropped }</code></span><span><code>enum class</code> identique</span><span><code>'rest' | 'grabbed' | 'flying' | 'dropped'</code></span>
+<span><b>Bord de la poignée</b></span><span><code>MeeshyReorderHandleEdge { trailing, leading }</code></span><span>idem</span><span><code>'trailing' | 'leading'</code></span>
+<span><b>Tailles</b></span><span>poignée <code>regular</code> 44 × 44, <code>narrow</code> 32 × 44 ; pastille 30</span><span>idem, en <code>dp</code></span><span>idem, en <code>px</code></span>
+<span><b>Emplacements</b></span><span><code>row: (Item, MeeshyReorderRowContext) -&gt; some View</code>, <code>header</code> (à côté de l'indice)</span><span><code>row: @Composable (T, MeeshyReorderRowContext) -&gt; Unit</code>, <code>header</code></span><span><code>row: (item, context) =&gt; ComponentChildren</code>, <code>header</code></span>
+<span><b>Contexte rendu à la rangée</b></span><span><code>MeeshyReorderRowContext(rank:count:phase:isPending:handle:)</code></span><span><code>data class</code> identique</span><span><code>type MeeshyReorderRowContext</code></span>
+<span><b>Calcul pur</b></span><span><code>MeeshyReorder.move(ids, from:to:)</code>, <code>targetIndex(from:offset:heights:spacing:)</code></span><span><code>MeeshyReorder.move(ids, from, to)</code>, <code>targetIndex(…)</code>, JVM pure</span><span><code>meeshyReorderMove(ids, from, to)</code>, <code>meeshyReorderTargetIndex(…)</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyReorderListRecipe.resolve(phase:rank:isFirst:isEnabled:isPending:handleEdge:reduceMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyReorderListRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyReorderListRecipe(…)</code> : classes et attributs</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>label: String</code><span>Obligatoire, non vide. Le nom dit de la liste : « Langues, par priorité ».</span></div>
+<div class="par"><code>onMove: (Int, Int) -&gt; Void</code><span><code>from</code> et <code>to</code>, une fois, au dépôt. Jamais pendant le vol, jamais si rien ne change.</span></div>
+<div class="par"><code>rank = .hidden</code><span><code>ordinal</code> écrit la pastille. Le rang dit à la voix existe dans les deux cas.</span></div>
+<div class="par"><code>emphasizesFirst = false</code><span>Bord d'accent sur la rangée de tête. Demande <code>tint</code> ou l'accent ambiant.</span></div>
+<div class="par"><code>handleEdge = .trailing</code><span><code>leading</code> prend la poignée étroite. Les bords suivent le sens d'écriture.</span></div>
+<div class="par"><code>isEnabled = true</code><span>Faux, ou moins de deux rangées : poignées éteintes, aucune action.</span></div>
+<div class="par"><code>pendingIDs: Set&lt;String&gt; = []</code><span>Les rangées dont l'ordre attend sa confirmation. L'hôte le vide.</span></div>
+<div class="par"><code>hint: String? = nil</code><span>Le mot de l'indice de tête. Absent : pas d'indice.</span></div>
+<div class="par"><code>labels: MeeshyReorderLabels</code><span><code>handle(title)</code>, <code>moveUp</code>, <code>moveDown</code>, <code>announce(title, rank, count)</code>, traduits par l'hôte.</span></div>
+<div class="par"><code>title: (Item) -&gt; String</code><span>Le nom dit d'une rangée, pour la poignée et l'annonce.</span></div>
+<div class="par"><code>allowsRowLongPress = false</code><span>Vrai : 350 ms d'appui sur la rangée saisit aussi. À laisser faux si la rangée a un menu.</span></div>
+<div class="par"><code>haptic = .standard</code><span>Léger, sélection, moyen. <code>none</code> laisse l'hôte jouer le sien.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois gestes</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Geste : un <code>DragGesture(minimumDistance: 0)</code> posé sur la poignée seule. Jamais <code>.onDrag</code> ni <code>List.onMove</code> : le premier capte l'appui long du système, le second impose la cellule de liste.</li>
+<li>Vol : <code>offset</code>, <code>rotationEffect(.degrees(2))</code>, <code>zIndex</code> ; les voisines par <code>.animation(_, value: ordre)</code> sur leurs identités.</li>
+<li>Voix : <code>accessibilityElement(children: .combine)</code>, deux <code>accessibilityAction(named:)</code>, <code>accessibilityValue</code> « 2 sur 3 », puis <code>AccessibilityNotification.Announcement</code>.</li>
+<li>Haptique : <code>sensoryFeedback</code> sur la phase et sur le rang visé. Clavier matériel : <code>onKeyPress</code> sur la poignée.</li>
+<li>Défilement : <code>scrollDisabled</code> pendant le vol ; près d'un bord, l'hôte reçoit <code>onEdgeApproach</code> et défile.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : <code>UIImpactFeedbackGenerator</code> et <code>UIAccessibility.post</code> à la place des API de 17. <code>accessibilityReduceMotion</code> : pas de rotation, fondu. Très grande police : la poignée garde 44, le texte passe à la ligne.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Geste : <code>pointerInput</code> et <code>detectDragGestures</code> sur la poignée ; <code>detectDragGesturesAfterLongPress</code> sur la rangée si l'hôte l'autorise.</li>
+<li>Vol : <code>graphicsLayer</code> (<code>rotationZ</code>, <code>translationY</code>, <code>shadowElevation</code>) et <code>zIndex</code> ; les voisines par <code>Modifier.animateItem()</code>.</li>
+<li>Voix : <code>semantics { customActions = … }</code> pour « Monter » et « Descendre », <code>stateDescription</code> pour le rang, <code>liveRegion</code> poli pour l'annonce.</li>
+<li>Haptique : <code>GestureThresholdActivate</code> à la saisie, <code>SegmentTick</code> par rang, <code>Confirm</code> au dépôt.</li>
+<li>Clavier et manette : <code>onKeyEvent</code> sur la poignée, mêmes touches que le web.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sous l'API 34, les haptiques retombent sur <code>LongPress</code> et <code>TextHandleMove</code>. Échelle d'animation à zéro : les places changent sans transition. La surface soulevée est tonale : pas de verre.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Geste : <code>pointerdown</code> et <code>setPointerCapture</code> sur la poignée, <code>touch-action: none</code> sur elle seule. Pas de glisser HTML5 : il n'existe pas au doigt.</li>
+<li>Vol : <code>transform</code> et <code>box-shadow</code> ; les voisines en FLIP, lues avant et après le nouvel ordre.</li>
+<li>Rôles : <code>role="list"</code>, des <code>listitem</code>, et la poignée en <code>&lt;button aria-describedby&gt;</code> ; un <code>aria-live="polite"</code> dit le rang.</li>
+<li>Clavier : Espace saisit et pose, les flèches déplacent, Échap annule ; <code>:focus-visible</code> dessine l'anneau.</li>
+<li>Pointeur fin : <code>cursor: grab</code> puis <code>grabbing</code> ; la poignée s'éclaire au survol.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>color-mix</code> : teintes pré-calculées par la recette. <code>prefers-reduced-motion</code> : aucun voyage, fondu de 120 ms. Dans la coque, l'haptique passe par le pont natif ; ailleurs, aucun.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Le calcul de l'ordre existe, le geste vertical manque partout</h2><p>Relevé dans le dépôt le 16 novembre 2026. Les trois plateformes savent calculer un déplacement, animer un changement d'ordre et l'offrir à la voix. Aucune n'a une liste verticale qui se range au doigt : sur iOS, le glisser natif des conversations a été retiré, et le web n'a aucun <code>draggable</code> hors du composer. La vue naît en K52 ; ses calculs s'extraient.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/core/model/…/sdk/model/ConversationReorder.kt</span><p><span class="be">Devient le composant</span> <code>ConversationReorder.move(orderedIds, from, to)</code> : la traduction pure de « la rangée <code>from</code> est tombée sur la place <code>to</code> ». Elle perd son type de requête et devient <code>MeeshyReorder.move</code>, portée à l'identique en Swift et en TypeScript.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/stories/…/stories/SlideReorderResolver.kt</span><p><span class="be">Devient le composant</span> <code>targetIndex(fromIndex, dragPx, slotWidthPx, slideCount)</code> : le seuil à la moitié d'une place, borné, sûr avant la mesure. Devient <code>targetIndex</code> en hauteurs de rangée ; le rail horizontal de <span class="mono">ComposerSlideRail.kt</span> reste à K20.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/core/model/…/conversationlist/ConversationListReorderMotion.kt</span><p>Le ressort d'un changement d'ordre et ses deux cas d'arrêt. Il rejoint <code>motion.travel</code> de K26 ; K52 le cite, il ne le recopie pas.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-core/…/preferences/CommunityOrderRepository.kt</span><p><span class="no">Reste à l'app</span> <code>ReorderOutcome</code> : envoyé, mis en file, refusé. C'est ce que l'hôte traduit en <code>pendingIDs</code>. K52 ne connaît ni réseau ni file.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView+Accessibility.swift</span><p><span class="be">Devient le composant</span> <code>Plan2DTrackAction { moveUp, moveDown }</code> : les deux actions de voix, offertes selon la position, avec leurs libellés. C'est l'alternative sans geste de K52, déjà écrite et déjà bornée.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/ViewModels/ConversationListReorderMotion.swift</span><p>Ressort 0,35 / 0,86, coupé sous Réduire les animations et pendant le défilement. Même sort que son miroir Kotlin : il passe à K26.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift</span><p>Le glisser natif (<code>.onDrag</code>) y a été retiré : il captait l'appui long et fermait le menu. D'où la règle de K52 : le geste part de la poignée, jamais de la rangée par défaut.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Composer/ComposerSlideRail.swift</span><p><span class="no">Reste à K20</span> Le mode <code>isReordering</code> et son tremblement rangent des vignettes à l'horizontale. Aucune <code>List.onMove</code> n'existe dans <span class="mono">apps/ios/Meeshy</span>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/lib/view/list-reorder-flip.ts</span><p><span class="be">Devient le composant</span> <code>planReorderFlip</code> et <code>useListReorderFlip</code> : le FLIP borné aux rangées visibles, coupé en mouvement réduit. C'est le voyage des voisines. Geste : aucun jumeau, à créer.</p></div>
+<div class="twin"><span class="pf">Kit</span><span class="mono">docs/product/kit/K25-MeeshyDragTargets.md</span><p><span class="no">Reste à K25</span> Les deux cibles du glisser de la scène, « dupliquer » et « retirer ». K52 ne déclare aucune cible hors de la liste : lâcher dehors rend l'ordre de départ.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: stretch">
+<div class="lst" style="width: 100%; gap: 8px">
+<div class="f rw" style="padding-left: 10px; min-height: 60px"><span class="av" style="--accent: #4ECDC4; width: 40px; height: 40px; font-size: 14px">LM</span><span class="tx" style="gap: 1px"><b style="font-size: 15px; font-weight: 600">Léo Marchetti</b><small>À ce soir</small></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div style="position: relative; height: 60px">
+<div class="slot s18" style="position: absolute; inset: 0; min-height: 0"></div>
+<div class="f rw up" style="position: absolute; inset: 0; padding-left: 10px; min-height: 60px; transform: translate(6px,-7px) rotate(2deg)"><span class="av" style="--accent: #FBBF24; width: 40px; height: 40px; font-size: 14px">F</span><span class="tx" style="gap: 1px"><b style="font-size: 15px; font-weight: 600">Famille Ndiaye</b><small>Maman : photo</small></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+<div class="f rw" style="padding-left: 10px; min-height: 60px"><span class="av" style="--accent: #818CF8; width: 40px; height: 40px; font-size: 14px">S</span><span class="tx" style="gap: 1px"><b style="font-size: 15px; font-weight: 600">Studio</b><small>Maquette validée</small></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Conversations épinglées</b><span class="kcap">Sans rang. La rangée est celle de la liste ; l'ordre part vers les préférences.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: stretch">
+<div class="lst" style="width: 100%; gap: 8px">
+<div class="f rw" style="padding-left: 10px; min-height: 60px; gap: 10px"><span class="rk r1">1</span><span class="ph" style="width: 28px; height: 44px; padding: 0; border-radius: 8px; flex: none"></span><span class="tx" style="gap: 1px"><b style="font-size: 15px; font-weight: 600">Plage</b><small class="mono">0:05</small></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw" style="padding-left: 10px; min-height: 60px; gap: 10px"><span class="rk">2</span><span class="ph" style="width: 28px; height: 44px; padding: 0; border-radius: 8px; flex: none"></span><span class="tx" style="gap: 1px"><b style="font-size: 15px; font-weight: 600">Marché</b><small class="mono">0:08</small></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw" style="padding-left: 10px; min-height: 60px; gap: 10px"><span class="rk r3">3</span><span class="ph" style="width: 28px; height: 44px; padding: 0; border-radius: 8px; flex: none"></span><span class="tx" style="gap: 1px"><b style="font-size: 15px; font-weight: 600">Concert</b><small class="mono">0:12</small></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Diapos d'une story, en liste</b><span class="kcap">Avec rang, sans mise en avant. Le rail de vignettes reste K20 ; la liste est sa vue accessible.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: stretch">
+<div class="lst" style="width: 100%; gap: 8px">
+<div class="f rw first" style="padding-left: 10px; min-height: 60px; --accent: #F87171"><span class="rk r1">1</span><span style="display: inline-flex; color: #F87171">[[ic:heart-fill l]]</span><span class="tx"><b style="font-size: 15px; font-weight: 600">J'adore</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw" style="padding-left: 10px; min-height: 60px; --accent: #F87171"><span class="rk">2</span><span style="display: inline-flex; color: var(--warn)">[[ic:fire-fill l]]</span><span class="tx"><b style="font-size: 15px; font-weight: 600">Feu</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw" style="padding-left: 10px; min-height: 60px; --accent: #F87171"><span class="rk r3">3</span><span style="display: inline-flex; color: var(--info)">[[ic:hands-clapping-fill l]]</span><span class="tx"><b style="font-size: 15px; font-weight: 600">Bravo</b></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Favoris de réactions</b><span class="kcap">Avec rang, première en avant : la tête de liste est la réaction du double toucher.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 10px">
+<span class="caps glass" style="height: 30px; font-size: 12px">[[ic:cloud-slash s]]<span>Hors ligne</span></span>
+<div class="lst" style="width: 100%; gap: 8px">
+<div class="f rw" style="padding-left: 10px; min-height: 60px"><span class="pst" style="width: 40px; height: 40px">[[ic:moon-stars]]</span><span class="tx" style="gap: 1px"><b style="font-size: 15px; font-weight: 600">Dakar la nuit</b><small>18 autocollants</small></span><span class="pend" role="img" aria-label="En attente d'envoi">[[ic:clock-countdown s]]</span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+<div class="f rw" style="padding-left: 10px; min-height: 60px"><span class="pst" style="width: 40px; height: 40px">[[ic:cat]]</span><span class="tx" style="gap: 1px"><b style="font-size: 15px; font-weight: 600">Chats ronds</b><small>24 autocollants</small></span><span class="ib hd">[[ic:dots-six-vertical]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Packs d'autocollants</b><span class="kcap">Sans rang, rangé hors ligne : l'ordre tient déjà, la marque d'attente s'éteindra seule.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Un dépôt, un appel.</b> Glisser la rangée 3 sur la place 2 rend <code>onMove(2, 1)</code> une fois, au lâcher. Lâcher sur sa place, hors de la liste, ou annuler ne rend rien et remet l'ordre de départ.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Calcul pur.</b> <code>move</code> et <code>targetIndex</code> : seuil à la moitié de la voisine, bornes, hauteurs inégales, liste d'une rangée, hauteur non mesurée. Vecteurs <code>K52-MeeshyReorderList.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Trois voies, un résultat.</b> Le glisser, l'action de voix « Monter » et la flèche du clavier produisent le même appel pour le même déplacement. En tête, « Monter » n'est pas offerte ; en queue, « Descendre » non plus.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> La liste porte <code>label</code>. Une rangée dit son titre et « 2 sur 3 » ; la poignée est un bouton nommé. Après un déplacement, l'annonce dit le titre et le nouveau rang, une fois.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Rang et mise en avant.</b> La pastille et le bord d'accent suivent la position : après le dépôt, la rangée arrivée en tête porte le 1 et le bord, l'ancienne les perd. Le rang montré en vol est celui de l'emplacement.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible, contraste, RTL.</b> Poignée de 44 pt (32 × 44 en étroite, jamais moins). Bord soulevé et pointillé à 3:1, clair et sombre. En arabe, la poignée passe au bord opposé et le penché s'inverse.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Mouvement réduit, voisins, pureté.</b> Sans mouvement : ni rotation ni voyage, fondu de 120 ms, haptique gardé. Pendant le vol, seules la rangée soulevée et les voisines franchies se re-peignent ; le contenu d'une rangée n'est jamais reconstruit. Un toucher sur le contenu (bascule, champ, puce) ne saisit pas la rangée. Garde de source : aucun type du domaine, aucun singleton, aucune valeur hors de <code>MeeshyReorderListRecipe</code>, aucun appel réseau. Non-régression : le menu d'appui long des conversations s'ouvre encore.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> L'ordre se règle sans glisser, à la voix, au clavier et au contacteur. Le rang se lit en chiffre et se dit, jamais par la seule teinte. L'état soulevé a trois signes : bord, ombre, penché.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Douze rangées au plus : rien de paresseux. Le vol n'anime que la transformation et l'ombre d'une rangée, sur sa propre couche. Les hauteurs sont lues une fois, à la saisie.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8496}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

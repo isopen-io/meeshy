@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Premier chargement, cache vide — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.qa{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0}
+.sk.r{border-radius:50%}
+.sk.p{border-radius:999px}
+.sk.d2{animation-delay:-.25s}.sk.d3{animation-delay:-.5s}.sk.d4{animation-delay:-.75s}
+.skc{border-radius:26px;border:1px solid var(--line);background:var(--raised)}
+.wash{animation:ldWash 1.1s ease-out both}
+.live{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:mxPulse 2.2s ease-out infinite}
+@keyframes ldWash{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column; --accent:#4ECDC4; --accent-ink:#7FE3DC">
+
+<div role="status" aria-busy="true" aria-label="Chargement de la fiche" style="display: flex; flex-direction: column; min-height: 844px">
+
+<header style="position: relative; height: 318px; overflow: hidden; background: linear-gradient(165deg, var(--deep) 0%, #14122E 48%, var(--ground) 100%)">
+<div class="orb" style="width: 220px; height: 220px; left: -50px; top: 30px; background: #4ECDC4; opacity: .13"></div>
+<div class="orb" style="width: 180px; height: 180px; right: -40px; top: 110px; background: #6366F1; opacity: .16; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 120px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 54px 16px 0">
+<button class="ib g" aria-label="Fermer la fiche">[[ic:x]]</button>
+<button class="ib g" aria-label="Plus">[[ic:dots-three]]</button>
+</div>
+
+<div aria-hidden="true" style="position: absolute; left: 16px; right: 16px; bottom: 96px; display: flex; justify-content: flex-end; gap: 8px">
+<span class="sk p" style="width: 112px; height: 36px; opacity: .7"></span>
+<span class="sk p d2" style="width: 84px; height: 36px; opacity: .7"></span>
+</div>
+</header>
+
+<section aria-hidden="true" style="position: relative; margin-top: -86px; padding: 0 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; gap: 12px">
+<span style="display: inline-flex; padding: 5px; border-radius: 50%; background: var(--ground)"><span class="sk r" style="width: 112px; height: 112px"></span></span>
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 6px">
+<span class="sk p d2" style="width: 128px; height: 34px"></span>
+<span class="sk p d3" style="width: 176px; height: 34px"></span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px; padding-top: 4px">
+<span class="sk" style="width: 236px; height: 34px"></span>
+<span class="sk d2" style="width: 148px; height: 16px; border-radius: 8px"></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 9px; padding-top: 6px">
+<span class="sk d2" style="width: 100%; height: 14px; border-radius: 7px"></span>
+<span class="sk d3" style="width: 92%; height: 14px; border-radius: 7px"></span>
+<span class="sk d4" style="width: 58%; height: 14px; border-radius: 7px"></span>
+</div>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap; padding-top: 2px">
+<span class="sk p" style="width: 92px; height: 34px"></span>
+<span class="sk p d2" style="width: 78px; height: 34px"></span>
+<span class="sk p d3" style="width: 86px; height: 34px"></span>
+<span class="sk p d4" style="width: 70px; height: 34px"></span>
+</div>
+</section>
+
+<section aria-hidden="true" style="margin: 28px 20px 0; display: flex; gap: 4px">
+<span class="qa"><span class="sk r" style="width: 60px; height: 60px"></span><span class="sk" style="width: 40px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d2" style="width: 60px; height: 60px"></span><span class="sk d2" style="width: 48px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d3" style="width: 60px; height: 60px"></span><span class="sk d3" style="width: 36px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d4" style="width: 60px; height: 60px"></span><span class="sk d4" style="width: 38px; height: 10px; border-radius: 5px"></span></span>
+</section>
+
+<section aria-hidden="true" style="padding: 30px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<div class="skc" style="display: flex; flex-direction: column; gap: 12px; padding: 18px">
+<span class="sk d2" style="width: 84px; height: 12px; border-radius: 6px"></span>
+<span class="sk d3" style="width: 150px; height: 26px"></span>
+<span class="sk d4" style="width: 190px; height: 12px; border-radius: 6px"></span>
+</div>
+<div class="skc" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px 14px 14px">
+<span class="sk r d3" style="width: 60px; height: 60px; flex: none"></span>
+<span class="sk d4" style="flex: 1; height: 28px"></span>
+<span class="sk d4" style="width: 34px; height: 12px; border-radius: 6px"></span>
+</div>
+</section>
+
+<nav aria-label="Faces du profil" style="margin-top: auto; padding: 28px 12px 24px; display: flex; align-items: center; justify-content: center; gap: 8px">
+<div class="seg glass">
+<button class="on" aria-current="page">[[ic:user-focus-fill]]<span>Vitrine</span></button>
+<button>[[ic:link]]<span>Liens</span></button>
+<button>[[ic:lightning]]<span>Actions</span></button>
+</div>
+<button class="ib" aria-label="Écrire" style="width: 56px; height: 56px; background: var(--brand-fill); color: #fff; box-shadow: 0 8px 22px rgba(79,70,229,.5)">[[ic:chat-circle]]</button>
+</nav>
+
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 20px 22px">
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px; color: var(--ink2)">[[ic:timer s]]240 ms plus tard</span>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+
+<div aria-busy="true" style="display: flex; flex-direction: column; padding-bottom: 32px">
+
+<header style="position: relative; height: 250px; overflow: hidden; background: linear-gradient(165deg, var(--deep) 0%, #14122E 48%, var(--ground) 100%)">
+<div class="wash" style="position: absolute; inset: 0; background: linear-gradient(165deg, #0F766E 0%, #134E4A 48%, #09090B 100%)"></div>
+<div class="orb" style="width: 220px; height: 220px; left: -50px; top: -20px; background: #4ECDC4; opacity: .7"></div>
+<div class="orb" style="width: 180px; height: 180px; right: -40px; top: 50px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 120px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 20px 16px 0">
+<button class="ib g" aria-label="Fermer la fiche">[[ic:x]]</button>
+<button class="ib g" aria-label="Plus">[[ic:dots-three]]</button>
+</div>
+</header>
+
+<section style="position: relative; margin-top: -86px; padding: 0 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; gap: 12px">
+<button class="ring rise" aria-label="Voir la story de Léo" style="background: var(--ground)">
+<span class="av" style="width: 112px; height: 112px; font-size: 40px">LM</span>
+<span class="dot on" style="position: absolute; right: 8px; bottom: 8px; width: 20px; height: 20px; border-width: 4px"></span>
+</button>
+<div aria-hidden="true" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 6px">
+<span class="sk p d2" style="width: 128px; height: 34px"></span>
+<span class="sk p d3" style="width: 176px; height: 34px"></span>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .12s; display: flex; flex-direction: column; gap: 6px">
+<h1 class="d" style="font-size: 36px">Léo Marchetti</h1>
+<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@leo.m</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700; color: var(--ok)"><span class="live"></span>En ligne</span>
+</div>
+</div>
+
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 9px; padding-top: 6px">
+<span class="sk d2" style="width: 100%; height: 14px; border-radius: 7px"></span>
+<span class="sk d3" style="width: 92%; height: 14px; border-radius: 7px"></span>
+<span class="sk d4" style="width: 58%; height: 14px; border-radius: 7px"></span>
+</div>
+
+<div aria-hidden="true" style="display: flex; gap: 8px; flex-wrap: wrap; padding-top: 2px">
+<span class="sk p" style="width: 92px; height: 34px"></span>
+<span class="sk p d2" style="width: 78px; height: 34px"></span>
+<span class="sk p d3" style="width: 86px; height: 34px"></span>
+<span class="sk p d4" style="width: 70px; height: 34px"></span>
+</div>
+</section>
+
+<section aria-hidden="true" style="margin: 28px 20px 0; display: flex; gap: 4px">
+<span class="qa"><span class="sk r" style="width: 60px; height: 60px"></span><span class="sk" style="width: 40px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d2" style="width: 60px; height: 60px"></span><span class="sk d2" style="width: 48px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d3" style="width: 60px; height: 60px"></span><span class="sk d3" style="width: 36px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d4" style="width: 60px; height: 60px"></span><span class="sk d4" style="width: 38px; height: 10px; border-radius: 5px"></span></span>
+</section>
+
+<section aria-hidden="true" style="padding: 28px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<div class="skc" style="display: flex; flex-direction: column; gap: 12px; padding: 18px">
+<span class="sk d2" style="width: 84px; height: 12px; border-radius: 6px"></span>
+<span class="sk d3" style="width: 150px; height: 26px"></span>
+<span class="sk d4" style="width: 190px; height: 12px; border-radius: 6px"></span>
+</div>
+<div class="skc" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px 14px 14px">
+<span class="sk r d3" style="width: 60px; height: 60px; flex: none"></span>
+<span class="sk d4" style="flex: 1; height: 28px"></span>
+<span class="sk d4" style="width: 34px; height: 12px; border-radius: 6px"></span>
+</div>
+</section>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 34px 20px 0">
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+<span class="tag" style="color: var(--ink2)">Liens et Actions</span>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+
+<section aria-hidden="true" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; padding: 22px 24px 0">
+<div style="display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px">[[ic:link s]]Liens</span>
+<div class="ticket" style="--cut: 40px; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px"><span class="sk r " style="width: 20px; height: 20px; flex: none"></span><span class="sk d2" style="width: 62px; height: 10px; border-radius: 5px"></span></div>
+<div class="cut" style="margin: 0 12px"></div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 14px"><span class="sk d2" style="width: 100%; height: 12px; border-radius: 6px"></span><span class="sk d3" style="width: 54px; height: 22px"></span></div>
+</div>
+<div class="ticket" style="--cut: 40px; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px"><span class="sk r d2" style="width: 20px; height: 20px; flex: none"></span><span class="sk d3" style="width: 78px; height: 10px; border-radius: 5px"></span></div>
+<div class="cut" style="margin: 0 12px"></div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 14px"><span class="sk d3" style="width: 100%; height: 12px; border-radius: 6px"></span><span class="sk d4" style="width: 70px; height: 22px"></span></div>
+</div>
+<div class="ticket" style="--cut: 40px; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px"><span class="sk r d3" style="width: 20px; height: 20px; flex: none"></span><span class="sk d4" style="width: 56px; height: 10px; border-radius: 5px"></span></div>
+<div class="cut" style="margin: 0 12px"></div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 14px"><span class="sk d4" style="width: 100%; height: 12px; border-radius: 6px"></span><span class="sk " style="width: 46px; height: 22px"></span></div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px">[[ic:lightning s]]Actions</span>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 18px; column-gap: 0">
+<span class="qa"><span class="sk r " style="width: 56px; height: 56px"></span><span class="sk " style="width: 40px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d2" style="width: 56px; height: 56px"></span><span class="sk d2" style="width: 48px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d2" style="width: 56px; height: 56px"></span><span class="sk d2" style="width: 36px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d3" style="width: 56px; height: 56px"></span><span class="sk d3" style="width: 44px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d3" style="width: 56px; height: 56px"></span><span class="sk d3" style="width: 50px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d4" style="width: 56px; height: 56px"></span><span class="sk d4" style="width: 34px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r d4" style="width: 56px; height: 56px"></span><span class="sk d4" style="width: 42px; height: 10px; border-radius: 5px"></span></span>
+<span class="qa"><span class="sk r " style="width: 56px; height: 56px"></span><span class="sk " style="width: 38px; height: 10px; border-radius: 5px"></span></span>
+</div>
+</div>
+</section>
+
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2413}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

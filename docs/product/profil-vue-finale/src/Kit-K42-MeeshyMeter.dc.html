@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K42 MeeshyMeter</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:860px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;flex-direction:column;justify-content:center;flex:1;min-height:132px;gap:10px}
+.sub{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.bar{display:block;position:relative}
+.bar.h5{height:5px}
+.bar.h10{height:10px}
+.bar.h12{height:12px}
+.bar.old>i{background:var(--ink3);opacity:.6}
+.bar>b.mk{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ground)}
+.mh{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.mh>span:first-child{font-size:13px;color:var(--ink2)}
+.mh>b{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;font-size:15px}
+.mf{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;color:var(--ink3)}
+.notch{display:block;height:12px;border-radius:999px;background:var(--field);border:1px solid var(--line)}
+.notch.f{background:var(--accent);border-color:transparent}
+.steps{display:grid;gap:6px;align-items:center}
+.prog{display:block;position:relative;height:4px;overflow:hidden;border-radius:999px;background:color-mix(in oklab,var(--accent) 22%,var(--field))}
+.prog>i{position:absolute;top:0;bottom:0;left:0;width:38%;border-radius:999px;background:var(--accent);animation:mtTravel 1.8s cubic-bezier(.4,0,.2,1) infinite}
+.prog.still>i{animation:none;left:31%}
+.cc{display:inline-flex;align-items:center;justify-content:center;height:22px;min-width:30px;padding:0 6px;border-radius:7px;background:var(--field);border:1px solid var(--line);font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink2)}
+.tile{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:22px;background:var(--field);border:1px solid var(--line);text-align:left;min-width:0}
+.tile.off{border-style:dashed}
+.med{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:14px;flex:none;background:color-mix(in oklab,var(--t,var(--accent)) 18%,transparent);color:var(--ti,var(--accent-ink))}
+.x2t{display:block;position:relative;height:24px;border-radius:999px;background:var(--field)}
+.x2t>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--brand-fill),var(--l-share))}
+.x2t>b{position:absolute;top:0;bottom:0;width:4px;margin-left:-2px;background:var(--ground)}
+.x2n{display:block;height:24px;border-radius:999px;background:var(--field);border:2px solid var(--line)}
+.x2n.f{background:var(--accent);border-color:transparent}
+.mv-fill{animation:mtFill 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.mv-roll{display:block;height:40px;overflow:hidden}
+.mv-roll>span{display:flex;flex-direction:column;animation:mtRoll 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.mv-roll>span>b{display:block;height:40px;line-height:40px}
+.mv-grow>i{transform-origin:left center;animation:mtGrow 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.mv-drain>i{animation:mtDrain 6.4s linear infinite}
+.mv-step>.notch{animation:mtStep 6.4s ease-out infinite}
+.mv-cap{animation:mtCap 6.4s ease-out infinite}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.lrow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;background:var(--raised);border:1px solid var(--line)}
+@keyframes mtFill{0%,12%{width:0}36%,88%{width:46%}96%,100%{width:0}}
+@keyframes mtRoll{0%,12%{transform:translateY(0)}24%{transform:translateY(-40px)}36%,88%{transform:translateY(-80px)}96%,100%{transform:translateY(0)}}
+@keyframes mtGrow{0%,12%{transform:scaleX(0)}36%,88%{transform:none}96%,100%{transform:scaleX(0)}}
+@keyframes mtDrain{0%,6%{width:70%;background:var(--accent)}64%{width:16%;background:var(--accent)}68%{width:13%;background:var(--warn)}88%,100%{width:0;background:var(--warn)}}
+@keyframes mtStep{0%,12%{background:var(--field);border-color:var(--line)}18%,88%{background:var(--accent);border-color:transparent}96%,100%{background:var(--field);border-color:var(--line)}}
+@keyframes mtCap{0%,30%{opacity:0;transform:translateY(4px)}40%,88%{opacity:1;transform:none}96%,100%{opacity:0}}
+@keyframes mtTravel{0%{left:-40%}100%{left:100%}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .18; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K42 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyMeter</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Une mesure fixe se lit sur une jauge linéaire qui dit sa valeur, sa teinte et ce qu'il reste</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 820px">Un quota d'entrées, une batterie, un palier de jeu, la complétion d'un profil. Le profil en dessine quatorze, le code en compte plus de trente, chacune écrite dans son écran. K42 en fait une seule : une piste, un remplissage, une valeur dite.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Elle se lit, elle ne se règle pas</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Elle fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Montre <b>une</b> valeur connue sur un total connu : la part remplie grandit depuis le bord de début, sur une piste de 5, 8 ou 12.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><b>Dit</b> sa valeur deux fois : à l'œil par son en-tête et ses légendes de bord, à la voix par « 23 sur 50 ».</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Prend sa <b>teinte</b> (accent, ok, warn, err ou libre) et en change seule quand elle est pleine ou périmée.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>S'<b>aligne</b> : plusieurs jauges empilées partagent la même origine, pour comparer des pays ou deux échelles de crans.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Elle ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>L'anneau d'une opération en vol autour d'un glyphe (envoi, export, temps d'une story) et tout décompte de temps, en mode <code>countdown</code> : <b>K09</b> <code>MeeshyProgressRing</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Une valeur qu'on règle du doigt : <b>K05</b> <code>MeeshyLabeledSlider</code>. Des crans qu'on avance : <b>K53</b> <code>MeeshyStepper</code>. Un niveau de proximité en pastilles : <b>K33</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Une série dans le temps (clics par jour) : les barres et toute série à axe de <b>K50</b> <code>MeeshyChart</code> ; la mini-courbe sans axe, <code>MeeshySpark</code>, et le chiffre en grand au-dessus d'elle : <b>K34</b> <code>MeeshyFigures</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le calcul : quota, pourcentage, palier suivant, seuil d'alerte et phrase traduite viennent de l'hôte. Le verre d'une carte qui la porte : <b>K01</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:ruler l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 20px">Linéaire quand la mesure est posée, annulaire quand elle est en vol</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">K42 décrit un état qui dure : 23 arrivées sur 50, 64 % de batterie, 640 étincelles avant le niveau 25. K09 décrit un travail en cours qui se terminera seul. Une barre de chargement haute, sans valeur, est la seule forme de K42 qui bouge sans fin : <code>indeterminate</code>.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une piste, un remplissage, cinq parties optionnelles</h2><p>La jauge du quota d'un lien de partage et l'échelle à crans, à deux fois leur taille. Les mesures données sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="flex-direction: column; align-items: stretch; justify-content: center; gap: 40px; padding: 52px 56px">
+<div style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px">
+<span style="position: relative; display: inline-flex"><span class="tag" style="font-size: 22px">Entrées</span><span class="kan" style="left: -30px; top: 2px">3</span></span>
+<span style="position: relative; display: inline-flex; align-items: baseline"><span class="d" style="font-size: 76px; line-height: 1">23</span><span class="d" style="font-size: 44px; color: var(--ink3)">&nbsp;/ 50</span><span class="kan" style="right: -28px; top: 8px">4</span></span>
+</div>
+<div style="position: relative">
+<span class="x2t"><i style="width: 46%"></i><b style="left: 50%"></b><b style="left: 75%"></b></span>
+<span class="kan" style="left: 22%; top: 1px">2</span>
+<span class="kan" style="right: -30px; top: 1px">1</span>
+<span class="kan" style="left: 50%; margin-left: -11px; bottom: -28px">7</span>
+</div>
+<div style="position: relative; display: flex; justify-content: space-between; font-size: 24px; color: var(--ink3); padding-top: 10px">
+<span>46 % du quota</span>
+<span>encore 27 places</span>
+<span class="kan" style="right: -28px; top: 14px">5</span>
+</div>
+</div>
+<div style="height: 0; border-top: 1.5px dashed var(--line)"></div>
+<div style="position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+<i class="x2n f"></i><i class="x2n f"></i><i class="x2n f"></i><i class="x2n f"></i><i class="x2n f"></i><i class="x2n"></i>
+<span class="kan" style="right: 7%; top: -28px">6</span>
+</div>
+</div>
+<div class="lgd">
+<span class="kan">1</span><div><b>Piste</b><span>Capsule de rayon plein, pleine largeur de l'hôte. Hauteurs 5 · 8 · 12. Fond tonal <code>--field</code>, sans filet. Elle ne se touche pas : aucune cible.</span></div>
+<span class="kan">2</span><div><b>Remplissage</b><span>Même rayon, part du bord de début. Aplat à la teinte, ou dégradé à deux couleurs (<code>--brand-fill</code> vers <code>--l-share</code>). Largeur visible minimale : sa hauteur, dès que la valeur dépasse zéro.</span></div>
+<span class="kan">3</span><div><b>Libellé</b><span>Optionnel, à gauche : 13 px <code>--ink2</code>, ou sur-titre 11 px. Il nomme ce qui est mesuré, jamais un pourcentage recopié.</span></div>
+<span class="kan">4</span><div><b>Valeur</b><span>Optionnelle, à droite : Nunito 800 de 15 à 40 px, chiffres à chasse fixe. Le total s'écrit en <code>--ink3</code>. Écart de 9 px avec la piste.</span></div>
+<span class="kan">5</span><div><b>Légendes de bord</b><span>Optionnelles, sous la piste, 12,5 px <code>--ink3</code> : ce qui est pris au début, ce qu'il reste à la fin. Écart 8 px.</span></div>
+<span class="kan">6</span><div><b>Crans</b><span>Forme segmentée : N capsules égales de 12, écart 6, filet 1 px sur les crans vides. Deux échelles empilées partagent la même grille.</span></div>
+<span class="kan">7</span><div style="border-bottom: 0; padding-bottom: 0"><b>Repères</b><span>Optionnels : entailles de 2 px à la couleur du fond, posées à une fraction de la piste (palier, seuil). Elles coupent piste et remplissage.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois formes, trois hauteurs, cinq teintes</h2><p>Tout est à taille réelle. Les spécimens sont ceux des écrans du profil : mêmes mots, mêmes valeurs, mêmes mesures.</p></header>
+
+<span class="sub">Formes</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage" style="gap: 12px">
+<span style="display: flex; align-items: center; gap: 12px"><span class="med">[[ic:trophy]]</span><span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">Ma Légende</span><span style="font-size: 13px; color: var(--ink2)">Niveau 24 · rang Or III</span></span></span>
+<span class="bar" role="img" aria-label="Niveau 24, 68 % vers le niveau 25"><i style="width: 68%"></i></span>
+<span style="font-size: 12.5px; color: var(--ink3)">640 étincelles avant le niveau 25</span>
+</div>
+<div class="cp"><b>continuous</b><span class="kcap">La forme par défaut : une part d'un total. Piste de 8, accent de la personne (Main, Web-Moi).</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 9px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="mh" style="--accent-ink: #D8B4FE"><span>Tes Bring à Léo</span><b style="color: var(--accent-ink)">2 / 3</b></div>
+<div class="steps" role="img" aria-label="2 sur 3 aujourd'hui" style="grid-template-columns: 28px repeat(3, minmax(0, 1fr)); --accent: #A855F7"><span class="av" style="width: 28px; height: 28px; font-size: 10.5px">AN</span><i class="notch f"></i><i class="notch f"></i><i class="notch"></i></div>
+<div class="steps" role="img" aria-label="1 sur 3 aujourd'hui" style="grid-template-columns: 28px repeat(3, minmax(0, 1fr))"><span class="av" style="width: 28px; height: 28px; font-size: 10.5px">LM</span><i class="notch f"></i><i class="notch"></i><i class="notch"></i></div>
+<div class="mh"><span>Ceux de Léo</span><b style="color: var(--accent-ink)">1 / 3</b></div>
+</div>
+<div class="cp"><b>stepped(count)</b><span class="kcap">N crans égaux, un par unité d'un petit quota. Deux échelles alignées se comparent cran à cran (Autre-Actions). Tête d'échelle en <code>leading</code>.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 9px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div style="display: flex; align-items: center; gap: 12px"><span role="img" aria-label="Reste 42 minutes" style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; flex: none; background: conic-gradient(var(--accent) 70%, rgba(165,180,252,.2) 0); color: var(--accent-ink)"><span style="position: absolute; inset: 3.5px; border-radius: 50%; background: var(--ground)"></span><span style="position: relative; display: flex">[[ic:clock-countdown s]]</span></span><span style="font-size: 13px; color: var(--ink2); flex: 1">Partage pour 1 h</span><span class="d" style="font-size: 15px">encore 42 min</span></div>
+</div>
+<div class="cp"><b>Le décompte · K09, pas ici</b><span class="kcap">Un temps qui s'écoule est le mode <code>countdown</code> de <b>K09</b> : un anneau de 34 qui se vide, dit « reste 42 min » (Carte-Personne, Android-Carte). La jauge garde les mesures fixes.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="--accent: #4ECDC4">
+<div style="display: flex; flex-direction: column; border-radius: 20px; overflow: hidden; background: var(--raised); border: 1px solid var(--line)">
+<span class="prog" role="progressbar" aria-label="Chargement" style="border-radius: 0"><i></i></span>
+<span style="display: flex; align-items: center; gap: 12px; padding: 18px 16px"><span class="sk" style="width: 44px; height: 44px; border-radius: 50%"></span><span style="display: flex; flex-direction: column; gap: 8px; flex: 1"><span class="sk" style="height: 12px; width: 62%"></span><span class="sk" style="height: 10px; width: 40%"></span></span></span>
+</div>
+</div>
+<div class="cp"><b>indeterminate</b><span class="kcap">Barre haute de 4, sans valeur : un segment de 38 % voyage. Collée au bord haut d'un écran qui charge (Android-Feuilles).</span></div>
+</div>
+</div>
+
+<span class="sub" style="padding-top: 10px">Hauteurs et teintes</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage" style="gap: 20px; --accent: #4ECDC4">
+<div style="display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 12px"><span class="mono" style="color: var(--ink3)">5</span><span class="bar h5"><i style="width: 70%"></i></span></div>
+<div style="display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 12px"><span class="mono" style="color: var(--ink3)">8</span><span class="bar"><i style="width: 70%"></i></span></div>
+<div style="display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 12px"><span class="mono" style="color: var(--ink3)">12</span><span class="bar h12"><i style="width: 70%"></i></span></div>
+</div>
+<div class="cp"><b>Trois hauteurs</b><span class="kcap">5 dans une barre dense ou une rangée (iPad-Split) · 8 par défaut · 12 quand la jauge est le sujet de la section (Lien-Partage).</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 8px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 4px"><div style="display: flex; flex-direction: column; gap: 2px"><span class="tag">Entrées</span><p class="d" style="font-size: 40px; line-height: 1"><span>23</span><span style="color: var(--ink3); font-size: 24px"> / 50</span></p></div></div>
+<span class="bar h12" role="img" aria-label="23 entrées sur 50, soit 46 %"><i style="width: 46%; background: linear-gradient(90deg, var(--brand-fill), var(--l-share))"></i></span>
+<div class="mf"><span>46 % du quota</span><span>encore 27 places</span></div>
+</div>
+<div class="cp"><b>Dégradé et légendes de bord</b><span class="kcap">Piste de 12, dégradé à deux couleurs, les deux légendes : la forme la plus complète (Lien-Partage).</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 12px">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div class="tile" style="padding: 12px"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span style="color: var(--ok); display: inline-flex">[[ic:battery-medium s]]</span>Batterie</span><span class="d" style="font-size: 26px">64 %</span><span class="bar" role="img" aria-label="Batterie à 64 %"><i style="width: 64%; background: var(--ok)"></i></span></div>
+<div class="tile" style="padding: 12px"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span style="color: var(--err); display: inline-flex">[[ic:battery-low s]]</span>Batterie</span><span class="d" style="font-size: 26px">9 %</span><span class="bar" role="img" aria-label="Batterie à 9 %"><i style="width: 9%; background: var(--err)"></i></span></div>
+</div>
+<div class="mh"><span>Stockage</span><b style="color: var(--warn)">82 %</b></div>
+<span class="bar"><i style="width: 82%; background: var(--warn)"></i></span>
+</div>
+<div class="cp"><b>ok · warn · err</b><span class="kcap">Un sens, pas une couleur : l'hôte choisit le genre d'après son seuil. Le glyphe ou le mot double toujours la teinte (Autre-Vitrine).</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 12px">
+<div class="mh"><span class="mono" style="color: var(--ink2)">meeshy.me/chat/studio-invites</span></div>
+<span class="bar"><i style="width: 46%; background: var(--l-share)"></i></span>
+<div class="mh"><span class="tag">Prochain palier</span><span class="mono" style="color: var(--l-aff); font-weight: 700">14 / 15</span></div>
+<span class="bar"><i style="width: 93%; background: var(--l-aff)"></i></span>
+<div class="mh"><span style="font-weight: 600; color: var(--ink)">Sénégal</span><b style="font-size: 17px">38 %</b></div>
+<span class="bar"><i style="width: 38%; background: var(--l-track)"></i></span>
+</div>
+<div class="cp"><b>tint</b><span class="kcap">Teinte opaque passée par l'hôte : ici les familles de liens, partage, parrainage, suivi (Moi-Liens, Parrainage, Lien-Detail).</span></div>
+</div>
+</div>
+
+<span class="sub" style="padding-top: 10px">États</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage" style="gap: 10px">
+<div style="display: flex; align-items: baseline; gap: 8px"><span class="d" style="font-size: 38px; color: var(--warn)">50</span><span style="font-size: 14px; font-weight: 600; color: var(--ink2)">/ 50 arrivées</span></div>
+<span class="bar" role="img" aria-label="50 arrivées sur 50"><i style="width: 100%; background: var(--warn)"></i></span>
+<p style="font-size: 13.5px; color: var(--ink2)">Plus personne ne peut entrer par ce lien.</p>
+</div>
+<div class="cp"><b>Plein</b><span class="kcap">À 100 %, la jauge prend <code>fullKind</code> si l'hôte en donne un, et la valeur la même encre (Etat-Erreur).</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<div class="tile off"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink3)">[[ic:battery-medium s]]Batterie</span><span class="d" style="font-size: 26px; color: var(--ink3)">64 %</span><span class="bar old" role="img" aria-label="Batterie à 64 % il y a 3 heures"><i style="width: 64%"></i></span><span style="font-size: 12px; color: var(--ink3)">il y a 3 h</span></div>
+</div>
+<div class="cp"><b>Périmé</b><span class="kcap"><code>isStale</code> : remplissage <code>--ink3</code> à 60 %, quelle que soit la teinte. La dernière valeur connue reste lisible (Etat-HorsLigne).</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px"><div class="mh"><span>Arrivées</span><b>0 / 50</b></div><span class="bar" role="img" aria-label="0 arrivée sur 50"><i style="width: 0"></i></span></div>
+<div style="display: flex; flex-direction: column; gap: 8px"><div class="mh"><span>Paliers</span><b>14 / 20</b></div><span class="bar" role="img" aria-label="14 filleuls sur 20, paliers à 5, 10 et 15" style="--accent: var(--l-aff)"><i style="width: 70%; background: var(--l-aff)"></i><b class="mk" style="left: 25%"></b><b class="mk" style="left: 50%"></b><b class="mk" style="left: 75%"></b></span></div>
+</div>
+<div class="cp"><b>Vide · repères</b><span class="kcap">À zéro : la piste seule, jamais un point de couleur. Repères : entailles aux paliers, sans libellé propre.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden; gap: 0">
+<div class="mx" data-theme="light" style="display: flex; flex-direction: column; gap: 10px; padding: 24px 28px">
+<div class="mh"><span>Batterie</span><b style="color: var(--ok)">64 %</b></div>
+<span class="bar"><i style="width: 64%; background: var(--ok)"></i></span>
+<div class="steps" style="grid-template-columns: repeat(6, minmax(0, 1fr)); padding-top: 6px"><i class="notch f"></i><i class="notch f"></i><i class="notch f"></i><i class="notch f"></i><i class="notch"></i><i class="notch"></i></div>
+</div>
+<div dir="rtl" style="display: flex; flex-direction: column; gap: 8px; padding: 20px 28px 0">
+<div class="mh"><span>الدخول</span><b dir="ltr" style="unicode-bidi: isolate">23 / 50</b></div>
+<span class="bar"><i style="width: 46%; background: var(--l-share)"></i></span>
+</div>
+<div class="cp" style="padding: 18px 28px 28px"><b>Thème clair · RTL</b><span class="kcap">En clair, les genres passent à leurs encres sombres. En arabe, le remplissage part de la droite ; les chiffres ne se retournent pas.</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage">
+<div class="card" style="display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 14px; padding: 18px">
+<span class="cc">SN</span><span class="bar h10"><i style="width: 100%; background: var(--l-share)"></i></span><span class="d" style="font-size: 17px; min-width: 20px; text-align: right">11</span>
+<span class="cc">FR</span><span class="bar h10"><i style="width: 55%; background: var(--l-share)"></i></span><span class="d" style="font-size: 17px; min-width: 20px; text-align: right">6</span>
+<span class="cc">PT</span><span class="bar h10"><i style="width: 27%; background: var(--l-share)"></i></span><span class="d" style="font-size: 17px; min-width: 20px; text-align: right">3</span>
+<span class="cc">CI</span><span class="bar h10"><i style="width: 27%; background: var(--l-share)"></i></span><span class="d" style="font-size: 17px; min-width: 20px; text-align: right">3</span>
+</div>
+</div>
+<div class="cp"><b>En liste alignée, avec <code>leading</code> et <code>trailing</code></b><span class="kcap">Un K41 de code en tête, le compte en queue. Les pistes partagent la même origine et la même largeur : c'est l'hôte qui pose la grille, la plus grande valeur vaut 100 % (Lien-Partage). La rangée de part complète est le genre <code>breakdown</code> de <b>K50</b>, qui pose cette jauge.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 16px">
+<div class="glass" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 26px; --accent: #4ECDC4">
+<span class="av" style="--accent: #4ECDC4">LM</span>
+<div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px"><span style="display: inline-flex; align-items: center; gap: 5px; color: var(--ink2)">[[ic:map-pin s]]Alfama</span><span style="color: var(--ink3)">·</span><span style="display: inline-flex; align-items: center; gap: 5px; color: var(--ink); font-weight: 600">[[ic:timer s]]encore 42 min</span></div>
+<span class="bar h5" style="max-width: 280px"><i style="width: 70%"></i></span>
+</div>
+<button class="ib g" aria-label="Partager ma position avec Léo" style="width: 48px; height: 48px">[[ic:map-pin]]</button>
+</div>
+</div>
+<div class="cp"><b>Sur du verre, à côté d'un bouton rond</b><span class="kcap">Piste de 5, largeur plafonnée à 280. Le verre de la barre est demandé à K01, le bouton rond à K02 : K42 ne dessine que sa piste et son remplissage (iPad-Split).</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Elle grandit une fois, puis elle tient</h2><p>À l'entrée, le remplissage part de zéro et rejoint sa valeur sur <code>motion.rise</code>, en cascade quand les jauges sont en liste. Une valeur qui change glisse de l'ancienne à la nouvelle sur <code>motion.morph</code>. Le segment de la forme indéterminée voyage sur <code>motion.travel</code>. Rien ne rebondit : une mesure ne dépasse jamais sa valeur.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 22px; flex: 1">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 4px"><div style="display: flex; flex-direction: column; gap: 2px"><span class="tag">Entrées</span><p class="d" style="display: flex; align-items: baseline; font-size: 40px; line-height: 1"><span class="mv-roll" aria-hidden="true"><span><b>0</b><b>12</b><b>23</b></span></span><span style="color: var(--ink3); font-size: 24px">&nbsp;/ 50</span></p></div><span class="spec" style="padding: 3px 9px">motion.rise</span></div>
+<span class="bar h12"><i class="mv-fill" style="width: 46%; background: linear-gradient(90deg, var(--brand-fill), var(--l-share))"></i></span>
+<div class="mf mv-cap"><span>46 % du quota</span><span>encore 27 places</span></div>
+</div>
+<div style="display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 10px">
+<span class="cc">SN</span><span class="bar h10 mv-grow"><i style="width: 100%; background: var(--l-share)"></i></span><span class="d" style="font-size: 15px">11</span>
+<span class="cc">FR</span><span class="bar h10 mv-grow"><i style="width: 55%; background: var(--l-share); animation-delay: .1s"></i></span><span class="d" style="font-size: 15px">6</span>
+<span class="cc">PT</span><span class="bar h10 mv-grow"><i style="width: 27%; background: var(--l-share); animation-delay: .2s"></i></span><span class="d" style="font-size: 15px">3</span>
+</div>
+<div class="steps mv-step" style="grid-template-columns: repeat(6, minmax(0, 1fr)); --accent: #4ECDC4"><i class="notch"></i><i class="notch" style="animation-delay: .08s"></i><i class="notch" style="animation-delay: .16s"></i><i class="notch" style="animation-delay: .24s"></i><i class="notch" style="animation-delay: .32s"></i><i class="notch" style="animation: none"></i></div>
+<div style="display: flex; flex-direction: column; gap: 8px; --accent: #4ECDC4">
+<div class="mh"><span>Partage pour 1 h</span><span class="spec" style="padding: 3px 9px">motion.morph</span></div>
+<span class="bar mv-drain"><i style="width: 70%"></i></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; --accent: #4ECDC4">
+<div class="mh"><span>Chargement</span><span class="spec" style="padding: 3px 9px">motion.travel</span></div>
+<span class="prog"><i></i></span>
+</div>
+</div>
+<span class="spec">durée : motion.rise à l'entrée, décalage de 100 ms par rangée en liste · motion.morph au changement de valeur · motion.travel, 1,8 s par passage · courbe : décélération de K26, sans dépassement · déclencheur : première apparition à l'écran, puis la valeur change · haptique : aucun ; un tic de réussite au plein si l'hôte le demande · mouvement réduit : valeur posée sans transition, segment indéterminé immobile au centre</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Piste seule</b></div>
+<div class="stage" style="min-height: 110px; gap: 8px"><div class="mh"><span class="tag">Entrées</span><b style="font-size: 22px">0<span style="color: var(--ink3); font-size: 15px"> / 50</span></b></div><span class="bar h12"><i style="width: 0"></i></span><div class="mf" style="visibility: hidden"><span>46 %</span></div></div>
+<span class="kcap">La jauge arrive à l'écran avec sa piste. La voix dit déjà la valeur vraie : « 23 sur 50 ».</span>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Elle grandit</b></div>
+<div class="stage" style="min-height: 110px; gap: 8px"><div class="mh"><span class="tag">Entrées</span><b style="font-size: 22px">12<span style="color: var(--ink3); font-size: 15px"> / 50</span></b></div><span class="bar h12"><i style="width: 24%; background: linear-gradient(90deg, var(--brand-fill), var(--l-share))"></i></span><div class="mf" style="visibility: hidden"><span>46 %</span></div></div>
+<span class="kcap"><code>motion.rise</code> : le remplissage s'étend depuis le bord de début, le nombre roule avec lui. Rapide au départ, lent à l'arrivée.</span>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Elle tient</b></div>
+<div class="stage" style="min-height: 110px; gap: 8px"><div class="mh"><span class="tag">Entrées</span><b style="font-size: 22px">23<span style="color: var(--ink3); font-size: 15px"> / 50</span></b></div><span class="bar h12"><i style="width: 46%; background: linear-gradient(90deg, var(--brand-fill), var(--l-share))"></i></span><div class="mf" style="font-size: 11px; white-space: nowrap; gap: 6px"><span>46 % du quota</span><span>encore 27 places</span></div></div>
+<span class="kcap">Posée, elle ne bouge plus. Les légendes arrivent en fondu. Au retour sur l'écran, rien ne se rejoue.</span>
+</div>
+<div class="kcell kc" style="grid-column: span 3; padding: 20px 24px; flex-direction: row; align-items: center; gap: 18px; min-height: 0">
+<span style="display: inline-flex; color: var(--warn)">[[ic:arrow-counter-clockwise]]</span>
+<span class="kcap" style="font-size: 13.5px"><b style="color: var(--ink)">Une seule fois par visite.</b> L'entrée ne se joue que si la jauge n'a jamais été vue avec cette valeur. Revenir en arrière, défiler, recharger depuis le cache : la valeur est posée. C'est la règle déjà tenue par la jauge du jeu sur le web (<code>previousGauge</code>) et par « rien ne se joue au premier rendu » sur iOS.</span>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Une valeur, un total, une forme, un genre, une hauteur. Aucune signature ne nomme un quota, une batterie, un niveau, un lien ou un cercle : l'hôte passe deux nombres et des mots déjà traduits.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyMeter.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-meter.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyMeter(value:total:label:form:kind:tint:size:…)</code></span><span><code>MeeshyMeter(value, total, label, modifier, form, kind, tint, size, …)</code></span><span><code>&lt;MeeshyMeter value total label form kind tint size … /&gt;</code></span>
+<span><b>Forme</b></span><span><code>MeeshyMeterForm { continuous, stepped(count: Int), indeterminate }</code></span><span><code>sealed interface</code> identique</span><span><code>'continuous' | { stepped } | 'indeterminate'</code></span>
+<span><b>Genre</b></span><span><code>MeeshyMeterKind { accent, ok, warn, err }</code>, <code>tint: Color? = nil</code>, <code>tintEnd: Color? = nil</code></span><span><code>enum class</code> identique, <code>tint</code>, <code>tintEnd: Color?</code></span><span><code>'accent' | 'ok' | 'warn' | 'err'</code>, <code>tint?</code>, <code>tintEnd?: string</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyMeterSize { s5, s8, s12 }</code></span><span>idem</span><span><code>5 | 8 | 12</code></span>
+<span><b>Emplacements</b></span><span><code>leading</code>, <code>trailing</code> : <code>@ViewBuilder</code>, sur la ligne de la piste</span><span>mêmes noms, <code>@Composable () -&gt; Unit</code></span><span>mêmes noms, <code>ComponentChildren</code></span>
+<span><b>En-tête et légendes</b></span><span><code>title</code>, <code>valueText</code>, <code>startCaption</code>, <code>endCaption</code> : <code>String?</code></span><span>mêmes noms, <code>String?</code></span><span>mêmes noms, <code>string | undefined</code></span>
+<span><b>Loi de la fraction</b></span><span><code>MeeshyMeterFraction.resolve(value:total:)</code> : pure, bornée à 0…1</span><span><code>MeeshyMeterFraction</code>, JVM pure</span><span><code>meeshyMeterFraction(value, total)</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyMeterRecipe.resolve(form:kind:tint:size:fraction:isFull:isStale:isEnabled:layoutDirection:)</code></span><span style="border-bottom: 0"><code>MeeshyMeterRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyMeterRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>value: Double</code><span>Obligatoire, sauf en <code>indeterminate</code>. Brute : la jauge borne elle-même entre 0 et <code>total</code>.</span></div>
+<div class="par"><code>total: Double = 1</code><span>Nul ou négatif : la jauge ne rend rien, l'hôte dit autre chose.</span></div>
+<div class="par"><code>label: String</code><span>Obligatoire. Le nom dit : ce qui est mesuré (« Arrivées par ce lien »).</span></div>
+<div class="par"><code>spokenValue: String? = nil</code><span>« 23 sur 50 ». Absent : pourcentage écrit par la locale.</span></div>
+<div class="par"><code>form = .continuous</code><span><code>stepped</code> pour un petit quota, <code>indeterminate</code> sans valeur. Aucun décompte : c'est K09.</span></div>
+<div class="par"><code>kind = .accent</code><span>Un sens. <code>tint: Color? = nil</code> passe une teinte libre, opaque ; <code>tintEnd</code> en fait un dégradé.</span></div>
+<div class="par"><code>fullKind: Kind? = nil</code><span>Genre pris quand la fraction atteint 1. Absent : le genre ne change pas.</span></div>
+<div class="par"><code>size = .s8</code><span>5 en barre dense, 8 par défaut, 12 quand elle est le sujet.</span></div>
+<div class="par"><code>title · valueText: String? = nil</code><span>En-tête visible, absent par défaut. Textes déjà formés par l'hôte.</span></div>
+<div class="par"><code>startCaption · endCaption = nil</code><span>Légendes de bord, absentes par défaut. Elles suivent le sens de lecture.</span></div>
+<div class="par"><code>marks: [Double] = []</code><span>Fractions de 0 à 1 où poser un repère. Ignorées en <code>stepped</code>.</span></div>
+<div class="par"><code>isStale: Bool = false</code><span>Désaturé. <code>animatesOnAppear = true</code> : l'entrée, une fois.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois façons de la peindre</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Dessin : deux <code>Capsule()</code> dans un <code>ZStack(alignment: .leading)</code>, largeur lue dans un <code>GeometryReader</code>. <code>.leading</code> se retourne seul en RTL.</li>
+<li>Entrée : <code>withAnimation</code> au jeton <code>motion.rise</code> dans <code>onAppear</code>, gardée par un identifiant de valeur déjà vue.</li>
+<li>Valeur : <code>contentTransition(.numericText(value:))</code> et <code>monospacedDigit()</code> sur <code>valueText</code>.</li>
+<li>Voix : <code>accessibilityElement(children: .ignore)</code>, <code>accessibilityLabel</code>, <code>accessibilityValue</code> ; pourcentage par <code>LocalizedNumber.percent</code>.</li>
+<li>Crans : <code>HStack</code> de capsules de poids égal ; indéterminée : <code>phaseAnimator</code> sur un décalage.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de <code>ProgressView(value:)</code> : son rayon, sa hauteur et sa teinte changent d'une version d'iOS à l'autre. iOS 16 : fondu du nombre à la place de <code>numericText(value:)</code>. « Réduire les animations » : valeur posée.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Dessin : un <code>Box</code> découpé en <code>CircleShape</code> et un <code>fillMaxWidth(fraction)</code> ; la fraction se lit en phase de mise en page, sans recomposer l'hôte.</li>
+<li>Entrée : <code>animateFloatAsState</code> au jeton <code>motion.rise</code> ; <code>tween(0)</code> sous <code>LocalReduceMotion</code>.</li>
+<li>Voix : <code>Modifier.semantics { progressBarRangeInfo = ProgressBarRangeInfo(…) ; stateDescription = spokenValue }</code>.</li>
+<li>Crans : <code>Row</code> et <code>Modifier.weight(1f)</code>, <code>Arrangement.spacedBy(6.dp)</code>.</li>
+<li>Material 3 Expressive : la piste garde la capsule ; sur une surface tonale, la piste passe à <code>surfaceContainerHighest</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de <code>LinearProgressIndicator</code> pour la forme continue : son écart de fin et son point d'arrêt ne sont pas ceux de la recette. Il reste admis pour <code>indeterminate</code> seulement. Échelle d'animation à zéro : valeur posée.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément : un <code>div</code> avec <code>role="progressbar"</code>, <code>aria-valuemin</code>, <code>aria-valuemax</code>, <code>aria-valuenow</code>, <code>aria-valuetext</code>, <code>aria-label</code>.</li>
+<li>Remplissage : <code>transform: scaleX()</code> sur un enfant pleine largeur, <code>transform-origin: inline-start</code>. Aucune relecture de mise en page.</li>
+<li>Entrée : une propriété <code>--meter-shown</code> passe de l'ancienne valeur à la nouvelle, avec une transition CSS.</li>
+<li>Crans : <code>display: grid</code> et <code>repeat(N, minmax(0, 1fr))</code> ; RTL par propriétés logiques.</li>
+<li>Indéterminée : pas d'<code>aria-valuenow</code>, <code>aria-busy</code> laissé à l'hôte.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de <code>&lt;progress&gt;</code> : son rendu ne se stylise pas de la même façon d'un moteur à l'autre. <code>prefers-reduced-motion</code> : aucune transition. Sans <code>color-mix</code> : piste pré-calculée dans la recette.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Trois barres de palier déjà agnostiques, une par plateforme</h2><p>Relevé dans le dépôt le 16 novembre 2026. La barre de palier de la progression est la plus mûre : deux nombres, une teinte, un nom dit, la valeur lue par la locale. K42 la garde et y range les autres, écrites chacune dans leur écran.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Profile/Views/ProgressionComponents.swift</span><p><span class="be">Devient le composant</span> <code>ProgressionBar(progress:tint:label:)</code> : trois paramètres opaques, deux capsules, fraction bornée, <code>accessibilityValue</code> par <code>LocalizedNumber.percent</code>. Elle monte dans <code>MeeshyUI/Kit</code> et gagne forme, hauteur, en-tête et légendes.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Game/PlayerBannerView.swift</span><p><code>GaugeBar</code>, privée : rail, remplissage par la largeur, animation de 0,42 s que l'hôte peut couper, sens de lecture respecté. Sa règle d'animation devient celle de K42 ; la bannière du jeu est rebranchée.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Onboarding/OnboardingVisuals.swift</span><p><code>OnboardingLevelGauge</code> (« 0 / 10 pts ») et <code>OnboardingProgressBar</code> (une capsule par étape) : la forme continue avec en-tête, et la forme <code>stepped</code>. Leurs chaînes restent à l'app.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift</span><p>Barres par pays de 8, largeur <code>geo.size.width * pct</code> : la liste alignée. La rangée autour (pastille, pays, pourcentage) est le genre <code>breakdown</code> de K50. Rebranché avec <span class="mono">Main/Views/Bubble/MediaConsumptionProgressBar.swift</span>, <span class="mono">MeeshyUI/Auth/Components/PasswordStrengthIndicator.swift</span> et les sept fichiers de l'app qui appellent <code>ProgressView(value:)</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/auth/LevelGauge.kt</span><p><span class="be">Devient le composant</span> Déjà dans <code>:sdk-ui</code>, publique, libellé donné par l'appelant, loi pure <code>levelGaugeFraction(points, threshold)</code> et son témoin <code>LevelGaugeTest</code>. Elle perd son étoile, qui passe en <code>leading</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/auth/src/main/kotlin/me/meeshy/app/onboarding/OnboardingProgressBar.kt</span><p>Une capsule de 6 par étape, « Étape p sur n » pour TalkBack : la forme <code>stepped</code>. La capsule courante élargie reste un choix de l'hôte, hors de K42.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/UploadProgressBar.kt</span><p><code>LinearTrack(fraction, accent)</code> : <code>animateFloatAsState</code> coupé sous <code>LocalReduceMotion</code>. Rebranché, comme <span class="mono">sdk-ui/…/bubble/MediaConsumptionProgressBar.kt</span> et les dix fichiers qui appellent <code>LinearProgressIndicator</code>. Le modèle <span class="mono">core/model/…/PasswordStrengthMeter.kt</span> reste à l'app et choisit le ton.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/progress-bar.tsx</span><p><span class="be">Devient le composant</span> <code>ProgressBar({ progress, label, tint })</code> : <code>role="progressbar"</code> et ses trois valeurs, libellé d'échelle. Sa loi <code>progressPercent</code> (<span class="mono">lib/view/progression.ts</span>) devient <code>meeshyMeterFraction</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/progression-concept.tsx</span><p><code>ConceptGauge</code> : l'entrée jouée une seule fois par visite (<code>previousGauge</code>, <code>--gauge-shown</code>), posée sous mouvement réduit. C'est la règle de mouvement de K42. Rebranchés : <span class="mono">game-season.tsx</span>, <span class="mono">message-receipts-sheet.tsx</span>, <span class="mono">routes/onboarding-visuals.tsx</span> (crans).</p></div>
+<div class="twin"><span class="pf">Hors champ</span><span class="mono">apps/ios/Meeshy/Features/Game/GameGaugesView.swift</span><p><span class="no">Non concerné</span> Malgré son nom : deux tuiles dessinées (trésor, flamme), aucune piste linéaire. Elle reste à l'app. <span class="mono">MeeshyUI/Kit/MeeshyProgressRing.swift</span> reste K09.</p></div>
+<div class="twin"><span class="pf">Profil</span><span class="mono">aucun jumeau</span><p><span class="no">À créer</span> Légendes de bord, repères, <code>isStale</code>, <code>fullKind</code> et les deux échelles alignées : dessinés par ce canevas, absents du code. Écart à trancher : seuil nul, <code>LevelGauge</code> dit « pleine », K42 propose « rien ».</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Elle sert aussi ailleurs</span><h2 class="d">Six écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage" style="gap: 10px; --accent: #FBBF24; --accent-ink: #FBBF24">
+<span style="display: flex; align-items: center; gap: 12px"><span class="med">[[ic:trophy-fill]]</span><span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span class="d" style="font-size: 17px">Or III</span><span style="font-size: 13px; color: var(--ink2)">Niveau 24</span></span><span class="d" style="font-size: 15px">1 860</span></span>
+<span class="bar" role="img" aria-label="Niveau 24, 68 % vers le niveau 25"><i style="width: 68%; background: linear-gradient(90deg, #F59E0B, #FBBF24)"></i><b class="mk" style="left: 50%"></b></span>
+<div class="mf"><span>Niveau 24</span><span>640 avant le niveau 25</span></div>
+</div>
+<div class="cp"><b>Jeu · progression de niveau</b><span class="kcap">Dégradé du palier, un repère à mi-course, légendes de bord.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 10px">
+<span style="display: flex; align-items: center; gap: 12px"><span class="med" style="--t: var(--info); --ti: var(--info)">[[ic:hard-drives]]</span><span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-size: 15px; font-weight: 600">Cache des médias</span><span style="font-size: 13px; color: var(--ink2)">1,6 Go sur 2 Go</span></span></span>
+<span class="bar" role="img" aria-label="Cache des médias, 1,6 Go sur 2 Go"><i style="width: 82%; background: var(--warn)"></i></span>
+<div class="mf"><span>82 % utilisés</span><span>0,4 Go libres</span></div>
+</div>
+<div class="cp"><b>Réglages · stockage du cache</b><span class="kcap">Genre <code>warn</code> choisi par l'hôte au-delà de 80 %, le reste dit en clair.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 10px">
+<div class="tonal" style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border-radius: 16px"><span style="display: inline-flex; color: var(--ink3)">[[ic:lock-key s]]</span><span class="mono" style="letter-spacing: .2em; color: var(--ink); flex: 1">••••••••••</span><span style="display: inline-flex; color: var(--ink3)">[[ic:eye s]]</span></div>
+<div class="steps" role="img" aria-label="Force du mot de passe : bon, 3 crans sur 4" style="grid-template-columns: repeat(4, minmax(0, 1fr)); --accent: var(--ok)"><i class="notch f" style="height: 5px"></i><i class="notch f" style="height: 5px"></i><i class="notch f" style="height: 5px"></i><i class="notch" style="height: 5px"></i></div>
+<div class="mf"><span style="color: var(--ok); font-weight: 600">Bon</span><span>ajoute un symbole</span></div>
+</div>
+<div class="cp"><b>Compte · force du mot de passe</b><span class="kcap"><code>stepped(4)</code>, crans de 5. Le mot double la couleur : jamais le vert seul.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 8px">
+<div class="lrow"><span class="med" style="--t: var(--brand); --ti: var(--ink2)">[[ic:file-audio]]</span><div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0"><div class="mh"><span style="color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">dakar-nuit-prise3.wav</span><span class="mono" style="color: var(--ink3)">18 / 42 Mo</span></div><span class="bar h5" role="img" aria-label="Envoi de dakar-nuit-prise3.wav, 18 Mo sur 42"><i style="width: 43%; background: var(--brand-soft)"></i></span></div></div>
+<div class="lrow"><span class="med" style="--t: var(--ok); --ti: var(--ok)">[[ic:check]]</span><div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0"><div class="mh"><span style="color: var(--ink); font-weight: 600">pochette.png</span><span class="mono" style="color: var(--ink3)">2,1 Mo</span></div><span class="bar h5"><i style="width: 100%; background: var(--ok)"></i></span></div></div>
+</div>
+<div class="cp"><b>Conversation · envoi de fichiers en liste</b><span class="kcap">Piste de 5 sous le nom. Un envoi autour d'un seul glyphe reste l'anneau de K09.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 10px">
+<div class="mh"><span style="color: var(--ink); font-weight: 600; font-size: 15px">Ton profil est presque prêt</span><b style="color: var(--accent-ink)">4 / 5</b></div>
+<div class="steps" role="img" aria-label="Profil complété : 4 étapes sur 5" style="grid-template-columns: repeat(5, minmax(0, 1fr))"><i class="notch f" style="height: 8px"></i><i class="notch f" style="height: 8px"></i><i class="notch f" style="height: 8px"></i><i class="notch f" style="height: 8px"></i><i class="notch" style="height: 8px"></i></div>
+<span style="font-size: 12.5px; color: var(--ink3)">Il reste : vérifier ton téléphone</span>
+</div>
+<div class="cp"><b>Accueil · complétion du profil</b><span class="kcap"><code>stepped(5)</code> en piste de 8 : chaque cran est une étape faite, pas un pourcentage.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 12px; --accent: #4ECDC4">
+<div style="display: flex; flex-direction: column; gap: 6px"><div class="mh"><span style="color: var(--ink); font-weight: 600">Samedi au studio</span><b>62 %</b></div><span class="bar"><i style="width: 62%"></i></span></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><div class="mh"><span style="color: var(--ink); font-weight: 600">Dimanche en plein air</span><b>38 %</b></div><span class="bar"><i style="width: 38%; background: var(--ink3)"></i></span></div>
+<div class="mf"><span>21 votes</span><span>encore 9 avant la clôture</span></div>
+</div>
+<div class="cp"><b>Sondage · résultats et quota de votes</b><span class="kcap">Deux jauges alignées, l'option en tête à l'accent, l'autre en neutre.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Fraction.</b> <code>value</code> négative rend 0, au-delà de <code>total</code> rend 1, <code>total</code> nul ne rend aucune vue. Jamais de division par zéro, jamais de remplissage qui déborde la piste. Vecteurs <code>K42-MeeshyMeter.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Un seul élément : barre de progression, nommée par <code>label</code>, valeur « 23 sur 50 » ou pourcentage de la locale. La valeur dite est la vraie dès le premier rendu, pas celle que l'œil voit monter. En-tête et légendes ne sont pas relus.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque forme × genre × hauteur rend les valeurs du tableau : rayon, hauteur, piste, encre, écart des crans. À la fraction 1, <code>fullKind</code> s'applique ; <code>isStale</code> l'emporte sur tout genre.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Contraste sans couleur.</b> Remplissage sur piste : 3:1 au moins en clair et en sombre, pour les quatre genres. Un témoin rend la jauge en niveaux de gris : pleine, vide et périmée restent distinctes.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement.</b> L'entrée se joue une fois par valeur vue ; au retour arrière, rien. Sous mouvement réduit : aucune transition, segment indéterminé immobile. Aucun dépassement de la valeur pendant l'animation.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>RTL et grande police.</b> En arabe : le remplissage part de la droite, les légendes s'échangent, « 23 / 50 » ne se retourne pas. Police à 200 % : la piste garde sa hauteur, l'en-tête passe sur deux lignes sans chevaucher la valeur.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Une valeur qui change ne re-rend ni la carte ni la rangée qui portent la jauge ; dans une liste de dix, une seule se repeint. Garde de source : aucun type du domaine, aucun singleton, aucune cote ni couleur hors de <code>MeeshyMeterRecipe</code> ; ni <code>ProgressView(value:)</code>, ni <code>LinearProgressIndicator</code> déterminé, ni <code>&lt;progress&gt;</code>. Non-régression : <code>LevelGaugeTest</code> et les suites de <code>progress-bar</code> passent sans changer une attente.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> La jauge ne se touche pas : ni cible, ni focus, ni geste. La teinte ne porte jamais seule le sens : un mot, un glyphe ou la valeur écrite la double. Une valeur qui change n'est pas annoncée d'elle-même ; l'hôte décide d'une annonce polie.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Ni flou, ni ombre, ni masque : deux formes pleines. Seules la transformation et l'opacité s'animent. Le segment indéterminé s'arrête hors écran et dès que la valeur arrive. Rien n'est retenu une fois l'écran quitté.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8347}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

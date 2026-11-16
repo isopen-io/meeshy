@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K45 MeeshyMedallion</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:120px;gap:16px}
+.tx{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.tx>b{font-weight:700;font-size:15px}
+.tx>span{font-size:13px;line-height:1.35;color:var(--ink2)}
+.car{display:inline-flex;color:var(--ink3)}
+.md{--s:44px;--c:var(--brand-soft);--bg:color-mix(in oklab,var(--c) 18%,transparent);position:relative;display:inline-flex;align-items:center;justify-content:center;width:var(--s);height:var(--s);flex:none;border-radius:50%;background:var(--bg);color:var(--ci,var(--c));isolation:isolate}
+.md>.ic{width:max(14px,calc(var(--s) * .5));height:max(14px,calc(var(--s) * .5))}
+.md>b{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:calc(var(--s) * .44);line-height:1;letter-spacing:-.02em}
+.z24{--s:24px}.z36{--s:36px}.z40{--s:40px}.z52{--s:52px}.z56{--s:56px}.z64{--s:64px}.z72{--s:72px}.z96{--s:96px}
+.t-acc{--c:var(--accent);--ci:var(--accent-ink)}.t-ok{--c:var(--ok)}.t-warn{--c:var(--warn)}.t-err{--c:var(--err)}.t-info{--c:var(--info)}.t-neu{--c:var(--ink2)}
+.md.sol{--bg:var(--c);color:#0B0B12}
+.md.grad{--bg:linear-gradient(140deg,var(--c),#6366F1);color:#0B0B12}
+.md.sq{border-radius:34%}
+.md.blob{animation:mxMorph 8s ease-in-out infinite}
+.md.sc{background:none;border-radius:0}
+.md.sc::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--bg);clip-path:polygon(100.0% 50.0%,98.4% 54.2%,94.3% 57.8%,90.1% 60.7%,87.6% 63.7%,87.6% 67.5%,89.0% 72.5%,89.8% 77.8%,88.3% 82.1%,84.3% 84.3%,78.9% 84.5%,73.8% 84.0%,70.0% 84.6%,67.5% 87.6%,65.4% 92.3%,62.6% 96.9%,58.7% 99.2%,54.2% 98.4%,50.0% 95.0%,46.4% 91.3%,43.1% 89.4%,39.3% 90.1%,34.6% 92.3%,29.5% 94.0%,25.0% 93.3%,22.2% 89.8%,21.1% 84.5%,20.7% 79.3%,19.4% 75.7%,16.0% 73.8%,11.0% 72.5%,6.0% 70.5%,3.0% 67.1%,3.1% 62.6%,5.7% 57.8%,8.7% 53.6%,10.0% 50.0%,8.7% 46.4%,5.7% 42.2%,3.1% 37.4%,3.0% 32.9%,6.0% 29.5%,11.0% 27.5%,16.0% 26.2%,19.4% 24.3%,20.7% 20.7%,21.1% 15.5%,22.2% 10.2%,25.0% 6.7%,29.5% 6.0%,34.6% 7.7%,39.3% 9.9%,43.1% 10.6%,46.4% 8.7%,50.0% 5.0%,54.2% 1.6%,58.7% 0.8%,62.6% 3.1%,65.4% 7.7%,67.5% 12.4%,70.0% 15.4%,73.8% 16.0%,78.9% 15.5%,84.3% 15.7%,88.3% 17.9%,89.8% 22.2%,89.0% 27.5%,87.6% 32.5%,87.6% 36.3%,90.1% 39.3%,94.3% 42.2%,98.4% 45.8%);animation:mxSpin 22s linear infinite}
+.md.halo{box-shadow:0 0 0 calc(var(--s) * .11) color-mix(in oklab,var(--c) 7%,transparent)}
+.md.dsh::before{content:"";position:absolute;inset:calc(var(--s) * -.11);border-radius:50%;border:2px dashed var(--line);animation:mxSpin 40s linear infinite}
+.md.dsh.far::before{inset:calc(var(--s) * -.2)}
+.md.stk{--bg:color-mix(in oklab,var(--c) 16%,var(--on,var(--ground)))}
+.md.stk::after{content:"";position:absolute;left:50%;top:50%;width:calc(var(--s) * .64);height:3px;border-radius:2px;background:currentColor;transform:translate(-50%,-50%) rotate(-45deg);box-shadow:0 0 0 3px var(--bg)}
+.md>i{position:absolute;inset:0;z-index:-1;border-radius:50%;border:2px solid var(--ci,var(--c));animation:mxPing 3s ease-out infinite}
+.md.lk{--bg:transparent;border:1.5px dashed var(--line);color:var(--ink3)}
+.md.still,.md.still::before,.md.still>i{animation:none}
+.rule{display:flex;flex-direction:column;align-items:center;gap:10px}
+.rule>span{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;font-weight:700;color:var(--ink2)}
+.rule>small{font-size:11.5px;color:var(--ink3);text-align:center;line-height:1.3}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.live{display:flex;flex-direction:column;align-items:center;gap:16px;flex:1;min-width:0}
+.live>.pit{display:flex;align-items:center;justify-content:center;height:190px;align-self:stretch;border-radius:22px;background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.live>b{font-size:14.5px}
+.live>span{font-size:12.5px;line-height:1.4;color:var(--ink2);text-align:center;max-width:230px}
+.swap{display:inline-grid}
+.swap>*{grid-area:1/1}
+.mv-lock{animation:mdLock 6s ease-in-out infinite}
+.mv-win{animation:mdWin 6s cubic-bezier(.3,1.5,.5,1) infinite}
+.mv-ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--warn);animation:mdRing 6s ease-out infinite}
+.mv-a{animation:mdLock 6s ease-in-out infinite}
+.mv-b{animation:mdTxt 6s ease-in-out infinite}
+@keyframes mdLock{0%,30%{opacity:1;transform:none}38%,90%{opacity:0;transform:scale(.8)}97%,100%{opacity:1;transform:none}}
+@keyframes mdWin{0%,30%{opacity:0;transform:scale(.6)}40%{opacity:1;transform:scale(1.14)}48%,90%{opacity:1;transform:none}97%,100%{opacity:0;transform:scale(.9)}}
+@keyframes mdRing{0%,36%{opacity:0;transform:scale(.7)}39%{opacity:.9;transform:scale(.8)}62%,100%{opacity:0;transform:scale(2.3)}}
+@keyframes mdTxt{0%,34%{opacity:0}42%,90%{opacity:1}97%,100%{opacity:0}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #FBBF24; opacity: .13; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K45 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyMedallion</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un glyphe qui nomme une chose sans se toucher est un médaillon teinté, d'une seule recette</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">La tête d'une rangée de réglages, le trophée d'une vitrine, l'image d'un état d'erreur, le type d'une notification. Le profil pose ce disque teinté cinquante fois, en neuf écritures. K45 en fait un seul : une forme, un fond, un contenu, un décor.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il nomme, il ne se touche pas</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>un</b> glyphe, ou une valeur courte, au centre d'une forme teintée : disque, carré arrondi, festonnée, organique.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Tire fond et encre d'<b>une seule teinte</b> reçue : fond doux à 18 %, ou aplat avec encre sombre.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Porte au plus <b>un décor</b> : halo, anneau pointillé, trait barré, ondes. Tout se mesure en part du diamètre.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit quatre <b>états</b> : normal, courant, gagné, verrouillé. Se tait à la voix quand son voisin dit déjà la chose.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Se toucher : le bouton rond est <b>K02</b> <code>MeeshyGlassButton</code>, l'action libellée <b>K40</b> ou <b>K32</b>. Le verre : <b>K01</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Une personne : l'avatar à initiales et sa présence : <code>MeeshyAvatar</code>, que l'hôte pose dans <b>K39</b> ou <b>K48</b>. Une épingle de carte : <b>K36</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Un compteur ou une étiquette posée sur autre chose : <b>K41</b> <code>MeeshyBadge</code>. Un anneau qui mesure : <b>K09</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La rangée, la phrase et la sortie autour de lui : <b>K06</b>, <b>K38</b>, <b>K43</b>. Choisir le glyphe et la teinte : <b>l'app</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span class="md z64 t-acc halo">[[ic:hand-tap]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : s'il se touche, ce n'est plus un médaillon</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Un médaillon n'a ni cible, ni état pressé, ni rôle de bouton. Dans une rangée qui se touche, c'est la rangée qui se touche. Un disque teinté seul qui répond au doigt est un K02 : il prend le verre, les 44 points et un nom dit.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une forme, un fond, un contenu, un décor</h2><p>Le médaillon de 96, agrandi deux fois, avec les trois décors de disque posés ensemble pour la lecture. À l'écran, il n'en porte qu'un. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="padding: 36px 40px 30px; flex-direction: column; gap: 26px">
+<div style="position: relative; width: 380px; height: 380px; display: flex; align-items: center; justify-content: center">
+<span style="zoom: 2.5; display: inline-flex"><span class="md z96 t-warn halo dsh far stk" style="--on: var(--raised)">[[ic:contactless-payment]]</span></span>
+<span class="kan" style="left: 94px; top: 94px">1</span>
+<span class="kan" style="left: 246px; top: 232px">2</span>
+<span class="kan" style="left: 132px; top: 150px">3</span>
+<span class="kan" style="left: 312px; top: 179px">4</span>
+<span class="kan" style="left: 179px; top: 347px">5</span>
+<span class="kan" style="left: 246px; top: 112px">6</span>
+</div>
+<div style="align-self: stretch; display: flex; align-items: center; gap: 16px; padding-top: 22px; border-top: 1.5px dashed var(--line)">
+<span class="md z64 blob grad" style="--c: #4ECDC4"><b>31</b></span>
+<span class="md z64 sc sol t-warn"><b>24</b></span>
+<span class="kcap" style="flex: 1; min-width: 0">Le contenu peut être une valeur : un niveau, en Nunito 900, à 44 % du diamètre. La forme bouge, la valeur reste droite.</span>
+</div>
+</div>
+<div class="card" style="padding: 26px; align-self: start">
+<div class="lgd">
+<span class="kan">1</span><div><b>Forme</b><span>Disque, carré arrondi (rayon à 34 % du côté), festonnée à neuf lobes, organique. Six diamètres : 24, 36, 44, 52, 64, 96. Jeton <code>medallion.size</code>.</span></div>
+<span class="kan">2</span><div><b>Fond</b><span><code>soft</code> : la teinte à 18 % (16 à 30 selon le genre). <code>solid</code> : aplat ou dégradé à 140°, encre <code>#0B0B12</code>. Jamais de bord, jamais d'ombre.</span></div>
+<span class="kan">3</span><div><b>Contenu</b><span>Un glyphe à la moitié du diamètre, 14 px au moins. Ou une valeur de un à trois caractères. Encre : la teinte, ou sa version lisible sur fond doux.</span></div>
+<span class="kan">4</span><div><b>Halo</b><span>Un anneau plein de 11 % du diamètre, la teinte à 7 %. Il agrandit la présence, pas la boîte : la mise en page ne le compte pas.</span></div>
+<span class="kan">5</span><div><b>Anneau pointillé</b><span>2 px au jeton <code>line</code>, à 11 % du bord (20 % avec un halo). Il tourne d'un tour en 40 s : la chose manque ou attend.</span></div>
+<span class="kan">6</span><div style="border-bottom: 0; padding-bottom: 0"><b>Trait barré</b><span>3 px, 64 % du diamètre, à −45°, détouré de 3 px à la couleur du fond. Il dit « indisponible » sans changer de glyphe. Les ondes sont le quatrième décor.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Cinq genres et une teinte libre, quatre formes, cinq décors, six tailles</h2><p>Tout est à taille réelle. Les spécimens sont ceux des écrans du profil : mêmes glyphes, mêmes teintes, mêmes mesures.</p></header>
+
+<span class="tag">Genres · fond doux</span>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px">
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 84px"><span class="md t-acc">[[ic:hourglass]]</span></div><div class="cp"><b>accent</b><span class="kcap">La teinte de la fiche. Encre <code>accent-ink</code> (Carte-Personne, Carte-Partage).</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 84px"><span class="md z52 sq" style="--c: var(--l-share)">[[ic:chats-circle]]</span></div><div class="cp"><b>tint</b><span class="kcap">Teinte libre de l'hôte : ici la famille « partage » d'un lien (Lien-Creer).</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 84px"><span class="md z40 t-ok">[[ic:battery-medium]]</span></div><div class="cp"><b>ok</b><span class="kcap">Ce qui va, ce qui est ouvert (Moi-Actions, « Ma batterie »).</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 84px"><span class="md t-warn">[[ic:trophy]]</span></div><div class="cp"><b>warn</b><span class="kcap">Ce qui se gagne, ce qui demande attention (Main, Parrainage).</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 84px"><span class="md z72 t-err halo stk">[[ic:map-pin]]</span></div><div class="cp"><b>err</b><span class="kcap">Ce qui a échoué ou est refusé (Etat-Erreur, position).</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 84px"><span class="md z40 t-neu">[[ic:gear-six]]</span></div><div class="cp"><b>neutral</b><span class="kcap">Ni bon ni mauvais : encre <code>ink2</code> (Moi-Actions, « Réglages »).</span></div></div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Fonds et formes</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><span class="md t-acc">[[ic:bell]]</span><span class="md sol" style="--c: var(--l-share)">[[ic:chats-circle]]</span><span class="md sol" style="--c: var(--l-comm)">[[ic:users-four]]</span><span class="md sol" style="--c: var(--l-aff)">[[ic:gift]]</span></div>
+<div class="cp"><b>disc · soft et solid</b><span class="kcap">Le défaut. En <code>solid</code>, l'aplat prend la teinte de famille et l'encre passe au sombre : la tête d'un billet (Moi-Liens).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><span class="md z52 sq" style="--c: var(--l-share)">[[ic:chats-circle]]</span><span class="md z40 sq t-warn">[[ic:cloud-slash]]</span><span class="md z36 sq t-info">[[ic:bell-ringing]]</span></div>
+<div class="cp"><b>squircle</b><span class="kcap">Rayon à 34 % du côté : 18 pour 52, 14 pour 40. La forme des réglages et des familles (Lien-Creer, Android-Feuilles).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage"><span class="md z72 sc grad t-acc" style="--s: 76px"><b>31</b></span><span class="md z56 sc t-warn" style="--bg: color-mix(in oklab, var(--warn) 22%, var(--field))">[[ic:trophy-fill]]</span></div>
+<div class="cp"><b>scallop</b><span class="kcap">Neuf lobes, un tour en 22 s. La forme expressive d'Android (Android-Vitrine). Sur iOS et le web sans tracé : disque.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage"><span class="md blob grad t-acc" style="--s: 68px"><b>31</b></span><span class="md z52 blob t-acc" style="--bg: color-mix(in oklab, var(--accent) 22%, transparent); animation-delay: -2.5s">[[ic:medal-fill]]</span></div>
+<div class="cp"><b>blob</b><span class="kcap">Un contour organique qui se déforme en 8 s, sans jamais tourner le contenu. Le niveau de la vitrine (Autre-Vitrine).</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Décors</span>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px">
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><span class="md z52 t-ok">[[ic:shield-check]]</span></div><div class="cp"><b>none</b><span class="kcap">Le défaut. Dans une rangée, rien d'autre que la forme.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><span class="md z72 t-warn halo">[[ic:cloud-slash]]</span></div><div class="cp"><b>halo</b><span class="kcap">Seul sur un écran : l'image d'un état K38 (Etat-Erreur).</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><span class="md z96 dsh" style="--bg: transparent; --c: var(--ink3); --s: 104px">[[ic:user-circle-dashed]]</span></div><div class="cp"><b>dashed</b><span class="kcap">Ce qui manque ou attend : profil introuvable (Etat-Introuvable).</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><span class="md z64 dsh stk" style="--s: 60px; --c: var(--ink3); --bg: var(--field)">[[ic:contactless-payment]]</span></div><div class="cp"><b>struck</b><span class="kcap">Indisponible ici. Se compose avec <code>dashed</code> (Etat-Erreur, sans contact).</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><span class="md z64 t-acc" style="--bg: transparent"><i></i><i style="animation-delay: -1s"></i><i style="animation-delay: -2s"></i>[[ic:contactless-payment]]</span></div><div class="cp"><b>waves</b><span class="kcap">Un à trois anneaux qui partent : il émet (Carte-Profil, Sans-Contact).</span></div></div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Tailles</span>
+<div class="kcell" style="padding: 34px 40px; justify-content: space-between; align-items: flex-end; gap: 24px">
+<div class="rule"><span class="md z24 t-info">[[ic:translate]]</span><span>24</span><small>dans une ligne de texte,<br>une puce</small></div>
+<div class="rule"><span class="md z36" style="--bg: var(--deep); --c: var(--ink2)">[[ic:globe-hemisphere-west]]</span><span>36</span><small>tête d'un billet d'adresse,<br>rangée dense</small></div>
+<div class="rule"><span class="md t-acc">[[ic:hourglass]]</span><span>44</span><small>le défaut : tête de rangée,<br>notification</small></div>
+<div class="rule"><span class="md z52 t-warn">[[ic:sparkle-fill]]</span><span>52</span><small>carte de contenu,<br>trophée d'une étagère</small></div>
+<div class="rule"><span class="md z64 t-ok">[[ic:seal-check]]</span><span>64</span><small>tête de feuille,<br>niveau d'une vitrine</small></div>
+<div class="rule"><span class="md z96 t-err halo">[[ic:wifi-slash]]</span><span>96</span><small>image d'un état plein écran,<br>cérémonie</small></div>
+</div>
+
+<span class="tag" style="margin-top: 14px">États</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 22px"><span class="md z52 t-acc">[[ic:user-focus]]</span><span class="md z52 sol t-acc">[[ic:user-focus-fill]]</span></div>
+<div class="cp"><b>Normal et courant</b><span class="kcap">Courant : le fond passe à <code>solid</code>, le glyphe à sa variante pleine. C'est l'hôte qui le pose (barre d'Android-Vitrine).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; grid-column: span 2; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage" style="gap: 10px; justify-content: flex-start; padding: 0 8px">
+<span class="md z52 blob t-warn" role="img" aria-label="Trophée" style="--bg: color-mix(in oklab, var(--warn) 20%, transparent)">[[ic:trophy-fill]]</span>
+<span class="md z52 blob t-acc" role="img" aria-label="Médaille" style="--bg: color-mix(in oklab, var(--accent) 22%, transparent); animation-delay: -2.5s">[[ic:medal-fill]]</span>
+<span class="md z52 blob" role="img" aria-label="Couronne" style="--bg: color-mix(in oklab, var(--brand-soft) 24%, transparent); --c: var(--ink2); animation-delay: -5s">[[ic:crown-fill]]</span>
+<span class="md z52 lk" role="img" aria-label="Verrouillé">[[ic:lock-simple]]</span>
+<span class="md z52 lk" role="img" aria-label="Verrouillé">[[ic:lock-simple]]</span>
+<span style="flex: 1; min-width: 0; padding-left: 8px; font-size: 13px; color: var(--ink2)">3 trophées gagnés<br>2 à gagner</span>
+</div>
+<div class="cp"><b>Gagné et verrouillé</b><span class="kcap">La rangée de récompenses : les gagnés d'abord, les verrouillés en contour pointillé de 1,5 sans fond, puis le compte. La rangée se dit en une phrase : « 3 trophées sur 5 » (Autre-Vitrine).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage" style="gap: 18px"><span class="md still grad t-acc" style="--s: 68px"><b>31</b></span><span class="md z52 still t-acc" style="--bg: transparent"><i style="transform: scale(1.3); opacity: .45"></i>[[ic:contactless-payment]]</span></div>
+<div class="cp"><b>Mouvement réduit</b><span class="kcap">Forme fixe : <code>blob</code> et <code>scallop</code> rendent un disque immobile, les ondes un seul anneau posé, l'anneau pointillé ne tourne pas.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden; grid-column: span 4; min-height: 0">
+<div class="mx" data-theme="light" style="display: flex; align-items: center; gap: 28px; padding: 22px 28px; flex: 1">
+<span class="md t-acc">[[ic:hourglass]]</span><span class="md z40 t-ok">[[ic:battery-medium]]</span><span class="md t-warn">[[ic:trophy]]</span><span class="md z52 t-err halo stk" style="--on: #FFFFFF">[[ic:map-pin]]</span><span class="md z40 t-neu">[[ic:gear-six]]</span><span class="md sol" style="--c: var(--l-comm); color: #fff">[[ic:users-four]]</span><span class="md z52 lk">[[ic:lock-simple]]</span>
+<div class="cp" style="margin: 0 0 0 auto; max-width: 420px"><b>Thème clair</b><span class="kcap">Mêmes parts, jetons clairs : les teintes s'assombrissent pour tenir 3:1 sur leur fond doux. Sur un aplat assombri, l'encre passe au blanc.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Il respire, il émet, il se gagne</h2><p>Trois mouvements, jamais plus d'un à la fois. La forme organique dérive sur <code>motion.float</code>. Les ondes partent à la cadence de <code>motion.pulse</code>. Un médaillon verrouillé qui se gagne change de fond par <code>motion.morph</code> et entre par <code>motion.rise</code>.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div style="display: flex; gap: 20px; flex: 1">
+<div class="live" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="pit"><span class="md blob grad t-acc" style="--s: 96px"><b>31</b></span></div>
+<b>Il respire</b><span><code>motion.float</code> · 8 s en boucle. Le contour se déforme, la valeur reste droite.</span>
+</div>
+<div class="live">
+<div class="pit"><span class="md z64 t-acc" style="--bg: transparent"><i></i><i style="animation-delay: -1s"></i><i style="animation-delay: -2s"></i>[[ic:contactless-payment]]</span></div>
+<b>Il émet</b><span><code>motion.pulse</code> · un anneau par seconde, de 0,7 à 2,3 fois le diamètre, en s'effaçant.</span>
+</div>
+<div class="live">
+<div class="pit" style="flex-direction: column; gap: 26px">
+<span class="swap" style="position: relative"><span class="mv-ring"></span><span class="md z64 lk mv-lock">[[ic:lock-simple]]</span><span class="md z64 sol t-warn mv-win">[[ic:trophy-fill]]</span></span>
+<span class="swap" style="font-size: 12.5px; font-weight: 600; color: var(--ink2); text-align: center"><span class="mv-a">3 trophées gagnés</span><span class="mv-b" style="color: var(--warn)">4 trophées gagnés</span></span>
+</div>
+<b>Il se gagne</b><span><code>motion.morph</code> puis <code>motion.rise</code> · le contour se remplit, le glyphe change, une onde part une fois.</span>
+</div>
+</div>
+<span class="spec">durée : motion.float 8 s en boucle · motion.pulse 3 s par anneau, décalés de 1 s · motion.morph + motion.rise au gain, une fois · courbe : ressorts de K26, dépassement à 1,14 au gain · déclencheur : la présence à l'écran (float, pulse) ; state passe de locked à earned (gain) · haptique : aucun au repos ; succès au gain · mouvement réduit : forme fixe, un seul anneau posé, gain en fondu sans échelle</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Verrouillé</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><span class="md z52 lk">[[ic:lock-simple]]</span><span class="kcap">Contour pointillé, sans fond, encre <code>ink3</code>. Il tient sa place dans la rangée : rien ne bougera autour de lui.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Il se remplit</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><span class="md z52 sol t-warn" style="transform: scale(1.14); opacity: .8">[[ic:trophy-fill]]</span><span class="kcap"><code>motion.morph</code> : le contour devient aplat, le cadenas devient le glyphe. Échelle 0,6 vers 1,14.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Gagné</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><span style="position: relative; display: inline-flex"><span class="md z52 sol t-warn">[[ic:trophy-fill]]</span><span style="position: absolute; inset: -9px; border-radius: 50%; border: 2px solid var(--warn); opacity: .4"></span></span><span class="kcap">L'échelle retombe à 1. Une onde part, une seule. Le compte de la rangée change en fondu.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Un glyphe ou une valeur, une teinte, quatre choix fermés. Aucune signature ne nomme un réglage, un trophée, un lien, un appel ou une famille de fichier : l'hôte passe un glyphe et une couleur.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyMedallion.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-medallion.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyMedallion(systemImage:kind:tint:shape:fill:size:…)</code></span><span><code>MeeshyMedallion(icon, modifier, kind, tint, shape, fill, size, …)</code></span><span><code>&lt;MeeshyMedallion glyph kind tint shape fill size … /&gt;</code></span>
+<span><b>Genre</b></span><span><code>MeeshyMedallionKind { accent, ok, warn, err, neutral }</code></span><span><code>enum class</code> identique</span><span><code>'accent' | 'ok' | 'warn' | 'err' | 'neutral'</code></span>
+<span><b>Forme</b></span><span><code>MeeshyMedallionShape { disc, squircle, scallop, blob }</code></span><span>idem</span><span><code>'disc' | 'squircle' | 'scallop' | 'blob'</code></span>
+<span><b>Fond</b></span><span><code>MeeshyMedallionFill { soft, solid }</code></span><span>idem</span><span><code>'soft' | 'solid'</code></span>
+<span><b>Décor</b></span><span><code>MeeshyMedallionDecor { none, halo, dashed, struck, waves(count: Int) }</code></span><span><code>sealed interface</code> identique</span><span><code>'none' | 'halo' | 'dashed' | 'struck' | { waves: 1 | 2 | 3 }</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyMedallionSize { s24, s36, s44, s52, s64, s96 }</code></span><span>idem</span><span><code>24 | 36 | 44 | 52 | 64 | 96</code></span>
+<span><b>État</b></span><span><code>MeeshyMedallionState { normal, current, earned, locked }</code></span><span>idem</span><span><code>'normal' | 'current' | 'earned' | 'locked'</code></span>
+<span><b>Emplacement</b></span><span><code>glyph</code> : <code>@ViewBuilder</code>, à la place de <code>systemImage</code> ; il reçoit l'encre</span><span><code>glyph: @Composable () -&gt; Unit</code></span><span><code>glyph: ComponentChildren</code></span>
+<span><b>Rangée</b></span><span><code>MeeshyMedallionRow(earned:total:caption:) { items }</code></span><span><code>MeeshyMedallionRow(earned, total, caption) { items }</code></span><span><code>&lt;MeeshyMedallionRow earned total caption&gt;</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyMedallionRecipe.resolve(kind:shape:fill:decor:size:state:tint:surface:reduceMotion:supportsShape:)</code></span><span style="border-bottom: 0"><code>MeeshyMedallionRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyMedallionRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>kind = .accent</code><span>L'accent ambiant. Les quatre autres sont les teintes de sens du thème.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte opaque de l'hôte. Présente, elle remplace la couleur du genre.</span></div>
+<div class="par"><code>shape = .disc</code><span>Une forme que la plateforme ne trace pas rend un disque.</span></div>
+<div class="par"><code>fill = .soft</code><span><code>solid</code> rend une encre sombre. <code>current</code> l'impose.</span></div>
+<div class="par"><code>size = .s44</code><span>Le diamètre. Glyphe, valeur et décors en découlent.</span></div>
+<div class="par"><code>decor = .none</code><span>Un seul. <code>struck</code> accepte l'anneau de <code>dashed</code> en plus.</span></div>
+<div class="par"><code>state = .normal</code><span><code>locked</code> ignore genre, fond et décor : contour et cadenas.</span></div>
+<div class="par"><code>value: String? = nil</code><span>Un à trois caractères, déjà formatés. Remplace le glyphe.</span></div>
+<div class="par"><code>gradientEnd: Color? = nil</code><span>En <code>solid</code> : seconde couleur d'un dégradé à 140°.</span></div>
+<div class="par"><code>surface: Color? = nil</code><span>Le fond sous le médaillon, pour détourer le trait barré.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Sans lui : caché à la voix. Avec lui : une image nommée.</span></div>
+<div class="par"><code>isAnimated: Bool = true</code><span>Faux : forme fixe. Le mouvement réduit l'impose.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois tracés</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Formes : <code>Circle()</code>, <code>RoundedRectangle(cornerRadius:style: .continuous)</code>, et deux <code>Shape</code> du kit pour la festonnée et l'organique.</li>
+<li>Organique : <code>animatableData</code> porté par <code>TimelineView(.animation)</code>, arrêté hors écran.</li>
+<li>Ondes : <code>phaseAnimator</code> sur un <code>Circle().strokeBorder</code> ; gain : <code>symbolEffect(.bounce)</code> et <code>sensoryFeedback(.success)</code>.</li>
+<li>Glyphe : <code>Image(systemName:)</code> en <code>MeeshyFont.relative</code>, il suit la taille du texte jusqu'au diamètre.</li>
+<li>Voix : <code>accessibilityHidden(true)</code> sans <code>label</code> ; sinon <code>accessibilityLabel</code> et le trait <code>.isImage</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Le tracé festonné manque ou coûte trop dans une liste : disque. <code>accessibilityReduceMotion</code> : forme fixe, un anneau posé. « Augmenter le contraste » : fond doux à 30 %.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Formes : <code>CircleShape</code>, <code>RoundedCornerShape(percent = 34)</code>, <code>MaterialShapes.Cookie9Sided.toShape()</code>.</li>
+<li>Organique : <code>Morph</code> entre deux <code>RoundedPolygon</code>, mené par <code>rememberInfiniteTransition</code>.</li>
+<li>Ondes : <code>drawBehind</code> avec un <code>drawCircle(style = Stroke)</code> par anneau, aucune recomposition.</li>
+<li>Gain : <code>AnimatedContent</code> pour le glyphe, <code>HapticFeedbackType.Confirm</code>.</li>
+<li>Voix : <code>clearAndSetSemantics { }</code> sans <code>label</code> ; sinon <code>contentDescription</code> et <code>Role.Image</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans Material 3 Expressive : <code>scallop</code> et <code>blob</code> rendent <code>CircleShape</code>. Échelle d'animation à zéro : rien ne bouge. Sans couleur dynamique : jetons du thème Meeshy.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément : un <code>&lt;span&gt;</code>, jamais un <code>&lt;button&gt;</code>. <code>aria-hidden="true"</code> sans <code>label</code> ; sinon <code>role="img"</code> et <code>aria-label</code>.</li>
+<li>Fond doux : <code>color-mix(in oklab, var(--tint) 18%, transparent)</code>.</li>
+<li>Festonnée : <code>clip-path: polygon()</code> sur un pseudo-élément qui tourne seul ; le glyphe ne tourne pas.</li>
+<li>Organique : huit rayons de <code>border-radius</code> en <code>@keyframes</code>. Ondes : <code>transform</code> et <code>opacity</code> seuls.</li>
+<li>Rangée de récompenses : <code>&lt;ul&gt;</code> nommée par son compte.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>clip-path</code> : disque. Sans <code>color-mix</code> : teinte pré-calculée par la recette. <code>prefers-reduced-motion</code> : aucune animation, un anneau posé.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">La pastille d'icône des réglages existe sur trois plateformes, et se réécrit partout</h2><p>Relevé dans le dépôt le 16 novembre 2026. Les deux SDK d'interface ont déjà la tuile d'icône d'une rangée de réglages ; le web a un disque de médaillon dans ses notifications. Côté iOS, une quarantaine de fichiers de l'app posent encore un <code>Circle()</code> et une opacité de 0,1 à la main.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift</span><p><span class="be">Devient le composant</span> <code>SettingsRow.iconTile</code> : un glyphe à la teinte reçue sur un carré arrondi à <code>MeeshyOpacity.light</code>, caché à la voix. C'est <code>squircle</code> en <code>soft</code>. Il sort de la rangée, gagne formes, décors et états, et monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Settings/Views/SettingsRowContent.swift</span><p>Le modèle d'une rangée : <code>icon</code>, <code>color</code>, titre. Il reste à l'app et remet glyphe et teinte à K45 par la rangée K06.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift</span><p><code>iconBadge(_:color:)</code>, la même tuile réécrite. <code>fieldIcon(_:color:)</code> l'est quatre fois de plus : <span class="mono">Settings/Views/SupportView.swift</span>, <span class="mono">AboutView.swift</span>, <span class="mono">DataStorageView.swift</span>, <span class="mono">MediaDownloadSettingsView.swift</span>. Rebranchés.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Game/GameBadgeShelf.swift</span><p><code>GameBadgeSwatch</code> : allumé, ou éteint à 35 % avec un contour de 1,5. Ce sont les états <code>earned</code> et <code>locked</code>. L'étagère et ses paliers restent au jeu.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Game/Choreography/BadgeStage.swift</span><p>La scène d'un badge qui s'allume, avec son chemin de mouvement réduit. Elle donne sa cadence au gain de K45 ; la cérémonie reste au jeu.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/settings/SettingsRow.kt</span><p><span class="be">Devient le composant</span> La tuile d'icône : teinte à <code>ICON_TILE_ALPHA</code> (0,12, dans <span class="mono">SettingsRowMetrics.kt</span>), <code>RoundedCornerShape(MeeshyRadius.sm)</code>, sémantique effacée. Déjà dans <code>:sdk-ui</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/core/model/…/model/game/BadgeStageFrame.kt</span><p>La trame pure d'un badge : remplissage, reflet, mouvement réduit, déjà testée (<span class="mono">BadgeStageFrameTest.kt</span>). Elle devient le calcul du gain ; <span class="mono">feature/game/…/game/BadgeStage.kt</span> s'y rebranche.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">aucun jumeau</span><p><span class="no">À créer</span> <code>MaterialShapes</code> n'apparaît nulle part dans <span class="mono">apps/android</span>. Les formes <code>scallop</code> et <code>blob</code> naissent en K45, avec leur repli en disque.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/notification-row.tsx</span><p><span class="be">Devient le composant</span> <code>MedallionDisc</code>, avec <code>MilestoneMedallion</code> et <code>GameMedallion</code> : un disque de 44 teinté du type, caché à la voix. Il perd son relief et ses marqueurs de notification, qui restent à l'hôte.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/game/game-badge.tsx</span><p>Le badge de jeu en métal, avec <code>collected</code> et <code>total</code>. Il reste au jeu ; sa rangée de compte prend <code>MeeshyMedallionRow</code>.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: stretch">
+<div class="card" style="display: flex; flex-direction: column; padding: 4px 0; flex: 1">
+<div class="row" style="padding: 8px 14px; min-height: 52px"><span class="md z36 sq t-info">[[ic:bell-ringing]]</span><span class="tx"><b style="font-size: 14px">Notifications</b></span><span class="car">[[ic:caret-right s]]</span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px; min-height: 52px"><span class="md z36 sq t-ok">[[ic:lock-key]]</span><span class="tx"><b style="font-size: 14px">Confidentialité</b></span><span class="car">[[ic:caret-right s]]</span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px; min-height: 52px"><span class="md z36 sq t-acc">[[ic:translate]]</span><span class="tx"><b style="font-size: 14px">Traduction</b></span><span class="car">[[ic:caret-right s]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Réglages</b><span class="kcap">L'emplacement de tête de chaque rangée K06 : <code>squircle</code> de 36, une teinte par thème.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 14px">
+<div style="display: flex; align-items: center; gap: 12px"><span class="md" style="--c: #FF6B6B">[[ic:heart-fill]]</span><span class="tx"><b style="font-size: 14px">Mina a aimé ta story</b><span>Il y a 4 min</span></span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="md t-warn">[[ic:trophy-fill]]</span><span class="tx"><b style="font-size: 14px">Nouveau rang : Or III</b><span>Il y a 2 h</span></span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="md t-info">[[ic:at]]</span><span class="tx"><b style="font-size: 14px">Tomás t'a mentionnée</b><span>Hier</span></span></div>
+</div>
+<div class="cp"><b>Notifications</b><span class="kcap">Le type de la ligne se lit avant le texte : même disque de 44, la teinte dit la nature.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 14px">
+<div style="display: flex; align-items: center; gap: 12px"><span class="md z40 t-ok">[[ic:phone-incoming]]</span><span class="tx"><b style="font-size: 14px">Léo Marchetti</b><span>Entrant · 12 min</span></span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="md z40 t-err">[[ic:phone-x]]</span><span class="tx"><b style="font-size: 14px">Kwame Mensah</b><span>Manqué · 09:14</span></span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="md z40 t-neu">[[ic:video-camera]]</span><span class="tx"><b style="font-size: 14px">Mina Okafor</b><span>Sortant · 3 min</span></span></div>
+</div>
+<div class="cp"><b>Journal d'appels</b><span class="kcap">Le sens et l'issue d'un appel : glyphe et genre. Le rouge n'est jamais seul, la ligne dit « Manqué ».</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 10px">
+<div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 18px; background: var(--field)"><span class="md sq t-err">[[ic:file-pdf]]</span><span class="tx"><b style="font-size: 14px">Devis-studio.pdf</b><span>248 Ko</span></span></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 18px; background: var(--field)"><span class="md sq t-acc">[[ic:file-audio]]</span><span class="tx"><b style="font-size: 14px">Dakar-nuit-prise3.wav</b><span>18,4 Mo</span></span></div>
+</div>
+<div class="cp"><b>Pièce jointe</b><span class="kcap">La famille d'un fichier dans une bulle : <code>squircle</code> de 44, teinte de la famille.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque genre × fond × forme × taille rend les valeurs du tableau : diamètre, rayon, fond, encre, taille du glyphe (moitié du diamètre, 14 au moins). Vecteurs <code>K45-MeeshyMedallion.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Jamais interactif.</b> Aucun rôle de bouton, aucune cible, aucun état pressé, aucun geste. Garde de source : pas de <code>Button</code>, de <code>clickable</code> ni de <code>onClick</code> dans le composant.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Sans <code>label</code> : absent de l'arbre d'accessibilité. Avec <code>label</code> : une image nommée. Verrouillé : le nom dit « verrouillé ». La rangée dit « 3 sur 5 » en un seul élément.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Contraste.</b> Le glyphe tient 3:1 sur son fond doux pour chaque genre, en clair et en sombre. L'encre d'un aplat tient 4,5:1. Le genre n'est jamais le seul porteur du sens.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Repli de forme.</b> <code>supportsShape</code> faux : <code>scallop</code> et <code>blob</code> rendent un disque de même diamètre, même fond, même contenu. La boîte ne change pas d'un pixel.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit et RTL.</b> Sans mouvement : aucune animation, un anneau posé, gain en fondu. En arabe : le trait barré garde son sens, la rangée de récompenses se lit de droite à gauche.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Le halo et les ondes ne changent pas la boîte : aucun voisin ne bouge ni ne se re-peint. Un médaillon qui passe de <code>locked</code> à <code>earned</code> ne re-rend pas sa rangée. Garde de source : aucun type du domaine, aucun singleton, aucune opacité ni couleur hors de <code>MeeshyMedallionRecipe</code>. Non-régression : les rangées de réglages gardent leurs instantanés.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Décoratif par défaut : dans une rangée, le titre dit déjà la chose. Seul sur un écran d'état, il reste caché et la phrase de K38 parle. Très grande police : le glyphe grandit jusqu'au diamètre, pas au-delà.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Aucun flou, aucune ombre portée. Dans une liste : <code>disc</code> ou <code>squircle</code>, sans animation. Les formes animées s'arrêtent hors écran. Seules l'opacité et la transformation s'animent.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8145}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

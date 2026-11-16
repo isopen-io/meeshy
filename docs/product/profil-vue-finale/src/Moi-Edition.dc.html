@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ma vitrine en édition — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.f{display:flex;flex-direction:column;gap:4px;min-height:68px;padding:12px 16px;border-radius:18px;background:var(--field);border:1px solid transparent;justify-content:center}
+.f.on{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in oklab,var(--accent) 22%,transparent)}
+.f input,.f textarea{font:inherit;font-size:17px;font-weight:500;line-height:1.4;color:var(--ink);background:none;border:0;outline:0;padding:0;margin:0;width:100%;min-width:0;resize:none}
+.f input:disabled{color:var(--ink2);-webkit-text-fill-color:var(--ink2);opacity:1}
+.caret{display:inline-block;width:2px;height:22px;border-radius:2px;background:var(--accent);animation:edBlink 1.1s steps(1) infinite}
+.sw8{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;flex:none;position:relative}
+.sw8.sel::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2.5px solid var(--ink)}
+.pill{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px 0 7px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.live{animation:edGlow 3.2s ease-in-out infinite}
+@keyframes edBlink{50%{opacity:0}}
+@keyframes edGlow{0%,100%{opacity:.55}50%{opacity:1}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<header style="position: relative; height: 262px; overflow: hidden; background: linear-gradient(165deg, #6D28D9 0%, #3B1A78 52%, #09090B 100%)">
+<div class="orb" style="width: 220px; height: 220px; left: -50px; top: 20px; background: #A855F7; opacity: .75"></div>
+<div class="orb" style="width: 180px; height: 180px; right: -40px; top: 90px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 110px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 54px 16px 0">
+<button style="min-height: 44px; padding: 0 6px; font-size: 16px; font-weight: 600; color: var(--ink)">Annuler</button>
+<button class="btn a sm">Enregistrer</button>
+</div>
+
+<div style="position: absolute; right: 16px; top: 122px">
+<button class="btn g sm" style="padding: 0 14px">[[ic:image s]]<span>Changer la bannière</span></button>
+</div>
+</header>
+
+<section class="rise" style="position: relative; margin-top: -78px; padding: 0 20px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div style="position: relative; display: inline-flex; border-radius: 50%; padding: 5px; background: var(--ground); border: 2px dashed var(--accent)">
+<span class="av" style="width: 108px; height: 108px; font-size: 38px">AN</span>
+<button class="ib glass" aria-label="Changer ma photo" style="position: absolute; right: -6px; bottom: -4px; color: var(--ink)">[[ic:camera]]</button>
+</div>
+<span class="mono" style="margin-bottom: 14px; font-size: 14px; color: var(--accent-ink)">@aissa</span>
+</div>
+<div style="display: flex; gap: 8px">
+<button class="chip" style="min-height: 44px; padding: 0 15px; color: var(--ink)">[[ic:camera s]]<span>Photo</span></button>
+<button class="chip" style="min-height: 44px; padding: 0 15px; color: var(--ink)">[[ic:magic-wand s]]<span>Retoucher</span></button>
+<button class="chip" style="min-height: 44px; padding: 0 15px; color: var(--ink)">[[ic:palette s]]<span>Décor</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .06s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 10px">
+<h2 class="d" style="font-size: 22px; margin-bottom: 6px">Identité</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div class="f"><label class="tag" for="ed-prenom">Prénom</label><input id="ed-prenom" type="text" value="Aïssa" autocomplete="given-name"></div>
+<div class="f"><label class="tag" for="ed-nom">Nom</label><input id="ed-nom" type="text" value="Ndiaye" autocomplete="family-name"></div>
+</div>
+<div class="f on">
+<label class="tag" for="ed-affiche" style="color: var(--accent-ink)">Nom affiché</label>
+<div style="display: flex; align-items: center; gap: 1px"><input id="ed-affiche" type="text" value="Aïssa Ndiaye" size="12" style="width: auto; flex: none"><span class="caret"></span></div>
+</div>
+<div class="f" style="flex-direction: row; align-items: center; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0">
+<label class="tag" for="ed-pseudo">Pseudo</label>
+<input id="ed-pseudo" class="mono" type="text" value="@aissa" disabled style="font-size: 16px">
+<span style="font-size: 12.5px; color: var(--ink3)">Ne se modifie pas ici</span>
+</div>
+<span class="ib" style="background: var(--raised); color: var(--ink3)">[[ic:lock-simple]]</span>
+</div>
+<div class="f">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<label class="tag" for="ed-bio">Bio</label>
+<span class="mono" style="font-size: 11.5px; color: var(--ink3)">78 / 500</span>
+</div>
+<textarea id="ed-bio" rows="3">Designer sonore à Dakar. Je parle wolof, j'écris en français, je rêve en anglais.</textarea>
+</div>
+<div class="f" style="flex-direction: row; align-items: center; gap: 12px">
+<span style="color: var(--accent-ink); display: inline-flex">[[ic:map-pin]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: center; gap: 8px"><label class="tag" for="ed-ville">Ville</label><span class="new">Nouveau</span></div>
+<input id="ed-ville" type="text" value="Dakar" autocomplete="address-level2">
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .12s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px">
+<h2 class="d" style="font-size: 22px">Couleur d'accent</h2>
+<span class="new">Nouveau</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, 44px); justify-content: space-between; row-gap: 18px; padding: 6px 8px">
+<button class="sw8 sel" aria-label="Violet, sélectionnée" aria-pressed="true" style="background: #A855F7; color: #0B0B12">[[ic:check s]]</button>
+<button class="sw8" aria-label="Turquoise" style="background: #4ECDC4"></button>
+<button class="sw8" aria-label="Corail" style="background: #FF6B6B"></button>
+<button class="sw8" aria-label="Ambre" style="background: #F8B500"></button>
+<button class="sw8" aria-label="Bleu" style="background: #3498DB"></button>
+<button class="sw8" aria-label="Vert" style="background: #2ECC71"></button>
+<button class="sw8" aria-label="Framboise" style="background: #FF2E63"></button>
+<button class="sw8" aria-label="Automatique" style="background: conic-gradient(from 210deg, #A855F7, #4ECDC4, #F8B500, #FF2E63, #A855F7); color: #0B0B12">[[ic:magic-wand s]]</button>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px; background: linear-gradient(120deg, color-mix(in oklab, var(--accent) 34%, transparent), color-mix(in oklab, var(--accent) 8%, transparent)); border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent)">
+<span class="dot live" style="background: var(--accent); border-color: transparent; width: 10px; height: 10px; border-width: 0"></span>
+<span style="flex: 1; min-width: 0; font-size: 14px; color: var(--ink)">Aperçu en direct : ta bannière est en <b style="color: var(--accent-ink)">Violet</b></span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .18s; padding: 36px 0 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 0 20px">
+<h2 class="d" style="font-size: 22px">Décor</h2>
+<a href="#" style="font-size: 13.5px; font-weight: 700; color: var(--accent-ink); min-height: 44px; display: inline-flex; align-items: center">Mes packs</a>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 0 20px">
+<button style="display: flex; flex-direction: column; gap: 8px; text-align: left">
+<span class="ph" style="height: 104px; width: 100%; position: relative; align-items: center; justify-content: center; padding: 0">
+<span style="width: 62px; height: 62px; border-radius: 50%; border: 3px solid var(--accent); box-shadow: 0 0 18px var(--accent); display: block"></span>
+</span>
+<span style="font-size: 13.5px; font-weight: 700; color: var(--ink); line-height: 1.25; min-height: 34px">Contour d'avatar</span>
+<span style="font-size: 12px; color: var(--ink2)">Néon Dakar</span>
+</button>
+<button style="display: flex; flex-direction: column; gap: 8px; text-align: left">
+<span class="ph" style="height: 104px; width: 100%">bannière</span>
+<span style="font-size: 13.5px; font-weight: 700; color: var(--ink); line-height: 1.25; min-height: 34px">Bannière</span>
+<span style="font-size: 12px; color: var(--ink2)">Néon Dakar</span>
+</button>
+<button style="display: flex; flex-direction: column; gap: 8px; text-align: left">
+<span class="ph" style="height: 104px; width: 100%; box-shadow: inset 0 0 0 4px var(--accent)">cadre</span>
+<span style="font-size: 13.5px; font-weight: 700; color: var(--ink); line-height: 1.25; min-height: 34px">Cadre de bannière</span>
+<span style="font-size: 12px; color: var(--ink2)">Néon Dakar</span>
+</button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .24s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 10px">
+<h2 class="d" style="font-size: 22px; margin-bottom: 6px">Contact</h2>
+<div class="f">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<label class="tag" for="ed-mail">E-mail</label>
+<span class="pill" style="background: color-mix(in oklab, var(--ok) 16%, transparent); color: var(--ok)">[[ic:seal-check s]]<span>Vérifié</span></span>
+</div>
+<input id="ed-mail" type="email" value="aissa@exemple.sn" autocomplete="email">
+</div>
+<div class="f" style="gap: 6px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<label class="tag" for="ed-tel">Téléphone</label>
+<span class="pill" style="background: color-mix(in oklab, var(--warn) 16%, transparent); color: var(--warn)">[[ic:shield-warning s]]<span>Non vérifié</span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<input id="ed-tel" type="tel" value="+221 •• ••• 42 18" autocomplete="tel">
+<button class="btn a sm" style="flex: none">Vérifier</button>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .3s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px">
+<h2 class="d" style="font-size: 22px">Langues du Prisme</h2>
+<span style="color: var(--accent-ink); display: inline-flex">[[ic:translate]]</span>
+</div>
+<div class="f" style="flex-direction: row; align-items: center; gap: 12px; padding-right: 6px; border-color: color-mix(in oklab, var(--accent) 50%, transparent)">
+<span class="d" style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #0B0B12; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none">1</span>
+<span style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0"><span class="tag">Principale</span><span style="font-size: 17px; font-weight: 500">Français</span></span>
+<button class="ib" aria-label="Déplacer Français" style="color: var(--ink3)">[[ic:dots-six-vertical]]</button>
+</div>
+<div class="f" style="flex-direction: row; align-items: center; gap: 12px; padding-right: 6px">
+<span class="d" style="width: 30px; height: 30px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 34%, transparent); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none">2</span>
+<span style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0"><span class="tag">2e choix</span><span style="font-size: 17px; font-weight: 500">Wolof</span></span>
+<button class="ib" aria-label="Déplacer Wolof" style="color: var(--ink3)">[[ic:dots-six-vertical]]</button>
+</div>
+<div class="f" style="flex-direction: row; align-items: center; gap: 12px; padding-right: 6px">
+<span class="d" style="width: 30px; height: 30px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 16%, transparent); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none">3</span>
+<span style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0"><span class="tag">3e choix</span><span style="font-size: 17px; font-weight: 500">Anglais</span></span>
+<button class="ib" aria-label="Déplacer Anglais" style="color: var(--ink3)">[[ic:dots-six-vertical]]</button>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; padding: 12px 4px 0">
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span style="font-size: 16px; font-weight: 600">Traduire automatiquement</span><span style="font-size: 13px; color: var(--ink2)">Tu lis tout dans ta langue principale.</span></span>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Traduire automatiquement"></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .36s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px">Ma voix</h2>
+<div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px 14px 14px; border-radius: 26px; background: var(--field)">
+<button class="ib" aria-label="Écouter l'échantillon de ma voix" style="width: 52px; height: 52px; background: var(--accent); color: #0B0B12">[[ic:play-fill]]</button>
+<div class="wave" style="flex: 1; height: 36px; justify-content: space-between">
+<i style="height: 30%"></i><i style="height: 60%"></i><i style="height: 90%"></i><i style="height: 45%"></i><i style="height: 75%"></i><i style="height: 100%"></i><i style="height: 55%"></i><i style="height: 35%"></i><i style="height: 80%"></i><i style="height: 60%"></i><i style="height: 95%"></i><i style="height: 40%"></i><i style="height: 70%"></i><i style="height: 50%"></i><i style="height: 85%"></i><i style="height: 30%"></i><i style="height: 65%"></i><i style="height: 45%"></i><i style="height: 75%"></i><i style="height: 35%"></i><i style="height: 55%"></i><i style="height: 25%"></i>
+</div>
+<span class="mono" style="color: var(--ink2)">0:12</span>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; padding: 0 4px">
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span style="font-size: 16px; font-weight: 600">Rendre mon échantillon public</span><span style="font-size: 13px; color: var(--ink2)">Tout le monde peut l'écouter sur ta vitrine.</span></span>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Rendre mon échantillon public"></button>
+</div>
+<button class="btn q" style="align-self: flex-start">[[ic:microphone]]<span>Réenregistrer</span></button>
+</section>
+
+<aside role="status" style="position: sticky; bottom: 0; margin-top: 30px; padding: 26px 16px 24px; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.92) 46%)">
+<div class="glass" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 20px">
+<span style="color: var(--warn); display: inline-flex">[[ic:cloud-slash]]</span>
+<span style="flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.35; color: var(--ink)"><b>Hors ligne</b> — tes changements partiront au retour du réseau</span>
+</div>
+</aside>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2476}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K43 MeeshyGroupCard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;flex-direction:column;align-items:stretch;justify-content:center;flex:1;min-height:120px;gap:12px}
+.badge{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;flex:none;background:color-mix(in oklab,var(--c,var(--brand-soft)) 18%,transparent);color:var(--c,var(--brand-soft))}
+.tx{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.tx>b{font-weight:700;font-size:15px}
+.tx>span{font-size:13px;line-height:1.35;color:var(--ink2)}
+.car{display:inline-flex;color:var(--ink3)}
+.oh{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:12px 18px 4px}
+.nt{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-radius:14px;background:var(--field);font-size:12.5px;line-height:1.4;color:var(--ink2)}
+.nt>.ic{margin-top:1px;color:var(--ink2)}
+.ft{display:flex;flex-direction:column;gap:12px;padding:14px 16px 16px}
+.g-gnd{background:var(--ground)}
+.g-gls{border-radius:30px;color:var(--ink)}
+.g-gls .sep{background:var(--glass-line)}
+.g-acc{position:relative;overflow:hidden;background:radial-gradient(120% 90% at 50% 0%,color-mix(in oklab,var(--accent) 22%,var(--raised)),var(--raised) 70%);border-color:color-mix(in oklab,var(--accent) 30%,transparent)}
+.g-dng{background:color-mix(in oklab,var(--err) 8%,var(--raised));border-color:color-mix(in oklab,var(--err) 34%,transparent)}
+.g-dng .sep{background:color-mix(in oklab,var(--err) 24%,transparent)}
+.g-dsh{border-style:dashed;border-width:1.5px;background:transparent}
+.g-sol{background:var(--accent);border-color:transparent;color:#0B0B12}
+.g-hi{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in oklab,var(--accent) 18%,transparent)}
+.g-pr{transform:scale(.97);filter:brightness(1.12)}
+.g-lk>.lk{opacity:.42}
+.act3{display:flex;flex-direction:column;gap:14px;padding:16px 14px;min-height:148px;border-radius:24px;transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
+.mx .act3:active{transform:scale(.97)}
+.bub{border-radius:22px 22px 22px 6px;background:color-mix(in oklab,var(--accent) 14%,var(--field));border:1px solid color-mix(in oklab,var(--accent) 36%,transparent)}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.ins{position:absolute;height:0;border-top:1.5px dashed var(--warn);pointer-events:none}
+.mv-in{animation:gcIn 7s cubic-bezier(.2,.9,.25,1) infinite}
+.mv-row{overflow:hidden;animation:gcOpen 7s cubic-bezier(.3,1.2,.4,1) infinite}
+.mv-sw{display:grid}
+.mv-sw>*{grid-area:1/1}
+.mv-a{animation:gcOut 7s ease-in-out infinite}
+.mv-b{animation:gcRes 7s cubic-bezier(.3,1.5,.5,1) infinite}
+.mv-btn{animation:gcTap 7s cubic-bezier(.3,1.6,.5,1) infinite}
+.mv-hi{animation:gcGlow 7s ease-in-out infinite}
+@keyframes gcIn{0%{opacity:0;transform:translateY(18px) scale(.97)}9%,92%{opacity:1;transform:none}100%{opacity:0;transform:translateY(0) scale(.99)}}
+@keyframes gcOpen{0%,22%{max-height:0;opacity:0}34%,90%{max-height:64px;opacity:1}98%,100%{max-height:0;opacity:0}}
+@keyframes gcTap{0%,46%{transform:scale(1)}50%{transform:scale(.94)}55%,100%{transform:scale(1)}}
+@keyframes gcOut{0%,54%{opacity:1;transform:none}60%,94%{opacity:0;transform:scale(.96)}100%{opacity:1;transform:none}}
+@keyframes gcRes{0%,56%{opacity:0;transform:scale(.9)}64%,92%{opacity:1;transform:none}98%,100%{opacity:0;transform:scale(.9)}}
+@keyframes gcGlow{0%,56%{border-color:color-mix(in oklab,var(--accent) 30%,transparent);box-shadow:0 0 0 0 transparent}64%,90%{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in oklab,var(--accent) 18%,transparent)}100%{border-color:color-mix(in oklab,var(--accent) 30%,transparent);box-shadow:0 0 0 0 transparent}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .18; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K43 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyGroupCard</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Ce qui va ensemble tient dans une seule surface arrondie, avec ses filets en retrait, son en-tête et son pied</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">Un groupe de réglages, une demande d'ami, l'aperçu d'un profil dans une bulle, une tuile « Mes packs ». Le profil dessine cette surface trente fois ; le code l'écrit dans chaque écran. K43 en fait une seule, qui prend sept fonds et cinq gabarits.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il rassemble, il ne décide de rien</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>une</b> surface arrondie (rayon 26, ou 30 sur un média) avec son bord fin, et rogne ce qu'elle contient à ce rayon.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Range ses enfants et trace <b>lui-même</b> les filets entre eux, en retrait de 18. Jamais de filet avant le premier ni après le dernier.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Offre cinq <b>emplacements</b> : en-tête, média de tête, emblème, contenu, pied. Un emplacement vide ne prend aucune place.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Prend son <b>fond</b> et son <b>gabarit</b> dans une recette, et devient un seul bouton quand toute la carte se touche.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre : <b>K01</b> <code>MeeshyGlassTone</code>. Le bouton rond d'un coin : <b>K02</b>. Les actions du pied : <b>K40</b>. La note du pied : <b>K46</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La rangée elle-même : <b>K06</b> pour une bascule, <b>K39</b> pour une personne, <b>K37</b> pour une rangée fermée. Le médaillon : <b>K45</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le titre au-dessus de la carte : <b>K44</b> <code>MeeshySectionHeader</code>. La bannière du média : <b>K27</b>. Un billet à encoches : <b>K30</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Une feuille qui monte du bas : <b>K15</b>. Décider quoi montrer, quand, et à qui : <b>l'app</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:cards xl]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : une carte, une idée, jamais une carte dans une carte</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Ce qui est dans la même surface se lit comme un tout. Deux idées font deux cartes, séparées de 10. Une carte ne contient pas une autre carte relevée : dedans, on passe au fond <code>ground</code> ou à un champ. Le rouge de <code>danger</code> annonce une conséquence, il ne décore pas.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une surface, cinq emplacements</h2><p>La carte « Où il est » de la face Actions, agrandie 1,7 fois, avec tous ses emplacements remplis. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="padding: 44px 40px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div style="position: relative; width: 612px">
+<div class="card" style="zoom: 1.7; width: 360px; overflow: hidden; display: flex; flex-direction: column">
+<div class="oh"><span class="tag">Où il est</span><span style="display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 16%, transparent); color: var(--accent-ink); font-size: 11px; font-weight: 700">[[ic:timer s]]<span>42 min</span></span></div>
+<div style="position: relative; overflow: hidden; height: 110px; margin-top: 6px">
+[[map]]
+<div style="position: absolute; left: 62%; top: 48%; width: 84px; height: 84px; margin: -42px 0 0 -42px; border-radius: 50%; background: rgba(78,205,196,.18); border: 1.5px solid var(--accent)"></div>
+</div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 8px; padding: 0 16px 14px; margin-top: -24px">
+<span style="position: relative; align-self: flex-start; display: inline-flex"><span class="av" style="width: 48px; height: 48px; font-size: 17px; box-shadow: 0 0 0 4px var(--raised)">LM</span><span class="dot on" style="position: absolute; right: -2px; bottom: -2px; border-color: var(--raised)"></span></span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span class="d" style="font-size: 18px">Alfama, Lisbonne</span>
+<span style="font-size: 13px; color: var(--ink2)">Précision quartier</span>
+</div>
+</div>
+<div class="sep"></div>
+<div class="row"><span class="badge" style="--c: var(--accent)">[[ic:map-pin]]</span><span class="tx"><b>Partager ma position avec Léo</b><span>Ma position — non partagée</span></span><span class="car">[[ic:caret-right s]]</span></div>
+<div class="sep"></div>
+<div class="ft">
+<div class="nt">[[ic:info s]]<span>Léo arrête ce partage quand il veut.</span></div>
+<div style="display: flex; gap: 8px">
+<span class="btn a sm" style="flex: 1">[[ic:map-trifold s]]<span>Voir sur la carte</span></span>
+<span class="btn q sm">[[ic:navigation-arrow s]]<span>Itinéraire</span></span>
+</div>
+</div>
+</div>
+<span class="ins" style="left: 0; width: 31px; top: 420px"></span>
+<span class="kan" style="right: -11px; top: 34px">1</span>
+<span class="kan" style="left: 136px; top: 24px">2</span>
+<span class="kan" style="left: 250px; top: 150px">3</span>
+<span class="kan" style="left: 118px; top: 232px">6</span>
+<span class="kan" style="left: 4px; top: 392px">4</span>
+<span class="kan" style="right: 26px; top: 590px">5</span>
+</div>
+</div>
+<div class="card" style="padding: 26px; align-self: start">
+<div class="lgd">
+<span class="kan">1</span><div><b>Surface</b><span>Rayon 26 dans une page, 30 sur un média ou une carte. Bord de 1 px au jeton <code>line</code>. Fond selon la variante. Tout le contenu est rogné au rayon.</span></div>
+<span class="kan">2</span><div><b>En-tête</b><span>Optionnel. Sur-titre 11 px en capitales, et un accessoire de fin (pastille K41, bouton rond K02). Hauteur 44, marges 18.</span></div>
+<span class="kan">3</span><div><b>Média de tête</b><span>Optionnel. Bord à bord, 62 à 140 px de haut : mini-bannière K27, vignette, fond de carte. Il ne porte aucun texte.</span></div>
+<span class="kan">4</span><div><b>Contenu</b><span>Des rangées de 60 px au moins, séparées par un filet de 1 px en retrait de 18 (trait jaune). Ou un contenu libre, marges 16 à 18, écart 14.</span></div>
+<span class="kan">5</span><div><b>Pied</b><span>Optionnel. Une note de conséquence (K46), puis une action ou une paire (K40, 44 de haut, écart 8 à 10). Marges 14 · 16 · 16.</span></div>
+<span class="kan">6</span><div style="border-bottom: 0; padding-bottom: 0"><b>Emblème de tête</b><span>Optionnel. Avatar ou médaillon K45 de 40 à 76 px. Sur un média il chevauche le bord de moitié, détouré de 4 px au fond de la carte.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Sept fonds, cinq gabarits, quatre états</h2><p>Tout est à taille réelle. Les spécimens sont ceux des écrans du profil : mêmes mots, mêmes glyphes, mêmes mesures.</p></header>
+
+<span class="tag">Fonds</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="card" style="display: flex; flex-direction: column; padding: 6px 0">
+<div class="row" style="padding: 8px 14px"><span class="badge" style="--c: var(--info)">[[ic:chart-bar]]</span><span class="tx"><b>Statistiques</b><span>12 480 messages</span></span><span class="car">[[ic:caret-right s]]</span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px"><span class="badge" style="--c: var(--warn)">[[ic:trophy]]</span><span class="tx"><b>Ma Légende</b><span>Niveau 24 · Or III</span></span><span class="car">[[ic:caret-right s]]</span></div>
+</div>
+</div>
+<div class="cp"><b>raised</b><span class="kcap">Le défaut. Relevée d'un cran sur le fond de la page (Moi-Actions, « Mon compte »).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; background: var(--raised)">
+<div class="stage">
+<div class="card g-gnd" style="display: flex; flex-direction: column; padding: 4px 0">
+<div class="row" style="padding: 8px 14px"><span class="av" style="--accent: #818CF8; border-radius: 15px">St</span><span class="tx" style="gap: 0"><span style="font-size: 12.5px; font-weight: 600">Conversation</span><b class="d" style="font-size: 17px">Studio</b></span><span class="car">[[ic:caret-up-down]]</span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px"><span class="tx"><span style="font-size: 12.5px; font-weight: 600">Nom du lien</span><b>Studio — invités</b></span></div>
+</div>
+</div>
+<div class="cp"><b>ground</b><span class="kcap">Dans une feuille K15, déjà relevée : la carte se creuse au lieu de monter (Lien-Creer).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="position: relative; overflow: hidden; border-radius: 22px; padding: 14px 12px; background: linear-gradient(160deg, #0F766E, #134E4A 50%, #312E81)">
+<div class="orb" style="width: 120px; height: 120px; left: -30px; top: -30px; background: #4ECDC4; opacity: .6"></div>
+<div class="glass g-gls" style="position: relative; display: flex; flex-direction: column; padding: 4px 0">
+<div class="row" style="padding: 8px 14px"><span class="av" style="--accent: #4ECDC4; width: 40px; height: 40px; font-size: 14px">LM</span><span class="tx"><b>Léo Marchetti</b><span style="color: var(--ink)">Alfama · 42 min</span></span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px; min-height: 52px"><span style="display: inline-flex">[[ic:navigation-arrow]]</span><span class="tx"><b style="font-weight: 600">Itinéraire</b></span><span class="car" style="color: var(--ink)">[[ic:caret-right s]]</span></div>
+</div>
+</div>
+<div class="cp"><b>glass</b><span class="kcap">Sur un média ou une carte. Rayon 30, verre demandé à K01, filets au jeton du verre (Sans-Contact, Carte-Partage).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #2ECC71; --accent-ink: #6EE7A0">
+<div class="stage">
+<div class="card g-acc" style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 16px 18px; text-align: center">
+<div class="orb" style="width: 110px; height: 110px; left: 50%; margin-left: -55px; top: -60px; background: var(--accent); opacity: .35"></div>
+<span class="av" style="position: relative; width: 56px; height: 56px; font-size: 20px; box-shadow: 0 0 0 5px color-mix(in oklab, var(--accent) 26%, transparent)">SB</span>
+<b class="d" style="position: relative; font-size: 20px">Vous êtes amies</b>
+<span style="position: relative; font-size: 13px; color: var(--ink2)">Sofia et toi pouvez vous voir en ligne.</span>
+</div>
+</div>
+<div class="cp"><b>accent</b><span class="kcap">Lavis de la teinte reçue, 22 % en tête, bord à 30 %. Orbe optionnelle, portée par <code>motion.float</code> (Etat-Demande).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="card g-dng" style="display: flex; flex-direction: column; padding: 6px 0">
+<div class="row" style="padding: 8px 14px; color: var(--err)"><span style="display: inline-flex">[[ic:prohibit]]</span><span class="tx"><b style="font-weight: 600">Bloquer Léo</b></span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px; color: var(--err)"><span style="display: inline-flex">[[ic:flag]]</span><span class="tx"><b style="font-weight: 600">Signaler</b></span></div>
+</div>
+</div>
+<div class="cp"><b>danger</b><span class="kcap">Fond rouge à 8 %, bord à 34 %, filets à 24 %. Réservé à ce qui retire ou coupe (Autre-Actions, Lien-Detail).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="card g-dsh" style="display: flex; align-items: center; gap: 12px; padding: 16px 14px">
+<span class="ib" style="background: var(--field); color: var(--ink2)">[[ic:lock-simple]]</span>
+<span class="tx"><b class="d" style="font-size: 16px; text-wrap: balance">Sofia n'accepte pas de nouvelles demandes</b><span>Tu peux toujours lui écrire.</span></span>
+</div>
+</div>
+<div class="cp"><b>dashed</b><span class="kcap">Bord pointillé de 1,5, sans fond : ce qui est fermé ou encore vide. La place est tenue, rien n'est promis (Etat-Demande).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: row; align-items: stretch">
+<span class="card g-sol act3" style="flex: 1; min-height: 132px"><span style="display: inline-flex">[[ic:gift-fill l]]</span><span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto"><span class="d" style="font-size: 26px">14</span><span style="font-size: 12px; font-weight: 700; line-height: 1.25">Filleuls</span></span></span>
+<span class="card g-sol act3" style="flex: 1; min-height: 132px; background: var(--ok)"><span style="display: inline-flex">[[ic:qr-code l]]</span><span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto"><span class="d" style="font-size: 20px; line-height: 1.1">Mon code</span><span style="font-size: 12px; font-weight: 700; line-height: 1.25">Montrer</span></span></span>
+</div>
+<div class="cp"><b>solid</b><span class="kcap">Aplat de la teinte, texte sombre <code>#0B0B12</code>, sans bord. Une carte d'action qui doit se voir en premier.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="display: flex; flex-direction: column; gap: 18px; padding: 20px; flex: 1">
+<div class="stage">
+<div class="card" style="display: flex; flex-direction: column; padding: 6px 0">
+<div class="row" style="padding: 8px 14px"><span class="badge" style="--c: var(--info)">[[ic:chart-bar]]</span><span class="tx"><b>Statistiques</b><span>12 480 messages</span></span><span class="car">[[ic:caret-right s]]</span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px"><span class="badge" style="--c: var(--warn)">[[ic:trophy]]</span><span class="tx"><b>Ma Légende</b><span>Niveau 24 · Or III</span></span><span class="car">[[ic:caret-right s]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes jetons : fond lavande très pâle, bord indigo à 18 %. Aucune ombre portée.</span></div>
+</div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Gabarits</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage">
+<div class="card" style="display: flex; flex-direction: column; padding: 6px 0">
+<div class="row" style="padding-top: 12px; padding-bottom: 12px"><span class="badge" style="--c: var(--ink2)">[[ic:map-pin]]</span><span class="tx"><b>Ma position</b><span>Non partagée — tu n'es visible par personne</span></span><span class="btn a sm">Partager</span></div>
+<div class="sep"></div>
+<div class="row"><span class="badge" style="--c: var(--ok)">[[ic:battery-medium]]</span><span class="tx"><b>Ma batterie</b><span>Visible par mes Proches</span></span><span class="sw on"></span></div>
+<div class="sep"></div>
+<div class="row"><span class="badge" style="--c: var(--accent)">[[ic:ghost]]</span><span class="tx"><b>Mode fantôme</b><span>Désactivé</span></span><span class="sw"></span></div>
+</div>
+</div>
+<div class="cp"><b>group</b><span class="kcap">Des rangées, des filets en retrait de 18, marges hautes et basses de 6. La carte ne sait pas ce que sont ses rangées (Moi-Actions).</span></div>
+</div>
+<div class="kcell kc" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<span style="display: flex; align-items: center; justify-content: space-between; color: var(--ok)">[[ic:battery-medium l]]<span class="tag">Batterie</span></span>
+<span class="d" style="font-size: 30px">64 %</span>
+<span class="bar"><i style="width: 64%; background: var(--ok)"></i></span>
+</div>
+<div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<span style="display: flex; align-items: center; justify-content: space-between; color: var(--ok)">[[ic:cell-signal-high l]]<span class="tag">Réseau</span></span>
+<span class="d" style="font-size: 26px; line-height: 34px">Joignable</span>
+<span style="font-size: 12.5px; color: var(--ink2); line-height: 8px">Vu à l'instant</span>
+</div>
+</div>
+<div class="card row" style="padding: 10px 16px; border-radius: 22px">
+<span class="ib" style="background: color-mix(in oklab, var(--accent) 16%, transparent); color: var(--accent-ink)">[[ic:bell-ringing]]</span>
+<span style="flex: 1; min-width: 0; font-weight: 600; font-size: 14.5px; line-height: 1.3">Me prévenir s'il devient injoignable</span>
+<span class="sw on"></span>
+</div>
+</div>
+<div class="cp"><b>content</b><span class="kcap">Contenu libre, marges de 16, écart de 10 à 14. L'en-tête porte le glyphe et le sur-titre. Deux cartes voisines sont à 10 l'une de l'autre (Autre-Actions).</span></div>
+</div>
+<div class="kcell kc" style="--accent: #2ECC71; --accent-ink: #6EE7A0">
+<div class="stage">
+<div class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px">
+<p style="font-size: 14px; font-weight: 600; color: var(--ink)">Sofia veut être ton amie</p>
+<div style="display: flex; align-items: flex-end; gap: 10px">
+<span class="av" style="width: 34px; height: 34px; font-size: 12.5px">SB</span>
+<div class="bub" style="display: flex; flex-direction: column; gap: 8px; padding: 13px 16px; flex: 1; min-width: 0">
+<p style="font-size: 16px; line-height: 1.4; color: var(--ink)">On s'est croisées au festival !</p>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--accent-ink)">[[ic:translate s]]<span>Traduit de l'arabe</span></span>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px">
+<span class="btn a" style="padding: 0 14px">[[ic:check]]<span>Accepter</span></span>
+<span class="btn q" style="padding: 0 14px">[[ic:x]]<span>Refuser</span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>prompt</b><span class="kcap">Une demande, une invitation, une proposition : tête à avatar, le texte, une action principale et une ou deux secondaires. La principale est 1,25 fois plus large (Etat-Demande).</span></div>
+</div>
+<div class="kcell kc" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage" style="align-items: center">
+<div class="card" style="position: relative; overflow: hidden; width: 296px; border-radius: 24px 24px 24px 8px; box-shadow: 0 18px 40px rgba(0,0,0,.4)">
+<div style="position: relative; height: 68px; overflow: hidden; background: linear-gradient(165deg, #0F766E 0%, #134E4A 55%, #13111C 100%)">
+<div class="orb" style="width: 110px; height: 110px; left: -30px; top: -40px; background: #4ECDC4; opacity: .7"></div>
+<div class="orb" style="width: 90px; height: 90px; right: -20px; top: 10px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 0 16px 16px; margin-top: -26px; position: relative">
+<span style="position: relative; align-self: flex-start; display: inline-flex"><span class="av" style="width: 56px; height: 56px; font-size: 20px; box-shadow: 0 0 0 4px var(--raised)">LM</span><span class="dot on" style="position: absolute; right: -2px; bottom: -2px; border-color: var(--raised)"></span></span>
+<div style="display: flex; flex-direction: column; gap: 1px"><span class="d" style="font-size: 20px">Léo Marchetti</span><span class="mono" style="font-size: 13px; color: var(--accent-ink)">@leo.m</span></div>
+<p style="font-size: 14px; line-height: 1.4; color: var(--ink)">Photographe de rue. Lyon ⇄ Lisbonne.</p>
+<span class="btn a sm" style="align-self: stretch">[[ic:user-focus s]]<span>Voir la vitrine</span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>preview</b><span class="kcap">L'aperçu riche d'une entité ou d'un lien : média, emblème à cheval, deux lignes, une ou deux actions. En bulle, le coin tourné vers l'auteur passe à 8 (Autre-Liens, Apercu-Lien).</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<button class="card act3" style="background: linear-gradient(160deg, color-mix(in oklab, var(--warn) 16%, var(--raised)), var(--raised) 70%)"><span style="color: var(--warn); display: inline-flex">[[ic:star-fill l]]</span><span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto"><span class="d" style="font-size: 30px">48</span><span style="font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--ink2)">Messages favoris</span></span></button>
+<button class="card act3" style="background: linear-gradient(160deg, color-mix(in oklab, var(--brand) 22%, var(--raised)), var(--raised) 70%)"><span style="color: var(--brand-soft); display: inline-flex">[[ic:bookmark-simple-fill l]]</span><span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto"><span class="d" style="font-size: 30px">112</span><span style="font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--ink2)">Publications enregistrées</span></span></button>
+<button class="card act3" style="background: linear-gradient(160deg, color-mix(in oklab, var(--accent) 20%, var(--raised)), var(--raised) 70%)"><span style="color: var(--accent-ink); display: inline-flex">[[ic:stack-fill l]]</span><span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto"><span class="d" style="font-size: 30px">6</span><span style="font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--ink2)">Mes packs</span></span></button>
+</div>
+</div>
+<div class="cp"><b>action</b><span class="kcap">Toute la carte se touche : un seul bouton, un seul nom dit. Emblème en tête, valeur ou titre en pied, rayon 24, 148 de haut au moins (Moi-Actions, « Mes contenus »).</span></div>
+</div>
+<div class="kcell kc" style="--accent: #2ECC71; --accent-ink: #6EE7A0">
+<div class="stage">
+<div class="tonal" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 28px; background: color-mix(in oklab, var(--accent) 10%, var(--field)); border-color: color-mix(in oklab, var(--accent) 34%, transparent)">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; flex: none; color: #0B0B12; background: var(--accent); animation: mxMorph 8s ease-in-out infinite">[[ic:handshake-fill]]</span>
+<span class="tx"><b class="d" style="font-size: 19px">Sofia veut être ton amie</b><span style="font-size: 12.5px">Reçue aujourd'hui à 09:14</span></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<span class="btn a" style="min-height: 56px; padding: 0 12px; font-size: 16px">[[ic:check]]<span>Accepter</span></span>
+<span class="btn q" style="min-height: 56px; padding: 0 12px; font-size: 16px">[[ic:x]]<span>Refuser</span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>prompt sur Android</b><span class="kcap">Même API. La surface est tonale, rayon 28, l'emblème prend une forme expressive, les actions montent à 56 et se partagent la largeur (Android-Feuilles).</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">États</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: center"><button class="card act3" style="width: 150px; background: linear-gradient(160deg, color-mix(in oklab, var(--accent) 20%, var(--raised)), var(--raised) 70%)"><span style="color: var(--accent-ink); display: inline-flex">[[ic:stack-fill l]]</span><span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto"><span class="d" style="font-size: 30px">6</span><span style="font-size: 12px; font-weight: 600; color: var(--ink2)">Mes packs</span></span></button></div>
+<div class="cp"><b>Repos</b><span class="kcap">Une carte inerte n'a ni rôle ni cible. Une carte d'action est un bouton nommé.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: center"><span class="card act3 g-pr" style="width: 150px; background: linear-gradient(160deg, color-mix(in oklab, var(--accent) 20%, var(--raised)), var(--raised) 70%)"><span style="color: var(--accent-ink); display: inline-flex">[[ic:stack-fill l]]</span><span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto"><span class="d" style="font-size: 30px">6</span><span style="font-size: 12px; font-weight: 600; color: var(--ink2)">Mes packs</span></span></span></div>
+<div class="cp"><b>Pressé</b><span class="kcap">Seulement si toute la carte se touche : échelle 0,97, fond éclairci de 12 %. Une rangée pressée ne presse pas sa carte.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="card g-hi" style="display: flex; flex-direction: column; padding: 6px 0">
+<div class="row" style="padding: 8px 14px"><span class="badge" style="--c: var(--accent)">[[ic:user-plus]]</span><span class="tx"><b>Demandes d'amis</b><span>2 à répondre</span></span><span class="car">[[ic:caret-right s]]</span></div>
+</div>
+</div>
+<div class="cp"><b>Mis en avant</b><span class="kcap">Bord d'accent plein et halo de 4 px à 18 %. L'écran y mène l'œil une fois, puis le halo se retire.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="card g-lk" style="display: flex; flex-direction: column; padding: 6px 0 0">
+<div class="row lk" style="padding: 8px 14px"><span class="badge" style="--c: var(--ink2)">[[ic:map-pin]]</span><span class="tx"><b>Sa position</b><span>Quartier</span></span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row lk" style="padding: 8px 14px"><span class="badge" style="--c: var(--ink2)">[[ic:battery-medium]]</span><span class="tx"><b>Sa batterie</b><span>Niveau</span></span></div>
+<div class="ft" style="padding: 10px 12px 12px"><div class="nt">[[ic:lock-key s]]<span>Ouvert à partir de Proche</span></div></div>
+</div>
+</div>
+<div class="cp"><b>Verrouillé</b><span class="kcap">Le contenu passe à 42 %, rien ne s'active, le pied dit ce qui ouvre. La rangée fermée seule reste à K37.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Elle arrive d'un bloc, s'ouvre d'une rangée, répond à un geste</h2><p>La carte entre par <code>motion.rise</code>, une fois, entière. Une rangée qui apparaît l'agrandit par <code>motion.collapse</code>, sans pousser d'un coup ses voisines. Quand son action aboutit, le pied change de forme par <code>motion.morph</code>. L'orbe d'un fond <code>accent</code> dérive sur <code>motion.float</code>.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px; --accent: #2ECC71; --accent-ink: #6EE7A0">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; min-height: 250px; flex: 1; padding-top: 44px">
+<div class="card mv-in" style="display: flex; flex-direction: column; padding: 6px 0; --accent: #A855F7">
+<div class="row" style="padding: 8px 14px"><span class="badge" style="--c: var(--ink2)">[[ic:map-pin]]</span><span class="tx"><b>Ma position</b><span>Non partagée</span></span><span class="sw"></span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px"><span class="badge" style="--c: var(--ok)">[[ic:battery-medium]]</span><span class="tx"><b>Ma batterie</b><span>Visible par mes Proches</span></span><span class="sw on"></span></div>
+<div class="mv-row">
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px"><span class="badge" style="--c: var(--warn)">[[ic:phone-slash]]</span><span class="tx"><b>Injoignable</b><span>Prévenir mes Proches</span></span><span class="sw on"></span></div>
+</div>
+</div>
+<div class="card g-acc mv-in mv-hi" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; animation-delay: .25s, 0s">
+<div class="orb" style="width: 130px; height: 130px; right: -40px; top: -60px; background: var(--accent); opacity: .3"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 12px">
+<span class="av" style="width: 44px; height: 44px">SB</span>
+<span class="tx"><b class="d" style="font-size: 17px">Sofia veut être ton amie</b><span>Reçue aujourd'hui à 09:14</span></span>
+</div>
+<div class="mv-sw" style="position: relative">
+<div class="mv-a" style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px">
+<span class="btn a mv-btn" style="padding: 0 12px">[[ic:check]]<span>Accepter</span></span>
+<span class="btn q" style="padding: 0 12px">[[ic:x]]<span>Refuser</span></span>
+</div>
+<div class="mv-b" style="display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; border-radius: 999px; background: var(--accent); color: #0B0B12; font-weight: 700">[[ic:user-check-fill]]<span>Connectés</span></div>
+</div>
+</div>
+</div>
+<span class="spec">durée : motion.rise à l'entrée, motion.collapse pour une rangée, motion.morph pour le pied · courbe : ressorts de K26 · déclencheur : la carte entre dans l'écran, un enfant naît ou part, l'action du pied aboutit · haptique : aucun à l'entrée ; léger au toucher d'une carte d'action ; succès quand le pied confirme · mouvement réduit : fondu seul, hauteur posée sans glissement, orbe immobile, halo fixe</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Elle entre entière</b></div>
+<div style="display: flex; align-items: center; gap: 16px">
+<div class="card" style="flex: none; width: 150px; padding: 4px 0; opacity: .75; transform: translateY(8px) scale(.97)"><div class="row" style="min-height: 34px; padding: 6px 12px"><span class="sk" style="width: 22px; height: 22px; border-radius: 50%; animation: none"></span><span class="sk" style="flex: 1; height: 8px; animation: none"></span></div><div class="sep" style="margin: 0 12px"></div><div class="row" style="min-height: 34px; padding: 6px 12px"><span class="sk" style="width: 22px; height: 22px; border-radius: 50%; animation: none"></span><span class="sk" style="flex: 1; height: 8px; animation: none"></span></div></div>
+<span class="kcap"><code>motion.rise</code> : 18 px vers le haut, échelle 0,97 vers 1. Les rangées ne cascadent pas dans la carte : deux cartes voisines se décalent de 60 ms.</span>
+</div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Une rangée naît</b></div>
+<div style="display: flex; align-items: center; gap: 16px">
+<div class="card" style="flex: none; width: 150px; padding: 4px 0"><div class="row" style="min-height: 34px; padding: 6px 12px"><span class="sk" style="width: 22px; height: 22px; border-radius: 50%; animation: none"></span><span class="sk" style="flex: 1; height: 8px; animation: none"></span></div><div class="sep" style="margin: 0 12px"></div><div class="row" style="min-height: 34px; padding: 6px 12px"><span class="sk" style="width: 22px; height: 22px; border-radius: 50%; animation: none"></span><span class="sk" style="flex: 1; height: 8px; animation: none"></span></div><div class="sep" style="margin: 0 12px; background: var(--warn)"></div><div class="row" style="min-height: 18px; padding: 2px 12px; opacity: .5"><span class="sk" style="width: 14px; height: 14px; border-radius: 50%; animation: none"></span><span class="sk" style="flex: 1; height: 6px; animation: none"></span></div></div>
+<span class="kcap"><code>motion.collapse</code> : la hauteur s'ouvre, le filet naît avec la rangée. Le bas de la carte descend, son haut ne bouge pas.</span>
+</div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1; --accent: #2ECC71">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Le pied confirme</b></div>
+<div style="display: flex; align-items: center; gap: 16px">
+<div class="card g-hi" style="flex: none; width: 150px; padding: 10px; display: flex; flex-direction: column; gap: 8px"><div style="display: flex; align-items: center; gap: 8px"><span class="av" style="width: 26px; height: 26px; font-size: 10px">SB</span><span class="sk" style="flex: 1; height: 8px; animation: none"></span></div><span style="display: flex; align-items: center; justify-content: center; gap: 5px; height: 30px; border-radius: 999px; background: var(--accent); color: #0B0B12; font-size: 11.5px; font-weight: 700">[[ic:user-check-fill s]]<span>Connectés</span></span></div>
+<span class="kcap"><code>motion.morph</code> : la paire d'actions se fond en un seul résultat. Le bord s'allume à l'accent, puis s'éteint.</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Une surface, un gabarit, cinq emplacements. Aucune signature ne nomme un réglage, une demande, un lien, un profil ou un pack : l'hôte remplit les emplacements avec ses propres vues.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyGroupCard.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-group-card.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyGroupCard(surface:layout:size:overline:…) { content }</code></span><span><code>MeeshyGroupCard(modifier, surface, layout, size, overline, …) { content }</code></span><span><code>&lt;MeeshyGroupCard surface layout size overline …&gt;children&lt;/MeeshyGroupCard&gt;</code></span>
+<span><b>Fond</b></span><span><code>MeeshyGroupCardSurface { raised, ground, glass, accent, danger, dashed, solid }</code></span><span><code>enum class</code> identique</span><span><code>'raised' | 'ground' | 'glass' | 'accent' | 'danger' | 'dashed' | 'solid'</code></span>
+<span><b>Gabarit</b></span><span><code>MeeshyGroupCardLayout { group, content, prompt, preview, action }</code></span><span><code>enum class</code> identique</span><span><code>'group' | 'content' | 'prompt' | 'preview' | 'action'</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyGroupCardSize { compact, regular, large }</code> : rayons 24, 26, 30</span><span>idem</span><span><code>'compact' | 'regular' | 'large'</code></span>
+<span><b>Coin de bulle</b></span><span><code>MeeshyGroupCardTail { none, leading, trailing }</code></span><span>idem</span><span><code>'none' | 'leading' | 'trailing'</code></span>
+<span><b>Emplacements</b></span><span><code>headerTrailing</code>, <code>media</code>, <code>emblem</code>, <code>content</code>, <code>footer</code> : <code>@ViewBuilder</code></span><span>mêmes noms, <code>@Composable () -&gt; Unit</code></span><span>mêmes noms, <code>ComponentChildren</code></span>
+<span><b>Filet</b></span><span><code>MeeshyGroupCardDivider(inset:)</code>, posé par la carte entre ses enfants</span><span><code>MeeshyGroupCardDivider(inset)</code></span><span><code>&lt;MeeshyGroupCardDivider inset /&gt;</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyGroupCardRecipe.resolve(surface:layout:size:tail:tint:isPressed:isHighlighted:isLocked:isEnabled:)</code></span><span style="border-bottom: 0"><code>MeeshyGroupCardRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyGroupCardRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>surface = .raised</code><span><code>glass</code> est demandé à K01 ; sur Android il rend une surface tonale.</span></div>
+<div class="par"><code>layout = .group</code><span><code>group</code> trace les filets. Les autres gabarits n'en tracent aucun.</span></div>
+<div class="par"><code>size = .regular</code><span>Rayon 26. <code>large</code> : 30, sur un média. <code>compact</code> : 24, en grille.</span></div>
+<div class="par"><code>overline: String? = nil</code><span>Sur-titre de l'en-tête, déjà traduit, rendu par <b>K44</b> en forme <code>overline</code>. Sans lui ni accessoire : pas d'en-tête.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte opaque de l'hôte pour <code>accent</code> et <code>solid</code>. Sans elle : l'accent ambiant.</span></div>
+<div class="par"><code>showsOrb: Bool = false</code><span>Une orbe flottante en tête, pour <code>accent</code> seulement : le remplissage est demandé à <b>K27</b> en <code>fill</code>.</span></div>
+<div class="par"><code>dividerInset: CGFloat = 18</code><span>Retrait des filets, au bord de début et de fin. Zéro : bord à bord.</span></div>
+<div class="par"><code>tail = .none</code><span>En bulle : le coin du bas, côté auteur, passe à 8.</span></div>
+<div class="par"><code>isHighlighted: Bool = false</code><span>Bord d'accent et halo de 4. L'hôte le retire quand il veut.</span></div>
+<div class="par"><code>isLocked: Bool = false</code><span>Contenu à 42 %, inactif et annoncé ; le pied reste lisible. Le pointillé et le cadenas sont la décoration de <b>K37</b>.</span></div>
+<div class="par"><code>onPress: (() -&gt; Void)? = nil</code><span>Sans lui : un conteneur. Avec lui : toute la carte est un bouton.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Nom dit de la carte. Obligatoire avec <code>onPress</code>.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois matières</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Surface : <code>RoundedRectangle(cornerRadius:style: .continuous)</code> en <code>background</code>, <code>clipShape</code> du même tracé, <code>strokeBorder</code> de 1 pt.</li>
+<li>Filets : un <code>Layout</code> ou <code>Group(subviews:)</code> (iOS 18) les pose entre les enfants ; ils ne sont jamais écrits par l'hôte.</li>
+<li>Verre : <code>glassEffect(_:in:)</code> par K01 sur iOS 26, dans le <code>GlassEffectContainer</code> de l'écran.</li>
+<li>Carte d'action : <code>Button</code> avec un <code>ButtonStyle</code> qui lit <code>isPressed</code> ; <code>sensoryFeedback(.selection)</code> au toucher.</li>
+<li>Voix : <code>accessibilityElement(children: .contain)</code> pour un groupe, <code>.combine</code> pour une carte d'action.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 et 17 : sans <code>Group(subviews:)</code>, l'hôte pose les filets avec <code>MeeshyGroupCardDivider</code>, et un témoin compte N − 1. iOS 16 à 25 : verre dessiné de K01. « Augmenter le contraste » : bord à 2 pt.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Surface : <code>Surface(shape = RoundedCornerShape(28.dp), tonalElevation)</code> ; <code>glass</code> y rend la surface tonale.</li>
+<li>Filets : <code>HorizontalDivider</code> en retrait, posé par un <code>Layout</code> qui compte ses mesurables.</li>
+<li>Carte d'action : <code>Surface(onClick = …)</code>, ondulation bornée au tracé, <code>HapticFeedbackType.ContextClick</code>.</li>
+<li>Une rangée qui naît : <code>animateContentSize</code> au ressort de <code>motion.collapse</code>.</li>
+<li>Voix : <code>semantics(mergeDescendants = true)</code> pour une carte d'action, <code>isTraversalGroup</code> pour un groupe.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation à zéro : hauteur posée, aucun halo animé. Sans couleur dynamique : jetons du thème Meeshy. Emblème expressif (<code>MaterialShapes</code>) absent : disque.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément : <code>&lt;section&gt;</code> nommé par son sur-titre, <code>&lt;article&gt;</code> pour <code>preview</code>, <code>&lt;button type="button"&gt;</code> pour <code>action</code>.</li>
+<li>Filets : <code>.card &gt; * + *::before</code> ou <code>border-top</code> sur un enfant en retrait ; aucun <code>&lt;hr&gt;</code> écrit par l'hôte.</li>
+<li>Verre : <code>backdrop-filter</code> par K01. Lavis : <code>color-mix(in oklab, var(--tint) 22%, var(--raised))</code>.</li>
+<li>Une rangée qui naît : <code>interpolate-size: allow-keywords</code> ou <code>grid-template-rows: 0fr → 1fr</code>.</li>
+<li>Pressé : <code>:active</code> sur le bouton seul ; <code>:focus-visible</code> trace l'anneau au rayon de la carte.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>backdrop-filter</code> : fond plein à 72 %. Sans <code>color-mix</code> : teinte pré-calculée par la recette. <code>prefers-reduced-motion</code> : aucune hauteur animée.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">La carte de réglages existe trois fois, ses cousines sont dans chaque écran</h2><p>Relevé dans le dépôt le 16 novembre 2026. Les trois plateformes ont une carte de réglages, dont deux déjà dans leur SDK d'interface. Le web écrit <code>rounded-[2xpx]</code> dans dix-sept fichiers, en cinq rayons différents (20, 22, 24, 26, 28).</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Settings/Views/SettingsSectionCard.swift</span><p><span class="be">Devient le composant</span> Le plus complet : titre, phrase, teinte qui colore fond et contour, contenu en <code>@ViewBuilder</code>. Il perd son titre au profit de K44, sa teinte <code>String</code> devient <code>tint</code>, et il monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift</span><p><code>SettingsCard</code> et <code>SettingsSeparator</code>, déjà publics et agnostiques : la surface et le filet en retrait. Ils deviennent des alias de K43 et de son <code>Divider</code>, puis s'effacent.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Settings/Views/SettingsBlockView.swift</span><p>Le bloc de rangées de navigation : c'est le gabarit <code>group</code>. Rebranché ; <code>SettingsNavigationRow</code> reste une rangée de l'app.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Call/Views/CallFeedbackCard.swift</span><p>La carte de retour d'appel : gabarit <code>content</code> avec pied d'actions. <span class="mono">Main/Components/LinkPreviewCard.swift</span> prend <code>preview</code> ; <span class="mono">MeeshyUI/JoinFlow/InviteLanding/InviteCardSurface.swift</span> prend <code>prompt</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/settings/SettingsCard.kt</span><p><span class="be">Devient le composant</span> Déjà dans <code>:sdk-ui</code>, contenu en <code>ColumnScope</code>. Il gagne <code>surface</code>, <code>layout</code> et les emplacements. <span class="mono">settings/SettingsSectionHeader.kt</span> part vers K44.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/…/chat/LinkPreviewCard.kt</span><p><code>RichLinkCard</code> et <code>RichLinkBody</code> : le gabarit <code>preview</code> en bulle. Rebranché ; la puce de lien nu reste à l'app. <span class="mono">feature/auth/…/invite/InviteCardSurface.kt</span> suit en <code>prompt</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/call-feedback-card.tsx</span><p><span class="be">Devient le composant</span> Surface, titre, contenu libre, pied d'actions et délai de retrait : la carte la plus proche du gabarit. La minuterie (<code>FEEDBACK_IDLE_MS</code>) reste à l'app.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/call-notice-card.tsx</span><p><code>CallNotice</code> : glyphe, phrase, une action. Gabarit <code>prompt</code>. <span class="mono">conversation-link-card.tsx</span> prend <code>preview</code> ; <span class="mono">contact-card-sheet.tsx</span> garde sa feuille (K15) et y pose des cartes <code>ground</code>.</p></div>
+<div class="twin"><span class="pf">Profil</span><span class="mono">aucun jumeau</span><p><span class="no">À créer</span> Les fonds <code>accent</code>, <code>danger</code>, <code>dashed</code> et <code>solid</code>, l'état verrouillé et la tuile d'action chiffrée : dessinés par ce canevas, absents du code. Ils naissent directement en K43.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="card" style="display: flex; flex-direction: column; padding: 0 0 6px">
+<div class="oh" style="padding: 10px 14px 0; min-height: 36px"><span class="tag">Notifications</span></div>
+<div class="row" style="padding: 8px 14px; min-height: 52px"><span class="badge" style="--c: var(--info); width: 34px; height: 34px">[[ic:bell-ringing s]]</span><span class="tx"><b style="font-size: 14px">Messages</b></span><span class="sw on"></span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="row" style="padding: 8px 14px; min-height: 52px"><span class="badge" style="--c: var(--accent); width: 34px; height: 34px">[[ic:moon s]]</span><span class="tx"><b style="font-size: 14px">Ne pas déranger</b></span><span class="sw"></span></div>
+</div>
+</div>
+<div class="cp"><b>Réglages</b><span class="kcap">Un groupe par thème : sur-titre dans la carte, rangées K06, filets en retrait.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #FBBF24; --accent-ink: #FBBF24">
+<div class="stage">
+<div class="card" style="display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 24px 24px 24px 8px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="av" style="width: 40px; height: 40px; font-size: 14px; border-radius: 13px">BD</span><span class="tx"><b style="font-size: 14.5px">Beatmakers Dakar</b><span>342 membres · invitation de Kwame</span></span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 8px"><span class="btn a sm" style="padding: 0 10px">Rejoindre</span><span class="btn q sm" style="padding: 0 10px">Plus tard</span></div>
+</div>
+</div>
+<div class="cp"><b>Invitation dans un fil</b><span class="kcap">Gabarit <code>prompt</code>, coin de bulle côté auteur. La teinte est celle de la communauté.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div style="padding: 6px; border-radius: 22px 22px 22px 8px; background: var(--field); display: flex; flex-direction: column; gap: 6px">
+<span class="mono" style="padding: 6px 8px 0; color: var(--accent-ink)">soundcloud.com/aissa</span>
+<div class="card" style="border-radius: 18px; overflow: hidden">
+<div class="ph" style="height: 70px; border: 0; border-radius: 0">pochette</div>
+<div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px"><b style="font-size: 14px">Dakar la nuit — prise 3</b><span style="font-size: 12.5px; color: var(--ink2)">Aïssa Ndiaye · 3:42</span></div>
+</div>
+</div>
+</div>
+<div class="cp"><b>Lien déplié dans une bulle</b><span class="kcap">Gabarit <code>preview</code>, taille <code>compact</code>, rayon ramené à 18 par la bulle qui l'accueille.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage">
+<div class="card" style="display: flex; flex-direction: column; gap: 12px; padding: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="badge" style="--c: var(--accent); width: 36px; height: 36px">[[ic:phone s]]</span><span class="tx"><b style="font-size: 14.5px">Comment était l'appel ?</b><span>Avec Léo · 12 min</span></span></div>
+<div style="display: flex; justify-content: space-between; color: var(--warn)">[[ic:star-fill l]][[ic:star-fill l]][[ic:star-fill l]][[ic:star-fill l]]<span style="display: inline-flex; color: var(--ink3)">[[ic:star l]]</span></div>
+<span class="btn g sm">Envoyer</span>
+</div>
+</div>
+<div class="cp"><b>Retour d'appel</b><span class="kcap">Gabarit <code>content</code> : emblème, question, contenu libre, une action en pied.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Filets.</b> N enfants rendent N − 1 filets, en retrait de <code>dividerInset</code>. Zéro ou un enfant : aucun filet. Un enfant qui ne rend rien ne laisse ni filet ni vide. Vecteurs <code>K43-MeeshyGroupCard.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Emplacements vides.</b> Sans <code>overline</code> ni accessoire : aucun en-tête, aucune marge. Sans <code>footer</code> : la dernière rangée touche la marge basse du gabarit. Le média est rogné au rayon, jamais au-dessus du bord.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque fond × gabarit × taille rend les valeurs du tableau : rayon, bord, fond, filet, marges. <code>danger</code> teinte fond, bord et filets ; <code>solid</code> rend une encre sombre ; <code>dashed</code> n'a pas de fond.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Sans <code>onPress</code> : un groupe nommé par son sur-titre, enfants atteignables un à un. Avec <code>onPress</code> : un seul bouton, un seul nom. <code>onPress</code> sans <code>label</code> échoue. Verrouillée : annoncée inactive.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Une rangée fait 44 pt au moins, 48 dp sur Android. Les encres tiennent 4,5:1 sur chaque fond, lavis <code>accent</code> et <code>danger</code> compris, en clair et en sombre.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit et RTL.</b> Sans mouvement : entrée en fondu, hauteur posée, orbe et halo fixes. En arabe : le retrait des filets, l'accessoire d'en-tête, le coin de bulle et l'emblème se reflètent.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Une rangée qui change ne re-rend ni la surface ni les autres rangées ; une carte qui grandit ne re-peint pas la carte voisine. Garde de source : aucun type du domaine, aucun singleton, aucun rayon ni couleur hors de <code>MeeshyGroupCardRecipe</code> ; le verre ne vient que de K01 ; aucune carte <code>raised</code> dans une carte <code>raised</code>. Non-régression : les écrans de réglages gardent leurs instantanés.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le rouge de <code>danger</code> ne porte jamais seul le sens : chaque rangée dit son action. Le sur-titre est un titre de niveau lisible au rotor. Très grande police : la paire d'actions du pied s'empile, la principale en haut.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Aucune ombre portée hors du verre et de la bulle. Un seul calque rogné par carte. Le flou n'existe qu'en <code>glass</code>. L'orbe s'arrête hors écran. Seules l'opacité, la transformation et la hauteur s'animent.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8524}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

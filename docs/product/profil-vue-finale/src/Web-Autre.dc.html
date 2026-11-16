@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Profil de Léo — Web, carte ouverte</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.mx kbd{display:inline-flex;align-items:center;justify-content:center;gap:2px;min-width:24px;height:24px;padding:0 6px;border-radius:7px;border:1px solid var(--glass-line);border-bottom-width:2.5px;background:rgba(255,255,255,.07);font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink2);flex:none}
+.mx kbd .ic{width:12px;height:12px}
+.mx .on kbd{border-color:rgba(9,9,11,.28);background:rgba(9,9,11,.08);color:#1E1B4B}
+.navl{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:600;color:var(--ink2);transition:background .2s}
+.navl:hover{background:var(--glass);color:var(--ink)}
+.quick{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0;padding:10px 4px;border-radius:24px;font-size:13px;font-weight:700;color:var(--ink)}
+.quick .ib{transition:transform .25s cubic-bezier(.3,1.6,.5,1),background .2s}
+.quick:hover .ib{transform:translateY(-3px) scale(1.06);background:rgba(255,255,255,.16)}
+.quick.drop{outline:2px dashed var(--accent);outline-offset:2px;background:color-mix(in oklab,var(--accent) 14%,transparent)}
+.quick.drop .ib{background:color-mix(in oklab,var(--accent) 30%,transparent);border-color:var(--accent);color:var(--accent-ink)}
+.ghost{position:absolute;left:-10px;top:0;display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 12px 0 6px;border-radius:16px;background:rgba(19,17,28,.82);color:var(--ink);transform:rotate(-6deg);animation:webDrop 2.6s ease-in-out infinite;z-index:3}
+.vtab{display:flex;align-items:center;gap:12px;min-height:54px;padding:0 12px 0 14px;border-radius:18px;font-weight:700;font-size:15px;color:var(--ink2);transition:background .2s}
+.vtab:hover{background:rgba(255,255,255,.08);color:var(--ink)}
+.mx .vtab.on{background:var(--ink);color:var(--ground);box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.vtab small{font-size:12px;font-weight:500;opacity:.78}
+.tile{display:flex;align-items:center;gap:10px;min-height:68px;padding:10px 12px 10px 10px;border-radius:22px;background:var(--raised);border:1px solid var(--line);transition:transform .25s cubic-bezier(.3,1.4,.5,1),box-shadow .25s,border-color .25s}
+.tile:hover,.tile.hov{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 18px 36px rgba(78,205,196,.20);background:color-mix(in oklab,var(--accent) 9%,var(--raised))}
+.tile b{display:block;font-size:14px;line-height:1.25;font-weight:700;color:var(--ink)}
+.tile small{display:block;font-size:12px;color:var(--ink2)}
+.tip{position:absolute;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:14px;background:rgba(9,9,11,.62);font-size:13.5px;font-weight:700;color:var(--ink);white-space:nowrap;transform:translate(-50%,-100%)}
+.tip::after{content:"";position:absolute;left:50%;bottom:-6px;width:12px;height:12px;margin-left:-6px;background:rgba(9,9,11,.62);border-right:1px solid var(--glass-line);border-bottom:1px solid var(--glass-line);transform:rotate(45deg)}
+.mapglass{background:rgba(9,9,11,.52)}
+.dash{stroke-dasharray:2 9;animation:webDash 1.4s linear infinite}
+.live{display:flex;flex-direction:column;gap:14px;padding:20px;min-height:148px}
+@keyframes webDrop{0%,100%{transform:translate(0,0) rotate(-6deg)}50%{transform:translate(8px,10px) rotate(-2deg)}}
+@keyframes webDash{to{stroke-dashoffset:-22}}
+</style>
+</helmet>
+<div class="mx" style="width: 100%; min-height: 900px; display: flex; flex-direction: column; --accent:#4ECDC4; --accent-ink:#7FE3DC">
+
+<nav aria-label="Navigation Meeshy" class="glass" style="position: sticky; top: 0; z-index: 5; border-width: 0 0 1px; border-radius: 0; box-shadow: none; background: rgba(9,9,11,.72)">
+<div style="max-width: 1360px; margin: 0 auto; padding: 0 24px; min-height: 68px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+<a href="#" class="d" style="font-size: 26px; font-weight: 900; color: var(--ink); letter-spacing: -.03em">Meeshy</a>
+<div style="display: flex; align-items: center; gap: 2px; flex-wrap: wrap">
+<a href="#" class="navl">[[ic:chat-circle s]]<span>Conversations</span></a>
+<a href="#" class="navl" style="color: var(--ink); background: var(--glass)">[[ic:circles-three s]]<span>Contacts</span></a>
+<a href="#" class="navl">[[ic:map-trifold s]]<span>Carte</span></a>
+</div>
+<span style="flex: 1"></span>
+<button class="btn q sm" style="gap: 10px; padding: 0 10px 0 14px; font-weight: 500; color: var(--ink3)">[[ic:magnifying-glass s]]<span>Chercher une personne</span><kbd>[[ic:command s]]K</kbd></button>
+<button class="ib g" aria-label="Notifications">[[ic:bell]]</button>
+<button class="av" aria-label="Mon profil, Aïssa Ndiaye" style="--accent: #A855F7; width: 40px; height: 40px; font-size: 14px">AN</button>
+</div>
+</nav>
+
+<main style="width: 100%; max-width: 1360px; margin: 0 auto; padding: 20px 24px 56px; display: flex; flex-direction: column; gap: 20px">
+
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink3)">
+<a href="#" style="display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-weight: 600; color: var(--ink2)">[[ic:caret-left s]]<span>Contacts</span></a>
+<span>/</span>
+<span style="color: var(--ink); font-weight: 600">Léo Marchetti</span>
+<span style="flex: 1"></span>
+<span style="display: inline-flex; align-items: center; gap: 8px">Changer de face <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>
+<span style="display: inline-flex; align-items: center; gap: 8px">Fermer la carte <kbd>Échap</kbd></span>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 32px">
+
+<aside aria-label="Fiche de Léo Marchetti" style="flex: 1 1 380px; min-width: min(380px, 100%); max-width: 440px; display: flex; flex-direction: column; gap: 22px">
+
+<div class="rise" style="display: flex; flex-direction: column">
+<div style="position: relative; height: 196px; border-radius: 32px; overflow: hidden; background: linear-gradient(160deg, #0F766E 0%, #134E4A 52%, #09090B 100%)">
+<div class="orb" style="width: 200px; height: 200px; left: -50px; top: -30px; background: #4ECDC4; opacity: .7"></div>
+<div class="orb" style="width: 170px; height: 170px; right: -40px; top: 50px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 90px; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.85))"></div>
+<div style="position: absolute; right: 14px; top: 14px; display: flex; gap: 8px">
+<button class="ib g" aria-label="Plus d'options">[[ic:dots-three]]</button>
+</div>
+</div>
+
+<div style="position: relative; margin-top: -72px; padding: 0 16px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; gap: 12px">
+<button class="ring" aria-label="Voir la story de Léo" style="background: var(--ground)">
+<span class="av" style="width: 120px; height: 120px; font-size: 42px">LM</span>
+<span class="dot on" style="position: absolute; right: 9px; bottom: 9px; width: 22px; height: 22px; border-width: 4px"></span>
+</button>
+<span class="chip glass" style="margin-bottom: 16px; color: var(--ink)">[[ic:smiley s]]<span>En vadrouille</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 class="d" style="font-size: 40px">Léo Marchetti</h1>
+<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@leo.m</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700; color: var(--ok)"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--ok)"></span>En ligne</span>
+<span class="chip" style="min-height: 30px; background: color-mix(in oklab, var(--accent) 18%, transparent); border-color: color-mix(in oklab, var(--accent) 45%, transparent); color: var(--accent-ink)">[[ic:fire-fill s]]<span>Proche</span></span>
+</div>
+</div>
+
+<p style="font-size: 16px; line-height: 1.5; color: var(--ink); text-wrap: pretty">Photographe de rue. Lyon ⇄ Lisbonne.</p>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:map-pin s]]<span>Lisbonne</span></span>
+<span class="chip">[[ic:translate s]]<span>Italien</span></span>
+<span class="chip">Français</span>
+<span class="chip">Portugais</span>
+<span class="chip">[[ic:lock-key s]]<span>Chiffré</span></span>
+</div>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .08s; position: relative; display: flex; flex-direction: column; gap: 10px; padding-top: 52px">
+<span class="ghost glass" aria-hidden="true">
+<span class="ph" style="width: 36px; height: 36px; padding: 0; border-radius: 10px; align-items: center; justify-content: center; color: var(--accent-ink)">[[ic:image s]]</span>
+<span class="mono" style="color: var(--ink)">photo.jpg</span>
+<span style="color: var(--ink); margin-right: -4px">[[ic:hand-grabbing-fill s]]</span>
+</span>
+<div style="display: flex; gap: 6px">
+<button class="quick drop"><span class="ib g lg">[[ic:chat-circle l]]</span><span>Écrire</span><kbd>E</kbd></button>
+<button class="quick"><span class="ib g lg">[[ic:phone l]]</span><span>Appeler</span><kbd>A</kbd></button>
+<button class="quick"><span class="ib g lg">[[ic:video-camera l]]</span><span>Vidéo</span><kbd>V</kbd></button>
+<button class="quick"><span class="ib g lg">[[ic:radio l]]</span><span>Talkie</span><kbd>T</kbd></button>
+</div>
+<p style="display: flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 13.5px; font-weight: 600; color: var(--accent-ink)">[[ic:file-arrow-up s]]<span>Dépose pour envoyer à Léo</span></p>
+</div>
+
+<div class="glass rise" role="tablist" aria-label="Faces du profil" aria-orientation="vertical" style="animation-delay: .16s; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 24px">
+<button class="vtab" role="tab" aria-selected="false">[[ic:user-focus]]<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span>Vitrine</span><small>Qui il est, ses publications</small></span><kbd>1</kbd></button>
+<button class="vtab" role="tab" aria-selected="false">[[ic:link]]<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span>Liens</span><small>Son lien de profil, ses adresses</small></span><kbd>2</kbd></button>
+<button class="vtab on" role="tab" aria-selected="true">[[ic:lightning-fill]]<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span>Actions</span><small>La carte est ouverte</small></span><kbd>3</kbd></button>
+</div>
+
+<div class="rise" style="animation-delay: .24s; display: flex; flex-direction: column; gap: 12px">
+<span class="tag" style="padding: 0 6px">Avec Léo</span>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 10px">
+<button class="tile hov"><span class="ib g" style="color: var(--accent-ink)">[[ic:monitor-play]]</span><span style="flex: 1; min-width: 0"><b>Regarder ensemble</b></span></button>
+<button class="tile"><span class="ib g">[[ic:headphones]]</span><span style="flex: 1; min-width: 0"><b>Écouter ensemble</b></span></button>
+<button class="tile"><span class="ib g">[[ic:hand-waving]]</span><span style="flex: 1; min-width: 0"><b>Bring</b><small>2 / 3 aujourd'hui</small></span></button>
+<button class="tile"><span class="ib g">[[ic:circles-three]]</span><span style="flex: 1; min-width: 0"><b>Notre cercle</b><small>Proche</small></span></button>
+<button class="tile" style="grid-column: 1 / -1"><span class="ib g">[[ic:paper-plane-tilt]]</span><span style="flex: 1; min-width: 0"><b>Envoyer son profil</b></span></button>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line)">
+<button class="btn x sm" style="flex: 1">[[ic:prohibit s]]<span>Bloquer</span></button>
+<button class="btn x sm" style="flex: 1">[[ic:flag s]]<span>Signaler</span></button>
+</div>
+</div>
+
+</aside>
+
+<section aria-label="Léo sur la carte" style="flex: 999 1 520px; min-width: min(520px, 100%); display: flex; flex-direction: column; gap: 22px">
+
+<div class="rise" style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span class="tag" style="display: inline-flex; align-items: center; gap: 8px; color: var(--accent-ink)">[[ic:map-trifold s]]<span>Actions · Carte</span></span>
+<h2 class="d" style="font-size: 34px">Léo est à Alfama</h2>
+<p style="font-size: 15px; color: var(--ink2)">Il partage sa position avec toi. La tienne n'est pas partagée.</p>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip on">[[ic:map-pin-fill s]]<span>Léo</span></span>
+<button class="chip">[[ic:fire s]]<span>Tous mes proches</span></button>
+<button class="ib g" aria-label="Fermer la carte">[[ic:x]]</button>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .1s; position: relative; overflow: hidden; height: 640px; border-radius: 32px; border: 1px solid var(--line); box-shadow: 0 30px 70px rgba(0,0,0,.5)">
+[[map]]
+
+<svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%"><line class="dash" x1="46" y1="36" x2="76" y2="66" stroke="#EEF2FF" stroke-width="2.5" stroke-linecap="round" vector-effect="non-scaling-stroke"></line></svg>
+
+<div style="position: absolute; left: 46%; top: 36%; width: 220px; height: 220px; margin: -110px 0 0 -110px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); border: 1.5px solid var(--accent)"></div>
+<div class="pin" style="left: 46%; top: 36%">
+<span class="av" style="width: 56px; height: 56px; font-size: 19px; border: 3px solid #09090B; box-shadow: 0 10px 24px rgba(0,0,0,.5)">LM</span>
+</div>
+<span style="position: absolute; left: 46%; top: 36%; margin: 14px 0 0 14px; color: #fff; filter: drop-shadow(0 2px 4px rgba(0,0,0,.7))">[[ic:cursor-fill]]</span>
+<div class="tip glass" role="tooltip" style="left: 46%; top: 36%; margin-top: -44px"><span class="dot on" style="width: 10px; height: 10px; border: 0"></span><span>Léo · il y a 20 s</span></div>
+
+<span class="mono glass mapglass" style="position: absolute; left: 61%; top: 51%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--ink)">[[ic:navigation-arrow s]]2,4 km</span>
+
+<div style="position: absolute; left: 76%; top: 66%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 8px">
+<span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: rgba(99,102,241,.3)"><span style="width: 16px; height: 16px; border-radius: 50%; background: #818CF8; border: 3px solid #fff"></span></span>
+<span class="glass mapglass" style="height: 26px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; color: var(--ink)">Toi</span>
+<span class="glass mapglass" style="height: 30px; padding: 0 12px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap">[[ic:airplane-tilt s]]<span>De passage à Lisbonne</span></span>
+</div>
+
+<div class="glass mapglass" style="position: absolute; left: 16px; top: 16px; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border-radius: 999px; font-size: 13.5px; font-weight: 700; color: var(--ink)">
+<span style="color: var(--accent-ink); display: inline-flex">[[ic:timer s]]</span><span>Partage en cours · encore 42 min</span>
+</div>
+
+<div style="position: absolute; right: 16px; top: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div class="glass mapglass" style="display: flex; flex-direction: column; border-radius: 22px; padding: 2px">
+<button class="ib" aria-label="Zoomer">[[ic:plus]]</button>
+<span style="height: 1px; margin: 0 8px; background: var(--glass-line)"></span>
+<button class="ib" aria-label="Dézoomer">[[ic:minus]]</button>
+</div>
+<button class="ib g mapglass" aria-label="Calques de la carte">[[ic:stack]]</button>
+<button class="ib g mapglass" aria-label="Me centrer" style="color: var(--accent-ink)">[[ic:crosshair-simple]]</button>
+<span style="display: flex; flex-direction: column; gap: 4px; align-items: center"><kbd>+</kbd><kbd>−</kbd><kbd>C</kbd></span>
+</div>
+
+<div class="glass mapglass" style="position: absolute; left: 16px; bottom: 16px; width: min(380px, calc(100% - 32px)); border-radius: 26px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="ib" style="background: var(--accent); color: #0B0B12">[[ic:map-pin-fill]]</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span class="d" style="font-size: 20px">Alfama, Lisbonne</span>
+<span style="font-size: 13px; color: var(--ink2)">Précision : quartier · encore 42 min</span>
+</div>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<button class="btn a sm" style="flex: 1">[[ic:navigation-arrow s]]<span>Itinéraire</span><kbd style="border-color: rgba(9,9,11,.3); background: rgba(9,9,11,.1); color: #0B0B12">I</kbd></button>
+<button class="btn g sm" style="flex: 1">[[ic:map-pin s]]<span>Partager la mienne</span></button>
+</div>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .2s; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span class="dot on" style="border: 0; width: 10px; height: 10px"></span>
+<h3 class="d" style="font-size: 22px">En direct</h3>
+<span style="font-size: 13px; color: var(--ink3)">Visible parce que vous êtes Proches</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 14px">
+<div class="card live">
+<span style="display: flex; align-items: center; gap: 10px; color: var(--ink2); font-size: 13.5px; font-weight: 600"><span style="color: var(--ok); display: inline-flex">[[ic:battery-medium]]</span>Batterie</span>
+<span class="d" style="font-size: 34px">64 %</span>
+<span class="bar"><i style="width: 64%; background: var(--ok)"></i></span>
+</div>
+<div class="card live">
+<span style="display: flex; align-items: center; gap: 10px; color: var(--ink2); font-size: 13.5px; font-weight: 600"><span style="color: var(--ok); display: inline-flex">[[ic:cell-signal-full]]</span>Téléphone</span>
+<span class="d" style="font-size: 34px">Joignable</span>
+<span style="font-size: 13px; color: var(--ink3)">Tu seras prévenue s'il ne l'est plus.</span>
+</div>
+<div class="card live">
+<span style="display: flex; align-items: center; gap: 10px; color: var(--ink2); font-size: 13.5px; font-weight: 600"><span style="color: var(--accent-ink); display: inline-flex">[[ic:music-notes]]</span>Écoute en cours</span>
+<div class="wave" style="height: 40px; gap: 4px">
+<i style="height: 40%"></i><i style="height: 75%"></i><i style="height: 100%"></i><i style="height: 55%"></i><i style="height: 85%"></i><i style="height: 35%"></i><i style="height: 70%"></i><i style="height: 95%"></i><i style="height: 50%"></i><i style="height: 80%"></i><i style="height: 30%"></i><i style="height: 65%"></i><i style="height: 90%"></i><i style="height: 45%"></i>
+</div>
+<button class="btn q sm" style="align-self: flex-start; min-height: 44px">[[ic:headphones s]]<span>Écouter ensemble</span></button>
+</div>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .3s; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 14px">
+<a href="#" class="tile" style="padding: 12px 16px 12px 12px"><span class="ib g" style="color: var(--accent-ink)">[[ic:chat-circle]]</span><span style="flex: 1; min-width: 0"><b>6 conversations</b><small>en commun</small></span><span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span></a>
+<a href="#" class="tile" style="padding: 12px 16px 12px 12px"><span class="ib g" style="color: var(--accent-ink)">[[ic:users-three]]</span><span style="flex: 1; min-width: 0"><b>3 communautés</b><small>en commun</small></span><span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span></a>
+<a href="#" class="tile" style="padding: 12px 16px 12px 12px"><span class="ib g" style="color: var(--accent-ink)">[[ic:handshake]]</span><span style="flex: 1; min-width: 0"><b>12 amis</b><small>en commun</small></span><span class="new">Nouveau</span></a>
+</div>
+
+</section>
+</div>
+</main>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1476}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

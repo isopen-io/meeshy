@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Créer un lien — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.tile{position:relative;display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:24px;background:var(--field);border:1px solid var(--line);text-align:left;min-width:0}
+.tile>.pa{display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:16px;flex:none;color:color-mix(in oklab,var(--fam) 70%,#fff);background:color-mix(in oklab,var(--fam) 24%,transparent)}
+.tile b{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;font-size:16.5px;line-height:1.15;color:var(--ink)}
+.tile small{font-size:12.5px;line-height:1.35;color:var(--ink2)}
+.tile.sel{border:2px solid var(--l-share);padding:15px;background:linear-gradient(160deg,color-mix(in oklab,var(--l-share) 22%,var(--field)),var(--field) 75%);box-shadow:0 14px 30px rgba(99,102,241,.28)}
+.tile .ok{position:absolute;right:12px;top:12px;color:var(--l-share);animation:lcPop .6s cubic-bezier(.3,1.6,.5,1) both .3s}
+.num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--l-share);color:#0B0B12;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:14px;flex:none}
+.fld{display:flex;flex-direction:column;gap:8px;padding:14px 18px}
+.fld>label,.fld>.lb{font-size:12.5px;font-weight:600;color:var(--ink2)}
+.inp{width:100%;min-height:48px;padding:0 14px;border-radius:14px;background:var(--field);border:1px solid var(--line);color:var(--ink);font:inherit;font-weight:600;outline:none}
+.inp:focus{border-color:var(--l-share)}
+.swr{display:flex;align-items:center;gap:14px;width:100%;min-height:56px;padding:8px 18px;font-size:15px;font-weight:500;color:var(--ink)}
+.swr>span:first-child{flex:1;min-width:0}
+.live{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:mxPulse 2.2s ease-out infinite}
+.caret{display:inline-block;width:2px;height:18px;border-radius:1px;background:var(--l-share);animation:lcBlink 1.1s steps(2) infinite}
+@keyframes lcPop{from{transform:scale(0)}to{transform:scale(1)}}
+@keyframes lcBlink{50%{opacity:0}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div aria-hidden="true" style="position: relative; height: 184px; overflow: hidden; background: linear-gradient(165deg, #6D28D9 0%, #3B1A78 55%, #09090B 100%)">
+<div class="orb" style="width: 220px; height: 220px; left: -50px; top: 10px; background: #A855F7; opacity: .75"></div>
+<div class="orb" style="width: 180px; height: 180px; right: -40px; top: 60px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+<div style="position: absolute; left: 20px; top: 66px; display: flex; align-items: center; gap: 12px; filter: blur(3px); opacity: .8">
+<span class="av" style="width: 56px; height: 56px; font-size: 20px">AN</span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 24px">Mes liens</span><span class="mono" style="color: var(--accent-ink)">meeshy.me/@aissa</span></span>
+</div>
+<div style="position: absolute; inset: 0; background: rgba(9,9,11,.58)"></div>
+</div>
+
+<main style="position: relative; margin-top: -34px; flex: 1; display: flex; flex-direction: column; background: var(--raised); border-radius: 34px 34px 0 0; border-top: 1px solid var(--glass-line); box-shadow: 0 -20px 50px rgba(0,0,0,.5)">
+
+<div style="display: flex; justify-content: center; padding-top: 9px"><span style="width: 36px; height: 5px; border-radius: 3px; background: var(--ink3); opacity: .6"></span></div>
+
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 0 22px">
+<h1 class="d" style="font-size: 24px">Nouveau lien</h1>
+<button class="ib g" aria-label="Fermer">[[ic:x]]</button>
+</header>
+
+<section class="rise" style="padding: 20px 16px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 6px">
+<span class="num">1</span>
+<h2 class="d" style="font-size: 19px">Que veux-tu partager ?</h2>
+</div>
+<div role="radiogroup" aria-label="Type de lien" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<button class="tile" role="radio" aria-checked="false" style="--fam: var(--accent-ink); grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 14px">
+<span class="pa">[[ic:user-focus]]</span>
+<span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0"><b>Mon profil</b><small>Ta vitrine publique, avec QR</small></span>
+<span style="color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+<button class="tile sel" role="radio" aria-checked="true" style="--fam: var(--l-share)">
+<span class="pa">[[ic:chats-circle-fill]]</span>
+<span class="ok">[[ic:check-circle-fill l]]</span>
+<b>Une conversation</b>
+<small>Fais entrer des invités, même sans compte</small>
+</button>
+<button class="tile" role="radio" aria-checked="false" style="--fam: var(--l-track)">
+<span class="pa">[[ic:cursor-click]]</span>
+<b>Un contenu à suivre</b>
+<small>publication, réel, story, statut, conversation, profil ou adresse</small>
+</button>
+<button class="tile" role="radio" aria-checked="false" style="--fam: var(--l-comm)">
+<span class="pa">[[ic:users-four]]</span>
+<b>Une communauté</b>
+<small>Ouvre la porte à de nouveaux membres</small>
+</button>
+<button class="tile" role="radio" aria-checked="false" style="--fam: var(--l-aff)">
+<span class="pa">[[ic:gift]]</span>
+<b>Un parrainage</b>
+<small>Ton code, ton QR, tes filleuls</small>
+</button>
+</div>
+<p style="display: flex; align-items: center; gap: 6px; padding: 0 6px; font-size: 12.5px; color: var(--ink3)">[[ic:cursor-click s]]<span>Suivi : choisis ta cible à l'étape suivante</span></p>
+</section>
+
+<section class="rise" style="animation-delay: .1s; padding: 34px 16px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 6px">
+<span class="num">2</span>
+<h2 class="d" style="font-size: 19px">Règle ton lien de partage</h2>
+</div>
+
+<div class="card" style="background: var(--ground); display: flex; flex-direction: column; padding: 4px 0">
+<button class="row" aria-label="Conversation : Studio. Changer" style="width: 100%">
+<span class="av" style="--accent: #818CF8; border-radius: 15px">St</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">Conversation</span><span class="d" style="font-size: 17px">Studio</span></span>
+<span style="color: var(--ink3)">[[ic:caret-up-down]]</span>
+</button>
+<div class="sep"></div>
+<div class="fld">
+<label for="lc-nom">Nom du lien</label>
+<input class="inp" id="lc-nom" type="text" value="Studio — invités">
+</div>
+<div class="fld" style="padding-top: 4px; padding-bottom: 16px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<label for="lc-adr" style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">Adresse</label>
+<span style="display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px 0 7px; border-radius: 999px; background: color-mix(in oklab, var(--ok) 16%, transparent); color: var(--ok); font-size: 12px; font-weight: 700">[[ic:check-circle-fill s]]<span>Disponible</span></span>
+</div>
+<div class="inp" style="display: flex; align-items: center; padding: 0 14px; border-color: var(--l-share); box-shadow: 0 0 0 4px rgba(129,140,248,.16)">
+<span class="mono" style="font-size: 14px; color: var(--ink3)">meeshy.me/chat/</span>
+<input class="mono" id="lc-adr" type="text" value="studio-invites" size="14" style="width: 118px; min-height: 44px; padding: 0; border: 0; background: none; outline: none; font-size: 14px; font-weight: 700; color: var(--ink)">
+<span class="caret" aria-hidden="true"></span>
+</div>
+</div>
+</div>
+
+<div class="card" style="background: var(--ground); display: flex; flex-direction: column; padding: 4px 0">
+<div class="fld" style="gap: 10px">
+<span class="lb" style="display: flex; align-items: center; gap: 6px">[[ic:clock s]]<span>Expire</span></span>
+<div role="radiogroup" aria-label="Expire" style="display: flex; gap: 8px">
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px; flex: 1; justify-content: center">24 h</button>
+<button class="chip on" role="radio" aria-checked="true" style="min-height: 44px; flex: 1; justify-content: center">7 j</button>
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px; flex: 1; justify-content: center">30 j</button>
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px; flex: 1; justify-content: center">Jamais</button>
+</div>
+</div>
+<div class="sep"></div>
+<div class="row" style="min-height: 72px">
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 600">Nombre d'entrées</span><span style="font-size: 12.5px; color: var(--ink3)">Ensuite, le lien se ferme</span></span>
+<div style="display: flex; align-items: center; gap: 4px; padding: 3px; border-radius: 999px; background: var(--field); border: 1px solid var(--line)">
+<button class="ib" aria-label="Moins d'entrées" style="color: var(--ink2)">[[ic:minus]]</button>
+<span class="d" aria-live="polite" style="min-width: 34px; text-align: center; font-size: 20px">50</span>
+<button class="ib" aria-label="Plus d'entrées" style="background: var(--glass); color: var(--ink)">[[ic:plus]]</button>
+</div>
+</div>
+</div>
+
+<div class="card" style="background: var(--ground); display: flex; flex-direction: column; padding: 4px 0">
+<button class="swr" role="switch" aria-checked="true"><span style="font-weight: 600">Accepter les invités sans compte</span><span class="sw on"></span></button>
+<div class="sep"></div>
+<button class="swr" role="switch" aria-checked="true"><span>Demander un pseudo</span><span class="sw on"></span></button>
+<div class="sep"></div>
+<button class="swr" role="switch" aria-checked="false"><span>Demander un e-mail</span><span class="sw"></span></button>
+<div class="sep"></div>
+<button class="swr" role="switch" aria-checked="false"><span>Demander la date de naissance</span><span class="sw"></span></button>
+<div class="sep"></div>
+<button class="swr" role="switch" aria-checked="true"><span>Les invités voient l'historique</span><span class="sw on"></span></button>
+</div>
+
+<div class="card" style="background: var(--ground); display: flex; flex-direction: column; padding: 4px 0">
+<div class="row">
+<span style="color: var(--ink2)">[[ic:flag-banner]]</span>
+<span style="flex: 1; min-width: 0; font-weight: 500">Pays autorisés</span>
+<div role="radiogroup" aria-label="Pays autorisés" style="display: flex; gap: 6px">
+<button class="chip on" role="radio" aria-checked="true" style="min-height: 44px">Tous</button>
+<button class="chip" role="radio" aria-checked="false" style="min-height: 44px">Choisir</button>
+</div>
+</div>
+<div class="sep"></div>
+<button class="row" style="width: 100%">
+<span style="color: var(--ink2)">[[ic:translate]]</span>
+<span style="flex: 1; min-width: 0; font-weight: 500">Langues autorisées</span>
+<span style="font-weight: 600; color: var(--ink2)">Toutes</span>
+<span style="color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .2s; padding: 34px 16px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 6px">
+<span class="live"></span>
+<span class="tag">Aperçu de ton billet</span>
+</div>
+<article class="ticket" style="--cut: 105px; --ground: #13111C; margin: 0 4px; background: linear-gradient(160deg, #1E1B4B, #17142A 70%); border-color: rgba(129,140,248,.38); box-shadow: 0 18px 40px rgba(67,56,202,.28)">
+<div style="display: flex; align-items: center; gap: 14px; height: 104px; padding: 0 18px">
+<span class="ib" style="width: 52px; height: 52px; border-radius: 18px; background: color-mix(in oklab, var(--l-share) 22%, transparent); color: var(--l-share)">[[ic:chats-circle l]]</span>
+<div style="display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0">
+<span class="tag" style="color: var(--l-share)">Lien de partage</span>
+<span class="d" style="font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Studio — invités</span>
+<span class="mono" style="color: var(--ink2); white-space: nowrap">meeshy.me/chat/<span style="color: var(--ink); font-weight: 700">studio-invites</span></span>
+</div>
+</div>
+<div class="cut"></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 14px 8px 16px; text-align: center">
+<span style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 22px">0<span style="font-size: 14px; color: var(--ink3)"> / 50</span></span><span style="font-size: 12px; color: var(--ink2)">entrées</span></span>
+<span style="display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); border-right: 1px solid var(--line)"><span class="d" style="font-size: 22px">7 j</span><span style="font-size: 12px; color: var(--ink2)">avant la fin</span></span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 22px; color: var(--ok)">Ouvert</span><span style="font-size: 12px; color: var(--ink2)">sans compte</span></span>
+</div>
+</article>
+</section>
+
+<footer style="position: sticky; bottom: 0; margin-top: 8px; padding: 26px 16px 24px; background: linear-gradient(180deg, rgba(19,17,28,0), var(--raised) 40%)">
+<button class="btn p" style="width: 100%; min-height: 56px; font-size: 16px">[[ic:copy]]<span>Créer et copier le lien</span></button>
+</footer>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2127}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

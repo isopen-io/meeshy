@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K32 MeeshyLabeledAction</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.stage{flex:1;display:flex;flex-direction:column;align-items:stretch;justify-content:center;min-height:150px}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.leo{--accent:#4ECDC4;--accent-ink:#7FE3DC}
+.mx[data-theme=light].leo{--accent-ink:#0F766E}
+.act{display:flex;flex-direction:column;align-items:center;gap:9px;min-width:0;position:relative}
+.act>.lb{font-size:12px;font-weight:600;line-height:1.25;color:var(--ink);text-align:center;text-wrap:balance;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.act>.ib{position:relative;color:var(--accent-ink)}
+.ib.s56{width:56px;height:56px}
+.ib.s64{width:64px;height:64px}
+.mx .act.on>.ib{background:var(--accent);border-color:transparent;color:#0B0B12;box-shadow:0 10px 26px color-mix(in oklab,var(--accent) 42%,transparent),inset 0 2px 0 rgba(255,255,255,.42)}
+.mx .act.x>.ib{background:rgba(248,113,113,.13);border-color:rgba(248,113,113,.3);color:var(--err)}
+.act.x>.lb{color:var(--err)}
+.act.off>.ib,.act.off>.lb{opacity:.4}
+.mx .act.pr>.ib{transform:scale(.94);background:rgba(255,255,255,.2)}
+.mx .act.hv>.ib{transform:translateY(-2px);background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.34),0 14px 28px rgba(0,0,0,.4)}
+.mx .act.fc>.ib{outline:2px solid var(--ink);outline-offset:3px}
+.vl{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:999px;background:var(--accent);color:#0B0B12;font-size:10px;font-weight:800;white-space:nowrap;margin-top:-3px}
+.vl.q{background:var(--field);color:var(--ink2);border:1px solid var(--line)}
+.vl>.ic{width:11px;height:11px}
+.bdg{position:absolute;top:-3px;inset-inline-end:-3px;display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:var(--brand-fill);color:#fff;border:2px solid var(--ground);font-size:11px;font-weight:800}
+.pend>.ic{opacity:.45}
+.pend::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2.5px solid color-mix(in oklab,var(--accent) 22%,transparent);border-top-color:var(--accent);animation:mxSpin 1s linear infinite}
+.kb{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:6px;background:var(--field);border:1px solid var(--line);font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;font-weight:700;color:var(--ink2);margin-top:-3px}
+.tile{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:10px;min-height:86px;padding:13px 12px 11px;border-radius:22px;background:var(--field);border:1px solid var(--line);color:var(--accent-ink);min-width:0}
+.tile>span{font-size:12.5px;font-weight:600;line-height:1.2;color:var(--ink)}
+.mx .tile.on{background:color-mix(in oklab,var(--accent) 30%,var(--field));border-color:transparent;border-radius:30px}
+.ptt{position:relative;display:flex;align-items:center;justify-content:center;width:96px;height:96px;border-radius:50%;background:var(--accent);color:#0B0B12;box-shadow:0 14px 36px color-mix(in oklab,var(--accent) 42%,transparent),inset 0 2px 0 rgba(255,255,255,.45)}
+.ptt::before,.ptt::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--accent);animation:pttRing 2.6s ease-out infinite}
+.ptt::after{animation-delay:-1.3s}
+.fr{border:1.5px dashed var(--line);border-radius:26px;padding:18px 14px}
+.col{outline:1px dashed color-mix(in oklab,var(--warn) 55%,transparent);outline-offset:0;border-radius:10px;padding:8px 0}
+.dm>.act{animation:laRise 5s cubic-bezier(.2,.9,.25,1) infinite both}
+.dm .go{animation:laDisc 5s infinite}
+.dm .tap{position:absolute;left:50%;top:30px;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.6);opacity:0;pointer-events:none;z-index:3;animation:laTap 5s infinite}
+.dm .sw2{position:relative;display:inline-flex;margin-top:-3px}
+.dm .sw2>.vl{margin-top:0}
+.dm .sw2>.vl:first-child{animation:laValA 5s infinite}
+.dm .sw2>.vl:last-child{position:absolute;inset:0;justify-content:center;opacity:0;animation:laValB 5s infinite}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--warn);opacity:.22;animation:laHap 5s infinite}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.demo{border-radius:20px;background:var(--ground);border:1px solid var(--line);padding:20px 14px 16px;min-height:150px;display:flex;flex-direction:column;justify-content:center}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line);margin-top:auto}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.leg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 28px;align-items:start}
+.leg>div{display:grid;grid-template-columns:22px minmax(0,1fr);gap:3px 12px;align-items:start}
+.leg .kan{position:static;margin-top:1px;grid-row:span 2}
+.leg b{font-size:14.5px;font-weight:700}
+.leg p{grid-column:2;font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.mrow{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;font-size:13.5px;font-weight:600;color:var(--ink)}
+@keyframes pttRing{0%{transform:scale(1);opacity:.75}100%{transform:scale(1.85);opacity:0}}
+@keyframes laRise{0%{opacity:0;transform:translateY(16px) scale(.94)}9%,90%{opacity:1;transform:none}96%,100%{opacity:0;transform:none}}
+@keyframes laDisc{
+0%,36%{transform:scale(1);background:rgba(255,255,255,.09);color:#7FE3DC;border-color:rgba(255,255,255,.18)}
+41%{transform:scale(.92);background:rgba(255,255,255,.22);color:#7FE3DC;border-color:rgba(255,255,255,.18);animation-timing-function:cubic-bezier(.3,1.6,.5,1)}
+42%{background:#4ECDC4;color:#0B0B12;border-color:transparent}
+49%{transform:scale(1.07);background:#4ECDC4;color:#0B0B12;border-color:transparent}
+55%,100%{transform:scale(1);background:#4ECDC4;color:#0B0B12;border-color:transparent}
+}
+@keyframes laTap{0%,30%{opacity:0;transform:scale(1.5)}35%{opacity:1;transform:scale(1)}41%{opacity:1;transform:scale(.8)}46%,100%{opacity:0;transform:scale(.8)}}
+@keyframes laValA{0%,41%{opacity:1}43%,100%{opacity:0}}
+@keyframes laValB{0%,41%{opacity:0;transform:scale(.7)}45%{opacity:1;transform:scale(1.25)}52%,100%{opacity:1;transform:scale(1)}}
+@keyframes laHap{0%,40%{opacity:.22;transform:scale(1)}42%{opacity:1;transform:scale(1.9)}50%,100%{opacity:.22;transform:scale(1)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #4ECDC4; opacity: .2"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .22; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 960px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K32 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyLabeledAction</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Une grille d'actions est faite de boutons ronds de verre libellés, partout la même</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 800px">Un disque de verre, son mot dessous, et une grille qui range le tout. Ce qu'on peut faire se lit d'un regard et se touche du pouce.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il nomme un geste et le range, il ne sait pas ce que le geste fait</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>un libellé visible</b> sous un disque de K02, et fait des deux <b>une seule cible</b>, un seul nom, une seule réponse au toucher.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Montre ce que l'action porte déjà : <code>value</code> en pilule sous le libellé (« 2 / 3 aujourd'hui »), <code>badge</code> sur le disque.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit son état sans changer de forme : repos, actif, en attente, désactivé, mis en avant, destructif.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><code>MeeshyActionGrid</code> range les actions en colonnes égales, alignées en haut, <b>sans jamais laisser une action seule</b> sur sa ligne.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le disque, son verre, son ombre, sa réponse à l'appui : <b>K02</b> <code>MeeshyGlassButtonFace</code> et <b>K01</b>. Il ne dessine aucun fond.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le menu de l'appui long : <b>K18</b> <code>MeeshyObjectMenu</code>. Les rangées à bascule : <b>K06</b>. La pilule « Hors ligne » : <b>K14</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Les titres de groupe (« Parler », « Ensemble ») : <b>K44</b>, dans la carte <b>K43</b> que pose l'hôte. La touche d'un raccourci : <b>K55</b>. La grille ne titre rien.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Choisir les actions, leur ordre, leur droit d'exister, mettre un compte en forme, confirmer un geste destructif : <b>l'app</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Six parties et une grille</h2><p>Une action à deux fois sa taille, puis la grille qui la range. Le cadre pointillé est la cible : tout ce qu'il contient se touche et se lit d'un bloc.</p></header>
+<div class="kcell kc leo" style="flex-direction: row; align-items: center; justify-content: space-around; gap: 40px; padding: 72px 48px 64px; background: radial-gradient(70% 90% at 28% 40%, rgba(78,205,196,.13), var(--ground) 70%)">
+<div style="position: relative; width: 260px; flex: none">
+<div style="position: absolute; inset: -22px -8px -20px; border: 1.5px dashed color-mix(in oklab, var(--warn) 60%, transparent); border-radius: 30px"></div>
+<div class="act" style="zoom: 2; width: 130px">
+<span class="ib g lg">[[ic:hand-waving l]]<span class="bdg">1</span></span>
+<span class="lb">Bring</span>
+<span class="vl">2 / 3 aujourd'hui</span>
+</div>
+<span class="kan" style="left: -19px; top: -33px">1</span>
+<span class="kan" style="left: 62px; top: 92px">2</span>
+<span class="kan" style="left: 166px; top: 44px">3</span>
+<span class="kan" style="left: 200px; top: -16px">4</span>
+<span class="kan" style="left: 70px; top: 140px">5</span>
+<span class="kan" style="left: 232px; top: 180px">6</span>
+</div>
+<div style="position: relative; width: 470px; flex: none; display: flex; flex-direction: column; gap: 16px">
+<div class="fr" style="padding: 20px 12px">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: start">
+<div class="col"><div class="act"><span class="ib g lg">[[ic:monitor-play l]]</span><span class="lb">Regarder ensemble</span></div></div>
+<div class="col"><div class="act"><span class="ib g lg">[[ic:headphones l]]</span><span class="lb">Écouter ensemble</span></div></div>
+<div class="col"><div class="act"><span class="ib g lg">[[ic:hand-waving l]]</span><span class="lb">Bring</span><span class="vl">2 / 3 aujourd'hui</span></div></div>
+<div class="col"><div class="act"><span class="ib g lg">[[ic:share-fat l]]</span><span class="lb">Lui envoyer un contenu</span></div></div>
+</div>
+</div>
+<span class="kan" style="left: 104px; top: -11px">7</span>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<span class="mono" style="color: var(--ink2)">colonne ≥ 76 · écart 8 · haut aligné</span>
+<span class="mono" style="color: var(--ink3)">350 px → 4 colonnes</span>
+</div>
+</div>
+</div>
+<div class="card leg" style="padding: 28px">
+<div><span class="kan">1</span><b>Cible</b><p>Toute la colonne : disque, libellé, valeur. Jamais moins de 76 × 88. Un seul bouton pour le lecteur d'écran.</p></div>
+<div><span class="kan">2</span><b>Disque</b><p><code>MeeshyGlassButtonFace</code> de K02, sans geste propre. 60 par défaut, 56 serré, 64 large. Verre de K01.</p></div>
+<div><span class="kan">3</span><b>Glyphe</b><p>46 % du disque : 26, 28, 30. Encre <code>tint</code>, sinon celle du verre. Figé : il ne grandit pas avec la police.</p></div>
+<div><span class="kan">4</span><b>Pastille <code>badge</code></b><p>Emplacement de K02, coin haut de fin. 21 de haut, liseré 2 au fond de l'hôte. Absente sans valeur.</p></div>
+<div><span class="kan">5</span><b>Libellé <code>title</code></b><p>12 / 600, centré, équilibré, deux lignes au plus. Écart 9 sous le disque. Il grandit avec la police.</p></div>
+<div><span class="kan">6</span><b>Valeur <code>value</code></b><p>Pilule de 20, 10 / 800, écart 6. Pleine à l'accent quand elle compte, sourde quand elle prévient (« Sera envoyé »).</p></div>
+<div style="grid-column: span 2"><span class="kan">7</span><b>Grille <code>MeeshyActionGrid</code></b><p>Colonnes égales d'au moins 76, écart 8, rangées espacées de 18. Les disques d'une rangée sont à la même hauteur, quel que soit le libellé. Le contour jaune montre une colonne.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Une forme, douze situations</h2><p>Tout est à taille réelle, sur une largeur de téléphone. Le disque est toujours celui de K02 : seuls son <code>kind</code>, sa taille et ce qui l'entoure changent.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+
+<div class="kcell kc leo">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:chat-circle l]]</span><span class="lb">Écrire</span></button>
+<button class="act"><span class="ib g lg">[[ic:phone l]]</span><span class="lb">Appeler</span></button>
+<button class="act"><span class="ib g lg">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></button>
+<button class="act"><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span></button>
+</div></div>
+<div class="cp"><b>Repos</b><span class="kcap"><code>kind: normal</code>, taille 60. Verre au ton de l'hôte, glyphe à l'accent, libellé à l'encre.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:chat-circle l]]</span><span class="lb">Écrire</span></button>
+<button class="act pr"><span class="ib g lg">[[ic:phone l]]</span><span class="lb">Appeler</span></button>
+<button class="act"><span class="ib g lg">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></button>
+<button class="act"><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span></button>
+</div></div>
+<div class="cp"><b>Pressé</b><span class="kcap">Le doigt posé n'importe où dans la cible fait répondre le disque seul. Le libellé ne bouge pas, les voisins non plus.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:monitor-play l]]</span><span class="lb">Regarder ensemble</span></button>
+<button class="act on" aria-pressed="true"><span class="ib g lg">[[ic:headphones-fill l]]</span><span class="lb">Écouter ensemble</span><span class="vl q">En cours</span></button>
+<button class="act"><span class="ib g lg">[[ic:hand-waving l]]</span><span class="lb">Bring</span></button>
+<button class="act"><span class="ib g lg">[[ic:share-fat l]]</span><span class="lb">Lui envoyer un contenu</span></button>
+</div></div>
+<div class="cp"><b>Actif</b><span class="kcap"><code>kind: active</code>. Disque plein à l'accent, glyphe plein et sombre. L'état est aussi dit en mots.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:chat-circle l]]<span class="bdg">3</span></span><span class="lb">Écrire</span></button>
+<button class="act"><span class="ib g lg">[[ic:phone l]]</span><span class="lb">Appeler</span></button>
+<button class="act"><span class="ib g lg">[[ic:hand-waving l]]</span><span class="lb">Bring</span><span class="vl">2 / 3 aujourd'hui</span></button>
+<button class="act"><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span></button>
+</div></div>
+<div class="cp"><b>Avec compteur</b><span class="kcap"><code>value</code> sous le libellé, <code>badge</code> sur le disque. Les deux sont des textes déjà mis en forme par l'app.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:chat-circle l]]</span><span class="lb">Écrire</span><span class="vl q">[[ic:clock-countdown s]]Sera envoyé</span></button>
+<button class="act off" disabled><span class="ib g lg">[[ic:phone l]]</span><span class="lb">Appeler</span></button>
+<button class="act off" disabled><span class="ib g lg">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></button>
+<button class="act off" disabled><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span></button>
+</div></div>
+<div class="cp"><b>Hors ligne</b><span class="kcap">Ce qui peut attendre reste actif et le dit : « Sera envoyé ». Le reste passe à 40 %, sans appui ni tic, avec sa raison en <code>hint</code>.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:chat-circle l]]</span><span class="lb">Écrire</span></button>
+<button class="act" aria-busy="true"><span class="ib g lg pend">[[ic:phone l]]</span><span class="lb">Appeler</span><span class="vl q">Appel…</span></button>
+<button class="act"><span class="ib g lg">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></button>
+<button class="act"><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span></button>
+</div></div>
+<div class="cp"><b>En attente</b><span class="kcap"><code>isPending</code>. Un anneau tourne autour du disque, le glyphe s'efface à moitié. Un second appui ne part pas.</span></div>
+</div>
+
+<div class="kcell kc leo" style="background: radial-gradient(120% 90% at 50% 34%, rgba(78,205,196,.2), var(--ground) 72%)">
+<div class="stage" style="align-items: center; gap: 0; padding: 30px 0 6px">
+<button class="ptt" aria-label="Maintenir pour parler">[[ic:microphone-fill xl]]</button>
+<div style="height: 40px"></div>
+<span class="d" style="font-size: 21px">Maintenir pour parler</span>
+<span style="margin-top: 4px; font-size: 13.5px; color: var(--ink2)">Ta voix part en direct</span>
+</div>
+<div class="cp"><b>Mis en avant</b><span class="kcap"><code>isFeatured</code>. Le disque de 96 à ondes est la forme <code>hold</code> de <b>K40</b> ; K32 le range, pose le libellé en titre et <code>value</code> en phrase. Un seul par écran.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage" style="gap: 18px">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:paper-plane-tilt l]]</span><span class="lb">Envoyer son profil</span></button>
+<button class="act"><span class="ib g lg">[[ic:copy l]]</span><span class="lb">Copier son lien</span></button>
+<button class="act"><span class="ib g lg">[[ic:qr-code l]]</span><span class="lb">Son QR</span></button>
+<button class="act"><span class="ib g lg">[[ic:circles-three l]]</span><span class="lb">Notre cercle</span></button>
+</div>
+<div style="border-radius: 26px; border: 1px solid rgba(248,113,113,.28); background: rgba(248,113,113,.07); padding: 16px 8px 14px">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act x" style="grid-column: 2"><span class="ib s56">[[ic:prohibit l]]</span><span class="lb">Bloquer</span></button>
+<button class="act x"><span class="ib s56">[[ic:flag l]]</span><span class="lb">Signaler</span></button>
+</div>
+</div>
+</div>
+<div class="cp"><b>Destructif, en bas, séparé</b><span class="kcap"><code>kind: destructive</code>. La grille sort ces actions de l'ordre et les pose dans une bande rouge, à la fin, en 56.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage"><div style="display: flex; align-items: flex-end; justify-content: space-around; gap: 8px">
+<div class="act" style="width: 84px"><span class="ib g s56">[[ic:map-pin l]]</span><span class="lb">56</span><span class="kcap mono">serré</span></div>
+<div class="act" style="width: 84px"><span class="ib g lg">[[ic:map-pin l]]</span><span class="lb">60</span><span class="kcap mono">défaut</span></div>
+<div class="act" style="width: 84px"><span class="ib g s64">[[ic:map-pin l]]</span><span class="lb">64</span><span class="kcap mono">large</span></div>
+</div></div>
+<div class="cp"><b>Trois tailles</b><span class="kcap"><code>size</code> vaut pour toute la grille, jamais pour une action seule. 56 sous 360 px de large, 64 sur tablette.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 0; overflow: hidden; gap: 0">
+<div class="mx leo" data-theme="light" style="flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 28px; background: linear-gradient(170deg, #E6FBF8, #FFFFFF 60%)">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:chat-circle l]]</span><span class="lb">Écrire</span></button>
+<button class="act on" aria-pressed="true"><span class="ib g lg">[[ic:phone-fill l]]</span><span class="lb">Appeler</span></button>
+<button class="act"><span class="ib g lg">[[ic:hand-waving l]]</span><span class="lb">Bring</span><span class="vl">2 / 3</span></button>
+<button class="act off" disabled><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span></button>
+</div></div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Verre clair de K01, glyphe à l'accent foncé. Le plein accent garde son encre sombre.</span></div>
+</div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:monitor-play l]]</span><span class="lb" style="font-size: 16px">Regarder ensemble</span></button>
+<button class="act"><span class="ib g lg">[[ic:share-fat l]]</span><span class="lb" style="font-size: 16px">Lui envoyer un contenu</span></button>
+<button class="act"><span class="ib g lg">[[ic:hand-waving l]]</span><span class="lb" style="font-size: 16px">Bring</span><span class="vl" style="height: 24px; font-size: 12px">2 / 3</span></button>
+</div></div>
+<div class="cp"><b>Grande police</b><span class="kcap">Le libellé grandit, le disque non. La colonne minimale passe à 104 : la grille perd une colonne plutôt que de couper un mot.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage" style="position: relative; justify-content: flex-end; padding-top: 112px">
+<div class="glass" style="position: absolute; left: 50%; top: 0; width: 214px; margin-left: -62px; border-radius: 22px; padding: 6px 0">
+<div class="mrow">[[ic:clock s]]<span>Pendant 1 heure</span></div>
+<div class="sep" style="margin: 0 14px"></div>
+<div class="mrow">[[ic:clock-countdown s]]<span>Pendant 8 heures</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<button class="act"><span class="ib g lg">[[ic:map-trifold l]]</span><span class="lb">Voir sur la carte</span></button>
+<button class="act on" aria-expanded="true"><span class="ib g lg">[[ic:map-pin-fill l]]</span><span class="lb">Partager ma position</span></button>
+<button class="act"><span class="ib g lg">[[ic:navigation-arrow l]]</span><span class="lb">Itinéraire</span></button>
+<button class="act"><span class="ib g lg">[[ic:battery-medium l]]</span><span class="lb">Batterie</span><span class="vl q">64 %</span></button>
+</div>
+</div>
+<div class="cp"><b>Menu à l'appui long</b><span class="kcap"><code>menu</code>. Le contenu est rendu par K18, ancré au disque. Le toucher bref garde l'action par défaut.</span></div>
+</div>
+
+</div>
+
+<div class="kcell kc leo" style="gap: 24px">
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 10px; width: 250px; flex: none">
+<div class="fr" style="padding: 16px 8px">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 8px; align-items: start">
+<div class="act"><span class="ib g s56">[[ic:chat-circle l]]</span><span class="lb">Écrire</span></div>
+<div class="act"><span class="ib g s56">[[ic:phone l]]</span><span class="lb">Appeler</span></div>
+<div class="act"><span class="ib g s56">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></div>
+<div class="act"><span class="ib g s56">[[ic:radio l]]</span><span class="lb">Talkie</span></div>
+<div class="act"><span class="ib g s56">[[ic:hand-waving l]]</span><span class="lb">Bring</span></div>
+<div class="act"><span class="ib g s56">[[ic:map-pin l]]</span><span class="lb">Position</span></div>
+</div>
+</div>
+<span class="mono" style="color: var(--ink2)">250 px · 3 colonnes · taille 56</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; width: 350px; flex: none">
+<div class="fr" style="padding: 16px 8px">
+<div style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px 8px; align-items: start">
+<div class="act" style="grid-column: span 4"><span class="ib g lg">[[ic:chat-circle l]]</span><span class="lb">Écrire</span></div>
+<div class="act" style="grid-column: span 4"><span class="ib g lg">[[ic:phone l]]</span><span class="lb">Appeler</span></div>
+<div class="act" style="grid-column: span 4"><span class="ib g lg">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></div>
+<div class="act" style="grid-column: 3 / span 4"><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span></div>
+<div class="act" style="grid-column: span 4"><span class="ib g lg">[[ic:hand-waving l]]</span><span class="lb">Bring</span></div>
+</div>
+</div>
+<span class="mono" style="color: var(--ink2)">350 px · 5 actions → 3 + 2, jamais 4 + 1</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0">
+<div class="fr" style="padding: 16px 8px">
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; align-items: start">
+<div class="act"><span class="ib g s64">[[ic:chat-circle l]]</span><span class="lb">Écrire</span></div>
+<div class="act"><span class="ib g s64">[[ic:phone l]]</span><span class="lb">Appeler</span></div>
+<div class="act"><span class="ib g s64">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></div>
+<div class="act"><span class="ib g s64">[[ic:radio l]]</span><span class="lb">Talkie</span></div>
+<div class="act"><span class="ib g s64">[[ic:hand-waving l]]</span><span class="lb">Bring</span></div>
+<div class="act"><span class="ib g s64">[[ic:map-pin l]]</span><span class="lb">Position</span></div>
+</div>
+</div>
+<span class="mono" style="color: var(--ink2)">560 px et plus · une seule rangée · taille 64</span>
+</div>
+</div>
+<div class="cp"><b>La grille s'adapte</b><span class="kcap"><code>columns: adaptive</code> : autant de colonnes d'au moins 76 que la largeur en loge, 4 au plus sur téléphone. Si la dernière rangée n'aurait qu'une action, la grille rééquilibre et centre la rangée courte.</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">Un interrupteur dans une cellule, deux états de plus, deux formes, une silhouette</h3></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="leo" style="display: flex; align-items: flex-start; justify-content: center; gap: 22px; width: 100%"><div class="act"><span style="display: inline-flex; align-items: center; justify-content: center; height: 60px"><span class="sw on" role="switch" aria-checked="true" aria-label="Batterie, partagée"></span></span><span class="lb">Batterie</span><span class="vl q">Partagée</span></div><div class="act"><span style="display: inline-flex; align-items: center; justify-content: center; height: 60px"><span class="sw" role="switch" aria-checked="false" aria-label="Injoignable, coupé"></span></span><span class="lb">Injoignable</span><span class="vl q">Coupé</span></div></div></div><span class="kcap"><b style="color: var(--ink)">Emplacement <code>control</code></b> Un interrupteur de <b>K06</b> à la place du disque, sa légende d'état en <code>value</code>. Même colonne, même cible.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="leo" style="display: flex; align-items: flex-start; justify-content: center; gap: 22px; width: 100%"><button class="act"><span class="ib g lg">[[ic:hand-waving l]]<span class="bdg" style="background: var(--warn); color: #0B0B12">[[ic:clock s]]</span></span><span class="lb">Bring</span><span class="vl q">Sera envoyé</span></button><button class="act"><span class="ib g lg" style="outline: 2px dashed var(--accent); outline-offset: 4px">[[ic:paper-plane-tilt l]]</span><span class="lb">Envoyer le profil</span></button></div></div><span class="kcap"><b style="color: var(--ink)">En file · cible de dépôt</b> <code>isQueued</code> : pastille horloge au coin, hors ligne. <code>isDropTarget</code> : le contour de <b>K25</b> quand on glisse quelque chose dessus.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="leo" style="display: flex; flex-direction: column; gap: 10px; width: 100%"><button class="tonal" style="display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 0 14px; border-radius: 20px; color: var(--accent-ink)">[[ic:map-trifold]]<span style="display: flex; flex-direction: column; gap: 1px; color: var(--ink)"><b style="font-size: 13.5px">Voir sur la carte</b><span class="kcap">Alfama · encore 42 min</span></span></button><div style="display: flex; gap: 8px"><button class="ib tonal" aria-label="Copier" style="color: var(--accent-ink)">[[ic:copy]]</button><button class="ib tonal" aria-label="QR" style="color: var(--accent-ink)">[[ic:qr-code]]</button><button class="ib tonal" aria-label="Partager" style="color: var(--accent-ink)">[[ic:export]]</button></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>shape: wide</code> · <code>compact</code></b> La tuile horizontale : glyphe, titre, sous-ligne. La compacte : 44, tonale, libellé dit. Le libellé d'un disque tient sur 2 à 3 lignes.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: flex-start; justify-content: center; gap: 22px; width: 100%"><div style="display: flex; flex-direction: column; align-items: center; gap: 9px"><i class="sk" style="display: block; width: 60px; height: 60px; border-radius: 50%; animation-delay: -0s"></i><i class="sk" style="display: block; width: 44px; height: 10px"></i></div><div style="display: flex; flex-direction: column; align-items: center; gap: 9px"><i class="sk" style="display: block; width: 60px; height: 60px; border-radius: 50%; animation-delay: -.2s"></i><i class="sk" style="display: block; width: 44px; height: 10px"></i></div><div style="display: flex; flex-direction: column; align-items: center; gap: 9px"><i class="sk" style="display: block; width: 60px; height: 60px; border-radius: 50%; animation-delay: -.4s"></i><i class="sk" style="display: block; width: 44px; height: 10px"></i></div></div></div><span class="kcap"><b style="color: var(--ink)">Silhouette</b> <code>isLoading</code> : les disques et leurs libellés en <code>MeeshySkeleton</code> de <b>K38</b>, mêmes colonnes. Jamais si le cache répond.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Le disque répond, le mot reste</h2><p>La grille entre en cascade, une fois. Ensuite seul le disque bouge : il s'enfonce, rebondit, et passe au plein accent si l'action change d'état. La valeur saute à son nouveau chiffre.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 24px; align-items: stretch">
+
+<div class="kcell kc leo" style="align-items: center; justify-content: center; gap: 36px; padding: 48px 28px; min-height: 440px; background: radial-gradient(80% 70% at 50% 40%, rgba(78,205,196,.12), var(--ground) 72%)">
+<div class="dm" style="zoom: 1.35; width: 350px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<div class="act"><span class="ib g lg">[[ic:monitor-play l]]</span><span class="lb">Regarder ensemble</span></div>
+<div class="act" style="animation-delay: .06s"><span class="ib g lg">[[ic:headphones l]]</span><span class="lb">Écouter ensemble</span></div>
+<div class="act" style="animation-delay: .12s"><span class="tap"></span><span class="ib g lg go">[[ic:hand-waving l]]</span><span class="lb">Bring</span><span class="sw2"><span class="vl">2 / 3 aujourd'hui</span><span class="vl">3 / 3 aujourd'hui</span></span></div>
+<div class="act" style="animation-delay: .18s"><span class="ib g lg">[[ic:share-fat l]]</span><span class="lb">Lui envoyer un contenu</span></div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px"><span class="hap"></span><span class="mono" style="color: var(--ink2)">tic léger au relâcher</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 24px">
+<div class="leo" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; flex: 1">
+<div class="kcell kc" style="padding: 20px 16px; gap: 14px; min-height: 0">
+<span class="step">1</span>
+<div class="stage" style="align-items: center; min-height: 110px"><div class="act pr" style="width: 96px"><span class="ib g lg">[[ic:hand-waving l]]</span><span class="lb">Bring</span><span class="vl">2 / 3 aujourd'hui</span></div></div>
+<span class="kcap"><b style="color: var(--ink)">Doigt posé.</b> Le disque s'enfonce à 0,94, le verre s'éclaire.</span>
+</div>
+<div class="kcell kc" style="padding: 20px 16px; gap: 14px; min-height: 0">
+<span class="step">2</span>
+<div class="stage" style="align-items: center; min-height: 110px"><div class="act on" style="width: 96px"><span class="ib g lg" style="transform: scale(1.07)">[[ic:hand-waving-fill l]]</span><span class="lb">Bring</span><span class="vl" style="transform: scale(1.2)">3 / 3 aujourd'hui</span></div></div>
+<span class="kcap"><b style="color: var(--ink)">Relâché.</b> Rebond à 1,07, plein accent, la valeur saute. Un tic.</span>
+</div>
+<div class="kcell kc" style="padding: 20px 16px; gap: 14px; min-height: 0">
+<span class="step">3</span>
+<div class="stage" style="align-items: center; min-height: 110px"><div class="act on" style="width: 96px"><span class="ib g lg">[[ic:hand-waving-fill l]]</span><span class="lb">Bring</span><span class="vl">3 / 3 aujourd'hui</span></div></div>
+<span class="kcap"><b style="color: var(--ink)">Posé.</b> Tout revient à 1. L'état tient jusqu'à ce que l'app le change.</span>
+</div>
+</div>
+<div class="leo" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="kcell kc" style="flex-direction: row; align-items: center; gap: 22px; padding: 40px 22px 40px 44px; min-height: 0">
+<span class="ptt" style="width: 64px; height: 64px; flex: none">[[ic:microphone-fill l]]</span>
+<span class="kcap"><b style="color: var(--ink)">Mis en avant.</b> Deux ondes partent du disque, sans fin, tant qu'il est à l'écran.</span>
+</div>
+<div class="kcell kc" style="flex-direction: row; align-items: center; gap: 22px; padding: 40px 22px 40px 34px; min-height: 0">
+<span class="ib g lg pend" style="color: var(--accent-ink)">[[ic:phone l]]</span>
+<span class="kcap"><b style="color: var(--ink)">En attente.</b> L'anneau fait un tour par seconde. Il part en fondu, 160 ms.</span>
+</div>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">motion.morph</b> (appui, changement d'état) · 200 ms · ressort vif, rebond 1,07 · déclencheur : doigt posé dans la cible, puis <span style="color: var(--accent-ink)">kind</span> ou <span style="color: var(--accent-ink)">value</span> qui change · haptique : un tic léger au relâcher, par K02 · mouvement réduit : fondu du fond, aucune échelle</div>
+<div class="spec"><b style="color: var(--ink)">motion.rise</b> (entrée de la grille) · 700 ms · 60 ms d'écart, huit actions au plus · déclencheur : première apparition, jamais au retour sur l'écran · haptique : aucune · mouvement réduit : aucune entrée</div>
+<div class="spec"><b style="color: var(--ink)">motion.pulse</b> (ondes du mis en avant, anneau d'attente) · 2,6 s et 1 s en boucle · linéaire sortant · déclencheur : <span style="color: var(--accent-ink)">isFeatured</span>, <span style="color: var(--accent-ink)">isPending</span> · haptique : aucune · mouvement réduit : ondes figées, anneau remplacé par un glyphe à 45 %</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<div class="h">Élément</div><div class="h">iOS · MeeshyUI/Kit/MeeshyLabeledAction.swift</div><div class="h">Android · me.meeshy.ui.component.kit</div><div class="h">Web · components/kit/meeshy-labeled-action.tsx</div>
+<div><b>Composant</b></div>
+<div><code>MeeshyLabeledAction(title:systemImage:value:badge:kind:isPending:isFeatured:menu:action:)</code></div>
+<div><code>MeeshyLabeledAction(title, icon, onClick, modifier, value, badge, kind, isPending, isFeatured, menu)</code></div>
+<div><code>&lt;MeeshyLabeledAction title glyph value badge kind isPending isFeatured menu onPress /&gt;</code></div>
+<div><b>Grille</b></div>
+<div><code>MeeshyActionGrid(columns:size:) { … }</code></div>
+<div><code>MeeshyActionGrid(modifier, columns, size) { … }</code></div>
+<div><code>&lt;MeeshyActionGrid columns size&gt;…&lt;/MeeshyActionGrid&gt;</code></div>
+<div><b>Variantes</b></div>
+<div><code>MeeshyGlassButtonKind { normal, active, destructive, soft }</code> : celui de K02</div>
+<div><code>MeeshyGlassButtonKind</code> : celui de K02</div>
+<div><code>'normal' | 'active' | 'destructive' | 'soft'</code></div>
+<div><b>Tailles</b></div>
+<div><code>MeeshyLabeledActionSize { s56, s60, s64 }</code></div>
+<div><code>enum class MeeshyLabeledActionSize</code> identique</div>
+<div><code>56 | 60 | 64</code></div>
+<div><b>Colonnes</b></div>
+<div><code>MeeshyActionColumns { adaptive(max: Int), fixed(Int) }</code></div>
+<div><code>sealed interface MeeshyActionColumns</code> identique</div>
+<div><code>'adaptive' | { adaptive: number } | { fixed: number }</code></div>
+<div><b>Emplacements</b> (<code>slot</code>)</div>
+<div><code>@ViewBuilder glyph</code>, <code>badge</code>, <code>menu</code>, <code>control</code>, <code>trailing</code></div>
+<div><code>glyph</code>, <code>badge</code>, <code>menu</code>, <code>control</code>, <code>trailing</code> : <code>@Composable</code></div>
+<div><code>glyph</code>, <code>badge</code>, <code>menu</code>, <code>control</code>, <code>trailing</code> : <code>ComponentChildren</code></div>
+<div><b>Désactivé</b></div>
+<div><code>.disabled(_:)</code></div>
+<div><code>enabled = true</code></div>
+<div><code>disabled</code></div>
+<div style="border-bottom: 0"><b>Recette</b></div>
+<div style="border-bottom: 0"><code>MeeshyLabeledActionRecipe.resolve(kind:size:isPending:isFeatured:isEnabled:hasValue:textScale:)</code> et <code>MeeshyActionGridRecipe.resolve(width:count:columns:size:textScale:)</code></div>
+<div style="border-bottom: 0"><code>MeeshyLabeledActionRecipe.resolve(…)</code>, <code>MeeshyActionGridRecipe.resolve(…)</code>, JVM pures</div>
+<div style="border-bottom: 0"><code>meeshyLabeledActionRecipe(…)</code>, <code>meeshyActionGridRecipe(…)</code> : classes et propriétés <code>--kit-action-*</code></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+<div class="par"><code>title: String</code><span>Obligatoire, non vide. Le mot visible, deux lignes au plus. <code>label: String? = nil</code> : le nom dit, par défaut <code>title</code>.</span></div>
+<div class="par"><code>systemImage</code> · <code>icon</code> · <code>glyph</code><span>Obligatoire, nommé selon la plateforme (iOS · Android · web). Remis tel quel à K02, qui lui donne son encre. L'emplacement libre <code>glyph</code> le remplace.</span></div>
+<div class="par"><code>value: String? = nil</code><span>Ce que l'action porte déjà, mis en forme : « 2 / 3 aujourd'hui », « 64 % ».</span></div>
+<div class="par"><code>valueKind = .accent</code><span><code>accent</code> pour un compte, <code>quiet</code> pour un avis : « Sera envoyé », « En cours ».</span></div>
+<div class="par"><code>badge: String? = nil</code><span>Texte court de la pastille. Vide ou absent : pas de pastille.</span></div>
+<div class="par"><code>kind = .normal</code><span>Les quatre de K02. <code>destructive</code> place l'action dans la bande du bas.</span></div>
+<div class="par"><code>isPending = false</code><span>Anneau, glyphe à 45 %, action retenue. Annoncé « en cours ».</span></div>
+<div class="par"><code>isFeatured = false</code><span>Pose le disque de 96 de <b>K40</b> (<code>shape: hold</code>), libellé en titre. Occupe toute la largeur de la grille.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Encre du glyphe et fond de l'actif. Sans elle : la teinte de l'hôte.</span></div>
+<div class="par"><code>hint: String? = nil</code><span>La phrase d'aide. Désactivé, elle dit pourquoi.</span></div>
+<div class="par"><code>shortcut: String? = nil</code><span>Une touche, rendue par <b>K55</b> <code>MeeshyKeyHint</code> dans l'emplacement de fin <code>trailing</code>. Montrée seulement quand un clavier est branché.</span></div>
+<div class="par"><code>shape = .disc</code><span><code>tile</code> (libellé dans la tuile), <code>wide</code> (glyphe à gauche, titre, sous-ligne), <code>compact</code> (44, tonale).</span></div>
+<div class="par"><code>isQueued = false</code><span>En file : pastille horloge au coin, action gardée. <code>isDropTarget</code> : la cible de dépôt de <b>K25</b>.</span></div>
+<div class="par"><code>isLoading = false</code><span>Silhouette de même forme : <code>MeeshySkeleton</code> de <b>K38</b>, seulement sur cache vide.</span></div>
+<div class="par"><code>size = .s60</code><span>Sur la grille, jamais sur une action. <code>columns = .adaptive(max: 4)</code>.</span></div>
+</div>
+<p style="display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px; border-radius: 18px; border: 1.5px dashed var(--line); font-size: 14px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--warn); display: inline-flex">[[ic:warning-circle]]</span><span><b style="color: var(--ink)">À trancher à l'ouverture du lot.</b> K02 s'arrête à 48 et sa fiche laisse « 56 à 84 » dehors. K32 a besoin de 56, 60 et 64 (le 96 de <code>isFeatured</code> est à K40) : soit <code>MeeshyGlassButtonSize</code> les reçoit, soit <code>MeeshyGlassButtonFace</code> accepte un diamètre remis par une recette du kit. Dans les deux cas K32 ne dessine aucun disque. Même question pour l'actif : celui de K02 est un disque blanc ; K32 le teinte par <code>tint</code>, que K02 doit donc accepter aussi sur son fond plein.</span></p>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Un contrat, trois matières</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="plat leo">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<h3 class="d" style="font-size: 20px">iOS · SwiftUI</h3></div>
+<div class="demo">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<div class="act"><span class="ib g lg">[[ic:chat-circle l]]</span><span class="lb">Écrire</span></div>
+<div class="act on"><span class="ib g lg">[[ic:phone-fill l]]</span><span class="lb">Appeler</span></div>
+<div class="act"><span class="ib g lg">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></div>
+<div class="act"><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span></div>
+</div>
+</div>
+<ul>
+<li>Un <code>Button</code> dont le libellé est <code>MeeshyGlassButtonFace</code> plus le texte : Liquid Glass du système sur iOS 26, fondu par rangée dans un <code>GlassEffectContainer</code>.</li>
+<li>Grille : un <code>Layout</code> propre, qui mesure la largeur, applique la recette et aligne les disques.</li>
+<li>Menu : <code>Menu(primaryAction:)</code> avec le contenu de K18. Tic : <code>sensoryFeedback</code> de K02.</li>
+<li>Raccourci : <code>keyboardShortcut</code>, montré sur iPad au maintien de la touche Commande.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Avant iOS 26 : verre dessiné de K01. iOS 16 : pas de <code>sensoryFeedback</code>, le tic passe par <code>HapticFeedback.light()</code>.</p>
+</div>
+
+<div class="plat leo">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<h3 class="d" style="font-size: 20px">Android · Compose</h3></div>
+<div class="demo">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<div class="tile">[[ic:chat-circle l]]<span>Écrire</span></div>
+<div class="tile on">[[ic:phone-fill l]]<span>Appeler</span></div>
+<div class="tile">[[ic:video-camera l]]<span>Vidéo</span></div>
+<div class="tile">[[ic:radio l]]<span>Talkie</span></div>
+</div>
+</div>
+<ul>
+<li>Une <b>tuile tonale carrée-arrondie</b> : rayon 22, glyphe en haut, <b>libellé dedans</b>. Pas de flou. Même API, même grille.</li>
+<li>Actif : conteneur à l'accent et rayon qui passe de 22 à 30, par <code>MaterialShapes</code> et <code>Morph</code>.</li>
+<li>Grille : <code>Layout</code> Compose mené par la recette. Cible de 48 dp. Tic : <code>HapticFeedback</code> par <code>MeeshyHaptics.light()</code>.</li>
+<li>Menu : <code>combinedClickable(onLongClick)</code>, toujours doublé d'une action nommée pour TalkBack.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>Morph</code> (Material 3 antérieur) : le rayon s'anime seul. Le mis en avant garde son disque rond et ses ondes.</p>
+</div>
+
+<div class="plat leo">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<h3 class="d" style="font-size: 20px">Web · Preact</h3></div>
+<div class="demo">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start">
+<div class="act"><span class="ib g lg">[[ic:chat-circle l]]</span><span class="lb">Écrire</span><span class="kb">M</span></div>
+<div class="act hv"><span class="ib g lg">[[ic:phone l]]</span><span class="lb">Appeler</span><span class="kb">A</span></div>
+<div class="act fc"><span class="ib g lg">[[ic:video-camera l]]</span><span class="lb">Vidéo</span><span class="kb">V</span></div>
+<div class="act"><span class="ib g lg">[[ic:radio l]]</span><span class="lb">Talkie</span><span class="kb">T</span></div>
+</div>
+</div>
+<ul>
+<li>Un <code>&lt;button&gt;</code> par action, dans un <code>&lt;ul&gt;</code>. Appui, <b>survol</b> et focus sont <code>:active</code>, <code>:hover</code>, <code>:focus-visible</code> : aucun état, aucun écouteur.</li>
+<li>Grille : <code>grid-template-columns: repeat(auto-fit, minmax(76px, 1fr))</code> et requête de conteneur pour la taille.</li>
+<li><b>Raccourci affiché</b> sous le libellé par <b>K55</b> quand <code>(hover: hover)</code> ; dit par <code>aria-keyshortcuts</code>.</li>
+<li>Menu : appui tenu 500 ms au doigt, clic droit ou Maj+F10 au clavier, comme K02.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>backdrop-filter</code> : fond plein de K01. Sans requêtes de conteneur : taille 60 partout.</p>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Des rangées d'actions partout, aucune grille commune</h2><p>Le code a déjà le disque à légende, sur les écrans plein cadre et dans les appels. La fiche de profil, elle, aligne des rectangles teintés. On extrait le premier, on rebranche les seconds.</p></header>
+<div class="card" style="overflow: hidden">
+<div class="twin"><span class="pf">iOS</span><span class="mono">MeeshyUI/Fullscreen/FullscreenActionRail.swift</span><p><span class="be">Devient le composant</span> <code>FullscreenActionButton</code> : glyphe, <code>caption</code> visible, <code>label</code> dit, valeur d'accessibilité, pastille, <code>isActive</code>. Le plus complet. Le rail vertical reste à l'hôte.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">MeeshyUI/Profile/UserProfileSheet+DetailsTab.swift</span><p><code>profileActionButton(icon:label:color:action:)</code> et <code>actionButtons</code> : neuf appels, rectangles teintés en rangées de deux. Rebranchés sur la grille, puis retirés.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">MeeshyUI/Profile/ProfileRelationSection.swift</span><p><code>ProfileRelationSlot</code> : l'emplacement où l'app pose ses actions de relation. Il reste, et reçoit une <code>MeeshyActionGrid</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Call/Views/CallDeviceControls.swift</span><p><code>CallPillButtonLabel</code> : la légende sous un bouton d'appel, que K02 a laissée à l'app. Elle trouve ici sa place.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Main/Views/ConversationListQuickActions.swift</span><p><code>tile(_:)</code> : pastille de 44, titre sur deux lignes, en grille. Même grammaire, autre matière. Rebranchée.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">sdk-ui/…/component/fullscreen/FullscreenActionRail.kt</span><p><span class="be">Devient le composant</span> <code>FullscreenActionButton</code>, miroir de l'iOS : <code>caption</code>, pastille, actif. Déjà dans <code>:sdk-ui</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">feature/profile/…/ProfileActions.kt · feature/community/…/CommunityDetailScreen.kt</span><p><code>ProfileActionButton</code>, <code>CallButtons</code> et <code>ActionButton</code> de <code>ActionsSection</code> : deux fois la même rangée, privée à chaque écran. Rebranchées.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/call-round-button.tsx</span><p><span class="be">Devient le composant</span> <code>RoundButton</code> : disque rond, <code>label</code> dit, <code>caption</code> dessous. Son disque part à K02, sa légende reste ici.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/quick-actions.tsx</span><p>La grille de « Plus » : trois colonnes de tuiles à pastille de 44 et libellé. Elle donne à la grille sa règle de colonnes. Rebranchée.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/user-profile-call.tsx · apps/web/src/routes/user-profile-sections.tsx</span><p><code>ProfileCallButtons</code> et <code>ProfileRelationSection</code> : boutons pleins en rangée, un fichier par action (<code>user-profile-bring.tsx</code>, <code>-talkie.tsx</code>, <code>-together.tsx</code>). Rebranchés, logique gardée.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+
+<div class="kcell kc" style="padding: 24px 18px">
+<div class="stage" style="justify-content: flex-start; gap: 18px; --accent: #6366F1; --accent-ink: #A5B4FC">
+<div style="display: flex; align-items: center; gap: 10px"><span class="av" style="width: 36px; height: 36px; font-size: 13px; --accent: #F8B500">SS</span><div style="display: flex; flex-direction: column; min-width: 0"><span class="d" style="font-size: 16px">Sortie de samedi</span><span style="font-size: 12px; color: var(--ink3)">5 membres</span></div></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; align-items: start">
+<button class="act"><span class="ib g s56">[[ic:magnifying-glass l]]</span><span class="lb">Chercher</span></button>
+<button class="act"><span class="ib g s56">[[ic:images l]]</span><span class="lb">Médias</span><span class="vl q">248</span></button>
+<button class="act on" aria-pressed="true"><span class="ib g s56">[[ic:bell-slash-fill l]]</span><span class="lb">Muet</span></button>
+<button class="act"><span class="ib g s56">[[ic:push-pin l]]</span><span class="lb">Épingler</span></button>
+</div>
+</div>
+<div class="cp"><b>Détails d'une conversation</b><span class="kcap">Les quatre gestes du haut. « Muet » actif, le compte des médias en valeur.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 18px">
+<div class="stage" style="justify-content: flex-start; gap: 18px; --accent: #FBBF24; --accent-ink: #FCD34D">
+<div style="display: flex; align-items: center; gap: 10px"><span class="ib" style="width: 36px; height: 36px; background: var(--l-comm); color: #0B0B12">[[ic:users-four s]]</span><div style="display: flex; flex-direction: column; min-width: 0"><span class="d" style="font-size: 16px">Photo de rue</span><span style="font-size: 12px; color: var(--ink3)">1 204 membres</span></div></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; align-items: start">
+<button class="act"><span class="ib g s56">[[ic:user-plus l]]</span><span class="lb">Inviter</span></button>
+<button class="act"><span class="ib g s56">[[ic:export l]]</span><span class="lb">Partager</span></button>
+<button class="act"><span class="ib g s56">[[ic:bell l]]</span><span class="lb">Alertes</span></button>
+<button class="act x"><span class="ib s56">[[ic:sign-out l]]</span><span class="lb">Quitter</span></button>
+</div>
+</div>
+<div class="cp"><b>Fiche d'une communauté</b><span class="kcap">Teinte de la communauté. « Quitter » en destructif, à la fin.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 18px">
+<div class="stage" style="justify-content: flex-start; gap: 14px; --accent: #A855F7; --accent-ink: #D8B4FE">
+<div style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: var(--line)"></div>
+<span class="mono" style="align-self: center; color: var(--ink2)">meeshy.me/@aissa</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; align-items: start">
+<button class="act"><span class="ib g s56">[[ic:copy l]]</span><span class="lb">Copier</span></button>
+<button class="act"><span class="ib g s56">[[ic:qr-code l]]</span><span class="lb">QR</span></button>
+<button class="act"><span class="ib g s56">[[ic:chat-circle l]]</span><span class="lb">Message</span></button>
+<button class="act"><span class="ib g s56">[[ic:export l]]</span><span class="lb">Autres</span></button>
+</div>
+</div>
+<div class="cp"><b>Feuille de partage</b><span class="kcap">Une seule rangée dans K15. Chaque sortie a son disque et son mot.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 18px; background: linear-gradient(170deg, #134E4A, #09090B 70%)">
+<div class="stage" style="justify-content: flex-start; gap: 18px; --accent: #EEF2FF; --accent-ink: #EEF2FF">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span class="d" style="font-size: 16px">Léo Marchetti</span><span class="mono" style="color: var(--ink2)">04:12</span></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; align-items: start">
+<button class="act on" aria-pressed="true"><span class="ib g s56">[[ic:microphone-slash-fill l]]</span><span class="lb">Micro</span><span class="vl q">Coupé</span></button>
+<button class="act"><span class="ib g s56">[[ic:speaker-high l]]</span><span class="lb">Son</span><span class="vl q">AirPods</span></button>
+<button class="act"><span class="ib g s56">[[ic:video-camera l]]</span><span class="lb">Vidéo</span></button>
+<button class="act"><span class="ib g s56">[[ic:screencast l]]</span><span class="lb">Écran</span></button>
+</div>
+</div>
+<div class="cp"><b>Panneau d'appel</b><span class="kcap">Les légendes des boutons d'appel, enfin au même endroit. L'actif est le disque blanc de K02.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque <code>kind</code> × taille × état rend le diamètre, le glyphe, l'encre du libellé et le genre de la valeur du tableau. Vecteurs <code>K32-MeeshyLabeledAction.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Grille.</b> Pour chaque largeur de 240 à 1 024 et chaque compte de 1 à 12 : colonnes d'au moins 76, quatre au plus sur téléphone, jamais une action seule sur la dernière rangée, disques d'une rangée à la même hauteur.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Un seul élément par action : le libellé, puis la valeur, la pastille et l'état en mots (« activé », « en cours », « indisponible »). Rôle bouton. Le glyphe est muet.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Une cible, une action.</b> Toucher le libellé ou la valeur déclenche la même action que le disque, une fois. En attente ou désactivé : ni action ni tic. L'appui long est toujours aussi une action nommée.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> 76 × 88 au moins, soit plus que 44 pt, 48 dp, 44 px. Libellé à 4,5:1 sur le fond de l'hôte en clair et en sombre, glyphe sombre sur le plein accent à 4,5:1 pour les teintes du catalogue.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit, grande police, RTL.</b> Aucune échelle ni entrée ; les ondes se figent. À 200 %, aucun mot coupé : la grille perd une colonne. En arabe, l'ordre et la pastille se reflètent.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Presser une action, changer sa valeur ou la mettre en attente ne re-rend ni ne repeint aucune autre action de la grille. Garde de source : aucun verre dessiné, aucun type du domaine, aucun singleton dans les fichiers de K32 ; le disque vient de K02.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le libellé est toujours visible : aucune action n'est un glyphe seul. La couleur ne porte jamais l'état à elle seule ; un mot le dit. Au clavier, les flèches suivent la grille, Tab en sort.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Seules la transformation et l'opacité s'animent. Un flou par rangée, jamais par disque. Seize actions à l'écran sans image perdue à l'appui ; les ondes s'arrêtent hors écran.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8262}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

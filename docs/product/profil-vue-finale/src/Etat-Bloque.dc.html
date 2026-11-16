@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Personne bloquée — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.halo{position:relative;display:inline-flex;align-items:center;justify-content:center;width:76px;height:76px;border-radius:50%;background:rgba(248,113,113,.13);color:var(--err)}
+.halo::before{content:"";position:absolute;inset:-9px;border-radius:50%;border:1.5px solid rgba(248,113,113,.28);animation:blkBreath 3.6s ease-in-out infinite}
+@keyframes blkBreath{0%,100%{transform:scale(.94);opacity:.9}50%{transform:scale(1.06);opacity:.25}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<header style="position: relative; height: 232px; overflow: hidden; background: linear-gradient(165deg, #2a2a33 0%, #1a1a20 52%, #09090B 100%)">
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 110px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 54px 16px 0">
+<button class="ib g" aria-label="Fermer">[[ic:x]]</button>
+<span class="chip glass" style="color: var(--err)">[[ic:prohibit s]]<span>Bloqué</span></span>
+</div>
+</header>
+
+<section class="rise" style="position: relative; margin-top: -78px; padding: 0 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+<span class="av" style="width: 104px; height: 104px; font-size: 36px; background: linear-gradient(140deg, #8E8E9C, #4A4A56); border: 5px solid var(--ground)">RS</span>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+<h1 class="d" style="font-size: 30px">Rui Santos</h1>
+<span class="mono" style="font-size: 14px; color: var(--ink3)">@rui.s</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; padding: 26px 20px 0">
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 30px 22px 16px">
+<span class="halo">[[ic:prohibit xl]]</span>
+<h2 class="d" style="font-size: 25px; text-align: center">Tu as bloqué Rui</h2>
+
+<ul style="list-style: none; margin: 0; padding: 0; align-self: stretch; display: flex; flex-direction: column; gap: 14px">
+<li style="display: flex; align-items: center; gap: 12px">
+<span class="ib" style="width: 38px; height: 38px; background: var(--field); color: var(--ink2)">[[ic:chat-circle-slash s]]</span>
+<span style="font-size: 15px; color: var(--ink)">Il ne peut plus t'écrire ni t'appeler</span>
+</li>
+<li style="display: flex; align-items: center; gap: 12px">
+<span class="ib" style="width: 38px; height: 38px; background: var(--field); color: var(--ink2)">[[ic:eye-slash s]]</span>
+<span style="font-size: 15px; color: var(--ink)">Il ne voit plus ton profil ni tes publications</span>
+</li>
+<li style="display: flex; align-items: center; gap: 12px">
+<span class="ib" style="width: 38px; height: 38px; background: var(--field); color: var(--ink2)">[[ic:bell-slash s]]</span>
+<span style="font-size: 15px; color: var(--ink)">Il n'est pas prévenu</span>
+</li>
+</ul>
+
+<div style="align-self: stretch; display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 4px">
+<button class="btn q" style="align-self: stretch; color: var(--ink)">Débloquer</button>
+<button style="display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 14px; font-size: 14px; font-weight: 700; color: var(--err)">[[ic:flag s]]<span>Signaler aussi</span></button>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .16s; padding: 30px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<h2 class="d" style="font-size: 20px">Ce qui reste</h2>
+<div class="card" style="display: flex; flex-direction: column; overflow: hidden">
+<button class="row" style="width: 100%; gap: 12px; padding: 8px 14px">
+<span class="ib" style="background: var(--field); color: var(--ink2)">[[ic:chats]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px">
+<span style="font-weight: 600; font-size: 14.5px; white-space: nowrap; letter-spacing: -.01em">Vos 2 conversations en commun</span>
+<span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink3)">[[ic:lock-simple s]]<span>Lecture seule</span></span>
+</span>
+<span style="color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="width: 100%; gap: 12px; padding: 8px 14px">
+<span class="ib" style="background: var(--field); color: var(--ink2)">[[ic:copy]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px">
+<span style="font-weight: 600">Copier son lien</span>
+<span class="mono" style="color: var(--ink3)">meeshy.me/@rui.s</span>
+</span>
+</button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .24s; margin-top: 40px; padding: 0 20px 44px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+<span class="tag">Si c'est lui qui t'a bloqué</span>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+<p style="font-size: 15px; line-height: 1.45; color: var(--ink2); text-align: center; text-wrap: pretty">Tu vois « Personne ici », l'écran d'un profil introuvable. Rien ne te dit que tu es bloqué.</p>
+
+<div aria-label="Aperçu de l'écran Profil introuvable" style="align-self: center; width: 216px; border-radius: 30px; background: var(--raised); border: 1px solid var(--line); box-shadow: 0 18px 44px rgba(0,0,0,.5); padding: 14px 14px 22px; display: flex; flex-direction: column; align-items: center; gap: 10px">
+<span style="align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink)">[[ic:x s]]</span>
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; margin-top: 18px; border-radius: 50%; border: 1.5px dashed var(--line); color: var(--ink3)">[[ic:user-circle-dashed l]]</span>
+<span class="d" style="font-size: 17px; margin-top: 4px">Personne ici</span>
+<span style="font-size: 11.5px; line-height: 1.4; color: var(--ink3); text-align: center">Ce profil n'existe pas, ou il n'est pas visible pour toi.</span>
+<span style="display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 16px; margin-top: 12px; border-radius: 999px; border: 1.5px solid var(--line); font-size: 12px; font-weight: 700; color: var(--ink2)">Retour</span>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1467}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

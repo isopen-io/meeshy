@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Carte — position Sang — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.stop{position:absolute;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px 0 9px;border-radius:999px;font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap}
+.stop>b{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-weight:700;font-size:11.5px;color:var(--accent-ink)}
+.knot{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#0B0B12;border:3px solid var(--accent)}
+.trace{stroke-dasharray:640;stroke-dashoffset:640;animation:sgDraw 2.6s cubic-bezier(.4,0,.2,1) .3s forwards}
+.day{display:block;height:26px;border-radius:4px;background:var(--accent)}
+.day.now{outline:2px solid var(--ink);outline-offset:2px}
+.near{position:relative;display:inline-flex;align-items:center;width:44px;height:14px;flex:none}
+.near>i{position:absolute;top:2px;width:10px;height:10px;border-radius:50%}
+.near>i:first-child{left:0;background:var(--ok);animation:sgNearA 2.4s ease-in-out infinite}
+.near>i:last-child{right:0;background:var(--accent);animation:sgNearB 2.4s ease-in-out infinite}
+section .row{padding-left:20px;padding-right:20px}
+section .sep{margin:0 20px}
+@keyframes sgDraw{to{stroke-dashoffset:0}}
+@keyframes sgNearA{0%,100%{transform:translateX(0)}55%,75%{transform:translateX(11px)}}
+@keyframes sgNearB{0%,100%{transform:translateX(0)}55%,75%{transform:translateX(-11px)}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column; --accent:#F87171;--accent-ink:#FCA5A5">
+
+<div aria-hidden="true" style="position: absolute; inset: 0; overflow: hidden">
+[[map]]
+<div style="position: absolute; inset: 0; background: radial-gradient(120% 50% at 70% 22%, rgba(248,113,113,.16), rgba(9,9,11,0) 70%)"></div>
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 170px; background: linear-gradient(180deg, rgba(9,9,11,.78), rgba(9,9,11,0))"></div>
+</div>
+
+<header style="position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 54px 16px 0">
+<button class="ib g" aria-label="Retour">[[ic:caret-left]]</button>
+<div class="glass" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 12px; border-radius: 999px">
+<span style="display: inline-flex; color: var(--accent)">[[ic:drop-fill s]]</span>
+<h1 class="d" style="font-size: 16px">Mina · Sang</h1>
+</div>
+<button class="ib g" aria-label="Mode fantôme">[[ic:ghost]]</button>
+</header>
+
+<div class="rise" style="position: relative; display: flex; justify-content: center; padding: 12px 16px 0">
+<div class="glass" role="status" style="display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 16px 0 14px; border-radius: 999px; border-color: color-mix(in oklab, var(--ok) 55%, transparent); background: color-mix(in oklab, var(--ok) 16%, rgba(9,9,11,.5))">
+<span class="near" aria-hidden="true"><i></i><i></i></span>
+<span style="font-size: 13.5px; font-weight: 700; color: var(--ok)">Mina est à 300 m de toi</span>
+</div>
+</div>
+
+<section aria-label="Trajet de Mina aujourd'hui" style="position: relative; height: 330px">
+<svg aria-hidden="true" viewBox="0 0 390 330" width="390" height="330" style="position: absolute; inset: 0; overflow: visible">
+<defs>
+<linearGradient id="sgFade" gradientUnits="userSpaceOnUse" x1="52" y1="270" x2="320" y2="74">
+<stop offset="0" stop-color="#F87171" stop-opacity=".12"></stop>
+<stop offset=".4" stop-color="#F87171" stop-opacity=".45"></stop>
+<stop offset="1" stop-color="#F87171" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M52 270 C 70 220, 96 196, 128 150 S 214 150, 256 204 S 300 130, 320 74" fill="none" stroke="#F87171" stroke-opacity=".16" stroke-width="16" stroke-linecap="round"></path>
+<path class="trace" d="M52 270 C 70 220, 96 196, 128 150 S 214 150, 256 204 S 300 130, 320 74" fill="none" stroke="url(#sgFade)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+
+<span class="knot" style="left: 52px; top: 270px; opacity: .55"></span>
+<span class="knot" style="left: 128px; top: 150px; opacity: .75"></span>
+<span class="knot" style="left: 256px; top: 204px"></span>
+
+<span class="stop glass" style="left: 22px; top: 286px"><b>09:10</b>Maison</span>
+<span class="stop glass" style="left: 62px; top: 102px"><b>12:30</b>Marché</span>
+<span class="stop glass" style="left: 196px; top: 222px"><b>15:05</b>Studio</span>
+<span class="stop glass" style="left: 178px; top: 34px; border-color: color-mix(in oklab, var(--accent) 60%, transparent)"><b>17:42</b>Ici</span>
+
+<div class="pin" style="left: 320px; top: 74px">
+<span class="av" style="--accent:#FF6B6B; width: 52px; height: 52px; font-size: 18px; border: 3px solid #0B0B12; box-shadow: 0 8px 20px rgba(0,0,0,.5)">MO</span>
+</div>
+
+<div style="position: absolute; left: 334px; top: 236px; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 50%; background: rgba(168,85,247,.22)">
+<span class="av" style="--accent:#A855F7; width: 36px; height: 36px; font-size: 13px; border: 2.5px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.5)">AN</span>
+</div>
+<span class="glass" style="position: absolute; right: 12px; top: 270px; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px 0 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; color: var(--ink); background: rgba(19,17,28,.66)"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+</section>
+
+<section class="glass rise" style="animation-delay: .1s; position: relative; flex: 1; display: flex; flex-direction: column; gap: 18px; padding: 10px 0 24px; border-radius: 34px 34px 0 0; border-bottom: 0; background: rgba(15,13,26,.74)">
+<div aria-hidden="true" style="align-self: center; width: 36px; height: 5px; border-radius: 999px; background: var(--ink3); opacity: .6"></div>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 0 20px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 8px"><span class="tag">30 derniers jours</span><span class="new">Nouveau</span></div>
+<h2 class="d" style="font-size: 24px">Aujourd'hui, 6,4 km</h2>
+</div>
+<span style="font-size: 12.5px; color: var(--ink2); padding-bottom: 4px">4 arrêts</span>
+</div>
+
+<div role="img" aria-label="Distance parcourue par jour sur 30 jours, aujourd'hui sélectionné" style="display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; padding: 4px 3px">
+<i class="day" style="opacity: .25"></i><i class="day" style="opacity: .5"></i><i class="day" style="opacity: .35"></i><i class="day" style="opacity: .8"></i><i class="day" style="opacity: .6"></i><i class="day" style="opacity: .15"></i><i class="day" style="opacity: .2"></i><i class="day" style="opacity: .55"></i><i class="day" style="opacity: .7"></i><i class="day" style="opacity: .4"></i><i class="day" style="opacity: .95"></i><i class="day" style="opacity: .5"></i><i class="day" style="opacity: .2"></i><i class="day" style="opacity: .12"></i><i class="day" style="opacity: .45"></i><i class="day" style="opacity: .65"></i><i class="day" style="opacity: .85"></i><i class="day" style="opacity: .3"></i><i class="day" style="opacity: .55"></i><i class="day" style="opacity: .18"></i><i class="day" style="opacity: .14"></i><i class="day" style="opacity: .6"></i><i class="day" style="opacity: .75"></i><i class="day" style="opacity: .4"></i><i class="day" style="opacity: 1"></i><i class="day" style="opacity: .5"></i><i class="day" style="opacity: .22"></i><i class="day" style="opacity: .35"></i><i class="day" style="opacity: .58"></i><i class="day now" style="opacity: .9"></i>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink3)"><span>18 oct.</span><span style="color: var(--ink); font-weight: 700">16 nov.</span></div>
+
+<div style="display: flex; gap: 8px">
+<button class="chip on" aria-pressed="true" style="min-height: 44px; flex: 1.5; justify-content: center">Aujourd'hui</button>
+<button class="chip" aria-pressed="false" style="min-height: 44px; flex: 1; justify-content: center">Hier</button>
+<button class="chip" aria-pressed="false" style="min-height: 44px; flex: 1; justify-content: center">7 j</button>
+<button class="chip" aria-pressed="false" style="min-height: 44px; flex: 1; justify-content: center">30 j</button>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 14px; margin: 0 20px; padding: 10px 16px 10px 10px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line)">
+<button class="ib" aria-label="Rejouer le trajet" style="background: var(--accent); color: #0B0B12">[[ic:play-fill]]</button>
+<div style="position: relative; flex: 1; height: 44px; display: flex; align-items: center">
+<div class="bar" style="width: 100%; height: 6px"><i style="width: 70%"></i></div>
+<span aria-hidden="true" style="position: absolute; left: 22%; top: 17px; width: 3px; height: 10px; border-radius: 2px; background: var(--ink3)"></span>
+<span aria-hidden="true" style="position: absolute; left: 48%; top: 17px; width: 3px; height: 10px; border-radius: 2px; background: var(--ink3)"></span>
+<span aria-hidden="true" style="position: absolute; left: 70%; top: 12px; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: var(--ink); box-shadow: 0 4px 10px rgba(0,0,0,.5)"></span>
+</div>
+<span class="mono" style="font-size: 14px; font-weight: 700; color: var(--ink)">15:05</span>
+</div>
+
+<div style="display: flex; flex-direction: column">
+<div class="row" style="align-items: flex-start; padding-top: 10px; padding-bottom: 14px">
+<span class="ib" style="background: color-mix(in oklab, var(--ok) 16%, transparent); color: var(--ok)">[[ic:battery-medium]]</span>
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px; padding-top: 11px"><span style="font-weight: 700">Sa batterie : 71 %</span><span style="font-size: 12.5px; color: var(--ink2)">il y a 12 min</span></div>
+<button class="btn g sm">[[ic:arrows-clockwise s]]<span>Demander un relevé</span></button>
+</div>
+</div>
+<div class="sep"></div>
+<div class="row">
+<span class="ib" style="background: var(--glass); color: var(--ink2)">[[ic:map-pin]]</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-size: 14px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap">Ma position — non partagée</span><span style="font-size: 12.5px; color: var(--ink2)">Tu n'es visible par personne</span></div>
+<button class="btn q sm" style="padding: 0 14px">Partager</button>
+</div>
+<div class="sep"></div>
+<button class="row" role="switch" aria-checked="false" style="width: 100%">
+<span class="ib" style="background: var(--glass); color: var(--ink2)">[[ic:ghost]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700">Mode fantôme</span><span style="font-size: 12.5px; color: var(--ink2)">Quand tu partages : Mina voit un fantôme, pas où tu es</span></span>
+<span class="sw" aria-hidden="true"></span>
+</button>
+</div>
+
+<button class="btn x" style="margin: 0 20px">[[ic:drop-slash]]<span>Ne plus recevoir sa position continue</span></button>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1143}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
