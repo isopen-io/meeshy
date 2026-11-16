@@ -9,6 +9,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -20,16 +21,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
 import me.meeshy.core.common.DefaultDispatcher
 import me.meeshy.sdk.location.LiveLocationFixSource
 import me.meeshy.sdk.location.LocationPermissionGate
 import me.meeshy.sdk.model.relation.SharedLocationFix
+import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshot
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
@@ -37,8 +41,12 @@ import me.meeshy.sdk.model.relation.SharedLocationShareDuration
 import me.meeshy.sdk.model.relation.SharedLocationStartRequest
 import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
 import me.meeshy.sdk.model.relation.SharedLocationUpdateGate
+import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.RelationsApi
+import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.session.PerAccountCache
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.RelationSocketEventsManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
 
@@ -60,6 +68,14 @@ interface SharedLocationRosterStoring {
 
     /** `null` efface la liste gardée de ce compte. */
     fun save(accountId: String, stored: String?)
+
+    /**
+     * La liste de ce compte vient-elle d'un autre de ses appareils (#18578) ? Survit au lancement : un appareil qui n'a
+     * fait que RECEVOIR la liste ne se remet jamais à publier sa position en se relançant.
+     */
+    fun loadReceived(accountId: String): Boolean
+
+    fun saveReceived(accountId: String, received: Boolean)
 }
 
 /** Ce que l'écran lit et pilote de MON partage de position. */
@@ -96,6 +112,15 @@ interface SharedLocationSharing {
  *   est rejouée, et à chaque socket accrochée ; un « Arrêter » qui n'a pas pu partir devient un retrait en attente,
  *   gardé et rejoué de la même façon (#18204).
  *
+ * PLUSIEURS APPAREILS, UN PARTAGE (#18389, #18578, iso `SharedLocationSharingCenter.swift` et `shared-location-sharing.ts`) :
+ * la passerelle n'en connaît qu'un par compte, et c'est lui qui fait foi. [sync] relit ce qu'elle sert (à chaque socket
+ * accrochée, avant la réconciliation, et à chaque `location:share-own-changed`) et s'y recale, retraits en attente d'ici
+ * gagnants : un retrait fait ailleurs s'applique ici, un ajout fait ailleurs n'est plus effacé par la liste périmée de
+ * cet appareil. Une liste REÇUE d'un autre appareil ne fait jamais partir la position d'ici : ni suivi, ni reprise au
+ * lancement, et une échéance s'y solde sans rien envoyer — la passerelle tient l'échéance de chacun (#18205). Seul un
+ * geste d'ici (« Partager », « Arrêter ») envoie quelque chose ; « Partager », une fois accepté, fait de cet appareil
+ * celui qui publie.
+ *
  * Le suivi ne vit que tant que l'app est utilisée : la permission demandée est celle « pendant l'utilisation » (fine ou
  * approximative, jamais `ACCESS_BACKGROUND_LOCATION`), et aucun service de premier plan ne la prolonge — l'émission en
  * arrière-plan attend l'avis de conformité (#13942, suite #18135). Le terme serveur coupe tout si l'appareil se tait.
@@ -110,6 +135,8 @@ class SharedLocationSharingCenter internal constructor(
     connected: Flow<Boolean>,
     private val clock: () -> Long,
     dispatcher: CoroutineDispatcher,
+    ownChanged: Flow<Unit> = emptyFlow(),
+    private val served: suspend () -> SharedLocationOwnSnapshot? = { null },
 ) : SharedLocationSharing, PerAccountCache {
 
     @Inject
@@ -120,6 +147,9 @@ class SharedLocationSharingCenter internal constructor(
         store: SharedLocationRosterStoring,
         sessionRepository: SessionRepository,
         socketManager: SocketManager,
+        relationSockets: RelationSocketEventsManager,
+        api: RelationsApi,
+        json: Json,
         @DefaultDispatcher dispatcher: CoroutineDispatcher,
     ) : this(
         emitter,
@@ -130,6 +160,8 @@ class SharedLocationSharingCenter internal constructor(
         socketManager.connectionState.map { it == SocketConnectionState.CONNECTED },
         System::currentTimeMillis,
         dispatcher,
+        ownChanged = relationSockets.sharedLocationOwnChanged,
+        served = { (apiCall { api.ownSharedLocation() } as? NetworkResult.Success)?.data?.served(json) },
     )
 
     /** Le compte d'une opération, et la génération de session à laquelle elle appartient. */
@@ -150,8 +182,17 @@ class SharedLocationSharingCenter internal constructor(
     @Volatile private var following: Job? = null
     @Volatile private var deadline: Job? = null
 
+    /** La liste vient d'un autre appareil du compte : celui-ci ne publie pas sa position (#18578). */
+    @Volatile private var received = false
+
     init {
-        scope.launch { connected.distinctUntilChanged().filter { it }.collect { reconcile() } }
+        scope.launch {
+            connected.distinctUntilChanged().filter { it }.collect {
+                sync()
+                reconcile()
+            }
+        }
+        scope.launch { ownChanged.collect { sync() } }
     }
 
     override fun restore() {
@@ -168,7 +209,7 @@ class SharedLocationSharingCenter internal constructor(
         if (!permission.isGranted()) return@locked SharedLocationShareProblem.LocationDenied
         val fix = deviceFix() ?: return@locked SharedLocationShareProblem.LocationUnavailable
         val previous = _roster.value
-        publish(ticket, previous.pruned(clock()).adding(userId, precision, duration, clock()), fix, previous)
+        publish(ticket, previous.pruned(clock()).adding(userId, precision, duration, clock()), fix, previous, claimsPublishing = true)
     }
 
     override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = locked { ticket ->
@@ -187,11 +228,52 @@ class SharedLocationSharingCenter internal constructor(
             val pruned = _roster.value.pruned(clock())
             if (pruned.isEmpty && !_roster.value.hasRecipients) {
                 adopt(ticket, SharedLocationRoster.EMPTY)
+                markReceived(ticket, false)
                 cancelDeadline()
+                return@locked null
+            }
+            if (received && !pruned.hasPendingWithdrawals) {
+                if (pruned.isEmpty) wipe(ticket) else adopt(ticket, pruned)
+                scheduleDeadline()
                 return@locked null
             }
             withdrawingRepublish(ticket, pruned).also { if (it != null && isCurrent(ticket)) scheduleRetry() }
         }
+    }
+
+    /**
+     * Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une relecture
+     * qui échoue (hors ligne, passerelle d'avant #18389, réponse sans liste lisible) ne change rien.
+     */
+    suspend fun sync() {
+        locked { ticket ->
+            val truth = readServed() ?: return@locked null
+            if (!isCurrent(ticket)) return@locked null
+            val before = _roster.value
+            val next = before.withServed(truth, clock())
+            if (next == before) return@locked null
+            if (next.hasRecipients && !before.hasRecipients) markReceived(ticket, true)
+            adopt(ticket, next)
+            if (!next.hasRecipients) {
+                stopFollowingDevice()
+                markReceived(ticket, false)
+            }
+            scheduleDeadline()
+            null
+        }
+    }
+
+    /**
+     * Une relecture qui lève (quelle que soit l'exception) vaut « je ne sais pas » : elle ne tue jamais le collecteur des
+     * reconnexions, qui rejoue les retraits en attente. La marque « reçue » s'écrit AVANT la liste reçue : un processus tué
+     * entre les deux écritures se relance muet, jamais publiant.
+     */
+    private suspend fun readServed(): SharedLocationOwnSnapshot? = try {
+        served()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
+        null
     }
 
     /**
@@ -203,7 +285,7 @@ class SharedLocationSharingCenter internal constructor(
         try {
             val ticket = currentTicket()?.takeIf(::isCurrent) ?: return
             val roster = _roster.value
-            if (!roster.hasRecipients || roster.hasPendingWithdrawals) return
+            if (received || !roster.hasRecipients || roster.hasPendingWithdrawals) return
             if (!SharedLocationUpdateGate.shouldSend(fix, clock(), lastSent)) return
             lastSent = SharedLocationUpdateGate.Sent(fix, clock())
             val verdict = emitter.update(fix)
@@ -239,7 +321,8 @@ class SharedLocationSharingCenter internal constructor(
         if (account != loadedFor) {
             resetSession(account)
             _roster.value = SharedLocationRoster.fromStored(store.load(account))
-            if (_roster.value.hasRecipients) startFollowing()
+            received = store.loadReceived(account)
+            if (_roster.value.hasRecipients && !received) startFollowing()
             scheduleDeadline()
         }
         return Ticket(account, generation)
@@ -252,6 +335,7 @@ class SharedLocationSharingCenter internal constructor(
         following = null
         deadline = null
         lastSent = null
+        received = false
         loadedFor = account
         _roster.value = SharedLocationRoster.EMPTY
     }
@@ -291,12 +375,18 @@ class SharedLocationSharingCenter internal constructor(
         return stopAll(ticket)
     }
 
-    /** La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. */
+    /**
+     * La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte.
+     * `claimsPublishing` : le geste « Partager » d'ici fait de cet appareil celui qui publie — mais seulement une fois le
+     * démarrage accepté (ou son accusé perdu) : un « Partager » refusé laisse muet un appareil qui n'a fait que RECEVOIR la
+     * liste, même au prochain lancement.
+     */
     private suspend fun publish(
         ticket: Ticket,
         wanted: SharedLocationRoster,
         fix: SharedLocationFix,
         previous: SharedLocationRoster,
+        claimsPublishing: Boolean = false,
     ): SharedLocationShareProblem? {
         val next = wanted.settled()
         val now = clock()
@@ -307,10 +397,12 @@ class SharedLocationSharingCenter internal constructor(
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         return when (verdict) {
             is SharedLocationStartVerdict.Started -> {
+                if (claimsPublishing) markReceived(ticket, false)
                 engage(ticket, next, fix)
                 null
             }
             SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED) -> {
+                if (claimsPublishing) markReceived(ticket, false)
                 engage(ticket, previous.union(next), fix)
                 SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
             }
@@ -344,7 +436,7 @@ class SharedLocationSharingCenter internal constructor(
     private fun engage(ticket: Ticket, next: SharedLocationRoster, fix: SharedLocationFix) {
         adopt(ticket, next)
         lastSent = SharedLocationUpdateGate.Sent(fix, clock())
-        startFollowing()
+        if (next.hasRecipients && !received) startFollowing()
         scheduleDeadline()
     }
 
@@ -389,8 +481,14 @@ class SharedLocationSharingCenter internal constructor(
         deadline = null
     }
 
+    private fun markReceived(ticket: Ticket, next: Boolean) {
+        received = next
+        store.saveReceived(ticket.account, next)
+    }
+
     private fun wipe(ticket: Ticket) {
         adopt(ticket, SharedLocationRoster.EMPTY)
+        markReceived(ticket, false)
         stopFollowingDevice()
         cancelDeadline()
     }
@@ -424,9 +522,18 @@ class SharedPreferencesSharedLocationRosterStore @Inject constructor(
         editor.apply()
     }
 
+    override fun loadReceived(accountId: String): Boolean = prefs.getBoolean(RECEIVED_PREFIX + accountId, false)
+
+    override fun saveReceived(accountId: String, received: Boolean) {
+        val editor = prefs.edit()
+        if (received) editor.putBoolean(RECEIVED_PREFIX + accountId, true) else editor.remove(RECEIVED_PREFIX + accountId)
+        editor.apply()
+    }
+
     private companion object {
         const val FILE_NAME = "meeshy_shared_location_roster"
         const val KEY_PREFIX = "roster."
+        const val RECEIVED_PREFIX = "received."
     }
 }
 

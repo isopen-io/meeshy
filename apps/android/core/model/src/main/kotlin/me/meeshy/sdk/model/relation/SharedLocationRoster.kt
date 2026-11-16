@@ -71,6 +71,22 @@ public class SharedLocationRoster private constructor(
         (withdrawals.keys + other.withdrawals.keys).associateWith { maxOf(withdrawals[it] ?: 0L, other.withdrawals[it] ?: 0L) },
     )
 
+    /**
+     * La liste que la passerelle SERT au compte (#18389, #18578), iso `rosterOps.withServed` du web et
+     * `SharedLocationRoster.withServed` d'iOS : elle fait foi pour chacun des appareils du compte. Ses personnes et leurs
+     * échéances remplacent les miennes ; un retrait en attente d'ici GAGNE (la personne reste hors de la liste, son
+     * retrait se rejoue) tant que la passerelle la sert encore, et s'éteint dès qu'elle ne la sert plus. Une personne
+     * servie déjà échue, ou à l'identifiant illisible, n'entre pas.
+     */
+    public fun withServed(served: SharedLocationOwnSnapshot, nowMillis: Long): SharedLocationRoster {
+        val readable = served.recipients.map { it.userId.lowercase() to it }.filter { (id, _) -> OBJECT_ID.matches(id) }
+        val servedIds = readable.map { it.first }.toSet()
+        val next = readable
+            .filter { (id, recipient) -> recipient.expiresAtMillis > nowMillis && id !in withdrawals }
+            .associate { (id, recipient) -> id to Entry(recipient.precision, recipient.expiresAtMillis) }
+        return SharedLocationRoster(next, withdrawals.filterKeys { it in servedIds })
+    }
+
     /** Sans ceux dont l'échéance est passée, ni les retraits que plus aucun partage serveur ne peut servir. */
     public fun pruned(nowMillis: Long): SharedLocationRoster = SharedLocationRoster(
         entries.filterValues { it.untilMillis > nowMillis },
@@ -141,6 +157,8 @@ public class SharedLocationRoster private constructor(
         public val EMPTY: SharedLocationRoster = SharedLocationRoster(emptyMap())
 
         private val codec = Json { ignoreUnknownKeys = true }
+
+        private val OBJECT_ID = Regex("^[0-9a-f]{24}$")
 
         /** Une liste illisible se relit vide ; une précision inconnue se relit comme la ville, jamais plus ouverte. */
         public fun fromStored(raw: String?): SharedLocationRoster {

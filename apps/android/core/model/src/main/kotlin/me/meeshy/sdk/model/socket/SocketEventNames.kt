@@ -136,6 +136,9 @@ object SocketEventNames {
     const val LOCATION_SHARE_CHANGED = "location:share-changed"
     const val LOCATION_SHARE_ENDED = "location:share-ended"
 
+    // MON partage a changé sur la passerelle, ici ou sur un autre appareil du compte (#18389, #18578) : sans charge
+    const val LOCATION_SHARE_OWN_CHANGED = "location:share-own-changed"
+
     // MA position partagée à des personnes (#16985) : client -> serveur, chacun avec son accusé
     const val LOCATION_SHARE_START = "location:share-start"
     const val LOCATION_SHARE_STOP = "location:share-stop"
@@ -400,6 +403,7 @@ object SocketEventNames {
         LOCATION_LIVE_UPDATED,
         LOCATION_SHARE_CHANGED,
         LOCATION_SHARE_ENDED,
+        LOCATION_SHARE_OWN_CHANGED,
         LOCATION_SHARE_START,
         LOCATION_SHARE_STOP,
         LOCATION_SHARE_UPDATE,

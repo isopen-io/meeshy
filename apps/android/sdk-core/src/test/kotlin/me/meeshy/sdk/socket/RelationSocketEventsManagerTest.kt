@@ -170,4 +170,14 @@ class RelationSocketEventsManagerTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `l'annonce que mon partage a change reveille le centre, sans rien porter`() = runTest {
+        val (manager, handlers) = wired()
+        manager.sharedLocationOwnChanged.test {
+            handlers.deliver(SocketEventNames.LOCATION_SHARE_OWN_CHANGED, """{}""")
+            assertThat(awaitItem()).isEqualTo(Unit)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

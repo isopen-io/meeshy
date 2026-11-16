@@ -79,6 +79,8 @@ class SharedLocationSharingCenterTest {
             store = object : SharedLocationRosterStoring {
                 override fun load(accountId: String): String? = saved[accountId]
                 override fun save(accountId: String, stored: String?) { saved[accountId] = stored }
+                override fun loadReceived(accountId: String): Boolean = false
+                override fun saveReceived(accountId: String, received: Boolean) = Unit
             },
             accountId = { account },
             connected = connected,
