@@ -9,6 +9,7 @@ import {
   CAPTURE_NOTICE_LANGUAGES,
   captureNoticeFallbackText,
   captureNoticeMetadata,
+  captureNoticeQuotedText,
   captureNoticeText,
   parseCaptureNotice,
   sanitizeNoticeName,
@@ -313,3 +314,13 @@ describe('combien de captures, combien de temps d’enregistrement (#18830)', ()
   });
 });
 
+
+describe('la citation d’un avis de capture ne dit ni qui, ni quoi (#18830)', () => {
+  it('est une phrase neutre dans la langue du lecteur', () => {
+    expect(captureNoticeQuotedText({ language: 'fr' })).toBe('Avis de capture d’écran');
+    expect(captureNoticeQuotedText({ language: 'en-GB' })).toBe('Screenshot notice');
+    for (const language of CAPTURE_NOTICE_LANGUAGES) {
+      expect(captureNoticeQuotedText({ language }).length).toBeGreaterThan(0);
+    }
+  });
+});

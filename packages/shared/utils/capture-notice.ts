@@ -277,16 +277,17 @@ type Tally = {
   readonly hour: string;
   readonly minute: string;
   readonly second: string;
+  readonly quoted: string;
 };
 
 const TALLY: Readonly<Record<ConversationPreviewLanguage, Tally>> = {
-  fr: { screenshots: '{n} captures', recordings: '{n} enregistrements', duration: 'durée {d}', hour: 'h', minute: 'min', second: 's' },
-  en: { screenshots: '{n} screenshots', recordings: '{n} recordings', duration: 'duration {d}', hour: 'h', minute: 'min', second: 's' },
-  es: { screenshots: '{n} capturas', recordings: '{n} grabaciones', duration: 'duración {d}', hour: 'h', minute: 'min', second: 's' },
-  pt: { screenshots: '{n} capturas', recordings: '{n} gravações', duration: 'duração {d}', hour: 'h', minute: 'min', second: 's' },
-  de: { screenshots: '{n} Screenshots', recordings: '{n} Aufzeichnungen', duration: 'Dauer {d}', hour: 'h', minute: 'min', second: 's' },
-  it: { screenshots: '{n} catture', recordings: '{n} registrazioni', duration: 'durata {d}', hour: 'h', minute: 'min', second: 's' },
-  ar: { screenshots: '{n} لقطات', recordings: '{n} تسجيلات', duration: 'المدة {d}', hour: 'س', minute: 'د', second: 'ث' },
+  fr: { screenshots: '{n} captures', recordings: '{n} enregistrements', duration: 'durée {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Avis de capture d’écran' },
+  en: { screenshots: '{n} screenshots', recordings: '{n} recordings', duration: 'duration {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Screenshot notice' },
+  es: { screenshots: '{n} capturas', recordings: '{n} grabaciones', duration: 'duración {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Aviso de captura de pantalla' },
+  pt: { screenshots: '{n} capturas', recordings: '{n} gravações', duration: 'duração {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Aviso de captura de tela' },
+  de: { screenshots: '{n} Screenshots', recordings: '{n} Aufzeichnungen', duration: 'Dauer {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Screenshot-Hinweis' },
+  it: { screenshots: '{n} catture', recordings: '{n} registrazioni', duration: 'durata {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Avviso di cattura dello schermo' },
+  ar: { screenshots: '{n} لقطات', recordings: '{n} تسجيلات', duration: 'المدة {d}', hour: 'س', minute: 'د', second: 'ث', quoted: 'إشعار لقطة شاشة' },
 };
 
 const twoDigits = (value: number): string => String(value).padStart(2, '0');
@@ -311,6 +312,15 @@ function tallySuffix(notice: CaptureNoticeMetadata, language: ConversationPrevie
     notice.recordedSeconds ? table.duration.replace('{d}', captureDurationText(notice.recordedSeconds, language)) : null,
   ].filter((part): part is string => part !== null);
   return parts.map((part) => ` · ${part}`).join('');
+}
+
+/**
+ * #18830 — ce qu'une CITATION d'avis de capture dit, à la LECTURE : ni
+ * l'acteur, ni le message capturé, ni son heure. Une réponse qui cite un avis
+ * part à toute la conversation ; l'avis, lui, n'est remis qu'à son audience.
+ */
+export function captureNoticeQuotedText(reader: { readonly language: string | null | undefined }): string {
+  return TALLY[normalizeConversationPreviewLanguage(reader.language)].quoted;
 }
 
 export type CaptureNoticeReader = {

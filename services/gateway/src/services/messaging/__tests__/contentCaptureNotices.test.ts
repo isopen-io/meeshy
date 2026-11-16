@@ -554,6 +554,7 @@ describe('recordContentCapture — une annonce par (acteur, message, sorte), et 
     for (let i = 0; i < 40; i += 1) {
       h.clock.now = new Date(NOW.getTime() + i * 31_000);
       h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE);
+      h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY);
       // eslint-disable-next-line no-await-in-loop
       const outcome = await h.capture([TIMED], { captureId: `shot-${String(i).padStart(8, '0')}` });
       expect(outcome).toEqual({ kind: 'recorded', noticedMessageIds: [TIMED] });
@@ -771,6 +772,21 @@ describe('recordContentCapture — combien de captures, combien de temps (#18830
     }
     expect(h.deliveries).toHaveLength(max);
     expect(noticesOf(h.created)[0]?.count).toBe(max);
+  });
+
+  it('un budget épuisé ne perd ni la capture ni sa durée : le réessai les compte (audit #18830, a)', async () => {
+    const h = flameWorld();
+    const key = captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV });
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001' });
+    for (let i = 0; i < SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY.maxRequests; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await h.limiter.checkLimit(key, SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY);
+    }
+    expect(await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001', recordingSeconds: 40 })).toEqual({ kind: 'recorded', noticedMessageIds: [] });
+    h.limiter.reset(key, SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY);
+    h.limiter.reset(key, SOCKET_RATE_LIMITS.MESSAGE_CAPTURE);
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001', recordingSeconds: 40 });
+    expect(noticesOf(h.created)[0]?.recordedSeconds).toBe(40);
   });
 
   it(`plafonne le compte à ${MAX_CAPTURE_COUNT} (audit #18830, 3)`, async () => {
