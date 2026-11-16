@@ -61,9 +61,6 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
     @State private var cardRoute: ConversationPeekCardRoute?
     @State private var leadHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
-    /// Chaque conclusion d'un geste : la clé du mouvement implicite qui porte
-    /// le cran, les animations explicites ne descendant pas jusqu'ici.
-    @State private var settleCount = 0
 
     static var handleHeight: CGFloat { 28 }
     private static var fallbackLeadHeight: CGFloat { 84 }
@@ -86,7 +83,12 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
                 menuContainer(layout: layout)
             }
             .frame(maxWidth: .infinity)
-            .animation(Self.settleAnimation(reduceMotion: reduceMotion), value: settleCount)
+            // Le cran se pose par un mouvement implicite : les animations
+            // explicites ne descendent pas jusqu'ici. Seul le retour au repos
+            // s'anime ; sous le doigt, la progression suit sans ressort.
+            .animation(progress == detent.progress ? Self.settleAnimation(reduceMotion: reduceMotion) : nil,
+                       value: progress == detent.progress)
+            .animation(Self.settleAnimation(reduceMotion: reduceMotion), value: detent)
             // La bande du haut reste au voile : visible, et un toucher la ferme
             // (`LongPressVeil`, sous l'aperçu, la reçoit — #17258). L'aperçu,
             // réduit à 80 % (#17274), se centre dans ce qui reste : la liste
@@ -214,7 +216,6 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
 
     private func settle(to target: ConversationPeekDetent) {
         if target != detent { HapticFeedback.light() }
-        settleCount += 1
         detent = target
         progress = target.progress
     }
