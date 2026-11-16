@@ -116,6 +116,24 @@ public enum MeeshyAnimation {
     public nonisolated static let bannerPullReturn = Animation.spring(response: 0.36, dampingFraction: 0.66)
     /// La bannière qui devient la conversation : la carte grandit jusqu'à l'écran sans rebondir, le cadre ne doit pas trembler.
     public nonisolated static let bannerPullMorph = Animation.spring(response: 0.42, dampingFraction: 0.92)
+    /// L'enveloppe arrivée au plein écran s'efface devant la conversation posée dessous, sans disparaître d'une image.
+    public nonisolated static let bannerMorphFade = Animation.easeOut(duration: 0.24)
+    /// L'aperçu d'appui long qui naît de la ligne (#18722) : le cadre de la rangée s'étend jusqu'à la carte, part vite et se pose sans trembler.
+    public nonisolated static let previewMorph = Animation.spring(response: 0.42, dampingFraction: 0.82)
+    /// Le retrait de l'aperçu : la carte redevient la ligne plus vite qu'elle n'en est née, et la rejoint avant que l'overlay ne se retire.
+    public nonisolated static let previewMorphReturn = Animation.spring(response: 0.3, dampingFraction: 0.8)
+    /// La carte d'aperçu qui recule quand le menu s'étend et revient quand il se réduit (#18723) : le maillon qui suit le menu dans la chaîne élastique franche du menu flottant (deux rangs de retard, même amorti), pour qu'elle arrive après lui et dépasse sa place.
+    public nonisolated static let menuSpring = Animation.spring(
+        response: FloatingMenuLadderFollow.firstRungResponse + 2 * FloatingMenuLadderFollow.responseStepPerRung,
+        dampingFraction: FloatingMenuLadderFollow.dampingFraction
+    )
+    /// L'aperçu tiré qui décroche en ligne déplaçable (#18724) : la ligne saute vers le doigt et le suit comme le premier barreau de la chaîne élastique franche — elle colle presque, dépasse un peu sa place, puis s'y pose.
+    public nonisolated static let peekDetach = Animation.spring(
+        response: FloatingMenuLadderFollow.firstRungResponse,
+        dampingFraction: FloatingMenuLadderFollow.dampingFraction
+    )
+    /// L'aperçu tiré puis relâché avant le décrochage revient à sa place : un ressort court qui fait sentir l'élastique sans trembler.
+    public nonisolated static let peekDetachReturn = Animation.spring(response: 0.32, dampingFraction: 0.72)
 }
 
 // MARK: - iPad Layout

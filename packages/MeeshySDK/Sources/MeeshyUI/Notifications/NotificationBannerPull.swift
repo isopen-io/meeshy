@@ -77,6 +77,34 @@ public nonisolated enum NotificationBannerPull {
     }
 }
 
+/// Une traction n'est jamais un toucher. Le bouton de la bannière émet son
+/// toucher à la levée du doigt, même après l'avoir traînée — la carte suit le
+/// doigt, qui reste donc dans ses bornes. Chaque image d'une traction arme ce
+/// verrou ; le toucher qui la suit de près est avalé, un toucher délibéré plus
+/// tard repasse.
+public nonisolated struct NotificationBannerTapLatch: Equatable, Sendable {
+    /// Le délai qui sépare la levée d'une traction du toucher que le bouton
+    /// émet derrière elle, avec sa marge.
+    public static let window: TimeInterval = 0.6
+
+    private var swallowsUntil: Date?
+
+    public init() {}
+
+    /// Note une image de traction : au-delà du tremblement, dans un sens ou
+    /// dans l'autre, le toucher qui suit est avalé.
+    public func notingPull(translation: CGFloat, at now: Date) -> NotificationBannerTapLatch {
+        guard abs(translation) >= NotificationBannerPull.minimumPull else { return self }
+        var latch = self
+        latch.swallowsUntil = now.addingTimeInterval(Self.window)
+        return latch
+    }
+
+    public func admitsTap(at now: Date) -> Bool {
+        swallowsUntil.map { now >= $0 } ?? true
+    }
+}
+
 /// L'échelle de la carte tirée : une largeur et une hauteur, ensemble.
 public nonisolated struct NotificationBannerStretch: Equatable, Sendable {
     public let width: CGFloat

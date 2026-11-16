@@ -136,4 +136,41 @@ final class NotificationBannerPullTests: XCTestCase {
         XCTAssertEqual(NotificationBannerMorph.cornerRadius(progress: 0, from: 22), 22)
         XCTAssertEqual(NotificationBannerMorph.cornerRadius(progress: 1, from: 22), 0)
     }
+
+    // MARK: - Une traction n'est jamais un toucher
+
+    /// Le bouton de la bannière émet son toucher à la levée du doigt, même
+    /// après une traction : sans ce verrou, une traction relâchée sous le seuil
+    /// ouvrait la conversation par le chemin du toucher, donc LUE.
+    func test_tapLatch_afterAPull_swallowsTheReleaseTap() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        let latch = NotificationBannerTapLatch().notingPull(translation: 53, at: start)
+
+        XCTAssertFalse(latch.admitsTap(at: start.addingTimeInterval(0.05)))
+    }
+
+    func test_tapLatch_aTremorBelowTheMinimumPull_staysATap() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        let latch = NotificationBannerTapLatch().notingPull(translation: NotificationBannerPull.minimumPull - 1, at: start)
+
+        XCTAssertTrue(latch.admitsTap(at: start.addingTimeInterval(0.05)))
+    }
+
+    func test_tapLatch_aPullUpward_alsoSwallowsTheReleaseTap() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        let latch = NotificationBannerTapLatch().notingPull(translation: -40, at: start)
+
+        XCTAssertFalse(latch.admitsTap(at: start.addingTimeInterval(0.05)))
+    }
+
+    func test_tapLatch_aDeliberateTapLater_opensAgain() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        let latch = NotificationBannerTapLatch().notingPull(translation: 53, at: start)
+
+        XCTAssertTrue(latch.admitsTap(at: start.addingTimeInterval(NotificationBannerTapLatch.window + 0.01)))
+    }
+
+    func test_tapLatch_untouched_admitsTheTap() {
+        XCTAssertTrue(NotificationBannerTapLatch().admitsTap(at: Date()))
+    }
 }
