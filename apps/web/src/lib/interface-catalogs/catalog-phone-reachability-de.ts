@@ -19,6 +19,7 @@ const de = {
   'phone.share.explainBlood': 'Bei deinem Blut standardmäßig aktiviert. Du kannst es jederzeit entziehen.',
   'phone.share.globalOff': 'Du benachrichtigst niemanden mehr: Es ist für alle ausgeschaltet, in deinem Profil.',
   'phone.global.title': 'Meine Nahestehenden benachrichtigen, wenn mein Telefon nicht erreichbar ist',
+  'phone.global.short': 'Telefon nicht erreichbar',
   'phone.global.explain': 'Dein Blut und die Nahestehenden, denen du es erlaubt hast, erfahren, seit wann dein Telefon nicht mehr antwortet und warum wahrscheinlich. Nie in einer Unterhaltung.',
   'phone.global.question': 'Wer wird benachrichtigt?',
   'phone.consent.title': '{name} benachrichtigen, wenn dein Telefon nicht mehr antwortet?',

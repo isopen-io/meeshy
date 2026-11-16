@@ -229,4 +229,17 @@ describe('mon profil', () => {
     expect(why?.getAttribute('aria-expanded')).toBe('false');
     expect(host.textContent).toContain('seule l’application Meeshy de votre téléphone partage votre batterie');
   });
+  test('la section de /me s’appelle « Mon téléphone » et accueille, dans la même carte, ce que le téléphone dit d’autre', async () => {
+    const client = new QueryClient();
+    const { deps } = gateway({ level: 'NONE' });
+    const host = await mount(
+      <MeBatterySection language="fr" deps={deps} client={client}>
+        <span data-autre-reglage="">Téléphone injoignable</span>
+      </MeBatterySection>,
+    );
+    await settle();
+    expect(host.querySelector('#me-battery')?.textContent).toContain('Mon téléphone');
+    expect(host.querySelector('[data-battery-global]')).not.toBeNull();
+    expect(host.querySelector('[data-autre-reglage]')).not.toBeNull();
+  });
 });

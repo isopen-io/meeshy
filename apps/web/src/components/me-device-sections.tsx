@@ -8,17 +8,16 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * est serré (`budgets.json`), chaque panneau garde son chunk et ses dépendances ici.
  */
 const MeBatterySection = lazy(() => import('./battery-panel').then((m) => ({ default: m.MeBatterySection })));
-const MePhoneReachabilitySection = lazy(() => import('./phone-reachability-panel').then((m) => ({ default: m.MePhoneReachabilitySection })));
+const MePhoneReachabilityRow = lazy(() => import('./phone-reachability-panel').then((m) => ({ default: m.MePhoneReachabilityRow })));
 
 export function MeDeviceSections({ language }: { readonly language: InterfaceLanguage }) {
   return (
-    <>
-      <Suspense fallback={null}>
-        <MeBatterySection language={language} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <MePhoneReachabilitySection language={language} />
-      </Suspense>
-    </>
+    <Suspense fallback={null}>
+      <MeBatterySection language={language}>
+        <Suspense fallback={null}>
+          <MePhoneReachabilityRow language={language} />
+        </Suspense>
+      </MeBatterySection>
+    </Suspense>
   );
 }

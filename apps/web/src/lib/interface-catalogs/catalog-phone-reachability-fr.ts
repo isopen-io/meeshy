@@ -18,6 +18,7 @@ const fr = {
   'phone.share.explainBlood': 'Activé par défaut avec vos Sangs. Vous pouvez le retirer à tout moment.',
   'phone.share.globalOff': 'Vous ne prévenez plus personne : le réglage est coupé pour tous, depuis votre profil.',
   'phone.global.title': 'Prévenir mes Proches si mon téléphone est injoignable',
+  'phone.global.short': 'Téléphone injoignable',
   'phone.global.explain': 'Vos Sangs, et les Proches à qui vous l’avez accordé, savent depuis quand votre téléphone ne répond plus, et pourquoi c’est probable. Jamais dans une conversation.',
   'phone.global.question': 'Qui est prévenu ?',
   'phone.consent.title': 'Prévenir {name} si votre téléphone ne répond plus ?',

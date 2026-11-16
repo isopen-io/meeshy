@@ -19,6 +19,7 @@ const en = {
   'phone.share.explainBlood': 'On by default with your Blood. You can turn it off at any time.',
   'phone.share.globalOff': 'You no longer let anyone know: it is turned off for everyone, from your profile.',
   'phone.global.title': 'Let my close ones know if my phone is unreachable',
+  'phone.global.short': 'Unreachable phone',
   'phone.global.explain': 'Your Blood, and the close ones you allowed, know since when your phone has stopped responding, and the likely reason. Never in a conversation.',
   'phone.global.question': 'Who is told?',
   'phone.consent.title': 'Let {name} know if your phone stops responding?',

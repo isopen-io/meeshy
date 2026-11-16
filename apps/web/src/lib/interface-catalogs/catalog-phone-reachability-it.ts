@@ -19,6 +19,7 @@ const it = {
   'phone.share.explainBlood': 'Attivo per impostazione predefinita con il tuo Sangue. Puoi toglierlo in qualsiasi momento.',
   'phone.share.globalOff': 'Non avvisi più nessuno: è disattivato per tutti, dal tuo profilo.',
   'phone.global.title': 'Avvisare le mie persone vicine se il mio telefono è irraggiungibile',
+  'phone.global.short': 'Telefono irraggiungibile',
   'phone.global.explain': 'Il tuo Sangue, e le persone vicine a cui l’hai concesso, sanno da quando il tuo telefono non risponde e il motivo probabile. Mai in una conversazione.',
   'phone.global.question': 'Chi viene avvisato?',
   'phone.consent.title': 'Avvisare {name} se il tuo telefono smette di rispondere?',

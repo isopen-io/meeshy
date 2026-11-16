@@ -19,6 +19,7 @@ const pt = {
   'phone.share.explainBlood': 'Ativado por padrão com seu Sangue. Você pode desativar a qualquer momento.',
   'phone.share.globalOff': 'Você não avisa mais ninguém: está desativado para todos, no seu perfil.',
   'phone.global.title': 'Avisar meus próximos se meu celular estiver inacessível',
+  'phone.global.short': 'Telefone inacessível',
   'phone.global.explain': 'Seu Sangue, e as pessoas próximas a quem você permitiu, sabem desde quando seu celular não responde e o motivo provável. Nunca em uma conversa.',
   'phone.global.question': 'Quem é avisado?',
   'phone.consent.title': 'Avisar {name} se seu celular parar de responder?',

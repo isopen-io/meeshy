@@ -19,6 +19,7 @@ const es = {
   'phone.share.explainBlood': 'Activado por defecto con tu Sangre. Puedes quitarlo en cualquier momento.',
   'phone.share.globalOff': 'Ya no avisas a nadie: está desactivado para todos, desde tu perfil.',
   'phone.global.title': 'Avisar a mis allegados si mi teléfono está inaccesible',
+  'phone.global.short': 'Teléfono ilocalizable',
   'phone.global.explain': 'Tu Sangre, y los allegados a quienes lo concediste, saben desde cuándo tu teléfono no responde y el motivo probable. Nunca en una conversación.',
   'phone.global.question': '¿Quién recibe el aviso?',
   'phone.consent.title': '¿Avisar a {name} si tu teléfono deja de responder?',

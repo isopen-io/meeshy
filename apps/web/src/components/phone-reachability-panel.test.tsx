@@ -9,7 +9,7 @@ import type { SafeStorage } from '@/lib/storage';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { ConversationPhoneReachabilitySection, MePhoneReachabilitySection, ProfilePhoneReachabilityRow } from './phone-reachability-panel';
+import { ConversationPhoneReachabilitySection, MePhoneReachabilityRow, ProfilePhoneReachabilityRow } from './phone-reachability-panel';
 
 /**
  * LE TÉLÉPHONE INJOIGNABLE D'UN PROCHE DANS LA FICHE ET LE PROFIL (#18737) — le web reçoit et affiche : le détail
@@ -183,18 +183,17 @@ describe('le profil d’une personne', () => {
 });
 
 describe('mon profil', () => {
-  test('« Prévenir mes Proches » se bascule ; qui est prévenu se lit derrière le (i)', async () => {
+  test('« Téléphone injoignable » se bascule, en deux mots : la section « Mon téléphone » de /me le porte (budget de verbosité)', async () => {
     const client = new QueryClient();
     const { deps, calls } = gateway({ level: 'NONE', extra: (request) => (request.method === 'PUT' ? { ok: true, data: { sharingEnabled: false } } : undefined) });
-    const host = await mount(<MePhoneReachabilitySection language="fr" deps={deps} client={client} />);
+    const host = await mount(<MePhoneReachabilityRow language="fr" deps={deps} client={client} />);
     await settle();
     const global = host.querySelector<HTMLButtonElement>('[data-phone-reachability-global]');
     expect(global?.getAttribute('aria-checked')).toBe('true');
-    expect(host.textContent).toContain('Prévenir mes Proches si mon téléphone est injoignable');
+    expect(host.textContent).toBe('Téléphone injoignable');
     await act(async () => global?.click());
     await settle();
     expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({ sharingEnabled: false });
     expect(host.querySelector('[data-phone-reachability-global]')?.getAttribute('aria-checked')).toBe('false');
-    expect(host.querySelector('button[aria-label="Qui est prévenu ?"]')).not.toBeNull();
   });
 });

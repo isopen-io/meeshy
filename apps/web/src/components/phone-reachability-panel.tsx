@@ -24,7 +24,6 @@ import { usePhoneReachabilityEntry } from '@/lib/phone-reachability/use-phone-re
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 import { SwitchRow } from './conversation-settings-section';
-import { SETTINGS_GLYPHS } from './glyphs-settings';
 import { GroupedSection, SECTION_INK, SECTION_INK_2 } from './grouped-section';
 import { PhoneReachabilityGlyph } from './phone-reachability-glyph';
 
@@ -263,26 +262,19 @@ export function ProfilePhoneReachabilityRow({
   );
 }
 
-/** Mon réglage GLOBAL (`/me`) : prévenir mes Proches si mon téléphone est injoignable, ou personne. */
-export function MePhoneReachabilitySection({ language, deps = apiDeps, client = appQueryClient }: { readonly language: InterfaceLanguage } & PanelDeps) {
+/**
+ * Ma coupure GLOBALE (`/me`), en une ligne : elle se range dans la carte « Mon téléphone » de la batterie
+ * (`MeBatterySection`), si bien que `/me` ne gagne ni titre ni question — son budget de verbosité tient.
+ * Ce que le réglage ouvre se lit sur la fiche de chaque personne.
+ */
+export function MePhoneReachabilityRow({ language, deps = apiDeps, client = appQueryClient }: { readonly language: InterfaceLanguage } & PanelDeps) {
   const ready = usePhoneReachabilityCatalog(language);
   const { settings, problem, save } = useEmitterSettings(deps, client);
-  if (!ready) return null;
+  if (!ready || settings === null) return null;
   return (
-    <GroupedSection
-      id="me-phone-reachability"
-      title={translatePhoneReachability(language, 'phone.detail.title')}
-      icon={<PhoneReachabilityGlyph reachable={false} size={18} />}
-      note={{
-        label: translatePhoneReachability(language, 'phone.global.question'),
-        text: `${translatePhoneReachability(language, 'phone.global.explain')} ${translatePhoneReachability(language, 'phone.webNote')}`,
-        glyph: SETTINGS_GLYPHS.info,
-      }}
-    >
-      {settings === null ? null : (
-        <SwitchRow label={translatePhoneReachability(language, 'phone.global.title')} checked={settings.sharingEnabled} onChange={(on) => void save(on)} marker="data-phone-reachability-global" />
-      )}
+    <>
+      <SwitchRow label={translatePhoneReachability(language, 'phone.global.short')} checked={settings.sharingEnabled} onChange={(on) => void save(on)} marker="data-phone-reachability-global" />
       <SettingsProblem language={language} problem={problem} />
-    </GroupedSection>
+    </>
   );
 }
