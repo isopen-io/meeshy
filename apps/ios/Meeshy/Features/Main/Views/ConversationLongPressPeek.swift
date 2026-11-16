@@ -37,6 +37,9 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
     let isVisible: Bool
     let reduceMotion: Bool
     let menuChrome: ConversationPeekMenuChrome
+    /// La progression du morphisme de la carte depuis la ligne (#18722) : le
+    /// menu n'apparaît qu'à son seuil (`ConversationPreviewMenuReveal`).
+    var morphProgress: CGFloat = 1
     /// La carte, construite pour les hauteurs servies — ses gestes de toucher
     /// et ses transformations d'émergence sont posés par la liste.
     let card: (ConversationPeekCardHeights) -> Card
@@ -133,6 +136,7 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
         .offset(y: menuChrome.offset)
         .opacity(menuChrome.opacity)
         .blur(radius: menuChrome.blur)
+        .modifier(ConversationPreviewMenuReveal(progress: morphProgress, reduceMotion: reduceMotion))
     }
 
     /// La poignée : on la tire, ou on la touche pour basculer de cran. C'est

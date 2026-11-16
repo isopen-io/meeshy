@@ -116,6 +116,10 @@ public enum MeeshyAnimation {
     public nonisolated static let bannerPullReturn = Animation.spring(response: 0.36, dampingFraction: 0.66)
     /// La bannière qui devient la conversation : la carte grandit jusqu'à l'écran sans rebondir, le cadre ne doit pas trembler.
     public nonisolated static let bannerPullMorph = Animation.spring(response: 0.42, dampingFraction: 0.92)
+    /// L'aperçu d'appui long qui naît de la ligne (#18722) : le cadre de la rangée s'étend jusqu'à la carte, part vite et se pose sans trembler.
+    public nonisolated static let previewMorph = Animation.spring(response: 0.42, dampingFraction: 0.82)
+    /// Le retrait de l'aperçu : la carte redevient la ligne plus vite qu'elle n'en est née, et la rejoint avant que l'overlay ne se retire.
+    public nonisolated static let previewMorphReturn = Animation.spring(response: 0.3, dampingFraction: 0.8)
 }
 
 // MARK: - iPad Layout

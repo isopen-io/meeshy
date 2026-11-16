@@ -186,34 +186,30 @@ extension ConversationListView {
     // MARK: - Aperçu d'appui long personnalisé (iPhone, toutes versions — #17242)
 
     func dismissContextMenu() {
-        // Zoom-out : anime la sortie (aperçu rétrécit, menu redescend) puis
-        // retire réellement l'overlay après la durée du spring. Purge annulable :
-        // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
-        // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
+        // La carte redevient la ligne ou fond sur place, puis l'overlay part et
+        // la rangée revient dans la même image. Purge annulable : une réouverture
+        // l'annule (`onLongPress`), sinon elle effacerait le menu rouvert.
         chipAutoScrollDriver.stop()
         contextMenuDismissSettle.cancel()
-        // min() : ne jamais RE-déplier une carte repliée par le drag vers le
-        // haut (0.0 → 0.7 ferait flasher l'aperçu pendant le fondu de sortie).
-        // Le shrink est ANIMÉ dans la même transaction que le fondu : la carte
-        // se résorbe (zoom-out + blur progressif lié au scale) pendant que le
-        // menu redescend et se dissout — miroir du zoom d'ouverture.
         let reduceMotion = ConversationPreviewEntranceMotion.isReducedNow
+        let exit = ConversationPreviewMorph.exit(hasSource: contextMenuSourceFrame != nil, reduceMotion: reduceMotion, chipLatched: chipModeLatched,
+                                                 pulledPastDismiss: dragOffsetY > ConversationPeekPullDown.dismissDistance)
         ConversationPreviewEntranceMotion.animateExit(reduceMotion: reduceMotion) {
-            previewScale = reduceMotion ? previewScale : min(previewScale, 0.7)
+            if exit == .morphToRow { previewMorphProgress = 0 }
             if !chipModeLatched && dragOffsetY <= ConversationPeekPullDown.dismissDistance {
-                // Fermeture normale : la carte revient en place en fondant.
-                // Fermeture depuis le morph drag (chip relâchée) : la carte
-                // fond SUR PLACE sous le doigt — la faire remonter au centre
-                // pendant le fondu serait un aller-retour parasite.
+                // Fermeture normale : la carte revient en place. Fermeture
+                // depuis le morph drag (chip relâchée) : la carte fond SUR
+                // PLACE sous le doigt — la faire remonter pendant le fondu
+                // serait un aller-retour parasite.
                 dragOffsetY = 0
                 dragOffsetX = 0
             }
             contextMenuAppeared = false
         }
-        contextMenuDismissSettle.arm(after: 0.26) {
+        contextMenuDismissSettle.arm(after: ConversationPreviewEntranceMotion.exitSettle) {
             sheetTargets.contextMenu = nil
-            previewScale = 1.0
-            previewEmergeOffset = 0
+            ConversationPreviewSourceRow.shared.conceal(nil)
+            previewMorphProgress = 1
             dragOffsetY = 0
             dragOffsetX = 0
             chipModeLatched = false
@@ -231,40 +227,28 @@ extension ConversationListView {
         chipModeLatched ? 1 : ConversationPeekPullDown.progress(translation: dragOffsetY)
     }
 
-    /// Émergence de l'aperçu depuis la ligne pressée — tick 1 : la carte se
-    /// pose, invisible, d'où elle part ; tick 2 : elle rejoint sa place, menu
-    /// et flou du fond dans la même transaction (`ConversationPreviewEntranceMotion`).
+    /// L'aperçu naît de la ligne pressée (#18722) — tick 1 : la carte se pose
+    /// SUR la ligne, qui se vide dans la même image ; tick 2 : une seule
+    /// progression animée l'étend jusqu'à sa place, voile et menu dans la même
+    /// transaction. Sans ligne connue ou sous Réduire les animations, elle
+    /// apparaît en fondu à sa place et la rangée reste visible.
     func runContextMenuEmergence(reduceMotion: Bool = ConversationPreviewEntranceMotion.isReducedNow) {
         DispatchQueue.main.async {
+            let hasSource = contextMenuSourceFrame != nil
             var placement = Transaction()
             placement.disablesAnimations = true
             withTransaction(placement) {
-                let start = ConversationPreviewEntranceMotion.placement(
-                    source: contextMenuSourceFrame, rest: previewRestFrame, reduceMotion: reduceMotion
-                )
-                previewScale = start.scale
-                previewEmergeOffset = start.offset
+                previewMorphProgress = ConversationPreviewMorph.startProgress(hasSource: hasSource, reduceMotion: reduceMotion)
             }
+            let morphs = ConversationPreviewMorph.morphsFromRow(hasSource: hasSource, reduceMotion: reduceMotion)
+            ConversationPreviewSourceRow.shared.conceal(morphs ? sheetTargets.contextMenu?.id : nil)
             DispatchQueue.main.async {
                 ConversationPreviewEntranceMotion.animateEntrance(reduceMotion: reduceMotion) {
                     contextMenuAppeared = true
-                    previewScale = 1.0
-                    previewEmergeOffset = 0
+                    previewMorphProgress = 1
                 }
             }
         }
-    }
-
-    /// Capture de la frame de REPOS de la carte — uniquement hors
-    /// transformation (avant l'émergence : overlay invisible, scale 1,
-    /// offsets nuls), sinon la mesure inclurait scale/offset en vol.
-    func capturePreviewRestFrameIfIdle(_ frame: CGRect) {
-        guard !contextMenuAppeared,
-              previewScale == 1.0,
-              previewEmergeOffset == 0,
-              dragOffsetY == 0
-        else { return }
-        previewRestFrame = frame
     }
 
     @ViewBuilder
@@ -284,8 +268,9 @@ extension ConversationListView {
                     ConversationLongPressPeek(
                         isVisible: contextMenuAppeared,
                         reduceMotion: reduceMotion,
-                        menuChrome: peekMenuChrome(reduceMotion: reduceMotion),
-                        card: { heights in peekCard(for: conversation, heights: heights, reduceMotion: reduceMotion) },
+                        menuChrome: peekMenuChrome(),
+                        morphProgress: previewMorphProgress,
+                        card: { heights in peekCard(for: conversation, heights: heights) },
                         menu: peekMenu(for: conversation),
                         onChipDragChanged: { handleCardChipDrag($0) },
                         onChipDragEnded: { endCardChipDrag($0) },
@@ -293,22 +278,48 @@ extension ConversationListView {
                     )
                 }
                 .onAppear {
-                    // Émergence depuis la ligne pressée : placement invisible sur
-                    // la ligne (tick 1, frame de repos mesurée) puis départ lent,
-                    // accélération et rebond vers la position finale (tick 2).
+                    // L'aperçu naît de la ligne pressée : posé sur elle (tick 1),
+                    // puis étendu jusqu'à sa place (tick 2).
                     dragOffsetY = 0
                     dragOffsetX = 0
                     runContextMenuEmergence(reduceMotion: reduceMotion)
                 }
+                // Filet : quel que soit le chemin qui retire l'overlay, la
+                // rangée source revient.
+                .onDisappear { ConversationPreviewSourceRow.shared.conceal(nil) }
             }
             .zIndex(300)
         }
     }
 
-    /// La carte de l'aperçu d'appui long = la carte des DERNIERS MESSAGES
-    /// (bannière, avatar/logo, titre, icônes d'en-tête, fil récent) — drapeau
-    /// Lentille ON comme OFF (le choix de mode garde ses deux portes, l'encoche de la carte de focus et le sous-menu « Mode de lecture »).
-    func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights, reduceMotion: Bool) -> some View {
+    /// La carte de l'aperçu d'appui long (#18722) : elle NAÎT du cadre de la
+    /// rangée pressée et s'étend jusqu'à la carte des DERNIERS MESSAGES —
+    /// face de la rangée sur la première moitié, aperçu fondu dans la seconde
+    /// (`ConversationPreviewMorphCard`). Pendant le morph vers le bas, elle
+    /// rétrécit en pastille et suit le doigt (`dragMorphProgress`).
+    func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights) -> some View {
+        let isDark = theme.mode.isDark
+        let accentColor = conversation.displayPalette(isDark: isDark).primary
+        return ConversationPreviewMorphCard(
+            progress: previewMorphProgress,
+            source: contextMenuSourceFrame,
+            accent: Color(hex: accentColor),
+            surface: MeeshyColors.backgroundSecondary(isDark: isDark),
+            rowFace: peekRowFace(for: conversation),
+            preview: peekPreview(for: conversation, heights: heights)
+        )
+        // Toucher la carte ouvre la conversation, par la porte du verrou.
+        .contentShape(Rectangle())
+        .onTapGesture { handlePeekTouch(.card, on: conversation) }
+        .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { handlePeekTouch(.card, on: conversation) }
+        .scaleEffect(1 - 0.45 * dragMorphProgress, anchor: .bottom)
+        .offset(x: dragOffsetX, y: dragOffsetY)
+        .opacity(ConversationPreviewMorph.cardOpacity(isAppeared: contextMenuAppeared, progress: previewMorphProgress))
+    }
+
+    /// L'aperçu complet = la carte des DERNIERS MESSAGES, drapeau Lentille ON
+    /// comme OFF (le mode garde ses deux portes : encoche et sous-menu).
+    private func peekPreview(for conversation: Conversation, heights: ConversationPeekCardHeights) -> some View {
         ConversationPreviewView(
             conversation: conversation,
             previewLoader: conversationViewModel.previewLoader,
@@ -326,28 +337,28 @@ extension ConversationListView {
         // Preview STATIQUE : le ScrollView interne des messages volerait le
         // glissement qui tire le menu ou morphe la carte en pastille.
         .scrollDisabled(true)
-        // Toucher la carte ouvre la conversation, par la porte du verrou.
-        .contentShape(Rectangle())
-        .onTapGesture { handlePeekTouch(.card, on: conversation) }
-        .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { handlePeekTouch(.card, on: conversation) }
-        // Frame de repos de la carte (mesurée overlay invisible, hors
-        // transformation) — point d'arrivée de l'émergence.
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { capturePreviewRestFrameIfIdle(geo.frame(in: .global)) }
-                    .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
-                        capturePreviewRestFrameIfIdle(frame)
-                    }
-            }
-        )
-        // Émerge DEPUIS la ligne pressée (`runContextMenuEmergence`) puis
-        // rejoint sa place ; pendant le morph vers le bas, elle rétrécit en
-        // pastille et suit le doigt (`dragMorphProgress`).
-        .scaleEffect(previewScale * (1 - 0.45 * dragMorphProgress), anchor: .bottom)
-        .offset(x: dragOffsetX, y: dragOffsetY + previewEmergeOffset)
-        .opacity(contextMenuAppeared ? 1 : 0)
-        .blur(radius: ConversationPreviewEntranceMotion.blurRadius(previewScale: previewScale, reduceMotion: reduceMotion))
+    }
+
+    /// La face de départ : la rangée telle que la liste la montre, pour que
+    /// l'œil ne voie qu'UNE ligne qui se transforme (`ConversationPeekRowFace`).
+    @ViewBuilder
+    private func peekRowFace(for conversation: Conversation) -> some View {
+        if let source = contextMenuSourceFrame {
+            ConversationPeekRowFace(
+                conversation: conversation,
+                community: ConversationRowItem.community(of: conversation, lookup: userCommunityLookup, all: userCommunities),
+                width: source.width,
+                presenceState: PresenceManager.shared.presenceState(for: conversation.participantUserId ?? ""),
+                isPeerHere: peerIsHere(in: conversation),
+                isDark: theme.mode.isDark,
+                storyRingState: storyRingState(for: conversation),
+                moodStatus: conversationMoodStatus(for: conversation),
+                typingUsername: conversationViewModel.typingUsernames[conversation.id],
+                draftSummary: conversationViewModel.draftSummaries[conversation.id],
+                preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
+                deviceText: conversationViewModel.endToEndTexts.text(for: conversation.id)
+            )
+        }
     }
 
     func handlePeekTouch(_ touch: ConversationPeekTouch, on conversation: Conversation) { dismissContextMenu(); if touch.effect == .dismissAndOpen { openConversation(conversation) } }
@@ -368,16 +379,11 @@ extension ConversationListView {
         )
     }
 
-    /// Le menu remonte en se dé-floutant avec l'émergence de la carte, et
-    /// redescend en se dissolvant pendant le morph en pastille.
-    func peekMenuChrome(reduceMotion: Bool) -> ConversationPeekMenuChrome {
-        guard contextMenuAppeared else {
-            return ConversationPeekMenuChrome(
-                offset: ConversationPreviewEntranceMotion.menuRestOffset(reduceMotion: reduceMotion),
-                opacity: 0,
-                blur: ConversationPreviewEntranceMotion.menuRestBlur(reduceMotion: reduceMotion)
-            )
-        }
+    /// Le menu se dévoile avec l'entrée (son seuil et sa montée depuis le bas
+    /// sont ceux du morphisme, `ConversationPreviewMenuReveal`), et redescend
+    /// en se dissolvant pendant le morph en pastille.
+    func peekMenuChrome() -> ConversationPeekMenuChrome {
+        guard contextMenuAppeared else { return ConversationPeekMenuChrome(offset: 0, opacity: 0, blur: 0) }
         return ConversationPeekMenuChrome(offset: 40 * dragMorphProgress, opacity: Double(1 - dragMorphProgress), blur: 6 * dragMorphProgress)
     }
 
@@ -477,16 +483,20 @@ extension ConversationListView {
     }
 }
 
-// MARK: - L'entrée de l'aperçu sous Réduire les animations (#11213)
+// MARK: - Le mouvement de l'aperçu (#11213, #18722)
 
-/// Le mouvement de l'aperçu < iOS 26 : la carte ÉMERGE de la ligne pressée —
-/// départ lent, accélération à mi-course, rebond (overshoot 1.3, le rebond
-/// appartient au long-press) et
-/// flou progressif. Sous Réduire les animations, un FONDU sur place, sans
-/// overshoot ni flou. Les deux moitiés du réglage (système et app) se lisent
-/// par `MeeshyMotion.shouldReduce`.
+/// Les deux mouvements de l'aperçu : l'entrée étend la carte depuis la ligne
+/// pressée par le jeton de ressort `previewMorph`, le retrait la ramène sur la
+/// ligne par `previewMorphReturn`. Sous Réduire les animations, un FONDU sur
+/// place, sans déplacement. Les deux moitiés du réglage (système et app) se
+/// lisent par `MeeshyMotion.shouldReduce`.
 enum ConversationPreviewEntranceMotion {
     static let fadeDuration: Double = 0.18
+
+    /// L'overlay se retire quand le retrait a rejoint la ligne : le ressort de
+    /// retour l'atteint avant, et la rangée revient dans la même image que le
+    /// retrait de la carte.
+    static let exitSettle: Double = 0.26
 
     /// Lecture ponctuelle, hors d'une vue (réouverture rapide, fermeture) : le
     /// corps de l'overlay, lui, lit l'environnement (`ConversationPreviewMotionReader`).
@@ -497,28 +507,12 @@ enum ConversationPreviewEntranceMotion {
         )
     }
 
-    static func emergesFromRow(reduceMotion: Bool) -> Bool {
-        !reduceMotion
-    }
-
-    /// D'où la carte part : SUR la ligne pressée (scale ≈ hauteur ligne /
-    /// hauteur carte, ancre `.bottom` — l'offset aligne le centre visuel de la
-    /// carte réduite, à maxY - scale·H/2, sur celui de la ligne), zoom centré
-    /// 0.7 quand la ligne n'est pas connue (rotor), à sa place sous Réduire les
-    /// animations.
-    static func placement(source: CGRect?, rest: CGRect, reduceMotion: Bool) -> (scale: CGFloat, offset: CGFloat) {
-        guard emergesFromRow(reduceMotion: reduceMotion) else { return (1.0, 0) }
-        guard let source, rest.height > 0 else { return (0.7, 0) }
-        let scale = max(0.22, min(0.7, source.height / rest.height))
-        return (scale, source.midY - (rest.maxY - scale * rest.height / 2))
-    }
-
     static func entrance(reduceMotion: Bool) -> Animation {
-        reduceMotion ? .easeOut(duration: fadeDuration) : .timingCurve(0.5, 0.0, 0.15, 1.3, duration: 0.55)
+        reduceMotion ? .easeOut(duration: fadeDuration) : MeeshyAnimation.previewMorph
     }
 
     static func exit(reduceMotion: Bool) -> Animation {
-        reduceMotion ? .easeOut(duration: fadeDuration) : .spring(response: 0.32, dampingFraction: 0.78)
+        reduceMotion ? .easeOut(duration: fadeDuration) : MeeshyAnimation.previewMorphReturn
     }
 
     /// L'entrée et la sortie passent la variante réduite à la racine du
@@ -532,22 +526,179 @@ enum ConversationPreviewEntranceMotion {
         meeshyWithAnimation(exit(reduceMotion: false), reduced: exit(reduceMotion: true),
                             reduceMotion: reduceMotion, body)
     }
+}
 
-    /// Le flou suit l'échelle de la carte — net à 1.0, jusqu'à 3 repliée ;
-    /// jamais négatif quand le rebond dépasse 1.0 ; nul sous Réduire les
-    /// animations.
-    static func blurRadius(previewScale: CGFloat, reduceMotion: Bool) -> CGFloat {
-        reduceMotion ? 0 : 3.0 * max(0, 1.0 - previewScale)
+// MARK: - La carte qui naît de la ligne (#18722)
+
+/// La carte d'aperçu pendant son morphisme : un cadre interpolé de la rangée
+/// pressée jusqu'à la place que l'aperçu lui donne, coins compris, qui porte
+/// la face de la rangée puis l'aperçu complet. L'aperçu se met en page UNE
+/// fois à sa taille de repos et le cadre ne fait que le découper : rien ne se
+/// remet en page pendant l'animation. Toutes les valeurs rendues dérivent de
+/// la seule `progress`, interpolée image par image par des modificateurs
+/// animables — ni la liste ni l'aperçu ne sont ré-évalués.
+struct ConversationPreviewMorphCard<RowFace: View, Preview: View>: View {
+    let progress: CGFloat
+    /// Le cadre GLOBAL de la rangée pressée ; nil ⇒ la carte ne part que d'elle-même.
+    let source: CGRect?
+    let accent: Color
+    let surface: Color
+    let rowFace: RowFace
+    let preview: Preview
+
+    var body: some View {
+        GeometryReader { geometry in
+            let rest = CGRect(origin: .zero, size: geometry.size)
+            let from = ConversationPreviewMorph.sourceInSlot(source, slot: geometry.frame(in: .global)) ?? rest
+            // Calé en tête et à gauche : la face garde son avatar et son titre
+            // pendant que le cadre se resserre, et l'aperçu tombe pile à sa place.
+            ZStack(alignment: .topLeading) {
+                rowFace
+                    .frame(width: from.width, height: from.height)
+                    .modifier(ConversationPreviewMorphFade(progress: progress, layer: .rowFace))
+                preview
+                    .frame(width: rest.width, height: rest.height, alignment: .top)
+                    .modifier(ConversationPreviewMorphFade(progress: progress, layer: .preview))
+            }
+            .modifier(ConversationPreviewMorphFrame(progress: progress, from: from, to: rest, accent: accent, surface: surface))
+        }
+    }
+}
+
+/// La face de départ de la carte : la MÊME rangée que la liste montre — même
+/// aiguillage Lentille, mêmes signaux (frappe, brouillon, présence, verrou) —,
+/// à la largeur de la ligne pressée. Inerte et muette pour VoiceOver : l'aperçu
+/// porte les actions.
+struct ConversationPeekRowFace: View {
+    let conversation: Conversation
+    let community: MeeshyCommunity?
+    let width: CGFloat
+    let presenceState: PresenceState
+    let isPeerHere: ConversationHere
+    let isDark: Bool
+    let storyRingState: StoryRingState
+    let moodStatus: StatusEntry?
+    let typingUsername: String?
+    let draftSummary: DraftSummary?
+    let preferredContentLanguages: [String]
+    let deviceText: ConversationPreviewDeviceText?
+
+    var body: some View {
+        row
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
-    /// Le menu remonte de 70 pt à l'ouverture ; sous Réduire les animations,
-    /// il apparaît à sa place.
-    static func menuRestOffset(reduceMotion: Bool) -> CGFloat {
-        reduceMotion ? 0 : 70
+    @ViewBuilder
+    private var row: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            LentilleConversationRow(
+                conversation: conversation,
+                community: community,
+                availableWidth: width,
+                presenceState: presenceState,
+                isPeerHere: isPeerHere,
+                isDark: isDark,
+                storyRingState: storyRingState,
+                moodStatus: moodStatus,
+                typingUsername: typingUsername,
+                draftSummary: draftSummary,
+                isContentLocked: ConversationLockManager.shared.hidesContent(of: conversation.id),
+                avatarRoute: ConversationOpenRoute.avatarRoute(for: conversation),
+                preferredContentLanguages: preferredContentLanguages,
+                deviceText: deviceText
+            )
+        } else {
+            ThemedConversationRow(
+                conversation: conversation,
+                community: community,
+                availableWidth: width,
+                presenceState: presenceState,
+                isPeerHere: isPeerHere,
+                isDark: isDark,
+                storyRingState: storyRingState,
+                moodStatus: moodStatus,
+                typingUsername: typingUsername,
+                draftSummary: draftSummary,
+                isContentLocked: ConversationLockManager.shared.hidesContent(of: conversation.id),
+                avatarRoute: ConversationOpenRoute.avatarRoute(for: conversation),
+                preferredContentLanguages: preferredContentLanguages,
+                deviceText: deviceText
+            )
+            .equatable()
+        }
+    }
+}
+
+/// Le cadre, le rayon, le fond et l'ombre de la carte, interpolés par SwiftUI
+/// à chaque image du ressort : le contenu reste opaque à ce modificateur.
+struct ConversationPreviewMorphFrame: ViewModifier, Animatable {
+    var progress: CGFloat
+    let from: CGRect
+    let to: CGRect
+    let accent: Color
+    let surface: Color
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
     }
 
-    static func menuRestBlur(reduceMotion: Bool) -> CGFloat {
-        reduceMotion ? 0 : 6
+    func body(content: Content) -> some View {
+        let frame = ConversationPreviewMorph.frame(progress: progress, from: from, to: to)
+        // Coins du même style que ceux de `ConversationPreviewView` : au repos,
+        // les deux découpes se confondent.
+        let shape = RoundedRectangle(
+            cornerRadius: ConversationPreviewMorph.cornerRadius(progress: progress, from: MeeshyRadius.md, to: MeeshyRadius.xl),
+            style: .circular
+        )
+        content
+            .frame(width: frame.width, height: frame.height, alignment: .topLeading)
+            .clipShape(shape)
+            // Le fond et l'ombre de la carte au repos (celle de
+            // `ConversationPreviewView`, que le découpage retient) naissent
+            // avec elle. L'ombre suit la FORME, jamais le contenu : aucun rendu
+            // hors écran des messages à chaque image du ressort.
+            .background(
+                shape.fill(surface)
+                    .shadow(color: accent.opacity(MeeshyOpacity.medium), radius: 20, y: 10)
+                    .opacity(ConversationPreviewMorph.opacity(of: .surface, progress: progress))
+            )
+            .position(x: frame.midX, y: frame.midY)
+    }
+}
+
+/// L'opacité d'une face de la carte, interpolée image par image.
+struct ConversationPreviewMorphFade: ViewModifier, Animatable {
+    var progress: CGFloat
+    let layer: ConversationPreviewMorph.Layer
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content.opacity(ConversationPreviewMorph.opacity(of: layer, progress: progress))
+    }
+}
+
+/// Le menu n'apparaît qu'au seuil du morphisme, depuis le bas de la carte, sur
+/// la fin du ressort ; avant, il ne prend aucun toucher.
+struct ConversationPreviewMenuReveal: ViewModifier, Animatable {
+    var progress: CGFloat
+    let reduceMotion: Bool
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: ConversationPreviewMorph.menuRise(progress: progress, reduceMotion: reduceMotion))
+            .opacity(Double(ConversationPreviewMorph.menuReveal(progress: progress)))
+            .allowsHitTesting(ConversationPreviewMorph.showsMenu(progress: progress))
     }
 }
 
