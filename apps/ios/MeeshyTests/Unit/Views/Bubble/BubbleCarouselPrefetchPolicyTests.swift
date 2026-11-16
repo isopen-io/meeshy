@@ -78,4 +78,48 @@ final class BubbleCarouselPrefetchPolicyTests: XCTestCase {
         XCTAssertEqual(BubbleCarouselView.reanchoredPage(shownId: "gone", index: 5, in: [a, b])?.index, 1)
         XCTAssertNil(BubbleCarouselView.reanchoredPage(shownId: "gone", index: 0, in: []))
     }
+
+    // MARK: - Les points : UN seul allongé, à la page visible (#18824)
+
+    func test_dotWidth_onlyTheVisiblePage_isLong() {
+        for current in 0..<4 {
+            let widths = (0..<4).map { CarouselPageDots.width(of: $0, current: current) }
+            XCTAssertEqual(widths.filter { $0 == CarouselPageDots.longDotWidth }.count, 1)
+            XCTAssertEqual(widths[current], CarouselPageDots.longDotWidth)
+            XCTAssertGreaterThan(CarouselPageDots.longDotWidth, CarouselPageDots.dotSide)
+        }
+    }
+
+    func test_dotWidth_otherPages_areRoundDots() {
+        XCTAssertEqual(CarouselPageDots.width(of: 0, current: 2), CarouselPageDots.dotSide)
+        XCTAssertEqual(CarouselPageDots.width(of: 3, current: 2), CarouselPageDots.dotSide)
+    }
+
+    func test_showsDots_fromTwoToSevenPages_thenACounter() {
+        XCTAssertFalse(CarouselPageDots.showsDots(count: 1))
+        XCTAssertTrue(CarouselPageDots.showsDots(count: 2))
+        XCTAssertTrue(CarouselPageDots.showsDots(count: 7))
+        XCTAssertFalse(CarouselPageDots.showsDots(count: 8))
+    }
+
+    func test_page_followsTheShownAttachment() {
+        let items = ["a", "b", "c"].map { MessageAttachment(id: $0, mimeType: "image/jpeg", fileUrl: "https://x/\($0).jpg") }
+        XCTAssertEqual(CarouselPageDots.page(of: "b", in: items, fallback: 0), 1)
+        XCTAssertEqual(CarouselPageDots.page(of: nil, in: items, fallback: 2), 2)
+        XCTAssertEqual(CarouselPageDots.page(of: "gone", in: items, fallback: 9), 2, "borné aux pages existantes")
+    }
+
+    func test_pageLabel_saysThePageAndTheCount() {
+        let label = CarouselPageDots.pageLabel(page: 1, count: 4)
+        XCTAssertFalse(label.isEmpty)
+        XCTAssertNotEqual(label, CarouselPageDots.pageLabel(page: 2, count: 4))
+        XCTAssertFalse(label.contains("%"), "les arguments sont posés")
+    }
+
+    func test_previewPresentation_opensNothing_threadPresentationOpensFullscreen() {
+        XCTAssertFalse(BubbleCarouselView.Presentation.preview.opensFullscreen)
+        XCTAssertFalse(BubbleCarouselView.Presentation.preview.showsCloseButton)
+        XCTAssertTrue(BubbleCarouselView.Presentation.thread.opensFullscreen)
+        XCTAssertTrue(BubbleCarouselView.Presentation.thread.showsCloseButton)
+    }
 }

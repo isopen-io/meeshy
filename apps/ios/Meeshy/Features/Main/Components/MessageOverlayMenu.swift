@@ -515,7 +515,7 @@ struct MessageOverlayMenu: View {
             visibleHeight: fit.visibleHeight,
             scrolls: fit.scrollsInternally,
             isTrailing: message.isMe,
-            interactive: touch.offersPlayback
+            interactive: touch.offersTouch
         ) {
             MessageOverlayCellPreview(
                 face: previewFace(kind: touch.kind, containerWidth: containerSize.width),
@@ -530,13 +530,13 @@ struct MessageOverlayMenu: View {
             .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
             .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)
             .overlayPreferenceValue(MediaPlayControlAnchorKey.self) { zones in
-                previewTouchMask(zones: zones, playable: touch.playableAttachmentIds)
+                previewTouchMask(zones: zones, playable: touch.touchZoneIds)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
         }
         // Le cadre défile, ou l'aperçu porte une zone de lecture (#11339) :
         // sinon, une image que les touchers traversent jusqu'au voile.
-        .allowsHitTesting(fit.scrollsInternally || touch.offersPlayback)
+        .allowsHitTesting(fit.scrollsInternally || touch.offersTouch)
     }
 
     /// **Le masque de l'aperçu** (#11339) : percé aux seuls BOUTONS de lecture
