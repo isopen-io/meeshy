@@ -41,9 +41,12 @@ struct RootThemedBackground: View {
 }
 
 /// Toast de notification temps réel (socket), monté au sommet du `ZStack`
-/// racine. Un appui long OU un tirage vers le bas ouvre l'aperçu de la
-/// conversation au lieu de naviguer ; un BALAYAGE VERS LE HAUT la ferme
-/// (#8723), la carte suivant le doigt.
+/// racine. Un appui long ouvre l'aperçu de la conversation (#8723) ; un
+/// BALAYAGE VERS LE HAUT la ferme, la carte suivant le doigt. TIRÉE VERS LE
+/// BAS (#18721), la carte suit le doigt avec résistance, s'élargit et s'étire ;
+/// relâchée avant le seuil elle revient à sa place, au-delà elle DEVIENT la
+/// conversation — ouverte en REGARD, donc laissée non lue jusqu'au premier
+/// acte de l'utilisateur (`PeekReadLaw`). Le toucher, lui, ouvre et consomme.
 struct RootNotificationToastOverlay: View {
     @ObservedObject var notificationManager: NotificationToastManager
     let suppressToastTap: Bool
@@ -51,64 +54,163 @@ struct RootNotificationToastOverlay: View {
     let onPreview: (SocketNotificationEvent) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Le déplacement vertical du doigt pendant le geste — seul le haut suit
-    /// (la carte ne descend pas : tirer vers le bas ouvre l'aperçu).
-    @GestureState private var dragLift: CGFloat = 0
+    /// La traction verticale du doigt : la SEULE valeur que la carte projette
+    /// (décalage, étirement) — aucune animation empilée pendant le geste.
+    @State private var pull: CGFloat = 0
+    /// Le cadre de la carte au repos, lu avant tout décalage : le départ du
+    /// morphisme vers la conversation.
+    @State private var restingFrame: CGRect = .zero
+    /// La bannière qui devient la conversation, peinte le temps de la
+    /// transformation pendant que la conversation se pose dessous.
+    @State private var morph: BannerMorph?
 
     var body: some View {
         VStack {
             if let toast = notificationManager.currentToast {
-                NotificationToastView(
-                    event: toast,
-                    // #7167 — la présentation est résolue à la POSE du toast ;
-                    // la vue la place, elle ne la recalcule pas à chaque corps.
-                    presentation: notificationManager.currentToastPresentation,
-                    onTap: {
-                        if suppressToastTap { return }
-                        notificationManager.dismissToast()
-                        // #6999 — taper un toast OUVRE le contenu : la notification
-                        // est consommée, exactement comme une ligne de cloche tapée.
-                        let consumedId = toast.id
-                        Task { @MainActor in
-                            await NotificationToastManager.shared.consume(.notification(id: consumedId))
-                        }
-                        onTap(toast)
-                    },
-                    onDismiss: { notificationManager.dismissToast() }
-                )
-                .offset(y: min(0, dragLift))
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.35).onEnded { _ in
-                        onPreview(toast)
-                    }
-                )
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 12)
-                        .updating($dragLift) { value, lift, _ in
-                            lift = value.translation.height
-                        }
-                        .onEnded { value in
-                            switch NotificationBannerSwipe.outcome(
-                                translation: value.translation.height,
-                                predictedEnd: value.predictedEndTranslation.height
-                            ) {
-                            case .dismiss: notificationManager.dismissToast()
-                            case .preview: onPreview(toast)
-                            case .none: break
-                            }
-                        }
-                )
-                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-                .padding(.top, MeeshySpacing.xxl)
+                card(toast)
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                    .padding(.top, MeeshySpacing.xxl)
             }
             Spacer()
         }
+        .overlay { morphLayer }
         .animation(reduceMotion ? .easeOut(duration: 0.2) : MeeshyAnimation.springBouncy,
                    value: notificationManager.currentToast?.id)
+        .task(id: morph?.id) { await runMorph() }
         .zIndex(201)
         #if DEBUG
         .task { await Self.presentLaunchPreviewIfRequested(on: notificationManager) }
         #endif
+    }
+
+    private func card(_ toast: SocketNotificationEvent) -> some View {
+        NotificationToastView(
+            event: toast,
+            // #7167 — la présentation est résolue à la POSE du toast ;
+            // la vue la place, elle ne la recalcule pas à chaque corps.
+            presentation: notificationManager.currentToastPresentation,
+            onTap: { openTapped(toast) },
+            onDismiss: { notificationManager.dismissToast() }
+        )
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { restingFrame = $0 }
+        .modifier(NotificationBannerPullEffect(translation: pull, reduceMotion: reduceMotion))
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+                onPreview(toast)
+            }
+        )
+        .simultaneousGesture(
+            DragGesture(minimumDistance: NotificationBannerPull.minimumPull)
+                .onChanged { pull = $0.translation.height }
+                .onEnded { release($0, toast: toast) }
+        )
+        // L'équivalent du geste pour VoiceOver : ouvrir sans marquer lu.
+        .accessibilityAction(named: Text(String(
+            localized: "notifications.banner.peekAction",
+            defaultValue: "Regarder sans marquer lu"
+        ))) { openPulled(toast) }
+    }
+
+    /// #6999 — taper un toast OUVRE le contenu : la notification est
+    /// consommée, exactement comme une ligne de cloche tapée.
+    private func openTapped(_ toast: SocketNotificationEvent) {
+        if suppressToastTap { return }
+        notificationManager.dismissToast()
+        let consumedId = toast.id
+        Task { @MainActor in
+            await NotificationToastManager.shared.consume(.notification(id: consumedId))
+        }
+        onTap(toast)
+    }
+
+    /// La levée du doigt : le HAUT ferme (loi inchangée), le BAS est une
+    /// traction que `NotificationBannerPull` tranche — revenir ou ouvrir.
+    private func release(_ value: DragGesture.Value, toast: SocketNotificationEvent) {
+        let translation = value.translation.height
+        let predictedEnd = value.predictedEndTranslation.height
+        if NotificationBannerSwipe.outcome(translation: translation, predictedEnd: predictedEnd) == .dismiss {
+            pull = 0
+            notificationManager.dismissToast()
+            return
+        }
+        switch NotificationBannerPull.outcome(translation: translation, predictedEnd: predictedEnd) {
+        case .cancel:
+            springBack()
+        case .open:
+            openPulled(toast)
+        }
+    }
+
+    /// La traction relâchée en deçà revient en ressort : rien n'a changé.
+    private func springBack() {
+        meeshyWithAnimation(MeeshyMotion.bannerPull(reduce: false), reduced: MeeshyMotion.bannerPull(reduce: true),
+                            reduceMotion: reduceMotion) { pull = 0 }
+    }
+
+    /// La bannière tirée devient la conversation. Une notification de message
+    /// ouvre sa conversation EN REGARD et ne se consomme pas : rien n'a été
+    /// lu. Les autres s'ouvrent comme au toucher. L'aiguillage reste celui du
+    /// toucher (routeur, verrou PIN) : le regard ne contourne aucune garde.
+    private func openPulled(_ toast: SocketNotificationEvent) {
+        if suppressToastTap { return springBack() }
+        guard let conversationId = PeekReadLaw.peekTarget(type: toast.notificationType, conversationId: toast.conversationId) else {
+            pull = 0
+            openTapped(toast)
+            return
+        }
+        PeekOpeningRequests.request(conversationId)
+        HapticFeedback.medium()
+        beginMorph(from: toast)
+        onTap(toast)
+    }
+
+    /// Pose l'enveloppe à la place exacte de la carte relâchée, la bannière
+    /// s'effaçant dans la même image ; `runMorph` la fait ensuite grandir.
+    /// Sous « Réduire les animations », pas d'enveloppe : la bannière s'efface
+    /// en fondu et la conversation paraît.
+    private func beginMorph(from toast: SocketNotificationEvent) {
+        guard !reduceMotion else {
+            pull = 0
+            notificationManager.dismissToast()
+            return
+        }
+        let released = restingFrame
+            .insetBy(dx: MeeshySpacing.sm, dy: 0)
+            .offsetBy(dx: 0, dy: NotificationBannerPull.elasticOffset(translation: pull))
+        let presentation = notificationManager.currentToastPresentation
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            pull = 0
+            notificationManager.dismissToast()
+            morph = BannerMorph(event: toast, headline: presentation?.headline ?? toast.toastAvatarName,
+                                message: presentation?.body, origin: released)
+        }
+    }
+
+    @ViewBuilder
+    private var morphLayer: some View {
+        if let morph {
+            BannerToConversationMorph(
+                event: morph.event, headline: morph.headline, message: morph.message,
+                progress: morph.progress, origin: morph.origin
+            )
+            .transition(.opacity)
+        }
+    }
+
+    /// L'enveloppe a été peinte à la taille de la carte : elle grandit jusqu'à
+    /// l'écran, puis s'efface devant la conversation posée dessous. Lancée par
+    /// `.task(id:)`, donc après la première image — une croissance animée dans
+    /// le tour qui pose l'enveloppe n'aurait aucune image de départ.
+    private func runMorph() async {
+        guard morph != nil else { return }
+        meeshyWithAnimation(MeeshyMotion.bannerMorph(reduce: false), reduced: MeeshyMotion.bannerMorph(reduce: true),
+                            reduceMotion: reduceMotion) { morph?.progress = 1 }
+        guard await cancellableSleep(for: MeeshyMotion.bannerMorphSettle) else { return }
+        meeshyWithAnimation(MeeshyMotion.reducedFade, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+            morph = nil
+        }
     }
 
     #if DEBUG
@@ -135,6 +237,17 @@ struct RootNotificationToastOverlay: View {
         manager.presentPreviewToast(event)
     }
     #endif
+}
+
+/// L'état de la bannière qui devient la conversation : ce qu'elle montre,
+/// d'où elle part, et jusqu'où elle a grandi.
+struct BannerMorph: Identifiable {
+    let id = UUID()
+    let event: SocketNotificationEvent
+    let headline: String
+    let message: String?
+    let origin: CGRect
+    var progress: CGFloat = 0
 }
 
 /// Hôte UNIQUE de la bulle de mood pour toute la fenêtre, et les deux feuilles

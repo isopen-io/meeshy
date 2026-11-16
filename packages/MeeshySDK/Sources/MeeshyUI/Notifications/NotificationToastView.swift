@@ -99,7 +99,8 @@ public struct NotificationToastView: View {
     }
 
     private static let thumbnailSide: CGFloat = 30
-    private static let cornerRadius: CGFloat = 22
+    /// Le rayon de la carte — aussi le départ du morphisme vers la conversation.
+    static let cornerRadius: CGFloat = 22
 
     private var cardShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
@@ -275,10 +276,12 @@ public struct NotificationToastView: View {
 // MARK: - Le geste de la bannière (#8723)
 
 /// Ce que décide un geste relâché sur la bannière. Vers le HAUT (ou lancé
-/// vers le haut) ferme ; vers le BAS ouvre l'aperçu ; en deçà, rien. Pur :
-/// c'est la seule partie du geste qu'un témoin peut tenir.
-public enum NotificationBannerSwipe: Equatable, Sendable {
+/// vers le haut) ferme ; vers le BAS, c'est une traction, et
+/// `NotificationBannerPull` décide si elle devient la conversation (#18721) ;
+/// en deçà, rien. Pur : c'est la seule partie du geste qu'un témoin peut tenir.
+public nonisolated enum NotificationBannerSwipe: Equatable, Sendable {
     case dismiss
+    /// Tirée vers le bas : la décision appartient à `NotificationBannerPull`.
     case preview
     case none
 
@@ -286,5 +289,89 @@ public enum NotificationBannerSwipe: Equatable, Sendable {
         if translation < -30 || predictedEnd < -80 { return .dismiss }
         if translation > 36 { return .preview }
         return .none
+    }
+}
+
+// MARK: - La bannière qui devient la conversation (#18721)
+
+/// L'enveloppe de transition que la racine peint pendant que la conversation
+/// se pose dessous : la carte de la bannière grandit jusqu'à l'écran, ses
+/// coins s'ouvrent, l'aperçu du message s'efface et la ligne « avatar · nom »
+/// glisse vers la place de l'en-tête qui va la reprendre.
+///
+/// Une enveloppe et non `matchedGeometryEffect` : la conversation est poussée
+/// dans la pile de navigation, une autre hiérarchie que la couche des
+/// bannières, et son en-tête n'existe pas encore quand le doigt se lève. La
+/// racine peint donc la transformation, puis s'efface devant l'écran réel.
+/// Une seule valeur — `progress` — la pilote (`NotificationBannerMorph`).
+public struct BannerToConversationMorph: View {
+    let event: SocketNotificationEvent
+    let headline: String
+    let message: String?
+    let progress: CGFloat
+    /// Le cadre de la carte quand le doigt s'est levé, en coordonnées globales.
+    let origin: CGRect
+
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    public init(event: SocketNotificationEvent, headline: String, message: String?, progress: CGFloat, origin: CGRect) {
+        self.event = event
+        self.headline = headline
+        self.message = message
+        self.progress = progress
+        self.origin = origin
+    }
+
+    public var body: some View {
+        GeometryReader { proxy in
+            let space = proxy.frame(in: .global)
+            let start = origin.offsetBy(dx: -space.minX, dy: -space.minY)
+            let frame = NotificationBannerMorph.frame(progress: progress, from: start, to: CGRect(origin: .zero, size: proxy.size))
+            card(start: start)
+                .frame(width: frame.width, height: frame.height, alignment: .topLeading)
+                .background(shape.fill(MeeshyColors.backgroundPrimary(isDark: theme.mode.isDark)))
+                .clipShape(shape)
+                .position(x: frame.midX, y: frame.midY)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(
+            cornerRadius: NotificationBannerMorph.cornerRadius(progress: progress, from: NotificationToastView.cornerRadius),
+            style: .continuous
+        )
+    }
+
+    /// L'identité descend de la marge de la carte jusqu'à la hauteur de
+    /// l'en-tête — juste sous la zone sûre, que la carte au repos révèle.
+    private func card(start: CGRect) -> some View {
+        let headerTop = max(MeeshySpacing.md, start.minY - MeeshySpacing.xxl + MeeshySpacing.sm)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.md) {
+                MeeshyAvatar(
+                    name: event.toastAvatarName,
+                    context: .notification,
+                    accentColor: DynamicColorGenerator.colorForName(event.toastAvatarColorSeed),
+                    avatarURL: event.toastAvatarURL
+                )
+                Text(headline)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+                    .lineLimit(1)
+            }
+            if let message {
+                Text(message)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                    .foregroundStyle(theme.textSecondary)
+                    .lineLimit(2)
+                    .opacity(NotificationBannerMorph.bodyOpacity(progress: progress))
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, NotificationBannerMorph.headerInset(progress: progress, from: MeeshySpacing.md, to: headerTop))
     }
 }

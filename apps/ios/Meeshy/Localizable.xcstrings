@@ -34212,6 +34212,54 @@
         }
       }
     },
+    "notifications.banner.peekAction": {
+      "comment": "Action VoiceOver de la bannière in-app d'un message : l'équivalent de la traction vers le bas, qui ouvre la conversation en regard (non lue tant qu'on n'y agit pas).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلقاء نظرة دون تعليمها كمقروءة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ansehen, ohne als gelesen zu markieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peek without marking as read"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirar sin marcar como leído"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regarder sans marquer lu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardare senza segnare come letto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espiar sem marcar como lida"
+          }
+        }
+      }
+    },
     "onboarding.continue": {
       "extractionState": "manual",
       "localizations": {
