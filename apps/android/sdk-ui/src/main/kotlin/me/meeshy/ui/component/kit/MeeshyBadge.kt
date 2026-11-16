@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -151,7 +152,7 @@ public fun MeeshyBadge(
                     color = ink,
                     fontSize = values.textSp.sp,
                     fontWeight = if (content is MeeshyBadgeContent.Count) FontWeight.ExtraBold else FontWeight.Bold,
-                    fontFeatureSettings = if (values.usesTabularFigures) "tnum" else null,
+                    style = if (values.usesTabularFigures) TextStyle(fontFeatureSettings = "tnum") else TextStyle.Default,
                     maxLines = lineLimit ?: Int.MAX_VALUE,
                     overflow = TextOverflow.Ellipsis,
                 )

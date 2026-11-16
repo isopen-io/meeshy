@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -131,7 +132,7 @@ public fun MeeshyMeter(
         if (title != null || valueText != null) {
             Row(Modifier.fillMaxWidth().decorative(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                 title?.let { Text(it, color = MeeshyTheme.tokens.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
-                valueText?.let { Text(it, color = MeeshyTheme.tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, fontFeatureSettings = "tnum") }
+                valueText?.let { Text(it, color = MeeshyTheme.tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, style = TextStyle(fontFeatureSettings = "tnum")) }
             }
         }
         Row(

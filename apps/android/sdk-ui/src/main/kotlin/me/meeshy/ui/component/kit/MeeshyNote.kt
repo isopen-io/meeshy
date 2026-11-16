@@ -144,10 +144,10 @@ public fun MeeshyNote(
                 .drawBehind {
                     if (values.accentBarDp > 0) {
                         val bar = values.accentBarDp.dp.toPx()
-                        val x = if (layoutDirection == LayoutDirection.Rtl) size.width - bar else 0f
-                        drawRect(color, Offset(x, 0f), Size(bar, size.height))
+                        val x = if (layoutDirection == LayoutDirection.Rtl) this.size.width - bar else 0f
+                        drawRect(color, Offset(x, 0f), Size(bar, this.size.height))
                     }
-                    if (values.hasBottomHairline) drawRect(hairline, Offset(0f, size.height - 1.dp.toPx()), Size(size.width, 1.dp.toPx()))
+                    if (values.hasBottomHairline) drawRect(hairline, Offset(0f, this.size.height - 1.dp.toPx()), Size(this.size.width, 1.dp.toPx()))
                 }
                 .heightIn(min = values.minHeightDp.dp)
                 .padding(start = inset[1].dp, top = inset[0].dp, end = inset[3].dp, bottom = inset[2].dp)
