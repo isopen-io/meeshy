@@ -430,15 +430,9 @@ struct MessageOverlayMenu: View {
                 // tient pas dans la fenêtre. Gate Equatable (H3) + mémoire de
                 // la rangée plate : le drag 60 fps ne reconstruit rien. Seule la
                 // zone de lecture d'un vocal ou d'une vidéo s'y touche (#11339).
-                previewViewport(
+                settledPreviewViewport(
                     touch: touch, containerSize: geometry.size, previewSize: CGSize(width: previewW, height: previewH),
                     fit: fit)
-                // Le léger rebond de fin (retour porteur, #18723) : la
-                // bulle grandit jusqu'à sa taille et la dépasse d'un rien avant
-                // de s'y poser. Sous « Réduire les animations », elle est
-                // déjà posée : aucune échelle.
-                .scaleEffect(settled ? 1 : PreviewSettleSpring.messageStartScale)
-                .animation(reduceMotion ? nil : MeeshyAnimation.messagePreviewPop, value: settled)
                 // #9043 — transformation de RENDU seule (aucune passe de
                 // layout par image) : le haut et le bord natif restent fixes.
                 .scaleEffect(revealSplit.factor, anchor: message.isMe ? .topTrailing : .topLeading)
@@ -476,6 +470,17 @@ struct MessageOverlayMenu: View {
         .dismissOnEscape { dismiss() }
         .onAppear { enter() }
         .onDisappear { stopPreviewPlayback() }
+    }
+
+    /// L'aperçu avec le léger rebond de fin (retour porteur, #18723) : la
+    /// bulle grandit jusqu'à sa taille et la dépasse d'un rien avant de s'y
+    /// poser. Sous « Réduire les animations », elle est déjà posée.
+    private func settledPreviewViewport(
+        touch: MessageOverlayPreviewTouch, containerSize: CGSize, previewSize: CGSize, fit: MessageOverlayPreviewFit.Result
+    ) -> some View {
+        previewViewport(touch: touch, containerSize: containerSize, previewSize: previewSize, fit: fit)
+            .scaleEffect(settled ? 1 : PreviewSettleSpring.messageStartScale)
+            .animation(reduceMotion ? nil : MeeshyAnimation.messagePreviewPop, value: settled)
     }
 
     /// **L'entrée de l'overlay** (#11208). Aucune haptique : le geste

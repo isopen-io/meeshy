@@ -251,13 +251,7 @@ struct RootView: View {
             // 8. Toast overlay — handled at MeeshyApp level to avoid duplicates
 
             // 9. Notification toast overlay (socket real-time)
-            RootNotificationToastOverlay(
-                notificationManager: notifications.manager,
-                suppressToastTap: suppressToastTap,
-                onTap: handleSocketNotificationTap,
-                onPreview: { openNotificationPreview(for: $0) },
-                onPulledOpen: { openNotificationPreview(for: $0, pulled: true) }
-            )
+            notificationToastOverlay
         }
         // Chaque couche est un `ViewModifier` NOMINAL (#5837) : la chaîne de 46
         // modificateurs imbriquait 66 niveaux dans le type de ce `body`, ~1095 Ko
@@ -747,6 +741,18 @@ struct RootView: View {
     /// of navigating away. Resolves the conversation cache-first (in-memory →
     /// GRDB → network), falling back to normal navigation when it isn't a
     /// conversation notification or can't be resolved.
+    /// La bannière socket : toucher l'ouvre, appui long ou traction la
+    /// regarde sans la marquer lue (#18721).
+    private var notificationToastOverlay: some View {
+        RootNotificationToastOverlay(
+            notificationManager: notifications.manager,
+            suppressToastTap: suppressToastTap,
+            onTap: handleSocketNotificationTap,
+            onPreview: { openNotificationPreview(for: $0) },
+            onPulledOpen: { openNotificationPreview(for: $0, pulled: true) }
+        )
+    }
+
     /// Tirée (`pulled`), la bannière s'est déjà transformée en la feuille au
     /// cran grand, et la main a déjà senti l'ouverture : ni second haptique,
     /// ni autre cran.
