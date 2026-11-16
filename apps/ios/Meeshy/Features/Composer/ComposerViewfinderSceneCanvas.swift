@@ -29,14 +29,6 @@ struct ComposerViewfinderSceneCanvas: View {
     /// Le glisser d'un objet, remis aux cibles du chrome (`feeding`).
     var onItemDragged: ((StoryCanvasItemDrag) -> Void)?
 
-    /// Le texte remis au canvas UNE passe après son montage : posé sur l'aperçu à l'instant où
-    /// le premier objet naît, il n'a encore ni calque ni fenêtre, et la saisie n'y prendrait pas.
-    @State private var mountedTextId: String?
-
-    private var editingTextId: String? {
-        typing?.textId == mountedTextId ? mountedTextId : nil
-    }
-
     /// Le haut du clavier et de sa barre, à l'écran : la saisie reste au-dessus.
     @State private var keyboardTop: CGFloat = .greatestFiniteMagnitude
 
@@ -91,7 +83,7 @@ struct ComposerViewfinderSceneCanvas: View {
             loadedImages: viewModel.loadedImages,
             loadedStickerAnimations: viewModel.loadedStickerAnimations,
             loadedImagesVersion: viewModel.loadedImagesVersion,
-            editingTextId: editingTextId,
+            editingTextId: typing?.textId,
             onInlineTextChanged: typing?.onChanged,
             onInlineTextEditEnded: typing.map { saisie in { _ in saisie.onEnded() } },
             selectedItemId: selectedItemId,
@@ -103,7 +95,6 @@ struct ComposerViewfinderSceneCanvas: View {
             onItemDragged: onItemDragged)
         .allowsHitTesting(takesTouches)
         .accessibilityIdentifier("composer.viewfinder.scene")
-        .task(id: typing?.textId) { mountedTextId = typing?.textId }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
             guard let cadre = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
             keyboardTop = ComposerViewfinderScene.typingFloor(keyboardEndFrame: cadre,
