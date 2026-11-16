@@ -82,36 +82,107 @@ final class ComposerKeyboardStyleBarTests: XCTestCase {
         XCTAssertEqual(ComposerKeyboardStyleFamily.outline.panel.flatMap(\.parts), [.borderWidth, .borderPalette])
     }
 
-    func test_panel_frame_isTheShapeAndThePadding() {
-        XCTAssertEqual(ComposerKeyboardStyleFamily.frame.panel.flatMap(\.parts), [.frameShapes, .framePadding])
+    /// **La couleur du cadre se choisit avec sa forme** (retour porteur) : elle
+    /// n'est plus dans « Style du cadre ».
+    func test_panel_frame_isTheShapeThePaddingAndTheFrameColour() {
+        XCTAssertEqual(ComposerKeyboardStyleFamily.frame.panel.flatMap(\.parts),
+                       [.frameShapes, .framePadding, .frameBorderPalette])
     }
 
-    func test_panel_frameStyle_isTheBackgroundThenTheBorderOfTheFrame() {
+    func test_panel_frameStyle_isTheBackgroundThenTheBorderWidth() {
         XCTAssertEqual(ComposerKeyboardStyleFamily.frameStyle.panel.flatMap(\.parts),
-                       [.backgrounds, .frameBorderWidth, .frameBorderPalette])
+                       [.backgrounds, .frameBorderWidth])
     }
 
-    // MARK: - Le cercle plein et le cercle creux montrent leur couleur
+    // MARK: - Chaque commande montre ce qu'elle rend
 
-    func test_tint_color_isTheTextColour_whiteByDefault() {
+    func test_indicator_font_isAaInTheCurrentFont() {
         var texte = StoryTextObject(text: "a")
-        XCTAssertEqual(ComposerKeyboardStyleFamily.color.tint(of: texte), "FFFFFF")
+        texte.textStyle = StoryTextStyle.allCases.last?.rawValue
+        XCTAssertEqual(ComposerKeyboardStyleFamily.typography.indicator(of: texte),
+                       .styledGlyph("Aa", style: texte.parsedTextStyle))
+    }
+
+    func test_indicator_effect_isAaWithTheSelectedEffect() {
+        var texte = StoryTextObject(text: "a")
+        let effet = StoryTextEffect.pickerChoices.last ?? .none
+        texte.textEffect = effet.rawValue
+        XCTAssertEqual(ComposerKeyboardStyleFamily.effect.indicator(of: texte), .effectGlyph("Aa", effect: effet))
+    }
+
+    func test_indicator_language_isTheLanguageCode_notAGlobe() {
+        var texte = StoryTextObject(text: "a")
+        texte.sourceLanguage = "de"
+        XCTAssertEqual(ComposerKeyboardStyleFamily.language.indicator(of: texte), .code("DE"))
+    }
+
+    func test_indicator_color_isAFilledDotOfTheTextColour() {
+        var texte = StoryTextObject(text: "a")
         texte.textColor = "FF2D55"
-        XCTAssertEqual(ComposerKeyboardStyleFamily.color.tint(of: texte), "FF2D55")
+        XCTAssertEqual(ComposerKeyboardStyleFamily.color.indicator(of: texte), .colorDot(hex: "FF2D55"))
     }
 
-    func test_tint_outline_isTheChosenOutlineColour_onlyWhenThereIsAnOutline() {
+    func test_indicator_outline_isARingOfTheOutlineColour_neutralWithoutOutline() {
         var texte = StoryTextObject(text: "a")
-        XCTAssertNil(ComposerKeyboardStyleFamily.outline.tint(of: texte), "sans contour, aucune couleur à annoncer")
-        texte = TextEditPalette.applying("34C759", to: .border, on: texte)
-        XCTAssertEqual(ComposerKeyboardStyleFamily.outline.tint(of: texte), "34C759")
+        XCTAssertEqual(ComposerKeyboardStyleFamily.outline.indicator(of: texte),
+                       .symbol(name: "circle", emphasis: 0, tint: nil))
+        texte.borderWidth = 1
+        texte.borderColor = "34C759"
+        XCTAssertEqual(ComposerKeyboardStyleFamily.outline.indicator(of: texte),
+                       .symbol(name: "circle", emphasis: 0, tint: "34C759"))
     }
 
-    func test_tint_otherCommands_areNeutral() {
-        let texte = StoryTextObject(text: "a")
-        for famille in [ComposerKeyboardStyleFamily.typography, .effect, .language, .frame, .frameStyle] {
-            XCTAssertNil(famille.tint(of: texte), "\(famille)")
+    func test_indicator_frame_isItsShapeTintedByTheFrameColour() {
+        var texte = StoryTextObject(text: "a")
+        texte.frameShape = StoryTextFrameShape.pill.rawValue
+        texte.frameBorderWidth = 2
+        texte.frameBorderColor = "FF9500"
+        XCTAssertEqual(ComposerKeyboardStyleFamily.frame.indicator(of: texte),
+                       StoryTextAttributeCycle.indicator(.frame, of: texte))
+        guard case .symbol(_, _, let teinte) = ComposerKeyboardStyleFamily.frame.indicator(of: texte) else {
+            return XCTFail("le cadre se montre par sa forme")
         }
+        XCTAssertEqual(teinte, "FF9500")
+    }
+
+    func test_indicator_frameStyle_isTheBackgroundSwatch() {
+        let texte = StoryTextObject(text: "a")
+        XCTAssertEqual(ComposerKeyboardStyleFamily.frameStyle.indicator(of: texte),
+                       StoryTextAttributeCycle.indicator(.background, of: texte))
+    }
+
+    // MARK: - Le contour au toucher : 1 pt, puis les couleurs
+
+    func test_quickAdvance_outline_withoutOutline_setsOnePointAndAColour() {
+        var texte = StoryTextObject(text: "a")
+        ComposerKeyboardStyleFamily.quickAdvance(.border, on: &texte, backgrounds: [])
+        XCTAssertEqual(texte.borderWidth, 1)
+        XCTAssertEqual(texte.borderColor, TextEditPalette.colors.first)
+    }
+
+    func test_quickAdvance_outline_cyclesTheColours_keepingTheWidth() {
+        var texte = StoryTextObject(text: "a")
+        texte.borderWidth = 6
+        texte.borderColor = TextEditPalette.colors[0]
+        ComposerKeyboardStyleFamily.quickAdvance(.border, on: &texte, backgrounds: [])
+        XCTAssertEqual(texte.borderColor, TextEditPalette.colors[1])
+        XCTAssertEqual(texte.borderWidth, 6, "la taille se règle à l'appui long, pas au toucher")
+    }
+
+    func test_quickAdvance_outline_afterTheLastColour_removesTheOutline() {
+        var texte = StoryTextObject(text: "a")
+        texte.borderWidth = 1
+        texte.borderColor = TextEditPalette.colors.last
+        ComposerKeyboardStyleFamily.quickAdvance(.border, on: &texte, backgrounds: [])
+        XCTAssertEqual(texte.borderWidth ?? 0, 0)
+    }
+
+    func test_quickAdvance_otherTools_followTheSDKRotation() {
+        var attendu = StoryTextObject(text: "a")
+        var texte = attendu
+        StoryTextAttributeCycle.advance(.effect, on: &attendu, backgrounds: [])
+        ComposerKeyboardStyleFamily.quickAdvance(.effect, on: &texte, backgrounds: [])
+        XCTAssertEqual(texte.textEffect, attendu.textEffect)
     }
 
     // MARK: - Ce que l'hôte ne sert pas n'a pas de commande
