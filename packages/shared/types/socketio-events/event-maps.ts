@@ -271,7 +271,12 @@ import type {
   ParticipantRightsUpdatedEventData,
   ParticipantRoleUpdatedEventData,
 } from './participant.js';
-import type { CommunityUpdatedEventData } from './community.js';
+import type {
+  CommunityMemberJoinedEventData,
+  CommunityMemberLeftEventData,
+  CommunityMemberRoleUpdatedEventData,
+  CommunityUpdatedEventData,
+} from './community.js';
 import type {
   UserPreferencesCommunityReorderedEventData,
   UserPreferencesReorderedEventData,
@@ -491,6 +496,9 @@ export interface ServerToClientEvents {
 
   // Communautés (#16857)
   [SERVER_EVENTS.COMMUNITY_UPDATED]: (data: CommunityUpdatedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_MEMBER_JOINED]: (data: CommunityMemberJoinedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_MEMBER_LEFT]: (data: CommunityMemberLeftEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_MEMBER_ROLE_UPDATED]: (data: CommunityMemberRoleUpdatedEventData) => void;
 
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;

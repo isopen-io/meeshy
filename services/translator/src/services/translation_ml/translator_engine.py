@@ -10,14 +10,17 @@ Responsabilités:
 
 import logging
 import asyncio
+import hashlib
 import os
 import threading
-from typing import List, Optional, Tuple
+from collections import OrderedDict
+from typing import Callable, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from config.settings import LANGUAGE_MAPPINGS
 from services.task_privacy import caused_by, run_in_thread_with_context, shown
 from utils.sentence_plan import SentencePlan, plan_sentences
+from utils.translation_quality import ESCALATION_PROFILES, assess_translation
 from utils.text_segmentation import (
     has_translatable_text,
     is_placeholder,
@@ -37,6 +40,7 @@ try:
 except ImportError:
     _LANGDETECT_OK = False
 
+REJECTION_MEMO_SIZE = 512
 DEFAULT_DETECT_LANGUAGE = os.getenv("TRANSLATOR_DEFAULT_DETECT_LANG", "fr")
 try:
     DETECT_MIN_CONFIDENCE = float(os.getenv("TRANSLATOR_DETECT_MIN_CONFIDENCE", "0.80"))
@@ -171,6 +175,12 @@ class UnsupportedLanguageError(TranslationInferenceError):
     et de laisser l'appelant servir l'original."""
 
 
+class TranslationRejectedError(TranslationInferenceError):
+    """Sortie hallucinée que même les profils de génération plus stricts n'ont
+    pas su remplacer (#18716). Sous-classe de `TranslationInferenceError` : elle
+    n'est jamais mise en cache ni servie, et l'appelant sert l'original."""
+
+
 class TranslatorEngine:
     """
     Moteur de traduction utilisant les modèles NLLB
@@ -201,6 +211,11 @@ class TranslatorEngine:
         # le défaut `.get(code, 'eng_Latn'/'fra_Latn')` aux call sites de traduction
         # → une demande de russe renvoyait silencieusement du français.
         self.lang_codes = dict(LANGUAGE_MAPPINGS)
+
+        # Empreintes des phrases déjà rejetées (#18716) : une relance ne rejoue
+        # pas toute l'échelle pour une sortie qu'on sait irrécupérable.
+        self._rejected: "OrderedDict[str, None]" = OrderedDict()
+        self._rejected_lock = threading.Lock()
 
         logger.info("⚙️ TranslatorEngine initialisé")
 
@@ -475,28 +490,13 @@ class TranslatorEngine:
                 # ✨ THREAD-SAFETY: Lock d'inférence pour protéger le modèle PyTorch
                 model_lock = self.model_loader.get_model_inference_lock(model_type)
 
-                with model_lock:
-                    # OPTIMISATION AVANCÉE: Greedy decoding (4x plus rapide)
-                    with create_inference_context():
-                        result = reusable_pipeline(
-                            text,
-                            src_lang=nllb_source,
-                            tgt_lang=nllb_target,
-                            max_length=256,       # Optimisé pour chunks courts (découpage intelligent avant)
-                            num_beams=1,          # GREEDY (4x plus rapide!)
-                            do_sample=False       # Déterministe
-                            # early_stopping retiré: incompatible avec num_beams=1 (greedy decoding)
-                        )
-
-                # Extraire le résultat
-                # Note: Seq2SeqTranslator retourne un dict pour un texte unique
-                if result and 'translation_text' in result:
-                    return result['translation_text']
-                elif result and isinstance(result, list) and len(result) > 0 and 'translation_text' in result[0]:
-                    return result[0]['translation_text']
-                else:
-                    logger.error(f"[NLLB] Résultat inattendu: {shown(result)}")
-                    raise TranslationInferenceError(f"Résultat NLLB inattendu: {shown(result)}")
+                generate = self._generator(reusable_pipeline, model_lock, nllb_source, nllb_target)
+                # Glouton d'abord ; une sortie signalée gravit l'échelle d'escalade (#18716)
+                with create_inference_context():
+                    outputs = generate(text)
+                    return self._vetted(
+                        [text], outputs, generate, source_lang, target_lang, model_type
+                    )[0]
 
             except TranslationInferenceError:
                 raise
@@ -608,34 +608,21 @@ class TranslatorEngine:
 
             model_lock = self.model_loader.get_model_inference_lock(model_type)
             batch_size = self.perf_config.batch_size
+            generate = self._generator(reusable_pipeline, model_lock, nllb_source, nllb_target)
             all_results: List[str] = []
 
             with create_inference_context():
                 for i in range(0, len(inputs), batch_size):
-                    chunk = inputs[i:i + batch_size]
                     # Greedy (num_beams=1), déterministe ; budget borné par la source (#9309)
-                    with model_lock:
-                        results = reusable_pipeline(
-                            chunk,
-                            src_lang=nllb_source,
-                            tgt_lang=nllb_target,
-                            max_length=256,
-                            num_beams=1,
-                            do_sample=False
-                        )
+                    all_results.extend(generate(inputs[i:i + batch_size]))
 
-                    # Agrégation HORS verrou : le modèle est libre pendant le formatage.
-                    for result in results:
-                        if isinstance(result, dict) and 'translation_text' in result:
-                            all_results.append(result['translation_text'])
-                        elif isinstance(result, list) and len(result) > 0 and 'translation_text' in result[0]:
-                            all_results.append(result[0]['translation_text'])
-                        else:
-                            raise TranslationInferenceError(f"Résultat batch NLLB inattendu: {shown(result)}")
-
-            if len(all_results) != len(inputs):
-                raise TranslationInferenceError(
-                    f"Le modèle a rendu {len(all_results)} traductions pour {len(inputs)} phrases"
+                if len(all_results) != len(inputs):
+                    raise TranslationInferenceError(
+                        f"Le modèle a rendu {len(all_results)} traductions pour {len(inputs)} phrases"
+                    )
+                # Seules les phrases signalées sont relancées, une à une (#18716)
+                all_results = self._vetted(
+                    inputs, all_results, generate, source_lang, target_lang, model_type
                 )
 
             if self.perf_config.enable_memory_cleanup and len(inputs) > 20:
@@ -650,6 +637,115 @@ class TranslatorEngine:
             logger.error(f"[BATCH-SYNC] ❌ Erreur batch pipeline {model_type}: {shown(str(e))}")
             failure = caused_by(TranslationInferenceError(f"Erreur batch pipeline {model_type}: {shown(str(e))}"), e)
         raise failure
+
+    def _generator(self, pipeline, model_lock, nllb_source: str, nllb_target: str) -> Callable[..., List[str]]:
+        """Un appel au modèle sous son verrou ; `profile` remplace le glouton par défaut.
+
+        Le verrou est pris et rendu PAR appel : l'agrégation se fait hors verrou."""
+
+        def generate(chunk, **profile) -> List[str]:
+            params = {"max_length": 256, "num_beams": 1, "do_sample": False, **profile}
+            with model_lock:
+                result = pipeline(chunk, src_lang=nllb_source, tgt_lang=nllb_target, **params)
+            results = [result] if isinstance(chunk, str) else result
+            return [self._translation_text(item) for item in results]
+
+        return generate
+
+    @staticmethod
+    def _translation_text(result) -> str:
+        if isinstance(result, dict) and 'translation_text' in result:
+            return result['translation_text']
+        if isinstance(result, list) and result and isinstance(result[0], dict) and 'translation_text' in result[0]:
+            return result[0]['translation_text']
+        logger.error(f"[NLLB] Résultat inattendu: {shown(result)}")
+        raise TranslationInferenceError(f"Résultat NLLB inattendu: {shown(result)}")
+
+    def _vetted(
+        self,
+        inputs: List[str],
+        outputs: List[str],
+        generate: Callable[..., List[str]],
+        source_lang: str,
+        target_lang: str,
+        model_type: str,
+    ) -> List[str]:
+        return [
+            self._settled(source, output, generate, source_lang, target_lang, model_type)
+            for source, output in zip(inputs, outputs)
+        ]
+
+    def _settled(
+        self,
+        source: str,
+        output: str,
+        generate: Callable[..., List[str]],
+        source_lang: str,
+        target_lang: str,
+        model_type: str,
+    ) -> str:
+        """La sortie servie pour une phrase : la gloutonne si elle est saine, sinon la
+        première saine de l'échelle ; à défaut, un rejet tracé (#18716).
+
+        L'échelle s'arrête dès qu'un profil plus strict reproduit une sortie déjà
+        rejetée : le modèle n'a rien d'autre à proposer pour cette phrase."""
+        verdict = assess_translation(source, output, target_lang)
+        if verdict.acceptable:
+            return output
+        pair = f"{source_lang}→{target_lang}"
+        key = self._rejection_key(source, source_lang, target_lang, model_type)
+        if self._already_rejected(key):
+            self._reject(pair, model_type, list(verdict.reasons), attempts=0)
+        reasons = list(verdict.reasons)
+        seen = {output.strip()}
+        attempts = 0
+        for profile in ESCALATION_PROFILES:
+            attempts += 1
+            candidate = generate(source, **profile)[0]
+            candidate_verdict = assess_translation(source, candidate, target_lang)
+            if candidate_verdict.acceptable:
+                logger.info(
+                    f"[TRANSLATOR] Traduction relevée (#18716) {pair} [{model_type}] : "
+                    f"motifs {','.join(reasons)} corrigés au profil {attempts}/{len(ESCALATION_PROFILES)}"
+                )
+                return candidate
+            reasons += [reason for reason in candidate_verdict.reasons if reason not in reasons]
+            if candidate.strip() in seen:
+                break
+            seen.add(candidate.strip())
+        self._remember_rejection(key)
+        self._reject(pair, model_type, reasons, attempts)
+
+    @staticmethod
+    def _rejection_key(source: str, source_lang: str, target_lang: str, model_type: str) -> str:
+        material = "\0".join((model_type, source_lang, target_lang, source))
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+    def _already_rejected(self, key: str) -> bool:
+        with self._rejected_lock:
+            if key not in self._rejected:
+                return False
+            self._rejected.move_to_end(key)
+            return True
+
+    def _remember_rejection(self, key: str) -> None:
+        with self._rejected_lock:
+            self._rejected[key] = None
+            self._rejected.move_to_end(key)
+            while len(self._rejected) > REJECTION_MEMO_SIZE:
+                self._rejected.popitem(last=False)
+
+    @staticmethod
+    def _reject(pair: str, model_type: str, reasons: List[str], attempts: int) -> None:
+        motive = ",".join(reasons)
+        origin = f"après {attempts} relance(s)" if attempts else "déjà rejetée, sans relance"
+        logger.warning(
+            f"[TRANSLATOR] Traduction annulée (#18716) {pair} [{model_type}] : "
+            f"motifs {motive}, {origin} — l'original est servi"
+        )
+        raise TranslationRejectedError(
+            f"Traduction {pair} annulée : sortie hallucinée ({motive}), {origin}"
+        )
 
     def cleanup(self):
         """Libère les ressources du moteur"""

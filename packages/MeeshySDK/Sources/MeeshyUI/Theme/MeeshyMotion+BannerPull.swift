@@ -17,4 +17,8 @@ public extension MeeshyMotion {
     /// Le temps que la carte met à atteindre le plein écran : au-delà,
     /// l'enveloppe peinte par la racine s'efface devant la conversation.
     nonisolated static var bannerMorphSettle: Duration { .milliseconds(420) }
+
+    /// La durée du fondu de l'enveloppe (`MeeshyAnimation.bannerMorphFade`) :
+    /// au-delà, elle quitte la hiérarchie.
+    nonisolated static var bannerMorphFadeOut: Duration { .milliseconds(240) }
 }

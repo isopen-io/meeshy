@@ -4,6 +4,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 
 import type { SocketClient } from '../net/socket';
 import { COMMUNITIES_QUERY_PREFIX, communityQueryKey, decodeCommunity, type CommunityPage, type CommunitySummary } from './communities';
+import { applyCommunityMemberEvent, COMMUNITY_MEMBER_EVENTS } from './community-member-live';
 
 /**
  * **L'IDENTITÉ D'UNE COMMUNAUTÉ SUIT SES RÉGLAGES** (#18435) —
@@ -65,10 +66,27 @@ export function applyCommunityUpdatedEvent(queryClient: QueryClient, payload: un
     });
 }
 
-/** Branche l'événement sur les caches des communautés ; rend le débranchement. */
-export function bindCommunityLive(params: { readonly socket: SocketClient; readonly queryClient: QueryClient }): () => void {
+/**
+ * Branche l'identité (`community:updated`) et l'effectif (`community:member-*`,
+ * #18766) sur les caches des communautés ; rend le débranchement. `viewerId`
+ * dit qui lit : un événement qui le concerne change son rôle.
+ */
+export function bindCommunityLive(params: {
+  readonly socket: SocketClient;
+  readonly queryClient: QueryClient;
+  readonly viewerId?: () => string;
+}): () => void {
   const { socket, queryClient } = params;
+  const viewerId = params.viewerId ?? (() => '');
   const onUpdated = (payload: unknown): void => applyCommunityUpdatedEvent(queryClient, payload);
+  const onMember = COMMUNITY_MEMBER_EVENTS.map((event) => {
+    const handler = (payload: unknown): void => applyCommunityMemberEvent(queryClient, event, payload, viewerId());
+    socket.on(event, handler);
+    return { event, handler };
+  });
   socket.on(SERVER_EVENTS.COMMUNITY_UPDATED, onUpdated);
-  return () => socket.off(SERVER_EVENTS.COMMUNITY_UPDATED, onUpdated);
+  return () => {
+    socket.off(SERVER_EVENTS.COMMUNITY_UPDATED, onUpdated);
+    onMember.forEach(({ event, handler }) => socket.off(event, handler));
+  };
 }

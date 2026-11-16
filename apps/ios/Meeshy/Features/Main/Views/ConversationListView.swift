@@ -163,12 +163,12 @@ struct ConversationListView: View {
     /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
     /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
     @State var contextMenuDismissSettle = Debouncer()
-    /// Scale de la carte d'aperçu de l'overlay pendant son émergence depuis la
-    /// ligne pressée (1.0 = posée). Tirer vers le haut ne la replie plus : le
-    /// geste agrandit le menu (`ConversationLongPressPeek`, #17242).
-    /// Muté uniquement quand l'overlay est ouvert ; les lignes ne le reçoivent
-    /// plus (gate Equatable intact pendant le geste).
-    @State var previewScale: CGFloat = 1.0
+    /// Progression du morphisme de la carte d'aperçu depuis la ligne pressée
+    /// (#18722) : 0 = le cadre de la rangée, 1 = la carte posée. LA valeur
+    /// animée qui pilote cadre, rayon, faces et seuil du menu
+    /// (`ConversationPreviewMorph`). Mutée uniquement quand l'overlay est
+    /// ouvert ; les lignes ne la reçoivent pas (gate Equatable intact).
+    @State var previewMorphProgress: CGFloat = 1
     /// Offset de la carte d'aperçu pendant le drag vers le bas — suit le doigt
     /// 1:1 et pilote le morph drag-n-drop (`dragMorphProgress`, +Overlays).
     /// > 110 pt au lâcher = fermeture du menu.
@@ -177,17 +177,9 @@ struct ConversationListView: View {
     /// le doigt latéralement une fois le mode drag engagé).
     @State var dragOffsetX: CGFloat = 0
     /// Frame GLOBALE de la ligne pressée au déclenchement du long-press —
-    /// point de départ de l'émergence de l'aperçu. nil = inconnu (rotor
-    /// accessibilité) → fallback zoom centré 0.7 → 1.0.
+    /// cadre d'où la carte d'aperçu naît (`ConversationPreviewMorph`). nil =
+    /// inconnu (rotor accessibilité) → la carte apparaît en fondu à sa place.
     @State var contextMenuSourceFrame: CGRect? = nil
-    /// Frame de REPOS de la carte d'aperçu (mesurée hors transformation,
-    /// overlay invisible) — sert à calculer le placement initial de
-    /// l'émergence depuis la ligne. Voir `runContextMenuEmergence` (+Overlays).
-    @State var previewRestFrame: CGRect = .zero
-    /// Offset y d'émergence : la carte part de la position de la ligne
-    /// (placement invisible) puis rejoint sa position finale — départ lent,
-    /// accélération, léger rebond (timingCurve overshoot).
-    @State var previewEmergeOffset: CGFloat = 0
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
@@ -223,6 +215,8 @@ struct ConversationListView: View {
     /// RESTE une chip qui suit librement le doigt (y compris vers le haut,
     /// pour viser un header au-dessus) jusqu'au relâchement — drop ou dismiss.
     @State var chipModeLatched = false
+    /// Le point GLOBAL où le doigt a saisi la carte : la ligne s'y resserre (#18724).
+    @State var chipGrabPoint: CGPoint? = nil
     /// Auto-scroll de bord pendant le drag de la chip (Phase 3) : stationner
     /// près du haut/bas du viewport fait défiler la liste pour atteindre les
     /// headers de section hors écran. Armé au verrouillage de la chip
@@ -426,18 +420,16 @@ struct ConversationListView: View {
             enableAutoPreviewLoad: passContext.autoPreviewIds.contains(conversation.id),
             onLongPress: { sourceFrame in
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id, refresh: true) }
-                // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
-                // le GeometryReader de l'overlay mesure la frame de repos de
-                // la carte, puis `runContextMenuEmergence` place la carte sur
-                // la ligne pressée (toujours invisible) et anime l'émergence.
+                // Montage au REPOS invisible (progression 1, opacité 0), puis
+                // `runContextMenuEmergence` pose la carte SUR la ligne pressée
+                // et l'étend jusqu'à sa place.
                 // Annule une purge de fermeture encore en vol, sinon elle
                 // effacerait ce menu fraîchement ouvert (~0.26 s plus tard).
                 contextMenuDismissSettle.cancel()
                 let wasMounted = sheetTargets.contextMenu != nil
                 contextMenuAppeared = false
                 contextMenuSourceFrame = sourceFrame.height > 0 ? sourceFrame : nil
-                previewScale = 1.0
-                previewEmergeOffset = 0
+                previewMorphProgress = 1
                 dragOffsetY = 0
                 dragOffsetX = 0
                 chipModeLatched = false
