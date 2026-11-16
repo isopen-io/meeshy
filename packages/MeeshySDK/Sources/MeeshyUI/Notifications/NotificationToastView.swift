@@ -345,20 +345,21 @@ public nonisolated enum NotificationBannerSwipe: Equatable, Sendable {
 
 // MARK: - La bannière qui devient la feuille de la conversation (#18721)
 
-/// L'enveloppe que la racine peint pendant le morphisme : la carte du tiroir
-/// relâché grandit jusqu'au cadre de la feuille de la conversation, ses coins
-/// passent au rayon de la feuille, le message s'efface pendant que l'en-tête
-/// de la feuille (poignée, avatar, nom) se compose, et l'écran derrière
-/// s'assombrit jusqu'au voile de la feuille. La feuille réelle se pose
-/// ensuite à la même place, sans animation : l'œil ne voit qu'une carte qui
-/// devient feuille.
+/// L'enveloppe peinte pendant le morphisme : la carte du tiroir relâché
+/// grandit jusqu'au cadre de la feuille de la conversation, ses coins passent
+/// au rayon de la feuille, le message s'efface, la poignée et les derniers
+/// messages servis (`messages`, fournis par l'app depuis son cache) se
+/// composent, et l'écran derrière s'assombrit jusqu'au voile de la feuille.
+/// L'identité (avatar, nom) ne se dédouble jamais : c'est la même rangée du
+/// début à la fin. L'enveloppe reste posée au-dessus de la feuille réelle
+/// jusqu'à ce que celle-ci ait peint (`NotificationBannerHandoff`).
 ///
 /// `Animatable` : SwiftUI interpole la SEULE `progress` image par image et
 /// chaque valeur peinte (cadre, rayon, faces, voile) en dérive
 /// (`NotificationBannerMorph`). Une animation posée sur un cadre calculé hors
 /// de la vue ne s'interpolait pas : la recette de #18721 montrait une
 /// enveloppe figée à sa taille de départ.
-public struct BannerToConversationMorph: View, Animatable {
+public struct BannerToConversationMorph<Messages: View>: View, Animatable {
     let event: SocketNotificationEvent
     let headline: String
     let message: String?
@@ -370,6 +371,9 @@ public struct BannerToConversationMorph: View, Animatable {
     let targetCornerRadius: CGFloat
     /// Le fond de la feuille.
     let surface: Color
+    /// La feuille réelle est à l'écran : son voile remplace celui de l'enveloppe.
+    let sheetShown: Bool
+    let messages: Messages
     var progress: CGFloat
 
     public var animatableData: CGFloat {
@@ -384,7 +388,9 @@ public struct BannerToConversationMorph: View, Animatable {
 
     public init(
         event: SocketNotificationEvent, headline: String, message: String?,
-        origin: CGRect, target: CGRect, targetCornerRadius: CGFloat, surface: Color, progress: CGFloat
+        origin: CGRect, target: CGRect, targetCornerRadius: CGFloat, surface: Color,
+        sheetShown: Bool = false, progress: CGFloat,
+        @ViewBuilder messages: () -> Messages
     ) {
         self.event = event
         self.headline = headline
@@ -393,7 +399,9 @@ public struct BannerToConversationMorph: View, Animatable {
         self.target = target
         self.targetCornerRadius = targetCornerRadius
         self.surface = surface
+        self.sheetShown = sheetShown
         self.progress = progress
+        self.messages = messages()
     }
 
     public var body: some View {
@@ -407,13 +415,18 @@ public struct BannerToConversationMorph: View, Animatable {
                     progress: progress, from: NotificationToastView.cornerRadius, to: targetCornerRadius),
                 style: .continuous
             )
+            let composed = NotificationBannerMorph.conversationOpacity(progress: progress)
             ZStack(alignment: .topLeading) {
-                Color.black.opacity(NotificationBannerMorph.scrimOpacity(progress: progress))
+                Color.black.opacity(NotificationBannerMorph.scrimOpacity(progress: progress, sheetShown: sheetShown))
                 ZStack(alignment: .top) {
-                    bannerFace
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    sheetHeader
-                        .opacity(NotificationBannerMorph.conversationOpacity(progress: progress))
+                    VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                        identity
+                        messages
+                            .frame(width: end.width, alignment: .topLeading)
+                            .opacity(composed)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    grabber.opacity(composed)
                 }
                 .frame(width: frame.width, height: frame.height, alignment: .top)
                 .background(shape.fill(surface))
@@ -437,8 +450,9 @@ public struct BannerToConversationMorph: View, Animatable {
         )
     }
 
-    /// La face de la carte : l'identité reste, le message s'efface.
-    private var bannerFace: some View {
+    /// L'identité de la carte, UNE fois du début à la fin : elle descend sous
+    /// la poignée pendant que le message s'efface.
+    private var identity: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
             avatar
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -456,21 +470,28 @@ public struct BannerToConversationMorph: View, Animatable {
             }
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.top, MeeshySpacing.md)
-        .opacity(1 - NotificationBannerMorph.conversationOpacity(progress: progress))
+        .padding(.top, MeeshySpacing.md + MeeshySpacing.md * min(1, max(0, progress)))
     }
 
-    /// La face de la feuille : sa poignée, puis l'en-tête de la conversation.
-    private var sheetHeader: some View {
-        VStack(spacing: MeeshySpacing.sm) {
-            Capsule()
-                .fill(theme.textMuted.opacity(MeeshyOpacity.strong))
-                .frame(width: 36, height: 5)
-                .padding(.top, MeeshySpacing.xs)
-            Text(headline)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-                .lineLimit(1)
-        }
+    /// La poignée de la feuille.
+    private var grabber: some View {
+        Capsule()
+            .fill(theme.textMuted.opacity(MeeshyOpacity.strong))
+            .frame(width: 36, height: 5)
+            .padding(.top, MeeshySpacing.xs)
+    }
+}
+
+public extension BannerToConversationMorph where Messages == EmptyView {
+    /// Sans messages en cache à montrer : la poignée et l'identité seules.
+    init(
+        event: SocketNotificationEvent, headline: String, message: String?,
+        origin: CGRect, target: CGRect, targetCornerRadius: CGFloat, surface: Color,
+        sheetShown: Bool = false, progress: CGFloat
+    ) {
+        self.init(
+            event: event, headline: headline, message: message, origin: origin, target: target,
+            targetCornerRadius: targetCornerRadius, surface: surface, sheetShown: sheetShown, progress: progress
+        ) { EmptyView() }
     }
 }

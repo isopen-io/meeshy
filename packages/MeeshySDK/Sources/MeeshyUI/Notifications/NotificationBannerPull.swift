@@ -174,9 +174,28 @@ public nonisolated enum NotificationBannerMorph {
         sheetDim * Double(clamped(progress))
     }
 
+    /// Le voile de l'enveloppe cède dès que la feuille réelle pose le sien :
+    /// l'écran ne s'assombrit jamais deux fois.
+    public static func scrimOpacity(progress: CGFloat, sheetShown: Bool) -> Double {
+        sheetShown ? 0 : scrimOpacity(progress: progress)
+    }
+
     private static func clamped(_ progress: CGFloat) -> CGFloat { min(1, max(0, progress)) }
 
     private static func interpolate(_ from: CGFloat, _ to: CGFloat, _ progress: CGFloat) -> CGFloat {
         from + (to - from) * progress
+    }
+}
+
+// MARK: - Le relais de l'enveloppe à la feuille
+
+/// L'enveloppe tient la place de la feuille tant que celle-ci n'a pas PEINT
+/// ses messages — jamais un écran vide entre les deux —, mais pas au-delà du
+/// plafond : une feuille qui ne peint pas (réseau froid, verrou) la libère.
+public nonisolated enum NotificationBannerHandoff {
+    public static let ceiling: TimeInterval = 2.5
+
+    public static func releasesEnvelope(morphSettled: Bool, sheetPainted: Bool, waited: TimeInterval) -> Bool {
+        morphSettled && (sheetPainted || waited >= ceiling)
     }
 }
