@@ -204,7 +204,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             }
             return
         }
-        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) || BatteryCenter.handledPullWake(userInfo, completionHandler: completionHandler) { return }
+        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) || BatteryCenter.handledPullWake(userInfo, completionHandler: completionHandler) || PhoneReachabilityCenter.handledProbeWake(userInfo, completionHandler: completionHandler) { return }
         // Multi-device : un autre appareil du compte a décroché — pendant
         // socketless de `call:already-answered` (voir sendCallCancellationPushes
         // côté gateway pour le rationale réseau). Le device qui a décroché
@@ -738,7 +738,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
-        if BatteryCenter.routesForegroundPush(notification.request.content) || routeBringPush(userInfo) { return completionHandler([]) }
+        if BatteryCenter.routesForegroundPush(notification.request.content) || PhoneReachabilityCenter.routesForegroundPush(notification.request.content) || routeBringPush(userInfo) { return completionHandler([]) }
         if routeTalkieWake(userInfo) { return completionHandler([]) }
         let convId = userInfo["conversationId"] as? String
         let messageId = userInfo["messageId"] as? String

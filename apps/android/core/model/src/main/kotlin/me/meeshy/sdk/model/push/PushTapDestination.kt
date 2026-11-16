@@ -67,6 +67,8 @@ public sealed interface PushTapDestination {
         private val RELATION_TYPES = setOf(
             "friend_request", "contact_request", "friend_accepted", "contact_accepted", "status_update",
             "contact_joined", "contact_recently_active",
+            // #18737 : le téléphone injoignable d'un Proche ouvre le profil de l'émetteur.
+            "device_unreachable",
         )
 
         private val ACCOUNT_TYPES = setOf(

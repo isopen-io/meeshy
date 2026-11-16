@@ -115,8 +115,9 @@ extension NotificationToastManager {
         // l'écran. Cf. le doc-comment de `allowsInAppBanner(type:)`.
         let prefs = UserPreferencesManager.shared.notification
         // La batterie d'un proche ne se dit jamais en carte : app ouverte, c'est la SyncPill qui
-        // l'annonce (`battery:changed`, #14147) — une carte en plus la dirait deux fois.
-        if event.notificationType != .deviceBattery, prefs.allowsInAppBanner(type: event.notificationType) {
+        // l'annonce (`battery:changed`, #14147) — une carte en plus la dirait deux fois. Même règle pour le
+        // téléphone injoignable (`phone:unreachable`, #18737).
+        if ![MeeshyNotificationType.deviceBattery, .deviceUnreachable].contains(event.notificationType), prefs.allowsInAppBanner(type: event.notificationType) {
             showToast(event)
         }
     }

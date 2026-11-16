@@ -20,6 +20,7 @@ const ar = {
   'battery.a11y.charging': 'البطارية عند {level}٪، قيد الشحن',
   'battery.a11y.off': 'الهاتف مطفأ على الأرجح',
   'battery.detail.title': 'البطارية',
+  'battery.me.title': 'هاتفي',
   'battery.phase.low': 'البطارية ضعيفة',
   'battery.phase.critical': 'البطارية حرجة',
   'battery.phase.off': 'الهاتف مطفأ على الأرجح',

@@ -45,11 +45,17 @@ export const deleteAccountConfirm = '/api/v1/me/delete-account/confirm';
 /** GET /api/v1/me/delete-account/delete-now */
 export const deleteAccountDeleteNow = '/api/v1/me/delete-account/delete-now';
 
+/** POST /api/v1/me/device/alive */
+export const deviceAlive = '/api/v1/me/device/alive';
+
 /** POST /api/v1/me/device/battery */
 export const deviceBattery = '/api/v1/me/device/battery';
 
 /** GET · PUT /api/v1/me/device/battery/settings */
 export const deviceBatterySettings = '/api/v1/me/device/battery/settings';
+
+/** GET · PUT /api/v1/me/device/reachability/settings */
+export const deviceReachabilitySettings = '/api/v1/me/device/reachability/settings';
 
 /** GET /api/v1/me/engagement */
 export const engagement = '/api/v1/me/engagement';

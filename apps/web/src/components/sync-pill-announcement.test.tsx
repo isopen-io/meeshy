@@ -55,6 +55,16 @@ describe('le défilement', () => {
     expect(host.querySelector('[data-probe="none"]')).not.toBeNull();
   });
 
+  test('le téléphone injoignable d’un proche se dit avec un téléphone barré, son retour avec un téléphone entier (#18737)', async () => {
+    const store = createPillAnnouncementStore();
+    store.getState().announce(said({ key: 'phone:ada', text: 'Ada a un téléphone injoignable depuis 14:10', icon: { kind: 'phone', reachable: false } }));
+    const host = await mount(<Probe store={store} suppressed={false} />);
+    expect(host.querySelector('[data-phone-glyph="unreachable"]')).not.toBeNull();
+    expect(host.querySelector('[data-battery-glyph]')).toBeNull();
+    await act(async () => store.getState().announce(said({ id: 'a2', key: 'phone:ada', text: 'Ada est de nouveau joignable', tone: 'good', icon: { kind: 'phone', reachable: true } })));
+    expect(host.querySelector('[data-phone-glyph="reachable"]')).not.toBeNull();
+  });
+
   test('retenue tant que la pastille dit plus urgent', async () => {
     const store = createPillAnnouncementStore();
     store.getState().announce(said());

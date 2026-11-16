@@ -568,6 +568,10 @@ const PENDING_CLIENT_ENTRIES = {
   'me.locationConsultations': { issue: 13937, reason: 'GET /me/location/consultations — qui a consulté ma position' },
   'me.locationBloodSettings': { issue: 13937, reason: 'PUT /me/location/blood-settings — fantôme et rayon de proximité' },
   'relations.byUserIdLocationHistory': { issue: 13937, reason: 'GET /relations/:userId/location/history — l’historique d’un Sang' },
+  // Le téléphone injoignable (#18737) : le signe de vie ne vient que d'un TÉLÉPHONE (iOS, Android répondent à la
+  // sonde silencieuse — le web n'en est pas un), et le web lit l'état d'une personne par le rattrapage et le direct.
+  'me.deviceAlive': { issue: 18737, reason: 'POST /me/device/alive — la réponse du téléphone à la sonde silencieuse, appelée par iOS et Android seulement' },
+  'relations.byUserIdPhoneReachability': { issue: 18737, reason: 'GET /relations/:userId/phone-reachability — l’état d’une personne, lu par iOS et Android ; le web suit le rattrapage et `phone:*`' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

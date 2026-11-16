@@ -20,7 +20,8 @@ import type { NotificationRecord } from './record';
  *   entrant ou terminé : la couche d'appel le présente elle-même ;
  * - une nouvelle bannière REMPLACE la précédente, sans file d'attente ;
  * - la batterie d'un Proche (`device_battery`, #14147) ne descend JAMAIS en bannière : onglet ouvert, la
- *   pastille de synchronisation la dit À LA PLACE du push — une seule voix pour un même palier.
+ *   pastille de synchronisation la dit À LA PLACE du push — une seule voix pour un même palier ; le téléphone
+ *   injoignable d'un Proche (`device_unreachable`, #18737) suit le même régime.
  */
 
 const CALL_LAYER_TYPES = new Set(['incoming_call', 'incoming_call_alert', 'call', 'CALL_INCOMING', 'call_ended']);
@@ -62,9 +63,29 @@ export function handBatteryAnnouncer(announcer: BatteryAnnouncer): () => void {
   };
 }
 
+/**
+ * Le type du téléphone injoignable d'un Proche (`PHONE_REACHABILITY_NOTIFICATION_TYPE`, #18737), même régime que
+ * la batterie : écrit en LITTÉRAL, tenu égal au contrat par un témoin, jamais en bannière — la pastille le dit à sa
+ * place, par l'annonceur que son hôte confie (`handPhoneReachabilityAnnouncer`).
+ */
+export const IN_APP_PHONE_REACHABILITY_TYPE = 'device_unreachable';
+
+let phoneReachabilityAnnouncer: BatteryAnnouncer | null = null;
+
+export function handPhoneReachabilityAnnouncer(announcer: BatteryAnnouncer): () => void {
+  phoneReachabilityAnnouncer = announcer;
+  return () => {
+    if (phoneReachabilityAnnouncer === announcer) phoneReachabilityAnnouncer = null;
+  };
+}
+
 export function offerInAppBanner(notification: NotificationRecord, location: { readonly pathname: string }): void {
   if (notification.type === IN_APP_BATTERY_TYPE) {
     batteryAnnouncer?.(notification);
+    return;
+  }
+  if (notification.type === IN_APP_PHONE_REACHABILITY_TYPE) {
+    phoneReachabilityAnnouncer?.(notification);
     return;
   }
   if (!shouldShowBanner(notification, location)) return;

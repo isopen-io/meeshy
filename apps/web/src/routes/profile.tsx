@@ -96,8 +96,8 @@ import { ProfilePostsPanel } from '@/routes/user-profile-posts';
 
 const actionDeps = appProfileActionDeps;
 
-/* MON PARTAGE DE BATTERIE (#14147) : son propre chunk — la coupure pour tous, et ce que ce navigateur ne fait pas. */
-const MeBatterySection = lazy(() => import('@/components/battery-panel').then((m) => ({ default: m.MeBatterySection })));
+/* MON PARTAGE DE BATTERIE (#14147) ET MON TÉLÉPHONE INJOIGNABLE (#18737) : un seul chunk — les deux coupures pour tous, et ce que ce navigateur ne fait pas. */
+const MeDeviceSections = lazy(() => import('@/components/me-device-sections').then((m) => ({ default: m.MeDeviceSections })));
 
 const FIELD_LABELS = {
   displayName: 'profile.display_name',
@@ -385,7 +385,7 @@ export default function ProfileScreen() {
                   />
                 )}
                 <Suspense fallback={null}>
-                  <MeBatterySection language={language} />
+                  <MeDeviceSections language={language} />
                 </Suspense>
                 {profile === undefined ? null : <MemberSinceSection language={language} createdAt={profile.createdAt} />}
               </>

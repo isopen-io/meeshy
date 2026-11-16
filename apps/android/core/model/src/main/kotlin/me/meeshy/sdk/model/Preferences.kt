@@ -271,6 +271,8 @@ data class UserNotificationPreferences(
     val gameEnabled: Boolean = true,
     // #14147 — « La batterie de mes Proches et de mes Sangs » (`device_battery`).
     val deviceBatteryEnabled: Boolean = true,
+    // #18737 — « Téléphone injoignable de mes Proches » (`device_unreachable`).
+    val deviceUnreachableEnabled: Boolean = true,
     val dndEnabled: Boolean = false,
     val dndStartTime: String = "22:00",
     val dndEndTime: String = "08:00",

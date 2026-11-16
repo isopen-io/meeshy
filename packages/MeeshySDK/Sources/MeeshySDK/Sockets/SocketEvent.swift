@@ -167,6 +167,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case nowPlayingUpdate = "now-playing:update"
     case participantRightsUpdated = "participant:rights-updated"
     case participantRoleUpdated = "participant:role-updated"
+    case phoneReachable = "phone:reachable"
+    case phoneUnreachable = "phone:unreachable"
     case postBookmarked = "post:bookmarked"
     case postCreated = "post:created"
     case postDeleted = "post:deleted"

@@ -1,6 +1,6 @@
 import { BATTERY_RECEIVE_MODES, type BatteryReceiveMode } from '@meeshy/shared/types/battery-constants';
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { memo, useEffect, useId, useState } from 'react';
+import { memo, useEffect, useId, useState, type ReactNode } from 'react';
 
 import {
   BATTERY_EMITTER_SETTINGS_QUERY_KEY,
@@ -374,15 +374,19 @@ export function ProfileBatteryRow({
   );
 }
 
-/** Mon partage GLOBAL (`/me`) : la coupure pour tous, et ce que ce navigateur ne fait pas. */
-export function MeBatterySection({ language, deps = apiDeps, client = appQueryClient }: { readonly language: InterfaceLanguage } & PanelDeps) {
+/**
+ * « MON TÉLÉPHONE » (`/me`) : la coupure globale de la batterie, ce que ce navigateur ne fait pas, et
+ * — par `children` — les autres partages du téléphone (l'injoignabilité, #18737), dans la MÊME carte :
+ * une section de plus porterait son titre et sa question, et `/me` dépasserait son budget de verbosité.
+ */
+export function MeBatterySection({ language, deps = apiDeps, client = appQueryClient, children }: { readonly language: InterfaceLanguage; readonly children?: ReactNode } & PanelDeps) {
   const ready = useBatteryCatalog(language);
   const { settings, problem, save } = useEmitterSettings(deps, client);
   if (!ready) return null;
   return (
     <GroupedSection
       id="me-battery"
-      title={translateBattery(language, 'battery.detail.title')}
+      title={translateBattery(language, 'battery.me.title')}
       icon={<BatteryGlyph level={60} tone="low" charging={false} width={18} ink="currentColor" />}
       note={{
         label: translateBattery(language, 'battery.global.question'),
@@ -399,6 +403,7 @@ export function MeBatterySection({ language, deps = apiDeps, client = appQueryCl
         />
       )}
       <SettingsProblem language={language} problem={problem} />
+      {children}
     </GroupedSection>
   );
 }

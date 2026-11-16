@@ -31,6 +31,7 @@ export function isNotificationTypeEnabledByPreference(
     case 'relation_acquaintance': return prefs.contactRequestEnabled;
     case 'contact_recently_active': return prefs.contactActivityEnabled ?? true;
     case 'device_battery':    return prefs.deviceBatteryEnabled ?? true;
+    case 'device_unreachable': return prefs.deviceUnreachableEnabled ?? true;
     case 'game_duo_invited':
     case 'game_duo_accepted':
     case 'game_league_result':

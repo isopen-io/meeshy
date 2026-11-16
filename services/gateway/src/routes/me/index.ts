@@ -17,6 +17,7 @@ import { securityEventsRoutes } from './security-events';
 import profileDecorRoutes from './profile-decor';
 import bloodLocationMeRoutes from './blood-location';
 import deviceBatteryMeRoutes from './device-battery';
+import deviceReachabilityMeRoutes from './device-reachability';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { handleGetMe, meRouteSharedOptions } from './get-me';
 
@@ -32,6 +33,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
   await fastify.register(bloodLocationMeRoutes);
   // #14147 : le relevé de batterie (REST, même porte que la socket) et la coupure globale.
   await fastify.register(deviceBatteryMeRoutes);
+  // #18737 : le signe de vie du téléphone sondé et la coupure globale de son injoignabilité.
+  await fastify.register(deviceReachabilityMeRoutes);
 
   // Future routes can be added here:
   // await fastify.register(profileRoutes);

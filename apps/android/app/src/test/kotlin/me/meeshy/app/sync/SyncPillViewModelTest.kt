@@ -58,6 +58,10 @@ class SyncPillViewModelTest {
         val battery = object : SyncPillBatterySource {
             override val announcements: Flow<SyncPillBatteryItem> = batteryItems
         }
+        val phoneItems = MutableSharedFlow<SyncPillPhoneReachabilityItem>(extraBufferCapacity = 8)
+        val phone = object : SyncPillPhoneReachabilitySource {
+            override val announcements: Flow<SyncPillPhoneReachabilityItem> = phoneItems
+        }
     }
 
     @Before
@@ -68,7 +72,7 @@ class SyncPillViewModelTest {
 
     private fun TestScope.viewModel(f: Fakes): SyncPillViewModel {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val vm = SyncPillViewModel(f.store, f.queue, f.typing, f.battery) { testScheduler.currentTime }
+        val vm = SyncPillViewModel(f.store, f.queue, f.typing, f.battery, f.phone) { testScheduler.currentTime }
         backgroundScope.launch { vm.uiState.collect { } }
         runCurrent()
         return vm
@@ -93,6 +97,41 @@ class SyncPillViewModelTest {
         f.batteryItems.emit(item)
         runCurrent()
         assertThat(vm.uiState.value.rows).isEmpty()
+    }
+
+    @Test
+    fun `une annonce de telephone injoignable defile, disparait et ne revient que sur un nouvel evenement`() = runTest {
+        val f = Fakes()
+        val vm = viewModel(f)
+        val unreachable = SyncPillPhoneReachabilityItem("phone:u2:unreachable:1", "u2", "Le téléphone de Ada est injoignable depuis 14:10")
+        f.phoneItems.emit(unreachable)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly(unreachable.label)
+        assertThat(vm.uiState.value.rows.single().glyph).isEqualTo(me.meeshy.sdk.model.syncpill.SyncPillGlyph.PHONE_UNREACHABLE)
+
+        advanceTimeBy(6_001)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
+
+        f.phoneItems.emit(unreachable)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
+
+        val reachable = SyncPillPhoneReachabilityItem("phone:u2:reachable:2", "u2", "Le téléphone de Ada répond de nouveau")
+        f.phoneItems.emit(reachable)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly(reachable.label)
+    }
+
+    @Test
+    fun `batterie et telephone injoignable defilent ensemble`() = runTest {
+        val f = Fakes()
+        val vm = viewModel(f)
+        f.batteryItems.emit(SyncPillBatteryItem("battery:u2:critical:1", "u2", "Alice · 5 %"))
+        f.phoneItems.emit(SyncPillPhoneReachabilityItem("phone:u3:unreachable:1", "u3", "Le téléphone de Bob est injoignable depuis 9:00"))
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel })
+            .containsExactly("Alice · 5 %", "Le téléphone de Bob est injoignable depuis 9:00").inOrder()
     }
 
     @Test

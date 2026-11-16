@@ -198,6 +198,10 @@ model User {
   /// Non nul = le compte a coupé le partage de sa BATTERIE pour tous depuis cette date (#14147) :
   /// aucun Proche ni Sang ne la reçoit, quels que soient les accords par personne. Optionnel, sans migration.
   batterySharingDisabledAt  DateTime?
+  /// Non nul = le compte a coupé le partage de l'INJOIGNABILITÉ de son téléphone pour tous depuis cette
+  /// date (#18737, le fantôme de TEL-01) : aucun Proche ni Sang ne la reçoit, et le téléphone n'est plus
+  /// sondé. Optionnel, sans migration.
+  unreachableSharingDisabledAt DateTime?
   /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
   /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
   /// Signal continu (contrairement a registrationCountry, capture une seule
@@ -2249,6 +2253,12 @@ model RelationFeatureSetting {
   /// nul), `critical` (push du critique seulement), `pill` (la SyncPill, jamais de push) ou `none`
   /// (rien). Une valeur inconnue vaut le défaut. Optionnel, sans migration.
   batteryReceive             String?
+  /// Partage de l'INJOIGNABILITÉ du téléphone de `ownerId` à `otherId` (#18737), TRI-ÉTAT comme
+  /// `batteryShared` : nul = le défaut du niveau effectif (accordé entre Sangs et dans l'équipe, refusé
+  /// entre Proches), `true` = accordé, `false` = refusé. Optionnel, sans migration.
+  unreachableShared          Boolean?
+  /// Quand ce partage a été RETIRÉ (trace).
+  unreachableWithdrawnAt     DateTime?
   /// Non nul = `ownerId` est en FANTÔME CIBLÉ pour `otherId` depuis cette date (#13937) : l'autre ne
   /// reçoit ni historique ni alerte de proximité, et rien ne lui dit pourquoi. Ce n'est pas un
   /// consentement : une ligne née d'un fantôme laisse ses quatre partages faux.

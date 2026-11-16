@@ -103,6 +103,17 @@ final class ProfileCircleViewModel: ObservableObject {
         effectiveToolLevel == .close
     }
 
+    /// « Prévenir {name} si mon téléphone est injoignable » (#18737) : dès Proche (`device.unreachable`). La passerelle
+    /// rejuge à chaque lecture.
+    var offersPhoneReachability: Bool {
+        effectiveToolLevel >= RelationFeature.deviceUnreachable.minimumLevel
+    }
+
+    /// Entre Sangs, le partage est actif d'office ; à Proche, il se consent une fois — comme la batterie.
+    var phoneReachabilityAsksConsent: Bool {
+        effectiveToolLevel == .close
+    }
+
     private var effectiveToolLevel: RelationLevel {
         max(shownLevel ?? .public, toolLevel ?? .public)
     }

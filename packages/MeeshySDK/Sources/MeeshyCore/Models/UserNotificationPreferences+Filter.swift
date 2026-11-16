@@ -141,6 +141,8 @@ public extension UserNotificationPreferences {
             return contactActivityEnabled
         case .deviceBattery:
             return receivesDeviceBattery
+        case .deviceUnreachable:
+            return receivesDeviceUnreachable
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
             return gameEnabled
         case .newConversation, .newConversationDirect, .newConversationGroup,
