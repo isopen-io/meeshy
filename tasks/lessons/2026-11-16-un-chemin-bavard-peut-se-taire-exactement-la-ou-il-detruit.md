@@ -3,7 +3,7 @@
 *2026-11-16, #18733 (cycle 172). `RedisDeliveryQueue`, chemin d'enfilage de la
 file de remise hors ligne.*
 
-## Le fait
+### Le fait
 
 Le chemin d'enfilage de la file hors ligne journalise **tout** : dédoublonnage,
 supplantation d'un événement mutable, repli mémoire sur panne Redis, map mémoire
@@ -18,7 +18,7 @@ fréquence il se produit, parce que rien ne le disait. Et la valeur était **dé
 sous la main** : `RPUSH` rend la longueur de la liste, le script la jetait ;
 côté mémoire, `evictCount` était calculé, servait à trancher, et était jeté.
 
-## Pourquoi un chemin instrumenté partout peut l'être partout sauf là
+### Pourquoi un chemin instrumenté partout peut l'être partout sauf là
 
 Une trace se pose avec le CAS qu'elle décrit — « j'ai dédoublonné », « je suis
 tombé sur Redis », « cette entrée est informe ». Chacun de ces cas est une
@@ -44,7 +44,7 @@ celle du chemin de PRODUCTION n'en avait pas. Quand deux évictions voisines ne
 sont pas instrumentées pareil, c'est en général la plus coûteuse qui se tait —
 parce qu'elle est la plus ordinaire, donc la moins écrite.
 
-## Et la jumelle n'était pas où l'issue regardait
+### Et la jumelle n'était pas où l'issue regardait
 
 L'issue scopait « les DEUX chemins, Redis et mémoire » — les deux moitiés de
 l'enfilage. Posée au moment du correctif, la question « ce `LTRIM` est-il le seul
@@ -58,7 +58,7 @@ garde 50 — jusqu'à 450 détruites, à l'instant précis où le drain venait d
 retirer de Redis. Il ne s'atteint par aucune lecture de l'enfilage : il naît de
 la RENCONTRE de deux bornes différentes sur le chemin de panne de la première.
 
-## La règle de forme qui en est sortie
+### La règle de forme qui en est sortie
 
 Quand on fait voyager une mesure depuis un script Lua (ou tout exécuteur distant
 sans double) :

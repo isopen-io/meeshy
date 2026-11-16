@@ -2,7 +2,7 @@
 
 *2026-11-16 — #18733. Cycle 172 de la routine d'amélioration continue du temps réel.*
 
-## Le constat
+### Le constat
 
 `DELIVERY_QUEUE_MAX_PER_USER` (500, tranche Redis) et `MEMORY_QUEUE_MAX_PER_USER`
 (50, repli mémoire) bornent la file hors ligne par destinataire. Au-delà, les
@@ -21,7 +21,7 @@ mémoire pleine (`warn`), entrée informe (`error`) — et le seul événement q
 DÉTRUIT du rejeu, sur le chemin de PRODUCTION, était muet. La map pleine, qui
 n'affecte que le repli, avertissait ; le plafond par destinataire, non.
 
-## Ce qui est décidé
+### Ce qui est décidé
 
 **1. La mesure voyage comme un SECOND élément de retour, jamais comme une
 quatrième valeur de code.** `ENQUEUE_DEDUP_LUA` rend désormais
@@ -62,7 +62,7 @@ drain n'a pas pu rouvrir, détruit le même rejeu, dans le même silence, et son
 nominal est le plus chaud du produit, et une trace par enfilage serait pire que
 le silence qu'on vient de retirer.
 
-## Ce que la décision NE tranche PAS
+### Ce que la décision NE tranche PAS
 
 - **La valeur 500, ni la politique d'éviction.** Les deux sont raisonnées et
   documentées (`DELIVERY_QUEUE_MAX_PER_USER` énumère les trois coûts qu'elles
@@ -76,7 +76,7 @@ le silence qu'on vient de retirer.
   (`scope`, `slice`, `userId`, `destroyed`, `cap`). Agréger est un autre lot, et
   il n'a de sens qu'avec un collecteur.
 
-## Le chemin que ce lot a rendu mesurable, et que personne n'avait nommé
+### Le chemin que ce lot a rendu mesurable, et que personne n'avait nommé
 
 Le pire des quatre n'était dans aucune issue : **Redis DRAINE puis sa remise
 ÉCHOUE.** Le repli mémoire reçoit alors jusqu'à 500 entrées scellées — la borne
@@ -85,7 +85,7 @@ la remise détruisait jusqu'à 450 entrées en silence, à l'instant précis où
 drain venait de les retirer de Redis. Et `slice(-50)` garde les DERNIÈRES, donc
 ce qui part est pris en tête : **la remise détruit exactement ce qu'elle remet.**
 
-## Preuve
+### Preuve
 
 `src/__tests__/unit/services/deliveryQueueBoundEviction.test.ts` — 14 témoins.
 Les quatre chemins nommés, les deux silences (sous le plafond, et sur une forme
