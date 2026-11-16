@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import MeeshyUI
 @testable import Meeshy
 
 /// L'aperçu d'appui long NAÎT de la ligne pressée (#18722) : une seule
@@ -55,18 +56,30 @@ final class ConversationPreviewMorphTests: XCTestCase {
 
     // MARK: - La face de la rangée cède à l'aperçu à mi-course
 
-    func test_rowFace_isWholeAtStart_andGoneFromHalfway() {
+    func test_rowFace_isWholeAtStart_andGoneAtTheEndOfTheCrossfade() {
         XCTAssertEqual(ConversationPreviewMorph.opacity(of: .rowFace, progress: 0), 1)
-        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .rowFace, progress: 0.25), 0.5, accuracy: 0.001)
-        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .rowFace, progress: 0.5), 0)
+        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .rowFace, progress: 0.25), 1)
+        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .rowFace, progress: 0.5), 0.5, accuracy: 0.001)
+        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .rowFace, progress: 0.75), 0)
         XCTAssertEqual(ConversationPreviewMorph.opacity(of: .rowFace, progress: 1), 0)
     }
 
-    func test_preview_isAbsentUntilHalfway_andWholeAtTheEnd() {
-        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .preview, progress: 0.4), 0)
-        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .preview, progress: 0.75), 0.5, accuracy: 0.001)
-        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .preview, progress: 1), 1)
+    func test_preview_isAbsentUntilTheCrossfade_andWholeAtTheEnd() {
+        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .preview, progress: 0.2), 0)
+        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .preview, progress: 0.5), 0.5, accuracy: 0.001)
+        XCTAssertEqual(ConversationPreviewMorph.opacity(of: .preview, progress: 0.75), 1)
         XCTAssertEqual(ConversationPreviewMorph.opacity(of: .preview, progress: 1.3), 1, "borné")
+    }
+
+    /// La recette du décrochage montrait une image BLANCHE : à mi-course, la
+    /// face de la rangée avait fini de s'effacer et l'aperçu ne commençait pas.
+    func test_faces_neverLeaveTheCardEmpty_atAnyProgress() {
+        for step in 0...40 {
+            let progress = CGFloat(step) / 40
+            let painted = ConversationPreviewMorph.opacity(of: .rowFace, progress: progress)
+                + ConversationPreviewMorph.opacity(of: .preview, progress: progress)
+            XCTAssertGreaterThanOrEqual(painted, 1 - 1e-9, "carte vide à \(progress)")
+        }
     }
 
     func test_surface_isAbsentOnTheRow_andWholeFromHalfway() {
@@ -166,9 +179,91 @@ final class ConversationPreviewMorphTests: XCTestCase {
         XCTAssertEqual(ConversationPreviewMorph.exit(hasSource: true, reduceMotion: false, chipLatched: false, pulledPastDismiss: true), .fadeInPlace)
     }
 
+    /// Une pastille lâchée hors de tout en-tête n'a rien déplacé : elle revient
+    /// à sa place en ressort, la rangée reparaît dans la même image.
+    func test_exit_ofAChipReleasedAwayFromAnyHeader_springsBackToItsSlot() {
+        XCTAssertEqual(ConversationPreviewMorph.exit(hasSource: true, reduceMotion: false, chipLatched: true, pulledPastDismiss: true,
+                                                     chipReturnsToSlot: true), .morphToRow)
+        XCTAssertEqual(ConversationPreviewMorph.exit(hasSource: true, reduceMotion: true, chipLatched: true, pulledPastDismiss: true,
+                                                     chipReturnsToSlot: true), .fadeInPlace, "sous Réduire les animations, un fondu")
+    }
+
+    /// La carte rejoint sa place quand elle redevient la ligne ou qu'une
+    /// fermeture ordinaire la laisse fondre ; tirée au-delà de la fermeture ou
+    /// décrochée, elle fond SOUS LE DOIGT, sans aller-retour.
+    func test_returnsHome_onlyWhenItMorphsBack_orAnOrdinaryCloseFades() {
+        XCTAssertTrue(ConversationPreviewMorph.returnsHome(after: .morphToRow, chipLatched: true, pulledPastDismiss: true))
+        XCTAssertTrue(ConversationPreviewMorph.returnsHome(after: .fadeInPlace, chipLatched: false, pulledPastDismiss: false))
+        XCTAssertFalse(ConversationPreviewMorph.returnsHome(after: .fadeInPlace, chipLatched: true, pulledPastDismiss: false))
+        XCTAssertFalse(ConversationPreviewMorph.returnsHome(after: .fadeInPlace, chipLatched: false, pulledPastDismiss: true))
+    }
+
     func test_exit_underReduceMotion_orWithoutARow_fadesInPlace() {
         XCTAssertEqual(ConversationPreviewMorph.exit(hasSource: true, reduceMotion: true, chipLatched: false, pulledPastDismiss: false), .fadeInPlace)
         XCTAssertEqual(ConversationPreviewMorph.exit(hasSource: false, reduceMotion: false, chipLatched: false, pulledPastDismiss: false), .fadeInPlace)
+    }
+
+    // MARK: - Le mouvement de l'entrée et du retrait
+
+    /// Le sens du mouvement se lit dans la valeur visée : vers la carte, le
+    /// ressort d'entrée ; vers la ligne, celui du retrait ; réduit, un fondu.
+    @MainActor
+    func test_morphAnimation_towardTheCard_isTheEntrance_towardTheRow_isTheReturn() {
+        XCTAssertEqual(ConversationPreviewEntranceMotion.animation(toward: 1, reduceMotion: false), MeeshyAnimation.previewMorph)
+        XCTAssertEqual(ConversationPreviewEntranceMotion.animation(toward: 0, reduceMotion: false), MeeshyAnimation.previewMorphReturn)
+        XCTAssertEqual(ConversationPreviewEntranceMotion.animation(toward: 1, reduceMotion: true),
+                       ConversationPreviewEntranceMotion.entrance(reduceMotion: true))
+    }
+
+    /// La recette ne montrait AUCUNE interpolation : une animation explicite
+    /// posée par `withAnimation` n'atteignait pas l'overlay de la liste (journal
+    /// RECETTE : `transaction.animation == nil` au rendu, à chaque étage). Le
+    /// mouvement est donc porté par l'overlay lui-même, sur ses deux valeurs.
+    func test_overlay_carriesItsOwnMotion_onProgressAndAppearance() throws {
+        let overlays = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        XCTAssertTrue(overlays.contains("ConversationPreviewMorphMotion(progress: previewMorphProgress, appeared: contextMenuAppeared"))
+    }
+
+    // MARK: - Le cadre RENDU de la carte (pas seulement la loi)
+
+    /// Les lois étaient vertes pendant que les pixels étaient faux : ce témoin
+    /// mesure la carte RENDUE, dans une fenêtre, à la place que la liste lui donne.
+    @MainActor
+    func test_renderedCard_atProgressZero_sitsOnTheRowFrame_andAtOne_fillsItsSlot() throws {
+        let slot = CGRect(x: 40, y: 100, width: 300, height: 420)
+        let source = CGRect(x: 8, y: 492, width: 386, height: 84)
+
+        let start = try XCTUnwrap(renderedFrames(progress: 0, source: source, slot: slot)["rowFace"])
+        let rest = try XCTUnwrap(renderedFrames(progress: 1, source: source, slot: slot)["preview"])
+
+        XCTAssertEqual(start.minX, source.minX, accuracy: 0.5, "la carte NAÎT sur la rangée pressée")
+        XCTAssertEqual(start.minY, source.minY, accuracy: 0.5)
+        XCTAssertEqual(start.width, source.width, accuracy: 0.5)
+        XCTAssertEqual(start.height, source.height, accuracy: 0.5)
+        XCTAssertEqual(rest.minX, slot.minX, accuracy: 0.5, "posée, elle occupe sa place")
+        XCTAssertEqual(rest.minY, slot.minY, accuracy: 0.5)
+        XCTAssertEqual(rest.height, slot.height, accuracy: 0.5)
+    }
+
+    @MainActor
+    private func renderedFrames(progress: CGFloat, source: CGRect, slot: CGRect) -> [String: CGRect] {
+        let probe = RenderedFrames()
+        let card = ConversationPreviewMorphCard(
+            progress: progress, source: source, accent: .blue, surface: .white,
+            rowFace: RenderedFrameReporter(name: "rowFace", probe: probe),
+            preview: RenderedFrameReporter(name: "preview", probe: probe)
+        )
+        let root = ZStack(alignment: .topLeading) {
+            card.frame(width: slot.width, height: slot.height).offset(x: slot.minX, y: slot.minY)
+        }
+        .frame(width: 402, height: 874, alignment: .topLeading)
+        .ignoresSafeArea()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = UIHostingController(rootView: root)
+        window.makeKeyAndVisible()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        window.isHidden = true
+        return probe.frames
     }
 
     // MARK: - La rangée source se vide le temps de l'aperçu
@@ -231,5 +326,20 @@ final class ConversationPreviewMorphTests: XCTestCase {
         XCTAssertTrue(rows.contains("RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress, conversationId: conversation.id)"), "la rangée pressée dit qui elle est")
         XCTAssertTrue(rows.contains(".modifier(ConcealedWhilePreviewed(conversationId: conversationId"), "la rangée source se vide par opacité")
         XCTAssertTrue(overlays.contains("ConversationPreviewSourceRow.shared.conceal(nil)"), "elle revient au retrait")
+    }
+}
+
+/// Les cadres GLOBAUX que les calques de la carte occupent une fois rendus.
+@MainActor
+private final class RenderedFrames {
+    var frames: [String: CGRect] = [:]
+}
+
+private struct RenderedFrameReporter: View {
+    let name: String
+    let probe: RenderedFrames
+
+    var body: some View {
+        Color.clear.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { probe.frames[name] = $0 }
     }
 }

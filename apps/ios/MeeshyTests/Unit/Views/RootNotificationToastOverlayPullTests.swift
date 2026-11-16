@@ -70,4 +70,34 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
         XCTAssertFalse(try body(of: "private func beginMorph(", in: source).contains("progress = 1"),
                        "grandir dans le tour qui pose l'enveloppe n'a aucune image de départ")
     }
+
+    /// Le bouton de la bannière émet son toucher à la levée, même après une
+    /// traction : une traction courte ouvrait donc la conversation par le
+    /// chemin du toucher, LUE (recette 1a). La traction verrouille le toucher.
+    func test_aPull_swallowsTheReleaseTapOfTheBannerButton() throws {
+        let source = try overlay()
+        let tapped = try body(of: "private func openTapped(", in: source)
+
+        XCTAssertTrue(source.contains("tapLatch = tapLatch.notingPull("), "chaque image de traction arme le verrou")
+        XCTAssertTrue(tapped.contains("tapLatch.admitsTap("), "le toucher qui suit une traction ne passe pas")
+    }
+
+    /// L'enveloppe est la SEULE transition d'une ouverture par traction : la
+    /// conversation se pose dessous sans glisser depuis la droite.
+    func test_openPulled_placesTheConversationWithoutThePushAnimation() throws {
+        let pulled = try body(of: "private func openPulled(", in: try overlay())
+        let peekPath = try XCTUnwrap(pulled.components(separatedBy: "PeekOpeningRequests.request(").last)
+
+        XCTAssertTrue(peekPath.contains("disablesAnimations = true"))
+        XCTAssertTrue(peekPath.contains("withTransaction("))
+    }
+
+    /// Arrivée au plein écran, l'enveloppe s'efface en fondu au lieu de
+    /// disparaître d'une image.
+    func test_morph_fadesOut_beforeLeaving() throws {
+        let run = try body(of: "private func runMorph(", in: try overlay())
+
+        XCTAssertTrue(run.contains("morph?.opacity = 0"), "le fondu porte sur une valeur rendue")
+        XCTAssertTrue(run.contains("MeeshyAnimation.bannerMorphFade"))
+    }
 }

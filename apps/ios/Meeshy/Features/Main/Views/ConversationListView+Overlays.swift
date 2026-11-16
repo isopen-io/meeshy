@@ -185,25 +185,20 @@ extension ConversationListView {
 
     // MARK: - Aperçu d'appui long personnalisé (iPhone, toutes versions — #17242)
 
-    func dismissContextMenu() {
+    func dismissContextMenu(chipReturnsToSlot: Bool = false) {
         // La carte redevient la ligne ou fond sur place, puis l'overlay part et
         // la rangée revient dans la même image. Purge annulable : une réouverture
         // l'annule (`onLongPress`), sinon elle effacerait le menu rouvert.
         chipAutoScrollDriver.stop()
         contextMenuDismissSettle.cancel()
         let reduceMotion = ConversationPreviewEntranceMotion.isReducedNow
+        let pastDismiss = dragOffsetY > ConversationPeekPullDown.dismissDistance
         let exit = ConversationPreviewMorph.exit(hasSource: contextMenuSourceFrame != nil, reduceMotion: reduceMotion, chipLatched: chipModeLatched,
-                                                 pulledPastDismiss: dragOffsetY > ConversationPeekPullDown.dismissDistance)
+                                                 pulledPastDismiss: pastDismiss, chipReturnsToSlot: chipReturnsToSlot)
+        let returnsHome = ConversationPreviewMorph.returnsHome(after: exit, chipLatched: chipModeLatched, pulledPastDismiss: pastDismiss)
         ConversationPreviewEntranceMotion.animateExit(reduceMotion: reduceMotion) {
-            if exit == .morphToRow { previewMorphProgress = 0 }
-            if !chipModeLatched && dragOffsetY <= ConversationPeekPullDown.dismissDistance {
-                // Fermeture normale : la carte revient en place. Fermeture
-                // depuis le morph drag (chip relâchée) : la carte fond SUR
-                // PLACE sous le doigt — la faire remonter pendant le fondu
-                // serait un aller-retour parasite.
-                dragOffsetY = 0
-                dragOffsetX = 0
-            }
+            if exit == .morphToRow { (previewMorphProgress, chipModeLatched) = (0, false) }
+            if returnsHome { (dragOffsetY, dragOffsetX) = (0, 0) }
             contextMenuAppeared = false
         }
         contextMenuDismissSettle.arm(after: ConversationPreviewEntranceMotion.exitSettle) {
@@ -284,6 +279,8 @@ extension ConversationListView {
                 // Filet : quel que soit le chemin qui retire l'overlay, la
                 // rangée source revient.
                 .onDisappear { ConversationPreviewSourceRow.shared.conceal(nil) }
+                .modifier(ConversationPreviewMorphMotion(progress: previewMorphProgress, appeared: contextMenuAppeared,
+                                                         pulled: dragOffsetY != 0 || dragOffsetX != 0, reduceMotion: reduceMotion))
             }
             .zIndex(300)
         }
@@ -448,14 +445,15 @@ extension ConversationListView {
     /// Relâchement de la chip : « Épingles » épingle la conversation (no-op
     /// si déjà épinglée), un header de section la déplace ("other" =
     /// « Mes conversations » = sectionId vide, ids de catégorie sinon),
-    /// hors cible la chip fond sur place (annulation, parité drag n drop
-    /// natif). Décision : `ChipDropResolver`.
+    /// hors cible la chip regagne sa ligne en ressort (annulation, parité
+    /// drag n drop natif). Décision : `ChipDropResolver`.
     private func handleChipDrop(at location: CGPoint) {
+        var returnsToSlot = false
         defer {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                 dropTargetSection = nil
             }
-            dismissContextMenu()
+            dismissContextMenu(chipReturnsToSlot: returnsToSlot)
         }
         guard let conversation = sheetTargets.contextMenu else { return }
         let hovered = sectionFrameRegistry.frames
@@ -468,7 +466,7 @@ extension ConversationListView {
             isAutoScrolling: chipAutoScrollDriver.isActivelyScrolling
         ) {
         case .none:
-            return
+            returnsToSlot = true
         case .pin:
             HapticFeedback.success()
             Task { await conversationViewModel.togglePin(for: conversation.id) }
@@ -511,6 +509,12 @@ enum ConversationPreviewEntranceMotion {
         reduceMotion ? .easeOut(duration: fadeDuration) : MeeshyAnimation.previewMorphReturn
     }
 
+    /// Le mouvement se lit dans la valeur visée : vers la carte, l'entrée ;
+    /// vers la ligne, le retrait.
+    static func animation(toward target: CGFloat, reduceMotion: Bool) -> Animation {
+        target >= 1 ? entrance(reduceMotion: reduceMotion) : exit(reduceMotion: reduceMotion)
+    }
+
     /// L'entrée et la sortie passent la variante réduite à la racine du
     /// mouvement, qui couperait sinon le fondu voulu (#18354).
     static func animateEntrance(reduceMotion: Bool, _ body: () -> Void) {
@@ -521,6 +525,28 @@ enum ConversationPreviewEntranceMotion {
     static func animateExit(reduceMotion: Bool, _ body: () -> Void) {
         meeshyWithAnimation(exit(reduceMotion: false), reduced: exit(reduceMotion: true),
                             reduceMotion: reduceMotion, body)
+    }
+}
+
+/// L'overlay porte LUI-MÊME son mouvement : une animation explicite posée par
+/// `withAnimation` n'atteint pas cette branche de la liste (mesuré au rendu :
+/// aucune transaction animée, à chaque étage). Chaque valeur qui pilote la
+/// carte anime donc sa propre transition — la progression et l'apparition
+/// vers leur cible, et le retour d'une traction relâchée (carte, voile et menu
+/// ensemble) ; les images du geste, elles, suivent le doigt sans ressort.
+struct ConversationPreviewMorphMotion: ViewModifier {
+    let progress: CGFloat
+    let appeared: Bool
+    let pulled: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        // Le modificateur le plus INTÉRIEUR a le dernier mot : le retrait et
+        // l'entrée priment sur le retour d'une traction qu'ils emportent.
+        content
+            .animation(ConversationPreviewEntranceMotion.animation(toward: progress, reduceMotion: reduceMotion), value: progress)
+            .animation(ConversationPreviewEntranceMotion.animation(toward: appeared ? 1 : 0, reduceMotion: reduceMotion), value: appeared)
+            .animation(pulled ? nil : ConversationPeekDetachMotion.returnAnimation(reduceMotion: reduceMotion), value: pulled)
     }
 }
 
@@ -736,6 +762,10 @@ struct ConversationPeekCardDrag: ViewModifier {
 nonisolated enum ConversationPeekDetachMotion {
     static func follow(isLatched: Bool, reduceMotion: Bool) -> Animation? {
         isLatched && !reduceMotion ? MeeshyAnimation.peekDetach : nil
+    }
+
+    static func returnAnimation(reduceMotion: Bool) -> Animation {
+        reduceMotion ? MeeshyMotion.reducedFade : MeeshyAnimation.peekDetachReturn
     }
 
     /// Le retour reste annulable : un nouveau glissement le reprend où il en est.

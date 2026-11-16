@@ -63,6 +63,8 @@ struct RootNotificationToastOverlay: View {
     /// La bannière qui devient la conversation, peinte le temps de la
     /// transformation pendant que la conversation se pose dessous.
     @State private var morph: BannerMorph?
+    /// Une traction n'est jamais un toucher : le bouton émet le sien à la levée.
+    @State private var tapLatch = NotificationBannerTapLatch()
 
     var body: some View {
         VStack {
@@ -94,6 +96,9 @@ struct RootNotificationToastOverlay: View {
         )
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { restingFrame = $0 }
         .modifier(NotificationBannerPullEffect(translation: pull, reduceMotion: reduceMotion))
+        .adaptiveOnChange(of: pull) { _, translation in
+            tapLatch = tapLatch.notingPull(translation: translation, at: Date())
+        }
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.35).onEnded { _ in
                 onPreview(toast)
@@ -114,7 +119,7 @@ struct RootNotificationToastOverlay: View {
     /// #6999 — taper un toast OUVRE le contenu : la notification est
     /// consommée, exactement comme une ligne de cloche tapée.
     private func openTapped(_ toast: SocketNotificationEvent) {
-        if suppressToastTap { return }
+        if suppressToastTap || !tapLatch.admitsTap(at: Date()) { return }
         notificationManager.dismissToast()
         let consumedId = toast.id
         Task { @MainActor in
@@ -161,7 +166,10 @@ struct RootNotificationToastOverlay: View {
         PeekOpeningRequests.request(conversationId)
         HapticFeedback.medium()
         beginMorph(from: toast)
-        onTap(toast)
+        // L'enveloppe est la seule transition : la conversation se pose dessous, sans glisser depuis la droite.
+        var beneath = Transaction()
+        beneath.disablesAnimations = true
+        withTransaction(beneath) { onTap(toast) }
     }
 
     /// Pose l'enveloppe à la place exacte de la carte relâchée, la bannière
@@ -195,6 +203,7 @@ struct RootNotificationToastOverlay: View {
                 event: morph.event, headline: morph.headline, message: morph.message,
                 progress: morph.progress, origin: morph.origin
             )
+            .opacity(morph.opacity)
             .transition(.opacity)
         }
     }
@@ -208,9 +217,13 @@ struct RootNotificationToastOverlay: View {
         meeshyWithAnimation(MeeshyMotion.bannerMorph(reduce: false), reduced: MeeshyMotion.bannerMorph(reduce: true),
                             reduceMotion: reduceMotion) { morph?.progress = 1 }
         guard await cancellableSleep(for: MeeshyMotion.bannerMorphSettle) else { return }
-        meeshyWithAnimation(MeeshyMotion.reducedFade, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
-            morph = nil
+        meeshyWithAnimation(MeeshyAnimation.bannerMorphFade, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+            morph?.opacity = 0
         }
+        guard await cancellableSleep(for: MeeshyMotion.bannerMorphFadeOut) else { return }
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { morph = nil }
     }
 
     #if DEBUG
@@ -248,6 +261,7 @@ struct BannerMorph: Identifiable {
     let message: String?
     let origin: CGRect
     var progress: CGFloat = 0
+    var opacity: Double = 1
 }
 
 /// Hôte UNIQUE de la bulle de mood pour toute la fenêtre, et les deux feuilles
