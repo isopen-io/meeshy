@@ -233,6 +233,11 @@ struct ComposerCaptureChrome: View {
                                     date: session.lookDate, person: session.lookPerson)
     }
 
+    /// Un objet sous le doigt : seuls l'objet et ses cibles restent (#18787).
+    private var showsChrome: Bool {
+        ComposerViewfinderScene.showsChrome(dragging: sceneDrag.isDragging)
+    }
+
     /// « Terminé » rend : seule la croix répond encore.
     private var finishing: Bool {
         session.phase.isEditing && session.isRenderingLook
@@ -274,20 +279,20 @@ struct ComposerCaptureChrome: View {
             typingTouchCatcher
             sceneObjectsLayer
             cropBrackets
-            if !finishing, session.offersEditPlayback { editPlayback }
-            cropPresets
+            if !finishing, showsChrome, session.offersEditPlayback { editPlayback }
+            if showsChrome { cropPresets }
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
-            if !typing { ComposerCaptureGestureHint(session: session) }
+            if !typing, showsChrome { ComposerCaptureGestureHint(session: session) }
             libraryTouchCatcher
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
-                topRow.opacity(showsTopRow ? chromeRest : 0)
-                    .allowsHitTesting(showsTopRow)
-                    .accessibilityHidden(!showsTopRow)
+                topRow.opacity(showsTopRow && showsChrome ? chromeRest : 0)
+                    .allowsHitTesting(showsTopRow && showsChrome)
+                    .accessibilityHidden(!showsTopRow || !showsChrome)
                     .overlay(alignment: .topTrailing) { ComposerCropCancelButton(session: session) }
                 Spacer(minLength: 0)
-                bottomRow
+                if showsChrome { bottomRow }
             }
             .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
             sceneDragTargets
@@ -296,6 +301,7 @@ struct ComposerCaptureChrome: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: typing)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsChrome)
         .modifier(ComposerCaptureChromeRestWatch(session: session, timer: session.selfTimer, opacity: $chromeRest))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
         .modifier(ComposerCaptureDismissAndBudget(session: session))
@@ -362,9 +368,16 @@ struct ComposerCaptureChrome: View {
     @ViewBuilder
     private var sceneDragTargets: some View {
         if let actions = sceneObjects?.dropActions {
-            MeeshyDragTargets(state: sceneDrag.targets, labels: ComposerCameraCopy.dragTargets,
-                              onDuplicate: { sceneDrag.drop(.duplicate, actions: actions) },
-                              onRemove: { sceneDrag.drop(.remove, actions: actions) })
+            GeometryReader { proxy in
+                let emplacements = sceneObjectsFrame.map {
+                    ComposerSceneDragTargetSlots(scene: $0, container: proxy.size)
+                }
+                MeeshyDragTargets(state: sceneDrag.targets,
+                                  topSlot: emplacements?.top, bottomSlot: emplacements?.bottom,
+                                  labels: ComposerCameraCopy.dragTargets,
+                                  onDuplicate: { sceneDrag.drop(.duplicate, actions: actions) },
+                                  onRemove: { sceneDrag.drop(.remove, actions: actions) })
+            }
         }
     }
 

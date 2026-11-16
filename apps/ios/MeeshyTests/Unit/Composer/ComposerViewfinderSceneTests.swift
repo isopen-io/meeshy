@@ -180,8 +180,10 @@ final class ComposerViewfinderSceneTests: XCTestCase {
         XCTAssertTrue(geste.contains("onItemDragged?(.moved(finger: convert(location, to: nil)))"))
         XCTAssertTrue(geste.contains("onItemDragged?(recognizer.state == .ended ? .ended(finger: convert(location, to: nil)) : .cancelled)"))
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("MeeshyDragTargets(state: sceneDrag.targets, labels: ComposerCameraCopy.dragTargets"),
+        XCTAssertTrue(chrome.contains("MeeshyDragTargets(state: sceneDrag.targets,"),
                       "le kit des cibles, jamais une jumelle")
+        XCTAssertTrue(chrome.contains("topSlot: emplacements?.top, bottomSlot: emplacements?.bottom"),
+                      "les cibles se posent hors de la scène (#18787)")
         XCTAssertTrue(chrome.contains("sceneObjects.feeding(sceneDrag)"))
         let toile = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerViewfinderSceneCanvas.swift")
         XCTAssertTrue(toile.contains("onItemDragged: onItemDragged)"))
@@ -401,5 +403,71 @@ final class ComposerViewfinderSceneTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(formats.minX, ComposerEditScene.railColumnWidth,
                                     "« Annuler » et les formats commencent à droite de la colonne")
         XCTAssertEqual(formats.maxX, ecran.width, accuracy: 0.01)
+    }
+
+    // MARK: - #18786 — toucher un texte du viseur ouvre sa saisie
+
+    func test_tap_onAText_opensItsTyping() {
+        XCTAssertEqual(ComposerViewfinderScene.tapOutcome(kind: .text), .editText)
+    }
+
+    func test_tap_onAnotherObject_selectsIt() {
+        for kind in [StoryCanvasUIView.CanvasItemKind.media, .sticker, .place, .audio] {
+            XCTAssertEqual(ComposerViewfinderScene.tapOutcome(kind: kind), .select, "\(kind)")
+        }
+        XCTAssertEqual(ComposerViewfinderScene.tapOutcome(kind: nil), .select)
+    }
+
+    // MARK: - #18787 — pendant le glisser, rien d'autre que l'objet et ses cibles
+
+    func test_dragDrop_publishesThatAnObjectIsDragged() {
+        let glisser = ComposerSceneDragDrop()
+        XCTAssertFalse(glisser.isDragging)
+        glisser.feed(.began(id: "s1", finger: .zero, start: .zero))
+        XCTAssertTrue(glisser.isDragging, "le chrome se retire")
+        glisser.feed(.moved(finger: CGPoint(x: 10, y: 10)))
+        XCTAssertTrue(glisser.isDragging)
+        glisser.feed(.ended(finger: .zero))
+        XCTAssertFalse(glisser.isDragging, "lâché : le chrome revient")
+        glisser.feed(.began(id: "s1", finger: .zero, start: .zero))
+        glisser.feed(.cancelled)
+        XCTAssertFalse(glisser.isDragging)
+    }
+
+    func test_chrome_isWithdrawnWhileDragging() {
+        XCTAssertFalse(ComposerViewfinderScene.showsChrome(dragging: true))
+        XCTAssertTrue(ComposerViewfinderScene.showsChrome(dragging: false))
+    }
+
+    /// **Les cibles hors de la scène** : la copie dans la bande du haut, la poubelle
+    /// dans celle du bas — la scène entière reste libre pour poser l'objet.
+    func test_targetSlots_sitInTheBandsOutsideTheScene() throws {
+        let conteneur = CGSize(width: 440, height: 956)
+        let scene = CGRect(x: 0, y: 87, width: 440, height: 782)
+        let emplacements = ComposerSceneDragTargetSlots(scene: scene, container: conteneur)
+        let centres = MeeshyDragTargetsRule.centers(size: conteneur, safeTop: 0, safeBottom: 0,
+                                                    topSlot: emplacements.top, bottomSlot: emplacements.bottom,
+                                                    offered: [.duplicate, .remove])
+        let rayon = CGFloat(MeeshyDragTargetsRecipe.diameter) / 2
+        let copie = try XCTUnwrap(centres[.duplicate])
+        let poubelle = try XCTUnwrap(centres[.remove])
+        XCTAssertLessThanOrEqual(copie.y + rayon, scene.minY, "la copie ne mord pas sur la scène")
+        XCTAssertGreaterThanOrEqual(copie.y - rayon, 0)
+        XCTAssertGreaterThanOrEqual(poubelle.y - rayon, scene.maxY, "la poubelle ne mord pas sur la scène")
+        XCTAssertLessThanOrEqual(poubelle.y + rayon, conteneur.height)
+        XCTAssertEqual(copie.x, scene.midX)
+        XCTAssertEqual(poubelle.x, scene.midX)
+    }
+
+    func test_targetSlots_tooNarrowABand_staysOnScreen() throws {
+        let conteneur = CGSize(width: 440, height: 800)
+        let scene = CGRect(x: 0, y: 10, width: 440, height: 780)
+        let emplacements = ComposerSceneDragTargetSlots(scene: scene, container: conteneur)
+        let centres = MeeshyDragTargetsRule.centers(size: conteneur, safeTop: 0, safeBottom: 0,
+                                                    topSlot: emplacements.top, bottomSlot: emplacements.bottom,
+                                                    offered: [.duplicate, .remove])
+        let rayon = CGFloat(MeeshyDragTargetsRecipe.diameter) / 2
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(centres[.duplicate]).y - rayon, 0)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(centres[.remove]).y + rayon, conteneur.height)
     }
 }
