@@ -201,8 +201,10 @@ def _setup_module_mocks():
             mock_torch.Tensor = MagicMock()
             sys.modules['torch'] = mock_torch
 
-    # Mock aiohttp module
-    if 'aiohttp' not in sys.modules:
+    # Mock aiohttp module - only if not installed
+    try:
+        import aiohttp  # noqa: F401
+    except ImportError:
         mock_aiohttp = MagicMock()
         mock_aiohttp.ClientSession = MagicMock()
         mock_aiohttp.ClientTimeout = MagicMock()
