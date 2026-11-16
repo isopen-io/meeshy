@@ -29,6 +29,8 @@ import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
 import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
+import type { AfterReadDepartureTracker } from './AfterReadDepartureTracker';
+import { createAfterReadDepartureTracker } from './afterReadDepartureWiring';
 import { e2eeSignalHandlerDeps, listenE2EESignals } from './handlers/E2EESignalHandler';
 import { listenCircleLive } from './handlers/circleLiveHandlers';
 import { ReactionHandler } from './handlers/ReactionHandler';
@@ -284,6 +286,7 @@ export class MeeshySocketIOManager {
   private messageHandler!: MessageHandler;
   private statusHandler!: StatusHandler;
   private conversationViewingHandler!: ConversationViewingHandler;
+  private afterReadDepartures!: AfterReadDepartureTracker;
   private reactionHandler!: ReactionHandler;
   private attachmentReactionHandler!: AttachmentReactionHandler;
   private commentReactionHandler!: CommentReactionHandler;
@@ -503,7 +506,10 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
-      emitViewingSnapshots: (socket) => this.conversationViewingHandler.afterAuthentication(socket),
+      emitViewingSnapshots: (socket) =>
+        this.conversationViewingHandler
+          .afterAuthentication(socket)
+          .finally(() => this.afterReadDepartures.afterAuthentication(socket.id)),
       // CALL-RESILIENCE (Vague 44) — lets AuthHandler's anonymous-guest
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".
@@ -570,6 +576,16 @@ export class MeeshySocketIOManager {
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
       userSockets: this.userSockets,
+    });
+
+    // #18556 — « vu puis quitté » constaté par le serveur quand le client ne l'a pas dit.
+    this.afterReadDepartures = createAfterReadDepartureTracker({
+      prisma: this.prisma,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      manager: () => this,
+      io: () => this.io,
+      onError: (error) => logger.warn('after-read departure failed', { error }),
     });
 
     this.reactionHandler = new ReactionHandler({
@@ -1955,6 +1971,7 @@ export class MeeshySocketIOManager {
 
       // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan, et l'arrière-plan.
       this.conversationViewingHandler.listen(socket);
+      this.afterReadDepartures.listen(socket);
       // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
       listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
       // #13142 — la porte unique des signaux chiffrés d'une conversation e2ee.
@@ -2126,6 +2143,9 @@ export class MeeshySocketIOManager {
         // part dans la room de la conversation.
         void this.conversationViewingHandler.handleSocketDisconnecting(socket.id).catch((error) => {
           logger.error('viewing handleSocketDisconnecting failed', { error, socketId: socket.id });
+        });
+        void this.afterReadDepartures.disconnecting(socket.id).catch((error) => {
+          logger.error('after-read departure on disconnect failed', { error, socketId: socket.id });
         });
 
         const disconnectingUserId = this.socketToUser.get(socket.id);

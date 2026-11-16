@@ -253,10 +253,16 @@ export function projectViewOnceForReader<T extends object>(
 
   // Seules les clés que la charge PORTE sont retenues : une lecture projetée
   // (`/sync?fields=`) ne se voit pas ajouter ce qu'elle n'a pas demandé.
-  const withheld = Object.fromEntries(
-    Object.entries(WITHHELD_CONTENT).filter(([key]) => key in message),
-  );
-  return { ...served, ...withheld };
+  return { ...served, ...withheldContentOf(message) };
+}
+
+/**
+ * Ce qu'un message dont le contenu ne se sert plus remplace, limité aux clés
+ * que la charge PORTE : une lecture projetée (`/sync?fields=`) ne se voit pas
+ * ajouter ce qu'elle n'a pas demandé.
+ */
+export function withheldContentOf(message: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(WITHHELD_CONTENT).filter(([key]) => key in message));
 }
 
 /** Ce qu'une vue unique déjà ouverte ne sert plus à son lecteur. */

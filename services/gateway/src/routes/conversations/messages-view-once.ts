@@ -14,11 +14,11 @@ import { recordViewOnceConsumption } from '../../services/messaging/recordViewOn
 import { scheduleViewOnceBurn } from '../../services/messaging/scheduleViewOnceBurn';
 import { computeViewOnceStates, type ViewOnceReaderState } from '../../services/messaging/viewOnceAudience';
 import { emitViewOnceConsumedPreview } from '../../socketio/emitConversationPreviewUpdate';
+import { broadcastViewOnceFact } from '../../socketio/broadcastViewOnceFact';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
@@ -184,15 +184,23 @@ export function registerMessageViewOnceRoutes(
           { conversationId, messageId, readerParticipantId: viewParticipant.id, actorUserId: userId },
           (error) => logger.warn(`[CONSUME] view-once list preview failed for ${messageId}`, error)
         );
-        io?.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_CONSUMED, {
-          messageId,
+        await broadcastViewOnceFact({
+          prisma,
+          manager: fastify.socketIOHandler.getManager(),
           conversationId,
-          userId,
-          participantId: viewParticipant.id,
-          byAuthor,
-          viewOnceCount,
-          maxViewOnceCount: recipientCount,
-          isFullyConsumed
+          messageId,
+          eventType: 'consumed',
+          payload: {
+            messageId,
+            conversationId,
+            userId,
+            participantId: viewParticipant.id,
+            byAuthor,
+            viewOnceCount,
+            maxViewOnceCount: recipientCount,
+            isFullyConsumed
+          },
+          onError: (error) => logger.warn(`[CONSUME] view-once consumed broadcast failed for ${messageId}`, error),
         });
       }
 

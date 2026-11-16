@@ -24,7 +24,7 @@
  * | date | qui la voit | ce qu'elle déclenche |
  * |---|---|---|
  * | `D(u)` | le destinataire `u` | la bulle disparaît de son écran (`message:expired` vers `user:<u>` SEUL) |
- * | `max D(u)` | l'expéditeur | son propre décompte, le plus tardif qu'il connaisse |
+ * | `max D(u)` | l'expéditeur | son propre décompte, le plus tardif qu'il connaisse ; pour une flamme-œil, le feu qui lui est annoncé quand tous ont vu puis quitté (#18556) |
  * | `D(u) + 1 h` | personne | la passerelle cesse de SERVIR le message à `u` |
  * | destruction | personne | le contenu est effacé en base (`Message.expiresAt`) |
  *
@@ -110,8 +110,13 @@ export function normalizeEphemeralDuration(input: {
 /**
  * Flamme-œil (#8302) — le message disparaît chez CHAQUE lecteur quand il l'a vu
  * puis a quitté la conversation. Aucune DURÉE : l'échéance du lecteur est
- * l'instant de SA consommation (`POST …/messages/after-read/consume`), et
- * l'expéditeur garde la bulle jusqu'à la destruction du contenu.
+ * l'instant de SA consommation (`POST …/messages/after-read/consume`).
+ *
+ * L'expéditeur garde la bulle jusqu'à ce que le FEU lui soit annoncé (#18556) :
+ * quand le dernier destinataire a vu puis quitté, il reçoit sa propre échéance
+ * — gravée sur SA ligne, comme celle d'un lecteur — et le message brûle chez
+ * lui aussi. Un feu retenu (un destinataire a coupé ses accusés de lecture) ne
+ * grave rien : il garde alors la bulle jusqu'à la destruction du contenu.
  */
 export function isAfterReadEphemeral(effectFlags?: number | null): boolean {
   return ((effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ) !== 0;
@@ -238,11 +243,14 @@ export function ephemeralDestructionAt(input: {
  */
 export function servedEphemeralExpiresAt(input: {
   readonly ephemeralDuration?: number | null;
-  /** Porte le bit flamme-œil (#8302) : sans durée, l'expéditeur n'y reçoit aucune échéance. */
+  /** Porte le bit flamme-œil (#8302) : sans durée, l'expéditeur n'y reçoit que le feu qui lui a été annoncé. */
   readonly effectFlags?: number | null;
   readonly rawExpiresAt?: Date | null;
   readonly isSender: boolean;
-  /** `D(lecteur)`, pour un destinataire. */
+  /**
+   * L'échéance gravée sur la ligne de CE lecteur : `D(lecteur)` pour un
+   * destinataire ; pour l'expéditeur d'une flamme-œil, le feu annoncé (#18556).
+   */
   readonly readerDeadline?: Date | null;
   /** `max D(u)`, pour l'expéditeur. */
   readonly latestRecipientDeadline?: Date | null;
@@ -251,7 +259,10 @@ export function servedEphemeralExpiresAt(input: {
 }): Date | null {
   if (isAfterReadEphemeral(input.effectFlags)) {
     if (!input.isSender) return input.readerDeadline ?? null;
-    return isDurationBoundedCopy(input) ? boundedCopySenderDeadline(input) : null;
+    const announced = asDate(input.readerDeadline);
+    const bounded = isDurationBoundedCopy(input) ? boundedCopySenderDeadline(input) : null;
+    if (announced && bounded) return announced.getTime() < bounded.getTime() ? announced : bounded;
+    return announced ?? bounded;
   }
   if (!hasDeclaredDuration(input.ephemeralDuration)) {
     return input.rawExpiresAt ?? null;
@@ -289,7 +300,8 @@ export function isEphemeralServable(input: {
  * ce lecteur sur sa chaîne de citations : la sienne, celle du message qu'elle
  * cite, celle du message que celui-ci cite… Chaque maillon garde sa propre loi
  * ({@link servedEphemeralExpiresAt}) — l'expéditeur d'une flamme-œil n'y reçoit
- * rien, et sa réponse vit donc jusqu'à la destruction GLOBALE, comme l'original.
+ * que le feu qui lui a été annoncé ; tant qu'il ne l'est pas, sa réponse vit
+ * jusqu'à la destruction GLOBALE, comme l'original.
  *
  * Une flamme-œil NON consommée n'a pas d'échéance servie : la citation reste
  * lisible et la réponse vit (« quand on lit cela, on a lu les messages

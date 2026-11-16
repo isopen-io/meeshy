@@ -89,6 +89,7 @@ import {
   withQuotedMessages,
 } from './ephemeralReaderDeadlines';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
+import { isLapsedForReader, projectEphemeralTombstonePage, type TombstoneRow } from './ephemeralTombstone';
 import {
   isServableThroughQuotes,
   loadInheritedEphemeralDeadlines,
@@ -647,12 +648,15 @@ export function registerMessagesListRoute(
       );
       if (ephemeralDeadlines.size > 0) {
         const servedAt = new Date();
+        // #18556 — une recherche trouve par le CONTENU : un éphémère échu pour
+        // ce lecteur n'y ressort pas, même en bulle vide.
         const served = messages.filter((message: { id: string }) =>
           isEphemeralServableToReader(
             message as Parameters<typeof isEphemeralServableToReader>[0],
             ephemeralDeadlines.get(message.id),
             servedAt
           )
+          && !(searchMode && isLapsedForReader(message as TombstoneRow, ephemeralDeadlines.get(message.id), null, servedAt))
         );
         if (served.length !== messages.length) {
           messages.length = 0;
@@ -774,6 +778,15 @@ export function registerMessagesListRoute(
         mappedMessages.forEach((m, index) => {
           mappedMessages[index] = projectViewOnceForReader(m, viewOnceStates.get(m.id));
         });
+      }
+
+      // #18556 — un message mort pour ce lecteur (son échéance d'éphémère, ou
+      // celle de ce qu'il cite), encore dans sa grâce, ne sert plus que sa
+      // bulle. APRÈS tous les enrichissements : ce qu'ils rattachent à la bulle
+      // (source d'un transfert, story citée) repartirait sinon avec elle.
+      if (ephemeralDeadlines.size > 0 || inheritedDeadlines.size > 0) {
+        const tombstoned = projectEphemeralTombstonePage(mappedMessages, messages, ephemeralDeadlines, inheritedDeadlines, new Date());
+        mappedMessages.splice(0, mappedMessages.length, ...tombstoned);
       }
 
       // #8630 — l'échéance servie d'une réponse est la plus proche de la

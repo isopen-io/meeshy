@@ -238,9 +238,14 @@ export interface ReadStatusUpdatedEventData {
 export interface MessageConsumedEventData {
   readonly messageId: string;
   readonly conversationId: string;
-  /** Identité de celui qui a ouvert (`User.id`, ou `Participant.id` d'un invité). */
+  /**
+   * Identité de celui qui a ouvert (`User.id`, ou `Participant.id` d'un invité)
+   * — servie à SES appareils seuls, pour qu'ils scellent sa bulle. Tout autre
+   * destinataire reçoit une chaîne VIDE (#18556) : une ouverture nominative est
+   * un accusé de lecture, et personne d'autre n'en a l'usage.
+   */
   readonly userId: string;
-  /** `Participant.id` de celui qui a ouvert — toujours présent, anonyme compris. */
+  /** `Participant.id` de celui qui a ouvert — présent pour l'ouvreur seul. */
   readonly participantId?: string;
   /** L'AUTEUR a ouvert son propre message : n'entre jamais dans l'audience. */
   readonly byAuthor?: boolean;

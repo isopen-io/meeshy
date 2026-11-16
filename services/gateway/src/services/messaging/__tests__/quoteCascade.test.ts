@@ -17,6 +17,8 @@ import { EPHEMERAL_UNAVAILABILITY_GRACE_MS } from '@meeshy/shared/utils/ephemera
 
 import {
   isServableThroughQuotes,
+  keepAliveForReader,
+  keepAliveForReaderAcrossConversations,
   loadInheritedEphemeralDeadlines,
   loadQuoteCascadeAudience,
   loadQuoteDescendants,
@@ -153,6 +155,77 @@ describe('la destruction d\'une flamme-œil entraîne ses réponses, pour CE lec
 
     expect(inherited.size).toBe(0);
     expect(queries).toEqual([]);
+  });
+});
+
+describe('la grâce sert une BULLE, plus jamais un contenu — toute porte qui lit une page (#18556)', () => {
+  const texte = (row: Row, content: string) => ({ ...row, content, attachments: [{ id: 'a-1' }], translations: { en: { text: content } } });
+  const dansLaGrace = new Date(CONSUMED.getTime() + 60_000);
+  const consommee = [{ messageId: 'flamme', participantId: LECTEUR, ephemeralExpiresAt: CONSUMED }];
+
+  it('la flamme échue pour ce lecteur sort vidée ; un message vivant sort intact', async () => {
+    const { prisma } = fakePrisma([flamme, sansLien], consommee);
+
+    const page = await keepAliveForReader(prisma, [texte(flamme, 'le secret'), texte(sansLien, 'bonjour')], LECTEUR, dansLaGrace);
+
+    expect(page.alive).toEqual([
+      { ...flamme, content: '', attachments: [], translations: null },
+      texte(sansLien, 'bonjour'),
+    ]);
+  });
+
+  it('la réponse à ce qui est mort pour ce lecteur sort vidée elle aussi', async () => {
+    const { prisma } = fakePrisma([flamme, reponse], consommee);
+
+    const page = await keepAliveForReader(prisma, [texte(reponse, 'je réponds au secret')], LECTEUR, dansLaGrace);
+
+    expect(page.alive).toEqual([{ ...reponse, content: '', attachments: [], translations: null }]);
+  });
+
+  it('un AUTRE lecteur, qui n’a pas consommé, reçoit le message entier', async () => {
+    const { prisma } = fakePrisma([flamme], consommee);
+
+    const page = await keepAliveForReader(prisma, [texte(flamme, 'le secret')], AUTRE, dansLaGrace);
+
+    expect(page.alive).toEqual([texte(flamme, 'le secret')]);
+  });
+
+  it('l’AUTEUR à qui le feu a été annoncé ne relit pas ce qu’il a vu brûler', async () => {
+    const { prisma } = fakePrisma([flamme], [...consommee, { messageId: 'flamme', participantId: EXPEDITEUR, ephemeralExpiresAt: CONSUMED }]);
+
+    const page = await keepAliveForReader(prisma, [texte(flamme, 'le secret')], EXPEDITEUR, dansLaGrace);
+
+    expect(page.alive).toEqual([{ ...flamme, content: '', attachments: [], translations: null }]);
+  });
+
+  it('une porte de RECHERCHE retire la ligne au lieu de servir une bulle vide', async () => {
+    const { prisma } = fakePrisma([flamme, sansLien], consommee);
+
+    const page = await keepAliveForReader(
+      prisma,
+      [texte(flamme, 'le secret'), texte(sansLien, 'bonjour')],
+      LECTEUR,
+      dansLaGrace,
+      { lapsed: 'drop' },
+    );
+
+    expect(page.alive.map((row) => row.id)).toEqual(['sans-lien']);
+  });
+
+  it('la forme qui TRAVERSE les conversations rend les pierres tombales, pas les lignes d’entrée', async () => {
+    const { prisma } = fakePrisma([flamme, sansLien], consommee);
+
+    const page = await keepAliveForReaderAcrossConversations(
+      prisma,
+      [texte(sansLien, 'bonjour'), texte(flamme, 'le secret')],
+      new Map([['c1', LECTEUR]]),
+      dansLaGrace,
+    );
+
+    expect(page.alive.map((row) => [row.id, row.content])).toEqual([
+      ['sans-lien', 'bonjour'],
+      ['flamme', ''],
+    ]);
   });
 });
 

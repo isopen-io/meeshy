@@ -1656,6 +1656,11 @@ model MessageStatusEntry {
   receivedAt  DateTime?
   /// When user read/saw the message
   readAt      DateTime?
+  /// #18556 — posé write-once par le SEUL accusé EXACT (messages réellement
+  /// affichés). L'accusé hérité grave `readAt` sur toute une plage jusqu'à la
+  /// frontière : seul ce champ prouve qu'un message a été VU, et c'est lui
+  /// que le départ du lecteur lit avant de brûler une flamme-œil.
+  exactReadAt DateTime?
 
   // ===== READ DETAILS =====
   /// How long user viewed the message (ms) - for analytics

@@ -10,6 +10,7 @@ import {
   loadEphemeralReaderDeadlines,
   type EphemeralReaderResolution,
 } from '../../routes/conversations/ephemeralReaderDeadlines';
+import { isLapsedForReader, withholdRawContent } from '../../routes/conversations/ephemeralTombstone';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
 
@@ -192,7 +193,11 @@ type ReaderPageRow = QuotingRow & {
 };
 
 export type ReaderPage<T> = {
-  /** Ce qui vit encore pour ce lecteur — l'éphémère lui-même, puis ce qu'il cite. */
+  /**
+   * Ce qui est encore SERVI à ce lecteur — l'éphémère lui-même, puis ce qu'il
+   * cite. Une ligne morte pour lui mais encore dans sa grâce n'y est plus qu'une
+   * pierre tombale (`withholdRawContent`), ou en est absente (`lapsed: 'drop'`).
+   */
   readonly alive: T[];
   /** Les échéances propres des éphémères de la page, pour la projection servie. */
   readonly deadlines: ReadonlyMap<string, EphemeralReaderResolution>;
@@ -233,18 +238,39 @@ export type ReaderPage<T> = {
  * #16582. Celle-ci lit la chaîne par un balayage PLAFONNÉ (#4165) qui SERT
  * quand il échoue (#9625) — juste pour une page, trop lâche pour une porte qui
  * décide seule.
+ *
+ * ─── LA GRÂCE SERT UNE BULLE, PLUS JAMAIS UN CONTENU (#18556) ───────────────
+ *
+ * Entre `D(u)` et `D(u) + 1 h` la ligne reste rendue, pour qu'un appareil en
+ * retard apprenne qu'elle a brûlé. Elle sortait ENTIÈRE par chaque porte qui
+ * passe ici — recherche, épingles, fil, synchronisation, mentions, favoris,
+ * lien de partage. Elle est désormais vidée ICI, sur la ligne brute, avant
+ * toute projection : aucune porte n'a à s'en souvenir, et celle qu'on ajoutera
+ * demain ne peut pas l'oublier. Une porte dont une bulle vide n'a aucun sens
+ * (une recherche trouve par le contenu) demande `lapsed: 'drop'`.
  */
+export type ReaderPageOptions = {
+  /** Le sort d'une ligne morte pour ce lecteur, encore dans sa grâce. Défaut : la pierre tombale. */
+  readonly lapsed?: 'tombstone' | 'drop';
+};
+
 export async function keepAliveForReader<T extends ReaderPageRow>(
   prisma: QuoteCascadePrisma,
   rows: readonly T[],
   readerParticipantId: string | undefined,
   now: Date = new Date(),
+  options: ReaderPageOptions = {},
 ): Promise<ReaderPage<T>> {
   const deadlines = await loadEphemeralReaderDeadlines(prisma, rows, readerParticipantId);
   const rootAlive = rows.filter((row) => isEphemeralServableToReader(row, deadlines.get(row.id), now));
   const inherited = await loadInheritedEphemeralDeadlines(prisma, rootAlive, readerParticipantId);
+  const served = rootAlive.filter((row) => isServableThroughQuotes(inherited, row.id, now));
+  const lapsed = (row: T) => isLapsedForReader(row, deadlines.get(row.id), inherited.get(row.id), now);
   return {
-    alive: rootAlive.filter((row) => isServableThroughQuotes(inherited, row.id, now)),
+    alive:
+      options.lapsed === 'drop'
+        ? served.filter((row) => !lapsed(row))
+        : served.map((row) => (lapsed(row) ? withholdRawContent(row) : row)),
     deadlines,
     inherited,
   };
@@ -285,6 +311,7 @@ export async function keepAliveForReaderAcrossConversations<
   rows: readonly T[],
   participantByConversation: ReadonlyMap<string, string | undefined>,
   now: Date = new Date(),
+  options: ReaderPageOptions = {},
 ): Promise<ReaderPage<T>> {
   if (rows.length === 0) return { alive: [], deadlines: new Map(), inherited: new Map() };
 
@@ -297,7 +324,7 @@ export async function keepAliveForReaderAcrossConversations<
 
   const pages = await Promise.all(
     [...byConversation].map(([conversationId, group]) =>
-      keepAliveForReader(prisma, group, participantByConversation.get(conversationId), now),
+      keepAliveForReader(prisma, group, participantByConversation.get(conversationId), now, options),
     ),
   );
 
@@ -310,8 +337,17 @@ export async function keepAliveForReaderAcrossConversations<
 
   // L'ordre d'ENTRÉE est rendu, pas l'ordre des groupes : cette unité garde une
   // page, elle ne la trie pas — l'appelant a déjà choisi son `orderBy`.
-  const alive = new Set(pages.flatMap((page) => page.alive).map((row) => row.id));
-  return { alive: rows.filter((row) => alive.has(row.id)), deadlines, inherited };
+  // Les lignes rendues sont celles de chaque PAGE — une pierre tombale y a
+  // remplacé la ligne morte —, jamais les lignes d'entrée refiltrées.
+  const servedById = new Map(pages.flatMap((page) => page.alive).map((row) => [row.id, row] as const));
+  return {
+    alive: rows.flatMap((row) => {
+      const served = servedById.get(row.id);
+      return served ? [served] : [];
+    }),
+    deadlines,
+    inherited,
+  };
 }
 
 export type QuoteDescendant = { readonly id: string; readonly conversationId: string };

@@ -16,10 +16,10 @@ import {
   purgeDueViewOnceContent,
   reevaluateLegacyViewOnceBurn,
 } from './messaging/purgeViewOnceContent';
-import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { loadQuoteDescendants } from './messaging/quoteCascade';
 import { backfillCaptureNoticeDeadlines } from './messaging/captureNoticeRetention';
 import { guardedInterval } from '../utils/guarded-timer';
+import { broadcastViewOnceFact } from '../socketio/broadcastViewOnceFact';
 
 const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
 
@@ -348,15 +348,16 @@ export class ExpiredMessagesCleanupService {
       attachmentRemover: this.attachmentRemover,
       onError: (messageId, err) => log.warn('view-once purge failed', { messageId, err }),
       onPurged: ({ id, ...entry }) => log.info('view-once purged', { messageId: id, ...entry }),
-      announce: (purged) => {
-        this.resolveManager()
-          ?.getIO()
-          ?.to(ROOMS.conversation(purged.conversationId))
-          .emit(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, {
-            messageId: purged.id,
-            conversationId: purged.conversationId,
-          });
-      },
+      announce: (purged) =>
+        broadcastViewOnceFact({
+          prisma: this.prisma,
+          manager: this.resolveManager(),
+          conversationId: purged.conversationId,
+          messageId: purged.id,
+          eventType: 'view-once-purged',
+          payload: { messageId: purged.id, conversationId: purged.conversationId },
+          onError: (err) => log.warn('view-once purge announce failed', { messageId: purged.id, err }),
+        }),
     });
   }
 
@@ -430,6 +431,7 @@ export class ExpiredMessagesCleanupService {
         data: {
           content: '',
           encryptedContent: null,
+          encryptionMetadata: null,
           translations: null,
           metadata: null,
           deletedAt: now,

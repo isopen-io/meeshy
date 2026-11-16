@@ -50,6 +50,7 @@ import { withCallSummaryParticipantNames } from '../services/calls/callSummaryPa
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 import { isEphemeralServableToReader, readEphemeralReaderResolution } from './conversations/ephemeralReaderDeadlines';
 import { mapMessageProtectionFields } from './conversations/messageProtectionProjection';
+import { projectEphemeralTombstone, type TombstoneRow } from './conversations/ephemeralTombstone';
 
 /**
  * L'expéditeur tel que `GET /messages/:messageId` le CHARGE — un `Participant`,
@@ -447,7 +448,10 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       // #11381 — un message `server`/`hybrid` sort en clair, ses traductions comprises.
       const opened = await revealAtRest(message, lazyKeyring(() => getEncryptionService(prisma)));
       const [citedMessage] = await withCallSummaryParticipantNames(prisma, await withNoticeUsernames(prisma, await servePostReplyCitations(prisma, [opened])));
-      return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
+      // #18556 — échu pour ce lecteur, encore dans sa grâce : la bulle seule.
+      // L'extension de notification la dépose pour le démarrage à froid ; elle
+      // y apprend que le message a brûlé, plus ce qu'il disait.
+      return sendSuccess(reply, projectEphemeralTombstone(projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
         // #11375 — `data` traverse entier : les colonnes de l'éditeur tiers en
         // sortent, ce lecteur reçoit ce que `servedEditAttribution` lui accorde.
         ...withServedEditAttribution(citedMessage, editAttributionReaderOf(authRequest.authContext)),
@@ -510,7 +514,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           recipientCount: summary?.totalMembers ?? 0
         }
       } as unknown as Record<string, unknown>)) as Record<string, unknown> & { id: string; isViewOnce?: boolean | null },
-      viewOnceStates.get(messageId)));
+      viewOnceStates.get(messageId)), message as TombstoneRow, ephemeralReader, new Date()));
 
     } catch (error) {
       logger.error('Error fetching message', error as Error);

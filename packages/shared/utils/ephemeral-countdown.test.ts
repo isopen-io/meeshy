@@ -294,6 +294,27 @@ describe('flamme-œil — une échéance par lecteur sans durée (#8302)', () =>
     ).toBeNull();
   });
 
+  it('sert à l\'expéditeur l\'instant du FEU qui lui a été annoncé — sa propre échéance, jamais celle d\'un lecteur (#18556)', () => {
+    const BURNT = at(180_000);
+    expect(
+      servedEphemeralExpiresAt({
+        effectFlags: AFTER_READ,
+        rawExpiresAt: new Date(BURNT.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS),
+        isSender: true,
+        readerDeadline: BURNT,
+        latestRecipientDeadline: CONSUMED,
+      }),
+    ).toEqual(BURNT);
+  });
+
+  it('cesse d\'être servi à l\'expéditeur une heure après le feu annoncé (#18556)', () => {
+    const BURNT = at(180_000);
+    const served = servedEphemeralExpiresAt({ effectFlags: AFTER_READ, isSender: true, readerDeadline: BURNT });
+    const grace = BURNT.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS;
+    expect(isEphemeralServable({ effectFlags: AFTER_READ, servedExpiresAt: served, now: new Date(grace - 1) })).toBe(true);
+    expect(isEphemeralServable({ effectFlags: AFTER_READ, servedExpiresAt: served, now: new Date(grace) })).toBe(false);
+  });
+
   it('cesse d\'être servi au lecteur une heure après sa consommation', () => {
     expect(
       isEphemeralServable({
@@ -388,6 +409,14 @@ describe('la COPIE transférée d\'une flamme — durée ET après lecture, le p
     expect(
       servedEphemeralExpiresAt({ ...copy, isSender: false, sentAt: SENT_AT, readerDeadline: at(90_000) }),
     ).toEqual(at(90_000));
+  });
+
+  it('le feu annoncé à l\'expéditeur d\'une copie l\'emporte quand il précède « envoi + durée » (#18556)', () => {
+    expect(servedEphemeralExpiresAt({ ...copy, sentAt: SENT_AT, readerDeadline: at(5_000) })).toEqual(at(5_000));
+  });
+
+  it('un feu gravé APRÈS « envoi + durée » ne repousse pas l\'échéance de l\'expéditeur d\'une copie (#18556)', () => {
+    expect(servedEphemeralExpiresAt({ ...copy, sentAt: SENT_AT, readerDeadline: at(90_000) })).toEqual(SENDER_DEADLINE);
   });
 
   it('laisse la flamme-œil SANS durée à sa règle : son expéditeur ne reçoit aucune échéance', () => {

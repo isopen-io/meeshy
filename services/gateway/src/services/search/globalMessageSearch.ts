@@ -259,7 +259,7 @@ async function servableForReader(prisma: PrismaClient, scope: Scope, rows: reado
   const groups = [...new Set(readable.map((row) => row.conversationId))];
   const alive = await Promise.all(
     groups.map(async (conversationId) => {
-      const page = await keepAliveForReader(prisma, readable.filter((row) => row.conversationId === conversationId) as never[], scope.participantByConversation.get(conversationId));
+      const page = await keepAliveForReader(prisma, readable.filter((row) => row.conversationId === conversationId) as never[], scope.participantByConversation.get(conversationId), new Date(), { lapsed: 'drop' });
       return (page.alive as unknown as HitRow[]).filter((row) => !page.inherited.has(row.id));
     })
   );

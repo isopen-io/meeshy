@@ -687,4 +687,27 @@ describe('GET threads — la citation d’un éphémère échu POUR CE LECTEUR e
     expect(res.json().data.replies[0].expiresAt).toBe(CONSUMED.toISOString());
     await app.close();
   });
+
+  it('#18556 — une RACINE consommée par ce lecteur sort en pierre tombale dans la grâce', async () => {
+    const racine = { ...mockParentMessage, ...flamme, id: MSG_ID, replyToId: null, replyTo: null };
+    const app = await buildApp({
+      prisma: makePrisma({
+        message: {
+          findFirst: jest.fn<any>().mockResolvedValue(racine),
+          findMany: jest.fn<any>().mockResolvedValue([]),
+        },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: READER_PARTICIPANT }) },
+        messageStatusEntry: {
+          findMany: jest.fn<any>().mockResolvedValue([
+            { messageId: MSG_ID, participantId: READER_PARTICIPANT, ephemeralExpiresAt: CONSUMED },
+          ]),
+        },
+      }),
+    });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.parent.content).toBe('');
+    expect(res.body).not.toContain('4271');
+    await app.close();
+  });
 });

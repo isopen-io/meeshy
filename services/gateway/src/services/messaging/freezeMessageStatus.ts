@@ -181,6 +181,17 @@ export async function freezeMessageStatus(
       frozen += updated?.count ?? toUpdate.length;
     }
 
+    // #18556 — la PREUVE d'affichage. Seul l'accusé exact nomme ce qui a été
+    // affiché ; la plage héritée survole. Write-once, posé même sur une ligne
+    // que la plage avait déjà gravée lue : c'est ce champ, pas `readAt`, que
+    // le départ du lecteur lit avant de brûler une flamme-œil.
+    if (field === 'readAt' && messageIds) {
+      await prisma.messageStatusEntry.updateMany({
+        where: { messageId: { in: ids }, participantId, ...unsetOrNull('exactReadAt') },
+        data: { exactReadAt: at },
+      });
+    }
+
     // La langue s'UNIONNE, là où l'horodatage se fige. Seules les entrées qui
     // ne la connaissent pas encore sont réécrites : sur le chemin courant — le
     // lecteur ne change pas de langue entre deux lots — cette passe n'écrit
