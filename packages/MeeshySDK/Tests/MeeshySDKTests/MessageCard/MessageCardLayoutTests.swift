@@ -249,6 +249,48 @@ struct MessageCardLayoutTests {
         #expect(Self.text(Self.with(.fleche).ops, "↳") != nil)
     }
 
+    @Test func link_points_isThreeDotsInARow_centredBetweenTheTwoTexts() {
+        let dots = Self.dots(Self.with(.points).ops)
+        #expect(dots.count == 3)
+        #expect(Set(dots.map(\.y)).count == 1)
+        let middle = dots.map(\.x).reduce(0, +) / 3
+        #expect(abs(middle - MessageCardLayout.cardWidth / 2) < 1)
+    }
+
+    @Test func link_losange_isADiamondBetweenTwoRules() throws {
+        let ops = Self.with(.losange).ops
+        let mark = try #require(Self.text(ops, "◆"))
+        #expect(abs(mark.x - MessageCardLayout.cardWidth / 2) < 1)
+        let rules = Self.separators(ops)
+        #expect(rules.count == 2)
+        #expect(rules.allSatisfy { $0.dash.isEmpty && Swift.abs($0.y - rules[0].y) < 0.5 })
+        #expect(rules.contains { $0.x2 < mark.x } && rules.contains { $0.x1 > mark.x })
+    }
+
+    @Test func link_asterisme_isATypographicAsterism_centred() throws {
+        let ops = Self.with(.asterisme).ops
+        let mark = try #require(Self.text(ops, "⁂"))
+        #expect(abs(mark.x - MessageCardLayout.cardWidth / 2) < 1)
+        #expect(Self.separators(ops).isEmpty)
+    }
+
+    @Test func link_double_isTwoParallelRules_acrossTheCard() {
+        let rules = Self.separators(Self.with(.double).ops)
+        #expect(rules.count == 2)
+        #expect(rules.allSatisfy { $0.dash.isEmpty && $0.x2 - $0.x1 > MessageCardLayout.cardWidth / 2 })
+        #expect(Set(rules.map(\.y)).count == 2)
+    }
+
+    @Test func everyLinkButSilenceAndBubblesPaintsInsideItsRegion() throws {
+        for link in MessageCardLinkID.allCases where link != .silence && link != .bulles {
+            let layout = Self.with(link)
+            let region = try #require(layout.regions.first { $0.part == .link })
+            let silence = Self.with(.silence).ops.count
+            #expect(layout.ops.count > silence, "\(link.rawValue) peint sa liaison")
+            #expect(region.height > 0)
+        }
+    }
+
     // MARK: - Zones touchables
 
     @Test func uneReponseCiteeSeLitDeHautEnBasSansEnTeteNonDemande() {

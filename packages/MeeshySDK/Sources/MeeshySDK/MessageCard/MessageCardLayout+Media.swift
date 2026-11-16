@@ -307,6 +307,15 @@ extension MessageCardLayoutEngine {
             ))]
         case .bulles, .silence:
             return []
+        case .points:
+            return [6.0, 26, 46].map { .dot(MessageCardDotOp(x: rtl ? x - $0 : x + $0, y: y, radius: 4, color: accent)) }
+        case .double:
+            return [-4.0, 4].map { .separator(MessageCardSeparatorOp(x1: ends[0], x2: ends[1], y: y + $0, radius: 0, color: accent, dash: [], lineWidth: 2)) }
+        case .losange, .asterisme:
+            return [.text(MessageCardTextOp(
+                text: link == .losange ? "◆" : "⁂", x: x, y: y + 12, font: MessageCardFont(face: .system(700), size: link == .losange ? 26 : 34),
+                color: accent, align: rtl ? .right : .left, direction: .ltr
+            ))]
         }
     }
 

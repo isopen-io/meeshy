@@ -101,6 +101,10 @@ struct MessageCardLinkGeometry {
         case .bulles: return MessageCardLinkGeometry(block: 44, quoteBar: false, bubbles: true)
         case .fil: return MessageCardLinkGeometry(block: 120, quoteBar: true, bubbles: false)
         case .silence: return MessageCardLinkGeometry(block: 88, quoteBar: false, bubbles: false)
+        case .points: return MessageCardLinkGeometry(block: 96, quoteBar: false, bubbles: false)
+        case .losange: return MessageCardLinkGeometry(block: 112, quoteBar: false, bubbles: false)
+        case .asterisme: return MessageCardLinkGeometry(block: 130, quoteBar: false, bubbles: false)
+        case .double: return MessageCardLinkGeometry(block: 104, quoteBar: false, bubbles: false)
         }
     }
 }
@@ -505,6 +509,35 @@ struct MessageCardLayoutEngine {
                 .dot(MessageCardDotOp(x: x, y: y + block - 26, radius: 10, color: accent)),
             ]
         case .bulles, .silence:
+            return []
+        case .points, .losange, .asterisme, .double:
+            return centredLinkOps(link, middle: y + block / 2, canvas: canvas)
+        }
+    }
+
+    /// Les liaisons centrées sur la carte : elles ne dépendent pas du sens de lecture.
+    private func centredLinkOps(_ link: MessageCardLinkID, middle: Double, canvas: MessageCardCanvas) -> [MessageCardOp] {
+        let accent = palette.accent
+        let centre = (canvas.left + canvas.right) / 2
+        func mark(_ text: String, size: Double, lift: Double) -> MessageCardOp {
+            .text(MessageCardTextOp(
+                text: text, x: centre, y: middle + lift, font: MessageCardFont(face: .system(700), size: size),
+                color: accent, align: .center, direction: .ltr
+            ))
+        }
+        func rule(_ x1: Double, _ x2: Double, _ y: Double) -> MessageCardOp {
+            .separator(MessageCardSeparatorOp(x1: x1, x2: x2, y: y, radius: 0, color: accent, dash: [], lineWidth: 3))
+        }
+        switch link {
+        case .points:
+            return [-36.0, 0, 36].map { .dot(MessageCardDotOp(x: centre + $0, y: middle, radius: 7, color: accent)) }
+        case .losange:
+            return [rule(centre - 170, centre - 40, middle), mark("◆", size: 44, lift: 15), rule(centre + 40, centre + 170, middle)]
+        case .asterisme:
+            return [mark("⁂", size: 72, lift: 26)]
+        case .double:
+            return [rule(canvas.left, canvas.right, middle - 7), rule(canvas.left, canvas.right, middle + 7)]
+        default:
             return []
         }
     }

@@ -62,6 +62,14 @@ describe('le fil dans la carte, comme iOS : un bloc titré, une ligne par commen
     expect(layout({ template: 'aurore.rond.silence', ...thread(lines) }).ops.some((op) => op.kind === 'separator')).toBe(false);
   });
 
+  test('les quatre liaisons ajoutées séparent aussi une réponse de sa racine', () => {
+    for (const link of ['points', 'losange', 'asterisme', 'double'] as const) {
+      const nested = layout({ template: `aurore.rond.${link}`, ...thread(lines) });
+      const flat = layout({ template: `aurore.rond.${link}`, ...thread(lines.map((entry) => ({ ...entry, level: 0 }))) });
+      expect(nested.ops.length).toBeGreaterThan(flat.ops.length);
+    }
+  });
+
   test('une ligne trop longue se coupe dans la largeur que son niveau laisse', () => {
     const long = 'Dan : ' + 'mot '.repeat(80).trim();
     const l = layout(thread([lines[0]!, { text: long, level: 3 }]));

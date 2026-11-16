@@ -140,49 +140,174 @@ struct MessageCardPressStyle: ButtonStyle {
     }
 }
 
-/// Le dessin d'une liaison, en petit : ce qu'elle PEINT entre la question et la réponse.
-struct MessageCardLinkGlyph: View {
-    let link: MessageCardLinkID
+/// **LA LIAISON POSÉE, EN PETIT** (#18809) — miroir de `linkSketch`
+/// (`apps/web/src/routes/thread-export-link-sketch.ts`). Une case du choix de
+/// liaison montre une carte miniature : la citation en haut, la réponse en bas
+/// et, entre les deux, ce que la liaison y PEINT, dans les encres de la palette
+/// choisie — jamais l'encre de l'interface, qu'un fond de palette pourrait avaler.
+/// Les coordonnées vivent dans un carré de 50 × 50 ; la bande de la liaison est
+/// `band` (la citation au-dessus, la réponse au-dessous).
+struct MessageCardLinkSketch: Equatable {
+    enum Ink: Equatable { case accent, quote, reply, quotePanel, replyPanel }
 
-    var body: some View {
-        Canvas { context, size in
-            let sx = size.width / 50
-            let sy = size.height / 34
-            func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * sx, y: y * sy) }
-            let stroke = StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
-            let ink = GraphicsContext.Shading.foreground
-            var path = Path()
-            switch link {
-            case .orbite:
-                path.move(to: point(4, 17)); path.addLine(to: point(18, 17))
-                path.move(to: point(32, 17)); path.addLine(to: point(46, 17))
-                context.stroke(path, with: ink, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: [1 * sx, 5 * sx]))
-                context.stroke(Path(ellipseIn: CGRect(x: 21 * sx, y: 17 * sy - 4 * sx, width: 8 * sx, height: 8 * sx)), with: ink, style: stroke)
-            case .filet:
-                path.move(to: point(6, 17)); path.addLine(to: point(22, 17))
-                context.stroke(path, with: ink, style: StrokeStyle(lineWidth: 3.4, lineCap: .round))
-            case .guillemets:
-                context.draw(Text(verbatim: "“").font(MessageCardFontStyle.font(MessageCardTemplates.guillemetFace, size: 36)), at: point(14, 20))
-            case .fleche:
-                path.move(to: point(12, 6)); path.addLine(to: point(12, 14))
-                path.addQuadCurve(to: point(16, 18), control: point(12, 18))
-                path.addLine(to: point(30, 18))
-                path.move(to: point(25, 13)); path.addLine(to: point(30, 18)); path.addLine(to: point(25, 23))
-                context.stroke(path, with: ink, style: stroke)
-            case .bulles:
-                context.stroke(Path(roundedRect: CGRect(x: 3 * sx, y: 4 * sy, width: 28 * sx, height: 11 * sy), cornerRadius: 5.5 * sy), with: ink, style: stroke)
-                context.stroke(Path(roundedRect: CGRect(x: 19 * sx, y: 19 * sy, width: 28 * sx, height: 11 * sy), cornerRadius: 5.5 * sy), with: ink, style: stroke)
-            case .fil:
-                path.move(to: point(10, 3)); path.addLine(to: point(10, 24))
-                context.stroke(path, with: ink, style: stroke)
-                context.fill(Path(ellipseIn: CGRect(x: 10 * sx - 3.2 * sy, y: 28 * sy - 3.2 * sy, width: 6.4 * sy, height: 6.4 * sy)), with: ink)
-            case .silence:
-                path.move(to: point(8, 17)); path.addLine(to: point(42, 17))
-                context.opacity = 0.4
-                context.stroke(path, with: ink, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: [2 * sx, 5 * sx]))
+    enum Mark: Equatable {
+        case line(x1: Double, y1: Double, x2: Double, y2: Double, width: Double, dash: [Double], ink: Ink)
+        case dot(x: Double, y: Double, radius: Double, ink: Ink)
+        case ring(x: Double, y: Double, radius: Double, ink: Ink)
+        case panel(x: Double, y: Double, width: Double, height: Double, ink: Ink)
+        case diamond(x: Double, y: Double, radius: Double, ink: Ink)
+        case arrow(x: Double, top: Double, bottom: Double, end: Double, ink: Ink)
+        case glyph(String, x: Double, y: Double, size: Double, serif: Bool, ink: Ink)
+
+        var ink: Ink {
+            switch self {
+            case let .line(_, _, _, _, _, _, ink), let .dot(_, _, _, ink), let .ring(_, _, _, ink),
+                 let .panel(_, _, _, _, ink), let .diamond(_, _, _, ink), let .arrow(_, _, _, _, ink),
+                 let .glyph(_, _, _, _, _, ink):
+                return ink
             }
         }
-        .frame(width: 46, height: 30)
+    }
+
+    static let side: Double = 50
+    static let band: ClosedRange<Double> = 17...33
+
+    let quote: [Mark]
+    let link: [Mark]
+    let reply: [Mark]
+
+    var marks: [Mark] { quote + link + reply }
+
+    static func of(_ link: MessageCardLinkID) -> MessageCardLinkSketch {
+        MessageCardLinkSketch(quote: quoteMarks(link), link: linkMarks(link), reply: replyMarks(link))
+    }
+
+    private static func hasQuoteBar(_ link: MessageCardLinkID) -> Bool {
+        [.orbite, .filet, .fleche, .fil].contains(link)
+    }
+
+    private static func quoteMarks(_ link: MessageCardLinkID) -> [Mark] {
+        if link == .bulles {
+            return [
+                .panel(x: 5, y: 4, width: 30, height: 13, ink: .quotePanel),
+                .line(x1: 10, y1: 10.5, x2: 29, y2: 10.5, width: 2, dash: [], ink: .quote),
+            ]
+        }
+        let start: Double = hasQuoteBar(link) ? 14 : 8
+        let bar: [Mark] = hasQuoteBar(link) ? [.line(x1: 9, y1: 6, x2: 9, y2: 15, width: 2, dash: [], ink: .accent)] : []
+        return bar + [
+            .line(x1: start, y1: 8, x2: 40, y2: 8, width: 2, dash: [], ink: .quote),
+            .line(x1: start, y1: 13, x2: 32, y2: 13, width: 2, dash: [], ink: .quote),
+        ]
+    }
+
+    private static func replyMarks(_ link: MessageCardLinkID) -> [Mark] {
+        if link == .bulles {
+            return [
+                .panel(x: 15, y: 33, width: 30, height: 13, ink: .replyPanel),
+                .line(x1: 20, y1: 39.5, x2: 40, y2: 39.5, width: 2.6, dash: [], ink: .reply),
+            ]
+        }
+        return [
+            .line(x1: 8, y1: 37, x2: 42, y2: 37, width: 2.6, dash: [], ink: .reply),
+            .line(x1: 8, y1: 42.5, x2: 33, y2: 42.5, width: 2.6, dash: [], ink: .reply),
+        ]
+    }
+
+    private static func linkMarks(_ link: MessageCardLinkID) -> [Mark] {
+        switch link {
+        case .orbite:
+            return [
+                .line(x1: 6, y1: 25, x2: 20, y2: 25, width: 1.8, dash: [1, 3.5], ink: .accent),
+                .ring(x: 25, y: 25, radius: 3, ink: .accent),
+                .line(x1: 30, y1: 25, x2: 44, y2: 25, width: 1.8, dash: [1, 3.5], ink: .accent),
+            ]
+        case .filet: return [.line(x1: 8, y1: 25, x2: 24, y2: 25, width: 3, dash: [], ink: .accent)]
+        case .guillemets: return [.glyph("“", x: 13, y: 26, size: 26, serif: true, ink: .accent)]
+        case .fleche: return [.arrow(x: 12, top: 19, bottom: 27, end: 28, ink: .accent)]
+        case .bulles, .silence: return []
+        case .fil:
+            return [
+                .line(x1: 9, y1: 18, x2: 9, y2: 27, width: 2, dash: [], ink: .accent),
+                .dot(x: 9, y: 30, radius: 2.2, ink: .accent),
+            ]
+        case .points: return [19.0, 25, 31].map { .dot(x: $0, y: 25, radius: 1.9, ink: .accent) }
+        case .losange:
+            return [
+                .line(x1: 8, y1: 25, x2: 19, y2: 25, width: 1.6, dash: [], ink: .accent),
+                .diamond(x: 25, y: 25, radius: 3.6, ink: .accent),
+                .line(x1: 31, y1: 25, x2: 42, y2: 25, width: 1.6, dash: [], ink: .accent),
+            ]
+        case .asterisme: return [.glyph("⁂", x: 25, y: 25, size: 15, serif: false, ink: .accent)]
+        case .double:
+            return [
+                .line(x1: 8, y1: 23, x2: 42, y2: 23, width: 1.5, dash: [], ink: .accent),
+                .line(x1: 8, y1: 27.5, x2: 42, y2: 27.5, width: 1.5, dash: [], ink: .accent),
+            ]
+        }
+    }
+}
+
+/// Une case du choix de liaison : la liaison posée sur une carte miniature de
+/// la palette choisie.
+struct MessageCardLinkGlyph: View {
+    let link: MessageCardLinkID
+    var palette: MessageCardPalette = MessageCardPaletteID.aurore.palette
+
+    var body: some View {
+        let sketch = MessageCardLinkSketch.of(link)
+        let palette = palette
+        Canvas { context, size in
+            let scale = min(size.width, size.height) / MessageCardLinkSketch.side
+            for mark in sketch.marks { Self.paint(mark, in: &context, scale: scale, palette: palette) }
+        }
+        .frame(width: 48, height: 48)
+        .background(MessageCardSwatch(palette: palette, shape: RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
+        .environment(\.layoutDirection, .leftToRight)
         .accessibilityHidden(true)
+    }
+
+    static func color(_ ink: MessageCardLinkSketch.Ink, of palette: MessageCardPalette) -> Color {
+        switch ink {
+        case .accent: return MessageCardFontStyle.color(palette.accent)
+        case .quote: return MessageCardFontStyle.color(palette.quoteInk)
+        case .reply: return MessageCardFontStyle.color(palette.replyInk)
+        case .quotePanel: return MessageCardFontStyle.color(palette.quotePanel)
+        case .replyPanel: return MessageCardFontStyle.color(palette.replyPanel)
+        }
+    }
+
+    private static func paint(_ mark: MessageCardLinkSketch.Mark, in context: inout GraphicsContext, scale: Double, palette: MessageCardPalette) {
+        func p(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x * scale, y: y * scale) }
+        let ink = GraphicsContext.Shading.color(color(mark.ink, of: palette))
+        switch mark {
+        case let .line(x1, y1, x2, y2, width, dash, _):
+            var path = Path()
+            path.move(to: p(x1, y1)); path.addLine(to: p(x2, y2))
+            context.stroke(path, with: ink, style: StrokeStyle(lineWidth: width * scale, lineCap: .round, dash: dash.map { $0 * scale }))
+        case let .dot(x, y, radius, _):
+            context.fill(Path(ellipseIn: CGRect(x: (x - radius) * scale, y: (y - radius) * scale, width: 2 * radius * scale, height: 2 * radius * scale)), with: ink)
+        case let .ring(x, y, radius, _):
+            context.stroke(Path(ellipseIn: CGRect(x: (x - radius) * scale, y: (y - radius) * scale, width: 2 * radius * scale, height: 2 * radius * scale)), with: ink, lineWidth: 1.6 * scale)
+        case let .panel(x, y, width, height, _):
+            context.fill(Path(roundedRect: CGRect(x: x * scale, y: y * scale, width: width * scale, height: height * scale), cornerRadius: height / 2 * scale), with: ink)
+        case let .diamond(x, y, radius, _):
+            var path = Path()
+            path.move(to: p(x, y - radius)); path.addLine(to: p(x + radius, y)); path.addLine(to: p(x, y + radius)); path.addLine(to: p(x - radius, y)); path.closeSubpath()
+            context.fill(path, with: ink)
+        case let .arrow(x, top, bottom, end, _):
+            var path = Path()
+            path.move(to: p(x, top)); path.addLine(to: p(x, bottom - 3))
+            path.addQuadCurve(to: p(x + 3, bottom), control: p(x, bottom))
+            path.addLine(to: p(end, bottom))
+            path.move(to: p(end - 4, bottom - 4)); path.addLine(to: p(end, bottom)); path.addLine(to: p(end - 4, bottom + 4))
+            context.stroke(path, with: ink, style: StrokeStyle(lineWidth: 2 * scale, lineCap: .round, lineJoin: .round))
+        case let .glyph(text, x, y, size, serif, _):
+            let face: MessageCardFace = serif ? MessageCardTemplates.guillemetFace : .system(700)
+            var label = context.resolve(Text(verbatim: text).font(MessageCardFontStyle.font(face, size: size * scale)))
+            label.shading = ink
+            context.draw(label, at: p(x, y), anchor: .center)
+        }
     }
 }

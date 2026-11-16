@@ -534,4 +534,82 @@ final class ImagineWorkshopTests: XCTestCase {
         }
         XCTAssertEqual(Self.value(strings["export.card.crop"], "fr"), "Recadrer")
     }
+
+    // MARK: - Le choix de liaison (#18809)
+
+    func test_linkTile_everyLinkButTheBlankOnesPaintsItsMarkBetweenTheQuoteAndTheReply() {
+        for link in MessageCardLinkID.allCases {
+            let sketch = MessageCardLinkSketch.of(link)
+            XCTAssertFalse(sketch.quote.isEmpty, "\(link.rawValue) : la citation se montre")
+            XCTAssertFalse(sketch.reply.isEmpty, "\(link.rawValue) : la réponse se montre")
+            switch link {
+            case .silence:
+                XCTAssertTrue(sketch.link.isEmpty, "le silence ne trace rien : la case montre l'espace")
+            case .bulles:
+                XCTAssertTrue(sketch.marks.contains { if case .panel = $0 { return true } else { return false } }, "les bulles portent les deux textes")
+            default:
+                XCTAssertFalse(sketch.link.isEmpty, "\(link.rawValue) peint sa liaison")
+                XCTAssertTrue(sketch.link.allSatisfy { $0.ink == .accent }, "\(link.rawValue) : la liaison est à l'accent de la palette")
+            }
+        }
+    }
+
+    func test_linkTile_noTwoLinksLookAlike() {
+        let sketches = MessageCardLinkID.allCases.map(MessageCardLinkSketch.of)
+        XCTAssertEqual(Set(sketches.indices.flatMap { i in sketches.indices.filter { $0 > i && sketches[$0] == sketches[i] } }).count, 0)
+    }
+
+    func test_linkTile_paintsInThePaletteInks_neverTheInterfaceInk() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Export/MessageCardThumbnails.swift"))
+        XCTAssertFalse(source.contains("Shading.foreground"), "une encre d'interface disparaît sur un fond de palette")
+        let tray = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Export/MessageCardExportTray.swift"))
+        XCTAssertTrue(tray.contains("MessageCardLinkGlyph(link: link, palette: format.template.palette.palette)"),
+                      "la case montre la liaison posée sur la palette choisie")
+    }
+
+    @MainActor
+    func test_linkTile_rendersEveryLinkVisibly_onADarkAndALightPalette() throws {
+        for palette in [MessageCardPaletteID.aurore, .editorial] {
+            let silence = try Self.tilePixels(.silence, palette: palette)
+            for link in MessageCardLinkID.allCases where link != .silence && link != .bulles {
+                let pixels = try Self.tilePixels(link, palette: palette)
+                XCTAssertGreaterThan(Self.bandDifference(pixels, silence), 12, "\(link.rawValue) se voit dans sa case (\(palette.rawValue))")
+            }
+        }
+    }
+
+    @MainActor
+    private static func tilePixels(_ link: MessageCardLinkID, palette: MessageCardPaletteID) throws -> [UInt8] {
+        let renderer = ImageRenderer(content: MessageCardLinkGlyph(link: link, palette: palette.palette))
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.cgImage)
+        let (width, height) = (96, 96)
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let space = CGColorSpaceCreateDeviceRGB()
+        let context = try XCTUnwrap(CGContext(data: &bytes, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                              space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return bytes
+    }
+
+    /// Le nombre de pixels de la bande de la liaison qui changent franchement par rapport au silence.
+    private static func bandDifference(_ a: [UInt8], _ b: [UInt8]) -> Int {
+        let rows = Int(MessageCardLinkSketch.band.lowerBound / MessageCardLinkSketch.side * 96)...Int(MessageCardLinkSketch.band.upperBound / MessageCardLinkSketch.side * 96)
+        return rows.reduce(0) { total, row in
+            total + (0..<96).filter { column in
+                let i = (row * 96 + column) * 4
+                return (0..<3).map { abs(Int(a[i + $0]) - Int(b[i + $0])) }.reduce(0, +) > 90
+            }.count
+        }
+    }
+
+    func test_catalog_theElevenLinksSpeakTheSevenLanguages() throws {
+        let strings = try Self.catalog()
+        for link in MessageCardLinkID.allCases {
+            for language in Self.languages {
+                XCTAssertFalse((Self.value(strings["export.card.link.\(link.rawValue)"], language) ?? "").isEmpty, "\(link.rawValue) [\(language)]")
+            }
+        }
+        XCTAssertEqual(Self.value(strings["export.card.link.double"], "fr"), "Double filet")
+    }
 }

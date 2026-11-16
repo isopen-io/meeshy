@@ -6,12 +6,13 @@
  *  - la TYPOGRAPHIE — la police de la réponse et celle de la citation ;
  *  - la LIAISON — la façon dont la question mène à la réponse : l'orbite
  *    « ——— ○ ——— », un filet, de grands guillemets, une flèche de réponse,
- *    deux bulles de conversation, un fil qui descend, ou le seul silence.
+ *    deux bulles de conversation, un fil qui descend, le seul silence, trois
+ *    points, un losange entre deux filets, l'astérisme « ⁂ » ou un double filet.
  *
- * 14 palettes × 8 typographies × 7 liaisons = 784 templates, chacun nommé
+ * 14 palettes × 8 typographies × 11 liaisons = 1 232 templates, chacun nommé
  * par un identifiant STABLE `palette.typographie.liaison` : c'est lui que le
  * compteur d'usage (`message-card-usage.ts`) compte, et lui que le format par
- * défaut retient. Ajouter une palette ajoute 56 templates sans toucher aux
+ * défaut retient. Ajouter une palette ajoute 88 templates sans toucher aux
  * autres ; en renommer une casserait les compteurs — on n'en renomme pas.
  *
  * LES POLICES SONT CELLES DES STORIES (`story-fonts.ts`, OFL/Apache, latin),
@@ -139,7 +140,7 @@ export const CARD_TYPEFACES = {
   systeme: { replyFont: native(700), quoteFont: native(400, true), replyScale: 1 },
 } as const satisfies Readonly<Record<string, CardTypeface>>;
 
-export const CARD_LINKS = ['orbite', 'filet', 'guillemets', 'fleche', 'bulles', 'fil', 'silence'] as const;
+export const CARD_LINKS = ['orbite', 'filet', 'guillemets', 'fleche', 'bulles', 'fil', 'silence', 'points', 'losange', 'asterisme', 'double'] as const;
 
 export type CardPaletteId = keyof typeof CARD_PALETTES;
 export type CardTypefaceId = keyof typeof CARD_TYPEFACES;

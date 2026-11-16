@@ -178,6 +178,18 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     expect(chip(host, 'link', 'bulles')?.getAttribute('aria-pressed')).toBe('false');
   });
 
+  test('chaque case de liaison montre sa liaison posée sur la palette de la carte (#18809)', async () => {
+    const { host } = await mountSheet();
+    await openTab(host, 'link');
+    const drawings = CARD_LINKS.map((link) => {
+      const sketch = chip(host, 'link', link)?.querySelector(`[data-link-sketch="${link}"]`);
+      expect(sketch?.querySelector('svg')?.childElementCount ?? 0).toBeGreaterThanOrEqual(4);
+      expect((sketch as HTMLElement | null)?.style.background ?? '').toContain('linear-gradient');
+      return sketch?.innerHTML ?? '';
+    });
+    expect(new Set(drawings).size).toBe(CARD_LINKS.length);
+  });
+
   test('changer une dimension garde les deux autres et repeint la carte', async () => {
     const { host, harness } = await mountSheet();
     await openTab(host, 'link');
