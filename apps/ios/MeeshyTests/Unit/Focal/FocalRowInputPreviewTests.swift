@@ -134,6 +134,20 @@ final class FocalRowInputPreviewTests: XCTestCase {
         XCTAssertFalse(row.isLastReceivedMessage)
     }
 
+    /// **Un vocal se rend dans l'aperçu** (#18824) : sans file audio de la
+    /// conversation, le bloc audio ne trouvait aucun message hôte et l'aperçu
+    /// d'un vocal en Script ou en Focal ne montrait que l'en-tête d'identité.
+    func test_preview_voice_isHostedByItsOwnMessage() {
+        var message = koreanMessage()
+        message.attachments = [MessageAttachment(id: "a1", messageId: "m9", fileName: "v.m4a",
+                                                 mimeType: "audio/mp4", fileUrl: "https://cdn/v.m4a")]
+        let row = preview(message: message, translations: [])
+
+        XCTAssertEqual(row.audioHostMessage?.id, "m9")
+        XCTAssertEqual(FocalAudioBlock.hostingMessage(for: "a1", in: row.allAudioItems,
+                                                      fallback: row.audioHostMessage)?.id, "m9")
+    }
+
     func test_preview_identifiesTheMessage() {
         let row = preview(translations: [])
 

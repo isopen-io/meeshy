@@ -5,7 +5,7 @@ import { ALL_TEMPLATE_IDS, CARD_PALETTES, templateOf } from './message-card-temp
 
 const vocabulary: TemplateVocabulary = {
   typeface: { rond: 'Ronde', didone: 'Didone', plume: 'Plume', affiche: 'Affiche', futur: 'Futuriste', machine: 'Machine à écrire', marqueur: 'Marqueur', systeme: 'Système' },
-  link: { orbite: 'Orbite', filet: 'Filet', guillemets: 'Guillemets', fleche: 'Flèche', bulles: 'Bulles', fil: 'Fil', silence: 'Silence' },
+  link: { orbite: 'Orbite', filet: 'Filet', guillemets: 'Guillemets', fleche: 'Flèche', bulles: 'Bulles', fil: 'Fil', silence: 'Silence', points: 'Points', losange: 'Losange', asterisme: 'Astérisme', double: 'Double filet' },
   tone: { dark: 'Sombre', light: 'Clair' },
 };
 
@@ -29,7 +29,7 @@ describe('l’ordre de la galerie', () => {
 
 describe('chercher un template', () => {
   test('une recherche vide rend toute la galerie', () => {
-    expect(searchTemplates({ query: '  ', vocabulary }).length).toBe(784);
+    expect(searchTemplates({ query: '  ', vocabulary }).length).toBe(1232);
   });
 
   test('ignore la casse et les accents, et lit le début des mots', () => {
@@ -39,14 +39,14 @@ describe('chercher un template', () => {
   });
 
   test('chaque mot tapé resserre la recherche', () => {
-    expect(searchTemplates({ query: 'plume', vocabulary }).length).toBe(98);
-    expect(searchTemplates({ query: 'plume sombre', vocabulary }).length).toBe(49);
+    expect(searchTemplates({ query: 'plume', vocabulary }).length).toBe(154);
+    expect(searchTemplates({ query: 'plume sombre', vocabulary }).length).toBe(77);
     expect(searchTemplates({ query: 'plume sombre bulles', vocabulary }).length).toBe(7);
   });
 
   test('le ton se filtre aussi sans le taper', () => {
     const light = searchTemplates({ query: '', vocabulary, tone: 'light' });
-    expect(light.length).toBe(392);
+    expect(light.length).toBe(616);
     expect(light.every((id) => paletteTone(CARD_PALETTES[templateOf(id).paletteId]) === 'light')).toBe(true);
   });
 

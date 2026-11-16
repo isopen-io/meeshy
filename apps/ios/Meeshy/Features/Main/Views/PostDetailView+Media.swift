@@ -108,14 +108,7 @@ extension PostDetailView {
                 guard let w = media.width, let h = media.height, w > 0, h > 0 else { return nil }
                 return CGFloat(w) / CGFloat(h)
             }()
-            ProgressiveCachedImage(
-                thumbHash: media.thumbHash,
-                thumbnailUrl: media.thumbnailUrl,
-                fullUrl: media.url,
-                autoLoad: true
-            ) {
-                Color(hex: media.thumbnailColor).shimmer()
-            }
+            FeedMediaImage(media: media, contentMode: .fit)
             .aspectRatio(aspectRatio, contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: 400)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
@@ -318,15 +311,7 @@ extension PostDetailView {
     }
     private func detailGridCell(_ media: FeedMedia) -> some View {
         return ZStack {
-            ProgressiveCachedImage(
-                thumbHash: media.thumbHash,
-                thumbnailUrl: media.thumbnailUrl,
-                fullUrl: media.url,
-                autoLoad: true
-            ) {
-                Color(hex: media.thumbnailColor).shimmer()
-            }
-            .aspectRatio(contentMode: .fill)
+            FeedMediaImage(media: media, inGrid: true)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
             if media.type == .video {

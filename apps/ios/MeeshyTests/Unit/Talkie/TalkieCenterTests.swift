@@ -173,3 +173,35 @@ final class TalkieCenterTests: XCTestCase {
         XCTAssertEqual(rig.sut.active.first?.name, "Alice")
     }
 }
+
+/// Le bandeau du talkie reçu, où qu'on soit (#18820) : « Couper » tant que la voix sonne, « Parler » seulement si
+/// l'émission vers ce correspondant est ouverte (la loi de l'offre), jamais un bouton grisé ; il reste là tant qu'on lui
+/// répond.
+@MainActor
+final class TalkieBannerLawTests: XCTestCase {
+
+    private func speaker(_ id: String = "t1", from: String = "alice") -> TalkieSpeaker {
+        TalkieSpeaker(talkieId: id, fromUserId: from, name: "Alice", openedAt: Date(timeIntervalSince1970: 0), maxDuration: 30)
+    }
+
+    func test_aLiveVoiceFromSomeoneIMayTalkTo_offersMuteAndTalk() {
+        XCTAssertEqual(TalkieBannerLaw.actions(speakerIsLive: true, offered: true), [.mute, .talk])
+    }
+
+    func test_aLiveVoiceWithoutTheOffer_offersOnlyMute() {
+        XCTAssertEqual(TalkieBannerLaw.actions(speakerIsLive: true, offered: false), [.mute])
+    }
+
+    func test_whileReplying_afterTheVoiceEnded_onlyTalkRemains() {
+        XCTAssertEqual(TalkieBannerLaw.actions(speakerIsLive: false, offered: true), [.talk])
+    }
+
+    func test_theBannerShowsTheLiveSpeaker_elseTheOneIAmAnswering_elseNothing() {
+        let live = speaker("t2", from: "bob")
+        let answered = speaker()
+
+        XCTAssertEqual(TalkieBannerLaw.speaker(active: live, replyingTo: answered), live)
+        XCTAssertEqual(TalkieBannerLaw.speaker(active: nil, replyingTo: answered), answered)
+        XCTAssertNil(TalkieBannerLaw.speaker(active: nil, replyingTo: nil))
+    }
+}

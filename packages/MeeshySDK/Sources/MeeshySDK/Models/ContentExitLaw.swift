@@ -73,18 +73,14 @@ public struct ContentExitLaw: Equatable, Sendable {
         /// Une capture de ce contenu se DÉCLARE à la passerelle (#9617).
         public var isDeclared: Bool { self != .free }
 
-        /// **Un contenu qui disparaît est soit ANNONCÉ, soit NOIR — jamais
-        /// capturé en silence** (#9617). La vue unique est toujours noire ; une
-        /// flamme ne quitte la couche sécurisée QUE sur une surface qui déclare
-        /// ce qu'elle affiche au détecteur de capture, donc dont la capture
-        /// produira l'annonce. FERMÉ PAR DÉFAUT : une surface qui ne dit rien
-        /// est réputée ne pas annoncer.
+        /// **Un contenu qui disparaît sort NOIR de toute capture** (directive
+        /// porteur, #18831) : la vue unique comme les deux
+        /// flammes, sur toutes les surfaces. Une flamme reste ANNONCÉE en plus
+        /// (#9617) — `isDeclared` —, mais le noir ne dépend plus de l'annonce :
+        /// `surfaceAnnounces` ne change plus le verdict, il reste accepté pour
+        /// les sites qui le passent.
         public func shieldsCapture(surfaceAnnounces: Bool = false) -> Bool {
-            switch self {
-            case .free: return false
-            case .announced: return !surfaceAnnounces
-            case .blocked: return true
-            }
+            self != .free
         }
     }
 

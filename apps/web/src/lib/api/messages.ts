@@ -165,7 +165,7 @@ export function messagesInfiniteOptions(deps: ConversationsDeps, conversationId:
         await loadMessages({
           ...deps,
           conversationId,
-          ...(pageParam !== undefined ? { before: pageParam } : {}),
+          ...(pageParam != null ? { before: pageParam } : {}),
           ...(signal !== undefined ? { signal } : {}),
         }),
       ),

@@ -357,6 +357,53 @@ final class MessageOverlayPreviewTouchTests: XCTestCase {
         XCTAssertFalse(touch.offersPlayback)
     }
 
+    // MARK: - Le carrousel défile au doigt (#18824)
+
+    func test_resolve_severalVisuals_scrollTheCarousel_inEveryReadingMode() {
+        for mode in ConversationReadingMode.allCases {
+            let touch = MessageOverlayPreviewTouch.resolve(
+                message: message([photo(id: "p1"), photo(id: "p2"), video()]), readingMode: mode)
+            XCTAssertTrue(touch.scrollsCarousel, "\(mode)")
+            XCTAssertTrue(touch.offersTouch, "\(mode)")
+            XCTAssertEqual(touch.touchZoneIds, ["v1", MessageOverlayPreviewTouch.carouselZoneId], "\(mode)")
+        }
+    }
+
+    func test_resolve_singlePhoto_staysAnImage() {
+        let touch = MessageOverlayPreviewTouch.resolve(message: message([photo()]), readingMode: .bubbles)
+        XCTAssertFalse(touch.scrollsCarousel)
+        XCTAssertFalse(touch.offersTouch, "une seule photo : tout part au glissement du cluster")
+    }
+
+    func test_resolve_photoAndVoice_isNoCarousel() {
+        let touch = MessageOverlayPreviewTouch.resolve(message: message([photo(), voice()]), readingMode: .bubbles)
+        XCTAssertFalse(touch.scrollsCarousel)
+        XCTAssertEqual(touch.touchZoneIds, ["a1"])
+    }
+
+    func test_resolve_protectedCarousel_staysInert() {
+        let photos = [photo(id: "p1"), photo(id: "p2")]
+        for protected in [message(photos, viewOnce: true), message(photos, blurred: true),
+                          message(photos, encrypted: true), message(photos, expiresAt: Date().addingTimeInterval(-1))] {
+            let touch = MessageOverlayPreviewTouch.resolve(message: protected, readingMode: .bubbles)
+            XCTAssertFalse(touch.scrollsCarousel)
+            XCTAssertFalse(touch.offersTouch)
+        }
+    }
+
+    func test_holes_keepTheCarouselZone() {
+        let bounds = CGRect(x: 0, y: 0, width: 300, height: 400)
+        let carousel = CGRect(x: 0, y: 0, width: 260, height: 340)
+        let touch = MessageOverlayPreviewTouch.resolve(
+            message: message([photo(id: "p1"), photo(id: "p2")]), readingMode: .focal)
+
+        let holes = MessageOverlayPreviewTouch.holes(
+            zones: [(attachmentId: MessageOverlayPreviewTouch.carouselZoneId, frame: carousel)],
+            playable: touch.touchZoneIds, in: bounds)
+
+        XCTAssertEqual(holes, [carousel])
+    }
+
     // MARK: - Jamais lisible si le fil ne le lit pas
 
     func test_resolve_viewOnceMessage_offersNoPlayback() {

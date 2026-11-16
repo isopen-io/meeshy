@@ -41,7 +41,7 @@ final class AudioSessionWritesOffMainGuardTests: XCTestCase {
     private static let allowed: [String: String] = [
         "packages/MeeshySDK/Sources/MeeshySDK/Media/MediaSessionCoordinator.swift":
             "les écritures s'exécutent sur sessionQueue (perform…, onSessionQueue)",
-        "packages/MeeshySDK/Sources/MeeshySDK/Media/MediaSessionCoordinator+MixableVoice.swift":
+        "packages/MeeshySDK/Sources/MeeshySDK/Media/MediaSessionCoordinator+InterruptingVoice.swift":
             "les écritures s'exécutent sur sessionQueue (onSessionQueue ; le réveil PushToTalk, hors fil principal, l'attend)",
         "packages/MeeshySDK/Sources/MeeshySDK/Media/AudioSessionProviding.swift":
             "le relais de la session réelle, appelé par le coordinateur seul",

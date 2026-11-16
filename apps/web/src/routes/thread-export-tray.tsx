@@ -68,6 +68,10 @@ export const LINK_LABEL = {
   bulles: 'export.card.link.bulles',
   fil: 'export.card.link.fil',
   silence: 'export.card.link.silence',
+  points: 'export.card.link.points',
+  losange: 'export.card.link.losange',
+  asterisme: 'export.card.link.asterisme',
+  double: 'export.card.link.double',
 } as const satisfies Readonly<Record<CardLinkId, ExportCardCatalogKey>>;
 
 const OPTION_LABEL = {
@@ -301,7 +305,7 @@ export function ExportTray(props: ExportTrayProps) {
         {tab === 'link'
           ? props.links.map((link) => (
               <Tile key={link} pressed={link === current.link} onClick={() => props.onPart({ link })} data={{ 'data-export-link': link }} label={translateExportCard(language, LINK_LABEL[link])}>
-                <LinkGlyph link={link} />
+                <LinkGlyph link={link} palette={current.paletteId} />
               </Tile>
             ))
           : null}

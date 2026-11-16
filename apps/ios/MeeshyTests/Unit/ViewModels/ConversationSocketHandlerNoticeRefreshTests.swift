@@ -103,4 +103,46 @@ final class ConversationSocketHandlerNoticeRefreshTests: XCTestCase {
         XCTAssertEqual(row?.content, "Tom et Aïcha viennent d’arriver")
         XCTAssertEqual(row?.isEdited, true)
     }
+
+    // MARK: - #18830 — l'avis de capture remis sous le même id se réécrit
+
+    private func captureNotice(count: Int, messageType: String = "system") -> APIMessage {
+        JSONStub.decode("""
+        {
+            "id":"m-capture",
+            "conversationId":"\(conversationId)",
+            "senderId":"000000000000000000000002",
+            "content":"Alice a capturé l’éphémère du 07/10/2026 à 12:05 (UTC)",
+            "messageType":"\(messageType)","messageSource":"system",
+            "createdAt":"2026-10-07T12:06:00.000Z",
+            "metadata":{"kind":"content-capture",
+                "actor":{"participantId":"p-actor","displayName":"Alice","isAnonymous":false},
+                "capturedMessageId":"aaaaaaaaaaaaaaaaaaaaaaaa","nature":"timed-flame","outcome":"announced",
+                "captureKind":"screenshot","sentAt":"2026-10-07T12:05:00.000Z","count":\(count)}
+        }
+        """)
+    }
+
+    func test_captureNotice_redeliveredUnderSameId_rewritesItsCount() async throws {
+        let (sut, socket, db, delegate) = try makeSUT()
+        _ = (sut, delegate)
+
+        socket.simulateMessage(captureNotice(count: 2))
+        try await Task.sleep(nanoseconds: 300_000_000)
+        socket.simulateMessage(captureNotice(count: 3))
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let stored = try await db.read { try MessageRecord.fetchOne($0, key: "m-capture") }
+        XCTAssertEqual(stored?.toMessage(currentUserId: "000000000000000000000001").captureNotice?.count, 3, "la seconde remise de l'avis le réécrit")
+    }
+
+    func test_refreshesKnownNotice_onlyAKnownCaptureNotice() {
+        XCTAssertTrue(ConversationIncomingMessageReconciler.refreshesKnownNotice(captureNotice(count: 2), known: true))
+        XCTAssertFalse(ConversationIncomingMessageReconciler.refreshesKnownNotice(captureNotice(count: 2), known: false))
+        XCTAssertFalse(ConversationIncomingMessageReconciler.refreshesKnownNotice(served(isEdited: false), known: true))
+        XCTAssertFalse(
+            ConversationIncomingMessageReconciler.refreshesKnownNotice(captureNotice(count: 2, messageType: "text"), known: true),
+            "seul un message SYSTÈME est un avis : une métadonnée posée sur une parole ne réécrit rien"
+        )
+    }
 }

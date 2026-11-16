@@ -111,7 +111,9 @@ public struct MessageCardFraming: Equatable, Hashable, Sendable {
 }
 
 /// Un média que la carte peint RECADRÉ, et donc qu'on peut cadrer (#18805) :
-/// son identifiant, sa nature, et son cadre en pixels de la carte.
+/// son identifiant, sa nature, et son cadre en pixels de la carte — photo,
+/// vidéo (son affiche et chacune de ses images), hero d'un post ou d'une story,
+/// fond (#18810).
 public struct MessageCardFramedMedia: Equatable, Sendable {
     public let mediaID: String
     public let kind: MessageCardMediaKind
@@ -120,31 +122,55 @@ public struct MessageCardFramedMedia: Equatable, Sendable {
     public let radius: Double
     /// Le média couvre la carte entière, sous le texte : un fond.
     public let isBackdrop: Bool
+    /// L'inclinaison de la carte (#18810), en radians, autour du pivot
+    /// (`pivotX`, `pivotY`, en pixels de la carte) : le cadre se dessine tourné.
+    public let rotation: Double
+    public let pivotX: Double
+    public let pivotY: Double
 
-    public init(mediaID: String, kind: MessageCardMediaKind, frame: MessageCardFrame, radius: Double, isBackdrop: Bool) {
+    public init(mediaID: String, kind: MessageCardMediaKind, frame: MessageCardFrame, radius: Double, isBackdrop: Bool,
+                rotation: Double = 0, pivotX: Double = 0, pivotY: Double = 0) {
         self.mediaID = mediaID
         self.kind = kind
         self.frame = frame
         self.radius = radius
         self.isBackdrop = isBackdrop
+        self.rotation = rotation
+        self.pivotX = pivotX
+        self.pivotY = pivotY
     }
 }
 
 public extension MessageCardLayout {
     /// Les médias recadrés de la carte, le fond d'abord puis de haut en bas —
-    /// jamais un sticker, qui s'inscrit en entier et ne se recadre pas.
+    /// jamais un sticker, qui s'inscrit en entier et ne se recadre pas. Une
+    /// carte INCLINÉE peint son contenu dans un groupe tourné : ses médias y
+    /// sont cherchés aussi, avec l'inclinaison du groupe (#18810).
     var framedMedia: [MessageCardFramedMedia] {
-        let backdrop = backdrop.compactMap { Self.framed($0, isBackdrop: true) }
-        return backdrop + ops.compactMap { Self.framed($0, isBackdrop: false) }
+        Self.framed(backdrop, isBackdrop: true, tilt: nil) + Self.framed(ops, isBackdrop: false, tilt: nil)
     }
 
-    private static func framed(_ op: MessageCardOp, isBackdrop: Bool) -> MessageCardFramedMedia? {
-        guard case let .media(media) = op, media.fit == .cover, media.kind.isVisual, media.width > 0, media.height > 0 else { return nil }
+    private static func framed(_ ops: [MessageCardOp], isBackdrop: Bool, tilt: MessageCardGroupOp?) -> [MessageCardFramedMedia] {
+        ops.flatMap { op -> [MessageCardFramedMedia] in
+            switch op {
+            case let .group(group):
+                return framed(group.ops, isBackdrop: isBackdrop, tilt: group)
+            case let .media(media):
+                return framed(media, isBackdrop: isBackdrop, tilt: tilt).map { [$0] } ?? []
+            default:
+                return []
+            }
+        }
+    }
+
+    private static func framed(_ media: MessageCardMediaOp, isBackdrop: Bool, tilt: MessageCardGroupOp?) -> MessageCardFramedMedia? {
+        guard media.fit == .cover, media.kind.isVisual, media.width > 0, media.height > 0 else { return nil }
         return MessageCardFramedMedia(
             mediaID: media.mediaID, kind: media.kind,
             frame: MessageCardFrame(x: media.x, y: media.y, width: media.width, height: media.height),
             radius: media.radius,
-            isBackdrop: isBackdrop
+            isBackdrop: isBackdrop,
+            rotation: tilt?.rotation ?? 0, pivotX: tilt?.cx ?? 0, pivotY: tilt?.cy ?? 0
         )
     }
 }

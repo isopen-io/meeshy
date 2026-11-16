@@ -155,14 +155,18 @@ struct OverlayPreviewMediaGrid: View {
             MaskedMediaTile()
                 .frame(width: size.width, height: size.height)
         } else {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil,
-                fullUrl: attachment.fileUrl.isEmpty ? attachment.thumbnailUrl : attachment.fileUrl
-            ) {
-                Color(hex: attachment.thumbnailColor).opacity(0.3)
+            AnimatedAttachmentImage(mimeType: attachment.mimeType, fileUrl: attachment.fileUrl,
+                                    pointSize: max(size.width, size.height),
+                                    inGrid: attachments.count > 1, byteSize: attachment.fileSize) {
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil,
+                    fullUrl: attachment.fileUrl.isEmpty ? attachment.thumbnailUrl : attachment.fileUrl
+                ) {
+                    Color(hex: attachment.thumbnailColor).opacity(0.3)
+                }
+                .aspectRatio(contentMode: .fill)
             }
-            .aspectRatio(contentMode: .fill)
             .frame(width: size.width, height: size.height)
             .clipped()
         }
@@ -362,15 +366,36 @@ struct ProtectedFormChip: View {
 /// le fil : il se lit aussi dans l'aperçu.
 struct MessageOverlayPreviewTouch: Equatable {
     let kind: MessageOverlayPreviewKind
-    /// Les pièces dont la zone de lecture se touche. Vide ⇒ l'aperçu est inerte.
+    /// Les pièces dont la zone de lecture se touche.
     let playableAttachmentIds: Set<String>
+    /// **Le carrousel défile au doigt** (#18824) : un message clair à plusieurs
+    /// visuels se montre en carrousel dans l'aperçu, et sa surface se touche.
+    var scrollsCarousel: Bool = false
+
+    /// L'identifiant de la zone du carrousel, déclarée par `BubbleCarouselView`
+    /// en présentation d'aperçu ; aucune pièce (identifiant serveur) ne le porte.
+    static let carouselZoneId = "overlay.preview.carousel"
 
     var offersPlayback: Bool { !playableAttachmentIds.isEmpty }
+
+    /// Les zones que le masque perce : lecture et carrousel. Vide ⇒ inerte.
+    var touchZoneIds: Set<String> {
+        scrollsCarousel ? playableAttachmentIds.union([Self.carouselZoneId]) : playableAttachmentIds
+    }
+
+    var offersTouch: Bool { !touchZoneIds.isEmpty }
 
     static func resolve(message: Message, readingMode: ConversationReadingMode, now: Date = Date()) -> MessageOverlayPreviewTouch {
         MessageOverlayPreviewTouch(
             kind: MessageOverlayPreviewKind.resolve(readingMode: readingMode),
-            playableAttachmentIds: playableAttachmentIds(for: message, now: now))
+            playableAttachmentIds: playableAttachmentIds(for: message, now: now),
+            scrollsCarousel: presentsCarousel(message, now: now))
+    }
+
+    /// Plusieurs visuels (photos, vidéos), sous aucune forme protégée.
+    static func presentsCarousel(_ message: Message, now: Date = Date()) -> Bool {
+        guard OverlayPreviewProtection.form(for: message, now: now) == .clear else { return false }
+        return message.attachments.filter { $0.type == .image || $0.type == .video }.count > 1
     }
 
     static func playableAttachmentIds(for message: Message, now: Date = Date()) -> Set<String> {
@@ -397,12 +422,30 @@ struct MessageOverlayPreviewTouch: Equatable {
         return played == activeAttachmentId
     }
 
-    /// **Les trous du masque** : les zones de lecture des pièces lisibles,
-    /// ramenées au cadre de l'aperçu. Une zone hors du cadre ne perce rien.
+    /// **Les trous du masque** : les zones de lecture des pièces lisibles et
+    /// celle du carrousel (`touchZoneIds`), ramenées au cadre de l'aperçu. Une
+    /// zone hors du cadre ne perce rien.
     static func holes(zones: [(attachmentId: String, frame: CGRect)], playable: Set<String>, in bounds: CGRect) -> [CGRect] {
         zones
             .filter { playable.contains($0.attachmentId) }
             .map { $0.frame.intersection(bounds) }
             .filter { !$0.isNull && !$0.isEmpty }
+    }
+}
+
+/// **Déclare la zone du carrousel de l'aperçu** (#18824) : le masque de
+/// l'aperçu la perce comme un bouton de lecture, pour que le doigt la fasse
+/// défiler. Le cadre voyage par la clé des contrôles de lecture
+/// (`MediaPlayControlAnchorKey`), que seul ce masque lit.
+struct OverlayPreviewTouchZone: ViewModifier {
+    let declares: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if declares {
+            content.mediaPlayControlAnchor(attachmentId: MessageOverlayPreviewTouch.carouselZoneId)
+        } else {
+            content
+        }
     }
 }

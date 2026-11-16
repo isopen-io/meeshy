@@ -116,7 +116,7 @@ export function reelsInfiniteOptions(deps: ReelsDeps, seed?: string) {
         await loadReelsPage({
           ...deps,
           ...(seed !== undefined ? { seed } : {}),
-          ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          ...(pageParam != null ? { cursor: pageParam } : {}),
           ...(signal !== undefined ? { signal } : {}),
         }),
       ),

@@ -60,7 +60,7 @@ public enum MessageCardSearch {
         ].flatMap(tokens)
     }
 
-    /// Les 784 templates dans l'ordre de la galerie : un brassage BIJECTIF, identique au web.
+    /// Tous les templates dans l'ordre de la galerie : un brassage BIJECTIF, identique au web.
     public static let galleryOrder: [MessageCardTemplateID] = {
         let palettes = MessageCardPaletteID.allCases
         let typefaces = MessageCardTypefaceID.allCases

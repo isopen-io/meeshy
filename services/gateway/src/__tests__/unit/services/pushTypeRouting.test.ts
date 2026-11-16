@@ -193,3 +193,20 @@ describe('battery_pull (#14147) — le réveil de relevé ne part vers aucun cli
     expect(tokenRoutesPushType(iphone(null), 'device_battery')).toBe(true);
   });
 });
+
+describe('talkie_incoming (#17144) — l’Android natif 3.1.0 route le réveil vers TalkieWakeService', () => {
+  const playNative = (appVersion: string): RoutableToken => ({ platform: 'android', appVersion, bundleId: 'me.meeshy.app' });
+
+  it('la 3.1.0 publiée sur Play (me.meeshy.app) reçoit le réveil', () => {
+    expect(tokenRoutesPushType(playNative('3.1.0'), 'talkie_incoming')).toBe(true);
+  });
+
+  it('une native antérieure à 3.1.0 n’en ferait qu’une bannière vide : rien ne part', () => {
+    expect(tokenRoutesPushType(playNative('3.0.0'), 'talkie_incoming')).toBe(false);
+  });
+
+  it('la coque et le navigateur ne le routent toujours pas', () => {
+    expect(tokenRoutesPushType(shell('99.0.0'), 'talkie_incoming')).toBe(false);
+    expect(tokenRoutesPushType(browser('99.0.0'), 'talkie_incoming')).toBe(false);
+  });
+});

@@ -166,7 +166,7 @@ struct ShareContentZone: View {
                     .fill(Color(hex: accentColor))
                     .frame(width: 3, height: 32)
                 if let first = message.attachments.first, withdrawn == nil {
-                    thumbnail(first).captureShield(message.contentExitLaw.capture.shieldsCapture())
+                    thumbnail(first).captureShield(message.exitOffer.capture.shieldsCapture())
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(message.senderName ?? "?")
@@ -177,7 +177,7 @@ struct ShareContentZone: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundStyle(theme.textMuted)
                         .lineLimit(2)
-                        .captureShield(message.contentExitLaw.capture.shieldsCapture())
+                        .captureShield(message.exitOffer.capture.shieldsCapture())
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)

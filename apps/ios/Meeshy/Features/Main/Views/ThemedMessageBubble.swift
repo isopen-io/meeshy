@@ -264,9 +264,16 @@ struct ThemedMessageBubble: View {
     @State private var shareURL: URL? = nil
     @State private var fullscreenAttachment: MessageAttachment? = nil
     @State private var showCarousel: Bool = false
+    @Environment(\.carouselPresentation) private var carouselPresentation
     @State private var carouselIndex: Int = 0
     @State private var revealedAttachmentIds: Set<String> = []
     @State private var fullscreenLocationAttachment: MessageAttachment? = nil
+
+    /// L'aperçu d'appui long montre plusieurs visuels en carrousel, par la
+    /// loi qui perce aussi son masque de toucher (#18824).
+    private var previewShowsCarousel: Bool {
+        carouselPresentation == .preview && MessageOverlayPreviewTouch.presentsCarousel(message)
+    }
 
     // MARK: - Lifecycle controllers (encapsulate timers + animations)
 
@@ -534,7 +541,7 @@ struct ThemedMessageBubble: View {
             shareURL: $shareURL,
             fullscreenAttachment: $fullscreenAttachment,
             fullscreenLocationAttachment: $fullscreenLocationAttachment,
-            showCarousel: $showCarousel,
+            showCarousel: previewShowsCarousel ? .constant(true) : $showCarousel,
             carouselIndex: $carouselIndex,
             revealedAttachmentIds: $revealedAttachmentIds,
             blurController: blurController,

@@ -121,7 +121,7 @@ export function mediaHubInfiniteOptions(deps: ConversationsDeps, conversationId:
           conversationId,
           kind,
           term,
-          ...(pageParam === undefined ? {} : { before: pageParam }),
+          ...(pageParam == null ? {} : { before: pageParam }),
           ...(signal === undefined ? {} : { signal }),
         }),
       ),

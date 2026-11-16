@@ -252,9 +252,9 @@ public struct EmojiReactionPicker: View {
                 .background(tileFrameReader(index: quickEmojis.count))
             }
             .accessibilityLabel(String(localized: "reaction.picker.more.a11y", bundle: .module))
-            // La tuile "+" cloture la vague — son index est place juste
-            // apres le dernier emoji pour qu'elle arrive en derniere.
-            .modifier(WaveTileModifier(index: quickEmojis.count, hasEntered: hasEntered))
+            // Le « + » entre avec les premières tuiles (#18812) : fermer la vague
+            // le faisait attendre 0,36 s à huit emojis.
+            .modifier(WaveTileModifier(index: ReactionStripWave.trailingRank(quickCount: quickEmojis.count), hasEntered: hasEntered))
         }
     }
 
@@ -279,7 +279,7 @@ public struct EmojiReactionPicker: View {
             .buttonStyle(PressableButtonStyle())
             .accessibilityLabel(extraTile.accessibilityLabel)
             .accessibilityIdentifier(extraTile.accessibilityIdentifier ?? "")
-            .modifier(WaveTileModifier(index: quickEmojis.count + 1, hasEntered: hasEntered))
+            .modifier(WaveTileModifier(index: ReactionStripWave.trailingRank(quickCount: quickEmojis.count) + 1, hasEntered: hasEntered))
         }
     }
 
@@ -427,6 +427,18 @@ public extension View {
 /// d'entree combine fade + montee verticale (la tuile arrive depuis le bas),
 /// l'easing `.spring` rebondissant donnant l'ondulation "wave-like" propre a
 /// chaque tuile au moment de se poser.
+/// La vague d'entrée de la barre : un décalage par rang, et la queue (« + »,
+/// tuile de l'hôte) qui entre avec les premières tuiles plutôt qu'après la
+/// dernière (#18812).
+nonisolated enum ReactionStripWave {
+    static let step = 0.045
+    static let trailingRankCap = 2
+
+    static func delay(rank: Int) -> Double { Double(max(rank, 0)) * step }
+
+    static func trailingRank(quickCount: Int) -> Int { min(max(quickCount, 0), trailingRankCap) }
+}
+
 private struct WaveTileModifier: ViewModifier {
     let index: Int
     let hasEntered: Bool
@@ -434,8 +446,7 @@ private struct WaveTileModifier: ViewModifier {
     /// `t` va de 0 (tuile cachee, sous la ligne) a 1 (tuile posee).
     @State private var t: CGFloat = 0
 
-    /// Delai d'entree : decalage croissant => effet de cascade sinusoidale.
-    private var staggerDelay: Double { Double(index) * 0.045 }
+    private var staggerDelay: Double { ReactionStripWave.delay(rank: index) }
 
     // La tuile arrive depuis ~16pt sous sa position finale.
     private var riseOffset: CGFloat { 16 * (1 - t) }

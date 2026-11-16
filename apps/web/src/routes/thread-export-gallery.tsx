@@ -16,7 +16,7 @@ import { LINK_LABEL, TYPEFACE_LABEL, templateLabel } from './thread-export-tray'
  * l'interface (« plume sombre », « bulles »), sans se soucier des accents, et
  * les noms des polices et des liaisons s'offrent en suggestions d'un toucher.
  *
- * Les cartes se montent par PAGES au fil du défilement : 784 boutons d'un
+ * Les cartes se montent par PAGES au fil du défilement : 1 232 boutons d’un
  * coup coûteraient une image perdue à l'ouverture, pour des vignettes que
  * personne ne verra.
  */

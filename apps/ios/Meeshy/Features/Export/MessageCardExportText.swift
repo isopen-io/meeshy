@@ -119,6 +119,10 @@ enum MessageCardExportText {
         case .bulles: return text("export.card.link.bulles", "Bulles")
         case .fil: return text("export.card.link.fil", "Fil")
         case .silence: return text("export.card.link.silence", "Silence")
+        case .points: return text("export.card.link.points", "Points")
+        case .losange: return text("export.card.link.losange", "Losange")
+        case .asterisme: return text("export.card.link.asterisme", "Astérisme")
+        case .double: return text("export.card.link.double", "Double filet")
         }
     }
 

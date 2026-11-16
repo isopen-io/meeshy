@@ -56,7 +56,22 @@ export type CaptureNoticeMetadata = {
   readonly captureKind: ContentCaptureKind;
   /** Heure d'ENVOI du message capturé, ISO 8601. */
   readonly sentAt: string;
+  /** #18830 — captures DISTINCTES de cette sorte sur ce message ; absent = une. */
+  readonly count?: number;
+  /** #18830 — durée cumulée des enregistrements, en secondes ; absent = inconnue. */
+  readonly recordedSeconds?: number;
 };
+
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value > 0;
+
+/** Le nombre et la durée ne s'écrivent que s'ils DISENT quelque chose : un avis d'une seule capture garde la forme d'avant. */
+function tally(count: unknown, recordedSeconds: unknown): Pick<CaptureNoticeMetadata, 'count' | 'recordedSeconds'> {
+  return {
+    ...(isPositiveInteger(count) && count > 1 ? { count } : {}),
+    ...(isPositiveInteger(recordedSeconds) ? { recordedSeconds } : {}),
+  };
+}
 
 const CAPTURED_NATURES: ReadonlySet<string> = new Set<CapturedNature>(['timed-flame', 'after-read-flame', 'view-once']);
 
@@ -97,6 +112,8 @@ export function captureNoticeMetadata(input: {
   readonly nature: CapturedNature;
   readonly captureKind: ContentCaptureKind;
   readonly sentAt: Date;
+  readonly count?: number;
+  readonly recordedSeconds?: number;
 }): CaptureNoticeMetadata {
   return {
     kind: CAPTURE_NOTICE_KIND,
@@ -106,6 +123,7 @@ export function captureNoticeMetadata(input: {
     outcome: outcomeOf(input.nature),
     captureKind: input.captureKind,
     sentAt: input.sentAt.toISOString(),
+    ...tally(input.count, input.recordedSeconds),
   };
 }
 
@@ -154,6 +172,7 @@ export function parseCaptureNotice(metadata: unknown): CaptureNoticeMetadata | n
     outcome,
     captureKind: raw.captureKind,
     sentAt: raw.sentAt,
+    ...tally(raw.count, raw.recordedSeconds),
   };
 }
 
@@ -251,6 +270,59 @@ function formatSentAt(sentAt: string, language: ConversationPreviewLanguage, tim
   return { date, time };
 }
 
+type Tally = {
+  readonly screenshots: string;
+  readonly recordings: string;
+  readonly duration: string;
+  readonly hour: string;
+  readonly minute: string;
+  readonly second: string;
+  readonly quoted: string;
+};
+
+const TALLY: Readonly<Record<ConversationPreviewLanguage, Tally>> = {
+  fr: { screenshots: '{n} captures', recordings: '{n} enregistrements', duration: 'durée {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Avis de capture d’écran' },
+  en: { screenshots: '{n} screenshots', recordings: '{n} recordings', duration: 'duration {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Screenshot notice' },
+  es: { screenshots: '{n} capturas', recordings: '{n} grabaciones', duration: 'duración {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Aviso de captura de pantalla' },
+  pt: { screenshots: '{n} capturas', recordings: '{n} gravações', duration: 'duração {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Aviso de captura de tela' },
+  de: { screenshots: '{n} Screenshots', recordings: '{n} Aufzeichnungen', duration: 'Dauer {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Screenshot-Hinweis' },
+  it: { screenshots: '{n} catture', recordings: '{n} registrazioni', duration: 'durata {d}', hour: 'h', minute: 'min', second: 's', quoted: 'Avviso di cattura dello schermo' },
+  ar: { screenshots: '{n} لقطات', recordings: '{n} تسجيلات', duration: 'المدة {d}', hour: 'س', minute: 'د', second: 'ث', quoted: 'إشعار لقطة شاشة' },
+};
+
+const twoDigits = (value: number): string => String(value).padStart(2, '0');
+
+/** « 42 s », « 1 min 05 s », « 1 h 02 min 05 s ». */
+export function captureDurationText(seconds: number, language: string | null | undefined): string {
+  const table = TALLY[normalizeConversationPreviewLanguage(language)];
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h} ${table.hour} ${twoDigits(m)} ${table.minute} ${twoDigits(s)} ${table.second}`;
+  if (m > 0) return `${m} ${table.minute} ${twoDigits(s)} ${table.second}`;
+  return `${s} ${table.second}`;
+}
+
+function tallySuffix(notice: CaptureNoticeMetadata, language: ConversationPreviewLanguage): string {
+  const table = TALLY[language];
+  const parts = [
+    notice.count && notice.count > 1
+      ? (notice.captureKind === 'recording' ? table.recordings : table.screenshots).replace('{n}', String(notice.count))
+      : null,
+    notice.recordedSeconds ? table.duration.replace('{d}', captureDurationText(notice.recordedSeconds, language)) : null,
+  ].filter((part): part is string => part !== null);
+  return parts.map((part) => ` · ${part}`).join('');
+}
+
+/**
+ * #18830 — ce qu'une CITATION d'avis de capture dit, à la LECTURE : ni
+ * l'acteur, ni le message capturé, ni son heure. Une réponse qui cite un avis
+ * part à toute la conversation ; l'avis, lui, n'est remis qu'à son audience.
+ */
+export function captureNoticeQuotedText(reader: { readonly language: string | null | undefined }): string {
+  return TALLY[normalizeConversationPreviewLanguage(reader.language)].quoted;
+}
+
 export type CaptureNoticeReader = {
   /** Langue d'interface du lecteur ; hors catalogue ⇒ français. */
   readonly language: string | null | undefined;
@@ -261,7 +333,11 @@ export type CaptureNoticeReader = {
 /** La phrase de l'avis pour UN lecteur — sa langue, son fuseau. Pure. */
 export function captureNoticeText(notice: CaptureNoticeMetadata, reader: CaptureNoticeReader): string {
   const language = normalizeConversationPreviewLanguage(reader.language);
-  const { date, time } = formatSentAt(notice.sentAt, language, validTimeZone(reader.timeZone));
+  return baseText(notice, language, reader.timeZone) + tallySuffix(notice, language);
+}
+
+function baseText(notice: CaptureNoticeMetadata, language: ConversationPreviewLanguage, timeZone: string | null | undefined): string {
+  const { date, time } = formatSentAt(notice.sentAt, language, validTimeZone(timeZone));
   const params: Readonly<Record<string, string>> = { actor: actorLabel(notice.actor, language), date, time };
   return templateOf(notice, language).replace(/\{(\w+)\}/g, (_match, token: string) => params[token] ?? '');
 }
@@ -272,6 +348,6 @@ export function captureNoticeText(notice: CaptureNoticeMetadata, reader: Capture
  * donc pas laisser croire qu'il le connaît.
  */
 export function captureNoticeFallbackText(notice: CaptureNoticeMetadata): string {
-  const text = captureNoticeText(notice, { language: 'fr', timeZone: 'UTC' });
-  return notice.outcome === 'blocked' ? text : `${text} (UTC)`;
+  const text = baseText(notice, 'fr', 'UTC');
+  return (notice.outcome === 'blocked' ? text : `${text} (UTC)`) + tallySuffix(notice, 'fr');
 }

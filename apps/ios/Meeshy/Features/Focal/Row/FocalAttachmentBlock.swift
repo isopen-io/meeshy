@@ -372,6 +372,12 @@ struct FocalGridCell: View {
         }
     }
 
+    /// #4984 — une pièce protégée ne joue rien et ne dit pas qu'elle bouge.
+    private var animationMimeType: String {
+        if case .none = protectionState { return attachment.mimeType }
+        return ""
+    }
+
     /// L'URL que la case charge, relue par le badge (#18678).
     private var displayedImageURL: String? {
         attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
@@ -382,21 +388,26 @@ struct FocalGridCell: View {
         switch attachment.type {
         case .image:
             let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-            OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
-                ProgressiveCachedImage(
-                    thumbHash: attachment.thumbHash,
-                    thumbnailUrl: thumbUrl,
-                    fullUrl: displayedImageURL,
-                    targetSize: CGSize(width: slot.width, height: slot.height),
-                    onFullImageLoaded: { displayedImageLanded = true },
-                    reloadToken: originalLanded,
-                    byteSize: attachment.fileSize
-                ) {
-                    Color(hex: attachment.thumbnailColor).shimmer()
+            AnimatedAttachmentImage(mimeType: animationMimeType, fileUrl: attachment.fileUrl,
+                                    pointSize: max(slot.width, slot.height),
+                                    inGrid: !isSolo || slot.overflowCount > 0,
+                                    byteSize: attachment.fileSize, contentMode: isSolo ? .fit : .fill) {
+                OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+                    ProgressiveCachedImage(
+                        thumbHash: attachment.thumbHash,
+                        thumbnailUrl: thumbUrl,
+                        fullUrl: displayedImageURL,
+                        targetSize: CGSize(width: slot.width, height: slot.height),
+                        onFullImageLoaded: { displayedImageLanded = true },
+                        reloadToken: originalLanded,
+                        byteSize: attachment.fileSize
+                    ) {
+                        Color(hex: attachment.thumbnailColor).shimmer()
+                    }
+                    .aspectRatio(contentMode: isSolo ? .fit : .fill)
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                    .clipped()
                 }
-                .aspectRatio(contentMode: isSolo ? .fit : .fill)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
             }
 
         case .video where !videoPresentation.hostsPlayer:

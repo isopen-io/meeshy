@@ -251,6 +251,38 @@ describe('les liaisons — des façons variées de mener la question à la répo
     expect(texts(ops).length).toBe(4);
   });
 
+  test('points : trois points centrés entre la question et la réponse', () => {
+    const { ops } = layoutWith('points');
+    const dots = ops.filter((op) => op.kind === 'dot');
+    expect(dots.length).toBe(3);
+    expect(dots.every((dot) => dot.kind === 'dot' && between(ops, dot.y))).toBe(true);
+    const middle = dots.reduce((sum, dot) => sum + (dot.kind === 'dot' ? dot.x : 0), 0) / 3;
+    expect(Math.abs(middle - CARD_WIDTH / 2)).toBeLessThan(1);
+  });
+
+  test('losange : un losange centré entre deux filets', () => {
+    const { ops } = layoutWith('losange');
+    const mark = opWithText(ops, '◆');
+    expect(mark !== undefined && between(ops, mark.y) && Math.abs(mark.x - CARD_WIDTH / 2) < 1).toBe(true);
+    const rules = ops.filter((op) => op.kind === 'separator');
+    expect(rules.length).toBe(2);
+    expect(rules.every((rule) => rule.kind === 'separator' && rule.dash.length === 0)).toBe(true);
+  });
+
+  test('astérisme : le ⁂ typographique, centré, sans filet', () => {
+    const { ops } = layoutWith('asterisme');
+    const mark = opWithText(ops, '⁂');
+    expect(mark !== undefined && between(ops, mark.y) && Math.abs(mark.x - CARD_WIDTH / 2) < 1).toBe(true);
+    expect(ops.some((op) => op.kind === 'separator')).toBe(false);
+  });
+
+  test('double filet : deux traits parallèles en travers de la carte', () => {
+    const rules = layoutWith('double').ops.filter((op) => op.kind === 'separator');
+    expect(rules.length).toBe(2);
+    expect(rules.every((rule) => rule.kind === 'separator' && rule.dash.length === 0 && rule.x2 - rule.x1 > CARD_WIDTH / 2)).toBe(true);
+    expect(new Set(rules.map((rule) => (rule.kind === 'separator' ? rule.y : 0))).size).toBe(2);
+  });
+
   test('chaque liaison garde la carte dans un carré pour un échange court', () => {
     for (const link of CARD_LINKS) expect(layoutWith(link).height).toBe(CARD_MIN_HEIGHT);
   });

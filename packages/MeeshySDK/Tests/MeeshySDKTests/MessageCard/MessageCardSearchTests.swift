@@ -9,7 +9,8 @@ struct MessageCardSearchTests {
     private static let vocabulary = MessageCardVocabulary(
         typeface: [.rond: "Ronde", .didone: "Didone", .plume: "Plume", .affiche: "Affiche", .futur: "Futuriste",
                    .machine: "Machine à écrire", .marqueur: "Marqueur", .systeme: "Système"],
-        link: [.orbite: "Orbite", .filet: "Filet", .guillemets: "Guillemets", .fleche: "Flèche", .bulles: "Bulles", .fil: "Fil", .silence: "Silence"],
+        link: [.orbite: "Orbite", .filet: "Filet", .guillemets: "Guillemets", .fleche: "Flèche", .bulles: "Bulles", .fil: "Fil", .silence: "Silence",
+               .points: "Points", .losange: "Losange", .asterisme: "Astérisme", .double: "Double filet"],
         tone: [.dark: "Sombre", .light: "Clair"]
     )
 
@@ -19,7 +20,7 @@ struct MessageCardSearchTests {
 
     @Test func laGalerieMontreChaqueTemplateUneFoisEtUneSeule() {
         #expect(MessageCardSearch.galleryOrder.count == MessageCardTemplates.all.count)
-        #expect(Set(MessageCardSearch.galleryOrder).count == 784)
+        #expect(Set(MessageCardSearch.galleryOrder).count == 1232)
     }
 
     @Test func laGalerieCommenceCommeSurLeWeb() {
@@ -37,7 +38,7 @@ struct MessageCardSearchTests {
     }
 
     @Test func uneRechercheVideRendTouteLaGalerie() {
-        #expect(Self.search("  ").count == 784)
+        #expect(Self.search("  ").count == 1232)
     }
 
     @Test func ignoreLaCasseEtLesAccentsEtLitLeDebutDesMots() {
@@ -47,14 +48,14 @@ struct MessageCardSearchTests {
     }
 
     @Test func chaqueMotTapeResserreLaRecherche() {
-        #expect(Self.search("plume").count == 98)
-        #expect(Self.search("plume sombre").count == 49)
+        #expect(Self.search("plume").count == 154)
+        #expect(Self.search("plume sombre").count == 77)
         #expect(Self.search("plume sombre bulles").count == 7)
     }
 
     @Test func leTonSeFiltreAussiSansLeTaper() {
         let light = Self.search("", tone: .light)
-        #expect(light.count == 392)
+        #expect(light.count == 616)
         #expect(light.allSatisfy { $0.palette.palette.tone == .light })
     }
 
