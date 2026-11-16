@@ -1236,3 +1236,39 @@ socket jusqu'au client.
 3. #18697, puis #18691 (mesurer d'abord sur le staging si le flux du profil vocal répond), puis #18728.
 4. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
 5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 37 — 2026-11-16
+
+- **Base** : `origin/dev` @ `ce1d2596`, puis `dev` @ `d2a1643f` fusionnée dans la branche avant la PR. Le lot du cycle 36 (#18695, PR #18730) était déjà fusionné.
+- **Branche** : `claude/determined-volta-ee6sna`.
+- **Objectif** : #18666. Le traducteur ne télécharge un `audioUrl` reçu par ZMQ que depuis un hôte autorisé.
+- **Mesure de rétrocompatibilité** : aucun producteur de la passerelle n'envoie un `audioUrl` non vide. `ZmqRequestSender.ts:244` pose `''` et écrase le `fileUrl` que posent `MessageProcessor.ts:878` et `MessageTranslationService.ts:2718`. Le refus par défaut ne retire donc rien.
+- **Livré** (seul le traducteur change ; ni le protocole ZMQ, ni la passerelle) :
+  - **Garde** `src/utils/audio_url_guard.py` :
+    - `admit_audio_url` accepte `https` seulement, sans identifiants, port absent ou 443. L'hôte doit figurer exactement dans `TRANSLATOR_AUDIO_URL_ALLOWED_HOSTS`, qui est **vide par défaut**, donc fail-closed. Une IP littérale doit être globale.
+    - Un hôte qu'aiohttp prendrait pour une adresse sans qu'`ipaddress` le lise comme telle (`2852039166`, `127.1`, `0177.0.0.1`) est refusé. Ce correctif vient de la QA.
+  - **`VerifiedAudioHostResolver`** : le connecteur aiohttp se connecte à l'adresse que le résolveur a vérifiée, ce qui supprime le DNS rebinding. Toutes les adresses résolues doivent être globales, y compris les IPv6 mappées vers de l'IPv4. Il n'y a pas de cache DNS, et `trust_env=False` fait que les proxys d'environnement sont ignorés.
+  - **`_download_from_url`** : `allow_redirects=False`, et un 3xx est refusé. Le plafond de taille tient, et un fichier partiel est effacé. Les journaux ne portent plus que la raison, l'hôte autorisé ou le type de l'exception, jamais l'URL. `zmq_audio_handler.py` journalise `url=yes/none`.
+  - **`tests/conftest.py`** : aiohttp n'est plus remplacé par un mock quand il est installé. Auparavant, la condition `'aiohttp' not in sys.modules` était toujours vraie.
+- **Tests** : `tests/test_audio_url_guard.py` (41) et `_qa.py` (36).
+  - **Rouge** sur la base : une erreur de collecte, puis `9 failed, 32 passed` avec le garde et l'ancien fetcher. La QA mesure `6 failed, 30 passed` avant son correctif.
+  - **Vert** : `77 passed`, relancé par moi. La QA obtient aussi `77 passed` sous Python 3.10.20 avec aiohttp 3.13.3, la version du `uv.lock`.
+  - **Suites voisines** :
+    - les 5 suites qui importent `audio_fetcher` donnent `68 passed` avant comme après ;
+    - les 24 suites qui importent aiohttp, la Voice API ou le pipeline donnent la même liste d'échecs avant et après, `59 failed, 434 passed, 18 skipped, 86 errors`, dus à l'environnement (`prometheus_client` absent).
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, **après correctif**. Sans ce correctif, le verdict aurait été défavorable : sous aiohttp 3.13.3, `https://2852039166/` listé a atteint 169.254.169.254:443.
+  - #18772 : SSRF par `webhookUrl` (`translation_pipeline_service.py:787`), accessible à un utilisateur authentifié. **C'est le plus grave.**
+  - #18773 : NAT64, 6to4 et Teredo à refuser explicitement ; les refus tardifs de `0x7f.1` et des IDN ; un témoin de redirection avec le vrai client ; le test d'intégration mort `src/tests/integration/test_audio_fetcher.py`.
+  - #18774 : `original.audio_url` renvoie la requête à la passerelle telle quelle.
+  - Complément sur #18729 : `_generate_temp_filename` utilise l'`attachment_id` ZMQ.
+- **Non vérifié** : la suite complète du traducteur sous `uv sync`, faute de mémoire dans le conteneur, donc la CI fait foi ; la version de Python de l'image GPU.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre. Surveiller en particulier la CI du traducteur, à cause du changement de `conftest`.
+1. #18772, avec l'agent `auditeur-adversarial` : mesurer d'abord quels clients envoient une `webhookUrl`.
+2. #18727, qui est petit, puis #18773.
+3. #18668 et #18692, les messages d'exception bruts, puis #18729 et #18774.
+4. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
+5. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
+6. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
