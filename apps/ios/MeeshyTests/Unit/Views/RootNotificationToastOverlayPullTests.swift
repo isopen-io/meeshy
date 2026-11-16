@@ -145,7 +145,10 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
     /// qui paraissait 0,4 s plus tard avec son squelette — une seconde d'écran
     /// vide. Elle reste désormais jusqu'à ce que la feuille ait PEINT.
     func test_envelope_leavesOnlyOnceTheSheetHasPainted() throws {
-        let run = try body(of: "private func runMorph(", in: try overlay())
+        let source = try overlay()
+        let run = try body(of: "private func runMorph(", in: source)
+            + body(of: "private func awaitSheetPaint(", in: source)
+        XCTAssertTrue(run.contains("awaitSheetPaint("), "le fondu attend le relais")
 
         XCTAssertTrue(run.contains("NotificationBannerHandoff.releasesEnvelope("))
         XCTAssertTrue(run.contains("ConversationOpeningPaint.reached(.painted"))
