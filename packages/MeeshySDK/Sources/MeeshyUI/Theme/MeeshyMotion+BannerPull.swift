@@ -9,14 +9,18 @@ public extension MeeshyMotion {
         reduce ? reducedFade : MeeshyAnimation.bannerPullReturn
     }
 
-    /// La croissance de la carte jusqu'au cadre de la conversation.
+    /// La croissance de la carte jusqu'au cadre de la feuille de la conversation.
     nonisolated static func bannerMorph(reduce: Bool) -> Animation {
         reduce ? reducedFade : MeeshyAnimation.bannerPullMorph
     }
 
-    /// Le temps que la carte met à atteindre le plein écran : au-delà,
-    /// l'enveloppe peinte par la racine s'efface devant la conversation.
-    nonisolated static var bannerMorphSettle: Duration { .milliseconds(420) }
+    /// Le temps que la carte met à atteindre le cadre de la feuille : au-delà,
+    /// la feuille réelle se pose à sa place.
+    nonisolated static var bannerMorphSettle: Duration { .milliseconds(440) }
+
+    /// Le temps que la feuille réelle met à couvrir l'enveloppe : au-delà,
+    /// l'enveloppe s'efface dessous.
+    nonisolated static var bannerSheetHandoff: Duration { .milliseconds(120) }
 
     /// La durée du fondu de l'enveloppe (`MeeshyAnimation.bannerMorphFade`) :
     /// au-delà, elle quitte la hiérarchie.

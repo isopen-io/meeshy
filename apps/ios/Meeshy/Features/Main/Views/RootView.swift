@@ -106,6 +106,10 @@ struct RootView: View {
     /// notification toast — presented as a reusable `ConversationView` preview
     /// (last messages + simple composer) over the current page.
     @State private var notificationPreviewConversation: Conversation?
+    /// Le cran où la feuille d'aperçu s'ouvre : moyen à l'appui long, grand
+    /// quand la bannière tirée s'y transforme (#18721) — c'est le cadre où
+    /// l'enveloppe du morphisme s'est posée.
+    @State private var notificationPreviewDetent: PresentationDetent = .medium
     /// Mood à republier depuis la bulle (hôte racine) — présente le composer
     /// de statut pré-rempli. Anciennement dans ConversationListView, mort.
     @State private var republishStatusEntry: StatusEntry?
@@ -251,7 +255,8 @@ struct RootView: View {
                 notificationManager: notifications.manager,
                 suppressToastTap: suppressToastTap,
                 onTap: handleSocketNotificationTap,
-                onPreview: openNotificationPreview(for:)
+                onPreview: { openNotificationPreview(for: $0) },
+                onPulledOpen: { openNotificationPreview(for: $0, pulled: true) }
             )
         }
         // Chaque couche est un `ViewModifier` NOMINAL (#5837) : la chaîne de 46
@@ -277,6 +282,7 @@ struct RootView: View {
             storyViewerCoordinator: storyViewerCoordinator,
             storyZoomNamespace: storyZoomNamespace,
             notificationPreviewConversation: $notificationPreviewConversation,
+            notificationPreviewDetent: $notificationPreviewDetent,
             onOpenFullConversation: { router.navigateToConversation($0) }
         ))
         .modifier(RootStoryDoorsLayer(
@@ -741,7 +747,10 @@ struct RootView: View {
     /// of navigating away. Resolves the conversation cache-first (in-memory →
     /// GRDB → network), falling back to normal navigation when it isn't a
     /// conversation notification or can't be resolved.
-    private func openNotificationPreview(for event: SocketNotificationEvent) {
+    /// Tirée (`pulled`), la bannière s'est déjà transformée en la feuille au
+    /// cran grand, et la main a déjà senti l'ouverture : ni second haptique,
+    /// ni autre cran.
+    private func openNotificationPreview(for event: SocketNotificationEvent, pulled: Bool = false) {
         guard let conversationId = event.conversationId, !conversationId.isEmpty, ConversationOpenRoute.mayPreview(conversationId) else {
             handleSocketNotificationTap(event)
             return
@@ -750,7 +759,8 @@ struct RootView: View {
         // long-press / drag, then re-arm shortly after.
         suppressToastTap = true
         delayed.run(after: .milliseconds(600)) { suppressToastTap = false }
-        HapticFeedback.medium()
+        if !pulled { HapticFeedback.medium() }
+        notificationPreviewDetent = pulled ? .large : .medium
         notifications.manager.dismissToast()
 
         // Fast path: in-memory conversation list.
