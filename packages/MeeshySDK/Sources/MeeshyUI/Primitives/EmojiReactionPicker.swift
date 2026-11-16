@@ -334,8 +334,11 @@ public struct EmojiReactionPicker: View {
                     )
                 )
 
-                expandButton
-                    .padding(.trailing, 10 * scale)
+                HStack(spacing: 6 * scale) {
+                    expandButton
+                    extraTileButton
+                }
+                .padding(.trailing, 10 * scale)
             }
         )
     }

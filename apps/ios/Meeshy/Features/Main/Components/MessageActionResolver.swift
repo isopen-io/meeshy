@@ -380,6 +380,15 @@ enum MessageActionResolver {
         return capped(candidates(ctx)) + removal + [.more]
     }
 
+    /// **Ce message s'image-t-il ?** — le verdict de la tuile Imager de la barre de
+    /// réactions (#16162). Il lit les CANDIDATS, pas la liste plafonnée : Imager est
+    /// la première action rabattue dans « Plus… » quand la liste déborde, et la tuile
+    /// existe justement pour rester à un toucher dans ce cas-là.
+    static func offersImager(_ ctx: MessageMenuContext) -> Bool {
+        guard !ctx.isViewOnce, !ctx.isGone else { return false }
+        return candidates(ctx).contains(.exportImage)
+    }
+
     /// Au-delà de six, ce qui a un JUMEAU dans « Plus… » y passe d'abord —
     /// l'export rapide et « Imager » (« Imager »), « Copier », « Traduire »
     /// (la vue Langue), « Éditer ». Ce qui n'en a pas — Répondre, les actions du
