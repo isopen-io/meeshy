@@ -29,7 +29,7 @@ const RANK: Readonly<Record<RelationLevel, number>> = {
   BLOOD: 5,
 };
 
-const isRelationLevel = (value: unknown): value is RelationLevel =>
+export const isRelationLevel = (value: unknown): value is RelationLevel =>
   typeof value === 'string' && Object.prototype.hasOwnProperty.call(RANK, value);
 
 export const parseRelationLevel = (value: unknown): RelationLevel => (isRelationLevel(value) ? value : 'PUBLIC');

@@ -14,6 +14,10 @@ import { profileViewerId } from '../users/profile-block-gate';
 import { getOptionalAuth } from '../users/presence-gate';
 import { parseFieldList, parseTokenSet, restrictFields } from '../../utils/sparse-fieldset';
 import { hasBlocked } from '../../utils/blocking';
+import { isRelationLevel, type RelationLevel } from '@meeshy/shared/types/relation';
+import { PROFILE_CAPABILITIES, resolveProfileCircleViewAs, type ProfileCircleView } from '@meeshy/shared/utils/profile-circle-view';
+import { profileSeenAs, readProfileCircleView } from '../../services/relations/profileCircleView';
+import { sendBadRequest, sendForbidden } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPerson' });
 
@@ -60,8 +64,8 @@ const lecteurInscrit = profileViewerId;
  * `relation` et `stats` DÉCLENCHENT des requêtes, `presence` ne fait que
  * retenir une suppression.
  */
-type Expansion = 'stats' | 'presence' | 'relation';
-const EXPANSIONS: readonly Expansion[] = ['stats', 'presence', 'relation'] as const;
+type Expansion = 'stats' | 'presence' | 'relation' | 'circle';
+const EXPANSIONS: readonly Expansion[] = ['stats', 'presence', 'relation', 'circle'] as const;
 
 /**
  * La relation du LECTEUR au sujet — jamais l'inverse, et jamais entre tiers.
@@ -110,6 +114,32 @@ type RelationServie = {
   readonly blockedByViewer: boolean;
   readonly relationRequestId: string | null;
 };
+
+const etatJsonSchema = {
+  type: 'object',
+  properties: { state: { type: 'string' }, circle: { type: 'string' }, consentRequired: { type: 'boolean' } },
+} as const;
+
+/** La fiche par cercle (#18861) : DÉCLARÉE, sans quoi le sérialiseur la supprime sans un mot. */
+const circleJsonSchema = {
+  type: 'object',
+  properties: {
+    isSelf: { type: 'boolean' },
+    level: { type: 'string' },
+    grantedByViewer: { type: 'string' },
+    grantedByTarget: { type: 'string' },
+    sharesCommunity: { type: 'boolean' },
+    missing: {
+      type: 'object',
+      nullable: true,
+      properties: { level: { type: 'string' }, byViewer: { type: 'boolean' }, byTarget: { type: 'boolean' } },
+    },
+    capabilities: {
+      type: 'object',
+      properties: Object.fromEntries(PROFILE_CAPABILITIES.map((cle) => [cle, etatJsonSchema])),
+    },
+  },
+} as const;
 
 const SANS_RELATION: RelationServie = { relation: 'none', isSelf: false, blockedByViewer: false, relationRequestId: null };
 
@@ -249,7 +279,8 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
         type: 'object',
         properties: {
           fields: { type: 'string', description: 'Comma-separated subset of the default projection' },
-          expand: { type: 'string', description: 'Comma-separated: stats, presence, relation' },
+          expand: { type: 'string', description: 'Comma-separated: stats, presence, relation, circle' },
+          as: { type: 'string', description: 'Owner only: the profile as a reader of this circle sees it (Voir comme)' },
         },
       },
       response: {
@@ -304,6 +335,9 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
                 // `nullable` parce que `null` est une RÉPONSE ici — « aucune
                 // demande à envoyer » — et non l'absence d'un champ.
                 relationRequestId: { type: 'string', nullable: true },
+                // #18861 : la fiche par cercle (`?expand=circle`) et le cercle de « Voir comme » (`?as=`).
+                circle: circleJsonSchema,
+                viewAs: { type: 'string' },
               },
             },
           },
@@ -316,7 +350,10 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { handle: string } }>, reply: FastifyReply) => {
     try {
       const { handle } = request.params;
-      const { fields, expand } = request.query as { fields?: string; expand?: string };
+      const { fields, expand, as } = request.query as { fields?: string; expand?: string; as?: string };
+
+      if (as !== undefined && !isRelationLevel(as)) return sendBadRequest(reply, 'Unknown circle');
+      const voirComme: RelationLevel | undefined = isRelationLevel(as) ? as : undefined;
 
       const acteur = (request as unknown as UnifiedAuthRequest).authContext;
       const viewerId = lecteurInscrit(request);
@@ -331,33 +368,46 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
 
       const demande = parseTokenSet(expand, EXPANSIONS);
 
+      // « Voir comme » est la fiche du PROPRIÉTAIRE : tout autre lecteur est refusé
+      // avant la moindre composition, et aucune charge ne part avec le refus.
+      if (voirComme && viewerId !== String(profil.id)) return sendForbidden(reply, 'Only the owner can view the profile as a circle');
+      const vue: ProfileCircleView | undefined = voirComme
+        ? resolveProfileCircleViewAs({ level: voirComme, targetId: String(profil.id) })
+        : undefined;
+      const base: Record<string, unknown> = vue ? { ...profileSeenAs(vue, profil), viewAs: voirComme } : profil;
+
       // La présence est RETIRÉE par défaut, jamais ajoutée par ce paramètre :
       // `servirProfilPublic` a déjà appliqué la loi du 2026-08-25, et ce qui
       // sort ici en est au mieux une part. L'inverse — poser la question
       // seulement sur `expand` — ferait de l'omission du paramètre une garde,
       // c'est-à-dire une garde qu'un appelant peut lever.
       if (!demande.has('presence')) {
-        for (const champ of CHAMPS_PRESENCE) delete profil[champ];
+        for (const champ of CHAMPS_PRESENCE) delete base[champ];
       }
 
       const cibleId = String(profil.id);
+      const lecteurReel = vue ? undefined : viewerId;
 
       if (demande.has('relation')) {
-        Object.assign(profil, await relationAvec(fastify, viewerId, cibleId));
+        Object.assign(base, await relationAvec(fastify, lecteurReel, cibleId));
+      }
+
+      if (demande.has('circle')) {
+        const cercle = vue ?? (viewerId ? await readProfileCircleView(fastify.prisma, { viewerId, targetId: cibleId }) : undefined);
+        if (cercle) base.circle = cercle;
       }
 
       if (demande.has('stats')) {
         const stats = await computeUserStats(fastify.prisma, cibleId);
-        profil.stats = servedUserStats(stats, {
-          estSoi: viewerId === cibleId,
-          estAdministration: permissionsService.hasPermission(
-            (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
-            'canViewUsers'
-          ),
+        base.stats = servedUserStats(stats, {
+          estSoi: lecteurReel === cibleId,
+          estAdministration:
+            !vue &&
+            permissionsService.hasPermission((acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum, 'canViewUsers'),
         });
       }
 
-      const servi = restrictFields(profil, champs, epinglesServis(demande));
+      const servi = restrictFields(base, champs, epinglesServis(demande));
 
       // `public` uniquement pour l'ANONYME, et c'est une condition de sécurité,
       // pas un réglage de performance : la charge d'un lecteur connecté dépend
@@ -414,5 +464,7 @@ function epinglesServis(demande: ReadonlySet<Expansion>): readonly string[] {
   const epingles = ['id'];
   if (demande.has('stats')) epingles.push('stats');
   if (demande.has('relation')) epingles.push('relation', 'isSelf', 'blockedByViewer', 'relationRequestId');
+  if (demande.has('circle')) epingles.push('circle');
+  epingles.push('viewAs');
   return epingles;
 }
