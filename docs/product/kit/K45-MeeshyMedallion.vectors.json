@@ -1,0 +1,78 @@
+{
+  "composant": "MeeshyMedallion",
+  "cle": "K45",
+  "note": "Vecteurs de parité (fiche K45 § 03, § 10). Diamètres 24, 36, 44, 52, 64, 96 ; glyphe à la moitié du diamètre, 14 au moins ; valeur à 44 %.",
+  "tailles": [
+    {
+      "taille": 24,
+      "glyphe": 14,
+      "valeur": 10.56
+    },
+    {
+      "taille": 36,
+      "glyphe": 18,
+      "valeur": 15.84
+    },
+    {
+      "taille": 44,
+      "glyphe": 22,
+      "valeur": 19.36
+    },
+    {
+      "taille": 52,
+      "glyphe": 26,
+      "valeur": 22.88
+    },
+    {
+      "taille": 64,
+      "glyphe": 32,
+      "valeur": 28.16
+    },
+    {
+      "taille": 96,
+      "glyphe": 48,
+      "valeur": 42.24
+    }
+  ],
+  "rayonCarreArrondi": 0.34,
+  "halo": {
+    "epaisseur": 0.11,
+    "opacite": 0.07
+  },
+  "pointille": {
+    "inset": 0.11,
+    "trait": 2,
+    "tourMs": 40000
+  },
+  "barre": {
+    "trait": 3,
+    "longueur": 0.64,
+    "angle": -45,
+    "detourage": 3
+  },
+  "ondes": [
+    {
+      "demande": 0,
+      "rendu": 1
+    },
+    {
+      "demande": 1,
+      "rendu": 1
+    },
+    {
+      "demande": 3,
+      "rendu": 3
+    },
+    {
+      "demande": 7,
+      "rendu": 3
+    }
+  ],
+  "fondDoux": {
+    "accent": 0.18,
+    "ok": 0.16,
+    "warn": 0.2,
+    "err": 0.16,
+    "neutral": 0.3
+  }
+}
