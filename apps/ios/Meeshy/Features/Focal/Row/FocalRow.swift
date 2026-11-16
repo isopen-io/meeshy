@@ -24,6 +24,7 @@ import MeeshyUI
 /// `.onTapGesture` car ce sont des ZONES DE RANGÉE, pas des CONTRÔLES
 /// (même patron que la bulle historique, `mediaWithReplyContainer`).
 struct FocalRow: View {
+    @Environment(\.carouselPresentation) private var carouselPresentation
     @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     let input: FocalRowInput
     let actions: FocalRowActions
@@ -511,7 +512,9 @@ struct FocalRow: View {
     @ViewBuilder
     private var visualBlock: some View {
         let items = FocalAudioRouting.visualAttachments(in: content)
-        if !items.isEmpty {
+        if carouselPresentation == .preview, items.count > 1, !items.contains(where: { $0.declaresViewOnce || $0.declaresBlur }) {
+            previewCarousel(items)
+        } else if !items.isEmpty {
             FocalAttachmentBlock(
                 items: items,
                 accentHex: input.accentHex,
@@ -522,6 +525,23 @@ struct FocalRow: View {
                 maxWidth: FocalMediaGridLayout.gridWidth(rowWidth: input.availableWidth)
             )
         }
+    }
+
+    /// **L'aperçu d'appui long fait défiler les visuels** (#18824) : le
+    /// carrousel de la bulle, en présentation d'aperçu, à la largeur de la grille.
+    private func previewCarousel(_ items: [MessageAttachment]) -> some View {
+        BubbleCarouselView(
+            items: items,
+            carouselIndex: .constant(0),
+            showCarousel: .constant(true),
+            fullscreenAttachment: .constant(nil),
+            contactColor: input.accentHex,
+            messageDeliveryStatus: content.meta.deliveryStatus ?? .sent,
+            isDark: input.isDark,
+            containerWidth: FocalMediaGridLayout.gridWidth(rowWidth: input.availableWidth)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: FocalMetrics.Media.radius, style: .continuous))
+        .padding(.leading, FocalMetrics.Row.contentIndent)
     }
 
     @ViewBuilder

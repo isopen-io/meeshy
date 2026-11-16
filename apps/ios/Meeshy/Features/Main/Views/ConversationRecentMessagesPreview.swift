@@ -648,3 +648,57 @@ final class ConversationPreviewPhotoFallbacks {
         attachmentIds = Array((attachmentIds.filter { $0 != attachmentId } + [attachmentId]).suffix(capacity))
     }
 }
+
+// MARK: - Les messages en cache peints dans l'enveloppe de la bannière (#18721)
+
+/// Les derniers messages en cache d'une conversation, peints dans l'enveloppe
+/// du tiroir de bannière le temps que la feuille réelle peigne les siens : la
+/// même face que l'aperçu d'appui long, posée au bas comme le fil. Une
+/// conversation verrouillée n'y montre rien.
+struct NotificationEnvelopeMessages: View {
+    let conversation: Conversation?
+    let loader: ConversationListPreviewLoader?
+    let width: CGFloat
+
+    var body: some View {
+        if let conversation, let loader, !ConversationLockManager.shared.isLocked(conversation.id) {
+            ConversationPreviewStateReader(loader: loader, conversationId: conversation.id) { state in
+                NotificationEnvelopeMessageList(conversation: conversation, state: state, width: width)
+            }
+        }
+    }
+}
+
+private struct NotificationEnvelopeMessageList: View {
+    let conversation: Conversation
+    let state: ConversationListPreviewLoader.PreviewState
+    let width: CGFloat
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        messages(of: conversation, state: state)
+    }
+
+    private func messages(of conversation: Conversation, state: ConversationListPreviewLoader.PreviewState) -> some View {
+        let isDark = colorScheme == .dark
+        let accent = conversation.displayPalette(isDark: isDark).primary
+        return ConversationRecentMessagesPreview(
+            messages: state.messages,
+            translations: state.snapshot?.translations ?? [:],
+            served: state.snapshot?.served ?? [:],
+            phase: state.phase,
+            readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
+            accentColor: accent,
+            skin: ConversationPreviewRenderer.skin(for: conversation, isDark: isDark),
+            isDirect: conversation.type == .direct,
+            isDark: isDark,
+            currentUserId: AuthManager.shared.currentUser?.id ?? "",
+            cardWidth: width,
+            backdrop: ConversationPreviewRenderer.backdrop(for: conversation, computedAccentHex: accent, isDark: isDark),
+            unencrypted: state.snapshot?.unencrypted ?? []
+        )
+        .frame(maxHeight: .infinity, alignment: .bottom)
+        .padding(.bottom, MeeshyControlSize.tapTarget + MeeshySpacing.lg)
+    }
+}

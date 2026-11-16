@@ -67,12 +67,26 @@ final class ConversationIncomingMessageReconciler {
         }
     }
 
+    /// #18830 — la passerelle remet l'avis de capture sous le MÊME id quand
+    /// son compte ou sa durée change : un avis déjà connu se RÉÉCRIT (contenu
+    /// et métadonnée), là où tout autre doublon s'ignore.
+    static func refreshesKnownNotice(_ apiMsg: APIMessage, known: Bool) -> Bool {
+        known && apiMsg.messageType == "system" && apiMsg.captureNotice != nil
+    }
+
+    private func refreshKnownNotice(_ apiMsg: APIMessage, delegate: ConversationSocketDelegate) async -> Bool {
+        guard Self.refreshesKnownNotice(apiMsg, known: delegate.containsMessage(id: apiMsg.id) || wasSeen(apiMsg.id)) else { return false }
+        if let persistence = persistenceProvider() {
+            await persistence.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
+        }
+        return true
+    }
+
     // MARK: - Reconciliation
 
     func reconcile(_ apiMsg: APIMessage) async {
         guard let delegate = delegateProvider() else { return }
         let userId = currentUserId
-
 
         // RC2.3 — reconcile an optimistic echo by `clientMessageId`.
         // The optimistic row's localId IS the `cid_*` (Phase 4
@@ -170,6 +184,7 @@ final class ConversationIncomingMessageReconciler {
             return
         }
 
+        if await refreshKnownNotice(apiMsg, delegate: delegate) { return }
         if delegate.containsMessage(id: apiMsg.id) {
             if apiMsg.senderId == userId,
                let socketAttachments = apiMsg.attachments, !socketAttachments.isEmpty,

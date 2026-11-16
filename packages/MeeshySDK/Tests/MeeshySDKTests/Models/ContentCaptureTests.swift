@@ -119,12 +119,37 @@ struct ContentCaptureTests {
         _ = tracker.recordingStarted(visible: [Self.candidate(Self.flameId, .announced)], captureId: "rec_0123456789", at: t0)
         _ = tracker.note(visible: [Self.candidate(Self.onceId, .blocked)], at: t0.addingTimeInterval(1))
         let last = tracker.recordingEnded(visible: [], at: t0.addingTimeInterval(2))
-        #expect(last.first?.messageIds == [Self.onceId])
+        #expect(last.first?.messageIds == [Self.flameId, Self.onceId], "la fin redit tout ce que l'enregistrement a vu, avec sa durée")
         #expect(!tracker.isRecording)
 
         let next = tracker.recordingStarted(visible: [Self.candidate(Self.flameId, .announced)], captureId: "rec_9999999999", at: t0.addingTimeInterval(60))
         #expect(next.first?.captureId == "rec_9999999999")
         #expect(next.first?.messageIds == [Self.flameId], "un nouvel enregistrement redéclare ce qu'il voit")
+    }
+
+    @Test("la fin d'un enregistrement dit sa DURÉE, sous le même identifiant, pour chaque message vu (#18830)")
+    func recordingEndCarriesItsDuration() {
+        var tracker = ContentCaptureTracker()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let start = tracker.recordingStarted(visible: [Self.candidate(Self.flameId, .announced)], captureId: "rec_0123456789", at: t0)
+        #expect(start.first?.recordingSeconds == nil, "le début ne connaît pas encore la durée")
+        _ = tracker.note(visible: [Self.candidate(Self.onceId, .blocked)], at: t0.addingTimeInterval(20))
+        let end = tracker.recordingEnded(visible: [], at: t0.addingTimeInterval(65.4))
+        #expect(end == [ContentCaptureReport(
+            conversationId: "conv-1", messageIds: [Self.flameId, Self.onceId], kind: .recording,
+            captureId: "rec_0123456789", recordingSeconds: 65
+        )])
+        #expect(end.first?.socketPayload["recordingSeconds"] as? Int == 65)
+        #expect(start.first?.socketPayload["recordingSeconds"] == nil)
+    }
+
+    @Test("une durée d'enregistrement se borne au plafond de la passerelle")
+    func recordingDurationIsBounded() {
+        var tracker = ContentCaptureTracker()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        _ = tracker.recordingStarted(visible: [Self.candidate(Self.flameId, .announced)], captureId: "rec_0123456789", at: t0)
+        let end = tracker.recordingEnded(visible: [], at: t0.addingTimeInterval(200_000))
+        #expect(end.first?.recordingSeconds == ContentCaptureReport.maxRecordingSeconds)
     }
 
     @Test("une déclaration d'enregistrement échouée se rejoue sous le même identifiant")
@@ -393,5 +418,35 @@ struct ContentCaptureTests {
         let column = SystemNoticeColumn.encode(join: join, capture: nil, encoder: JSONEncoder(), id: "x")
         #expect(SystemNoticeColumn.decode(column, decoder: JSONDecoder(), id: "x").join == join)
         #expect(SystemNoticeColumn.decode(Data(#"{"kind":"member-left"}"#.utf8), decoder: JSONDecoder(), id: "x").capture == nil)
+    }
+
+    // MARK: - #18830 — combien de captures, combien de temps
+
+    private static func tallied(_ extra: String, captureKind: String = "screenshot") throws -> CaptureNoticeMetadata {
+        let base = String(decoding: noticeJSON(captureKind: captureKind), as: UTF8.self)
+        return try JSONDecoder().decode(CaptureNoticeMetadata.self, from: Data((base.dropLast() + "," + extra + "}").utf8))
+    }
+
+    @Test("relit le nombre et la durée servis, et en ignore une forme illisible sans refuser l'avis")
+    func readsCountAndDuration() throws {
+        let read = try Self.tallied(#""count":3,"recordedSeconds":65"#)
+        #expect(read.count == 3)
+        #expect(read.recordedSeconds == 65)
+        let odd = try Self.tallied(#""count":"trois","recordedSeconds":-4"#)
+        #expect(odd.count == 1)
+        #expect(odd.recordedSeconds == nil)
+        #expect(try Self.notice().count == 1, "un avis d'avant le compte vaut une capture")
+    }
+
+    @Test("dit le nombre de captures, et la durée et le nombre d'enregistrements — comme @meeshy/shared")
+    func saysCountAndDuration() throws {
+        #expect(CaptureNoticeText.compose(try Self.tallied(#""count":3"#), language: "fr", timeZone: Self.utc)
+                == "Alice a capturé l’éphémère du 07/10/2026 à 12:05 · 3 captures")
+        #expect(CaptureNoticeText.compose(try Self.tallied(#""recordedSeconds":65"#, captureKind: "recording"), language: "fr", timeZone: Self.utc)
+                == "Alice a enregistré l’écran pendant l’éphémère du 07/10/2026 à 12:05 · durée 1 min 05 s")
+        #expect(CaptureNoticeText.compose(try Self.tallied(#""count":2,"recordedSeconds":3725"#, captureKind: "recording"), language: "fr", timeZone: Self.utc)
+                == "Alice a enregistré l’écran pendant l’éphémère du 07/10/2026 à 12:05 · 2 enregistrements · durée 1 h 02 min 05 s")
+        #expect(CaptureNoticeText.compose(try Self.tallied(#""count":3"#), language: "en", timeZone: Self.utc).hasSuffix("· 3 screenshots"))
+        #expect(CaptureNoticeText.fallback(try Self.tallied(#""count":2"#)) == "Alice a capturé l’éphémère du 07/10/2026 à 12:05 (UTC) · 2 captures")
     }
 }

@@ -373,6 +373,8 @@ public struct BannerToConversationMorph<Messages: View>: View, Animatable {
     let surface: Color
     /// La feuille réelle est à l'écran : son voile remplace celui de l'enveloppe.
     let sheetShown: Bool
+    /// L'enveloppe passe la main à la feuille peinte.
+    let fading: Bool
     let messages: Messages
     var progress: CGFloat
 
@@ -389,7 +391,7 @@ public struct BannerToConversationMorph<Messages: View>: View, Animatable {
     public init(
         event: SocketNotificationEvent, headline: String, message: String?,
         origin: CGRect, target: CGRect, targetCornerRadius: CGFloat, surface: Color,
-        sheetShown: Bool = false, progress: CGFloat,
+        sheetShown: Bool = false, fading: Bool = false, progress: CGFloat,
         @ViewBuilder messages: () -> Messages
     ) {
         self.event = event
@@ -400,6 +402,7 @@ public struct BannerToConversationMorph<Messages: View>: View, Animatable {
         self.targetCornerRadius = targetCornerRadius
         self.surface = surface
         self.sheetShown = sheetShown
+        self.fading = fading
         self.progress = progress
         self.messages = messages()
     }
@@ -421,6 +424,8 @@ public struct BannerToConversationMorph<Messages: View>: View, Animatable {
                 ZStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                         identity
+                            .opacity(NotificationBannerHandoff.identityOpacity(fading: fading))
+                            .transaction { $0.animation = nil }
                         messages
                             .frame(width: end.width, alignment: .topLeading)
                             .opacity(composed)
