@@ -58,6 +58,12 @@ struct RootNotificationToastOverlay: View {
     /// La feuille que la bannière TIRÉE devient : ouverte au cran grand, là
     /// où l'enveloppe du morphisme s'est posée.
     let onPulledOpen: (SocketNotificationEvent) -> Void
+    /// Le tiroir commence à s'ouvrir : la conversation se lit en cache avant
+    /// même la levée du doigt.
+    var onPullBegan: (SocketNotificationEvent) -> Void = { _ in }
+    /// D'où l'enveloppe peint les derniers messages en cache de la
+    /// conversation : jamais un vide entre la bannière et la feuille.
+    var envelopeSource = BannerEnvelopeSource()
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Sur iPad la feuille est un formulaire centré : la carte n'a pas de
@@ -71,8 +77,9 @@ struct RootNotificationToastOverlay: View {
     /// L'écran entier et le haut de sa zone sûre : l'arrivée du morphisme.
     @State private var screenFrame: CGRect = .zero
     @State private var safeTop: CGFloat = 0
-    /// La bannière qui devient la feuille, peinte le temps de la transformation.
-    @State private var morph: BannerMorph?
+    /// La bannière qui devient la feuille : l'identité de la transformation en
+    /// cours, peinte par `BannerMorphWindow`.
+    @State private var morphId: UUID?
     /// Une traction n'est jamais un toucher : le bouton émet le sien à la levée.
     @State private var tapLatch = NotificationBannerTapLatch()
 
@@ -91,10 +98,9 @@ struct RootNotificationToastOverlay: View {
                 .ignoresSafeArea()
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { screenFrame = $0 }
         }
-        .overlay { morphLayer }
         .animation(reduceMotion ? .easeOut(duration: 0.2) : MeeshyAnimation.springBouncy,
                    value: notificationManager.currentToast?.id)
-        .task(id: morph?.id) { await runMorph() }
+        .task(id: morphId) { await runMorph() }
         .zIndex(201)
         #if DEBUG
         .task { await Self.presentLaunchPreviewIfRequested(on: notificationManager) }
@@ -119,6 +125,7 @@ struct RootNotificationToastOverlay: View {
         .offset(y: NotificationBannerDrawer.lift(translation: pull))
         .adaptiveOnChange(of: pull) { previous, translation in
             tapLatch = tapLatch.notingPull(translation: translation, at: Date())
+            if previous == 0, translation > 0 { onPullBegan(toast) }
             if NotificationBannerDrawer.isArmed(translation: translation) != NotificationBannerDrawer.isArmed(translation: previous) {
                 HapticFeedback.light()
             }
@@ -209,51 +216,55 @@ struct RootNotificationToastOverlay: View {
             container: screenFrame.size, top: safeTop + NotificationSheetGeometry.topGap
         ).offsetBy(dx: screenFrame.minX, dy: screenFrame.minY)
         let presentation = notificationManager.currentToastPresentation
+        let morph = BannerMorph(event: toast, headline: presentation?.headline ?? toast.toastAvatarName,
+                                message: presentation?.body, origin: released, target: target)
+        if let conversationId = toast.conversationId { ConversationOpeningPaint.forget(conversationId) }
         var instant = Transaction()
         instant.disablesAnimations = true
         withTransaction(instant) {
             pull = 0
             notificationManager.dismissToast()
-            morph = BannerMorph(event: toast, headline: presentation?.headline ?? toast.toastAvatarName,
-                                message: presentation?.body, origin: released, target: target)
         }
+        guard BannerMorphWindow.shared.show(morph, source: envelopeSource) else {
+            onPulledOpen(toast)
+            return
+        }
+        morphId = morph.id
     }
 
-    @ViewBuilder
-    private var morphLayer: some View {
-        if let morph {
-            BannerToConversationMorph(
-                event: morph.event, headline: morph.headline, message: morph.message,
-                origin: morph.origin, target: morph.target,
-                targetCornerRadius: NotificationSheetGeometry.cornerRadius,
-                surface: NotificationSheetGeometry.surface,
-                progress: morph.progress
-            )
-            .opacity(morph.opacity)
-        }
-    }
-
-    /// L'enveloppe a été peinte à la taille du tiroir : elle devient la
-    /// feuille, puis la feuille réelle se pose À SA PLACE, sans animation, et
-    /// l'enveloppe s'efface dessous. Lancée par `.task(id:)`, donc après la
-    /// première image — une croissance animée dans le tour qui pose
-    /// l'enveloppe n'aurait aucune image de départ.
+    /// L'enveloppe a été peinte à la taille du tiroir et grandit jusqu'à la
+    /// feuille (`BannerMorphHost`). Posée, la feuille réelle se présente À SA
+    /// PLACE, sans animation, DESSOUS l'enveloppe ; celle-ci ne s'efface qu'une
+    /// fois la feuille peinte de ses messages (`NotificationBannerHandoff`).
+    /// Lancée par `.task(id:)`, donc après la première image de l'enveloppe.
     private func runMorph() async {
-        guard let event = morph?.event else { return }
-        meeshyWithAnimation(MeeshyMotion.bannerMorph(reduce: false), reduced: MeeshyMotion.bannerMorph(reduce: true),
-                            reduceMotion: reduceMotion) { morph?.progress = 1 }
-        guard await cancellableSleep(for: MeeshyMotion.bannerMorphSettle) else { return }
+        let stage = BannerMorphWindow.shared.stage
+        guard let id = morphId, let event = stage.morph?.event else { return }
+        guard await cancellableSleep(for: MeeshyMotion.bannerMorphSettle) else { return BannerMorphWindow.shared.hide(id) }
         var inPlace = Transaction()
         inPlace.disablesAnimations = true
         withTransaction(inPlace) { onPulledOpen(event) }
-        guard await cancellableSleep(for: MeeshyMotion.bannerSheetHandoff) else { return }
-        meeshyWithAnimation(MeeshyAnimation.bannerMorphFade, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
-            morph?.opacity = 0
+        guard await awaitSheetPaint(of: event.conversationId ?? "", on: stage) else { return BannerMorphWindow.shared.hide(id) }
+        stage.fading = true
+        _ = await cancellableSleep(for: MeeshyMotion.bannerMorphFadeOut)
+        BannerMorphWindow.shared.hide(id)
+        if morphId == id { morphId = nil }
+    }
+
+    /// Le relais : le voile de l'enveloppe cède dès que la feuille est à
+    /// l'écran, l'enveloppe elle-même dès qu'elle a peint — ou au plafond.
+    private func awaitSheetPaint(of conversationId: String, on stage: BannerMorphStage) async -> Bool {
+        let handedAt = Date()
+        while !NotificationBannerHandoff.releasesEnvelope(
+            morphSettled: true,
+            sheetPainted: ConversationOpeningPaint.reached(.painted, for: conversationId),
+            waited: Date().timeIntervalSince(handedAt)
+        ) {
+            if !stage.sheetShown, ConversationOpeningPaint.reached(.shown, for: conversationId) { stage.sheetShown = true }
+            guard await cancellableSleep(for: .milliseconds(16)) else { return false }
         }
-        guard await cancellableSleep(for: MeeshyMotion.bannerMorphFadeOut) else { return }
-        var instant = Transaction()
-        instant.disablesAnimations = true
-        withTransaction(instant) { morph = nil }
+        stage.sheetShown = true
+        return await cancellableSleep(for: MeeshyMotion.bannerSheetHandoff)
     }
 
     #if DEBUG
@@ -282,8 +293,8 @@ struct RootNotificationToastOverlay: View {
     #endif
 }
 
-/// L'état de la bannière qui devient la feuille : ce qu'elle montre, d'où
-/// elle part, où elle arrive, et jusqu'où elle a grandi.
+/// La bannière qui devient la feuille : ce qu'elle montre, d'où elle part,
+/// où elle arrive.
 struct BannerMorph: Identifiable {
     let id = UUID()
     let event: SocketNotificationEvent
@@ -291,16 +302,113 @@ struct BannerMorph: Identifiable {
     let message: String?
     let origin: CGRect
     let target: CGRect
-    var progress: CGFloat = 0
-    var opacity: Double = 1
+}
+
+/// Où l'enveloppe lit la conversation tirée et ses derniers messages en
+/// cache. Sans chargeur (iPad), elle ne peint que l'identité.
+struct BannerEnvelopeSource {
+    var loader: ConversationListPreviewLoader?
+    var conversation: (String) -> Conversation? = { _ in nil }
+}
+
+/// Ce que la fenêtre de l'enveloppe peint : l'enveloppe, et où en est son
+/// relais à la feuille.
+@MainActor
+final class BannerMorphStage: ObservableObject {
+    nonisolated deinit {}
+    @Published var morph: BannerMorph?
+    @Published var sheetShown = false
+    @Published var fading = false
+}
+
+/// L'enveloppe vit dans sa propre fenêtre passe-plat : la feuille qu'elle
+/// devient est une présentation, que rien de la racine ne recouvre. Elle
+/// n'existe que le temps de la transformation et ne prend aucun toucher.
+@MainActor
+final class BannerMorphWindow {
+    static let shared = BannerMorphWindow()
+    static let windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue + 1)
+
+    let stage = BannerMorphStage()
+    private var window: CallPassthroughWindow?
+
+    nonisolated deinit {}
+
+    func show(_ morph: BannerMorph, source: BannerEnvelopeSource) -> Bool {
+        guard let scene = CallWindowScene.target() else { return false }
+        hide()
+        stage.sheetShown = false
+        stage.fading = false
+        stage.morph = morph
+        let overlay = CallPassthroughWindow(windowScene: scene)
+        let controller = UIHostingController(rootView: BannerMorphHost(stage: stage, source: source))
+        controller.view.backgroundColor = .clear
+        overlay.windowLevel = Self.windowLevel
+        overlay.overrideUserInterfaceStyle = DeviceLayout.measurementWindow?.overrideUserInterfaceStyle ?? .unspecified
+        overlay.rootViewController = controller
+        overlay.interactiveFrame = .zero
+        overlay.isHidden = false
+        window = overlay
+        return true
+    }
+
+    /// Retire l'enveloppe `id` seulement : une transformation remplacée ne
+    /// retire jamais celle qui l'a remplacée.
+    func hide(_ id: UUID) {
+        guard stage.morph?.id == id else { return }
+        hide()
+    }
+
+    func hide() {
+        stage.morph = nil
+        guard let overlay = window else { return }
+        window = nil
+        overlay.isHidden = true
+        overlay.rootViewController = nil
+    }
+}
+
+/// L'enveloppe peinte dans sa fenêtre : elle grandit dès sa première image,
+/// porte les derniers messages en cache, et s'efface quand la feuille a peint.
+struct BannerMorphHost: View {
+    @ObservedObject var stage: BannerMorphStage
+    let source: BannerEnvelopeSource
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var progress: CGFloat = 0
+
+    var body: some View {
+        if let morph = stage.morph { envelope(morph) }
+    }
+
+    private func envelope(_ morph: BannerMorph) -> some View {
+        BannerToConversationMorph(
+            event: morph.event, headline: morph.headline, message: morph.message,
+            origin: morph.origin, target: morph.target,
+            targetCornerRadius: NotificationSheetGeometry.cornerRadius,
+            surface: NotificationSheetGeometry.surface,
+            sheetShown: stage.sheetShown, fading: stage.fading,
+            progress: progress
+        ) {
+            NotificationEnvelopeMessages(
+                conversation: source.conversation(morph.event.conversationId ?? ""),
+                loader: source.loader, width: morph.target.width
+            )
+        }
+        .opacity(stage.fading ? 0 : 1)
+        .animation(reduceMotion ? MeeshyMotion.reducedFade : MeeshyAnimation.bannerMorphFade, value: stage.fading)
+        .task(id: morph.id) {
+            meeshyWithAnimation(MeeshyMotion.bannerMorph(reduce: false), reduced: MeeshyMotion.bannerMorph(reduce: true),
+                                reduceMotion: reduceMotion) { progress = 1 }
+        }
+    }
 }
 
 /// La feuille de la conversation que la bannière devient, telle que le
-/// système la pose au cran « grand » : son haut sous la zone sûre, ses coins,
-/// son fond. Mesurée au simulateur (iPhone 17 Pro, iOS 27) ;
+/// système la pose au cran « grand » : son haut SUR la zone sûre, ses coins,
+/// son fond. Mesurée au simulateur (iPhone 17 Pro, iOS 27 : haut à 62 pt) ;
 /// l'enveloppe s'y pose pour que la feuille réelle arrive sans saut.
 enum NotificationSheetGeometry {
-    static let topGap: CGFloat = 10
+    static let topGap: CGFloat = 0
     static let cornerRadius: CGFloat = 38
     static var surface: Color { Color(uiColor: .systemBackground) }
 }

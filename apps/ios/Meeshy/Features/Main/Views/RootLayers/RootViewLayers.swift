@@ -59,6 +59,7 @@ struct RootEnvironmentLayer: ViewModifier {
                     .presentationDetents([.large, .medium], selection: $notificationPreviewDetent)
                     .presentationDragIndicator(.visible)
                     .closesForConversationOpening(.sheet)
+                    .onAppear { ConversationOpeningPaint.announce(.shown, for: conv.id) }
             }
             .modifier(PostDetailSheetHost(
                 router: router,
