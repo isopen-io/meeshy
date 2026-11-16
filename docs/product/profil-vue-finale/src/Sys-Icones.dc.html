@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Système — Icônes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.cell{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;text-align:center}
+.cell>b{display:flex;align-items:center;justify-content:center;width:64px;height:64px;margin-bottom:7px;border-radius:22px;background:var(--field);border:1px solid var(--line);color:var(--ink);transition:transform .3s cubic-bezier(.3,1.6,.5,1),color .2s}
+.cell:hover>b{transform:translateY(-4px) scale(1.06);color:var(--fam,var(--accent-ink))}
+.cell>span{font-size:11.5px;font-weight:600;line-height:1.25;color:var(--ink)}
+.cell>code{font-size:10px;color:var(--ink3);white-space:nowrap}
+.fam{display:flex;flex-direction:column;gap:24px;padding:28px}
+.fam>header{display:flex;align-items:center;gap:10px}
+.fam>header>i{width:10px;height:10px;border-radius:50%;background:var(--fam)}
+.fam>header>em{margin-left:auto;font-style:normal;color:var(--ink3)}
+.pz{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;flex:none}
+.pz.off{background:var(--field);border:1px solid var(--line);color:var(--ink2)}
+.pz.act{background:color-mix(in oklab,var(--accent) 26%,transparent);border:1.5px solid var(--accent);color:var(--accent-ink);animation:icBeat 2.8s ease-in-out infinite}
+.tr{display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;align-items:center;gap:20px;min-height:68px;padding:8px 26px}
+.tr+.tr{border-top:1px solid var(--line)}
+.tr .mono{font-size:13px;color:var(--ink2)}
+.cz{display:flex;align-items:center;justify-content:center;width:104px;height:104px;border:1.5px solid var(--accent);color:var(--ink);animation:mxMorph 8s ease-in-out infinite}
+@keyframes icBeat{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 280px; height: 280px; right: 120px; top: -110px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -40px; background: #6366F1; opacity: .26; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 14px; max-width: 760px">
+<span class="tag">Profil Meeshy · système</span>
+<h1 class="d" style="font-size: 56px">Icônes</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2)">Une idée, une icône, sur les trois plateformes. Trait au repos, plein quand c'est actif.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip glass" style="min-height: 44px; padding: 0 18px; color: var(--ink)">[[ic:stack s]]<span>112 icônes</span></span>
+<span class="chip glass" style="min-height: 44px; padding: 0 18px; color: var(--ink)">[[ic:circles-three s]]<span>9 familles</span></span>
+<span class="chip glass" style="min-height: 44px; padding: 0 18px; color: var(--ink)">[[ic:heart-fill s]]<span>2 états</span></span>
+</div>
+</header>
+
+<section class="card fam rise" style="--fam: #D8B4FE; animation-delay: .04s">
+<header><i></i><span class="tag">Faces</span><em class="mono">16</em></header>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b>[[ic:user-focus l]]</b><span>Vitrine</span><code class="mono">user-focus</code></div>
+<div class="cell"><b>[[ic:link l]]</b><span>Liens</span><code class="mono">link</code></div>
+<div class="cell"><b>[[ic:lightning l]]</b><span>Actions</span><code class="mono">lightning</code></div>
+<div class="cell"><b>[[ic:eye l]]</b><span>Voir comme</span><code class="mono">eye</code></div>
+<div class="cell"><b>[[ic:pencil-simple l]]</b><span>Modifier</span><code class="mono">pencil-simple</code></div>
+<div class="cell"><b>[[ic:palette l]]</b><span>Couleur d'accent</span><code class="mono">palette</code></div>
+<div class="cell"><b>[[ic:magic-wand l]]</b><span>Décor</span><code class="mono">magic-wand</code></div>
+<div class="cell"><b>[[ic:smiley l]]</b><span>Humeur</span><code class="mono">smiley</code></div>
+<div class="cell"><b>[[ic:camera l]]</b><span>Photo de profil</span><code class="mono">camera</code></div>
+<div class="cell"><b>[[ic:image l]]</b><span>Bannière</span><code class="mono">image</code></div>
+<div class="cell"><b>[[ic:images l]]</b><span>Médias partagés</span><code class="mono">images</code></div>
+<div class="cell"><b>[[ic:stack l]]</b><span>Publications</span><code class="mono">stack</code></div>
+<div class="cell"><b>[[ic:heart l]]</b><span>Aimer</span><code class="mono">heart</code></div>
+<div class="cell"><b>[[ic:star l]]</b><span>Messages favoris</span><code class="mono">star</code></div>
+<div class="cell"><b>[[ic:bookmark-simple l]]</b><span>Enregistrés</span><code class="mono">bookmark-simple</code></div>
+<div class="cell"><b>[[ic:storefront l]]</b><span>Mes packs</span><code class="mono">storefront</code></div>
+</div>
+</section>
+
+<section class="card fam" style="--fam: #7FE3DC">
+<header><i></i><span class="tag">Parler</span><em class="mono">16</em></header>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b>[[ic:chat-circle l]]</b><span>Message</span><code class="mono">chat-circle</code></div>
+<div class="cell"><b>[[ic:phone l]]</b><span>Appel</span><code class="mono">phone</code></div>
+<div class="cell"><b>[[ic:video-camera l]]</b><span>Vidéo</span><code class="mono">video-camera</code></div>
+<div class="cell"><b>[[ic:radio l]]</b><span>Talkie</span><code class="mono">radio</code></div>
+<div class="cell"><b>[[ic:microphone l]]</b><span>Maintenir pour parler</span><code class="mono">microphone</code></div>
+<div class="cell"><b>[[ic:waveform l]]</b><span>Voix</span><code class="mono">waveform</code></div>
+<div class="cell"><b>[[ic:play l]]</b><span>Écouter</span><code class="mono">play</code></div>
+<div class="cell"><b>[[ic:pause l]]</b><span>Pause</span><code class="mono">pause</code></div>
+<div class="cell"><b>[[ic:translate l]]</b><span>Traduction</span><code class="mono">translate</code></div>
+<div class="cell"><b>[[ic:music-notes l]]</b><span>Écoute en cours</span><code class="mono">music-notes</code></div>
+<div class="cell"><b>[[ic:phone-slash l]]</b><span>Injoignable</span><code class="mono">phone-slash</code></div>
+<div class="cell"><b>[[ic:bell l]]</b><span>Notifications</span><code class="mono">bell</code></div>
+<div class="cell"><b>[[ic:bell-ringing l]]</b><span>Sonnerie d'appel</span><code class="mono">bell-ringing</code></div>
+<div class="cell"><b>[[ic:envelope-simple l]]</b><span>E-mail</span><code class="mono">envelope-simple</code></div>
+<div class="cell"><b>[[ic:megaphone l]]</b><span>Annonce</span><code class="mono">megaphone</code></div>
+<div class="cell"><b>[[ic:broadcast l]]</b><span>En direct</span><code class="mono">broadcast</code></div>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<section class="card fam" style="--fam: #FBBF24">
+<header><i></i><span class="tag">Ensemble</span><em class="mono">8</em></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b>[[ic:monitor-play l]]</b><span>Regarder ensemble</span><code class="mono">monitor-play</code></div>
+<div class="cell"><b>[[ic:headphones l]]</b><span>Écouter ensemble</span><code class="mono">headphones</code></div>
+<div class="cell"><b>[[ic:battery-medium l]]</b><span>Batterie</span><code class="mono">battery-medium</code></div>
+<div class="cell"><b>[[ic:trophy l]]</b><span>Jeu</span><code class="mono">trophy</code></div>
+<div class="cell"><b>[[ic:sparkle l]]</b><span>Étincelles</span><code class="mono">sparkle</code></div>
+<div class="cell"><b>[[ic:medal l]]</b><span>Rang</span><code class="mono">medal</code></div>
+<div class="cell"><b>[[ic:crown l]]</b><span>Titre</span><code class="mono">crown</code></div>
+<div class="cell"><b>[[ic:users l]]</b><span>En commun</span><code class="mono">users</code></div>
+</div>
+</section>
+
+<section class="card fam" style="--fam: #60A5FA">
+<header><i></i><span class="tag">Carte et position</span><em class="mono">8</em></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b>[[ic:map-trifold l]]</b><span>Carte</span><code class="mono">map-trifold</code></div>
+<div class="cell"><b>[[ic:map-pin l]]</b><span>Position</span><code class="mono">map-pin</code></div>
+<div class="cell"><b>[[ic:navigation-arrow l]]</b><span>Itinéraire</span><code class="mono">navigation-arrow</code></div>
+<div class="cell"><b>[[ic:ghost l]]</b><span>Mode fantôme</span><code class="mono">ghost</code></div>
+<div class="cell"><b>[[ic:crosshair l]]</b><span>Me recentrer</span><code class="mono">crosshair</code></div>
+<div class="cell"><b>[[ic:compass l]]</b><span>Boussole</span><code class="mono">compass</code></div>
+<div class="cell"><b>[[ic:arrows-out l]]</b><span>Plein écran</span><code class="mono">arrows-out</code></div>
+<div class="cell"><b>[[ic:clock-countdown l]]</b><span>Temps restant</span><code class="mono">clock-countdown</code></div>
+</div>
+</section>
+</div>
+
+<section class="card fam" style="--fam: #818CF8">
+<header><i></i><span class="tag">Liens et partage</span><em class="mono">16</em></header>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b>[[ic:qr-code l]]</b><span>QR</span><code class="mono">qr-code</code></div>
+<div class="cell"><b>[[ic:scan l]]</b><span>Scanner</span><code class="mono">scan</code></div>
+<div class="cell"><b>[[ic:export l]]</b><span>Partager</span><code class="mono">export</code></div>
+<div class="cell"><b>[[ic:paper-plane-tilt l]]</b><span>Envoyer le profil</span><code class="mono">paper-plane-tilt</code></div>
+<div class="cell"><b>[[ic:copy l]]</b><span>Copier</span><code class="mono">copy</code></div>
+<div class="cell"><b>[[ic:contactless-payment l]]</b><span>Sans contact</span><code class="mono">contactless-payment</code></div>
+<div class="cell"><b>[[ic:arrow-square-out l]]</b><span>Lien sortant</span><code class="mono">arrow-square-out</code></div>
+<div class="cell"><b>[[ic:download-simple l]]</b><span>Enregistrer le QR</span><code class="mono">download-simple</code></div>
+<div class="cell"><b style="color: var(--l-share)">[[ic:chats-circle l]]</b><span>Lien de partage</span><code class="mono">chats-circle</code></div>
+<div class="cell"><b style="color: var(--l-track)">[[ic:cursor-click l]]</b><span>Lien de suivi</span><code class="mono">cursor-click</code></div>
+<div class="cell"><b style="color: var(--l-comm)">[[ic:users-four l]]</b><span>Lien de communauté</span><code class="mono">users-four</code></div>
+<div class="cell"><b style="color: var(--l-aff)">[[ic:gift l]]</b><span>Parrainage</span><code class="mono">gift</code></div>
+<div class="cell"><b>[[ic:globe-hemisphere-west l]]</b><span>Adresse perso</span><code class="mono">globe-hemisphere-west</code></div>
+<div class="cell"><b>[[ic:vinyl-record l]]</b><span>Adresse musique</span><code class="mono">vinyl-record</code></div>
+<div class="cell"><b>[[ic:at l]]</b><span>Adresse courte</span><code class="mono">at</code></div>
+<div class="cell"><b>[[ic:chart-line-up l]]</b><span>Clics</span><code class="mono">chart-line-up</code></div>
+</div>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<section class="card fam" style="--fam: #A855F7">
+<header><i></i><span class="tag">Cercles</span><em class="mono">8</em></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b>[[ic:circles-three l]]</b><span>Cercles</span><code class="mono">circles-three</code></div>
+<div class="cell"><b>[[ic:globe l]]</b><span>Public</span><code class="mono">globe</code></div>
+<div class="cell"><b>[[ic:users-three l]]</b><span>Communauté</span><code class="mono">users-three</code></div>
+<div class="cell"><b>[[ic:hand-waving l]]</b><span>Connaissance · Bring</span><code class="mono">hand-waving</code></div>
+<div class="cell"><b>[[ic:handshake l]]</b><span>Ami</span><code class="mono">handshake</code></div>
+<div class="cell"><b>[[ic:fire l]]</b><span>Proche</span><code class="mono">fire</code></div>
+<div class="cell"><b>[[ic:drop l]]</b><span>Sang</span><code class="mono">drop</code></div>
+<div class="cell"><b>[[ic:user-plus l]]</b><span>Inviter</span><code class="mono">user-plus</code></div>
+</div>
+</section>
+
+<section class="card fam" style="--fam: #F87171">
+<header><i></i><span class="tag">Signaler et impasses</span><em class="mono">8</em></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b style="color: var(--err)">[[ic:prohibit l]]</b><span>Bloquer</span><code class="mono">prohibit</code></div>
+<div class="cell"><b style="color: var(--err)">[[ic:flag l]]</b><span>Signaler</span><code class="mono">flag</code></div>
+<div class="cell"><b style="color: var(--err)">[[ic:hand-fist l]]</b><span>Haine</span><code class="mono">hand-fist</code></div>
+<div class="cell"><b style="color: var(--err)">[[ic:mask-happy l]]</b><span>Faux profil</span><code class="mono">mask-happy</code></div>
+<div class="cell"><b>[[ic:user-circle-dashed l]]</b><span>Profil introuvable</span><code class="mono">user-circle-dashed</code></div>
+<div class="cell"><b>[[ic:link-break l]]</b><span>Lien cassé</span><code class="mono">link-break</code></div>
+<div class="cell"><b>[[ic:cloud-slash l]]</b><span>Hors ligne</span><code class="mono">cloud-slash</code></div>
+<div class="cell"><b>[[ic:arrows-clockwise l]]</b><span>Réessayer</span><code class="mono">arrows-clockwise</code></div>
+</div>
+</section>
+</div>
+
+<section class="card fam" style="--fam: #34D399">
+<header><i></i><span class="tag">Identité et confiance</span><em class="mono">16</em></header>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b style="color: var(--ok)">[[ic:seal-check l]]</b><span>Vérifié</span><code class="mono">seal-check</code></div>
+<div class="cell"><b>[[ic:lock-key l]]</b><span>Chiffré</span><code class="mono">lock-key</code></div>
+<div class="cell"><b>[[ic:shield-check l]]</b><span>Protégé</span><code class="mono">shield-check</code></div>
+<div class="cell"><b style="color: var(--warn)">[[ic:shield-warning l]]</b><span>Non vérifié</span><code class="mono">shield-warning</code></div>
+<div class="cell"><b>[[ic:identification-card l]]</b><span>Identité</span><code class="mono">identification-card</code></div>
+<div class="cell"><b>[[ic:address-book l]]</b><span>Carnet</span><code class="mono">address-book</code></div>
+<div class="cell"><b>[[ic:lock-simple l]]</b><span>Réservé</span><code class="mono">lock-simple</code></div>
+<div class="cell"><b>[[ic:eye-slash l]]</b><span>Masqué</span><code class="mono">eye-slash</code></div>
+<div class="cell"><b>[[ic:user-check l]]</b><span>Connectés</span><code class="mono">user-check</code></div>
+<div class="cell"><b>[[ic:user-minus l]]</b><span>Annuler le lien</span><code class="mono">user-minus</code></div>
+<div class="cell"><b>[[ic:hourglass l]]</b><span>En attente</span><code class="mono">hourglass</code></div>
+<div class="cell"><b>[[ic:check-circle l]]</b><span>Accepté</span><code class="mono">check-circle</code></div>
+<div class="cell"><b>[[ic:chat-circle-dots l]]</b><span>Demande de message</span><code class="mono">chat-circle-dots</code></div>
+<div class="cell"><b>[[ic:buildings l]]</b><span>Ville affichée</span><code class="mono">buildings</code></div>
+<div class="cell"><b style="color: var(--err)">[[ic:trash l]]</b><span>Supprimer</span><code class="mono">trash</code></div>
+<div class="cell"><b style="color: var(--err)">[[ic:sign-out l]]</b><span>Déconnexion</span><code class="mono">sign-out</code></div>
+</div>
+</section>
+
+<section class="card fam" style="--fam: #A5B4FC">
+<header><i></i><span class="tag">Système et états</span><em class="mono">16</em></header>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 26px 14px">
+<div class="cell"><b>[[ic:gear-six l]]</b><span>Réglages</span><code class="mono">gear-six</code></div>
+<div class="cell"><b>[[ic:dots-three l]]</b><span>Plus</span><code class="mono">dots-three</code></div>
+<div class="cell"><b>[[ic:x l]]</b><span>Fermer</span><code class="mono">x</code></div>
+<div class="cell"><b>[[ic:caret-left l]]</b><span>Retour</span><code class="mono">caret-left</code></div>
+<div class="cell"><b>[[ic:plus l]]</b><span>Créer</span><code class="mono">plus</code></div>
+<div class="cell"><b>[[ic:minus l]]</b><span>Retirer</span><code class="mono">minus</code></div>
+<div class="cell"><b>[[ic:check l]]</b><span>Choisi</span><code class="mono">check</code></div>
+<div class="cell"><b>[[ic:magnifying-glass l]]</b><span>Chercher</span><code class="mono">magnifying-glass</code></div>
+<div class="cell"><b>[[ic:funnel l]]</b><span>Filtrer</span><code class="mono">funnel</code></div>
+<div class="cell"><b>[[ic:dots-six-vertical l]]</b><span>Réordonner</span><code class="mono">dots-six-vertical</code></div>
+<div class="cell"><b>[[ic:clock l]]</b><span>Vu il y a…</span><code class="mono">clock</code></div>
+<div class="cell"><b>[[ic:cell-signal-high l]]</b><span>Réseau</span><code class="mono">cell-signal-high</code></div>
+<div class="cell"><b>[[ic:device-mobile l]]</b><span>Depuis un mobile</span><code class="mono">device-mobile</code></div>
+<div class="cell"><b>[[ic:desktop l]]</b><span>Depuis un ordinateur</span><code class="mono">desktop</code></div>
+<div class="cell"><b>[[ic:info l]]</b><span>En savoir plus</span><code class="mono">info</code></div>
+<div class="cell"><b style="color: var(--warn)">[[ic:warning l]]</b><span>Attention</span><code class="mono">warning</code></div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span class="tag">Repos / actif</span>
+<h2 class="d" style="font-size: 32px">Le trait se remplit quand ça vit</h2>
+<p style="font-size: 15px; color: var(--ink2)">Même dessin, deux états. Le plein dit : face choisie, cœur donné, position partagée, appel en cours.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px">
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:user-focus l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act">[[ic:user-focus-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Vitrine</span><code class="mono" style="font-size: 10px; color: var(--ink3)">user-focus-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:link l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -.3s">[[ic:link-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Liens</span><code class="mono" style="font-size: 10px; color: var(--ink3)">link-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:lightning l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -.6s">[[ic:lightning-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Actions</span><code class="mono" style="font-size: 10px; color: var(--ink3)">lightning-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:heart l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -.9s">[[ic:heart-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Aimé</span><code class="mono" style="font-size: 10px; color: var(--ink3)">heart-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:star l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -1.2s">[[ic:star-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">En favori</span><code class="mono" style="font-size: 10px; color: var(--ink3)">star-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:map-pin l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -1.5s">[[ic:map-pin-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Position partagée</span><code class="mono" style="font-size: 10px; color: var(--ink3)">map-pin-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:fire l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -1.8s">[[ic:fire-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Proche</span><code class="mono" style="font-size: 10px; color: var(--ink3)">fire-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:drop l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -2.1s">[[ic:drop-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Sang</span><code class="mono" style="font-size: 10px; color: var(--ink3)">drop-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:chat-circle l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -2.4s">[[ic:chat-circle-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Message non lu</span><code class="mono" style="font-size: 10px; color: var(--ink3)">chat-circle-fill</code></div></div>
+<div class="card" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 12px 18px"><div style="display: flex; align-items: center; gap: 10px"><span class="pz off">[[ic:phone l]]</span><span style="color: var(--ink3)">[[ic:arrow-right s]]</span><span class="pz act" style="animation-delay: -2.7s">[[ic:phone-fill l]]</span></div><div style="display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-size: 13.5px; font-weight: 700">Appel en cours</span><code class="mono" style="font-size: 10px; color: var(--ink3)">phone-fill</code></div></div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span class="tag">Tailles</span>
+<h2 class="d" style="font-size: 32px">Quatre tailles, quatre places</h2>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+<div class="card" style="display: flex; flex-direction: column; gap: 20px; padding: 24px">
+<div style="display: flex; align-items: center; justify-content: center; height: 132px; border-radius: 18px; background: var(--ground); border: 1px solid var(--line)"><span class="chip">[[ic:map-pin s]]<span>Alfama · 42 min</span></span></div>
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span class="d" style="font-size: 26px">16 px</span><code class="mono" style="color: var(--ink3)">s</code></div>
+<p style="font-size: 13.5px; color: var(--ink2)">Puce. À côté d'un mot court, jamais seule.</p>
+</div>
+<div class="card" style="display: flex; flex-direction: column; gap: 20px; padding: 24px">
+<div style="display: flex; align-items: center; height: 132px; border-radius: 18px; background: var(--ground); border: 1px solid var(--line)"><div class="row" style="flex: 1; min-width: 0; padding: 8px 16px"><span style="color: var(--accent-ink)">[[ic:map-pin]]</span><span style="flex: 1; min-width: 0; font-weight: 600">Partager ma position</span><span style="color: var(--ink3)">[[ic:caret-right s]]</span></div></div>
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span class="d" style="font-size: 26px">22 px</span><code class="mono" style="color: var(--ink3)">par défaut</code></div>
+<p style="font-size: 13.5px; color: var(--ink2)">Rangée de liste, bouton à libellé, sélecteur de faces.</p>
+</div>
+<div class="card" style="display: flex; flex-direction: column; gap: 20px; padding: 24px">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 132px; border-radius: 18px; background: linear-gradient(150deg, #3B1A78, #13111C)"><button class="ib g lg" aria-label="Partager ma position">[[ic:map-pin l]]</button><span style="font-size: 12px; font-weight: 600">Position</span></div>
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span class="d" style="font-size: 26px">28 px</span><code class="mono" style="color: var(--ink3)">l</code></div>
+<p style="font-size: 13.5px; color: var(--ink2)">Bouton rond de verre, 56 à 64 px, sur la face Actions.</p>
+</div>
+<div class="card" style="display: flex; flex-direction: column; gap: 20px; padding: 24px">
+<div style="display: flex; align-items: center; justify-content: center; height: 132px; border-radius: 18px; background: var(--ground); border: 1px solid var(--line)"><span style="display: flex; align-items: center; justify-content: center; width: 84px; height: 84px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--accent-ink)">[[ic:map-pin-fill xl]]</span></div>
+<div style="display: flex; align-items: baseline; justify-content: space-between"><span class="d" style="font-size: 26px">36 px</span><code class="mono" style="color: var(--ink3)">xl</code></div>
+<p style="font-size: 13.5px; color: var(--ink2)">Héro. État vide, confirmation, tête de feuille.</p>
+</div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span class="tag">Trois plateformes</span>
+<h2 class="d" style="font-size: 32px">Le même sens, le jeu de chaque maison</h2>
+<p style="font-size: 15px; color: var(--ink2)">Le dessin change d'une plateforme à l'autre. L'idée, non.</p>
+</div>
+<div class="card" style="overflow: hidden">
+<div class="tr" style="min-height: 52px; background: var(--field)">
+<span class="tag">Dessin</span>
+<span class="tag">iOS · SF Symbols</span>
+<span class="tag">Web · Phosphor</span>
+<span class="tag">Android · Material Symbols</span>
+</div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field); color: var(--accent-ink)">[[ic:user-focus]]</span><b>Vitrine</b></span><code class="mono">person.crop.circle</code><code class="mono">user-focus</code><code class="mono">account_circle</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field); color: var(--accent-ink)">[[ic:link]]</span><b>Liens</b></span><code class="mono">link</code><code class="mono">link</code><code class="mono">link</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field); color: var(--accent-ink)">[[ic:lightning]]</span><b>Actions</b></span><code class="mono">bolt.fill</code><code class="mono">lightning</code><code class="mono">bolt</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:chat-circle]]</span><b>Message</b></span><code class="mono">bubble.left.fill</code><code class="mono">chat-circle</code><code class="mono">chat_bubble</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:phone]]</span><b>Appel</b></span><code class="mono">phone.fill</code><code class="mono">phone</code><code class="mono">call</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:video-camera]]</span><b>Vidéo</b></span><code class="mono">video.fill</code><code class="mono">video-camera</code><code class="mono">videocam</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:map-trifold]]</span><b>Carte</b></span><code class="mono">map.fill</code><code class="mono">map-trifold</code><code class="mono">map</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:map-pin]]</span><b>Position</b></span><code class="mono">mappin.and.ellipse</code><code class="mono">map-pin</code><code class="mono">location_on</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:qr-code]]</span><b>QR</b></span><code class="mono">qrcode</code><code class="mono">qr-code</code><code class="mono">qr_code_2</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:export]]</span><b>Partager</b></span><code class="mono">square.and.arrow.up</code><code class="mono">export</code><code class="mono">share</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: rgba(248,113,113,.13); color: var(--err)">[[ic:prohibit]]</span><b>Bloquer</b></span><code class="mono">nosign</code><code class="mono">prohibit</code><code class="mono">block</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: rgba(248,113,113,.13); color: var(--err)">[[ic:flag]]</span><b>Signaler</b></span><code class="mono">flag.fill</code><code class="mono">flag</code><code class="mono">flag</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:circles-three]]</span><b>Cercles</b></span><code class="mono">person.3.fill</code><code class="mono">circles-three</code><code class="mono">groups</code></div>
+<div class="tr"><span style="display: flex; align-items: center; gap: 14px"><span class="ib" style="background: var(--field)">[[ic:lock-key]]</span><b>Chiffré</b></span><code class="mono">lock.fill</code><code class="mono">lock-key</code><code class="mono">lock</code></div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span class="tag">Icônes de cercle</span>
+<h2 class="d" style="font-size: 32px">Plus on est proche, plus la pastille se remplit</h2>
+</div>
+<div class="card" style="position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; padding: 40px 28px 34px; overflow: hidden">
+<div style="position: absolute; left: 12%; right: 12%; top: 91px; height: 2px; background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 12%, transparent), var(--accent))"></div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center"><span class="cz" style="background: color-mix(in oklab, var(--accent) 6%, var(--raised)); border-color: color-mix(in oklab, var(--accent) 40%, transparent)">[[ic:globe xl]]</span><span class="d" style="font-size: 19px">Public</span><span style="font-size: 12.5px; color: var(--ink2)">Tout le monde</span><code class="mono" style="font-size: 10px; color: var(--ink3)">globe</code></div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center"><span class="cz" style="background: color-mix(in oklab, var(--accent) 16%, var(--raised)); animation-delay: -1.3s">[[ic:users-three xl]]</span><span class="d" style="font-size: 19px">Communauté</span><span style="font-size: 12.5px; color: var(--ink2)">128 personnes</span><code class="mono" style="font-size: 10px; color: var(--ink3)">users-three</code></div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center"><span class="cz" style="background: color-mix(in oklab, var(--accent) 28%, var(--raised)); animation-delay: -2.6s">[[ic:hand-waving xl]]</span><span class="d" style="font-size: 19px">Connaissance</span><span style="font-size: 12.5px; color: var(--ink2)">46 personnes</span><code class="mono" style="font-size: 10px; color: var(--ink3)">hand-waving</code></div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center"><span class="cz" style="background: color-mix(in oklab, var(--accent) 44%, var(--raised)); animation-delay: -3.9s">[[ic:handshake xl]]</span><span class="d" style="font-size: 19px">Ami</span><span style="font-size: 12.5px; color: var(--ink2)">31 personnes</span><code class="mono" style="font-size: 10px; color: var(--ink3)">handshake</code></div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center"><span class="cz" style="background: color-mix(in oklab, var(--accent) 68%, var(--raised)); color: #0B0B12; animation-delay: -5.2s">[[ic:fire-fill xl]]</span><span class="d" style="font-size: 19px">Proche</span><span style="font-size: 12.5px; color: var(--ink2)">9 personnes</span><code class="mono" style="font-size: 10px; color: var(--ink3)">fire-fill</code></div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center"><span class="cz" style="background: var(--accent); color: #0B0B12; box-shadow: 0 0 44px color-mix(in oklab, var(--accent) 55%, transparent); animation-delay: -6.5s">[[ic:drop-fill xl]]</span><span class="d" style="font-size: 19px">Sang</span><span style="font-size: 12.5px; color: var(--ink2)">3 personnes</span><code class="mono" style="font-size: 10px; color: var(--ink3)">drop-fill</code></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":5524}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

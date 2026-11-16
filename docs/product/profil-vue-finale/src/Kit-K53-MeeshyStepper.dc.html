@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K53 MeeshyStepper</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;flex-direction:column;justify-content:center;flex:1;min-height:132px;gap:12px}
+.stage.c{align-items:center}
+.sub{display:flex;align-items:center;gap:12px;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);padding-top:10px}
+.sub>code{text-transform:none;letter-spacing:0}
+.sub::after{content:"";flex:1;height:1px;background:var(--line)}
+
+.stp{display:inline-flex;align-items:center;gap:4px;padding:3px;border-radius:999px;background:var(--field);border:1px solid var(--line)}
+.stp>.ib:first-child{color:var(--ink2)}
+.stp>.ib:last-child{background:var(--glass);color:var(--ink)}
+.stp>.d{min-width:34px;text-align:center;font-size:20px;font-variant-numeric:tabular-nums}
+.stp>.ib.end{opacity:.36;background:none}
+.stp.off{opacity:.42}
+.mx .stp>.ib.dn{transform:scale(.88);background:color-mix(in oklab,var(--ink) 34%,transparent);box-shadow:0 0 0 3px color-mix(in oklab,var(--ink) 12%,transparent)}
+
+.trkbox{border-radius:26px;background:var(--field);border:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column}
+.trk{position:relative;display:flex}
+.trk>.ln{position:absolute;inset-inline:16.66%;top:29px;height:3px;border-radius:2px;background:var(--line)}
+.trk>.fl{position:absolute;inset-inline-start:16.66%;top:29px;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--line),var(--accent))}
+[dir=rtl] .trk>.fl{background:linear-gradient(270deg,var(--line),var(--accent))}
+.trk.n2>.ln{inset-inline:25%}.trk.n2>.fl{inset-inline-start:25%}
+.trk.n4>.ln{inset-inline:12.5%}.trk.n4>.fl{inset-inline-start:12.5%}
+.trk.n5>.ln{inset-inline:10%}.trk.n5>.fl{inset-inline-start:10%}
+.stop{display:flex;flex-direction:column;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;position:relative}
+.stop>i{display:flex;align-items:center;justify-content:center;height:60px}
+.stop>i>b{display:block;border-radius:50%;border:1.5px solid var(--ink3);background:color-mix(in oklab,var(--ink3) 16%,var(--field))}
+.stop.on>i>b{border:2px solid var(--accent);background:color-mix(in oklab,var(--accent) 34%,var(--raised));box-shadow:0 0 0 7px color-mix(in oklab,var(--accent) 16%,transparent)}
+.stop>span{font-size:13.5px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.stop.on>span{font-weight:800;color:var(--ink)}
+.stop.dn>i>b{transform:scale(.9)}
+.stop.fo{outline:2px solid var(--brand-soft);outline-offset:2px;border-radius:18px}
+.tft{display:flex;align-items:center;gap:8px;margin:14px 4px -14px;padding:13px 4px 14px;border-top:1px solid var(--line)}
+.tft>p{font-size:12.5px;letter-spacing:-.01em;color:var(--ink2)}
+
+.ms{position:relative;display:flex;gap:4px}
+.step{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0;text-align:center}
+.step>b{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:var(--field);border:1.5px solid var(--accent);color:var(--accent-ink)}
+.step>strong{display:flex;align-items:flex-start;justify-content:center;min-height:32px;font-size:12.5px;font-weight:700;line-height:1.25;color:var(--ink)}
+.step>span{font-size:11.5px;color:var(--ink2)}
+.step.now>b{background:var(--accent);color:#0B0B12}
+.step.todo>b{border-color:var(--line);color:var(--ink3)}
+.step.todo>strong{color:var(--ink2);font-weight:600}
+.trace{position:absolute;left:12.5%;right:12.5%;top:21px;height:3px;border-radius:2px;background:var(--field);overflow:hidden}
+.trace>i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--brand-soft));transform-origin:left center}
+[dir=rtl] .trace>i{background:linear-gradient(270deg,var(--accent),var(--brand-soft));transform-origin:right center}
+[dir=rtl] .step>strong,[dir=rtl] .step>span,[dir=rtl] .stop>span{direction:ltr}
+.ms.n2>.trace{left:25%;right:25%}
+.ms.n3>.trace{left:16.66%;right:16.66%}
+.ms.n5>.trace{left:10%;right:10%}
+.kcell .trace,.card .trace{background:color-mix(in oklab,var(--ink3) 22%,var(--field))}
+
+.z2{zoom:2}
+.num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.lrow{display:flex;align-items:center;gap:14px;padding:12px 6px 12px 16px;border-radius:22px;background:var(--raised);border:1px solid var(--line)}
+.med{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:14px;flex:none;background:color-mix(in oklab,var(--t,var(--accent)) 18%,transparent);color:var(--ti,var(--accent-ink))}
+.tk{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:8px;background:var(--field);border:1px solid var(--line);font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink2);white-space:nowrap}
+
+.mv-roll{display:block;height:28px;overflow:hidden}
+.mv-roll>span{display:flex;flex-direction:column;animation:spRoll 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.mv-roll>span>b{display:block;height:28px;line-height:28px;font-weight:800}
+.stp.mv{animation:spButt 6.4s ease-out infinite}
+.stp.mv>.ib:last-child{animation:spTap 6.4s ease-out infinite}
+.mv-butt{animation:spFlag 6.4s ease-out infinite}
+.trk.mv>.fl{animation:spFill 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.trk.mv>.stop>i>b{border-width:2px}
+.trk.mv>.stop:nth-child(3)>i>b{animation:spOnA 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.trk.mv>.stop:nth-child(4)>i>b{animation:spOnB 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.trk.mv>.stop:nth-child(5)>i>b{animation:spOnC 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.trk.mv>.stop:nth-child(3)>span{animation:spInkA 6.4s linear infinite}
+.trk.mv>.stop:nth-child(4)>span{animation:spInkB 6.4s linear infinite}
+.trk.mv>.stop:nth-child(5)>span{animation:spInkC 6.4s linear infinite}
+.ms.mv>.trace>i{animation:spTrace 6.4s cubic-bezier(.2,.9,.25,1) infinite}
+.ms.mv>.step>b{animation:spPop 6.4s cubic-bezier(.3,1.6,.5,1) infinite backwards}
+.ms.mv>.step>strong,.ms.mv>.step>span{animation:spCap 6.4s ease-out infinite backwards}
+.ms.mv>.step:nth-child(3)>*{animation-delay:.55s}
+.ms.mv>.step:nth-child(4)>*{animation-delay:1.1s}
+.ms.mv>.step:nth-child(5)>*{animation-delay:1.65s}
+@keyframes spRoll{0%,12%{transform:translateY(0)}18%,34%{transform:translateY(-28px)}40%,94%{transform:translateY(-56px)}100%{transform:translateY(0)}}
+@keyframes spTap{0%,9%{transform:scale(1);opacity:1}12%{transform:scale(.88)}17%,31%{transform:scale(1)}34%{transform:scale(.88);opacity:1}40%,55%{transform:scale(1);opacity:.36}58%{transform:scale(.94);opacity:.36}62%,94%{transform:scale(1);opacity:.36}100%{transform:scale(1);opacity:1}}
+@keyframes spButt{0%,57%{transform:translateX(0)}59%{transform:translateX(5px)}61%{transform:translateX(-4px)}63%{transform:translateX(2px)}66%,100%{transform:translateX(0)}}
+@keyframes spFlag{0%,56%{opacity:0;transform:translateY(4px)}60%,88%{opacity:1;transform:none}94%,100%{opacity:0}}
+@keyframes spFill{0%,26%{width:0}33%,59%{width:33.34%}66%,94%{width:66.68%}100%{width:0}}
+@keyframes spOnA{0%,26%{border-color:var(--accent);background:color-mix(in oklab,var(--accent) 34%,var(--raised));box-shadow:0 0 0 7px color-mix(in oklab,var(--accent) 16%,transparent)}33%,94%{border-color:var(--ink3);background:color-mix(in oklab,var(--ink3) 16%,var(--field));box-shadow:0 0 0 0 transparent}100%{border-color:var(--accent);background:color-mix(in oklab,var(--accent) 34%,var(--raised));box-shadow:0 0 0 7px color-mix(in oklab,var(--accent) 16%,transparent)}}
+@keyframes spOnB{0%,26%{border-color:var(--ink3);background:color-mix(in oklab,var(--ink3) 16%,var(--field));box-shadow:0 0 0 0 transparent}33%,59%{border-color:var(--accent);background:color-mix(in oklab,var(--accent) 34%,var(--raised));box-shadow:0 0 0 7px color-mix(in oklab,var(--accent) 16%,transparent)}66%,100%{border-color:var(--ink3);background:color-mix(in oklab,var(--ink3) 16%,var(--field));box-shadow:0 0 0 0 transparent}}
+@keyframes spOnC{0%,59%{border-color:var(--ink3);background:var(--ink3);box-shadow:0 0 0 0 transparent}66%,94%{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 7px color-mix(in oklab,var(--accent) 16%,transparent)}100%{border-color:var(--ink3);background:var(--ink3);box-shadow:0 0 0 0 transparent}}
+@keyframes spInkA{0%,26%{color:var(--ink)}33%,94%{color:var(--ink2)}100%{color:var(--ink)}}
+@keyframes spInkB{0%,26%{color:var(--ink2)}33%,59%{color:var(--ink)}66%,100%{color:var(--ink2)}}
+@keyframes spInkC{0%,59%{color:var(--ink2)}66%,94%{color:var(--ink)}100%{color:var(--ink2)}}
+@keyframes spTrace{0%,6%{transform:scaleX(0);opacity:1}42%,90%{transform:scaleX(1);opacity:1}96%{transform:scaleX(1);opacity:0}100%{transform:scaleX(0);opacity:0}}
+@keyframes spPop{0%,5%{transform:scale(.72);opacity:.3}12%{transform:scale(1.1);opacity:1}18%,88%{transform:scale(1);opacity:1}96%,100%{transform:scale(.72);opacity:.3}}
+@keyframes spCap{0%,8%{opacity:0;transform:translateY(6px)}18%,88%{opacity:1;transform:none}96%,100%{opacity:0}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #4ECDC4; opacity: .14; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K53 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyStepper</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Une valeur qui avance par crans se règle ou se suit sur une seule échelle discrète</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">Cinquante entrées pour un lien, « Quartier » plutôt que « Ville », quatre étapes d'une histoire à deux. Trois dessins du profil, une seule idée : la valeur ne glisse pas, elle saute d'un cran au suivant. K53 lui donne trois formes et une seule loi de bornes.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Des crans, jamais une glissière</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Avance <b>un entier</b> d'un pas à la fois entre deux bornes : deux boutons, la valeur en grand au milieu, l'appui long qui accélère.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>un choix</b> sur 2 à 5 arrêts ordonnés d'une ligne. La taille de chaque repère est libre : c'est elle qui porte le sens.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><b>Raconte</b> 2 à 5 étapes en lecture seule : disques reliés par une trace, à faire, fait, courant.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><b>Tient ses bornes</b> seul : le bouton s'atténue à la butée, la main le sent, la voix annonce la valeur, pas le geste.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Une valeur continue réglée du doigt : <b>K05</b> <code>MeeshyLabeledSlider</code>. Un choix nommé sans ordre, à pastille qui glisse : <b>K03</b> <code>MeeshySegmented</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Une mesure qui se lit sans se régler, même à crans : <b>K42</b> <code>MeeshyMeter</code>. La saisie d'un nombre au clavier : <b>K08</b> <code>MeeshyField</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre du bouton plus : <b>K01</b>. Le disque et sa cible de 44 : <b>K02</b>. La surface qui porte la piste et sa phrase : <b>K43</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le sens d'un cran : rayon en mètres, quota restant, date d'une étape et phrase traduite viennent de l'hôte.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:steps l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 20px">Compter : boutons. Choisir un degré : piste. Suivre un chemin : jalons.</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1020px">Au-delà de cinq arrêts, la piste devient illisible : on passe aux boutons, ou à K05 si la valeur est continue. Sous deux, il n'y a rien à choisir : K06 suffit. Les jalons ne se touchent jamais : un chemin qu'on parcourt soi-même est une navigation, pas un K53.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Trois formes, douze parties</h2><p>Le compteur d'entrées d'un lien, la précision d'un partage de position et « Notre histoire », à deux fois leur taille. Les mesures données sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="flex-direction: column; align-items: center; justify-content: center; gap: 52px; padding: 64px 48px 56px">
+
+<div style="position: relative; display: inline-flex">
+<div class="stp z2">
+<button class="ib" aria-label="Moins d'entrées">[[ic:minus]]</button>
+<span class="d">50</span>
+<button class="ib" aria-label="Plus d'entrées">[[ic:plus]]</button>
+</div>
+<span class="kan" style="left: -36px; top: 41px">1</span>
+<span class="kan" style="left: 41px; top: -30px">2</span>
+<span class="kan" style="left: 50%; margin-left: -11px; bottom: -30px">3</span>
+<span class="kan" style="right: 41px; top: -30px">4</span>
+</div>
+
+<div style="align-self: stretch; height: 0; border-top: 1.5px dashed var(--line)"></div>
+
+<div style="position: relative; display: inline-flex">
+<div class="trk z2" style="width: 300px">
+<span class="ln"></span><span class="fl" style="width: 33.34%"></span>
+<button class="stop"><i><b style="width: 56px; height: 56px"></b></i><span>Ville</span></button>
+<button class="stop on"><i><b style="width: 34px; height: 34px"></b></i><span>Quartier</span></button>
+<button class="stop"><i><b style="width: 10px; height: 10px; background: var(--ink3)"></b></i><span>Exact</span></button>
+</div>
+<span class="kan" style="left: 389px; top: 24px">5</span>
+<span class="kan" style="left: 189px; top: 24px">6</span>
+<span class="kan" style="left: 346px; top: -4px">7</span>
+<span class="kan" style="left: 550px; top: 144px">8</span>
+</div>
+
+<div style="align-self: stretch; height: 0; border-top: 1.5px dashed var(--line)"></div>
+
+<div style="position: relative; display: inline-flex">
+<div class="ms z2" style="width: 308px">
+<div class="trace"><i></i></div>
+<div class="step"><b>[[ic:chat-circle]]</b><strong>Premier message</strong><span>6 mars</span></div>
+<div class="step"><b>[[ic:handshake]]</b><strong>Amis</strong><span>11 mars</span></div>
+<div class="step"><b>[[ic:fire]]</b><strong>Proches</strong><span>19 mars</span></div>
+<div class="step now"><b>[[ic:sparkle-fill]]</b><strong>1 000 messages</strong><span>6 mai</span></div>
+</div>
+<span class="kan" style="left: 110px; top: -12px">9</span>
+<span class="kan" style="left: 141px; top: 14px">10</span>
+<span class="kan" style="left: 268px; top: 108px">11</span>
+<span class="kan" style="left: 578px; top: -12px">12</span>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 18px">
+<span class="pf">Forme boutons</span>
+<div class="lgd">
+<span class="kan">1</span><div><b>Capsule tonale</b><span>Hauteur 50, marge 3, écart 4. Fond <code>--field</code>, bord 1 <code>--line</code>. Jamais de verre : elle vit dans une rangée.</span></div>
+<span class="kan">2</span><div><b>Bouton moins</b><span>Disque de 44 demandé à K02, matière plate, glyphe <code>--ink2</code>. Atténué à 36 % à la borne basse.</span></div>
+<span class="kan">3</span><div><b>Valeur</b><span>Nunito 800, 20. Largeur minimale 34, chiffres tabulaires : la capsule ne tremble pas quand le nombre change.</span></div>
+<span class="kan">4</span><div><b>Bouton plus</b><span>Disque de 44 demandé à K02, verre de K01 (<code>--glass</code>), glyphe <code>--ink</code> : le sens qui ouvre est le plus visible.</span></div>
+</div>
+<span class="pf" style="padding-top: 6px">Forme piste</span>
+<div class="lgd">
+<span class="kan">5</span><div><b>Ligne</b><span>3 de haut, rayon 2, <code>--line</code>. Du centre du premier arrêt au centre du dernier.</span></div>
+<span class="kan">6</span><div><b>Remplissage</b><span>Dégradé <code>--line</code> vers <code>--accent</code>, du premier arrêt au cran choisi. Il part du bord de début.</span></div>
+<span class="kan">7</span><div><b>Repère</b><span>Disque de 10 à 56 dans une case de 60, taille donnée par l'hôte. Choisi : bord 2 <code>--accent</code>, halo de 7 à 16 %.</span></div>
+<span class="kan">8</span><div><b>Libellé</b><span>13,5 · 600 <code>--ink2</code>, 800 <code>--ink</code> sur le choisi. Écart 10 sous la case. La colonne entière est la cible.</span></div>
+</div>
+<span class="pf" style="padding-top: 6px">Forme jalons</span>
+<div class="lgd">
+<span class="kan">9</span><div><b>Disque</b><span>44, fond <code>--field</code>, bord 1,5 <code>--accent</code>, glyphe de 22 en <code>--accent-ink</code>. À faire : bord <code>--line</code>, glyphe <code>--ink3</code>.</span></div>
+<span class="kan">10</span><div><b>Trace</b><span>3 de haut à 21 du sommet, dégradé <code>--accent</code> vers <code>--brand-soft</code>, sous les disques. Remplie jusqu'au courant.</span></div>
+<span class="kan">11</span><div><b>Titre et date</b><span>Titre 12,5 · 700 sur deux lignes au plus (réserve de 32), puis légende 11,5 <code>--ink2</code>.</span></div>
+<span class="kan" style="border-bottom: 0">12</span><div style="border-bottom: 0"><b>Courant</b><span>Le dernier atteint, en aplat <code>--accent</code>, glyphe plein sombre <code>#0B0B12</code>. Un seul par échelle.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois genres, quatre états, deux sens de lecture</h2><p>Tout est à taille réelle. Les spécimens sont ceux des écrans du profil : mêmes mots, mêmes valeurs, mêmes mesures.</p></header>
+
+<span class="sub"><code>buttons</code><span>bornes, pas, appui long</span></span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage c"><div class="stp" role="group" aria-label="Nombre d'entrées"><button class="ib" aria-label="Moins d'entrées">[[ic:minus]]</button><span class="d" aria-live="polite">50</span><button class="ib" aria-label="Plus d'entrées">[[ic:plus]]</button></div></div>
+<div class="cp"><b>Repos</b><span class="kcap">Entre ses bornes. Le plus porte le verre, le moins reste plat.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><div class="stp"><button class="ib" aria-label="Moins d'entrées">[[ic:minus]]</button><span class="d">51</span><button class="ib dn" aria-label="Plus d'entrées">[[ic:plus]]</button></div></div>
+<div class="cp"><b>Pressé</b><span class="kcap">Le disque descend à 0,9 et s'éclaircit. La valeur change à l'appui, pas au relâcher.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><div class="stp"><button class="ib" aria-label="Moins d'entrées">[[ic:minus]]</button><span class="d" style="min-width: 46px">180</span><button class="ib dn" aria-label="Plus d'entrées">[[ic:plus]]</button></div><span style="display: flex; gap: 6px"><span class="tk">+1</span><span class="tk">+10</span><span class="tk" style="color: var(--accent-ink); border-color: var(--accent)">+100</span></span></div>
+<div class="cp"><b>Appui long</b><span class="kcap">Après 0,4 s, le pas se répète, puis grandit par paliers. Relâcher l'arrête net.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><div class="stp"><button class="ib" aria-label="Moins de places">[[ic:minus]]</button><span class="d">8</span><button class="ib end" aria-label="Plus de places" aria-disabled="true">[[ic:plus]]</button></div><span class="tk">[[ic:vibrate s]]butée</span></div>
+<div class="cp"><b>Borne haute atteinte</b><span class="kcap">Le plus perd son verre et s'atténue. Y appuyer rend une haptique de butée, rien d'autre.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><div class="stp"><button class="ib end" aria-label="Moins d'entrées" aria-disabled="true">[[ic:minus]]</button><span class="d">1</span><button class="ib" aria-label="Plus d'entrées">[[ic:plus]]</button></div></div>
+<div class="cp"><b>Borne basse atteinte</b><span class="kcap">Le moins s'atténue. Il reste focusable : la voix dit « minimum atteint ».</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><div class="stp off" aria-disabled="true"><button class="ib" aria-label="Moins d'entrées" disabled>[[ic:minus]]</button><span class="d">50</span><button class="ib" aria-label="Plus d'entrées" disabled>[[ic:plus]]</button></div></div>
+<div class="cp"><b>Désactivé</b><span class="kcap">Toute la capsule à 42 %. La valeur reste lisible et dite.</span></div>
+</div>
+<div class="kcell kc" style="grid-column: span 2">
+<div class="stage"><div class="card" style="background: var(--ground); padding: 4px 0"><div class="row" style="min-height: 72px"><span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 600">Nombre d'entrées</span><span style="font-size: 12.5px; color: var(--ink3)">Ensuite, le lien se ferme</span></span><div class="stp" role="group" aria-label="Nombre d'entrées"><button class="ib" aria-label="Moins d'entrées">[[ic:minus]]</button><span class="d" aria-live="polite">50</span><button class="ib" aria-label="Plus d'entrées">[[ic:plus]]</button></div></div></div></div>
+<div class="cp"><b>Dans sa rangée · Liens, créer un lien de partage</b><span class="kcap">L'écran d'origine. Le titre et la conséquence sont à la rangée, la capsule est en accessoire de fin.</span></div>
+</div>
+</div>
+
+<span class="sub"><code>track</code><span>2 à 5 crans, un seul choisi</span></span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage"><div class="trkbox">
+<div class="trk" role="radiogroup" aria-label="Précision de la position">
+<span class="ln"></span><span class="fl" style="width: 33.34%"></span>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 56px; height: 56px"></b></i><span>Ville</span></button>
+<button class="stop on" role="radio" aria-checked="true"><i><b style="width: 34px; height: 34px"></b></i><span>Quartier</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 10px; height: 10px; background: var(--ink3)"></b></i><span>Exact</span></button>
+</div>
+<div class="tft"><span style="display: inline-flex; color: var(--accent-ink)">[[ic:eye s]]</span><p>Léo te verra dans un rayon d'environ <b style="color: var(--ink); font-weight: 700">600 m</b></p></div>
+</div></div>
+<div class="cp"><b>3 crans, avec pied · Carte, partager ma position</b><span class="kcap">L'écran d'origine. Plus le repère est gros, plus la position est floue. La phrase du pied vient de l'hôte.</span></div>
+</div>
+<div class="kcell kc" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage"><div class="trkbox">
+<div class="trk n2" role="radiogroup" aria-label="Durée du partage">
+<span class="ln"></span><span class="fl" style="width: 50%"></span>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 20px; height: 20px"></b></i><span>1 h</span></button>
+<button class="stop on" role="radio" aria-checked="true"><i><b style="width: 44px; height: 44px"></b></i><span>8 h</span></button>
+</div>
+</div></div>
+<div class="cp"><b>2 crans, accent de la personne</b><span class="kcap">Le minimum. Ici le repère grandit avec la durée. Teinte : l'accent de Léo.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="trkbox">
+<div class="trk n5" role="radiogroup" aria-label="Taille du texte">
+<span class="ln"></span><span class="fl" style="width: 40%"></span>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 12px; height: 12px"></b></i><span>Mini</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 20px; height: 20px"></b></i><span>Petit</span></button>
+<button class="stop on" role="radio" aria-checked="true"><i><b style="width: 28px; height: 28px"></b></i><span>Normal</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 38px; height: 38px"></b></i><span>Grand</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 48px; height: 48px"></b></i><span>Maxi</span></button>
+</div>
+</div></div>
+<div class="cp"><b>5 crans</b><span class="kcap">Le maximum : une colonne ne descend jamais sous 44 de large. Au-delà, forme <code>buttons</code>.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="trkbox">
+<div class="trk" role="radiogroup" aria-label="Précision de la position">
+<span class="ln"></span><span class="fl" style="width: 33.34%"></span>
+<button class="stop dn" role="radio" aria-checked="false"><i><b style="width: 56px; height: 56px; background: color-mix(in oklab, var(--ink3) 34%, var(--field))"></b></i><span>Ville</span></button>
+<button class="stop on" role="radio" aria-checked="true"><i><b style="width: 34px; height: 34px"></b></i><span>Quartier</span></button>
+<button class="stop fo" role="radio" aria-checked="false"><i><b style="width: 10px; height: 10px; background: var(--ink3)"></b></i><span>Exact</span></button>
+</div>
+</div></div>
+<div class="cp"><b>Pressé · focus clavier</b><span class="kcap">À gauche, le repère pressé descend à 0,9. À droite, l'anneau de focus entoure la colonne ; les flèches déplacent le choix.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="trkbox" style="opacity: .42">
+<div class="trk" role="radiogroup" aria-label="Précision de la position" aria-disabled="true">
+<span class="ln"></span><span class="fl" style="width: 33.34%; background: var(--ink3)"></span>
+<button class="stop" role="radio" aria-checked="false" disabled><i><b style="width: 56px; height: 56px"></b></i><span>Ville</span></button>
+<button class="stop on" role="radio" aria-checked="true" disabled style="--accent: #8D92CB"><i><b style="width: 34px; height: 34px"></b></i><span>Quartier</span></button>
+<button class="stop" role="radio" aria-checked="false" disabled><i><b style="width: 10px; height: 10px; background: var(--ink3)"></b></i><span>Exact</span></button>
+</div>
+</div></div>
+<div class="cp"><b>Désactivé</b><span class="kcap">À 42 %, sans accent. Le choix en cours reste marqué et dit.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="trkbox" dir="rtl">
+<div class="trk" role="radiogroup" aria-label="Précision de la position">
+<span class="ln"></span><span class="fl" style="width: 33.34%"></span>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 56px; height: 56px"></b></i><span>Ville</span></button>
+<button class="stop on" role="radio" aria-checked="true"><i><b style="width: 34px; height: 34px"></b></i><span>Quartier</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 10px; height: 10px; background: var(--ink3)"></b></i><span>Exact</span></button>
+</div>
+</div></div>
+<div class="cp"><b>RTL</b><span class="kcap">Le premier cran passe à droite, le remplissage part de la droite. Flèche gauche : cran suivant.</span></div>
+</div>
+</div>
+
+<span class="sub"><code>milestones</code><span>lecture seule, 2 à 5 étapes</span></span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage"><div class="ms" role="list" aria-label="Notre histoire">
+<div class="trace"><i></i></div>
+<div class="step" role="listitem"><b>[[ic:chat-circle]]</b><strong>Premier message</strong><span>6 mars</span></div>
+<div class="step" role="listitem"><b>[[ic:handshake]]</b><strong>Amis</strong><span>11 mars</span></div>
+<div class="step" role="listitem"><b>[[ic:fire]]</b><strong>Proches</strong><span>19 mars</span></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:sparkle-fill]]</b><strong>1 000 messages</strong><span>6 mai</span></div>
+</div></div>
+<div class="cp"><b>4 étapes · Vitrine de Léo, en commun</b><span class="kcap">L'écran d'origine. Tout est fait, le dernier atteint passe en aplat.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="ms n3" role="list" aria-label="Inscription">
+<div class="trace"><i style="width: 50%"></i></div>
+<div class="step" role="listitem"><b>[[ic:check]]</b><strong>Compte</strong><span>fait</span></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:user-circle-fill]]</b><strong>Profil</strong><span>en cours</span></div>
+<div class="step todo" role="listitem"><b>[[ic:handshake]]</b><strong>Premiers amis</strong><span>à faire</span></div>
+</div></div>
+<div class="cp"><b>Fait · courant · à faire</b><span class="kcap">Les trois états d'un disque. La trace s'arrête au courant ; le reste garde la piste nue.</span></div>
+</div>
+<div class="kcell kc" style="--accent: #FBBF24; --accent-ink: #FBBF24">
+<div class="stage"><div class="ms n5" role="list" aria-label="Série de jours">
+<div class="trace"><i style="width: 50%"></i></div>
+<div class="step" role="listitem"><b>[[ic:check]]</b><strong>3 jours</strong></div>
+<div class="step" role="listitem"><b>[[ic:check]]</b><strong>7 jours</strong></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:fire-fill]]</b><strong>14 jours</strong></div>
+<div class="step todo" role="listitem"><b>[[ic:lock-simple]]</b><strong>30 jours</strong></div>
+<div class="step todo" role="listitem"><b>[[ic:lock-simple]]</b><strong>100 jours</strong></div>
+</div></div>
+<div class="cp"><b>5 étapes, sans date</b><span class="kcap">Le maximum. La légende est optionnelle ; le titre reste obligatoire.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="ms n2" role="list" aria-label="Vérification">
+<div class="trace"><i style="width: 0"></i></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:seal-check-fill]]</b><strong>E-mail</strong><span>vérifié</span></div>
+<div class="step todo" role="listitem"><b>[[ic:phone]]</b><strong>Téléphone</strong><span>à vérifier</span></div>
+</div></div>
+<div class="cp"><b>2 étapes</b><span class="kcap">Le minimum : un départ, une arrivée, une seule trace.</span></div>
+</div>
+<div class="kcell kc" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage"><div class="ms" dir="rtl" role="list" aria-label="Notre histoire">
+<div class="trace"><i style="width: 66.6%"></i></div>
+<div class="step" role="listitem"><b>[[ic:chat-circle]]</b><strong>Premier message</strong><span>6 mars</span></div>
+<div class="step" role="listitem"><b>[[ic:handshake]]</b><strong>Amis</strong><span>11 mars</span></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:fire-fill]]</b><strong>Proches</strong><span>19 mars</span></div>
+<div class="step todo" role="listitem"><b>[[ic:sparkle]]</b><strong>1 000 messages</strong><span>bientôt</span></div>
+</div></div>
+<div class="cp"><b>RTL</b><span class="kcap">La première étape est à droite, la trace se dessine vers la gauche.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="ms" role="list" aria-label="Notre histoire">
+<div class="trace"><i></i></div>
+<div class="step" role="listitem"><b>[[ic:chat-circle]]</b><strong>Premier message</strong><span>6 mars</span></div>
+<div class="step" role="listitem"><b>[[ic:handshake]]</b><strong>Amis</strong><span>11 mars</span></div>
+<div class="step" role="listitem"><b>[[ic:fire]]</b><strong>Proches</strong><span>19 mars</span></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:sparkle-fill]]</b><strong>1 000 messages</strong><span>6 mai</span></div>
+</div><span class="tk" style="align-self: center">[[ic:pause s]]trace posée</span></div>
+<div class="cp"><b>Mouvement réduit</b><span class="kcap">Rien ne se dessine : la trace et les disques sont là au premier rendu.</span></div>
+</div>
+</div>
+
+<div class="kcell kc" style="padding: 20px">
+<div class="mx" data-theme="light" style="border-radius: 20px; padding: 32px 36px; display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 44px; align-items: center">
+<div class="stp" role="group" aria-label="Nombre d'entrées"><button class="ib" aria-label="Moins d'entrées">[[ic:minus]]</button><span class="d" aria-live="polite">50</span><button class="ib" aria-label="Plus d'entrées" style="background: #fff; box-shadow: 0 2px 8px rgba(67,56,202,.18)">[[ic:plus]]</button></div>
+<div class="trkbox">
+<div class="trk" role="radiogroup" aria-label="Précision de la position">
+<span class="ln"></span><span class="fl" style="width: 33.34%"></span>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 56px; height: 56px"></b></i><span>Ville</span></button>
+<button class="stop on" role="radio" aria-checked="true"><i><b style="width: 34px; height: 34px"></b></i><span>Quartier</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 10px; height: 10px; background: var(--ink3)"></b></i><span>Exact</span></button>
+</div>
+</div>
+<div class="ms" role="list" aria-label="Notre histoire">
+<div class="trace" style="background: var(--field)"><i></i></div>
+<div class="step" role="listitem"><b>[[ic:chat-circle]]</b><strong>Premier message</strong><span>6 mars</span></div>
+<div class="step" role="listitem"><b>[[ic:handshake]]</b><strong>Amis</strong><span>11 mars</span></div>
+<div class="step" role="listitem"><b>[[ic:fire]]</b><strong>Proches</strong><span>19 mars</span></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:sparkle-fill]]</b><strong>1 000 messages</strong><span>6 mai</span></div>
+</div>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes jetons, valeurs claires. Le plus garde un disque levé là où le verre n'a rien à flouter ; glyphes et libellés tiennent 4,5:1.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Un cran à la fois, et la butée se sent</h2><p>Le disque pressé répond sur <code>motion.pulse</code>. Le nombre roule et le halo de la piste change de cran sur <code>motion.morph</code>. La trace des jalons se dessine une fois sur <code>motion.rise</code>, chaque disque arrivant quand elle l'atteint. À la borne, rien ne dépasse : la capsule cogne, la main le sent.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 26px; flex: 1">
+<div style="display: flex; align-items: center; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span style="font-weight: 600">Places dans l'appel</span><span class="mv-butt" style="font-size: 12.5px; color: var(--warn)">Maximum atteint</span></div>
+<div class="stp mv" aria-hidden="true"><span class="ib">[[ic:minus]]</span><span class="d"><span class="mv-roll"><span><b>6</b><b>7</b><b>8</b></span></span></span><span class="ib">[[ic:plus]]</span></div>
+<span class="tk">motion.pulse</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: flex-end"><span class="tk">motion.morph</span></div>
+<div class="trkbox" aria-hidden="true">
+<div class="trk mv">
+<span class="ln"></span><span class="fl"></span>
+<span class="stop"><i><b style="width: 56px; height: 56px"></b></i><span>Ville</span></span>
+<span class="stop"><i><b style="width: 34px; height: 34px"></b></i><span>Quartier</span></span>
+<span class="stop"><i><b style="width: 10px; height: 10px"></b></i><span>Exact</span></span>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div style="display: flex; justify-content: flex-end"><span class="tk">motion.rise</span></div>
+<div class="ms mv" aria-hidden="true">
+<div class="trace"><i></i></div>
+<div class="step"><b>[[ic:chat-circle]]</b><strong>Premier message</strong><span>6 mars</span></div>
+<div class="step"><b>[[ic:handshake]]</b><strong>Amis</strong><span>11 mars</span></div>
+<div class="step"><b>[[ic:fire]]</b><strong>Proches</strong><span>19 mars</span></div>
+<div class="step now"><b>[[ic:sparkle-fill]]</b><strong>1 000 messages</strong><span>6 mai</span></div>
+</div>
+</div>
+</div>
+<span class="spec">durée : motion.pulse à l'appui · motion.morph au changement de cran et de valeur · motion.rise pour la trace, 180 ms de décalage par disque · courbe : ressort de K26 à l'appui, décélération sans dépassement pour le remplissage et la trace · déclencheur : appui, appui long (répétition après 400 ms, pas qui grandit), première apparition des jalons · haptique : un cran léger par pas, butée ferme à la borne, aucun pour les jalons · mouvement réduit : valeur et halo posés sans transition, trace posée, haptique conservée</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 1fr auto; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">1</span><b style="font-size: 14.5px">Un appui, un cran</b></div>
+<div class="stage c" style="min-height: 110px"><div class="stp"><span class="ib">[[ic:minus]]</span><span class="d">7</span><span class="ib dn">[[ic:plus]]</span></div></div>
+<span class="kcap"><code>motion.pulse</code> : le disque descend à 0,9 et revient. Le nombre roule vers le haut quand il monte, vers le bas quand il descend.</span>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">2</span><b style="font-size: 14.5px">Appui long : il accélère</b></div>
+<div class="stage c" style="min-height: 110px"><div class="stp"><span class="ib">[[ic:minus]]</span><span class="d" style="min-width: 46px">180</span><span class="ib dn">[[ic:plus]]</span></div><span style="display: flex; gap: 6px"><span class="tk">+1</span><span class="tk">+10</span><span class="tk" style="color: var(--accent-ink); border-color: var(--accent)">+100</span></span></div>
+<span class="kcap">Après 400 ms, le pas se répète toutes les 120 ms, puis toutes les 60. L'échelle des pas vient de l'hôte.</span>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">3</span><b style="font-size: 14.5px">Butée</b></div>
+<div class="stage c" style="min-height: 110px"><div class="stp" style="transform: translateX(4px)"><span class="ib">[[ic:minus]]</span><span class="d">8</span><span class="ib end">[[ic:plus]]</span></div><span class="tk">[[ic:vibrate s]]butée</span></div>
+<span class="kcap">La valeur s'arrête à la borne, la répétition aussi. Le bouton s'atténue, la capsule cogne de 4 et revient.</span>
+</div>
+<div class="kcell kc" style="grid-column: span 3; padding: 20px 24px; flex-direction: row; align-items: center; gap: 18px; min-height: 0">
+<span style="display: inline-flex; color: var(--warn)">[[ic:arrow-counter-clockwise]]</span>
+<span class="kcap" style="font-size: 13.5px"><b style="color: var(--ink)">La trace se dessine une seule fois par visite.</b> Revenir en arrière, défiler, recharger depuis le cache : elle est posée. Une étape franchie pendant que l'écran est ouvert prolonge la trace d'un segment, sans rejouer les précédents. Sur la piste, le halo ne voyage pas : il s'éteint sur l'ancien cran et s'allume sur le nouveau pendant que le remplissage s'étire.</span>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Un entier, deux bornes, un genre, des arrêts. Aucune signature ne nomme une entrée, une précision, un cercle, un lien ou une étape d'histoire : l'hôte passe des nombres, des glyphes et des mots déjà traduits.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyStepper.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-stepper.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyStepper(value:range:label:kind:stops:…onChange:)</code></span><span><code>MeeshyStepper(value, range, label, onChange, modifier, kind, stops, …)</code></span><span><code>&lt;MeeshyStepper value range label kind stops … onChange /&gt;</code></span>
+<span><b>Genre</b></span><span><code>MeeshyStepperKind { buttons, track, milestones }</code></span><span><code>enum class</code> identique</span><span><code>'buttons' | 'track' | 'milestones'</code></span>
+<span><b>Arrêt</b></span><span><code>MeeshyStepperStop(id: String, title: String, caption: String?, systemImage: String?, markSize: CGFloat?)</code></span><span><code>data class</code> identique, <code>icon: ImageVector?</code>, <code>markSize: Dp?</code></span><span><code>{ id, title, caption?, glyph?, markSize? }</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyStepperSize { regular, compact }</code> : disques de 44 ou de 36, cible toujours 44</span><span>idem</span><span><code>'regular' | 'compact'</code></span>
+<span><b>Emplacements</b></span><span><code>footer</code> : <code>@ViewBuilder</code>, sous la piste. <code>valueContent</code> : remplace le nombre</span><span>mêmes noms, <code>@Composable () -&gt; Unit</code></span><span>mêmes noms, <code>ComponentChildren</code></span>
+<span><b>Loi du pas</b></span><span><code>MeeshyStepperRule.next(value:delta:range:step:)</code> : pure, bornée, rend aussi <code>hitBound</code></span><span><code>MeeshyStepperRule</code>, JVM pure</span><span><code>meeshyStepperNext(value, delta, range, step)</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyStepperRecipe.resolve(kind:size:value:range:stopCount:isPressed:isEnabled:layoutDirection:reduceMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyStepperRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyStepperRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>value: Int</code><span>Obligatoire. Un nombre en <code>buttons</code>, l'indice de l'arrêt choisi ou courant ailleurs.</span></div>
+<div class="par"><code>range: ClosedRange&lt;Int&gt;</code><span>Obligatoire en <code>buttons</code>. Ailleurs, déduit de <code>stops</code> : 0 à N − 1.</span></div>
+<div class="par"><code>label: String</code><span>Obligatoire. Le nom dit : ce qui est réglé (« Nombre d'entrées »).</span></div>
+<div class="par"><code>spokenValue: String? = nil</code><span>« 50 entrées », « Quartier, 2 sur 3 ». Absent : le nombre ou le titre de l'arrêt.</span></div>
+<div class="par"><code>kind = .buttons</code><span><code>milestones</code> ignore <code>onChange</code> : il ne reçoit aucun geste.</span></div>
+<div class="par"><code>step: Int = 1</code><span>Pas de base. <code>stepLadder: [(from: Int, step: Int)] = []</code> le fait grandir avec la valeur.</span></div>
+<div class="par"><code>repeatsOnHold: Bool = true</code><span>Appui long qui répète et accélère. Faux : un appui, un pas.</span></div>
+<div class="par"><code>stops: [MeeshyStepperStop] = []</code><span>2 à 5. Hors de ces bornes en <code>track</code> ou <code>milestones</code> : rien n'est rendu.</span></div>
+<div class="par"><code>decrementLabel · incrementLabel</code><span>Obligatoires en <code>buttons</code> : « Moins d'entrées », « Plus d'entrées ».</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte opaque du choisi et de la trace. Absente : l'accent de l'environnement.</span></div>
+<div class="par"><code>isEnabled: Bool = true</code><span><code>animatesOnAppear = true</code> : la trace des jalons, une fois.</span></div>
+<div class="par"><code>onChange: (Int) -&gt; Void</code><span>La valeur déjà bornée. <code>onBound: (() -&gt; Void)? = nil</code> prévient l'hôte à la butée.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une loi de bornes, trois façons de la peindre</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Boutons : deux <code>MeeshyGlassButton</code> de K02 dans une <code>Capsule</code>, <code>buttonRepeatBehavior(.enabled)</code> pour l'appui long.</li>
+<li>Valeur : <code>contentTransition(.numericText(value:))</code> et <code>monospacedDigit()</code>.</li>
+<li>Haptique : <code>sensoryFeedback(.increase)</code>, <code>.decrease</code>, et <code>.impact(weight: .heavy)</code> à la butée.</li>
+<li>Voix : un seul élément, <code>accessibilityAdjustableAction</code> et <code>accessibilityValue</code>. La piste expose le trait de bouton radio par arrêt.</li>
+<li>Jalons : <code>Capsule().trim(from:to:)</code> animé au jeton <code>motion.rise</code>, <code>accessibilityElement(children: .combine)</code> par étape.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de <code>Stepper</code> du système : sa capsule, ses glyphes et sa hauteur ne sont pas ceux de la recette. iOS 16 : répétition par une tâche annulable au lieu de <code>buttonRepeatBehavior</code>, <code>UIImpactFeedbackGenerator</code> au lieu de <code>sensoryFeedback</code>. Sous iOS 26 : verre dessiné de K01.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Boutons : <code>Row</code> sur surface tonale, deux disques de K02 en cible de 48 dp, <code>enabled</code> lu sur la loi de bornes.</li>
+<li>Valeur : <code>AnimatedContent</code> avec <code>slideInVertically</code>, sens donné par le signe du pas.</li>
+<li>Appui long : <code>pointerInput</code> et <code>awaitEachGesture</code>, boucle annulée au relâcher.</li>
+<li>Voix : <code>semantics { progressBarRangeInfo ; setProgress { … } ; stateDescription }</code> ; piste en <code>selectableGroup()</code> et <code>Role.RadioButton</code>.</li>
+<li>Haptique : <code>HapticFeedbackType.SegmentTick</code> par cran, <code>Reject</code> à la butée. Jalons : <code>drawBehind</code> et <code>animateFloatAsState</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de verre : le plus prend <code>surfaceContainerHighest</code>, le moins reste nu. Constantes haptiques absentes : <code>TextHandleMove</code> et <code>LongPress</code>. Échelle d'animation à zéro : tout est posé.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Boutons : un groupe <code>role="spinbutton"</code> avec <code>aria-valuenow</code>, <code>aria-valuemin</code>, <code>aria-valuemax</code>, <code>aria-valuetext</code> ; deux <code>&lt;button&gt;</code> hors de l'ordre de tabulation.</li>
+<li>Clavier : flèches pour un pas, Page pour dix, Début et Fin pour les bornes.</li>
+<li>Appui long : <code>pointerdown</code> et minuterie, coupée à <code>pointerup</code>, <code>pointerleave</code> et <code>blur</code>.</li>
+<li>Piste : <code>role="radiogroup"</code>, tabulation itinérante, remplissage en <code>transform: scaleX()</code> depuis <code>inset-inline-start</code>.</li>
+<li>Jalons : une liste <code>&lt;ol&gt;</code>, <code>aria-current="step"</code> sur le courant, trace en <code>transform: scaleX()</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de <code>&lt;input type="number"&gt;</code> : ses flèches ne se stylisent pas et la molette change la valeur par accident. Pas de vibration sur Safari : la butée se lit par l'atténuation seule. <code>prefers-reduced-motion</code> : aucune transition.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Un compteur à deux boutons par plateforme, aucun partagé</h2><p>Relevé dans le dépôt le 16 novembre 2026. Le même réglage, le nombre d'entrées d'un lien, est écrit trois fois de trois façons. La piste à repères et les jalons titrés n'existent pas encore : seuls leurs cousins sans titre sont là.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Inspector/ClipInspectorNumericField.swift</span><p><span class="be">Devient le composant</span> Déjà dans <code>MeeshyUI</code>, paramètres opaques (<code>title</code>, <code>value</code>, <code>unit</code>, <code>onStep</code>), deux boutons <code>minus.circle.fill</code> et <code>plus.circle.fill</code> avec leurs noms dits. Ses boutons montent dans <code>Kit</code> ; son champ saisissable reste à K08.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift</span><p><code>Stepper(value:in: 1...10000, step:)</code> du système, avec un pas qui grandit : 1 sous 100, 10 sous 1 000, 100 au-delà. Cette échelle devient <code>stepLadder</code>. L'écran est rebranché sur K53.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Components/InviteFriendsSheet.swift</span><p>Le même <code>Stepper</code>, la même plage, une autre échelle : 1 sous 100, 10 au-delà. Deux lois pour un seul réglage : écart à trancher en passant les deux écrans sur la même <code>stepLadder</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/SharedLocation/ProfileShareLocationRow.swift</span><p>Durée en <code>Picker</code> segmenté, précision en <code>Picker</code> en ligne. La précision passe à la forme <code>track</code> ; la durée reste un choix nommé, donc K03.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/conversations/src/main/kotlin/me/meeshy/app/conversations/CreateShareLinkScreen.kt</span><p><span class="be">Devient le composant</span> <code>MaxUsesStepper</code>, privé : <code>Row</code>, deux <code>IconButton</code> de 48 dp (<code>Icons.Filled.Remove</code>, <code>Icons.Filled.Add</code>), valeur en gras, <code>enabled</code> coupé à chaque borne. Il perd son formulaire et son modèle de vue, reçoit <code>value</code>, <code>range</code> et <code>onChange</code>, et monte dans <code>:sdk-ui</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/voiceprofile/VoiceProfileWizardView.kt</span><p><code>StepIndicator</code>, privé : segments par étape, <code>progressBarRangeInfo</code>, région vivante polie. Sa sémantique devient celle de la forme <code>milestones</code> ; ses segments nus restent la forme à crans de K42.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/auth/src/main/kotlin/me/meeshy/app/onboarding/OnboardingProgressBar.kt</span><p><code>OnboardingProgressBar(position, count, isDark)</code> : des étapes sans titre ni glyphe. Elle reste à K42. Les étapes nommées de l'inscription, elles, prennent K53.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileShareLocationRow.kt</span><p><code>PRECISION_ORDER</code> : ville, quartier, exact, rendus en <code>FilterChip</code>. L'ordre est déjà celui de la piste ; les puces sont remplacées.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/share-link-form.tsx</span><p><span class="no">À créer</span> Aucun compteur à boutons dans <span class="mono">apps/web/src/components</span>. Le réglage est un <code>&lt;input type="number"&gt;</code> (<code>link-max-uses</code>, <code>min</code> 1, plafond <code>MAX_USES_CEILING</code>, <code>aria-invalid</code>). Le plafond et l'erreur restent à l'hôte.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/user-profile-share-location.tsx</span><p><code>PRECISIONS_SHOWN</code> : <code>city</code>, <code>neighborhood</code>, <code>exact</code>, dans l'ordre de la piste. Rebranché sur la forme <code>track</code>. <span class="mono">apps/web/src/routes/onboarding-visuals.tsx</span> (<code>ProgressSegments</code>, <code>role="progressbar"</code>) reste à K42.</p></div>
+<div class="twin"><span class="pf">Hors champ</span><span class="mono">apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerDrawingOptionPanel.kt</span><p><span class="no">Non concerné</span> <code>ThicknessOptions</code> : un <code>Slider</code> à pas entre deux glyphes moins et plus. C'est un curseur : K05. De même <span class="mono">MeeshyUI/Story/Timeline/Views/Inspector/KeyframeInspector.swift</span>, dont les <code>minus.circle</code> retirent une clé au lieu de compter.</p></div>
+<div class="twin"><span class="pf">Profil</span><span class="mono">aucun jumeau</span><p><span class="no">À créer</span> Repères de taille libre, halo, pied de piste, jalons titrés à trois états, trace qui se dessine et haptique de butée : dessinés par ce canevas, absents du code des trois plateformes.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Six écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage"><div class="lrow"><span class="med" style="--t: var(--ok); --ti: var(--ok)">[[ic:phone]]</span><span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 600">Participants</span><span style="font-size: 12.5px; color: var(--ink3)">8 au maximum</span></span><div class="stp" role="group" aria-label="Participants maximum"><button class="ib" aria-label="Moins de participants">[[ic:minus]]</button><span class="d" aria-live="polite">6</span><button class="ib" aria-label="Plus de participants">[[ic:plus]]</button></div></div></div>
+<div class="cp"><b>Appels · participants maximum</b><span class="kcap">Forme <code>buttons</code>, de 2 à 8, pas de 1.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="trkbox">
+<div class="trk n5" role="radiogroup" aria-label="Taille du texte">
+<span class="ln"></span><span class="fl" style="width: 60%"></span>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 12px; height: 12px"></b></i><span>Mini</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 20px; height: 20px"></b></i><span>Petit</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 28px; height: 28px"></b></i><span>Normal</span></button>
+<button class="stop on" role="radio" aria-checked="true"><i><b style="width: 38px; height: 38px"></b></i><span>Grand</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 48px; height: 48px"></b></i><span>Maxi</span></button>
+</div>
+<div class="tft"><span style="display: inline-flex; color: var(--accent-ink)">[[ic:text-aa s]]</span><p style="font-size: 16px; color: var(--ink)">On se retrouve à Alfama ?</p></div>
+</div></div>
+<div class="cp"><b>Réglages · taille du texte</b><span class="kcap">Forme <code>track</code>, 5 crans. Le pied montre un message à la taille choisie.</span></div>
+</div>
+<div class="kcell kc" style="--accent: #FBBF24; --accent-ink: #FBBF24">
+<div class="stage"><div class="trkbox">
+<div class="trk n4" role="radiogroup" aria-label="Durée d'un message éphémère">
+<span class="ln"></span><span class="fl" style="width: 25%"></span>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 14px; height: 14px"></b></i><span>1 h</span></button>
+<button class="stop on" role="radio" aria-checked="true"><i><b style="width: 26px; height: 26px"></b></i><span>24 h</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 38px; height: 38px"></b></i><span>7 j</span></button>
+<button class="stop" role="radio" aria-checked="false"><i><b style="width: 50px; height: 50px"></b></i><span>30 j</span></button>
+</div>
+</div></div>
+<div class="cp"><b>Conversation · message éphémère</b><span class="kcap">Forme <code>track</code>, 4 crans. Plus le repère est gros, plus le message dure.</span></div>
+</div>
+<div class="kcell kc" style="--accent: #818CF8; --accent-ink: #A5B4FC">
+<div class="stage"><div class="ms n3" role="list" aria-label="Inscription">
+<div class="trace"><i style="width: 50%"></i></div>
+<div class="step" role="listitem"><b>[[ic:check]]</b><strong>Ton compte</strong><span>fait</span></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:translate-fill]]</b><strong>Tes langues</strong><span>en cours</span></div>
+<div class="step todo" role="listitem"><b>[[ic:handshake]]</b><strong>Tes amis</strong><span>à faire</span></div>
+</div></div>
+<div class="cp"><b>Inscription · étapes</b><span class="kcap">Forme <code>milestones</code>, 3 étapes, teinte de marque.</span></div>
+</div>
+<div class="kcell kc" style="--accent: #FBBF24; --accent-ink: #FBBF24">
+<div class="stage"><div class="ms n5" role="list" aria-label="Jalons de la série">
+<div class="trace"><i style="width: 50%"></i></div>
+<div class="step" role="listitem"><b>[[ic:check]]</b><strong>3 jours</strong><span>+ 20</span></div>
+<div class="step" role="listitem"><b>[[ic:check]]</b><strong>7 jours</strong><span>+ 50</span></div>
+<div class="step now" role="listitem" aria-current="step"><b>[[ic:fire-fill]]</b><strong>14 jours</strong><span>+ 120</span></div>
+<div class="step todo" role="listitem"><b>[[ic:lock-simple]]</b><strong>30 jours</strong><span>+ 300</span></div>
+<div class="step todo" role="listitem"><b>[[ic:lock-simple]]</b><strong>100 jours</strong><span>+ 1 000</span></div>
+</div></div>
+<div class="cp"><b>Jeu · jalons d'une série</b><span class="kcap">Forme <code>milestones</code>, 5 étapes ; la légende porte les étincelles gagnées.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="lrow"><span class="ph" style="width: 48px; height: 48px; border-radius: 14px; padding: 0; flex: none"></span><span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 600">Pack « Néons »</span><span style="font-size: 12.5px; color: var(--ink3)">240 étincelles</span></span><div class="stp" role="group" aria-label="Quantité"><button class="ib" aria-label="Un de moins">[[ic:minus]]</button><span class="d" aria-live="polite">2</span><button class="ib" aria-label="Un de plus">[[ic:plus]]</button></div></div></div>
+<div class="cp"><b>Boutique · quantité</b><span class="kcap">Forme <code>buttons</code>, de 1 à 9. Le total est calculé et écrit par l'hôte.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Bornes.</b> <code>MeeshyStepperRule.next</code> ne rend jamais une valeur hors de <code>range</code>, quel que soit le pas ; à la borne il rend <code>hitBound</code> et <code>onChange</code> n'est pas appelé. Moins de 2 ou plus de 5 arrêts : rien n'est rendu, et la recette le dit. Vecteurs <code>K53-MeeshyStepper.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Appui long.</b> La répétition commence après 400 ms, suit <code>stepLadder</code>, s'arrête au relâcher, à la butée et quand le composant quitte l'écran. Aucune minuterie ne survit.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> <code>buttons</code> : un élément ajustable, « Nombre d'entrées, 50 ». <code>track</code> : groupe de boutons radio, « Quartier, 2 sur 3, sélectionné ». <code>milestones</code> : liste, étape courante dite.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Chaque bouton et chaque colonne de piste mesurent au moins 44 pt, 48 dp, 44 px, y compris en <code>compact</code> et à 5 crans dans 320 de large. Glyphes, valeur et libellés à 4,5:1 sur <code>--field</code> et <code>--ground</code>, en clair et en sombre. Le choisi ne tient pas à la couleur seule : bord, halo et graisse.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit.</b> Valeur, halo et trace sont posés au premier rendu. L'haptique de cran et de butée reste.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>RTL.</b> L'ordre des arrêts, le remplissage et la trace s'inversent ; le plus reste du côté de fin ; les flèches du clavier suivent le sens de lecture.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et source.</b> Changer la valeur ne repeint que le nombre, ou deux repères et le remplissage. La rangée hôte ne change pas de largeur de 9 à 10&nbsp;000. Garde de source : aucun type du domaine, aucun singleton, aucun verre dessiné dans les fichiers de K53 (K01 et K02 seulement), aucune valeur hors de <code>MeeshyStepperRecipe</code>.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> La voix annonce la valeur après chaque pas, jamais le geste ; à la borne elle dit « minimum atteint » ou « maximum atteint ». Un utilisateur du lecteur d'écran règle par balayage vertical, sans viser les boutons.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Aucune mesure de mise en page pendant la répétition : le nombre est à largeur réservée, le remplissage et la trace sont des transformations. La recette est une fonction pure, calculée une fois par changement de valeur.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":9749}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

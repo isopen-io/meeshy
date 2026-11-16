@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Profil — Web grand écran, les états et la carte de tous mes proches</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.mx kbd{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;border-radius:7px;background:var(--field);border:1px solid var(--line);border-bottom-width:2.5px;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:700;line-height:1;color:var(--ink2);flex:none}
+.mx .btn.p kbd{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.34);color:#fff}
+.mx :focus-visible{outline:2px solid var(--brand-soft);outline-offset:3px}
+.mx .lrow{border-radius:18px;transition:background .2s}
+.mx .lrow:hover,.mx .lrow.hov{background:rgba(255,255,255,.08)}
+.frame{position:relative;overflow:hidden;border-radius:32px;border:1px solid var(--line);background:rgba(19,17,28,.55)}
+.blur{position:absolute;border-radius:50%;transform:translate(-50%,-50%);background:color-mix(in oklab,var(--accent) 18%,transparent);border:1.5px solid var(--accent);animation:weBreath 5s ease-in-out infinite}
+@keyframes weBreath{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.05)}}
+.spot{position:absolute;display:inline-flex;transform:translate(-50%,-50%);border-radius:50%;transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
+.mx .spot:hover,.mx .spot.hov{transform:translate(-50%,-50%) scale(1.1)}
+.spot>.av{border:3px solid #fff;box-shadow:0 10px 24px rgba(0,0,0,.55)}
+.cap{position:absolute;transform:translate(-50%,0);display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;background:rgba(19,17,28,.78);border:1px solid var(--glass-line);font-size:11.5px;font-weight:600;color:var(--ink);white-space:nowrap}
+.ptr{position:absolute;z-index:3;color:#fff;filter:drop-shadow(0 3px 6px rgba(0,0,0,.6));animation:wePtr 3.4s ease-in-out infinite;pointer-events:none}
+@keyframes wePtr{0%,100%{transform:translate(0,0)}50%{transform:translate(-6px,5px)}}
+.frise{position:relative;display:grid;grid-template-columns:repeat(30,minmax(0,1fr));align-items:end;gap:4px;height:96px}
+.frise>i{display:block;border-radius:5px 5px 2px 2px;background:color-mix(in oklab,var(--accent) 42%,var(--field))}
+.frise>i.sel{background:var(--accent);box-shadow:0 0 18px color-mix(in oklab,var(--accent) 70%,transparent)}
+.frise>i.today{background:var(--ink)}
+.dash{display:flex;align-items:center;justify-content:center;width:132px;height:132px;border-radius:50%;border:2px dashed rgba(165,180,252,.42);color:var(--ink2);animation:mxSpin 40s linear infinite}
+.dash>svg{animation:weCounter 40s linear infinite}
+@keyframes weCounter{to{transform:rotate(-1turn)}}
+.wait{opacity:.62}
+</style>
+</helmet>
+<div class="mx" style="width: 100%; min-height: 900px; display: flex; flex-direction: column; background: radial-gradient(60% 520px at 14% 120px, rgba(168,85,247,.14), rgba(9,9,11,0) 70%), radial-gradient(50% 520px at 86% 220px, rgba(99,102,241,.13), rgba(9,9,11,0) 70%), var(--ground)">
+
+<nav aria-label="Navigation Meeshy" style="position: sticky; top: 0; z-index: 5; background: rgba(9,9,11,.62); -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6); border-bottom: 1px solid var(--line)">
+<div style="max-width: 1360px; margin: 0 auto; padding: 0 24px; height: 68px; display: flex; align-items: center; gap: 20px">
+<a href="#" class="d" style="font-size: 27px; font-weight: 900; color: var(--ink); letter-spacing: -.03em">Meeshy</a>
+<label style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; max-width: 460px; height: 44px; margin: 0 auto; padding: 0 10px 0 16px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink3)">
+[[ic:magnifying-glass s]]
+<input type="search" placeholder="Chercher une personne, un lien" aria-label="Chercher" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 14px">
+<kbd>/</kbd>
+</label>
+<button class="ib" aria-label="Notifications" style="color: var(--ink2)">[[ic:bell]]</button>
+<button aria-label="Mon compte" style="display: inline-flex; border-radius: 50%"><span class="av" style="width: 40px; height: 40px; font-size: 15px; box-shadow: 0 0 0 2px rgba(216,180,254,.45)">AN</span></button>
+</div>
+</nav>
+
+<main style="width: 100%; max-width: 1360px; margin: 0 auto; padding: 0 24px 56px; flex: 1">
+
+<section aria-labelledby="s1">
+<div style="display: flex; align-items: center; gap: 12px; padding: 32px 4px 16px">
+<span class="mono" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--field); border: 1px solid var(--line); color: var(--ink2); font-weight: 700">1</span>
+<h2 class="tag" style="font-size: 12px"><span id="s1">meeshy.me/@inconnu — personne ici</span></h2>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+<div class="frame" style="display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 64px 24px 68px; text-align: center">
+<div class="orb" style="width: 280px; height: 280px; left: 12%; top: -90px; background: #6366F1; opacity: .2"></div>
+<div class="orb" style="width: 240px; height: 240px; right: 10%; bottom: -100px; background: #A855F7; opacity: .18; animation-delay: -4s"></div>
+<div class="dash rise" style="position: relative">[[ic:user-circle-dashed xl]]</div>
+<h1 class="d rise" style="position: relative; font-size: 56px; font-weight: 900; animation-delay: .06s">Personne ici</h1>
+<p class="rise" style="position: relative; max-width: 460px; font-size: 17px; line-height: 1.5; color: var(--ink2); text-wrap: balance; animation-delay: .1s">Ce profil n'existe pas, ou il n'est pas visible pour toi.</p>
+<div class="ticket rise" style="--cut: 26px; position: relative; display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 24px; animation-delay: .14s">
+<span style="color: var(--ink3); display: inline-flex">[[ic:link s]]</span>
+<span class="mono" style="font-size: 15px; color: var(--ink2); text-decoration: line-through; text-decoration-color: var(--err); text-decoration-thickness: 2px">meeshy.me/@inconnu</span>
+</div>
+<div class="rise" style="position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; width: 100%; margin-top: 14px; animation-delay: .2s">
+<label class="glass" style="display: flex; align-items: center; gap: 12px; flex: 1 1 320px; min-width: 0; max-width: 520px; height: 58px; padding: 0 14px 0 22px; border-radius: 999px; color: var(--ink2)">
+[[ic:magnifying-glass]]
+<input type="search" placeholder="Un nom, un pseudo, une ville" aria-label="Chercher quelqu'un" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 16px; text-align: left">
+<kbd>/</kbd>
+</label>
+<button class="btn p" style="min-height: 58px; padding: 0 28px">[[ic:magnifying-glass]]<span>Chercher quelqu'un</span></button>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="s2">
+<div style="display: flex; align-items: center; gap: 12px; padding: 56px 4px 16px">
+<span class="mono" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--field); border: 1px solid var(--line); color: var(--ink2); font-weight: 700">2</span>
+<h2 class="tag" style="font-size: 12px"><span id="s2">Chargement, cache vide</span></h2>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+<div class="frame" role="status" aria-label="Chargement du profil">
+<nav aria-label="Navigation Meeshy" style="background: rgba(9,9,11,.62); -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6); border-bottom: 1px solid var(--line)">
+<div style="max-width: 1360px; margin: 0 auto; padding: 0 24px; height: 68px; display: flex; align-items: center; gap: 20px">
+<a href="#" class="d" style="font-size: 27px; font-weight: 900; color: var(--ink); letter-spacing: -.03em">Meeshy</a>
+<label style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; max-width: 460px; height: 44px; margin: 0 auto; padding: 0 10px 0 16px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink3)">
+[[ic:magnifying-glass s]]
+<input type="search" placeholder="Chercher une personne, un lien" aria-label="Chercher" style="flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 14px">
+<kbd>/</kbd>
+</label>
+<button class="ib" aria-label="Notifications" style="color: var(--ink2)">[[ic:bell]]</button>
+<button aria-label="Mon compte" style="display: inline-flex; border-radius: 50%"><span class="av" style="width: 40px; height: 40px; font-size: 15px; box-shadow: 0 0 0 2px rgba(216,180,254,.45)">AN</span></button>
+</div>
+</nav>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px,100%),1fr)); gap: 24px; align-items: start; padding: 22px 24px 28px">
+<div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+<div class="sk" style="height: 58px; border-radius: 999px"></div>
+<div class="sk" style="height: 190px; border-radius: 28px"></div>
+<div style="display: flex; align-items: flex-end; gap: 14px; margin-top: -62px; padding: 0 20px"><div style="width: 112px; height: 112px; border-radius: 50%; padding: 6px; background: var(--raised); flex: none"><div class="sk" style="width: 100%; height: 100%; border-radius: 50%"></div></div><div class="sk" style="width: 110px; height: 34px; border-radius: 999px; margin-bottom: 8px"></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 4px 20px 0">
+<div class="sk" style="width: 68%; height: 34px; border-radius: 14px"></div>
+<div class="sk" style="width: 40%; height: 14px"></div>
+<div class="sk" style="width: 96%; height: 14px; margin-top: 8px"></div>
+<div class="sk" style="width: 74%; height: 14px"></div>
+<div style="display: flex; gap: 8px; margin-top: 6px"><div class="sk" style="width: 96px; height: 34px; border-radius: 999px"></div><div class="sk" style="width: 70px; height: 34px; border-radius: 999px"></div><div class="sk" style="width: 82px; height: 34px; border-radius: 999px"></div></div>
+<div style="display: flex; gap: 10px; margin-top: 18px; justify-content: space-between"><div class="sk" style="width: 58px; height: 58px; border-radius: 50%"></div><div class="sk" style="width: 58px; height: 58px; border-radius: 50%"></div><div class="sk" style="width: 58px; height: 58px; border-radius: 50%"></div><div class="sk" style="width: 58px; height: 58px; border-radius: 50%"></div><div class="sk" style="width: 58px; height: 58px; border-radius: 50%"></div></div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+<div class="sk" style="height: 58px; border-radius: 999px"></div>
+<div class="ticket" style="--cut: 119px; margin: 0 4px">
+<div style="display: flex; align-items: center; gap: 14px; height: 118px; padding: 0 20px"><div style="display: flex; flex-direction: column; gap: 10px; flex: 1"><div class="sk" style="width: 110px; height: 10px"></div><div class="sk" style="width: 78%; height: 22px"></div><div class="sk" style="width: 56%; height: 11px"></div></div><div class="sk" style="width: 84px; height: 84px; border-radius: 16px; flex: none"></div></div>
+<div class="cut"></div>
+<div style="display: flex; gap: 8px; padding: 14px 16px"><div class="sk" style="flex: 1; height: 44px; border-radius: 999px"></div><div class="sk" style="flex: 1; height: 44px; border-radius: 999px"></div><div class="sk" style="flex: 1; height: 44px; border-radius: 999px"></div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 0 4px">
+<div class="ticket" style="--cut: 85px">
+<div style="display: flex; align-items: center; gap: 12px; height: 84px; padding: 0 18px"><div class="sk" style="width: 44px; height: 44px; border-radius: 50%; flex: none"></div><div style="display: flex; flex-direction: column; gap: 8px; flex: 1"><div class="sk" style="width: 64px; height: 10px"></div><div class="sk" style="width: 58%; height: 16px"></div></div><div class="sk" style="width: 56px; height: 30px; flex: none"></div></div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; height: 52px; padding: 0 18px"><div class="sk" style="width: 62%; height: 12px"></div></div>
+</div>
+<div class="ticket" style="--cut: 85px">
+<div style="display: flex; align-items: center; gap: 12px; height: 84px; padding: 0 18px"><div class="sk" style="width: 44px; height: 44px; border-radius: 50%; flex: none"></div><div style="display: flex; flex-direction: column; gap: 8px; flex: 1"><div class="sk" style="width: 64px; height: 10px"></div><div class="sk" style="width: 44%; height: 16px"></div></div><div class="sk" style="width: 56px; height: 30px; flex: none"></div></div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; height: 52px; padding: 0 18px"><div class="sk" style="width: 62%; height: 12px"></div></div>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+<div class="sk" style="height: 58px; border-radius: 999px"></div>
+<div style="border-radius: 28px; border: 1px solid var(--line); background: var(--raised); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px 6px; padding: 26px 12px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><div class="sk" style="width: 60px; height: 60px; border-radius: 50%"></div><div class="sk" style="width: 48px; height: 10px"></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><div class="sk" style="width: 60px; height: 60px; border-radius: 50%"></div><div class="sk" style="width: 48px; height: 10px"></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><div class="sk" style="width: 60px; height: 60px; border-radius: 50%"></div><div class="sk" style="width: 48px; height: 10px"></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><div class="sk" style="width: 60px; height: 60px; border-radius: 50%"></div><div class="sk" style="width: 48px; height: 10px"></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><div class="sk" style="width: 60px; height: 60px; border-radius: 50%"></div><div class="sk" style="width: 48px; height: 10px"></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><div class="sk" style="width: 60px; height: 60px; border-radius: 50%"></div><div class="sk" style="width: 48px; height: 10px"></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><div class="sk" style="width: 60px; height: 60px; border-radius: 50%"></div><div class="sk" style="width: 48px; height: 10px"></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><div class="sk" style="width: 60px; height: 60px; border-radius: 50%"></div><div class="sk" style="width: 48px; height: 10px"></div></div>
+</div>
+<div class="card" style="display: flex; flex-direction: column; padding: 10px 0">
+<div class="row"><div class="sk" style="width: 40px; height: 40px; border-radius: 50%; flex: none"></div><div style="display: flex; flex-direction: column; gap: 8px; flex: 1"><div class="sk" style="width: 34%; height: 13px"></div><div class="sk" style="width: 56%; height: 10px"></div></div><div class="sk" style="width: 52px; height: 32px; border-radius: 999px; flex: none"></div></div><div class="sep"></div><div class="row"><div class="sk" style="width: 40px; height: 40px; border-radius: 50%; flex: none"></div><div style="display: flex; flex-direction: column; gap: 8px; flex: 1"><div class="sk" style="width: 28%; height: 13px"></div><div class="sk" style="width: 50%; height: 10px"></div></div><div class="sk" style="width: 52px; height: 32px; border-radius: 999px; flex: none"></div></div><div class="sep"></div><div class="row"><div class="sk" style="width: 40px; height: 40px; border-radius: 50%; flex: none"></div><div style="display: flex; flex-direction: column; gap: 8px; flex: 1"><div class="sk" style="width: 42%; height: 13px"></div><div class="sk" style="width: 64%; height: 10px"></div></div><div class="sk" style="width: 52px; height: 32px; border-radius: 999px; flex: none"></div></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="s3" style="--accent:#4ECDC4; --accent-ink:#7FE3DC">
+<div style="display: flex; align-items: center; gap: 12px; padding: 56px 4px 16px">
+<span class="mono" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--field); border: 1px solid var(--line); color: var(--ink2); font-weight: 700">3</span>
+<h2 class="tag" style="font-size: 12px"><span id="s3">Hors ligne</span></h2>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+<div class="frame">
+<div class="glass" role="status" style="position: relative; z-index: 2; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 48px; padding: 4px 8px 4px 20px; border-radius: 0; border-width: 0 0 1px; background: rgba(251,191,36,.1); font-size: 14px">
+<span style="display: inline-flex; color: var(--warn)">[[ic:cloud-slash]]</span>
+<span style="flex: 1 1 240px; min-width: 0; color: var(--ink)"><b style="font-weight: 700">Hors ligne</b> · tu vois la dernière version connue</span>
+<span style="font-size: 12.5px; color: var(--ink2)">Mise à jour il y a 18 min</span>
+<button class="btn sm" style="min-height: 40px; color: var(--ink)">[[ic:arrows-clockwise s]]<span>Réessayer</span></button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px,100%),1fr)); gap: 28px; align-items: center; padding: 24px">
+<div style="position: relative; min-height: 300px; border-radius: 28px; overflow: hidden; background: linear-gradient(150deg, #1D8F88 0%, #14534F 48%, #1E1B4B 100%); box-shadow: 0 24px 60px rgba(78,205,196,.18)">
+<div class="orb" style="width: 220px; height: 220px; left: -50px; top: -40px; background: #4ECDC4; opacity: .7"></div>
+<div class="orb" style="width: 190px; height: 190px; right: -40px; bottom: -50px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+<div style="position: absolute; left: 24px; bottom: 24px; right: 24px; display: flex; align-items: flex-end; gap: 16px">
+<span class="av" style="width: 116px; height: 116px; font-size: 42px; border: 5px solid rgba(9,9,11,.55)">LM</span>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; min-width: 0">
+<span class="chip glass" style="align-self: flex-start; color: var(--ink)">[[ic:smiley s]]<span>En vadrouille</span></span>
+<span class="chip glass" style="align-self: flex-start; color: var(--ink)">[[ic:fire s]]<span>Proche</span></span>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h3 class="d" style="font-size: 40px; font-weight: 900">Léo Marchetti</h3>
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"><span class="mono" style="font-size: 15px; color: var(--accent-ink)">@leo.m</span><span style="font-size: 13.5px; color: var(--ink3)">Lisbonne · membre depuis janvier 2026</span></div>
+</div>
+<p style="font-size: 16.5px; line-height: 1.5; text-wrap: pretty">Photographe de rue. Lyon ⇄ Lisbonne.</p>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:translate s]]<span>Italien</span></span><span class="chip">Français</span><span class="chip">Portugais</span><span class="chip">[[ic:lock-key s]]<span>Chiffré</span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 20px; background: var(--field); border: 1px solid var(--line)">
+<span style="display: inline-flex; color: var(--ink2)">[[ic:map-pin]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 600; font-size: 14px">Alfama, vu à 14:02</span><span style="font-size: 12.5px; color: var(--ink2)">Sa position ne bouge plus tant que tu es hors ligne</span></span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px; min-width: 0">
+<button class="btn a" style="align-self: stretch; min-height: 56px">[[ic:chat-circle]]<span>Écrire à Léo</span></button>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink2); margin-top: -6px">[[ic:paper-plane-tilt s]]<span>Ton message partira au retour du réseau</span></span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding-top: 6px">
+<button class="wait" aria-disabled="true" style="display: flex; flex-direction: column; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span class="ib g lg" style="color: var(--ink)">[[ic:phone]]</span><span>Appeler</span></button>
+<button class="wait" aria-disabled="true" style="display: flex; flex-direction: column; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span class="ib g lg" style="color: var(--ink)">[[ic:video-camera]]</span><span>Vidéo</span></button>
+<button class="wait" aria-disabled="true" style="display: flex; flex-direction: column; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span class="ib g lg" style="color: var(--ink)">[[ic:radio]]</span><span>Talkie</span></button>
+<button class="wait" aria-disabled="true" style="display: flex; flex-direction: column; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span class="ib g lg" style="color: var(--ink)">[[ic:map-trifold]]</span><span>Carte</span></button>
+</div>
+<span class="chip" style="align-self: center; color: var(--warn)">[[ic:hourglass-medium s]]<span>En attente du réseau</span></span>
+</div>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="s4">
+<div style="display: flex; align-items: center; gap: 12px; padding: 56px 4px 16px">
+<span class="mono" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--field); border: 1px solid var(--line); color: var(--ink2); font-weight: 700">4</span>
+<h2 class="tag" style="font-size: 12px"><span id="s4">Fiche bloquée · Demande reçue</span></h2>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px,100%),1fr)); gap: 24px; align-items: stretch">
+
+<article class="card" style="--accent:#9CA3AF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px 32px 36px; border-radius: 32px; text-align: center">
+<span style="position: relative; display: inline-flex">
+<span class="av" style="width: 104px; height: 104px; font-size: 36px; filter: grayscale(1); opacity: .8">RS</span>
+<span style="position: absolute; right: -6px; bottom: -6px; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--raised); color: var(--err); border: 1px solid var(--line)">[[ic:prohibit]]</span>
+</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h3 class="d" style="font-size: 32px">Tu as bloqué Rui</h3>
+<span class="mono" style="font-size: 14px; color: var(--ink2)">@rui.s</span>
+</div>
+<p style="max-width: 400px; font-size: 15.5px; line-height: 1.5; color: var(--ink2); text-wrap: balance">Rui ne peut plus t'écrire, t'appeler ni voir ta vitrine. Il n'en est pas averti.</p>
+<span class="chip" style="color: var(--ink2)">[[ic:flag s]]<span>Bloqué et signalé le 12 nov.</span></span>
+<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; padding-top: 14px">
+<button class="btn q" style="color: var(--ink)">Débloquer</button>
+<button class="btn g">[[ic:flag]]<span>Voir mon signalement</span></button>
+</div>
+</article>
+
+<article class="card" style="--accent:#2ECC71; --accent-ink:#6EE7A0; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 16px; padding: 0 0 28px; border-radius: 32px">
+<div style="position: relative; height: 112px; overflow: hidden; background: linear-gradient(150deg, #1E9E57, #145C3A 55%, #1E1B4B)">
+<div class="orb" style="width: 170px; height: 170px; left: -30px; top: -60px; background: #2ECC71; opacity: .75"></div>
+<div class="orb" style="width: 150px; height: 150px; right: 30px; top: 20px; background: #6366F1; opacity: .7; animation-delay: -4s"></div>
+</div>
+<div style="display: flex; align-items: flex-end; gap: 14px; margin-top: -34px; padding: 0 28px; position: relative">
+<span class="av" style="width: 92px; height: 92px; font-size: 32px; border: 5px solid var(--raised)">SB</span>
+<div style="display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; min-width: 0">
+<h3 class="d" style="font-size: 28px">Sofia Benali</h3>
+<span class="mono" style="font-size: 13.5px; color: var(--accent-ink)">@sofia.b</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 0 28px">
+<p style="font-size: 15px; font-weight: 700">Sofia veut être ton amie</p>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border-radius: 6px 22px 22px 22px; background: var(--field); border: 1px solid var(--line)">
+<p style="font-size: 16px; line-height: 1.5; text-wrap: pretty">Salut Aïssa, on s'est croisées au festival ! J'adore ce que tu fais avec les sons de la ville, on reste en contact ?</p>
+<button aria-label="Traduit de l'arabe, voir l'original" style="display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 44px; font-size: 12.5px; font-weight: 600; color: var(--accent-ink)">[[ic:translate s]]<span>Traduit de l'arabe · voir l'original</span></button>
+</div>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink2)">[[ic:users-three s]]<span>Une communauté en commun · Beatmakers Dakar</span></span>
+</div>
+<span style="flex: 1"></span>
+<div style="display: flex; gap: 10px; flex-wrap: wrap; padding: 0 28px">
+<button class="btn a" style="flex: 2 1 160px">[[ic:check]]<span>Accepter</span></button>
+<button class="btn q" style="flex: 1 1 110px; color: var(--ink)">Refuser</button>
+</div>
+</article>
+
+</div>
+</section>
+
+<section aria-labelledby="s5">
+<div style="display: flex; align-items: center; gap: 12px; padding: 56px 4px 16px">
+<span class="mono" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--field); border: 1px solid var(--line); color: var(--ink2); font-weight: 700">5</span>
+<h2 class="tag" style="font-size: 12px"><span id="s5">Tous mes proches sur la carte</span></h2><span class="new">Nouveau</span>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+<div style="position: relative; overflow: hidden; border-radius: 32px; border: 1px solid var(--line); display: flex; flex-wrap: wrap; min-height: 560px; box-shadow: 0 30px 70px rgba(0,0,0,.45)">
+[[map]]
+<div style="position: absolute; inset: 0; background: radial-gradient(70% 90% at 65% 50%, rgba(9,9,11,0), rgba(9,9,11,.42))"></div>
+
+<aside class="glass" aria-label="Mes proches" style="position: relative; z-index: 2; flex: 0 1 360px; min-width: 0; margin: 16px; padding: 16px 12px 14px; border-radius: 26px; background: rgba(19,17,28,.66); display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 8px">
+<h3 class="d" style="font-size: 24px">Mes proches</h3>
+<span style="flex: 1"></span>
+<span style="font-size: 12.5px; color: var(--ink2)">3 sur la carte</span>
+</div>
+<div role="group" aria-label="Filtrer par cercle" style="display: flex; gap: 6px; padding: 0 6px">
+<button class="chip on" aria-pressed="true" style="padding: 0 12px">Tous</button>
+<button class="chip" style="padding: 0 10px; gap: 4px">[[ic:drop s]]<span>Sang</span></button>
+<button class="chip" style="padding: 0 10px; gap: 4px">[[ic:fire s]]<span>Proche</span></button>
+<button class="chip" style="padding: 0 10px; gap: 4px">[[ic:handshake s]]<span>Ami</span></button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<button class="lrow" style="--accent:#FF6B6B; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 5px 8px; width: 100%">
+<span style="position: relative; display: inline-flex; flex: none"><span class="av" style="width: 40px; height: 40px; font-size: 14px">MO</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px"></span></span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; color: var(--ink)">Mina Okafor</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink2); white-space: nowrap">[[ic:drop s]]<span>Baixa · en continu</span></span></span>
+<span class="d" style="font-size: 17px; white-space: nowrap">300 m</span>
+</button>
+<button class="lrow hov" style="--accent:#4ECDC4; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 5px 8px; width: 100%">
+<span style="position: relative; display: inline-flex; flex: none"><span class="av" style="width: 40px; height: 40px; font-size: 14px">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px"></span></span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; color: var(--ink)">Léo Marchetti</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink2); white-space: nowrap">[[ic:fire s]]<span>Alfama · encore 42 min</span></span></span>
+<span class="d" style="font-size: 17px; white-space: nowrap">2,4 km</span>
+</button>
+<button class="lrow" style="--accent:#F8B500; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 5px 8px; width: 100%">
+<span style="position: relative; display: inline-flex; flex: none"><span class="av" style="width: 40px; height: 40px; font-size: 14px">TR</span></span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; color: var(--ink)">Tomás Ribeiro</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink2); white-space: nowrap">[[ic:handshake s]]<span>Cascais · ville</span></span></span>
+<span class="d" style="font-size: 17px; white-space: nowrap">24 km</span>
+</button>
+<button class="lrow" style="--accent:#3498DB; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 5px 8px; width: 100%">
+<span style="position: relative; display: inline-flex; flex: none; opacity: .55"><span class="av" style="width: 40px; height: 40px; font-size: 14px">YT</span></span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; color: var(--ink)">Yuki Tanaka</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink2); white-space: nowrap"><span>Partage terminé il y a 1 h</span></span></span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:clock-counter-clockwise]]</span>
+</button>
+<button class="lrow" style="--accent:#9B59B6; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 5px 8px; width: 100%">
+<span style="position: relative; display: inline-flex; flex: none; opacity: .55"><span class="av" style="width: 40px; height: 40px; font-size: 14px">KM</span></span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; color: var(--ink)">Kwame Mensah</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink2); white-space: nowrap"><span>En mode fantôme</span></span></span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:ghost]]</span>
+</button>
+</div>
+<span style="flex: 1"></span>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 12px 8px 0; border-top: 1px solid var(--glass-line)">
+<div style="display: flex; align-items: center; gap: 10px"><span style="display: inline-flex; color: var(--ink2)">[[ic:eye-slash]]</span><span style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 700; font-size: 14px">Tu n'es visible par personne</span><span style="font-size: 12px; color: var(--ink2)">Ma position — non partagée</span></span></div>
+<button class="btn a" style="align-self: stretch">[[ic:map-pin]]<span>Partager ma position</span></button>
+</div>
+</aside>
+
+<div style="position: relative; z-index: 1; flex: 1 1 520px; min-width: 0; min-height: 560px">
+
+<div class="blur" style="--accent:#F8B500; left: 84%; top: 23%; width: 200px; height: 200px"></div>
+<div class="blur" style="--accent:#4ECDC4; left: 24%; top: 40%; width: 136px; height: 136px; animation-delay: -2.5s"></div>
+
+<button class="spot" aria-label="Tomás Ribeiro, Cascais, précision ville" style="--accent:#F8B500; left: 84%; top: 23%"><span class="av" style="width: 52px; height: 52px; font-size: 18px">TR</span></button>
+<span class="cap" style="left: 84%; top: calc(23% + 36px)">[[ic:handshake s]]<span>Cascais · ville</span></span>
+
+<button class="spot hov" aria-label="Léo Marchetti, Alfama, précision quartier" style="--accent:#4ECDC4; left: 24%; top: 40%; z-index: 2"><span class="av" style="width: 52px; height: 52px; font-size: 18px">LM</span><span class="dot on" style="position: absolute; right: -2px; bottom: -2px"></span></button>
+<span class="ptr" style="left: calc(24% + 14px); top: calc(40% + 12px)">[[ic:cursor-fill l]]</span>
+
+<div class="glass rise" role="tooltip" style="--accent:#4ECDC4; --accent-ink:#7FE3DC; position: absolute; z-index: 3; left: calc(24% + 52px); top: calc(40% - 150px); width: 268px; padding: 14px 16px; border-radius: 22px 22px 22px 6px; background: rgba(19,17,28,.82); display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px"><span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span class="d" style="font-size: 18px">Léo Marchetti</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--accent-ink)">[[ic:fire s]]<span>Proche · en ligne</span></span></span><span class="d" style="font-size: 20px">2,4 km</span></div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<span class="chip" style="min-height: 28px; padding: 0 9px; font-size: 12px">[[ic:map-pin s]]<span>Alfama · quartier</span></span>
+<span class="chip" style="min-height: 28px; padding: 0 9px; font-size: 12px">[[ic:timer s]]<span>42 min</span></span>
+<span class="chip" style="min-height: 28px; padding: 0 9px; font-size: 12px">[[ic:battery-medium s]]<span>64 %</span></span>
+</div>
+</div>
+
+<button class="spot" aria-label="Mina Okafor, Baixa, point exact" style="--accent:#FF6B6B; left: 56%; top: 58%">
+<span style="position: absolute; left: 50%; bottom: -8px; width: 16px; height: 16px; margin-left: -8px; background: #fff; transform: rotate(45deg); border-radius: 3px"></span>
+<span class="av" style="position: relative; width: 52px; height: 52px; font-size: 18px">MO</span>
+<span style="position: absolute; right: -8px; top: -8px; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #0B0B12; color: #FF6B6B; border: 1.5px solid #FF6B6B">[[ic:drop-fill s]]</span>
+</button>
+<span class="cap" style="left: 56%; top: calc(58% + 42px)">Baixa · 300 m</span>
+
+<div class="pin" style="left: 45%; top: 76%; width: 44px; height: 44px"><span class="av" style="width: 42px; height: 42px; font-size: 14px; border: 3px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.5)">AN</span></div>
+<span class="cap glass" style="left: 45%; top: calc(76% + 32px); height: 30px; padding: 0 12px; background: rgba(168,85,247,.28); font-size: 12.5px">[[ic:airplane-tilt s]]<span>De passage à Lisbonne</span></span>
+
+<div style="position: absolute; right: 16px; bottom: 58px; display: flex; flex-direction: column; gap: 8px">
+<button class="ib g" aria-label="Zoomer" style="background: rgba(19,17,28,.6)">[[ic:plus]]</button>
+<button class="ib g" aria-label="Dézoomer" style="background: rgba(19,17,28,.6)">[[ic:minus]]</button>
+<button class="ib g" aria-label="Revenir sur ma position" style="background: rgba(19,17,28,.6)">[[ic:crosshair]]</button>
+</div>
+<div style="position: absolute; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end">
+<span class="cap" style="position: static; transform: none"><i style="width: 9px; height: 9px; border-radius: 50%; background: #fff"></i><span>exact</span></span>
+<span class="cap" style="position: static; transform: none"><i style="width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--ink2); background: rgba(165,180,252,.2)"></i><span>quartier</span></span>
+<span class="cap" style="position: static; transform: none"><i style="width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--ink2); background: rgba(165,180,252,.2)"></i><span>ville</span></span>
+</div>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="s6" style="--accent:#FF6B6B; --accent-ink:#FFA3A3">
+<div style="display: flex; align-items: center; gap: 12px; padding: 28px 4px 16px">
+<span class="mono" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--field); border: 1px solid var(--line); color: var(--ink2); font-weight: 700">6</span>
+<h2 class="tag" style="font-size: 12px"><span id="s6">Position Sang</span></h2><span class="new">Nouveau</span>
+<span style="flex: 1; height: 1px; background: var(--line)"></span>
+</div>
+<div class="card" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px,100%),1fr)); gap: 0; border-radius: 32px; overflow: hidden; background: linear-gradient(120deg, rgba(255,107,107,.1), var(--raised) 46%)">
+<div style="grid-column: span 2; display: flex; flex-direction: column; gap: 18px; padding: 26px 28px 24px; min-width: 0">
+<div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+<span style="position: relative; display: inline-flex"><span class="av" style="width: 56px; height: 56px; font-size: 20px">MO</span><span class="dot on" style="position: absolute; right: -2px; bottom: -2px"></span></span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0">
+<h3 class="d" style="font-size: 26px">Les 30 jours de Mina</h3>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--accent-ink)">[[ic:drop s]]<span>Sang · position continue · 18 oct. → 16 nov.</span></span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end"><span class="d" style="font-size: 30px">148 km</span><span style="font-size: 12.5px; color: var(--ink2)">parcourus en 30 jours</span></div>
+</div>
+
+<div style="position: relative; padding-top: 44px">
+<div role="img" aria-label="Distance parcourue par jour, du 18 octobre au 16 novembre, le 9 novembre est sélectionné" class="frise"><i style="height: 22%"></i><i style="height: 38%"></i><i style="height: 30%"></i><i style="height: 55%"></i><i style="height: 47%"></i><i style="height: 18%"></i><i style="height: 26%"></i><i style="height: 62%"></i><i style="height: 44%"></i><i style="height: 35%"></i><i style="height: 70%"></i><i style="height: 52%"></i><i style="height: 28%"></i><i style="height: 16%"></i><i style="height: 48%"></i><i style="height: 66%"></i><i style="height: 100%"></i><i style="height: 58%"></i><i style="height: 40%"></i><i style="height: 33%"></i><i style="height: 61%"></i><i style="height: 45%"></i><i class="sel" style="height: 74%"></i><i style="height: 36%"></i><i style="height: 50%"></i><i style="height: 29%"></i><i style="height: 57%"></i><i style="height: 42%"></i><i style="height: 68%"></i><i class="today" style="height: 34%"></i></div>
+<div aria-hidden="true" style="position: absolute; left: 75%; top: 34px; bottom: -10px; width: 2px; margin-left: -1px; background: var(--ink); border-radius: 2px"></div>
+<span class="glass" style="position: absolute; left: 75%; top: 0; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; background: rgba(19,17,28,.85); font-size: 12.5px; font-weight: 700; white-space: nowrap">Lun. 9 nov. · 6,2 km</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, auto); justify-content: space-between; font-size: 11.5px; color: var(--ink3)"><span>18 oct.</span><span>25 oct.</span><span>1 nov.</span><span>8 nov.</span><span style="color: var(--ink); font-weight: 700">16 nov.</span></div>
+
+<div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+<button class="ib" aria-label="Rejouer la journée du 9 novembre" style="width: 48px; height: 48px; background: var(--accent); color: #0B0B12">[[ic:play-fill]]</button>
+<div style="position: relative; flex: 1 1 220px; height: 44px; display: flex; align-items: center">
+<input type="range" min="0" max="1440" value="860" aria-label="Heure de la relecture" style="position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0">
+<span class="bar" style="width: 100%; height: 6px"><i style="width: 60%"></i></span>
+<span aria-hidden="true" style="position: absolute; left: 60%; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.5), 0 0 0 5px rgba(255,107,107,.3)"></span>
+</div>
+<span style="display: flex; flex-direction: column; align-items: flex-end"><span class="mono" style="font-size: 14px; color: var(--ink)">14:20</span><span style="font-size: 12px; color: var(--ink2)">Baixa → Alfama</span></span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; justify-content: center; gap: 16px; padding: 26px 28px; border-left: 1px solid var(--line); min-width: 0">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="ib lg" style="background: color-mix(in oklab, var(--ok) 16%, transparent); color: var(--ok)">[[ic:battery-medium l]]</span>
+<div style="display: flex; flex-direction: column"><span class="d" style="font-size: 34px">71 %</span><span style="font-size: 12.5px; color: var(--ink2)">Batterie de Mina · relevée il y a 12 min</span></div>
+</div>
+<button class="btn g" style="align-self: stretch">[[ic:battery-medium]]<span>Demander un relevé de batterie</span></button>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink2)">[[ic:bell s]]<span>Mina est prévenue à chaque relevé</span></span>
+</div>
+</div>
+</section>
+
+</main>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":3787}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

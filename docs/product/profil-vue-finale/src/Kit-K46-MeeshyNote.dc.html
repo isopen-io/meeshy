@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K46 MeeshyNote</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;flex-direction:column;align-items:stretch;justify-content:center;flex:1;min-height:120px;gap:14px}
+.host{display:flex;flex-direction:column;border-radius:20px;background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.nt{--c:var(--ink3);display:flex;align-items:flex-start;gap:8px;margin:0;font-size:12.5px;line-height:1.45;color:var(--ink3);text-align:start}
+.nt>.ic{color:var(--c);margin-top:1px}
+.nt b{font-weight:700;color:var(--ink)}
+.nt>.tx2{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.nt small{font-size:12.5px;line-height:1.4;color:var(--ink2)}
+.n-info{--c:var(--info)}.n-ok{--c:var(--ok)}.n-warn{--c:var(--warn)}.n-sec{--c:var(--brand-soft)}.n-acc{--c:var(--accent-ink)}
+.nt.n-info,.nt.n-warn,.nt.n-sec,.nt.n-acc{color:var(--ink2)}
+.nt.tinted{align-items:center;font-size:14px;font-weight:600;color:var(--c)}
+.nt.tinted>.ic{margin-top:0}
+.nt.band{position:relative;align-items:center;gap:10px;padding:12px 14px 12px 18px;border-radius:16px;overflow:hidden;background:color-mix(in oklab,var(--c) 10%,transparent);font-size:13px;line-height:1.4;color:var(--ink)}
+.nt.band::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:3px;background:var(--c)}
+.nt.band>.ic{margin-top:0}
+.nt.banner{align-items:center;gap:12px;min-height:48px;padding:4px 8px 4px 20px;background:color-mix(in oklab,var(--c) 10%,transparent);border-bottom:1px solid var(--glass-line);font-size:14px;line-height:1.35;color:var(--ink)}
+.nt.banner>.ic{margin-top:0}
+.nt.live{align-items:center;gap:10px;font-size:13.5px;font-weight:600;color:var(--c)}
+.nt.live.stale{--c:var(--ink2);font-weight:500}
+.nt.live.stale>.ld{background:#9CA3AF}
+.ld{width:9px;height:9px;margin:0 4px;border-radius:50%;flex:none;background:var(--c)}
+.ld.on{animation:mxPulse 2.2s ease-out infinite}
+.ntl{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.ntl>.nt{align-items:center;gap:10px;font-size:13px;color:var(--ink2)}
+.ntl>.nt>.ic{color:var(--ink2);margin-top:0}
+.ntl.big{gap:12px}
+.ntl.big>.nt{gap:12px;font-size:14.5px;color:var(--ink)}
+.tb{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 12px;border-radius:999px;flex:none;font-size:13.5px;font-weight:700;color:var(--accent-ink);white-space:nowrap}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.live3{display:flex;flex-direction:column;align-items:center;gap:14px;flex:1;min-width:0}
+.live3>.pit{display:flex;flex-direction:column;justify-content:center;height:200px;align-self:stretch;border-radius:22px;background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.live3>b{font-size:14.5px}
+.live3>span{font-size:12.5px;line-height:1.4;color:var(--ink2);text-align:center;max-width:250px}
+.swap{display:grid}
+.swap>*{grid-area:1/1}
+.bone{height:10px;border-radius:5px;background:var(--field)}
+.mv-drop{overflow:hidden;animation:ntDrop 6s cubic-bezier(.2,.9,.25,1) infinite}
+.mv-a{animation:ntA 6s ease-in-out infinite}
+.mv-b{animation:ntB 6s ease-in-out infinite}
+.mv-say{animation:ntSay 6s ease-in-out infinite}
+@keyframes ntDrop{0%,14%{max-height:0;opacity:0}26%,78%{max-height:60px;opacity:1}90%,100%{max-height:0;opacity:0}}
+@keyframes ntA{0%,40%{opacity:1}48%,90%{opacity:0}98%,100%{opacity:1}}
+@keyframes ntB{0%,40%{opacity:0}48%,90%{opacity:1}98%,100%{opacity:0}}
+@keyframes ntSay{0%,46%{opacity:0;transform:translateY(6px)}54%,72%{opacity:1;transform:none}80%,100%{opacity:0;transform:none}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #60A5FA; opacity: .2"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #FBBF24; opacity: .13; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K46 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyNote</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Ce que l'écran doit dire sans qu'on l'ait demandé tient en une note en ligne : un glyphe, une phrase, un ton</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">« Hors ligne, tu vois la dernière version connue. » « Léo te verra dans un rayon d'environ 600 m. » « Position en direct. » Le profil dit ces phrases quarante fois, en une douzaine d'écritures. K46 en fait une seule note, posée dans le flux, qui reste tant qu'elle est vraie.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Elle dit, elle reste, elle ne flotte pas</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Elle fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>une tête</b> (glyphe, point ou point pulsé) et <b>une phrase</b>, sur autant de lignes qu'il faut. Une valeur peut y être en gras.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Prend <b>une forme</b> parmi cinq : ligne, bande, bandeau, liste, direct. Et <b>un sens</b> parmi cinq, qui teinte la tête, jamais la phrase seule.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Porte au plus <b>une seconde ligne</b> (horodatage, précision) et <b>une action de fin</b>.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Vit <b>dans le flux</b> : elle pousse ce qui la suit, défile avec lui, et reste tant que ce qu'elle dit est vrai.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Elle ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Flotter ni disparaître seule : la pilule éphémère (« De retour en ligne », refus, échec) est <b>K14</b> <code>MeeshyStatusCapsule</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le bouton : son action de fin est un <b>K40</b> <code>MeeshyButton</code> en texte ou à contour. Un bouton rond serait <b>K02</b>. Le verre : <b>K01</b>, et la note n'en demande pas.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Remplir un écran : vide, erreur et refus pleine page sont <b>K38</b>. Une étiquette posée sur autre chose : <b>K41</b>. Un médaillon de tête : <b>K45</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Savoir si le réseau est là, si la donnée est fraîche, quoi écrire : <b>l'app</b>. Elle reçoit une phrase déjà traduite et un ton.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; flex: none; border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-ink)">[[ic:push-pin l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : une note occupe de la place, et la rend</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Elle n'est jamais posée par-dessus un contenu, jamais minutée, jamais fermée d'une croix. Quand elle arrive, ce qui suit descend ; quand elle n'est plus vraie, elle se replie et ce qui suit remonte. Ce qui doit passer au-dessus de l'écran et s'en aller tout seul est une K14.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une tête, une phrase, et ce qui les tient</h2><p>La forme <code>banner</code> porte toutes les parties ; elle est agrandie deux fois, accrochée au haut de son conteneur, avec une <code>band</code> dessous pour le filet. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="padding: 36px; flex-direction: column; gap: 26px">
+<div style="position: relative; width: 660px">
+<div style="zoom: 2; width: 330px">
+<div class="host">
+<div class="nt banner n-warn" style="padding: 10px 6px 10px 16px">[[ic:cloud-slash]]<span class="tx2"><span><b>Hors ligne</b> · tu vois la dernière version connue</span><small>Mise à jour il y a 18 min</small></span><button class="tb">Réessayer</button></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 16px">
+<div class="bone" style="width: 62%"></div>
+<p class="nt band n-acc">[[ic:eye s]]<span>Léo te verra dans un rayon d'environ <b>600 m</b></span></p>
+</div>
+</div>
+</div>
+<span class="kan" style="left: 12px; top: 28px">1</span>
+<span class="kan" style="left: 394px; top: 30px">2</span>
+<span class="kan" style="left: 392px; top: 110px">3</span>
+<span class="kan" style="left: 600px; top: 26px">4</span>
+<span class="kan" style="left: 300px; top: 143px">5</span>
+<span class="kan" style="left: 20px; top: 252px">6</span>
+</div>
+<div style="align-self: stretch; display: flex; align-items: center; gap: 28px; padding-top: 22px; border-top: 1.5px dashed var(--line)">
+<p class="nt live n-ok"><span class="ld on"></span><span>Position en direct · mise à jour il y a 20 s</span></p>
+<span class="kcap" style="flex: 1; min-width: 0">La tête peut être un point de 9 px, pulsé quand la donnée arrive en direct. La phrase prend alors la teinte du ton, en 13,5 px demi-gras.</span>
+</div>
+</div>
+<div class="card" style="padding: 26px; align-self: start">
+<div class="lgd">
+<span class="kan">1</span><div><b>Tête</b><span>Un glyphe de 16 px (ligne, bande, liste) ou de 22 px (bandeau), à la teinte du sens. Ou un point de 9 px, fixe ou pulsé. Calée sur la première ligne. Jeton <code>note.lead</code>.</span></div>
+<span class="kan">2</span><div><b>Phrase</b><span>12,5 px en ligne, 13 en bande, 14 en bandeau, interligne 1,4. Sans limite de lignes, jamais tronquée. Une valeur en gras 700, à l'encre <code>ink</code>.</span></div>
+<span class="kan">3</span><div><b>Seconde ligne</b><span>Optionnelle. 12,5 px <code>ink2</code>, à 1 px sous la phrase : un horodatage, une précision. Jamais une seconde idée.</span></div>
+<span class="kan">4</span><div><b>Action de fin</b><span>Optionnelle, une seule. Un K40 en texte ou à contour, cible de 44 px, calé à la fin. Sous 320 px de large, il passe à la ligne.</span></div>
+<span class="kan">5</span><div><b>Conteneur</b><span><code>line</code> et <code>live</code> : aucun. <code>band</code> : rayon 16, la teinte du sens à 10 %, marges 12 · 14 · 12 · 18. <code>banner</code> : pleine largeur, sans rayon, 48 px au moins, filet bas de 1 px.</span></div>
+<span class="kan">6</span><div style="border-bottom: 0; padding-bottom: 0"><b>Filet d'accent</b><span>3 px à la teinte du sens, au bord de début de la bande, sur toute sa hauteur. Il passe à droite en écriture de droite à gauche. Jeton <code>note.rule</code>.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Cinq formes, cinq sens</h2><p>Tout est à taille réelle. Les phrases sont celles des écrans du profil, avec leurs glyphes et leurs mesures.</p></header>
+
+<span class="tag">Formes</span>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 22px; grid-column: span 2">
+<div class="stage">
+<div class="host" style="padding: 4px 0">
+<div class="row" style="min-height: 56px"><span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 600">Site</span><span class="mono" style="color: var(--ink2)">aissandiaye.studio</span></span><span style="display: inline-flex; color: var(--ink3)">[[ic:arrow-square-out s]]</span></div>
+</div>
+<p class="nt" style="padding: 0 6px">[[ic:shield-check s]]<span>Les visiteurs voient un avertissement avant de quitter Meeshy.</span></p>
+<p class="nt" style="padding: 0 6px; align-items: center">[[ic:cursor-click s]]<span>Suivi : choisis ta cible à l'étape suivante</span></p>
+</div>
+<div class="cp"><b>line</b><span class="kcap">Le défaut. Une ligne atténuée de 12,5 px sous une commande ou une donnée, sans conteneur (Mes-Adresses, Lien-Creer).</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; grid-column: span 2">
+<div class="stage">
+<p class="nt band n-acc">[[ic:eye s]]<span>Léo te verra dans un rayon d'environ <b>600 m</b></span></p>
+<p class="nt band">[[ic:arrow-u-up-left s]]<span>Rien n'a été envoyé. Le bouton est revenu comme avant.</span></p>
+</div>
+<div class="cp"><b>band</b><span class="kcap">Une bande arrondie à filet, entre deux blocs. Elle dit la conséquence de ce qu'on vient de régler ou de tenter (Carte-Partage, Etat-Erreur).</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; grid-column: span 2">
+<div class="stage">
+<p class="nt live n-ok"><span class="ld on"></span><span>Position en direct · mise à jour il y a 20 s</span></p>
+<p class="nt live stale"><span class="ld"></span><span>Position d'il y a 3 h · hors ligne</span></p>
+</div>
+<div class="cp"><b>live</b><span class="kcap">Un point pulsé et un texte teinté : la donnée arrive en ce moment. Périmée, le point se fige, la teinte tombe à <code>ink2</code> (Carte-Personne, Android-Carte).</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; grid-column: span 3">
+<div class="stage">
+<div class="host">
+<div class="nt banner n-warn" role="status">[[ic:cloud-slash]]<span style="flex: 1; min-width: 0"><b>Hors ligne</b> · tu vois la dernière version connue</span><small>Mise à jour il y a 18 min</small><button class="btn sm" style="min-height: 40px; color: var(--ink)">[[ic:arrows-clockwise s]]<span>Réessayer</span></button></div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 16px 20px"><div class="bone" style="width: 46%"></div><div class="bone" style="width: 70%"></div></div>
+</div>
+<div class="host" style="width: 340px; align-self: center">
+<div class="nt banner n-warn" style="padding: 10px 16px">[[ic:cloud-slash]]<span class="tx2"><span><b>Hors ligne · vu il y a 3 h</b></span><small>Tu vois la dernière fiche enregistrée</small></span></div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px"><div class="bone" style="width: 58%"></div></div>
+</div>
+</div>
+<div class="cp"><b>banner</b><span class="kcap">Pleine largeur, accroché au haut d'un conteneur : une page, une feuille, un fil. En large, tout tient sur une ligne ; en étroit, deux lignes, l'action dessous si elle ne tient plus (Web-Etats, Android-Feuilles, Moi-Edition).</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; grid-column: span 3">
+<div class="stage" style="flex-direction: row; align-items: center; gap: 28px">
+<ul class="ntl" style="flex: 1; min-width: 0">
+<li class="nt">[[ic:clock-countdown s]]<span>Une fois toutes les 3 heures au plus</span></li>
+<li class="nt">[[ic:eye-slash s]]<span>Sans heure exacte, sans point de présence</span></li>
+<li class="nt">[[ic:bell-simple s]]<span>Chacun peut la couper dans ses réglages</span></li>
+</ul>
+<ul class="ntl big" style="flex: 1; min-width: 0">
+<li class="nt">[[ic:chat-circle-slash]]<span>Il ne peut plus t'écrire ni t'appeler</span></li>
+<li class="nt" style="align-items: flex-start">[[ic:eye-slash]]<span>Il ne voit plus ta présence ni tes publications</span></li>
+</ul>
+</div>
+<div class="cp"><b>list</b><span class="kcap">Deux à quatre lignes à glyphe, écart de 10 px : des garanties en 13 px <code>ink2</code>, ou des conséquences en 14,5 px <code>ink</code> avant un geste qui engage (Hors-App, Android-Feuilles, Etat-Bloque).</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Tons</span>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px">
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><p class="nt">[[ic:hourglass-medium s]]<span>Ensuite, le lien se ferme</span></p><p class="nt band">[[ic:hourglass-medium s]]<span>Ensuite, le lien se ferme</span></p></div><div class="cp"><b>neutral</b><span class="kcap">Le défaut. Une précision : tête et phrase à <code>ink3</code>.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><p class="nt n-info">[[ic:info s]]<span>Ton pseudo change aussi ton adresse</span></p><p class="nt band n-info">[[ic:info s]]<span>Ton pseudo change aussi ton adresse</span></p></div><div class="cp"><b>info</b><span class="kcap">Ce qu'il vaut mieux savoir avant d'agir. Tête <code>info</code>.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><p class="nt tinted n-ok">[[ic:check-circle s]]<span>Sofia a reçu ta vitrine</span></p><p class="nt band n-ok">[[ic:check-circle s]]<span>Sofia a reçu ta vitrine</span></p></div><div class="cp"><b>ok</b><span class="kcap">Une confirmation qui reste à l'écran (Sans-Contact). En ligne, la phrase prend le ton.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><p class="nt n-warn">[[ic:cloud-slash s]]<span>Tes changements partiront au retour du réseau</span></p><p class="nt band n-warn">[[ic:cloud-slash s]]<span>Tes changements partiront au retour du réseau</span></p></div><div class="cp"><b>warn</b><span class="kcap">Ce qui est dégradé. Le seul sens annoncé à la voix, quand il arrive.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="min-height: 150px"><p class="nt n-sec">[[ic:lock-key s]]<span>Chiffré de bout en bout</span></p><p class="nt band n-sec">[[ic:lock-key s]]<span>Chiffré de bout en bout</span></p></div><div class="cp"><b>security</b><span class="kcap">Une garantie : chiffrement, confidentialité. Tête <code>brand-soft</code>.</span></div></div>
+</div>
+
+<span class="tag" style="margin-top: 14px">États</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><p class="nt band n-warn" style="align-items: flex-start">[[ic:cloud-slash s]]<span><b>Hors ligne</b> — tes changements partiront au retour du réseau, dans l'ordre où tu les as faits.</span></p></div>
+<div class="cp"><b>Plusieurs lignes</b><span class="kcap">La phrase passe à la ligne, jamais de points de suspension. La tête reste calée sur la première ligne.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<p class="nt band n-info" style="padding-right: 4px">[[ic:info s]]<span style="flex: 1; min-width: 0">Téléphone non vérifié</span><button class="tb">Vérifier</button></p>
+<p class="nt band n-warn" style="padding-right: 8px">[[ic:warning s]]<span style="flex: 1; min-width: 0">Ta demande n'est pas partie</span><button class="btn q sm" style="min-height: 36px; padding: 0 14px">Réessayer</button></p>
+</div>
+<div class="cp"><b>Avec action</b><span class="kcap">Un K40 : <code>text</code> par défaut, <code>outline</code> quand c'est la seule sortie de l'écran. La cible garde 44 px de haut.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: flex-start">
+<p class="nt live n-ok"><span class="ld on"></span><span>En direct · il y a 20 s</span></p>
+<p class="nt live stale"><span class="ld"></span><span>Il y a 3 h · hors ligne</span></p>
+<p class="nt live n-ok"><span class="ld" style="box-shadow: 0 0 0 4px color-mix(in oklab, var(--ok) 28%, transparent)"></span><span>En direct · il y a 20 s</span></p>
+</div>
+<div class="cp"><b>Frais, périmé, mouvement réduit</b><span class="kcap">Périmé : c'est l'hôte qui le dit (<code>isStale</code>). Mouvement réduit : le point ne pulse plus, un halo posé le remplace.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="display: flex; flex-direction: column; gap: 14px; padding: 20px; flex: 1">
+<div class="stage">
+<p class="nt n-sec">[[ic:lock-key s]]<span>Chiffré de bout en bout</span></p>
+<p class="nt band n-warn">[[ic:cloud-slash s]]<span><b>Hors ligne</b> · dernière version connue</span></p>
+<p class="nt live n-ok"><span class="ld on"></span><span>Position en direct</span></p>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes parts, jetons clairs : les sens s'assombrissent pour tenir 4,5:1 quand ils portent du texte.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Elle arrive en poussant, elle pulse, elle change de teinte</h2><p>Trois mouvements, tous dans le flux. Le bandeau s'ouvre et se replie sur <code>motion.collapse</code>. Le point de la forme <code>live</code> bat à la cadence de <code>motion.pulse</code>. Un changement de phrase ou de sens est un fondu enchaîné de <code>motion.morph</code> ; une note qui entre avec son écran suit la cascade <code>motion.rise</code>.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div style="display: flex; gap: 20px; flex: 1">
+<div class="live3">
+<div class="pit" style="justify-content: flex-start">
+<div class="mv-drop"><div class="nt banner n-warn" style="padding: 10px 14px; font-size: 13px">[[ic:cloud-slash]]<span class="tx2"><span><b>Hors ligne</b></span><small>Dernière version connue</small></span></div></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 18px 16px 0"><span class="av" style="width: 40px; height: 40px; font-size: 14px; --accent: #4ECDC4">LM</span><div style="display: flex; flex-direction: column; gap: 8px; flex: 1"><div class="bone" style="width: 70%"></div><div class="bone" style="width: 44%"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 16px 0"><div class="bone" style="width: 92%"></div><div class="bone" style="width: 80%"></div><div class="bone" style="width: 60%"></div></div>
+</div>
+<b>Elle arrive en poussant</b><span><code>motion.collapse</code> · la hauteur passe de 0 à sa mesure, le contenu descend d'autant. Rien n'est recouvert.</span>
+</div>
+<div class="live3">
+<div class="pit" style="align-items: center">
+<div class="swap">
+<p class="nt live n-ok mv-a"><span class="ld on"></span><span>En direct · il y a 20 s</span></p>
+<p class="nt live stale mv-b"><span class="ld"></span><span>Il y a 3 h · hors ligne</span></p>
+</div>
+</div>
+<b>Elle pulse, puis se fige</b><span><code>motion.pulse</code> · une onde de 9 px toutes les 2,2 s. Donnée périmée : le point s'arrête, la teinte tombe.</span>
+</div>
+<div class="live3">
+<div class="pit" style="align-items: center; gap: 16px; padding: 0 16px">
+<div class="swap" style="align-self: stretch">
+<p class="nt mv-a" style="align-items: center">[[ic:floppy-disk s]]<span>Enregistré sur cet appareil</span></p>
+<p class="nt n-warn mv-b" style="align-items: center">[[ic:cloud-slash s]]<span>Partira au retour du réseau</span></p>
+</div>
+<span class="mv-say" style="display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--field); border: 1px solid var(--line); font-size: 11.5px; font-weight: 600; color: var(--ink2)">[[ic:speaker-high s]]<span>dit une fois à la voix</span></span>
+</div>
+<b>Elle change de ton</b><span><code>motion.morph</code> · fondu enchaîné de la tête et de la phrase. Seul le passage à <code>warn</code> est annoncé.</span>
+</div>
+</div>
+<span class="spec">durée : motion.collapse à l'ouverture et au repli du bandeau · motion.pulse 2,2 s en boucle sur le point · motion.morph au changement de phrase ou de sens · motion.rise à l'entrée avec l'écran · courbe : ressorts de K26, sans dépassement sur la hauteur · déclencheur : la note entre ou sort de l'arbre ; text, kind ou isStale changent · haptique : aucun, jamais · mouvement réduit : pas de hauteur animée (la note est là ou non), point fixe à halo posé, fondu de 150 ms</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Le réseau tombe</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="host" style="width: 120px; flex: none; padding: 12px; gap: 8px"><div class="bone" style="width: 70%"></div><div class="bone" style="width: 90%"></div><div class="bone" style="width: 50%"></div></div><span class="kcap">L'écran garde ce qu'il montrait : le cache répond. Aucune note encore, aucun contenu ne bouge.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Le bandeau s'ouvre</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="host" style="width: 120px; flex: none"><div style="height: 18px; background: color-mix(in oklab, var(--warn) 22%, transparent); border-bottom: 1px solid var(--glass-line)"></div><div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 6px"><div class="bone" style="width: 70%"></div><div class="bone" style="width: 90%"></div></div></div><span class="kcap"><code>motion.collapse</code> : la hauteur s'ouvre, le contenu descend d'autant. La voix dit la phrase une fois.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Le réseau revient</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="host" style="width: 120px; flex: none; padding: 12px; gap: 8px"><div class="bone" style="width: 70%"></div><div class="bone" style="width: 90%"></div><div class="bone" style="width: 50%"></div></div><span class="kcap">Le bandeau se replie, le contenu remonte. C'est une K14 qui dit « De retour en ligne », puis s'efface.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Une phrase, une forme, un sens. Aucune signature ne nomme un réseau, une position, un lien, un cercle ou un chiffrement : l'hôte passe un texte déjà traduit, un glyphe et dit si la donnée est fraîche.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyNote.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-note.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyNote(_ text:form:kind:lead:detail:…)</code></span><span><code>MeeshyNote(text, modifier, form, kind, lead, detail, …)</code></span><span><code>&lt;MeeshyNote text form kind lead detail … /&gt;</code></span>
+<span><b>Forme</b></span><span><code>MeeshyNoteForm { line, band, banner, live }</code></span><span><code>enum class</code> identique</span><span><code>'line' | 'band' | 'banner' | 'live'</code></span>
+<span><b>Sens</b></span><span><code>MeeshyNoteKind { neutral, info, ok, warn, security }</code></span><span>idem</span><span><code>'neutral' | 'info' | 'ok' | 'warn' | 'security'</code></span>
+<span><b>Tête</b></span><span><code>MeeshyNoteLead { systemImage(String), dot, pulse, none }</code></span><span><code>sealed interface</code> identique, <code>icon(ImageVector)</code></span><span><code>{ glyph } | 'dot' | 'pulse' | 'none'</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyNoteSize { compact, regular }</code> : 13 ou 14,5 px en liste</span><span>idem</span><span><code>'compact' | 'regular'</code></span>
+<span><b>Forme list</b></span><span><code>MeeshyNoteList(items:kind:size:)</code>, <code>MeeshyNoteItem(systemImage:text:)</code></span><span><code>MeeshyNoteList(items, kind, size)</code>, <code>MeeshyNoteItem(icon, text)</code></span><span><code>&lt;MeeshyNoteList items kind size /&gt;</code></span>
+<span><b>Emplacements</b></span><span><code>action</code> : <code>@ViewBuilder</code>, un K40 ; <code>glyph</code> : à la place du nom de symbole</span><span><code>action: (@Composable () -&gt; Unit)?</code>, <code>glyph</code></span><span><code>action</code>, <code>glyph</code> : <code>ComponentChildren</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyNoteRecipe.resolve(form:kind:lead:size:isStale:hasDetail:hasAction:width:reduceMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyNoteRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyNoteRecipe(…)</code> : classes et attributs</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>text: String</code><span>Obligatoire, non vide, déjà traduit. Aucune limite de lignes.</span></div>
+<div class="par"><code>emphasis: String? = nil</code><span>La valeur à mettre en gras dans la phrase, où qu'elle tombe.</span></div>
+<div class="par"><code>form = .line</code><span>La forme. <code>banner</code> prend toute la largeur de l'hôte.</span></div>
+<div class="par"><code>kind = .neutral</code><span>Teinte la tête, le filet et le fond. Jamais le seul porteur du sens.</span></div>
+<div class="par"><code>lead = nil</code><span>Sans lui : le glyphe par défaut du sens ; <code>pulse</code> en <code>live</code>.</span></div>
+<div class="par"><code>detail: String? = nil</code><span>La seconde ligne. Ignorée en <code>line</code> et en <code>live</code>.</span></div>
+<div class="par"><code>isStale: Bool = false</code><span>En <code>live</code> : point figé, teinte neutre. L'hôte décide du seuil.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte opaque de l'hôte. Présente, elle remplace celle du ton.</span></div>
+<div class="par"><code>announces: Bool? = nil</code><span>Sans lui : vrai pour <code>warn</code>, faux ailleurs. Une fois, à l'arrivée.</span></div>
+<div class="par"><code>actionStyle = .text</code><span><code>text</code> ou <code>outline</code>, remis au K40 de l'emplacement.</span></div>
+<div class="par"><code>alignment = .leading</code><span><code>center</code> pour une note seule sous un grand bloc centré.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Ce que la voix lit, quand la phrase visible ne suffit pas seule.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois façons de la dire</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Corps : <code>HStack(alignment: .firstTextBaseline)</code> ; la tête suit la première ligne à toute taille de texte.</li>
+<li>Phrase : <code>Text(AttributedString)</code>, gras posé sur <code>emphasis</code> ; polices <code>MeeshyFont.relative</code>.</li>
+<li>Action : <code>ViewThatFits</code> la passe sous la phrase quand la largeur manque.</li>
+<li>Ouverture : la note entre dans un <code>VStack</code> avec <code>.transition(.move(edge: .top).combined(with: .opacity))</code>.</li>
+<li>Voix : <code>accessibilityElement(children: .combine)</code> ; à l'arrivée d'un <code>warn</code>, <code>AccessibilityNotification.Announcement</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sous iOS 17, l'annonce passe par <code>UIAccessibility.post(notification: .announcement)</code>. <code>accessibilityReduceMotion</code> : aucune transition de hauteur, point fixe. Aucun verre : la note ne demande rien à K01.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Corps : <code>Row</code> et <code>Modifier.alignByBaseline()</code> ; phrase en <code>AnnotatedString</code>.</li>
+<li>Bande et bandeau : surface tonale, <code>drawBehind</code> pour le filet de 3 dp, sans <code>Card</code> ni élévation.</li>
+<li>Ouverture : <code>AnimatedVisibility(expandVertically() + fadeIn())</code> dans la colonne de l'hôte.</li>
+<li>Point pulsé : <code>rememberInfiniteTransition</code> dans <code>drawBehind</code>, aucune recomposition.</li>
+<li>Voix : <code>semantics(mergeDescendants = true)</code> ; <code>liveRegion = LiveRegionMode.Polite</code> pour <code>warn</code> seulement.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation à zéro : la note apparaît sans hauteur animée, le point ne bat pas. Sans couleur dynamique : jetons du thème Meeshy. En liste différée, la note est un élément comme un autre.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément : <code>&lt;p role="note"&gt;</code> ; <code>role="status"</code> pour <code>warn</code> ; <code>&lt;ul&gt;</code> pour la liste. Jamais <code>role="alert"</code>.</li>
+<li>Fond et filet : <code>color-mix(in oklab, var(--kind) 10%, transparent)</code> et <code>border-inline-start</code>.</li>
+<li>Ouverture : <code>grid-template-rows: 0fr → 1fr</code>, ou <code>interpolate-size: allow-keywords</code>.</li>
+<li>Action : <code>flex-wrap</code> la passe à la ligne ; le bandeau large garde tout sur 48 px.</li>
+<li>Point pulsé : <code>box-shadow</code> animée sur un seul élément.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>color-mix</code> : teinte pré-calculée par la recette. Sans transition de rangée de grille : apparition sèche. <code>prefers-reduced-motion</code> : aucune animation, halo posé.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">La note en ligne existe déjà dans les deux SDK, sous un nom de métier</h2><p>Relevé dans le dépôt le 16 novembre 2026. Les deux SDK d'interface portent <code>AudioConsentNotice</code> : un glyphe, une phrase, une action, des paramètres opaques. Le web a un bandeau à statut poli. Autour, une dizaine de notes de métier réécrivent la même rangée.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Media/AudioConsentNotice.swift</span><p><span class="be">Devient le composant</span> « Note inline discrète », déjà déclarée atome : <code>message</code>, <code>actionTitle</code>, une teinte, lue d'un seul bloc. Elle perd son glyphe de micro figé et son nom de métier, gagne forme, sens et tête, et monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/EmailSpamFolderHint.swift</span><p>« Rien reçu ? Regardez aussi dans vos spams. » : une ligne visible, sans état. C'est la forme <code>line</code>. La phrase reste au catalogue, le rendu passe à K46. <span class="mono">AuthInfoHint.swift</span>, qui déplie un texte derrière un (i), n'est pas une note et reste où il est.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Primitives/ErrorBannerView.swift</span><p>La bande d'erreur d'un écran, avec sa croix et sa relance. Sa forme persistante se rebranche sur <code>band</code> en <code>warn</code> avec action ; ce qu'elle a d'éphémère revient à K14.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Components/ConnectionBanner.swift</span><p>Malgré son nom, c'est l'orchestrateur de la pastille flottante de synchronisation : il reste à l'app et à K14. Il fournit le signal « hors ligne » que l'hôte remet au <code>banner</code> de K46. <span class="mono">Call/Views/CallWaitingBannerView.swift</span> et <span class="mono">Main/Views/CommentSheetBanners.swift</span> prennent le gabarit du bandeau, leur contenu reste au métier.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/audio/AudioConsentNotice.kt</span><p><span class="be">Devient le composant</span> Le miroir exact, avec <code>audioConsentNoticeDescription</code> qui fait lire « message. action » en un seul nœud. Déjà dans <code>:sdk-ui</code> : il passe dans <code>component/kit</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/chrome/StorageUnavailableBanner.kt</span><p>« Stockage indisponible » : bandeau discret, icône et texte, le signal jamais porté par la seule couleur. C'est <code>banner</code> en <code>warn</code>, rebranché.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/…/chat/EndToEndMenuNotices.kt</span><p>Les notes du chiffrement dans un fil, avec <span class="mono">ChatEmptyThreadNotice.kt</span> et <span class="mono">ComposerNotices.kt</span> : sens <code>security</code>. <span class="mono">feature/conversations/…/ConnectionBanner.kt</span> garde sa loi d'états pure et la remet à l'hôte. <span class="mono">feature/auth/…/AuthInfoDisclosure.kt</span>, un (i) qui déplie, reste à l'authentification.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/app-update-banner.tsx</span><p><span class="be">Devient le composant</span> Un bandeau en haut de page, <code>role="status"</code> et <code>aria-live="polite"</code>, une phrase, deux sorties. Il donne la forme <code>banner</code> et sa façon d'annoncer ; la priorité entre bandeaux reste à l'hôte.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/email-sent-notice.tsx</span><p><code>SpamFolderHint</code> : un <code>&lt;p&gt;</code> en légende, la même phrase que sur iOS. Forme <code>line</code>. <span class="mono">external-interop-notice.tsx</span> s'y rebranche pour sa phrase, pas pour sa question.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/thread-header-notice.tsx</span><p>Une note minutée sous l'en-tête d'un fil (<code>useTransientNotice</code>) : éphémère, donc K14, pas K46. <span class="mono">call-notice-card.tsx</span> et <span class="mono">system-notice.tsx</span> sont des rangées de fil, sans statut : elles restent au fil.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Elle sert aussi ailleurs</span><h2 class="d">Cinq écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px; grid-column: span 2">
+<div class="stage">
+<p class="nt band n-sec" style="align-self: center">[[ic:lock-key s]]<span>Messages chiffrés de bout en bout</span></p>
+<div style="align-self: flex-start; max-width: 78%; padding: 10px 14px; border-radius: 18px 18px 18px 6px; background: var(--field); font-size: 14px">Tu passes au studio ce soir ?</div>
+<div style="align-self: flex-end; max-width: 78%; padding: 10px 14px; border-radius: 18px 18px 6px 18px; background: var(--brand-fill); color: #fff; font-size: 14px">Vers 19 h, j'apporte les prises</div>
+</div>
+<div class="cp"><b>Conversation</b><span class="kcap">En tête d'un fil chiffré : <code>band</code>, sens <code>security</code>, centrée. Elle défile avec les messages.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; grid-column: span 2">
+<div class="stage">
+<div class="host" style="padding: 4px 0"><div class="row" style="min-height: 56px"><span style="flex: 1; min-width: 0; font-weight: 600">Traduire les messages vocaux</span><span class="sw on" role="switch" aria-checked="true" aria-label="Traduire les messages vocaux"></span></div></div>
+<p class="nt" style="padding: 0 6px">[[ic:translate s]]<span>Tu entends la voix de l'autre dans ta langue. L'original reste à un geste.</span></p>
+</div>
+<div class="cp"><b>Réglages</b><span class="kcap">L'aide sous une rangée K06 : <code>line</code>, sens <code>neutral</code>, deux lignes si besoin.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; grid-column: span 2">
+<div class="stage">
+<div class="host">
+<div class="nt banner n-warn" style="padding: 8px 6px 8px 16px">[[ic:wifi-slash]]<span class="tx2"><span><b>Connexion perdue</b></span><small>Tes messages partiront tout seuls</small></span><button class="tb">Réessayer</button></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px"><span class="av" style="width: 36px; height: 36px; font-size: 13px; --accent: #FF6B6B">MO</span><div style="display: flex; flex-direction: column; gap: 7px; flex: 1"><div class="bone" style="width: 46%"></div><div class="bone" style="width: 74%"></div></div></div>
+</div>
+</div>
+<div class="cp"><b>Liste des conversations</b><span class="kcap"><code>banner</code>, sens <code>warn</code>, accroché au haut de la liste, qui descend d'autant.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; grid-column: span 3">
+<div class="stage" style="flex-direction: row; align-items: center; gap: 24px">
+<ul class="ntl big" style="flex: 1; min-width: 0">
+<li class="nt">[[ic:chats-circle]]<span>Tes messages disparaissent de ton côté</span></li>
+<li class="nt">[[ic:link-break]]<span>Tes liens et ton adresse cessent de répondre</span></li>
+<li class="nt">[[ic:clock-countdown]]<span>Tu as 30 jours pour changer d'avis</span></li>
+</ul>
+<button class="btn x sm" style="flex: none">Supprimer mon compte</button>
+</div>
+<div class="cp"><b>Suppression de compte</b><span class="kcap"><code>list</code> en taille <code>regular</code> : les conséquences, lues avant le geste. Le bouton est un K40, hors de la note.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; grid-column: span 3">
+<div class="stage" style="flex-direction: row; align-items: center; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0"><b class="d" style="font-size: 19px">Autoriser le micro ?</b><span style="font-size: 13.5px; color: var(--ink2)">Pour les messages vocaux et le Talkie.</span></div>
+<ul class="ntl" style="flex: 1.2; min-width: 0">
+<li class="nt">[[ic:microphone s]]<span>Seulement quand tu maintiens le bouton</span></li>
+<li class="nt">[[ic:lock-key s]]<span>Rien n'est gardé sans ton accord</span></li>
+<li class="nt">[[ic:gear-six s]]<span>Tu peux le couper dans les réglages</span></li>
+</ul>
+</div>
+<div class="cp"><b>Demande de permission</b><span class="kcap"><code>list</code> en taille <code>compact</code> : trois garanties sous la question, avant la fenêtre du système.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque forme × sens × tête rend les valeurs du tableau : taille de phrase, taille et teinte de la tête, fond, filet, marges, hauteur minimale. Vecteurs <code>K46-MeeshyNote.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Dans le flux.</b> Une note qui arrive déplace ce qui la suit de sa hauteur exacte et ne recouvre rien. Garde de source : ni <code>overlay</code>, ni <code>zIndex</code>, ni position fixe, ni minuterie dans le composant.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Tête, phrase et seconde ligne se lisent en un seul élément ; l'action reste un bouton à part, nommé. La liste annonce son nombre de lignes. Le glyphe est caché à la voix.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Annonce.</b> Un <code>warn</code> qui arrive est dit une fois, poliment, sans voler le focus. Les autres sens ne sont jamais annoncés. Une phrase qui change sans changer de sens ne se redit pas.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Contraste et couleur.</b> La phrase tient 4,5:1 sur son fond pour chaque forme et chaque sens, en clair et en sombre ; la tête tient 3:1. Retirer la couleur ne retire aucun sens : glyphe et mots suffisent.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Texte long et RTL.</b> Très grande police : la phrase passe à la ligne, rien n'est tronqué, l'action passe dessous et garde 44 pt. En arabe : la tête et le filet passent à droite, l'action à gauche.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins, fraîcheur et pureté.</b> Le point qui pulse ne re-peint ni la phrase ni ses voisins. <code>isStale</code> fige le point et retire la teinte sans changer la hauteur d'un pixel. Mouvement réduit : aucune hauteur animée, aucun battement. Garde de source : aucun type du domaine, aucun singleton, aucune lecture du réseau ni de l'horloge dans le composant. Non-régression : la note de consentement vocal garde ses instantanés.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Une note est du texte : elle se lit dans l'ordre de l'écran, là où elle est posée. Elle n'interrompt jamais ; seul <code>warn</code> se fait entendre à son arrivée. Le sens est toujours doublé par un glyphe et par les mots.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Aucun flou, aucune ombre, aucun verre. Le battement n'anime qu'une ombre sur un point de 9 px et s'arrête hors écran. L'ouverture d'un bandeau est la seule mise en page animée, une fois.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8148}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

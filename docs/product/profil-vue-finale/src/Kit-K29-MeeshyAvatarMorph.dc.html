@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K29 MeeshyAvatarMorph</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>.ic{margin-top:2px}
+.li b{font-weight:700}
+.leo{--accent:#4ECDC4;--accent-ink:#7FE3DC}
+.cell{flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;overflow:hidden}
+.cell>.cv{position:relative;display:flex;align-items:center;justify-content:center;height:200px;overflow:hidden}
+.cell>.cp{display:flex;flex-direction:column;gap:4px;padding:16px 20px 20px;border-top:1px solid var(--line)}
+.cell>.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.ghost{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1.5px dashed var(--ink3);color:var(--ink3);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;flex:none}
+.bn{position:relative;overflow:hidden;background:linear-gradient(165deg,color-mix(in oklab,var(--accent) 72%,#1E1B4B) 0%,color-mix(in oklab,var(--accent) 34%,var(--ground)) 52%,var(--ground) 100%)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:150px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.leg{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 14px;align-items:start}
+.leg>.kan{position:static;margin-top:1px}
+.leg b{font-size:15px}
+.leg p{font-size:13.5px;line-height:1.45;color:var(--ink2);grid-column:2}
+.fr{position:relative;overflow:hidden;border-radius:16px;background:var(--ground);border:1px solid var(--line);flex:none}
+.st{position:relative;width:390px;height:480px;overflow:hidden;border-radius:28px;background:var(--ground);border:1px solid var(--line)}
+.st>.ly{position:absolute;inset:0;opacity:0}
+.st>.la{animation:amA 10s linear infinite}
+.st>.lb{animation:amB 10s linear infinite}
+.st>.lc{animation:amC 10s linear infinite}
+.st>.ld{animation:amD 10s linear infinite}
+.fx{position:absolute;left:0;top:0;width:0;height:0;animation:amX 10s infinite;transform:translateX(40px)}
+.fy{display:block;width:0;height:0;animation:amY 10s infinite;transform:translateY(152px)}
+.fs{position:relative;display:block;width:112px;height:112px;margin:-56px 0 0 -56px;animation:amS 10s infinite;transform:scale(.393)}
+.fs>.av{width:112px;height:112px;font-size:40px;box-shadow:0 10px 24px rgba(0,0,0,.45)}
+.fs>.rg{position:absolute;inset:-6px;padding:0;opacity:0;animation:amRing 10s linear infinite}
+.fs>.bd{position:absolute;right:-2px;bottom:-2px;width:30px;height:30px;border-width:6px;animation:mxPulse 2.2s ease-out infinite,amBadge 10s linear infinite}
+.cur{position:absolute;left:0;top:-5px;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px color-mix(in oklab,var(--accent) 24%,transparent);animation:amCur 10s infinite;transform:translateX(39px)}
+.arc{stroke-dasharray:2 7;animation:amArc 1.2s linear infinite}
+@keyframes amA{0%,12%{opacity:1}18%,90%{opacity:0}97%,100%{opacity:1}}
+@keyframes amB{0%,12%{opacity:0}18%,36%{opacity:1}42%,100%{opacity:0}}
+@keyframes amC{0%,36%{opacity:0}42%,54%{opacity:1}61%,100%{opacity:0}}
+@keyframes amD{0%,55%{opacity:0}62%,88%{opacity:1}96%,100%{opacity:0}}
+@keyframes amX{0%{transform:translateX(40px)}12%{transform:translateX(40px);animation-timing-function:cubic-bezier(.3,1.35,.5,1)}20%{transform:translateX(195px)}36%{transform:translateX(195px);animation-timing-function:cubic-bezier(.4,0,.2,1)}42%{transform:translateX(92px)}54%{transform:translateX(92px);animation-timing-function:cubic-bezier(.1,.7,.3,1)}66%{transform:translateX(250px)}88%{transform:translateX(250px);animation-timing-function:cubic-bezier(.4,0,.2,1)}97%,100%{transform:translateX(40px)}}
+@keyframes amY{0%{transform:translateY(152px)}12%{transform:translateY(152px);animation-timing-function:cubic-bezier(.3,1.35,.5,1)}20%{transform:translateY(160px)}36%{transform:translateY(160px);animation-timing-function:cubic-bezier(.4,0,.2,1)}42%{transform:translateY(42px)}54%{transform:translateY(42px);animation-timing-function:cubic-bezier(.75,0,.9,.45)}66%{transform:translateY(236px)}88%{transform:translateY(236px);animation-timing-function:cubic-bezier(.4,0,.2,1)}97%,100%{transform:translateY(152px)}}
+@keyframes amS{0%{transform:scale(.393)}12%{transform:scale(.393);animation-timing-function:cubic-bezier(.3,1.35,.5,1)}20%{transform:scale(1)}36%{transform:scale(1);animation-timing-function:cubic-bezier(.4,0,.2,1)}42%{transform:scale(.321)}54%{transform:scale(.321);animation-timing-function:ease-out}60%{transform:scale(.64);animation-timing-function:ease-in}66%{transform:scale(.5)}88%{transform:scale(.5);animation-timing-function:cubic-bezier(.4,0,.2,1)}97%,100%{transform:scale(.393)}}
+@keyframes amRing{0%,19%{opacity:0}23%,35%{opacity:1}38%,100%{opacity:0}}
+@keyframes amBadge{0%,11%{opacity:1}13%,20%{opacity:0}23%,35%{opacity:1}37%,42%{opacity:0}45%,53%{opacity:1}55%,97%{opacity:0}100%{opacity:1}}
+@keyframes amCur{0%{transform:translateX(39px)}12%{transform:translateX(39px);animation-timing-function:cubic-bezier(.3,1.2,.5,1)}20%{transform:translateX(117px)}36%{transform:translateX(117px);animation-timing-function:cubic-bezier(.4,0,.2,1)}42%{transform:translateX(195px)}54%{transform:translateX(195px);animation-timing-function:linear}60%{transform:translateX(273px)}66%{transform:translateX(351px)}88%{transform:translateX(351px);animation-timing-function:cubic-bezier(.4,0,.2,1)}97%,100%{transform:translateX(39px)}}
+@keyframes amArc{to{stroke-dashoffset:-18}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #4ECDC4; opacity: .18"></div>
+<div class="orb" style="width: 230px; height: 230px; right: -30px; top: -40px; background: #6366F1; opacity: .26; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 960px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K29 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyAvatarMorph</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un avatar VOYAGE d'un écran à l'autre (liste → fiche → épingle de carte) au lieu de réapparaître</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 780px">Dans la liste, sur la fiche, sur la carte : c'est le même avatar. Tu lui donnes une identité et une portée ; il garde sa place au départ, vole jusqu'à l'arrivée et s'y pose à la bonne taille.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px; padding-top: 4px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il transporte, il ne dessine rien</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Relie <b>deux emplacements</b> qui portent la même identité dans la même portée : un seul avatar, jamais deux.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Anime <b>la place et la taille</b> entre les deux, en ligne droite ou en arc, sur un calque au-dessus des écrans.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Laisse une <b>empreinte</b> au départ : la liste ne se décale pas, et le retour sait où se poser.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Range <b>deux emplacements</b> autour du contenu, <code>ring</code> et <code>badge</code>, et décide s'ils volent avec lui.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Dessiner l'avatar, ses initiales, sa photo, son décor : <b>MeeshyAvatar</b>, qui existe sur les trois plateformes.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>La présence et l'anneau de story : l'hôte les pose dans <code>badge</code> et <code>ring</code>. L'onde et le disque de l'épingle : <b>K36</b>.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Le repli de l'en-tête au défilement : <b>K28</b> lui donne l'avancée. Les ressorts et les durées : <b>K26</b>.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Naviguer, ouvrir la carte, choisir quel écran suit : <b>l'app</b>. K29 ne connaît ni personne ni route.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Un contenu, deux emplacements, une identité</h2></header>
+<div style="display: grid; grid-template-columns: 680px minmax(0, 1fr); gap: 48px; align-items: center">
+<div class="kcell leo" style="padding: 44px 48px">
+<div style="position: relative; width: 584px; height: 420px; border: 1.5px dashed var(--line); border-radius: 36px">
+<span class="mono" style="position: absolute; left: 52px; top: 20px; color: var(--ink3)">portée</span>
+<svg aria-hidden="true" viewBox="0 0 584 420" style="position: absolute; inset: 0; width: 584px; height: 420px">
+<path class="arc" d="M 148 318 C 214 318, 250 296, 282 262" fill="none" stroke="#7FE3DC" stroke-width="2.5" stroke-linecap="round"></path>
+<path d="M 269 264 L 284 260 L 282 275" fill="none" stroke="#7FE3DC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="ghost" style="position: absolute; left: 48px; top: 274px; width: 88px; height: 88px; font-size: 30px"><span style="opacity: .5">LM</span></span>
+<span class="mono" style="position: absolute; left: 48px; top: 372px; width: 88px; text-align: center; color: var(--ink3)">44</span>
+<span class="ring" style="position: absolute; left: 258px; top: 56px; padding: 10px"><span class="av" style="width: 224px; height: 224px; font-size: 80px">LM</span></span>
+<span class="dot on" style="position: absolute; left: 440px; top: 238px; width: 44px; height: 44px; border-width: 8px; border-color: var(--raised)"></span>
+<span class="mono" style="position: absolute; left: 258px; top: 318px; width: 244px; text-align: center; color: var(--ink3)">112</span>
+<span class="chip mono" style="position: absolute; left: 306px; top: 356px; color: var(--accent-ink)">id · "p-7f3a"</span>
+<span class="kan" style="left: 16px; top: 18px">6</span>
+<span class="kan" style="left: 300px; top: 104px">1</span>
+<span class="kan" style="left: 486px; top: 120px">2</span>
+<span class="kan" style="left: 488px; top: 262px">3</span>
+<span class="kan" style="left: 34px; top: 264px">4</span>
+<span class="kan" style="left: 278px; top: 362px">5</span>
+</div>
+</div>
+<div class="leg" style="row-gap: 16px">
+<span class="kan">1</span><div><b>Contenu</b> <code>content</code><p>L'avatar lui-même, remis par l'hôte. K29 lui donne un cadre rond de <code>size</code> et rien d'autre. Dessiné à 2× : 112 ici, 36 à 112 dans l'app.</p></div>
+<span class="kan">2</span><div><b>Emplacement</b> <code>ring</code><p>Autour du contenu, à 5 px (4,5 % de <code>size</code>, 2 au moins). L'hôte y pose l'anneau de story ou le contour de décor. Il s'efface en vol, sauf <code>ringTravels</code>.</p></div>
+<span class="kan">3</span><div><b>Emplacement</b> <code>badge</code><p>Coin bas de fin, 25 % de <code>size</code>, 14 au moins. Présence, compteur. Il part 80 ms avant l'envol et revient 120 ms après l'arrivée.</p></div>
+<span class="kan">4</span><div><b>Empreinte</b><p>La place gardée au départ : même encombrement, vide et transparente. Le pointillé n'existe que sur cette fiche.</p></div>
+<span class="kan">5</span><div><b>Identité</b> <code>id</code><p>Une chaîne opaque. Deux emplacements de même <code>id</code> dans la même portée sont le même avatar. Unique par portée : un doublon coupe le voyage et le dit en débogage.</p></div>
+<span class="kan">6</span><div><b>Portée</b> <code>MeeshyAvatarMorphScope</code><p>Posée une fois par la racine, autour de la navigation. Elle porte le calque de vol. Sans elle, aucun voyage : le repli.</p></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Quatre escales, une seule identité</h2></header>
+<div class="leo" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell cell">
+<div class="cv" style="flex-direction: column; align-items: stretch">
+<div class="row" style="opacity: .45"><span class="av" style="--accent:#FF6B6B">MO</span><span style="flex: 1; font-weight: 700">Mina Okafor</span></div>
+<div class="row"><span style="position: relative; display: flex"><span class="av">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; border-color: var(--raised)"></span></span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Léo Marchetti</span><span style="font-size: 12.5px; color: var(--ink2)">On se retrouve à Alfama ?</span></span></div>
+<div class="row" style="opacity: .45"><span class="av" style="--accent:#F8B500">TR</span><span style="flex: 1; font-weight: 700">Tomás Ribeiro</span></div>
+</div>
+<div class="cp"><b>Ligne · 44</b><span class="kcap">Jalon <code>row</code>. Le départ le plus courant. <code>badge</code> porte la présence.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv bn">
+<div class="orb" style="width: 150px; height: 150px; left: -40px; top: -40px; background: var(--accent); opacity: .5"></div>
+<div class="orb" style="width: 120px; height: 120px; right: -30px; top: 30px; background: #6366F1; opacity: .5; animation-delay: -4s"></div>
+<span style="position: relative; display: flex"><span class="ring"><span class="av" style="width: 112px; height: 112px; font-size: 40px">LM</span></span><span class="dot on" style="position: absolute; right: 6px; bottom: 6px; width: 24px; height: 24px; border-width: 4px"></span></span>
+</div>
+<div class="cp"><b>Fiche · 112</b><span class="kcap">Jalon <code>hero</code>. <code>ring</code> porte l'anneau de story, qui tourne.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv bn" style="align-items: flex-start; padding: 18px 14px">
+<div class="glass" style="display: flex; align-items: center; gap: 8px; width: 100%; height: 56px; padding: 0 12px 0 6px; border-radius: 999px">
+<button class="ib" aria-label="Retour">[[ic:caret-left]]</button>
+<span style="position: relative; display: flex"><span class="av" style="width: 36px; height: 36px; font-size: 13px">LM</span><span class="dot on" style="position: absolute; right: -4px; bottom: -4px; border-color: #1c2a33"></span></span>
+<span style="flex: 1; font-weight: 700; font-size: 14.5px; white-space: nowrap">Léo Marchetti</span>
+<span style="display: flex; color: var(--ink2)">[[ic:dots-three]]</span>
+</div>
+</div>
+<div class="cp"><b>Barre · 36</b><span class="kcap">Jalon <code>bar</code>. C'est le défilement qui mène, par <code>progress</code>.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv">
+[[map]]
+<div style="position: absolute; left: 50%; top: 50%; width: 150px; height: 150px; transform: translate(-50%, -50%); border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); border: 1.5px solid var(--accent)"></div>
+<div style="position: absolute; left: 50%; top: calc(50% + 27px); width: 16px; height: 16px; background: var(--ground); transform: translate(-50%, -50%) rotate(45deg); border-radius: 3px"></div>
+<div class="pin" style="left: 50%; top: 50%"><span class="av" style="width: 56px; height: 56px; font-size: 20px; border: 3px solid var(--ground); box-shadow: 0 10px 24px rgba(0,0,0,.5)">LM</span></div>
+</div>
+<div class="cp"><b>Épingle · 56</b><span class="kcap">Jalon <code>pin</code>. Le liseré, la pointe, le disque et l'onde sont à K36.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 bis · États</span><h2 class="d">En vol, parti, replié, en clair</h2></header>
+<div class="leo" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell cell">
+<div class="cv">
+<span class="ghost" style="position: absolute; left: 30px; bottom: 30px; width: 44px; height: 44px"></span>
+<span class="ghost" style="position: absolute; right: 26px; top: 24px; width: 56px; height: 56px"></span>
+<svg aria-hidden="true" viewBox="0 0 300 200" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%">
+<path class="arc" d="M 62 136 C 150 150, 214 120, 232 72" fill="none" stroke="#7FE3DC" stroke-width="2" stroke-linecap="round"></path>
+</svg>
+<span class="av" style="position: relative; top: 14px; left: 14px; width: 64px; height: 64px; font-size: 23px; box-shadow: 0 22px 34px rgba(0,0,0,.55)">LM</span>
+</div>
+<div class="cp"><b>En vol</b><span class="kcap">Sur le calque de la portée, au-dessus de tout. Ombre portée, <code>badge</code> masqué, aucun toucher.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv" style="flex-direction: column; align-items: stretch">
+<div class="row" style="opacity: .45"><span class="av" style="--accent:#FF6B6B">MO</span><span style="flex: 1; font-weight: 700">Mina Okafor</span></div>
+<div class="row"><span class="ghost" style="width: 44px; height: 44px"></span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Léo Marchetti</span><span style="font-size: 12.5px; color: var(--ink2)">On se retrouve à Alfama ?</span></span></div>
+<div class="row" style="opacity: .45"><span class="av" style="--accent:#F8B500">TR</span><span style="flex: 1; font-weight: 700">Tomás Ribeiro</span></div>
+</div>
+<div class="cp"><b>Empreinte</b><span class="kcap">L'avatar est parti, sa place reste. Le nom ne bouge pas d'un pixel.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv" style="gap: 0">
+<span class="av" style="width: 44px; height: 44px; opacity: .3; margin-right: -22px">LM</span>
+<span class="av" style="width: 84px; height: 84px; font-size: 30px; opacity: .6; position: relative">LM</span>
+<span class="av" style="width: 112px; height: 112px; font-size: 40px; margin-left: -70px; position: relative">LM</span>
+</div>
+<div class="cp"><b>Repli</b><span class="kcap">Sans portée, sans capacité ou sous mouvement réduit : fondu enchaîné et échelle, sur place.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="mx cv leo" data-theme="light" style="flex-direction: column; align-items: stretch; background: var(--ground)">
+<div class="row"><span style="position: relative; display: flex"><span class="av">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px"></span></span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Léo Marchetti</span><span style="font-size: 12.5px; color: var(--ink2)">On se retrouve à Alfama ?</span></span></div>
+<div class="sep"></div>
+<div class="row" style="justify-content: center; gap: 20px"><span class="ghost" style="width: 44px; height: 44px"></span><span style="display: flex; color: var(--ink3)">[[ic:arrow-right s]]</span><span class="av" style="width: 56px; height: 56px; font-size: 20px; box-shadow: 0 12px 24px rgba(67,56,202,.28)">LM</span></div>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Rien ne change : K29 n'a pas de couleur. Seule l'ombre du vol suit le thème.</span></div>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">Un contour qui change avec l'état, là où la plateforme le sait</h3></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: center; gap: 16px"><span class="av" style="width: 64px; height: 64px; font-size: 23px; --accent: #4ECDC4; border-radius: 50%">LM</span><span style="display: inline-flex; color: var(--ink3)">[[ic:arrow-right s]]</span><span class="av" style="width: 64px; height: 64px; font-size: 23px; --accent: #4ECDC4; border-radius: 34%">LM</span><span style="display: inline-flex; color: var(--ink3)">[[ic:arrow-right s]]</span><span class="av" style="width: 64px; height: 64px; font-size: 23px; --accent: #4ECDC4; border-radius: 42% 58% 55% 45% / 48% 42% 58% 52%; animation: mxMorph 6s ease-in-out infinite">LM</span></div></div><span class="kcap"><b style="color: var(--ink)">Contour lié à un état · Android</b> <code>outline</code> suit un état de l'hôte (repos, en vol, posé) : le contour se métamorphose par <code>MaterialShapes</code> et <code>Morph</code>, sur <code>motion.morph</code> de <b>K26</b>.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: center; gap: 16px"><span style="display: inline-flex; width: 64px; height: 64px; border-radius: 50%; border: 2px dashed var(--ink3)"></span><span style="display: inline-flex; color: var(--ink3)">[[ic:arrow-right s]]</span><span class="av" style="width: 64px; height: 64px; font-size: 23px; --accent: #4ECDC4; border-radius: 50%">LM</span></div></div><span class="kcap"><b style="color: var(--ink)">Ailleurs : le cercle</b> iOS et web gardent le cercle, quel que soit <code>outline</code>. L'empreinte en pointillé reste un dessin de cette fiche : rien n'en est livré.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Liste, fiche, repli, envol, épingle : un seul avatar</h2></header>
+<div style="display: grid; grid-template-columns: 446px minmax(0, 1fr); gap: 40px; align-items: stretch">
+
+<div class="kcell leo" style="flex-direction: column; gap: 22px; padding: 28px">
+<div class="st">
+
+<div class="ly la">
+<span class="d" style="position: absolute; left: 18px; top: 18px; font-size: 24px">Discussions</span>
+<div style="position: absolute; left: 0; right: 0; top: 62px; display: flex; flex-direction: column">
+<div class="row"><span class="av" style="--accent:#FF6B6B">MO</span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Mina Okafor</span><span style="font-size: 12.5px; color: var(--ink2)">Je suis à 300 m, j'arrive</span></span></div>
+<div class="row"><span class="ghost" style="width: 44px; height: 44px"></span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Léo Marchetti</span><span style="font-size: 12.5px; color: var(--ink2)">On se retrouve à Alfama ?</span></span></div>
+<div class="row"><span class="av" style="--accent:#F8B500">TR</span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Tomás Ribeiro</span><span style="font-size: 12.5px; color: var(--ink2)">Cascais demain, tu viens ?</span></span></div>
+<div class="row"><span class="av" style="--accent:#3498DB">YT</span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Yuki Tanaka</span><span style="font-size: 12.5px; color: var(--ink2)">Merci pour le son</span></span></div>
+<div class="row"><span class="av" style="--accent:#9B59B6">KM</span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Kwame Mensah</span><span style="font-size: 12.5px; color: var(--ink2)">Message vocal · 0:12</span></span></div>
+<div class="row"><span class="av" style="--accent:#2ECC71">SB</span><span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700">Sofia Benali</span><span style="font-size: 12.5px; color: var(--ink2)">Demande envoyée</span></span></div>
+</div>
+</div>
+
+<div class="ly lb">
+<div class="bn" style="position: absolute; left: 0; right: 0; top: 0; height: 230px">
+<div class="orb" style="width: 190px; height: 190px; left: -60px; top: -60px; background: var(--accent); opacity: .5"></div>
+<div class="orb" style="width: 160px; height: 160px; right: -50px; top: 10px; background: #6366F1; opacity: .5; animation-delay: -4s"></div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 236px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 28px; text-align: center">
+<span class="d" style="font-size: 28px">Léo Marchetti</span>
+<span class="mono" style="color: var(--ink2)">@leo.m · Lisbonne</span>
+<span style="display: flex; gap: 8px; padding-top: 8px"><span class="chip" style="color: var(--accent-ink)">[[ic:fire s]]<span>Proche</span></span><span class="chip">[[ic:smiley s]]<span>En vadrouille</span></span></span>
+<p style="font-size: 14px; color: var(--ink2); padding-top: 8px">Photographe de rue. Lyon ⇄ Lisbonne.</p>
+</div>
+<div class="seg glass" style="position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%)"><span class="on">[[ic:user-focus-fill s]]<span>Vitrine</span></span><span>[[ic:link s]]<span>Liens</span></span><span>[[ic:lightning s]]<span>Actions</span></span></div>
+</div>
+
+<div class="ly lc">
+<div class="bn" style="position: absolute; left: 0; right: 0; top: 0; height: 120px"></div>
+<div class="glass" style="position: absolute; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; gap: 8px; height: 60px; padding: 0 14px 0 8px; border-radius: 999px">
+<button class="ib" aria-label="Retour">[[ic:caret-left]]</button>
+<span style="width: 36px; height: 36px; flex: none"></span>
+<span style="flex: 1; display: flex; flex-direction: column"><span style="font-weight: 700; font-size: 14.5px">Léo Marchetti</span><span style="font-size: 12px; color: var(--ok)">en ligne</span></span>
+<span style="display: flex; color: var(--ink2)">[[ic:dots-three]]</span>
+</div>
+<div style="position: absolute; left: 16px; right: 16px; top: 96px; display: flex; flex-direction: column; gap: 12px">
+<span class="tag">Publications</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="ph" style="height: 150px">photo</div><div class="ph" style="height: 150px">réel 0:24</div><div class="ph" style="height: 150px">photo</div>
+<div class="ph" style="height: 150px">photo</div><div class="ph" style="height: 150px">photo</div><div class="ph" style="height: 150px">réel 0:41</div>
+</div>
+</div>
+</div>
+
+<div class="ly ld">
+[[map]]
+<div style="position: absolute; left: 250px; top: 236px; width: 170px; height: 170px; transform: translate(-50%, -50%); border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); border: 1.5px solid var(--accent)"></div>
+<div style="position: absolute; left: 250px; top: 264px; width: 16px; height: 16px; background: var(--ground); transform: translate(-50%, -50%) rotate(45deg); border-radius: 3px"></div>
+<div class="pin" style="left: 250px; top: 236px"><span style="width: 62px; height: 62px; border-radius: 50%; background: var(--ground)"></span></div>
+<button class="ib g" aria-label="Revenir à la fiche" style="position: absolute; left: 16px; top: 16px">[[ic:caret-down]]</button>
+<div class="glass" style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 12px; padding: 10px 20px 20px; border-radius: 30px 30px 0 0; border-bottom: 0; background: rgba(19,17,28,.72)">
+<span aria-hidden="true" style="align-self: center; width: 36px; height: 5px; border-radius: 999px; background: var(--ink3); opacity: .6"></span>
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span class="d" style="font-size: 20px">Léo Marchetti</span><span style="font-size: 13px; color: var(--ink2)">Alfama · quartier · encore 42 min</span></div>
+<button class="btn a sm">[[ic:navigation-arrow-fill s]]<span>Itinéraire</span></button>
+</div>
+</div>
+</div>
+
+<span class="fx"><span class="fy"><span class="fs"><span class="av">LM</span><span class="ring rg"></span><span class="dot on bd"></span></span></span></span>
+</div>
+
+<div style="width: 390px; display: flex; flex-direction: column; gap: 12px">
+<div style="position: relative; height: 6px; border-radius: 999px; background: var(--field); border: 1px solid var(--line)"><i class="cur"></i></div>
+<div class="mono" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); text-align: center; color: var(--ink2)"><span>liste 44</span><span>fiche 112</span><span>repli 36</span><span>envol</span><span>épingle 56</span></div>
+</div>
+<span class="kcap" style="align-self: stretch">En direct, boucle de 10 s. Les écrans se fondent dessous ; l'avatar, lui, ne quitte jamais l'image. Regarde la ligne de Léo : sa place reste vide tant qu'il est ailleurs.</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 22px; justify-content: space-between">
+<div class="leo" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px">
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="fr" style="height: 176px; display: flex; flex-direction: column; justify-content: center">
+<div class="row" style="padding: 6px 12px; min-height: 52px; gap: 10px; opacity: .4"><span class="av" style="--accent:#FF6B6B; width: 36px; height: 36px; font-size: 13px">MO</span><span class="sk" style="flex: 1; height: 10px; animation: none"></span></div>
+<div class="row" style="padding: 6px 12px; min-height: 56px; gap: 10px"><span class="av">LM</span><span class="sk" style="flex: 1; height: 10px; animation: none"></span></div>
+<div class="row" style="padding: 6px 12px; min-height: 52px; gap: 10px; opacity: .4"><span class="av" style="--accent:#F8B500; width: 36px; height: 36px; font-size: 13px">TR</span><span class="sk" style="flex: 1; height: 10px; animation: none"></span></div>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px"><span class="step">1</span><span class="kcap"><b style="color: var(--ink)">Liste · 44.</b> Tu touches la ligne. L'avatar se décolle, sa place reste.</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="fr bn" style="height: 176px; display: flex; align-items: center; justify-content: center">
+<span class="ring"><span class="av" style="width: 112px; height: 112px; font-size: 40px">LM</span></span>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px"><span class="step">2</span><span class="kcap"><b style="color: var(--ink)">Fiche · 112.</b> Il grandit jusqu'au héros. L'anneau arrive une fois posé.</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="fr bn" style="height: 176px; padding: 12px 8px">
+<div class="glass" style="display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 8px; border-radius: 999px"><span style="display: flex; color: var(--ink2)">[[ic:caret-left s]]</span><span class="av" style="width: 36px; height: 36px; font-size: 13px">LM</span><span class="sk" style="flex: 1; height: 9px; animation: none"></span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding-top: 12px"><div class="ph" style="height: 84px; border-radius: 12px"></div><div class="ph" style="height: 84px; border-radius: 12px"></div></div>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px"><span class="step">3</span><span class="kcap"><b style="color: var(--ink)">Repli · 36.</b> Tu défiles : il glisse dans la barre de verre, au doigt.</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="fr" style="height: 176px">
+<svg aria-hidden="true" viewBox="0 0 150 176" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%">
+<path class="arc" d="M 30 30 C 96 26, 112 66, 108 132" fill="none" stroke="#7FE3DC" stroke-width="2" stroke-linecap="round"></path>
+</svg>
+<span class="ghost" style="position: absolute; left: 8%; top: 12px; width: 36px; height: 36px"></span>
+<span class="ghost" style="position: absolute; left: 54%; bottom: 14px; width: 56px; height: 56px"></span>
+<span class="av" style="position: absolute; left: 50%; top: 42px; width: 50px; height: 50px; font-size: 18px; box-shadow: 0 18px 28px rgba(0,0,0,.55)">LM</span>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px"><span class="step">4</span><span class="kcap"><b style="color: var(--ink)">Envol.</b> « Voir sur la carte » : il part de côté, se soulève, puis tombe.</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="fr" style="height: 176px">
+[[map]]
+<div style="position: absolute; left: 50%; top: 46%; width: 116px; height: 116px; transform: translate(-50%, -50%); border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); border: 1.5px solid var(--accent)"></div>
+<div class="pin" style="left: 50%; top: 46%"><span class="av" style="width: 56px; height: 56px; font-size: 20px; border: 3px solid var(--ground)">LM</span></div>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px"><span class="step">5</span><span class="kcap"><b style="color: var(--ink)">Épingle · 56.</b> Il se pose. L'onde de K36 part à cet instant, pas avant.</span></div>
+</div>
+
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">motion.travel</b> (liste ↔ fiche) · durée et ressort de K26 · déclencheur : la navigation de l'hôte · haptique : none, le toucher a déjà la sienne · mouvement réduit : fondu réduit de K26 (160 ms), sur place</div>
+<div class="spec"><b style="color: var(--ink)">motion.collapse</b> (fiche ↔ barre) · sans durée propre · déclencheur : <span style="color: var(--accent-ink)">progress</span> de 0 à 1, donné par K28 · haptique : aucune · mouvement réduit : inchangé, c'est le doigt qui mène</div>
+<div class="spec"><b style="color: var(--ink)">motion.travel</b> + arc (barre → épingle) · durée de K26 · côté en sortie douce, chute en entrée douce, flèche = 18 % de la distance, 96 au plus · déclencheur : l'action de l'hôte · haptique : <span style="color: var(--accent-ink)">medium</span> à l'atterrissage, celle du jeton · mouvement réduit : fondu réduit de K26, sans arc</div>
+<div class="spec"><b style="color: var(--ink)">motion.morph</b> (ring, badge) · sortie 80 ms avant le départ, entrée 120 ms après l'arrivée · interruptible : un retour pendant le vol repart de la position courante, sans saut</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<div class="tonal" style="border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px"><code>path: straight</code><span class="kcap">Ligne droite. Même écran, ou pousser et revenir.</span></div>
+<div class="tonal" style="border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px"><code>path: arc</code><span class="kcap">Arc. Changement de plan : fiche vers carte.</span></div>
+<div class="tonal" style="border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px"><code>path: auto</code><span class="kcap">Défaut. Arc au-delà de 160 px de trajet, droite en dessous.</span></div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Mêmes noms sur les trois plateformes</h2></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span>
+<span class="h">iOS · MeeshyUI/Kit/<wbr>MeeshyAvatarMorph.swift</span>
+<span class="h">Android · me.meeshy.ui.component.kit</span>
+<span class="h">Web · components/kit/meeshy-avatar-morph.tsx</span>
+
+<span><b>Composant</b></span>
+<span><code>MeeshyAvatarMorph(id:<wbr>size:<wbr>path:<wbr>ring:<wbr>badge:<wbr>content:)</code></span>
+<span><code>MeeshyAvatarMorph(id, size, modifier, path, ring, badge, content)</code></span>
+<span><code>&lt;MeeshyAvatarMorph id size path ring badge&gt;…&lt;/MeeshyAvatarMorph&gt;</code></span>
+
+<span><b>Portée</b></span>
+<span><code>MeeshyAvatarMorphScope { … }</code>, lue dans l'environnement</span>
+<span><code>MeeshyAvatarMorphScope { … }</code>, lue par <code>CompositionLocal</code></span>
+<span><code>&lt;MeeshyAvatarMorphScope&gt;</code>, lue par contexte</span>
+
+<span><b>Contour</b></span>
+<span><code>MeeshyAvatarMorphOutline { circle }</code> : le cercle seul</span>
+<span><code>MeeshyAvatarMorphOutline { circle, soft, organic }</code></span>
+<span><code>'circle'</code> : le cercle seul</span>
+
+<span><b>Trajet</b></span>
+<span><code>MeeshyAvatarMorphPath { auto, straight, arc }</code></span>
+<span><code>enum class</code> identique</span>
+<span><code>'auto' | 'straight' | 'arc'</code></span>
+
+<span><b>Tailles</b></span>
+<span><code>size: CGFloat</code> · jalons <code>MeeshyAvatarMorphSize.bar / .row / .pin / .hero</code></span>
+<span><code>size: Dp</code> · mêmes jalons</span>
+<span><code>size: number</code> · mêmes jalons, en <code>rem</code></span>
+
+<span><b>Emplacements</b></span>
+<span><code>content</code>, <code>ring</code>, <code>badge</code> : <code>@ViewBuilder</code></span>
+<span>trois <code>@Composable () -&gt; Unit</code></span>
+<span><code>children</code>, <code>ring</code>, <code>badge</code> : <code>ComponentChildren</code></span>
+
+<span><b>Avancée pilotée</b></span>
+<span><code>progress: CGFloat? = nil</code></span>
+<span><code>progress: (() -&gt; Float)? = null</code>, lue au dessin</span>
+<span><code>progress?: number</code>, posée en <code>--kit-morph-progress</code></span>
+
+<span style="border-bottom: 0"><b>Recette</b></span>
+<span style="border-bottom: 0"><code>MeeshyAvatarMorphRecipe.resolve(from:<wbr>to:<wbr>path:<wbr>progress:<wbr>reduceMotion:<wbr>hasScope:)</code></span>
+<span style="border-bottom: 0"><code>MeeshyAvatarMorphRecipe.resolve(…)</code>, mêmes arguments</span>
+<span style="border-bottom: 0"><code>meeshyAvatarMorphRecipe(…)</code> : propriétés <code>--kit-morph-*</code></span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="tag">Paramètres opaques, mêmes défauts partout</span>
+<div class="li"><span><code>id</code> (obligatoire) : une chaîne. K29 ne sait pas ce qu'elle nomme.</span></div>
+<div class="li"><span><code>size</code> (obligatoire) : le diamètre à cet emplacement. Jalons 36, 44, 56, 112.</span></div>
+<div class="li"><span><code>path = auto</code> · <code>progress = nil</code> (sinon de 0 à 1 : le voyage suit la valeur, pas le temps).</span></div>
+<div class="li"><span><code>outline = circle</code> : sur Android, un contour par état de l'hôte ; ailleurs, toujours le cercle.</span></div>
+<div class="li"><span><code>ringTravels = false</code> · <code>badgeTravels = false</code> : l'emplacement vole avec le contenu ou s'efface.</span></div>
+<div class="li"><span><code>isEnabled = true</code> : à faux, l'emplacement ne part ni ne reçoit. <code>onArrive</code>, absent par défaut.</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="tag">Ce que la recette rend, en valeurs</span>
+<div class="li"><span>Le mode : <code>shared</code>, <code>driven</code> (par <code>progress</code>) ou <code>crossfade</code> (repli).</span></div>
+<div class="li"><span>Le trajet résolu, la flèche de l'arc, le jeton de mouvement de K26 et sa durée.</span></div>
+<div class="li"><span>L'échelle de départ et d'arrivée, l'ombre du vol, l'opacité de <code>ring</code> et de <code>badge</code> à chaque instant.</span></div>
+<div class="li"><span>Le jeu du <code>ring</code> et le côté du <code>badge</code> pour un diamètre donné.</span></div>
+<div class="li"><span style="color: var(--ink2)">Aucun type du domaine dans une signature : ni personne, ni présence, ni story, ni carte.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Le même voyage, le moteur de chacun</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<span class="d" style="font-size: 22px">iOS</span></span>
+<ul>
+<li>Même hiérarchie (fiche ↔ barre, fiche ↔ carte en feuille) : <code>matchedGeometryEffect(id:in:)</code>, le <code>Namespace</code> vit dans la portée.</li>
+<li>Écran poussé ou présenté (liste → fiche) : <code>matchedTransitionSource</code> et <code>navigationTransition(.zoom)</code>, iOS 18 et plus. Le geste de retour ramène l'avatar à sa ligne.</li>
+<li>Arc : un <code>GeometryEffect</code> le long de la courbe, piloté par le ressort de K26.</li>
+<li><code>sensoryFeedback(.impact(weight: .medium))</code> à l'atterrissage. <code>accessibilityReduceMotion</code> force le repli.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 et 17, ou hiérarchies sans portée commune : transition système de l'écran, et l'avatar d'arrivée entre en fondu, de 0,86 à 1.</p>
+</div>
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<span class="d" style="font-size: 22px">Android</span></span>
+<ul>
+<li>La portée est un <code>SharedTransitionLayout</code> autour du <code>NavHost</code> ; elle fournit <code>SharedTransitionScope</code> et <code>AnimatedVisibilityScope</code>.</li>
+<li><code>Modifier.sharedElement(rememberSharedContentState(id), …)</code> sur le contenu ; <code>sharedBounds</code> quand <code>ring</code> voyage.</li>
+<li>Arc : <code>boundsTransform</code> avec <code>ArcMode.ArcBelow</code>. Dessus du reste par <code>renderInSharedTransitionScopeOverlay</code>.</li>
+<li>Retour prédictif : le geste du système tient <code>progress</code>. <code>HapticFeedbackType.Confirm</code> à l'arrivée.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de portée ou animations coupées dans les réglages : <code>fadeIn</code> et <code>scaleIn(0.86f)</code> sur place, aucun élément partagé créé.</p>
+</div>
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<span class="d" style="font-size: 22px">Web</span></span>
+<ul>
+<li><code>view-transition-name</code> posé depuis <code>id</code>, sur les deux emplacements seulement le temps du voyage.</li>
+<li>La portée appelle <code>document.startViewTransition()</code> autour du changement de route.</li>
+<li>Arc : deux animations sur <code>::view-transition-group()</code>, l'axe horizontal en sortie douce, le vertical en entrée douce.</li>
+<li>Fiche ↔ barre : <code>animation-timeline: scroll()</code> sur <code>transform</code>, sans script.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans View Transitions ou sous <code>prefers-reduced-motion</code> : fondu enchaîné et échelle en <code>@keyframes</code>, le fondu réduit de K26. Jamais de mesure de boîte dans une boucle.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Le zoom existe déjà, pour les stories et pour les scènes</h2></header>
+<div class="card" style="display: flex; flex-direction: column; overflow: hidden">
+<div class="twin"><span class="pf">iOS · SDK</span><span class="mono">MeeshyUI/Theme/ViewModifiers.swift</span><p><span class="be">Devient le composant</span> <code>zoomTransitionNamespace</code>, <code>zoomTransitionSource(id:in:)</code>, <code>zoomTransitionDestination(sourceID:in:)</code> : la portée dans l'environnement, la paire source et destination, le repli sans effet avant iOS 18. Il lui manque la taille, l'arc et les emplacements.</p></div>
+<div class="twin"><span class="pf">iOS · app</span><span class="mono">Features/Stories/Views/StoryTrayView.swift</span><p>Quatre sources posées sur les bulles du rail, lues depuis l'environnement. Premier écran rebranché.</p></div>
+<div class="twin"><span class="pf">iOS · app</span><span class="mono">Features/Main/Views/SceneZoomTransition.swift</span><p>« Quelle source zoome, et quand » : la règle reste à l'app, K29 n'en reprend que la forme.</p></div>
+<div class="twin"><span class="pf">iOS · app</span><span class="mono">Features/Call/Views/GroupCallStageView.swift</span><p><code>sharingGeometry(of:)</code> : un <code>matchedGeometryEffect</code> par identité, coupé sous mouvement réduit. La branche « même hiérarchie » de la recette.</p></div>
+<div class="twin"><span class="pf">iOS · SDK</span><span class="mono">MeeshyUI/Notifications/NotificationToastView.swift</span><p><code>BannerToConversationMorph</code> : une enveloppe peinte par la racine, pilotée par une seule valeur, quand deux hiérarchies ne se voient pas. C'est le calque de vol.</p></div>
+<div class="twin"><span class="pf">iOS · SDK</span><span class="mono">MeeshyUI/Primitives/MeeshyAvatar.swift</span><p>Reste où il est, inchangé : c'est le <code>content</code>. Il n'apprend rien du voyage.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">feature/feed/…/feed/SceneZoom.kt</span><p><span class="be">Devient le composant</span> <code>SceneZoomScopes</code>, <code>LocalSceneZoomScopes</code>, <code>Modifier.sceneZoom(key)</code> : les deux portées posées par la racine, <code>sharedElement</code>, sans effet si elles manquent. À sortir de <code>:feature:feed</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">feature/feed/…/feed/SceneZoomPolicy.kt</span><p>La règle de l'app, comme sur iOS : elle reste dans le fil.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">sdk-ui/…/ui/component/MeeshyAvatar.kt</span><p>Reste où il est : c'est le <code>content</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">aucun jumeau — à créer</span><p>Aucun <code>view-transition-name</code> ni <code>startViewTransition</code> dans <code>apps/web/src</code>. Le composant naît avec K29.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">components/avatar.tsx</span><p><code>Avatar</code> reste le <code>content</code>. <span class="mono" style="color: var(--ink2)">components/shared-locations-map-view.tsx</span> le dessine déjà sur la carte : l'arrivée existe.</p></div>
+</div>
+<p class="kcap" style="max-width: 900px">K29 promeut la paire source et destination du plus complet. Il ne rebranche aucun écran : stories, scènes et appels passent par un lot d'intégration, avec leurs captures. Sur iOS, l'épingle de <span class="mono">Features/Contacts/SharedLocationsMapSection.swift</span> est encore un marqueur système : l'arrivée « épingle » attend K36.</p>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre voyages qui n'ont rien d'un profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell cell" style="--accent:#FF6B6B">
+<div class="cv" style="gap: 14px">
+<div class="fr" style="width: 104px; height: 152px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px"><span class="ring" style="padding: 4px"><span class="av" style="width: 60px; height: 60px; font-size: 21px">MO</span></span><span style="font-size: 11.5px; font-weight: 600; color: var(--ink2)">Mina</span></div>
+<span style="display: flex; color: var(--ink3)">[[ic:arrow-right s]]</span>
+<div class="fr" style="width: 104px; height: 152px"><div class="ph" style="position: absolute; inset: 0; border: 0; border-radius: 0">story</div><span style="position: absolute; left: 8px; right: 8px; top: 8px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.3)"><i style="display: block; width: 40%; height: 100%; border-radius: 2px; background: #fff"></i></span><span class="av" style="position: absolute; left: 8px; top: 18px; width: 30px; height: 30px; font-size: 11px">MO</span></div>
+</div>
+<div class="cp"><b>Stories</b><span class="kcap">La bulle du rail (60, avec <code>ring</code>) devient l'auteur en tête du lecteur (30).</span></div>
+</div>
+
+<div class="kcell cell" style="--accent:#F8B500">
+<div class="cv" style="gap: 14px">
+<div class="fr" style="width: 104px; height: 152px; display: flex; flex-direction: column; justify-content: center"><div class="row" style="padding: 6px 8px; min-height: 50px; gap: 8px"><span class="av" style="width: 40px; height: 40px; font-size: 14px">TR</span><span class="sk" style="flex: 1; height: 8px; animation: none"></span></div><div class="row" style="padding: 6px 8px; min-height: 50px; gap: 8px; opacity: .4"><span class="av" style="--accent:#3498DB; width: 40px; height: 40px; font-size: 14px">YT</span><span class="sk" style="flex: 1; height: 8px; animation: none"></span></div></div>
+<span style="display: flex; color: var(--ink3)">[[ic:arrow-right s]]</span>
+<div class="fr" style="width: 104px; height: 152px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px"><div class="glass" style="display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 6px; border-radius: 999px; box-shadow: none"><span class="av" style="width: 28px; height: 28px; font-size: 10px">TR</span><span class="sk" style="flex: 1; height: 7px; animation: none"></span></div><span class="tonal" style="align-self: flex-start; width: 62px; height: 24px; border-radius: 12px"></span><span style="align-self: flex-end; width: 54px; height: 24px; border-radius: 12px; background: var(--brand-fill)"></span><span class="tonal" style="align-self: flex-start; width: 46px; height: 24px; border-radius: 12px"></span></div>
+</div>
+<div class="cp"><b>Conversation</b><span class="kcap">La pastille de la ligne (44) glisse dans l'en-tête du fil (36). Retour : elle rentre.</span></div>
+</div>
+
+<div class="kcell cell" style="--accent:#3498DB">
+<div class="cv" style="gap: 14px">
+<div class="fr" style="width: 104px; height: 152px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 8px; align-content: center"><span class="tonal" style="height: 62px; border-radius: 12px; display: flex; align-items: center; justify-content: center"><span class="av" style="width: 30px; height: 30px; font-size: 11px">YT</span></span><span class="tonal" style="height: 62px; border-radius: 12px; display: flex; align-items: center; justify-content: center"><span class="av" style="--accent:#9B59B6; width: 30px; height: 30px; font-size: 11px">KM</span></span><span class="tonal" style="height: 62px; border-radius: 12px; display: flex; align-items: center; justify-content: center"><span class="av" style="--accent:#FF6B6B; width: 30px; height: 30px; font-size: 11px">MO</span></span><span class="tonal" style="height: 62px; border-radius: 12px; display: flex; align-items: center; justify-content: center"><span class="av" style="--accent:#4ECDC4; width: 30px; height: 30px; font-size: 11px">LM</span></span></div>
+<span style="display: flex; color: var(--ink3)">[[ic:arrow-right s]]</span>
+<div class="fr" style="width: 104px; height: 152px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px"><span class="av" style="width: 64px; height: 64px; font-size: 23px; box-shadow: 0 0 0 3px var(--ground), 0 0 0 5px var(--ok)">YT</span><span class="wave" style="height: 18px"><i style="height: 18px"></i><i style="height: 18px"></i><i style="height: 18px"></i><i style="height: 18px"></i><i style="height: 18px"></i></span></div>
+</div>
+<div class="cp"><b>Appel de groupe</b><span class="kcap">Qui prend la parole passe de la grille (30) à la une (64), <code>path: straight</code>.</span></div>
+</div>
+
+<div class="kcell cell" style="--accent:#9B59B6">
+<div class="cv" style="gap: 14px">
+<div class="fr" style="width: 104px; height: 152px; padding: 8px 6px"><div class="glass" style="display: flex; align-items: center; gap: 6px; height: 46px; padding: 0 8px; border-radius: 16px; box-shadow: none"><span class="av" style="width: 28px; height: 28px; font-size: 10px">KM</span><span style="flex: 1; display: flex; flex-direction: column; gap: 5px"><span class="sk" style="height: 6px; animation: none"></span><span class="sk" style="height: 6px; width: 70%; animation: none"></span></span></div></div>
+<span style="display: flex; color: var(--ink3)">[[ic:arrow-right s]]</span>
+<div class="fr" style="width: 104px; height: 152px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px"><div class="glass" style="display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 6px; border-radius: 999px; box-shadow: none"><span class="av" style="width: 28px; height: 28px; font-size: 10px">KM</span><span class="sk" style="flex: 1; height: 7px; animation: none"></span></div><span class="tonal" style="align-self: flex-start; width: 70px; height: 34px; border-radius: 12px; display: flex; align-items: center; justify-content: center"><span class="wave" style="height: 14px; gap: 2px"><i style="height: 14px; width: 2px"></i><i style="height: 14px; width: 2px"></i><i style="height: 14px; width: 2px"></i><i style="height: 14px; width: 2px"></i></span></span></div>
+</div>
+<div class="cp"><b>Bannière de notification</b><span class="kcap">L'avatar de la bannière se range dans l'en-tête de la conversation qu'elle ouvre.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="wit">[[ic:seal-check]]<span><b>Un seul.</b> À chaque image du voyage, un avatar et un seul est visible pour un <code>id</code> : jamais zéro, jamais deux.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Pour chaque paire de jalons × trajet × portée × mouvement réduit, mode, durée, flèche et opacités sont ceux des vecteurs, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Empreinte.</b> La ligne de départ garde sa hauteur et ses voisins leur place, avant, pendant et après.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Interruption.</b> Un retour à mi-vol repart de la position courante ; l'avatar finit à sa ligne, <code>badge</code> revenu.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Repli.</b> Sans portée, sous mouvement réduit ou sans capacité : aucun élément partagé créé, fondu réduit de K26 (160 ms), même état final.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Lecteur d'écran.</b> Le calque de vol est masqué. Nom, rôle et valeur sont ceux du <code>content</code> à l'arrivée, annoncés une fois.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et sens.</b> La cible de l'hôte reste de 44 pendant et après ; en RTL, l'arc se reflète et <code>badge</code> suit le bord de fin.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Voisins.</b> Le voyage ne re-rend ni la liste ni la fiche : zéro recomposition comptée hors des deux emplacements.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Pureté.</b> Garde de source : aucun type du domaine, aucun singleton, aucune navigation dans les fichiers de K29.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le voyage est un décor de transition : il n'a ni nom ni rôle et ne retient jamais le focus. Le focus va au titre de l'écran d'arrivée, comme sans K29.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Une transformation et une opacité sur un calque : ni flou, ni ombre recalculée, ni mise en page pendant le vol. 120 images par seconde ; rien de retenu une fois posé.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":6499}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

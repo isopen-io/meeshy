@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K47 MeeshyChoiceTiles</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:120px;gap:16px}
+.tile{--fam:var(--accent);position:relative;display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:24px;background:var(--field);border:1px solid var(--line);text-align:left;min-width:0;transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
+.tile>.pa{display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:16px;flex:none;color:color-mix(in oklab,var(--fam) 70%,#fff);background:color-mix(in oklab,var(--fam) 24%,transparent)}
+.mx[data-theme=light] .tile>.pa{color:var(--fam)}
+.tile b{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;font-size:16.5px;line-height:1.15;color:var(--ink)}
+.tile small{font-size:12.5px;line-height:1.35;color:var(--ink2)}
+.tile>.tx{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.tile>.car{display:inline-flex;color:var(--ink3)}
+.mx .tile.sel{border:2px solid var(--fam);padding:15px;background:linear-gradient(160deg,color-mix(in oklab,var(--fam) 22%,var(--field)),var(--field) 75%);box-shadow:0 14px 30px color-mix(in oklab,var(--fam) 28%,transparent)}
+.tile.wd{flex-direction:row;align-items:center;gap:14px}
+.tile.cpt{flex-direction:row;align-items:center;gap:10px;min-height:68px;padding:11px 10px;border-radius:22px}
+.tile.cpt>.pa{width:44px;height:44px;border-radius:15px}
+.tile.cpt b{flex:1;min-width:0;font-size:14.5px}
+.mx .tile.cpt.sel{padding:10px 9px}
+.tile.val{justify-content:flex-end;gap:2px;min-height:132px;padding:14px 12px;border-width:1.5px}
+.tile.val>.n{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;letter-spacing:-.015em;font-size:40px;line-height:1;color:var(--ink2)}
+.tile.val>.u{font-size:14px;font-weight:700;color:var(--ink2)}
+.mx .tile.val.sel{padding:13.5px 11.5px;background:color-mix(in oklab,var(--fam) 16%,var(--field));box-shadow:0 10px 26px color-mix(in oklab,var(--fam) 28%,transparent)}
+.tile.val.sel>.n,.tile.val.sel>.u{color:var(--ink)}
+.tile.gl{align-items:flex-start;justify-content:flex-end;gap:8px;min-height:124px;padding:12px 10px 12px 12px;border-radius:22px;border:1.5px solid var(--glass-line);background:rgba(255,255,255,.06);-webkit-backdrop-filter:blur(26px) saturate(1.8);backdrop-filter:blur(26px) saturate(1.8)}
+.tile.gl>b{font-family:Inter,system-ui,sans-serif;font-size:13.5px;font-weight:700;line-height:1.2;text-wrap:balance}
+.tile.gl>small{font-size:11px;font-weight:600;line-height:1.2}
+.tile.gl>.gy{display:inline-flex;color:var(--ink)}
+.mx .tile.gl.sel{border:1.5px solid var(--accent-ink);padding:12px 10px 12px 12px;background:rgba(168,85,247,.26);box-shadow:none}
+.tile.gl.sel>.gy{color:var(--accent-ink)}
+.ck{position:absolute;right:10px;top:10px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--fam);color:#0B0B12}
+.mx[data-theme=light] .tile{--fam:var(--accent-ink)}
+.mx[data-theme=light] .ck{color:#fff}
+.mx .ck.un{background:transparent;border:1.5px solid var(--ink3)}
+.mx .ck.lock{background:var(--field);color:var(--ink2)}
+.tile.cpt>.ck{right:-7px;top:-7px;box-shadow:0 0 0 3px var(--cutc,var(--ground))}
+.mx .tile.lkd{border:1.5px dashed var(--line);background:transparent}
+.tile.lkd b,.tile.lkd>.u{color:var(--ink2)}
+.tile.lkd>.pa{background:transparent;border:1.5px dashed var(--line);color:var(--ink3)}
+.tile .key{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;line-height:1.2;color:var(--accent-ink)}
+.tile.pr{transform:scale(.96);background:color-mix(in oklab,var(--ink2) 13%,var(--field))}
+.tile.fo{outline:2px solid var(--ink);outline-offset:3px}
+.tile.off{opacity:.4}
+.pick{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.pick>b{display:flex;align-items:center;justify-content:center;width:54px;height:54px;border-radius:50%;background:var(--field);border:1px solid var(--line);color:var(--ink2)}
+.pick>span{font-size:11.5px;font-weight:600;color:var(--ink3)}
+.pick.on>b{background:var(--ink);color:var(--ground);border-color:transparent;box-shadow:0 0 0 4px rgba(238,242,255,.16)}
+.pick.on>span{color:var(--ink)}
+.grp{display:grid;gap:10px;width:342px;max-width:100%}
+.say{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.gbk{position:relative;overflow:hidden;border-radius:26px;padding:16px;background:linear-gradient(150deg,#4C1D95,#1E1B4B 55%,#0F3D3A);display:flex;flex-direction:column;gap:12px}
+.rule{display:flex;flex-direction:column;gap:12px;flex:1;min-width:0}
+.rule>span{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;font-weight:700;color:var(--ink2)}
+.rule>small{font-size:12px;color:var(--ink3);line-height:1.4}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.pit{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:26px 20px;border-radius:22px;background:var(--raised);border:1px solid var(--line);flex:1;min-width:0}
+.swap{display:inline-grid}
+.swap>*{grid-area:1/1}
+.tap{position:absolute;left:50%;top:58%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(238,242,255,.5);opacity:0;pointer-events:none}
+.mx .tile.lv{border:2px solid var(--line);padding:13.5px 11.5px}
+.lv.a{animation:kcSelA 6s ease-in-out infinite}
+.lv.b{animation:kcSelB 6s ease-in-out infinite}
+.lv.a>.n,.lv.a>.u{animation:kcInkA 6s ease-in-out infinite}
+.lv.b>.n,.lv.b>.u{animation:kcInkB 6s ease-in-out infinite}
+.lv.a>.ck{animation:kcCkA 6s cubic-bezier(.3,1.6,.5,1) infinite}
+.lv.b>.ck{animation:kcCkB 6s cubic-bezier(.3,1.6,.5,1) infinite}
+.lv.a>.tap{animation:kcTapA 6s ease-out infinite}
+.lv.b>.tap{animation:kcTapB 6s ease-out infinite}
+.sy-a{animation:kcSayA 6s ease-in-out infinite}
+.sy-b{animation:kcSayB 6s ease-in-out infinite}
+.mx .tile.gl.mu{animation:kcMul 6s ease-in-out infinite}
+.mu>.ck.on{animation:kcMulOn 6s cubic-bezier(.3,1.6,.5,1) infinite}
+.mu>.ck.un{animation:kcMulUn 6s ease-in-out infinite}
+.mu>.tap{animation:kcMulTap 6s ease-out infinite}
+.sy-1{animation:kcMulUn 6s ease-in-out infinite}
+.sy-2{animation:kcMulSay 6s ease-in-out infinite}
+@keyframes kcSelA{0%,42%,96%,100%{border-color:var(--fam);background:color-mix(in oklab,var(--fam) 16%,var(--field));box-shadow:0 10px 26px color-mix(in oklab,var(--fam) 28%,transparent);transform:none}46%,90%{border-color:var(--line);background:var(--field);box-shadow:0 0 0 transparent;transform:none}93%{transform:scale(.95)}}
+@keyframes kcSelB{0%,40%,96%,100%{border-color:var(--line);background:var(--field);box-shadow:0 0 0 transparent;transform:none}43%{transform:scale(.95)}46%,90%{border-color:var(--fam);background:color-mix(in oklab,var(--fam) 16%,var(--field));box-shadow:0 10px 26px color-mix(in oklab,var(--fam) 28%,transparent);transform:none}}
+@keyframes kcInkA{0%,42%,96%,100%{color:var(--ink)}46%,90%{color:var(--ink2)}}
+@keyframes kcInkB{0%,42%,96%,100%{color:var(--ink2)}46%,90%{color:var(--ink)}}
+@keyframes kcCkA{0%,42%{opacity:1;transform:none}46%,93%{opacity:0;transform:scale(.3)}96%{opacity:1;transform:scale(1.28)}100%{opacity:1;transform:none}}
+@keyframes kcCkB{0%,43%{opacity:0;transform:scale(.3)}47%{opacity:1;transform:scale(1.28)}51%,90%{opacity:1;transform:none}94%,100%{opacity:0;transform:scale(.3)}}
+@keyframes kcTapA{0%,88%{opacity:0;transform:scale(.6)}92%{opacity:.5;transform:scale(1)}98%,100%{opacity:0;transform:scale(1.6)}}
+@keyframes kcTapB{0%,38%{opacity:0;transform:scale(.6)}42%{opacity:.5;transform:scale(1)}48%,100%{opacity:0;transform:scale(1.6)}}
+@keyframes kcSayA{0%,42%,96%,100%{opacity:1}46%,92%{opacity:0}}
+@keyframes kcSayB{0%,42%,96%,100%{opacity:0}46%,92%{opacity:1}}
+@keyframes kcMul{0%,24%,80%,100%{border-color:var(--glass-line);background-color:rgba(255,255,255,.06);transform:none}27%,77%{transform:scale(.95)}30%,74%{border-color:var(--accent-ink);background-color:rgba(168,85,247,.26);transform:none}}
+@keyframes kcMulOn{0%,27%{opacity:0;transform:scale(.3)}31%{opacity:1;transform:scale(1.28)}35%,74%{opacity:1;transform:none}78%,100%{opacity:0;transform:scale(.3)}}
+@keyframes kcMulUn{0%,27%,80%,100%{opacity:1}31%,76%{opacity:0}}
+@keyframes kcMulSay{0%,27%,80%,100%{opacity:0}31%,76%{opacity:1}}
+@keyframes kcMulTap{0%,22%{opacity:0;transform:scale(.6)}26%{opacity:.45;transform:scale(1)}32%,72%{opacity:0;transform:scale(1.6)}76%{opacity:.45;transform:scale(1)}82%,100%{opacity:0;transform:scale(1.6)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #6366F1; opacity: .24"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #A855F7; opacity: .16; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K47 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyChoiceTiles</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Choisir parmi quelques options qui méritent d'être expliquées se fait sur des tuiles, une ou plusieurs à la fois</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">Le type d'un lien, la durée d'un partage, ce qu'on donne sans contact, l'icône d'une adresse. Le profil dessine cette grille six fois, avec cinq classes et trois coches. K47 en fait une seule : une tuile, une marque de sélection, une grille de colonnes égales.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il explique chaque option, puis il marque le choix</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Range <b>deux à huit</b> options dans une grille de 2, 3 ou 4 colonnes égales. Chaque tuile a une tête, un titre et, au besoin, une phrase.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Marque le choix par <b>trois signes à la fois</b> : un bord de 2 px, un fond teinté, une coche en pastille de coin. Jamais la couleur seule.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Tient <b>deux régimes</b> : un seul choix (rôle radio) ou plusieurs (rôle case à cocher), avec le compte dit à la voix.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Montre une option <b>fermée</b> sans la cacher : bord pointillé, cadenas, et ce qui l'ouvre.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Un aperçu peint par l'hôte (fond d'écran, cadre, réel) : c'est la bande de vignettes <b>K19</b> <code>MeeshyTileStrip</code>. Une couleur : <b>K07</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Un choix court, sans explication (24 h, 7 j, 30 j) : les puces <b>K04</b>. Deux à quatre faces d'un même écran : <b>K03</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre de la tuile : demandé à <b>K01</b>. Le médaillon de tête : <b>K45</b>. La pastille de la coche : <b>K41</b>. Le cadenas et sa clé : la décoration de <b>K37</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Valider le choix, ouvrir l'étape suivante, dire pourquoi une option est fermée : <b>l'app</b>. Lancer une action : <b>K32</b> ou <b>K40</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; flex: none; background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-ink)">[[ic:squares-four l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : une tuile choisit, elle ne déclenche rien</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Toucher une tuile change une valeur et rien d'autre. La suite appartient au bouton de l'écran (« Créer le lien », « Donner », « Partager »). Une grille de tuiles qui lancent chacune une action est une grille d'actions : K32.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une tête, un titre, une phrase, une marque</h2><p>La tuile carrée de Lien-Creer, choisie, agrandie deux fois. En dessous, à taille réelle, la tuile large et deux tuiles compactes dans leur grille. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="padding: 40px 40px 30px; flex-direction: column; gap: 30px">
+<div style="position: relative; width: 360px">
+<div style="zoom: 2; width: 180px"><div class="tile sel" style="--fam: var(--l-share)">
+<span class="pa">[[ic:chats-circle-fill]]</span>
+<span class="ck">[[ic:check-fat-fill s]]</span>
+<b>Une conversation</b>
+<small>Fais entrer des invités, même sans compte</small>
+</div></div>
+<span class="kan" style="left: -11px; top: 286px">1</span>
+<span class="kan" style="left: 112px; top: 18px">2</span>
+<span class="kan" style="left: 326px; top: 150px">3</span>
+<span class="kan" style="left: -11px; top: 216px">4</span>
+<span class="kan" style="left: 190px; top: -11px">5</span>
+<span class="kan" style="left: 334px; top: 60px">6</span>
+</div>
+<div style="position: relative; align-self: stretch; padding-top: 26px; border-top: 1.5px dashed var(--line)">
+<div class="grp" style="grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; --cutc: var(--raised)">
+<div class="tile wd" style="--fam: var(--accent-ink); grid-column: 1 / -1"><span class="pa">[[ic:user-focus]]</span><span class="tx"><b>Mon profil</b><small>Ta vitrine publique, avec QR</small></span><span class="car">[[ic:caret-right s]]</span></div>
+<div class="tile cpt sel" style="--fam: var(--brand-soft)"><span class="pa">[[ic:film-reel-fill]]</span><b>Un réel</b><span class="ck">[[ic:check-fat-fill s]]</span></div>
+<div class="tile cpt" style="--fam: var(--l-track)"><span class="pa">[[ic:circle-notch]]</span><b>Une story</b></div>
+</div>
+<span class="kan" style="right: 36px; top: 40px">7</span>
+<span class="kan" style="left: calc(50% - 11px); bottom: 23px">8</span>
+</div>
+</div>
+<div class="card" style="padding: 26px; align-self: start">
+<div class="lgd">
+<span class="kan">1</span><div><b>Surface</b><span>Rayon 24 (22 en compact), marge 16, fond <code>field</code>, bord 1 px <code>line</code>. Tonale par défaut ; en <code>glass</code>, la matière vient de K01. Jeton <code>choice.radius</code>.</span></div>
+<span class="kan">2</span><div><b>Tête</b><span>Un médaillon K45 de 46, carré arrondi à 16, teinté à 24 %. Ou une valeur en Nunito 800 de 40 avec son unité de 14. Ou un glyphe seul de 28.</span></div>
+<span class="kan">3</span><div><b>Titre</b><span>Nunito 800 de 16,5 (14,5 en compact), encre <code>ink</code>, deux lignes au plus. C'est le nom dit de l'option.</span></div>
+<span class="kan">4</span><div><b>Description</b><span>Optionnelle. Inter 12,5, encre <code>ink2</code>, trois lignes au plus. Elle est l'aide dite, jamais le nom.</span></div>
+<span class="kan">5</span><div><b>Marque de sélection</b><span>Bord 2 px à la teinte, marge réduite d'un pixel pour que rien ne bouge, fond dégradé de la teinte à 22 % vers <code>field</code>, ombre 14/30 à 28 %.</span></div>
+<span class="kan">6</span><div><b>Coche</b><span>Pastille K41 de 24, aplat de la teinte, glyphe sombre de 16, à 10 du coin haut de fin. En compact elle chevauche le coin de 7, détourée de 3.</span></div>
+<span class="kan">7</span><div><b>Chevron</b><span>Emplacement de fin de la tuile large seulement. 16 px, encre <code>ink3</code>. Il dit que l'option a une suite ; il ne se touche pas seul.</span></div>
+<span class="kan">8</span><div style="border-bottom: 0; padding-bottom: 0"><b>Grille</b><span>2, 3 ou 4 colonnes égales, gouttière 10 (8 sur verre). Les tuiles d'une ligne ont la même hauteur. Une tuile large prend la ligne entière.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois contenus, deux régimes, trois formats, deux surfaces</h2><p>Tout est à taille réelle, dans la largeur de 342 px qu'un téléphone laisse à la grille. Les spécimens sont ceux des écrans du profil : mêmes mots, mêmes glyphes, mêmes mesures.</p></header>
+
+<span class="tag">Contenus</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="grp" role="radiogroup" aria-label="Type de lien" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+<button class="tile wd" role="radio" aria-checked="false" style="--fam: var(--accent-ink); grid-column: 1 / -1"><span class="pa">[[ic:user-focus]]</span><span class="tx"><b>Mon profil</b><small>Ta vitrine publique, avec QR</small></span><span class="car">[[ic:caret-right s]]</span></button>
+<button class="tile sel" role="radio" aria-checked="true" style="--fam: var(--l-share)"><span class="pa">[[ic:chats-circle-fill]]</span><span class="ck">[[ic:check-fat-fill s]]</span><b>Une conversation</b><small>Fais entrer des invités, même sans compte</small></button>
+<button class="tile" role="radio" aria-checked="false" style="--fam: var(--l-track)"><span class="pa">[[ic:cursor-click]]</span><b>Un contenu à suivre</b><small>publication, réel, story, statut ou adresse</small></button>
+<button class="tile" role="radio" aria-checked="false" style="--fam: var(--l-comm)"><span class="pa">[[ic:users-four]]</span><b>Une communauté</b><small>Ouvre la porte à de nouveaux membres</small></button>
+<button class="tile" role="radio" aria-checked="false" style="--fam: var(--l-aff)"><span class="pa">[[ic:gift]]</span><b>Un parrainage</b><small>Ton code, ton QR, tes filleuls</small></button>
+</div>
+</div>
+<div class="cp"><b>option</b><span class="kcap">Médaillon, titre, phrase. Chaque tuile peut recevoir sa teinte : ici la famille du lien (Lien-Creer, Web-Lien).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; gap: 26px">
+<div class="grp" role="radiogroup" aria-label="Durée du partage" style="grid-template-columns: repeat(3, minmax(0, 1fr))">
+<button class="tile val sel" role="radio" aria-checked="true"><span class="ck">[[ic:check-fat-fill s]]</span><span class="n">1</span><span class="u">heure</span></button>
+<button class="tile val" role="radio" aria-checked="false"><span class="n">8</span><span class="u">heures</span></button>
+<button class="tile val lkd" role="radio" aria-checked="false" aria-disabled="true"><span style="position: absolute; left: 12px; top: 12px; display: inline-flex; color: var(--ink3)">[[ic:infinity l]]</span><span class="ck lock">[[ic:lock-simple s]]</span><span style="font-size: 12.5px; font-weight: 700; line-height: 1.25; color: var(--ink3)">Jusqu'à ce que j'arrête</span><span class="key" style="margin-top: 5px">Sang seulement</span></button>
+</div>
+<div class="grp" role="radiogroup" aria-label="Rappel" style="grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; --fam: var(--info)">
+<button class="tile val" role="radio" aria-checked="false" style="min-height: 96px"><span class="n" style="font-size: 30px">15</span><span class="u" style="font-size: 13px">min</span></button>
+<button class="tile val" role="radio" aria-checked="false" style="min-height: 96px"><span class="n" style="font-size: 30px">1</span><span class="u" style="font-size: 13px">heure</span></button>
+<button class="tile val sel" role="radio" aria-checked="true" style="min-height: 96px; --fam: var(--info)"><span class="ck">[[ic:check-fat-fill s]]</span><span class="n" style="font-size: 30px">4</span><span class="u" style="font-size: 13px">heures</span></button>
+<button class="tile val" role="radio" aria-checked="false" style="min-height: 96px"><span class="n" style="font-size: 30px">1</span><span class="u" style="font-size: 13px">jour</span></button>
+</div>
+</div>
+<div class="cp"><b>value</b><span class="kcap">La tête est un chiffre de 40 et son unité : trois colonnes, hauteur 132, bord de 1,5 (Carte-Partage, « Pendant »). En quatre colonnes, le chiffre descend à 30.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="grp" role="radiogroup" aria-label="Icône de l'adresse" style="grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 4px">
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:globe-hemisphere-west]]</b><span>Site</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:vinyl-record]]</b><span>Musique</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:camera]]</b><span>Photos</span></button>
+<button class="pick on" role="radio" aria-checked="true"><b>[[ic:film-reel-fill]]</b><span>Vidéos</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:storefront]]</b><span>Boutique</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:envelope-simple]]</b><span>Contact</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:calendar-blank]]</b><span>Agenda</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:heart]]</b><span>Favori</span></button>
+</div>
+</div>
+<div class="cp"><b>icon</b><span class="kcap">Un disque de 54 à glyphe, libellé dessous. Choisi : disque à l'encre, glyphe plein, halo de 4. Pas de coche : le disque inversé suffit (Mes-Adresses).</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Régimes et surfaces</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="grp" role="radiogroup" aria-label="Cible du lien de suivi" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+<button class="tile cpt" role="radio" aria-checked="false" style="--fam: var(--l-track)"><span class="pa">[[ic:image]]</span><b>Une publication</b></button>
+<button class="tile cpt sel" role="radio" aria-checked="true" style="--fam: var(--brand-soft)"><span class="pa">[[ic:film-reel-fill]]</span><b>Un réel</b><span class="ck">[[ic:check-fat-fill s]]</span></button>
+<button class="tile cpt" role="radio" aria-checked="false" style="--fam: var(--l-track)"><span class="pa">[[ic:circle-notch]]</span><b>Une story</b></button>
+<button class="tile cpt" role="radio" aria-checked="false" style="--fam: var(--l-track)"><span class="pa">[[ic:smiley]]</span><b>Un statut</b></button>
+<button class="tile cpt" role="radio" aria-checked="false" style="--fam: var(--l-track); grid-column: 1 / -1"><span class="pa">[[ic:globe-hemisphere-west]]</span><b>Une adresse externe</b><span style="font-size: 12.5px; color: var(--ink3)">Site, boutique, billetterie</span></button>
+</div>
+</div>
+<div class="cp"><b>single · tonale</b><span class="kcap">Un groupe radio : une seule tuile choisie, toujours. Toucher la tuile choisie ne la relâche pas (Lien-Suivi-Creer).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="gbk" style="width: 342px; max-width: 100%">
+<div class="orb" style="width: 160px; height: 160px; right: -40px; top: -50px; background: #A855F7; opacity: .5"></div>
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between"><span class="tag" style="color: var(--ink2)">Ce que je donne</span><span class="say">1 sur 3</span></div>
+<div class="grp" role="group" aria-label="Ce que je donne, 1 sur 3 choisi" style="position: relative; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%">
+<button class="tile gl sel" role="checkbox" aria-checked="true"><span class="ck">[[ic:check-fat-fill s]]</span><span class="gy">[[ic:user-focus l]]</span><b>Ma vitrine</b><small>Ce que voit le Public</small></button>
+<button class="tile gl" role="checkbox" aria-checked="false"><span class="ck un"></span><span class="gy">[[ic:handshake l]]</span><b>Une demande d'ami</b><small>Elle répond quand elle veut</small></button>
+<button class="tile gl lkd" role="checkbox" aria-checked="false" aria-disabled="true"><span class="ck lock">[[ic:lock-simple s]]</span><span class="gy" style="color: var(--ink3)">[[ic:phone l]]</span><b>Mon numéro</b><span class="key">Proches seulement</span></button>
+</div>
+</div>
+</div>
+<div class="cp"><b>multiple · verre</b><span class="kcap">Des cases à cocher : un rond vide attend la coche, le compte se dit. Sur une image ou une carte, la tuile demande son verre à K01 (Sans-Contact).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="grp" role="radiogroup" aria-label="Précision" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+<button class="tile sel" role="radio" aria-checked="true" style="border-radius: 28px"><span class="pa" style="border-radius: 50%">[[ic:map-pin-fill]]</span><span class="ck">[[ic:check-fat-fill s]]</span><b>Quartier</b><small>Un disque de 500 m</small></button>
+<button class="tile" role="radio" aria-checked="false" style="border-radius: 28px"><span class="pa" style="border-radius: 50%">[[ic:buildings]]</span><b>Ville</b><small>Le nom de la ville, rien d'autre</small></button>
+</div>
+</div>
+<div class="cp"><b>tonale · Android</b><span class="kcap">Sur Android la surface est tonale partout, rayon 28, médaillon rond : la matière et la forme viennent du thème, la recette ne change pas.</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Formats</span>
+<div class="kcell" style="padding: 30px 34px; align-items: flex-start; gap: 34px">
+<div class="rule" style="flex: 0 0 180px"><div class="tile" style="--fam: var(--l-comm)"><span class="pa">[[ic:users-four]]</span><b>Une communauté</b><small>Ouvre la porte à de nouveaux membres</small></div><span>square</span><small>Le défaut. Colonne de 148 au moins, hauteur naturelle, tête en haut. Deux colonnes sur téléphone.</small></div>
+<div class="rule"><div class="tile wd" style="--fam: var(--accent-ink)"><span class="pa">[[ic:user-focus]]</span><span class="tx"><b>Mon profil</b><small>Ta vitrine publique, avec QR</small></span><span class="car">[[ic:caret-right s]]</span></div><span>wide</span><small>Toute la ligne, 80 de haut, tête au bord de début, chevron possible. Pour l'option qui domine ou qui a une suite. Les huit motifs de « Signaler » sont des tuiles <code>wide</code>, une par ligne : pas des K06.</small></div>
+<div class="rule" style="flex: 0 0 230px"><div class="tile cpt" style="--fam: var(--l-track)"><span class="pa">[[ic:smiley]]</span><b>Un statut</b></div><span>compact</span><small>68 de haut, rayon 22, marge 11 et 10, titre de 14,5, pas de phrase. Quand il y a plus de quatre options.</small></div>
+<div class="rule" style="flex: 0 0 110px"><div class="tile val"><span class="n">8</span><span class="u">heures</span></div><span>value</span><small>132 de haut, trois ou quatre colonnes.</small></div>
+</div>
+
+<span class="tag" style="margin-top: 14px">États</span>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px">
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="align-items: stretch"><div class="tile" style="--fam: var(--l-share); flex: 1"><span class="pa">[[ic:chats-circle]]</span><b>Une conversation</b></div></div><div class="cp"><b>Libre</b><span class="kcap">Bord 1 px, fond <code>field</code>, glyphe au trait.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="align-items: stretch"><div class="tile sel" style="--fam: var(--l-share); flex: 1"><span class="pa">[[ic:chats-circle-fill]]</span><span class="ck">[[ic:check-fat-fill s]]</span><b>Une conversation</b></div></div><div class="cp"><b>Choisie</b><span class="kcap">Bord 2 px, fond teinté, coche, glyphe plein.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="align-items: stretch"><div class="tile pr" style="--fam: var(--l-share); flex: 1"><span class="pa">[[ic:chats-circle]]</span><b>Une conversation</b></div></div><div class="cp"><b>Pressée</b><span class="kcap">Échelle 0,96 et voile de 13 %, dès le doigt posé.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="align-items: stretch"><div class="tile fo" style="--fam: var(--l-share); flex: 1"><span class="pa">[[ic:chats-circle]]</span><b>Une conversation</b></div></div><div class="cp"><b>Focus clavier</b><span class="kcap">Anneau de 2 px à l'encre, écarté de 3. Jamais au doigt.</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="align-items: stretch"><div class="tile off" style="--fam: var(--l-share); flex: 1"><span class="pa">[[ic:chats-circle]]</span><b>Une conversation</b></div></div><div class="cp"><b>Désactivée</b><span class="kcap">Contenu à 40 %. Ni geste ni haptique ; annoncée « indisponible ».</span></div></div>
+<div class="kcell kc" style="padding: 18px"><div class="stage" style="align-items: stretch"><div class="tile lkd" style="flex: 1"><span class="pa">[[ic:chats-circle]]</span><span class="ck lock">[[ic:lock-simple s]]</span><b>Une conversation</b><span class="key">Amis seulement</span></div></div><div class="cp"><b>Verrouillée</b><span class="kcap">Bord pointillé de 1,5, cadenas, et ce qui l'ouvre : la décoration de K37.</span></div></div>
+<div class="kcell kc" style="padding: 20px; grid-column: span 2">
+<div class="stage"><div class="grp" style="grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%"><div class="tile val sel" style="min-height: 104px"><span class="ck">[[ic:check-fat-fill s]]</span><span class="n">1</span><span class="u">heure</span></div><div class="tile val" style="min-height: 104px"><span class="n">8</span><span class="u">heures</span></div></div></div>
+<div class="cp"><b>Mouvement réduit</b><span class="kcap">La coche ne saute pas : elle apparaît en fondu de 120 ms. Pas d'échelle à l'appui ; le voile reste.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden; grid-column: span 4; min-height: 0">
+<div class="mx" data-theme="light" style="display: flex; align-items: center; gap: 12px; padding: 22px 24px; flex: 1">
+<div class="tile sel" style="--fam: var(--l-share); width: 150px"><span class="pa">[[ic:chats-circle-fill]]</span><span class="ck">[[ic:check-fat-fill s]]</span><b>Une conversation</b></div>
+<div class="tile" style="--fam: var(--l-comm); width: 150px"><span class="pa">[[ic:users-four]]</span><b>Une communauté</b></div>
+<div class="tile val sel" style="width: 92px"><span class="ck">[[ic:check-fat-fill s]]</span><span class="n">1</span><span class="u">heure</span></div>
+<div class="tile val lkd" style="width: 92px"><span class="ck lock">[[ic:lock-simple s]]</span><span class="n" style="font-size: 28px; color: var(--ink3)">[[ic:infinity l]]</span><span class="key">Sang seulement</span></div>
+<div class="cp" style="margin: 0 0 0 auto; max-width: 250px"><b>Thème clair</b><span class="kcap">Mêmes parts, jetons clairs. La teinte s'assombrit, la coche passe à l'encre blanche, le bord choisi tient 3:1 sur le blanc.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">La coche saute, le voisin se relâche</h2><p>Un seul mouvement, court. La tuile touchée s'enfonce puis revient sur le ressort de <code>motion.morph</code> pendant que son bord et son fond changent ; la coche entre par <code>motion.rise</code> avec un dépassement. Dans un groupe radio, la tuile quittée perd sa marque dans le même temps, sans rebond.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div style="display: flex; gap: 20px; flex: 1">
+<div class="pit">
+<div class="grp" role="radiogroup" aria-label="Durée du partage" style="grid-template-columns: repeat(3, minmax(0, 1fr)); width: 330px">
+<div class="tile val lv a"><span class="ck">[[ic:check-fat-fill s]]</span><span class="tap"></span><span class="n">1</span><span class="u">heure</span></div>
+<div class="tile val lv b"><span class="ck">[[ic:check-fat-fill s]]</span><span class="tap"></span><span class="n">8</span><span class="u">heures</span></div>
+<div class="tile val lkd"><span style="position: absolute; left: 12px; top: 12px; display: inline-flex; color: var(--ink3)">[[ic:infinity l]]</span><span class="ck lock">[[ic:lock-simple s]]</span><span style="font-size: 12.5px; font-weight: 700; line-height: 1.25; color: var(--ink3)">Jusqu'à ce que j'arrête</span><span class="key" style="margin-top: 5px">Sang seulement</span></div>
+</div>
+<span class="say">[[ic:speaker-high s]]<span class="swap"><span class="sy-a">« 1 heure, sélectionné, 1 sur 3 »</span><span class="sy-b">« 8 heures, sélectionné, 2 sur 3 »</span></span></span>
+<b style="font-size: 14.5px">single : le choix se déplace</b>
+</div>
+<div class="pit" style="flex: 0 0 290px; padding: 16px">
+<div class="gbk" style="align-self: stretch; padding: 14px">
+<div class="orb" style="width: 130px; height: 130px; right: -40px; top: -40px; background: #A855F7; opacity: .5"></div>
+<div class="grp" role="group" aria-label="Ce que je donne" style="position: relative; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%">
+<div class="tile gl sel"><span class="ck">[[ic:check-fat-fill s]]</span><span class="gy">[[ic:user-focus l]]</span><b>Ma vitrine</b></div>
+<div class="tile gl mu"><span class="ck un"></span><span class="ck on">[[ic:check-fat-fill s]]</span><span class="tap"></span><span class="gy">[[ic:handshake l]]</span><b>Une demande d'ami</b></div>
+</div>
+</div>
+<span class="say">[[ic:speaker-high s]]<span class="swap"><span class="sy-1">« 1 sur 2 choisi »</span><span class="sy-2">« 2 sur 2 choisis »</span></span></span>
+<b style="font-size: 14.5px">multiple : la case bascule</b>
+</div>
+</div>
+<span class="spec">durée : appui 90 ms · marque 260 ms (motion.morph) · coche 320 ms (motion.rise), décalée de 60 ms · courbe : ressort de K26, dépassement de la coche à 1,28 ; le relâchement du voisin est une sortie linéaire de 160 ms · déclencheur : le doigt levé dans la tuile ; au clavier, la flèche (single) ou Espace (multiple) · haptique : sélection à la bascule ; refus léger sur une tuile verrouillée ; rien sur une tuile désactivée ou déjà choisie · mouvement réduit : ni échelle ni saut, bord, fond et coche en fondu de 120 ms</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Le doigt se pose</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="tile val pr" style="width: 92px; min-height: 92px; flex: none"><span class="n" style="font-size: 32px">8</span><span class="u">heures</span></div><span class="kcap">Échelle 0,96 et voile, en moins d'une image. Rien n'est encore choisi : glisser hors de la tuile annule.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">La coche saute</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="tile val sel" style="width: 92px; min-height: 92px; flex: none"><span class="ck" style="transform: scale(1.28)">[[ic:check-fat-fill s]]</span><span class="n" style="font-size: 32px">8</span><span class="u">heures</span></div><span class="kcap"><code>motion.morph</code> : le bord passe à 2 px, le fond se teinte. <code>motion.rise</code> : la coche entre de 0,3 à 1,28. Un tic haptique.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Le voisin se relâche</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="tile val" style="width: 92px; min-height: 92px; flex: none; opacity: .75"><span class="n" style="font-size: 32px">1</span><span class="u">heure</span></div><span class="kcap">La coche retombe à 1. L'ancienne tuile a perdu bord, fond et coche dans le même temps. Aucune tuile ne change de taille.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Une liste d'options opaques, une sélection, quatre choix fermés. Aucune signature ne nomme un lien, une durée de partage, un cercle ou une adresse : l'hôte passe des identifiants, des textes, des glyphes et une teinte.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyChoiceTiles.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-choice-tiles.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyChoiceTiles(label:items:selection:columns:…onSelect:)</code></span><span><code>MeeshyChoiceTiles(label, items, selection, onSelect, modifier, columns, …)</code></span><span><code>&lt;MeeshyChoiceTiles label items selection columns onSelect … /&gt;</code></span>
+<span><b>Tuile seule</b></span><span><code>MeeshyChoiceTile(item:isSelected:…)</code>, pour un hôte qui pose sa grille</span><span><code>MeeshyChoiceTile(item, selected, …)</code></span><span><code>&lt;MeeshyChoiceTile item selected … /&gt;</code></span>
+<span><b>Option</b></span><span><code>MeeshyChoiceItem(id:title:detail:value:unit:systemImage:tint:state:spansRow:)</code></span><span><code>data class</code> identique, <code>icon: ImageVector?</code></span><span><code>type MeeshyChoiceItem</code>, <code>glyph?: ComponentChildren</code></span>
+<span><b>Sélection</b></span><span><code>MeeshyChoiceSelection { single(String?), multiple(Set&lt;String&gt;) }</code></span><span><code>sealed interface</code> identique</span><span><code>{ single: string | null } | { multiple: ReadonlySet&lt;string&gt; }</code></span>
+<span><b>Contenu</b></span><span><code>MeeshyChoiceContent { option, value, icon }</code></span><span><code>enum class</code> identique</span><span><code>'option' | 'value' | 'icon'</code></span>
+<span><b>Format</b></span><span><code>MeeshyChoiceFormat { square, wide, compact }</code></span><span>idem</span><span><code>'square' | 'wide' | 'compact'</code></span>
+<span><b>Surface</b></span><span><code>MeeshyChoiceSurface { tonal, glass }</code> ; <code>glass</code> appelle K01</span><span>idem ; <code>glass</code> rend la surface tonale</span><span><code>'tonal' | 'glass'</code></span>
+<span><b>État d'une option</b></span><span><code>MeeshyChoiceItemState { enabled, disabled, locked(key: String) }</code></span><span><code>sealed interface</code> identique</span><span><code>'enabled' | 'disabled' | { locked: string }</code></span>
+<span><b>Emplacements</b></span><span><code>leading</code> (à la place du médaillon), <code>trailing</code> (chevron de la tuile large)</span><span><code>leading</code>, <code>trailing</code> : <code>@Composable (MeeshyChoiceItem) -&gt; Unit</code></span><span><code>leading</code>, <code>trailing</code> : fonctions de rendu</span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyChoiceTilesRecipe.resolve(content:format:surface:columns:isSelected:isPressed:state:tint:reduceMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyChoiceTilesRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyChoiceTilesRecipe(…)</code> : classes et attributs</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>label: String</code><span>Obligatoire, non vide. Le nom dit du groupe : « Type de lien ».</span></div>
+<div class="par"><code>columns: Int = 2</code><span>2, 3 ou 4. Toute autre valeur est ramenée dans la plage.</span></div>
+<div class="par"><code>content = .option</code><span>Ce que porte la tête. <code>value</code> lit <code>value</code> et <code>unit</code>, déjà formatés.</span></div>
+<div class="par"><code>format = .square</code><span><code>spansRow</code> d'une option la rend <code>wide</code> dans une grille carrée.</span></div>
+<div class="par"><code>surface = .tonal</code><span><code>glass</code> prend le ton de l'hôte : <code>tone: MeeshyGlassTone? = nil</code>.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>La teinte du groupe : l'accent ambiant. Celle d'une option prime.</span></div>
+<div class="par"><code>allowsEmpty = false</code><span>En <code>single</code> : retoucher la tuile choisie ne la relâche pas.</span></div>
+<div class="par"><code>maxSelected: Int? = nil</code><span>En <code>multiple</code> : au plafond, les tuiles libres passent en désactivées.</span></div>
+<div class="par"><code>countLabel: ((Int, Int) -&gt; String)?</code><span>En <code>multiple</code> : la phrase du compte, traduite par l'hôte.</span></div>
+<div class="par"><code>onSelect: (String) -&gt; Void</code><span>L'identifiant touché. L'hôte tient la sélection et la renvoie.</span></div>
+<div class="par"><code>onLockedTap: ((String) -&gt; Void)? = nil</code><span>Absent : la tuile verrouillée ne répond pas. Présent : l'hôte ouvre ce qui l'ouvre.</span></div>
+<div class="par"><code>haptic = .selection</code><span><code>none</code> laisse l'hôte jouer le sien.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois grilles</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Grille : <code>Grid</code> jusqu'à huit options (hauteurs de ligne égales), <code>LazyVGrid</code> au-delà.</li>
+<li>Tuile : un <code>Button</code> à <code>ButtonStyle</code> propre, qui lit <code>configuration.isPressed</code> pour l'échelle et le voile.</li>
+<li>Voix : <code>accessibilityAddTraits(.isSelected)</code> en <code>single</code>, <code>.isToggle</code> et « coché » en <code>multiple</code> ; le groupe est un conteneur nommé par <code>label</code>.</li>
+<li>Coche : <code>transition(.scale.combined(with: .opacity))</code> ; haptique par <code>sensoryFeedback(.selection, trigger:)</code>.</li>
+<li>Verre : <code>MeeshyGlassTone</code> de K01, donc <code>glassEffect</code> sur iOS 26 et le verre dessiné avant.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Très grande police : la grille descend d'une colonne, puis passe en tuiles larges empilées. <code>accessibilityReduceMotion</code> : fondu. « Différencier sans couleur » : la coche suffit déjà.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Groupe : <code>Modifier.selectableGroup()</code> ; tuile : <code>selectable(role = Role.RadioButton)</code> ou <code>toggleable(role = Role.Checkbox)</code>.</li>
+<li>Grille : lignes de <code>Row</code> à <code>weight(1f)</code> et <code>IntrinsicSize.Max</code> ; jamais de grille paresseuse dans une feuille qui défile.</li>
+<li>Marque : <code>animateColorAsState</code> pour bord et fond, <code>AnimatedVisibility(scaleIn + fadeIn)</code> pour la coche.</li>
+<li>Haptique : <code>HapticFeedbackType.SegmentTick</code> à la bascule, <code>Reject</code> sur une tuile verrouillée.</li>
+<li>Verrouillée : <code>stateDescription</code> porte la clé (« Sang seulement »), <code>disabled()</code> si l'hôte n'écoute pas.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de verre : <code>glass</code> rend la surface tonale du thème. <code>fontScale</code> 2,0 : une colonne de moins. Échelle d'animation à zéro : la marque change sans transition.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li><code>role="radiogroup"</code> et des <code>&lt;button role="radio" aria-checked&gt;</code> ; en <code>multiple</code>, <code>role="group"</code> et <code>role="checkbox"</code>.</li>
+<li>Clavier : un seul arrêt de tabulation en <code>single</code>, flèches qui déplacent le choix et suivent le sens d'écriture ; Espace bascule en <code>multiple</code>.</li>
+<li>Grille : <code>grid-template-columns: repeat(n, minmax(0, 1fr))</code>, hauteurs égales par la ligne de grille.</li>
+<li>Marque : <code>transition</code> sur <code>border-color</code>, <code>background</code> et <code>transform</code> ; <code>:active</code> pour l'appui, <code>:focus-visible</code> pour l'anneau.</li>
+<li>Verrouillée : <code>aria-disabled="true"</code> et la clé en <code>aria-description</code> ; la tuile reste dans l'ordre de lecture.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>backdrop-filter</code> : fond plein de K01. Sans <code>color-mix</code> : fond teinté pré-calculé par la recette. Largeur sous 300 px : une colonne. <code>prefers-reduced-motion</code> : aucune transition d'échelle.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">La carte à cocher existe déjà, en rangée, sur les trois plateformes</h2><p>Relevé dans le dépôt le 16 novembre 2026. Chaque plateforme a un choix exclusif correct à la voix, mais écrit en privé dans son écran. Aucune ne l'a en tuiles de grille avec une tête typographique : ce format naît en K47. Sous <span class="mono">apps/ios/Meeshy/Features/Settings</span> et <span class="mono">Auth</span>, aucune grille à sélection n'existe.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Call/Views/CallFeedbackCard.swift</span><p><span class="be">Devient le composant</span> <code>issueChip</code> dans un <code>LazyVGrid</code> à colonnes fixes : choix multiple, 44 pt de haut, deux lignes de texte, trait <code>.isSelected</code>. C'est <code>multiple</code> en <code>compact</code>. Il gagne tête, coche et état verrouillé, et monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Profile/Views/ProfileDecorSheet.swift</span><p><code>DecorTileOutline</code> : le liseré de 2 px d'une tuile choisie, écrit en vue de valeur. Il devient la marque de K47 ; les tuiles à aperçu de la feuille restent à K19.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift</span><p><code>pellet</code> : un disque de 42 à glyphe, libellé dessous, dans une grille de cinq colonnes, avec son état actif. C'est le contenu <code>icon</code>. Rebranché.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Composer/ComposerMoodSurface.swift</span><p><code>emojiCell</code> : une cellule de grille choisie par un fond à 15 % et une échelle de 1,1. Elle prend la marque commune ; le choix de l'humeur reste au composer.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/settings/…/settings/LocationSharingSettingsSection.kt</span><p><span class="be">Devient le composant</span> <code>SelectableCardGroup</code> et <code>SelectableCard</code> : <code>selectableGroup()</code>, <code>Role.RadioButton</code>, pastille d'icône de 32 teintée à 15 %, titre, coche. Privés à l'écran ; ils sortent vers <code>:sdk-ui</code> et gagnent la grille.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/conversations/…/conversations/NewConversationEncryptionSection.kt</span><p><code>EncryptionChoiceRow</code> : titre, description, <code>enabled</code> et la raison d'une option indisponible. C'est l'état verrouillé avec sa clé. Rebranché.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/settings/…/settings/MediaDownloadScreen.kt</span><p><code>PolicyRow</code>, le même choix exclusif réécrit. Avec <span class="mono">sdk-ui/…/ui/component/report/ReportReasonList.kt</span> (<code>ReasonRow</code>, glyphe et radio), deux appelants de plus.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/appearance-picker-parts.tsx</span><p><span class="be">Devient le composant</span> <code>ChoiceGroup</code> : <code>role="radiogroup"</code>, un seul arrêt de tabulation, flèches par <code>arrowTarget</code> qui suivent le sens d'écriture, cible de 44, bord de 2 px à l'accent. Il gagne le contenu de tuile et le régime multiple.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/game-atmosphere-choice.tsx</span><p>Des tuiles larges <code>role="radio"</code> de 64 de haut, contour de 2 px quand elles sont choisies, titre et ligne de détail. Rebranchées en <code>wide</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/appearance-picker-sections.tsx</span><p><span class="no">Reste à K19</span> Ses vignettes peignent un fond ou un design : un aperçu, pas une explication. Elles gardent <code>ChoiceGroup</code> par K47 pour le clavier, et K19 pour le dessin.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: stretch">
+<div class="grp" role="radiogroup" aria-label="Type de conversation" style="grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 8px">
+<button class="tile sel" role="radio" aria-checked="true" style="--fam: var(--brand-soft); padding: 13px"><span class="pa">[[ic:chat-circle-fill]]</span><span class="ck">[[ic:check-fat-fill s]]</span><b style="font-size: 15px">Directe</b><small>Toi et une personne</small></button>
+<button class="tile" role="radio" aria-checked="false" style="--fam: var(--ok); padding: 14px"><span class="pa">[[ic:users-three]]</span><b style="font-size: 15px">Groupe</b><small>Jusqu'à 256 membres</small></button>
+<button class="tile wd" role="radio" aria-checked="false" style="--fam: var(--warn); grid-column: 1 / -1; padding: 12px 14px"><span class="pa">[[ic:megaphone-simple]]</span><span class="tx"><b style="font-size: 15px">Diffusion</b><small>Toi seule écris</small></span></button>
+</div>
+</div>
+<div class="cp"><b>Nouvelle conversation</b><span class="kcap">Le type, avant les membres : <code>option</code>, deux colonnes et une tuile large.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="align-items: stretch">
+<div class="grp" role="radiogroup" aria-label="Durée des messages éphémères" style="grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; gap: 8px">
+<button class="tile val" role="radio" aria-checked="false" style="min-height: 112px"><span class="n" style="font-size: 34px">24</span><span class="u">heures</span></button>
+<button class="tile val sel" role="radio" aria-checked="true" style="min-height: 112px; --fam: var(--info)"><span class="ck">[[ic:check-fat-fill s]]</span><span class="n" style="font-size: 34px">7</span><span class="u">jours</span></button>
+<button class="tile val" role="radio" aria-checked="false" style="min-height: 112px"><span class="n" style="font-size: 34px">90</span><span class="u">jours</span></button>
+</div>
+</div>
+<div class="cp"><b>Messages éphémères</b><span class="kcap">La durée se lit en chiffre : <code>value</code>, trois colonnes, dans les détails d'une conversation.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 10px">
+<div class="grp" role="group" aria-label="Ce qui n'allait pas, 2 choisis" style="grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 12px 10px">
+<button class="tile cpt sel" role="checkbox" aria-checked="true" style="--fam: var(--warn); min-height: 56px"><b style="font-size: 13.5px; padding-left: 4px">Son haché</b><span class="ck">[[ic:check-fat-fill s]]</span></button>
+<button class="tile cpt" role="checkbox" aria-checked="false" style="min-height: 56px"><b style="font-size: 13.5px; padding-left: 4px">Écho</b></button>
+<button class="tile cpt" role="checkbox" aria-checked="false" style="min-height: 56px"><b style="font-size: 13.5px; padding-left: 4px">Image figée</b></button>
+<button class="tile cpt sel" role="checkbox" aria-checked="true" style="--fam: var(--warn); min-height: 56px"><b style="font-size: 13.5px; padding-left: 4px">Coupure</b><span class="ck">[[ic:check-fat-fill s]]</span></button>
+</div>
+<span class="say" style="align-self: flex-end">2 choisis</span>
+</div>
+<div class="cp"><b>Retour d'appel</b><span class="kcap">Les motifs se cumulent : <code>multiple</code> en <code>compact</code>, sans tête, compte dit.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="grp" role="radiogroup" aria-label="Thème" style="grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; gap: 4px">
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:sun]]</b><span>Clair</span></button>
+<button class="pick on" role="radio" aria-checked="true"><b>[[ic:moon-fill]]</b><span>Sombre</span></button>
+<button class="pick" role="radio" aria-checked="false"><b>[[ic:circle-half]]</b><span>Système</span></button>
+</div>
+</div>
+<div class="cp"><b>Réglages · apparence</b><span class="kcap">Trois options qu'un glyphe suffit à dire : <code>icon</code>, libellé dessous.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Régimes.</b> En <code>single</code>, toucher une tuile libre rend son identifiant une fois et une seule tuile reste choisie ; retoucher la choisie ne rend rien. En <code>multiple</code>, chaque touche bascule ; au plafond <code>maxSelected</code>, les libres ne répondent plus.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque contenu × format × surface × état rend les valeurs du tableau : rayon, marge, bord, fond, taille de tête. Vecteurs <code>K47-MeeshyChoiceTiles.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Le groupe porte <code>label</code>. Une tuile dit son titre, son rôle (radio ou case à cocher), son état, sa description en aide et « 2 sur 5 ». En <code>multiple</code>, le compte est annoncé à chaque bascule.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Verrouillée et désactivée.</b> Une tuile verrouillée reste lisible à la voix avec sa clé, ne se choisit jamais, et rend <code>onLockedTap</code> s'il existe. Une désactivée n'émet ni geste ni haptique.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Toute tuile fait 44 pt au moins dans ses deux dimensions, en quatre colonnes comprises. Le bord choisi tient 3:1 sur la surface, le titre 4,5:1 sur le fond teinté, clair et sombre. La couleur n'est jamais le seul signe.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Clavier, RTL, mouvement réduit.</b> Un seul arrêt de tabulation en <code>single</code>, flèches inversées en arabe, coche et chevron au bord de fin. Sans mouvement : aucune échelle, fondu de 120 ms.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Choisir une tuile ne change la taille d'aucune : le bord de 2 px est compensé par la marge, les hauteurs de ligne sont figées. Seules la tuile quittée et la tuile choisie se re-peignent. Garde de source : aucun type du domaine, aucun singleton, aucune couleur ni rayon hors de <code>MeeshyChoiceTilesRecipe</code>, le verre par K01 seulement. Non-régression : le retour d'appel, le partage de position et le choix d'apparence gardent leurs instantanés.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le choix se lit sans la couleur : bord, fond et coche. La tête est décorative, le titre parle. Très grande police : une colonne de moins, puis des tuiles larges ; aucun texte n'est tronqué avant trois lignes.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Huit tuiles au plus : rien de paresseux, aucune mesure différée. La bascule anime l'opacité, la transformation et deux couleurs. Sur verre, un seul flou pour le groupe, demandé à K01.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8817}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

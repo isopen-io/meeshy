@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K40 MeeshyButton</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:150px}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.leo{--accent:#4ECDC4;--accent-ink:#7FE3DC}
+.mx[data-theme=light].leo{--accent-ink:#0F766E}
+.mx .btn.t{background:color-mix(in oklab,var(--tint,var(--l-comm)) 20%,transparent);color:var(--tint-ink,var(--tint,var(--l-comm)))}
+.mx .btn.tx{min-height:44px;padding:0 10px;color:var(--ink2);font-weight:600}
+.mx .btn.tx.ta{color:var(--accent-ink)}
+.mx .btn.tx.td{color:var(--err)}
+.btn.h56{min-height:56px;padding:0 26px;font-size:16px}
+.btn.h36{min-height:36px;padding:0 12px;font-size:12.5px;gap:6px}
+.btn{position:relative}
+.mx .prs{transform:scale(.94);filter:brightness(.78) saturate(1.1)}
+.mx .btn.q.prs,.mx .btn.tx.prs{background:var(--field);filter:none}
+.mx .hv{filter:brightness(1.14);transform:translateY(-1px)}
+.mx .btn.q.hv,.mx .btn.tx.hv{background:color-mix(in oklab,var(--field) 60%,transparent);filter:none}
+.mx .fc{outline:2px solid var(--ink);outline-offset:3px}
+.dis{opacity:.45;cursor:default}
+.spin{display:inline-flex;animation:mxSpin .9s linear infinite}
+.mx kbd{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:7px;background:var(--field);border:1px solid var(--line);border-bottom-width:2.5px;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink2);line-height:1}
+.mx .btn.p kbd{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);color:#fff}
+.cnt{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:rgba(11,11,18,.2);font-size:12px;font-weight:800}
+.clk{position:absolute;top:-6px;inset-inline-end:-4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--warn);color:#0B0B12;border:2px solid var(--ground)}
+.clk>.ic{width:14px;height:14px}
+.rnd{position:relative;display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;flex:none;background:var(--accent);color:#0B0B12;box-shadow:0 10px 26px color-mix(in oklab,var(--accent) 48%,transparent),inset 0 2px 0 rgba(255,255,255,.4);transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
+.rnd.br{background:var(--brand-fill);color:#fff;box-shadow:0 10px 26px rgba(79,70,229,.5),inset 0 1px 0 rgba(255,255,255,.3)}
+.rnd.sq{border-radius:18px;box-shadow:0 6px 16px rgba(0,0,0,.3)}
+.rnd.ext{width:auto;padding:0 20px 0 16px;gap:10px;border-radius:18px;font-weight:700;font-size:15px;box-shadow:0 6px 16px rgba(0,0,0,.3)}
+.ptt{position:relative;display:inline-flex;align-items:center;justify-content:center;width:96px;height:96px;border-radius:50%;flex:none;background:var(--accent);color:#0B0B12;box-shadow:0 14px 36px color-mix(in oklab,var(--accent) 42%,transparent),inset 0 2px 0 rgba(255,255,255,.45)}
+.ptt.live::before,.ptt.live::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--accent);animation:pttRing 2.6s ease-out infinite}
+.ptt.live::after{animation-delay:-1.3s}
+.ptt.held{transform:scale(1.06);box-shadow:0 0 0 6px color-mix(in oklab,var(--accent) 30%,transparent),0 14px 36px color-mix(in oklab,var(--accent) 42%,transparent),inset 0 2px 0 rgba(255,255,255,.45)}
+.ptt.no{background:rgba(248,113,113,.16);color:var(--err);box-shadow:inset 0 0 0 1.5px rgba(248,113,113,.4)}
+.ptt.s64{width:64px;height:64px}
+.grow{display:grid;grid-template-columns:150px repeat(6,minmax(0,1fr));gap:10px;align-items:center;padding:9px 14px;border-radius:20px}
+.grow>.btn{justify-self:start}
+.grow>b{font-size:14px;font-weight:700}
+.grow>b>code{display:block;font-weight:500;margin-top:2px}
+.gst{position:relative;overflow:hidden;background:linear-gradient(120deg,color-mix(in oklab,var(--accent) 52%,var(--ground)),color-mix(in oklab,var(--brand) 50%,var(--ground)))}
+.gst>*{position:relative}
+.gst>.orb{position:absolute}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.demo{border-radius:20px;background:var(--ground);border:1px solid var(--line);padding:20px 14px 16px;min-height:150px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line);margin-top:auto}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.leg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 28px;align-items:start}
+.leg>div{display:grid;grid-template-columns:22px minmax(0,1fr);gap:3px 12px;align-items:start}
+.leg .kan{position:static;margin-top:1px;grid-row:span 2}
+.leg b{font-size:14.5px;font-weight:700}
+.leg p{grid-column:2;font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.why{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--warn);opacity:.22;flex:none}
+.stk{display:inline-grid}
+.stk>*{grid-area:1/1;display:inline-flex;align-items:center;justify-content:center}
+.tapr{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.65);opacity:0;pointer-events:none;z-index:3}
+.dmA{animation:kbPress 5s infinite}
+.dmA .g1{animation:kbG1 5s infinite}
+.dmA .g2{opacity:0;animation:kbG2 5s infinite}
+.dmA .g3{opacity:0;animation:kbG3 5s infinite}
+.dmA .l1{animation:kbL1 5s infinite}
+.dmA .l2{opacity:0;animation:kbL2 5s infinite}
+.dmA .tapr{animation:kbTap 5s infinite}
+.hapA{animation:kbHapA 5s infinite}
+.dmB{animation:kbDisc 5s infinite}
+.dmB .m1{animation:kbM1 5s infinite}
+.dmB .m2{opacity:0;animation:kbM2 5s infinite}
+.fcA{animation:kbFaceA 5s infinite}
+.fcB{animation:kbFaceB 5s infinite}
+.dmC{animation:kbHold 5s infinite}
+.dmC::before,.dmC::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--accent);opacity:0;animation:kbWave 5s linear infinite}
+.dmC::after{animation-delay:.42s}
+.dmC .tapr{width:60px;height:60px;margin:-30px 0 0 -30px;animation:kbTapHold 5s infinite}
+.hapC{animation:kbHapC 5s infinite}
+@keyframes pttRing{0%{transform:scale(1);opacity:.75}100%{transform:scale(1.85);opacity:0}}
+@keyframes kbPress{0%,20%{transform:scale(1);background:var(--brand-fill);color:#fff}25%{transform:scale(.94);background:#4338CA;animation-timing-function:cubic-bezier(.3,1.6,.5,1)}34%,60%{transform:scale(1);background:var(--brand-fill);color:#fff}64%{transform:scale(1.04);background:#34D399;color:#0B0B12}70%,92%{transform:scale(1);background:#34D399;color:#0B0B12}97%,100%{transform:scale(1);background:var(--brand-fill);color:#fff}}
+@keyframes kbTap{0%,15%{opacity:0;transform:scale(1.5)}20%{opacity:1;transform:scale(1)}26%{opacity:1;transform:scale(.8)}31%,100%{opacity:0;transform:scale(.8)}}
+@keyframes kbG1{0%,29%{opacity:1;transform:scale(1)}32%,95%{opacity:0;transform:scale(.4)}98%,100%{opacity:1;transform:scale(1)}}
+@keyframes kbG2{0%,29%{opacity:0}32%,60%{opacity:1}63%,100%{opacity:0}}
+@keyframes kbG3{0%,60%{opacity:0;transform:scale(.3) rotate(-40deg)}66%{opacity:1;transform:scale(1.25) rotate(0)}72%,92%{opacity:1;transform:scale(1)}96%,100%{opacity:0;transform:scale(1)}}
+@keyframes kbL1{0%,60%{opacity:1}63%,95%{opacity:0}98%,100%{opacity:1}}
+@keyframes kbL2{0%,61%{opacity:0;transform:translateY(6px)}66%,92%{opacity:1;transform:none}96%,100%{opacity:0}}
+@keyframes kbHapA{0%,25%{opacity:.22;transform:scale(1)}27%{opacity:1;transform:scale(1.9)}34%,61%{opacity:.22;transform:scale(1)}64%{opacity:1;transform:scale(2.2)}72%,100%{opacity:.22;transform:scale(1)}}
+@keyframes kbDisc{0%,38%{transform:scale(1)}44%{transform:scale(.88);animation-timing-function:cubic-bezier(.3,1.6,.5,1)}54%,100%{transform:scale(1)}}
+@keyframes kbM1{0%,38%{opacity:1;transform:rotate(0) scale(1)}46%,90%{opacity:0;transform:rotate(90deg) scale(.4)}97%,100%{opacity:1;transform:rotate(0) scale(1)}}
+@keyframes kbM2{0%,40%{opacity:0;transform:rotate(-90deg) scale(.4)}50%,88%{opacity:1;transform:rotate(0) scale(1)}95%,100%{opacity:0;transform:rotate(-90deg) scale(.4)}}
+@keyframes kbFaceA{0%,40%{background:var(--ink);color:var(--ground)}46%,90%{background:transparent;color:var(--ink2)}96%,100%{background:var(--ink);color:var(--ground)}}
+@keyframes kbFaceB{0%,40%{background:transparent;color:var(--ink2)}46%,90%{background:var(--ink);color:var(--ground)}96%,100%{background:transparent;color:var(--ink2)}}
+@keyframes kbHold{0%,18%{transform:scale(1)}24%,70%{transform:scale(1.06)}76%,100%{transform:scale(1)}}
+@keyframes kbTapHold{0%,13%{opacity:0;transform:scale(1.4)}18%,70%{opacity:1;transform:scale(1)}75%,100%{opacity:0;transform:scale(1.2)}}
+@keyframes kbWave{0%,28%{transform:scale(1);opacity:0}29%{transform:scale(1);opacity:.75}42%{transform:scale(1.85);opacity:0}43%{transform:scale(1);opacity:.75}56%{transform:scale(1.85);opacity:0}57%{transform:scale(1);opacity:.75}70%{transform:scale(1.85);opacity:0}100%{transform:scale(1);opacity:0}}
+@keyframes kbHapC{0%,22%{opacity:.22;transform:scale(1)}24%{opacity:1;transform:scale(2.1)}32%,70%{opacity:.22;transform:scale(1)}72%{opacity:1;transform:scale(1.7)}80%,100%{opacity:.22;transform:scale(1)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #6366F1; opacity: .24"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #A855F7; opacity: .2; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 980px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K40 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyButton</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Toute action nommée est une capsule libellée, pleine, de verre, à contour ou en texte, partout la même</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 820px">Un verbe dans une capsule. Sept genres, quatre hauteurs, trois formes. Le profil en dessine quarante ; le reste de l'app, des centaines, chacune à sa main.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il porte un verbe et répond au doigt, il ne sait pas ce que le verbe déclenche</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dessine <b>une capsule libellée</b> dans l'un de sept genres : <code>primary</code>, <code>accent</code>, <code>tinted</code>, <code>glass</code>, <code>outline</code>, <code>danger</code>, <code>text</code>.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Tient quatre hauteurs (56, 50, 44, 36), en largeur ajustée ou pleine, avec un glyphe de tête et un emplacement de fin.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit ses états sans changer de taille : pressé, survolé, focus, <b>occupé</b>, <b>désactivé avec sa raison</b>, <b>différé</b> hors ligne.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Prend deux autres formes pour l'action phare d'un écran : <code>round</code> (disque plein de 56) et <code>hold</code> (disque de 96 à maintenir). Range deux boutons en <code>pair</code>.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre du genre <code>glass</code>, son ton, son reflet à l'appui : <b>K01</b> <code>MeeshyGlassTone</code>. Il le demande, il ne le dessine pas.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le bouton rond de verre à glyphe seul (44, 48) : <b>K02</b>. Le disque libellé d'une grille : <b>K32</b>. Le bouton à deux moitiés : <b>K13</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La touche de raccourci, la pastille horloge ou de compte : <b>K55</b> et <b>K41</b>, posées dans ses emplacements. Les puces qui filtrent : <b>K04</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Choisir le verbe, confirmer un geste destructif, mettre en file hors ligne, ouvrir le micro : <b>l'app</b>. Le bouton rapporte un toucher ou un maintien, rien d'autre.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Quatre parties, deux formes de plus, une paire</h2><p>La capsule à deux fois sa taille, puis ce qui en dérive. Tout ce qui est à l'intérieur du contour se touche d'un bloc et se lit d'un nom.</p></header>
+<div class="kcell kc" style="flex-direction: row; align-items: center; justify-content: space-between; gap: 48px; padding: 72px 64px 60px; background: radial-gradient(60% 90% at 26% 42%, rgba(99,102,241,.16), var(--ground) 70%)">
+<div style="display: flex; flex-direction: column; gap: 34px; flex: none">
+<div style="position: relative; align-self: flex-start">
+<div class="btn p h56" style="zoom: 2; padding: 0 20px 0 24px">[[ic:chat-circle]]<span>Lui écrire</span><kbd>M</kbd></div>
+<span class="kan" style="left: -11px; top: -11px">1</span>
+<span class="kan" style="left: 54px; top: 14px">2</span>
+<span class="kan" style="left: 190px; top: 14px">3</span>
+<span class="kan" style="right: 42px; top: 8px">4</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span class="mono" style="color: var(--ink2)">hauteur 56 · 50 · 44 · 36 — rayon plein — marges 26 · 22 · 16 · 12</span>
+<span class="mono" style="color: var(--ink3)">glyphe 22 (16 en 44 et 36) — écart 8 — libellé 16 · 15 · 13,5 · 12,5 / 700</span>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, auto); gap: 72px 72px; align-items: center; justify-items: center; padding-right: 24px">
+<div style="position: relative">
+<div class="btn p" aria-busy="true"><span class="spin">[[ic:circle-notch]]</span><span>Lui écrire</span></div>
+<span class="kan" style="left: 6px; top: -13px">5</span>
+</div>
+<div style="position: relative">
+<div class="rnd">[[ic:chat-circle-fill l]]</div>
+<span class="kan" style="left: -9px; top: -9px">6</span>
+</div>
+<div style="position: relative; --accent: #4ECDC4">
+<div class="ptt live">[[ic:microphone-fill xl]]</div>
+<span class="kan" style="left: -4px; top: -4px">7</span>
+</div>
+<div style="position: relative; display: flex; gap: 8px; width: 290px">
+<div class="btn a" style="flex: 1.6; padding: 0 14px">[[ic:check]]<span>Accepter</span></div>
+<div class="btn q" style="flex: 1; padding: 0 14px">Refuser</div>
+<span class="kan" style="left: -11px; top: -11px">8</span>
+</div>
+</div>
+</div>
+<div class="card leg" style="padding: 28px">
+<div><span class="kan">1</span><b>Capsule</b><p>Rayon plein. Hauteur 56, 50, 44 ou 36. La cible ne descend jamais sous 44 : en 36, elle déborde de 4 de chaque côté.</p></div>
+<div><span class="kan">2</span><b>Glyphe de tête <code>glyph</code></b><p>Optionnel. 22, ou 16 dans les deux petites tailles. À l'encre du libellé. Figé : il ne grandit pas avec la police.</p></div>
+<div><span class="kan">3</span><b>Libellé <code>title</code></b><p>Un verbe, une ligne, jamais coupé. Graisse 700. En pleine largeur, glyphe et libellé restent centrés ensemble.</p></div>
+<div><span class="kan">4</span><b>Emplacement de fin <code>trailing</code></b><p>Une touche K55, un chevron ou un compte K41. Marge de fin réduite de 6 quand il est là. Muet pour le lecteur d'écran.</p></div>
+<div><span class="kan">5</span><b>Indicateur d'occupation</b><p>Prend la place exacte du glyphe ; sans glyphe, il se pose avant le libellé. La largeur de la capsule ne bouge pas.</p></div>
+<div><span class="kan">6</span><b>Forme <code>round</code></b><p>Disque plein de 56, glyphe de 28, ombre à sa teinte. Sur Android : carré-arrondi de rayon 18, ou FAB étendu libellé.</p></div>
+<div><span class="kan">7</span><b>Forme <code>hold</code></b><p>Disque de 96, glyphe de 36. Se maintient au lieu de se toucher. Ses ondes partent tant qu'il émet.</p></div>
+<div><span class="kan">8</span><b>Disposition <code>pair</code></b><p>Deux boutons sur une ligne, écart 8. Le principal prend 1,6 part, l'autre 1. Même hauteur, toujours.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Sept genres, six états, quatre tailles, trois formes</h2><p>Tout est à taille réelle. Les genres sont repris tels quels des écrans du profil : mêmes classes, mêmes mesures.</p></header>
+
+<div class="kcell kc" style="gap: 6px; padding: 28px 22px">
+<div class="grow" style="padding-top: 0; padding-bottom: 6px">
+<span></span><span class="tag">Repos</span><span class="tag">Pressé</span><span class="tag">Survol</span><span class="tag">Focus</span><span class="tag">Occupé</span><span class="tag">Désactivé</span>
+</div>
+<div class="grow">
+<b>Primaire<code>primary</code></b>
+<button class="btn p">[[ic:chat-circle]]<span>Écrire</span></button>
+<button class="btn p prs">[[ic:chat-circle]]<span>Écrire</span></button>
+<button class="btn p hv">[[ic:chat-circle]]<span>Écrire</span></button>
+<button class="btn p fc">[[ic:chat-circle]]<span>Écrire</span></button>
+<button class="btn p" aria-busy="true"><span class="spin">[[ic:circle-notch]]</span><span>Écrire</span></button>
+<button class="btn p dis" disabled="disabled">[[ic:chat-circle]]<span>Écrire</span></button>
+</div>
+<div class="grow">
+<b>Accent<code>accent</code></b>
+<button class="btn a">[[ic:phone]]<span>Appeler</span></button>
+<button class="btn a prs">[[ic:phone]]<span>Appeler</span></button>
+<button class="btn a hv">[[ic:phone]]<span>Appeler</span></button>
+<button class="btn a fc">[[ic:phone]]<span>Appeler</span></button>
+<button class="btn a" aria-busy="true"><span class="spin">[[ic:circle-notch]]</span><span>Appeler</span></button>
+<button class="btn a dis" disabled="disabled">[[ic:phone]]<span>Appeler</span></button>
+</div>
+<div class="grow">
+<b>Teinté<code>tinted</code></b>
+<button class="btn t">[[ic:users-four]]<span>Rejoindre</span></button>
+<button class="btn t prs">[[ic:users-four]]<span>Rejoindre</span></button>
+<button class="btn t hv">[[ic:users-four]]<span>Rejoindre</span></button>
+<button class="btn t fc">[[ic:users-four]]<span>Rejoindre</span></button>
+<button class="btn t" aria-busy="true"><span class="spin">[[ic:circle-notch]]</span><span>Rejoindre</span></button>
+<button class="btn t dis" disabled="disabled">[[ic:users-four]]<span>Rejoindre</span></button>
+</div>
+<div class="grow gst">
+<div class="orb" style="width: 130px; height: 130px; left: 260px; top: -50px; background: var(--accent); opacity: .7"></div>
+<div class="orb" style="width: 120px; height: 120px; right: 160px; top: 0; background: var(--brand-soft); opacity: .7; animation-delay: -3s"></div>
+<b>Verre<code style="color: var(--ink)">glass</code></b>
+<button class="btn g">[[ic:export]]<span>Partager</span></button>
+<button class="btn g prs">[[ic:export]]<span>Partager</span></button>
+<button class="btn g hv">[[ic:export]]<span>Partager</span></button>
+<button class="btn g fc">[[ic:export]]<span>Partager</span></button>
+<button class="btn g" aria-busy="true"><span class="spin">[[ic:circle-notch]]</span><span>Partager</span></button>
+<button class="btn g dis" disabled="disabled">[[ic:export]]<span>Partager</span></button>
+</div>
+<div class="grow">
+<b>Contour<code>outline</code></b>
+<button class="btn q">[[ic:user-plus]]<span>Inviter</span></button>
+<button class="btn q prs">[[ic:user-plus]]<span>Inviter</span></button>
+<button class="btn q hv">[[ic:user-plus]]<span>Inviter</span></button>
+<button class="btn q fc">[[ic:user-plus]]<span>Inviter</span></button>
+<button class="btn q" aria-busy="true"><span class="spin">[[ic:circle-notch]]</span><span>Inviter</span></button>
+<button class="btn q dis" disabled="disabled">[[ic:user-plus]]<span>Inviter</span></button>
+</div>
+<div class="grow">
+<b>Danger<code>danger</code></b>
+<button class="btn x">[[ic:prohibit]]<span>Bloquer</span></button>
+<button class="btn x prs" style="background: rgba(248,113,113,.26)">[[ic:prohibit]]<span>Bloquer</span></button>
+<button class="btn x hv" style="background: rgba(248,113,113,.2)">[[ic:prohibit]]<span>Bloquer</span></button>
+<button class="btn x fc">[[ic:prohibit]]<span>Bloquer</span></button>
+<button class="btn x" aria-busy="true"><span class="spin">[[ic:circle-notch]]</span><span>Bloquer</span></button>
+<button class="btn x dis" disabled="disabled">[[ic:prohibit]]<span>Bloquer</span></button>
+</div>
+<div class="grow">
+<b>Texte<code>text</code></b>
+<button class="btn tx">Plus tard</button>
+<button class="btn tx prs">Plus tard</button>
+<button class="btn tx hv">Plus tard</button>
+<button class="btn tx fc">Plus tard</button>
+<button class="btn tx" aria-busy="true"><span class="spin">[[ic:circle-notch s]]</span><span>Plus tard</span></button>
+<button class="btn tx dis" disabled="disabled">Plus tard</button>
+</div>
+<div class="cp" style="padding: 14px 14px 0"><span class="kcap">Pressé : échelle 0,94 et teinte assombrie, en moins d'une image. Survol (web, pointeur iPad) : teinte éclaircie, un point de levée. Focus : anneau de 2 à l'encre, décalé de 3, visible sur tous les genres. Occupé : le libellé reste, l'indicateur tourne à la place du glyphe. Désactivé : contenu à 45 %, ni action ni tic.</span></div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: row; flex-wrap: wrap; align-items: flex-end">
+<button class="btn a h56">[[ic:map-pin-fill]]<span>56</span></button>
+<button class="btn a">[[ic:map-pin]]<span>50</span></button>
+<button class="btn a sm">[[ic:map-pin s]]<span>44</span></button>
+<button class="btn a h36">[[ic:map-pin s]]<span>36</span></button>
+</div>
+<div class="cp"><b>Quatre tailles</b><span class="kcap"><code>s56</code> pied de feuille et action unique · <code>s50</code> défaut · <code>s44</code> dans une rangée ou un billet · <code>s36</code> sur une bannière, cible étendue à 44.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="align-items: stretch">
+<button class="btn p h56" style="width: 100%">[[ic:copy]]<span>Créer et copier le lien</span></button>
+<button class="btn q" style="align-self: flex-start">[[ic:user-plus]]<span>Inviter quelqu'un</span></button>
+</div>
+<div class="cp"><b>Pleine largeur ou ajustée</b><span class="kcap"><code>width: fill</code> prend la largeur de l'hôte, contenu centré. <code>fit</code> s'arrête à son libellé. Jamais une largeur fixe.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="align-items: flex-start">
+<button class="btn p h56" style="padding: 0 20px 0 24px">[[ic:chat-circle]]<span>Lui écrire sur Meeshy</span><kbd>M</kbd></button>
+<button class="btn g sm" style="padding: 0 14px">[[ic:eye s]]<span>Vue par : Moi</span>[[ic:caret-down s]]</button>
+<button class="btn a sm" style="padding: 0 10px 0 16px"><span>Répondre</span><span class="cnt">2</span></button>
+</div>
+<div class="cp"><b>Emplacement de fin</b><span class="kcap">Une touche K55 (web, clavier branché) · un chevron quand le bouton ouvre un choix · un compte K41. Un seul à la fois.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: row; flex-wrap: wrap">
+<button class="btn tx">Annuler</button>
+<button class="btn tx ta"><span>Tout voir</span>[[ic:caret-right s]]</button>
+<button class="btn tx td">[[ic:trash s]]<span>Retirer</span></button>
+</div>
+<div class="cp"><b>Texte : trois encres</b><span class="kcap">Neutre par défaut, teintée par <code>tint</code>, rouge par <code>isDestructive</code>. Aucun fond au repos, cible de 44, chevron de fin possible. L'action la moins lourde d'un groupe.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="align-items: stretch; gap: 10px">
+<button class="btn a" style="min-height: 54px">[[ic:fire]]<span>Soyons proches</span></button>
+<button class="btn q">[[ic:handshake]]<span>Restons amis</span></button>
+<div class="sep" style="margin: 6px 0"></div>
+<button class="btn x">[[ic:user-minus]]<span>Annuler le lien</span></button>
+</div>
+<div class="cp"><b>Danger, rangé en dernier</b><span class="kcap">Fond <code>--err</code> à 13 %, texte <code>--err</code>. Toujours le dernier du groupe, sous un filet. Jamais deux par écran.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<button class="btn" disabled="disabled" aria-disabled="true" style="background: var(--field); color: var(--ink3); cursor: not-allowed">[[ic:user-plus]]<span>Demander à être amis</span></button>
+<span class="why">[[ic:lock-simple s]]<span>Sofia n'accepte pas de nouvelles demandes</span></span>
+</div>
+<div class="cp"><b>Désactivé, avec sa raison</b><span class="kcap"><code>disabledReason</code> s'écrit sous le bouton et se lit après son nom. Un bouton éteint sans raison ne passe pas la revue.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<button class="btn p">[[ic:paper-plane-tilt]]<span>Envoyer la demande</span><span class="clk">[[ic:clock s]]</span></button>
+<span class="why">[[ic:cloud-slash s]]<span>Partira au retour du réseau</span></span>
+</div>
+<div class="cp"><b>Différé, hors ligne</b><span class="kcap"><code>isDeferred</code> : le bouton reste actif, l'action est mise en file par l'app. Pastille horloge K41 au coin de fin, dite « sera envoyé ».</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="align-items: stretch; gap: 14px">
+<div style="display: flex; gap: 8px">
+<button class="btn a" style="flex: 1.6; padding: 0 14px">[[ic:check]]<span>Accepter</span></button>
+<button class="btn q" style="flex: 1; padding: 0 14px">[[ic:x]]<span>Refuser</span></button>
+</div>
+<div style="display: flex; gap: 8px">
+<button class="btn a sm" style="flex: 1.6">[[ic:map-trifold s]]<span>Voir sur la carte</span></button>
+<button class="btn q sm" style="flex: 1">[[ic:navigation-arrow s]]<span>Itinéraire</span></button>
+</div>
+</div>
+<div class="cp"><b>Paire</b><span class="kcap"><code>MeeshyButtonPair</code> : deux boutons, une ligne, parts 1,6 et 1. Si un libellé ne tient pas, la paire s'empile, le principal en haut.</span></div>
+</div>
+
+<div class="mx kcell kc" data-theme="light" style="background: var(--ground); border-color: transparent">
+<div class="stage" style="flex-direction: row; flex-wrap: wrap">
+<button class="btn p sm">Écrire</button>
+<button class="btn a sm">Appeler</button>
+<button class="btn t sm" style="--tint-ink: #92400E">Rejoindre</button>
+<button class="btn q sm">Inviter</button>
+<button class="btn x sm">Bloquer</button>
+<button class="btn tx ta">Tout voir</button>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes genres. Le teinté et le danger passent à une encre foncée pour garder 4,5:1 ; le blanc ne se pose que sur l'indigo.</span></div>
+</div>
+
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: row; align-items: center; justify-content: space-around; gap: 8px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><button class="rnd" aria-label="Écrire">[[ic:chat-circle-fill l]]</button><span class="kcap">Repos</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><button class="rnd prs" aria-label="Écrire">[[ic:chat-circle-fill l]]</button><span class="kcap">Pressé</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><button class="rnd" aria-label="Écrire" aria-busy="true"><span class="spin">[[ic:circle-notch l]]</span></button><span class="kcap">Occupé</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><button class="rnd br" aria-label="Nouveau message">[[ic:note-pencil l]]</button><span class="kcap">Primaire</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><button class="rnd sq" aria-label="Créer un lien">[[ic:plus l]]</button><span class="kcap">Android</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><button class="rnd ext">[[ic:note-pencil]]<span>Nouveau message</span></button><span class="kcap">Android, étendu</span></div>
+</div>
+<div class="cp"><b>Forme <code>round</code></b><span class="kcap">Disque plein de 56 à glyphe seul, nom dit obligatoire, ombre à sa teinte. Une seule par écran, dans la zone du pouce. Sur Android : carré-arrondi de rayon 18, et FAB étendu quand le haut de la liste est visible. Le rond de VERRE reste K02.</span></div>
+</div>
+
+<div class="kcell kc leo">
+<div class="stage" style="flex-direction: row; align-items: flex-start; justify-content: space-around; gap: 8px; padding-top: 44px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 48px; width: 130px; text-align: center"><button class="ptt" aria-label="Maintenir pour parler à Léo">[[ic:microphone-fill xl]]</button><span class="kcap">Repos<br>« Maintenir pour parler »</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 48px; width: 130px; text-align: center"><button class="ptt held" aria-label="Maintenir pour parler à Léo">[[ic:microphone-fill xl]]</button><span class="kcap">Maintenu<br>le micro s'ouvre</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 48px; width: 130px; text-align: center"><button class="ptt held live" aria-label="Tu parles à Léo">[[ic:microphone-fill xl]]</button><span class="kcap">Émission<br>« Ta voix part en direct »</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 48px; width: 130px; text-align: center"><button class="ptt no" aria-label="Talkie indisponible">[[ic:microphone-slash xl]]</button><span class="kcap">Refusé<br>« Léo parle déjà »</span></div>
+</div>
+<div class="cp"><b>Forme <code>hold</code></b><span class="kcap">Disque de 96 à maintenir. <code>holdState</code> est remis par l'hôte : <code>idle</code>, <code>held</code>, <code>live</code>, <code>refused</code>. Le bouton rapporte <code>onHoldChange(true / false)</code> ; il ne connaît ni micro ni réseau. Au lecteur d'écran : double toucher pour commencer, double toucher pour finir.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">La capsule s'enfonce, le glyphe change, les ondes partent</h2><p>Trois boucles de cinq secondes. Le point jaune s'allume à l'instant du retour haptique. Rien d'autre que la transformation et l'opacité ne bouge.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: stretch">
+
+<div class="kcell kc leo" style="flex-direction: row; align-items: stretch; gap: 0; padding: 0; overflow: hidden">
+<div style="flex: 1.5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 40px 20px; border-right: 1px solid var(--line)">
+<div class="btn p h56 dmA" style="padding: 0 26px">
+<span class="stk"><span class="g1">[[ic:paper-plane-tilt]]</span><span class="g2"><span class="spin">[[ic:circle-notch]]</span></span><span class="g3">[[ic:check]]</span></span>
+<span class="stk"><span class="l1">Envoyer la demande</span><span class="l2">Demande envoyée</span></span>
+<span class="tapr"></span>
+</div>
+<span style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span class="hap hapA"></span><span>tic léger au relâcher · succès à la coche</span></span>
+<span class="mono" style="color: var(--ink3)">motion.morph</span>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 40px 12px; border-right: 1px solid var(--line); --accent: #A855F7">
+<div class="rnd dmB"><span class="stk"><span class="m1">[[ic:chat-circle-fill l]]</span><span class="m2">[[ic:plus l]]</span></span></div>
+<span class="seg tonal" style="padding: 3px; gap: 0"><span class="fcA" style="min-height: 28px; padding: 0 10px; font-size: 11.5px">Vitrine</span><span class="fcB" style="min-height: 28px; padding: 0 10px; font-size: 11.5px">Liens</span></span>
+<span class="mono" style="color: var(--ink3)">motion.morph</span>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 40px 12px">
+<div class="ptt s64 dmC">[[ic:microphone-fill l]]<span class="tapr"></span></div>
+<span style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span class="hap hapC"></span><span>tic ferme, deux fois</span></span>
+<span class="mono" style="color: var(--ink3)">motion.pulse</span>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<div class="kcell kc" style="padding: 18px 14px; gap: 14px; min-height: 0">
+<span class="step">1</span>
+<div class="stage" style="min-height: 76px"><div class="btn p sm prs" style="padding: 0 12px">[[ic:paper-plane-tilt s]]<span>Envoyer</span></div></div>
+<div class="cp"><b>Doigt posé</b><span class="kcap">La capsule s'enfonce à 0,94 et s'assombrit. Avant toute action.</span></div>
+</div>
+<div class="kcell kc" style="padding: 18px 14px; gap: 14px; min-height: 0">
+<span class="step">2</span>
+<div class="stage" style="min-height: 76px"><div class="btn p sm" style="padding: 0 12px"><span class="spin">[[ic:circle-notch s]]</span><span>Envoyer</span></div></div>
+<div class="cp"><b>Occupé</b><span class="kcap">Retour à 1. L'indicateur prend la place du glyphe. Un second toucher ne part pas.</span></div>
+</div>
+<div class="kcell kc" style="padding: 18px 14px; gap: 14px; min-height: 0">
+<span class="step">3</span>
+<div class="stage" style="min-height: 76px"><div class="btn sm" style="padding: 0 12px; background: #34D399; color: #0B0B12">[[ic:check s]]<span>Envoyée</span></div></div>
+<div class="cp"><b>Confirmé</b><span class="kcap">Si l'hôte change <code>glyph</code> et <code>title</code>, ils se fondent. Rebond 1,04.</span></div>
+</div>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">motion.morph</b> (appui, glyphe ↔ indicateur ↔ coche, glyphe du round d'une face à l'autre) · 420 ms · ressort 0,42 / 0,7, rebond 1,04 · déclencheur : doigt posé dans la cible, puis changement de <code>isPending</code>, <code>glyph</code> ou <code>title</code> · haptique : un tic léger au relâcher, un succès si l'hôte le demande · mouvement réduit : fondu de 160 ms, aucune échelle</div>
+<div class="spec"><b style="color: var(--ink)">motion.pulse</b> (ondes du hold) · 2,6 s en boucle, deux ondes décalées de 1,3 s · linéaire sortant · déclencheur : <code>holdState == live</code>, arrêt net au relâcher · haptique : un tic ferme à l'ouverture, un à la fermeture, une erreur au refus · mouvement réduit : ondes retirées, anneau plein de 6 autour du disque</div>
+<div class="spec"><b style="color: var(--ink)">motion.rise</b> (entrée d'une paire ou d'un pied de feuille) · 360 ms + 80 ms d'écart · déclencheur : première apparition, jamais au retour sur l'écran · haptique : aucune · mouvement réduit : aucune entrée</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<div class="h">Élément</div>
+<div class="h">iOS · MeeshyUI/Kit/MeeshyButton.swift</div>
+<div class="h">Android · me.meeshy.ui.component.kit</div>
+<div class="h">Web · components/kit/meeshy-button.tsx</div>
+<div><b>Composant</b></div>
+<div><code>MeeshyButton(_ title:systemImage:kind:size:shape:width:isPending:isDeferred:action:)</code></div>
+<div><code>MeeshyButton(title, onClick, modifier, icon, kind, size, shape, width, isPending, isDeferred, enabled)</code></div>
+<div><code>&lt;MeeshyButton title glyph kind size shape width isPending isDeferred disabled onPress /&gt;</code></div>
+<div><b>Genres</b> (<code>enum</code>)</div>
+<div><code>MeeshyButtonKind { primary, accent, tinted, glass, outline, danger, text }</code></div>
+<div><code>enum class MeeshyButtonKind</code> identique</div>
+<div><code>'primary' | 'accent' | 'tinted' | 'glass' | 'outline' | 'danger' | 'text'</code></div>
+<div><b>Tailles</b></div>
+<div><code>MeeshyButtonSize { s56, s50, s44, s36 }</code></div>
+<div><code>enum class MeeshyButtonSize</code> identique</div>
+<div><code>56 | 50 | 44 | 36</code></div>
+<div><b>Formes</b></div>
+<div><code>MeeshyButtonShape { capsule, round, hold }</code></div>
+<div><code>enum class MeeshyButtonShape</code> identique</div>
+<div><code>'capsule' | 'round' | 'hold'</code></div>
+<div><b>Largeur et encre</b></div>
+<div><code>MeeshyButtonWidth { fit, fill }</code>, <code>tint: Color? = nil</code>, <code>isDestructive: Bool</code></div>
+<div><code>enum class</code> identique, <code>tint: Color?</code>, <code>isDestructive</code></div>
+<div><code>'fit' | 'fill'</code>, <code>tint?: string</code>, <code>isDestructive?</code></div>
+<div><b>Maintien</b></div>
+<div><code>MeeshyButtonHoldState { idle, held, live, refused }</code>, <code>onHoldChange: (Bool) -&gt; Void</code></div>
+<div><code>enum class MeeshyButtonHoldState</code>, <code>onHoldChange: (Boolean) -&gt; Unit</code></div>
+<div><code>holdState</code>, <code>onHoldChange(held: boolean)</code></div>
+<div><b>Emplacements</b> (<code>slot</code>)</div>
+<div><code>@ViewBuilder glyph</code>, <code>trailing</code>, <code>badge</code></div>
+<div><code>glyph</code>, <code>trailing</code>, <code>badge</code> : <code>@Composable</code></div>
+<div><code>glyph</code>, <code>trailing</code>, <code>badge</code> : <code>ComponentChildren</code></div>
+<div><b>Paire</b></div>
+<div><code>MeeshyButtonPair(primary:secondary:)</code></div>
+<div><code>MeeshyButtonPair(primary, secondary, modifier)</code></div>
+<div><code>&lt;MeeshyButtonPair primary secondary /&gt;</code></div>
+<div><b>Désactivé</b></div>
+<div><code>.disabled(_:)</code> + <code>disabledReason</code></div>
+<div><code>enabled = true</code> + <code>disabledReason</code></div>
+<div><code>disabled</code> + <code>disabledReason</code></div>
+<div style="border-bottom: 0"><b>Recette</b></div>
+<div style="border-bottom: 0"><code>MeeshyButtonRecipe.resolve(kind:size:shape:material:isPressed:isHovered:isFocused:isEnabled:isPending:isDestructive:tint:)</code></div>
+<div style="border-bottom: 0"><code>MeeshyButtonRecipe.resolve(…)</code>, JVM pure</div>
+<div style="border-bottom: 0"><code>meeshyButtonRecipe(…)</code> : classes et propriétés <code>--kit-button-*</code></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+<div class="par"><code>title: String</code><span>Obligatoire, non vide. Le mot visible et le nom dit. En <code>round</code> et <code>hold</code> : dit seulement.</span></div>
+<div class="par"><code>systemImage: String? = nil</code><span><code>icon</code> sur Android, <code>glyph</code> sur le web. Obligatoire en <code>round</code> et <code>hold</code>. Reçoit l'encre du genre. L'emplacement libre s'appelle <code>glyph</code> partout.</span></div>
+<div class="par"><code>kind = .primary</code><span>Un seul <code>primary</code> ou <code>accent</code> par groupe. <code>glass</code> remet la matière à K01.</span></div>
+<div class="par"><code>size = .s50</code><span><code>round</code> vaut 56 et <code>hold</code> 96 : la taille ne s'y passe pas.</span></div>
+<div class="par"><code>shape = .capsule</code><span><code>round</code> et <code>hold</code> n'acceptent que <code>primary</code>, <code>accent</code>, <code>tinted</code>.</span></div>
+<div class="par"><code>width = .fit</code><span><code>fill</code> : toute la largeur de l'hôte, contenu centré.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>La teinte de <code>accent</code> et <code>tinted</code>, et l'encre de <code>text</code>. Sans elle : celle de l'hôte, ou l'encre neutre en <code>text</code>.</span></div>
+<div class="par"><code>isDestructive = false</code><span>Pour <code>text</code> seulement : encre rouge. Le fond rouge doux est le genre <code>danger</code>.</span></div>
+<div class="par"><code>isPending = false</code><span>Indicateur à la place du glyphe, action retenue, annoncé « en cours ».</span></div>
+<div class="par"><code>isDeferred = false</code><span>Pastille horloge au coin de fin. Le bouton reste actif.</span></div>
+<div class="par"><code>disabledReason: String? = nil</code><span>La phrase montrée sous le bouton éteint et lue après son nom.</span></div>
+<div class="par"><code>shortcut: String? = nil</code><span>Une touche, remise à K55. Montrée quand un clavier est branché.</span></div>
+</div>
+<p style="display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px; border-radius: 18px; border: 1.5px dashed var(--line); font-size: 14px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--warn); display: inline-flex">[[ic:warning-circle]]</span><span><b style="color: var(--ink)">À trancher à l'ouverture du lot.</b> K16 porte déjà <code>MeeshyModeCapsule</code> (genres <code>glass</code> et <code>solid</code>, état occupé). K16 garde son cadre, son en-tête et sa plaque ; ses deux capsules deviennent des <code>MeeshyButton</code> en <code>glass</code> et <code>primary</code>, taille 44. Le nom <code>MeeshyModeCapsule</code> reste un alias le temps d'une version.</span></p>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Un contrat, trois matières</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<h3 class="d" style="font-size: 20px">iOS · SwiftUI</h3></div>
+<div class="demo gst">
+<div class="orb" style="width: 120px; height: 120px; left: 20px; top: -30px; background: var(--accent); opacity: .7"></div>
+<div class="btn g">[[ic:export]]<span>Partager</span></div>
+<div class="rnd">[[ic:chat-circle-fill l]]</div>
+</div>
+<ul>
+<li>Un <code>Button</code> et un seul <code>ButtonStyle</code>, mené par la recette. Le genre <code>glass</code> appelle K01 : <code>glassEffect</code> interactif sur iOS 26.</li>
+<li>Glyphe qui change : <code>contentTransition(.symbolEffect(.replace))</code>. Tic : <code>sensoryFeedback</code>.</li>
+<li>Maintien : <code>DragGesture(minimumDistance: 0)</code>, relâché aussi quand le doigt sort ou que la vue disparaît.</li>
+<li>Pointeur iPad : <code>hoverEffect</code>. Clavier : <code>keyboardShortcut</code> et anneau de focus.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Avant iOS 26 : verre dessiné de K01. Avant iOS 17 : pas de <code>symbolEffect</code>, le glyphe se fond ; le tic passe par <code>HapticFeedback.light()</code>.</p>
+</div>
+
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<h3 class="d" style="font-size: 20px">Android · Compose</h3></div>
+<div class="demo">
+<div class="btn tonal" style="color: var(--ink)">[[ic:export]]<span>Partager</span></div>
+<div class="rnd sq">[[ic:plus l]]</div>
+<div class="rnd ext">[[ic:note-pencil]]<span>Nouveau message</span></div>
+</div>
+<ul>
+<li>Capsule <code>CircleShape</code> sur une <code>Surface</code>. Le genre <code>glass</code> est la <b>surface tonale</b> de K01 : aucun flou.</li>
+<li><code>round</code> : carré-arrondi de rayon 18, et FAB étendu qui se replie au défilement. Rayon animé par <code>MaterialShapes</code> et <code>Morph</code>.</li>
+<li>Glyphe qui change : <code>AnimatedContent</code>. Tic : <code>HapticFeedback</code> par <code>MeeshyHaptics</code>. Cible de 48 dp.</li>
+<li>Maintien : <code>pointerInput</code> avec <code>awaitFirstDown</code> et <code>waitForUpOrCancellation</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>Morph</code> (Material 3 antérieur) : le rayon s'anime seul. Le <code>hold</code> garde son disque rond et ses ondes sur toutes les versions.</p>
+</div>
+
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<h3 class="d" style="font-size: 20px">Web · Preact</h3></div>
+<div class="demo">
+<div class="btn p hv" style="padding: 0 16px 0 20px">[[ic:chat-circle]]<span>Lui écrire</span><kbd>M</kbd></div>
+<div class="btn q fc">[[ic:copy]]<span>Copier</span><kbd>C</kbd></div>
+</div>
+<ul>
+<li>Un <code>&lt;button type="button"&gt;</code>. Appui, survol et focus sont <code>:active</code>, <code>:hover</code> sous <code>(hover: hover)</code> et <code>:focus-visible</code> : aucun état.</li>
+<li>Occupé : <code>aria-busy</code>. Éteint : <code>aria-disabled</code> et la raison en <code>aria-describedby</code>, pour rester atteignable au clavier.</li>
+<li>Touche K55 dans <code>trailing</code>, dite par <code>aria-keyshortcuts</code>. Verre : <code>backdrop-filter</code> par K01.</li>
+<li>Maintien : <code>pointerdown</code> avec <code>setPointerCapture</code> ; au clavier, Espace tenue.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>backdrop-filter</code> : fond plein de K01. Sans pointeur fin : ni survol ni touche affichée.</p>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Un bouton par écran, aucun pour tous</h2><p>Relevé dans le dépôt le 16 novembre 2026 : 236 fichiers iOS dessinent une <code>Capsule()</code> à la main, 177 composants web portent <code>rounded-full</code>. Le bouton existe partout, privé à chaque fois. On extrait le plus complet, on rebranche les autres.</p></header>
+<div class="card" style="overflow: hidden">
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/MeeshyPrimaryButton.kt</span><p><span class="be">Devient le composant</span> Déjà dans <code>:sdk-ui</code>, déjà opaque : <code>text</code>, <code>onClick</code>, <code>enabled</code>, <code>loading</code>. 52 dp, dégradé de marque. Il gagne les genres, les tailles, le glyphe et la capsule.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/auth/AuthActionButton.kt · apps/android/feature/auth/…/onboarding/OnboardingButtons.kt</span><p>Les boutons de connexion et d'accueil : deux dessins de plus du même primaire. Rebranchés.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/talkie/TalkieHold.kt</span><p><code>Modifier.talkieHold</code> : le geste de maintien, déjà isolé. Il devient le geste de la forme <code>hold</code>. <code>apps/android/app/…/talkie/TalkieOverlay.kt</code> garde l'indicateur de qui parle.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/chrome/MeeshyFloatingButtons.kt</span><p>Les boutons flottants de la liste. Ils donnent à la forme <code>round</code> son carré-arrondi et son ombre.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthActionButton.swift</span><p><span class="be">Devient le composant</span> <code>title</code>, <code>isLoading</code>, action asynchrone et une recette en valeurs (<code>AuthActionButtonAppearance.resolve</code>). Le plus proche du contrat.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift</span><p><code>PressableButtonStyle</code> : la réponse à l'appui, appelée par 13 sites. Elle devient la réponse du composant, puis disparaît des écrans.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/ThemedActionButton.swift</span><p>Disque teinté à pastille de compte et halo : le jumeau de la forme <code>round</code>. Sa pastille part à K41.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/ConversationLayers/ConversationHeaderTalkieButton.swift · apps/ios/Meeshy/Features/Talkie/TalkieHoldGesture.swift</span><p>Le bouton Talkie de l'en-tête et son <code>TalkieHoldModifier</code> : le jumeau de la forme <code>hold</code>. Le geste entre dans le kit, le canal audio reste à l'app.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyModeCapsule.swift</span><p>La capsule de K16, verre ou pleine, avec occupé. K16 garde son cadre et délègue ses capsules à K40.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/admin/button.tsx</span><p><span class="be">Devient le composant</span> <code>AdminButton</code> : tons <code>primary</code>, <code>secondary</code>, <code>danger</code>, tailles 44 et 52, focus visible, libellé jamais replié. Il sort de l'administration et prend la capsule.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/call-round-button.tsx · apps/web/src/components/thread-header-talkie.tsx</span><p><code>RoundButton</code> (disque, <code>label</code> dit, tons) pour la forme <code>round</code> ; <code>ThreadHeaderTalkie</code> pour le maintien. Rebranchés.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Sept endroits qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+
+<div class="kcell kc" style="padding: 24px 18px">
+<div class="stage" style="align-items: stretch; justify-content: flex-start; gap: 10px">
+<span class="d" style="font-size: 20px; margin-bottom: 4px">Bon retour</span>
+<span class="tonal" style="display: flex; align-items: center; min-height: 46px; padding: 0 14px; border-radius: 14px; font-size: 14px; color: var(--ink2)">aissa</span>
+<button class="btn p" style="width: 100%">Se connecter</button>
+<button class="btn tx ta" style="align-self: center">Créer un compte</button>
+</div>
+<div class="cp"><b>Connexion et inscription</b><span class="kcap">Un primaire pleine largeur, un texte dessous. Occupé pendant l'appel réseau.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 18px">
+<div class="stage" style="align-items: stretch; justify-content: flex-start; gap: 14px; --tint: #FBBF24">
+<div style="display: flex; align-items: center; gap: 10px"><span class="ib" style="width: 40px; height: 40px; border-radius: 14px; background: var(--l-comm); color: #0B0B12">[[ic:users-four]]</span><div style="display: flex; flex-direction: column; min-width: 0"><span class="d" style="font-size: 16px">Photo de rue</span><span style="font-size: 12px; color: var(--ink3)">1 204 membres</span></div></div>
+<button class="btn t" style="width: 100%">[[ic:users-four]]<span>Rejoindre</span></button>
+</div>
+<div class="cp"><b>Fiche d'une communauté</b><span class="kcap"><code>tinted</code> à la teinte de la communauté. Après l'entrée : <code>outline</code> « Membre ».</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 18px">
+<div class="stage" style="align-items: stretch; justify-content: flex-start; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; min-height: 56px; --accent: #4ECDC4"><span class="av" style="width: 38px; height: 38px; font-size: 14px">LM</span><div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14px">Léo Marchetti</span><span style="font-size: 12px; color: var(--err)">Manqué · 14:02</span></div><button class="btn a h36">[[ic:phone s]]<span>Rappeler</span></button></div>
+<div class="sep" style="margin: 0"></div>
+<div style="display: flex; align-items: center; gap: 10px; min-height: 56px; --accent: #FF6B6B"><span class="av" style="width: 38px; height: 38px; font-size: 14px">MO</span><div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14px">Mina Okafor</span><span style="font-size: 12px; color: var(--ink3)">Hier · 6 min</span></div><button class="btn q h36">[[ic:phone s]]<span>Rappeler</span></button></div>
+</div>
+<div class="cp"><b>Journal d'appels</b><span class="kcap">Taille 36 en fin de rangée, cible de 44. Accent sur l'appel manqué seulement.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 18px">
+<div class="stage" style="align-items: stretch; justify-content: flex-start; gap: 10px">
+<span class="d" style="font-size: 17px">Vider le cache ?</span>
+<span style="font-size: 12.5px; line-height: 1.4; color: var(--ink2); margin-bottom: 4px">412 Mo. Tes messages restent sur le serveur.</span>
+<button class="btn x" style="width: 100%">[[ic:trash]]<span>Vider</span></button>
+<button class="btn tx" style="align-self: center">Annuler</button>
+</div>
+<div class="cp"><b>Confirmation d'un réglage</b><span class="kcap"><code>danger</code> puis <code>text</code>. Le geste destructif ne ressemble jamais au principal.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 18px">
+<div class="stage" style="align-items: stretch; justify-content: flex-start; gap: 14px">
+<div style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: var(--line)"></div>
+<span class="d" style="font-size: 17px">Visible pendant</span>
+<div style="display: flex; gap: 8px; flex-wrap: wrap"><span class="chip on">24 h</span><span class="chip">48 h</span><span class="chip">7 j</span></div>
+<div style="display: flex; gap: 8px">
+<button class="btn p sm" style="flex: 1.6">Appliquer</button>
+<button class="btn q sm" style="flex: 1">Annuler</button>
+</div>
+</div>
+<div class="cp"><b>Pied d'une feuille du composer</b><span class="kcap">Une <code>pair</code> au bas de K15. Le principal a la plus grande part.</span></div>
+</div>
+
+<div class="kcell kc leo" style="padding: 24px 18px">
+<div class="stage" style="gap: 16px">
+<button class="ptt live s64" aria-label="Tu parles à Léo" style="margin-top: 34px">[[ic:microphone-fill l]]</button>
+<span class="d" style="font-size: 15px; margin-top: 30px">Ta voix part en direct</span>
+</div>
+<div class="cp"><b>Talkie d'une conversation</b><span class="kcap">Forme <code>hold</code>, à l'accent de la conversation. Le même disque que sur la fiche.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 18px; grid-column: span 2">
+<div class="stage" style="align-items: stretch; justify-content: flex-start; gap: 0; position: relative">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 58px; --accent: #4ECDC4"><span class="av" style="width: 40px; height: 40px; font-size: 14px">LM</span><div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14px">Léo Marchetti</span><span style="font-size: 12.5px; color: var(--ink3)">Tu passes par Alfama ce soir ?</span></div><span style="font-size: 11.5px; color: var(--ink3)">14:20</span></div>
+<div class="sep" style="margin: 0"></div>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 58px; --accent: #F8B500"><span class="av" style="width: 40px; height: 40px; font-size: 14px">TR</span><div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14px">Tomás Ribeiro</span><span style="font-size: 12.5px; color: var(--ink3)">La plage est vide, viens</span></div><span style="font-size: 11.5px; color: var(--ink3)">11:05</span></div>
+<div class="sep" style="margin: 0"></div>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 58px; --accent: #3498DB"><span class="av" style="width: 40px; height: 40px; font-size: 14px">YT</span><div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14px">Yuki Tanaka</span><span style="font-size: 12.5px; color: var(--ink3)">Merci pour le son</span></div><span style="font-size: 11.5px; color: var(--ink3)">Hier</span></div>
+<button class="rnd br" aria-label="Nouveau message" style="align-self: flex-end; margin: 6px 4px 0 0">[[ic:note-pencil l]]</button>
+</div>
+<div class="cp"><b>Liste des conversations</b><span class="kcap">Forme <code>round</code>, genre <code>primary</code> : « Nouveau message », une seule fois, dans la zone du pouce. Sur Android, le même appel rend le FAB carré-arrondi.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque genre × taille × état rend la hauteur, les marges, le fond, l'encre et l'ombre du tableau. Vecteurs <code>K40-MeeshyButton.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Une action, une fois.</b> Le toucher part au relâcher dans la cible. Occupé ou désactivé : ni action ni tic. Différé : l'action part, la pastille est là.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Largeur stable.</b> Passer de repos à occupé ne change la largeur d'aucun genre d'un seul point. En <code>pair</code>, les deux hauteurs sont égales et les parts valent 1,6 et 1.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Nom : <code>title</code>, jamais le nom du glyphe. Rôle bouton. « En cours », « sera envoyé » et la raison d'un bouton éteint sont dits. La touche et le chevron sont muets.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Maintien.</b> <code>onHoldChange(true)</code> au doigt posé, <code>(false)</code> au doigt levé, sorti, ou si le bouton disparaît. Jamais deux <code>true</code> de suite. Une alternative en deux touchers existe.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> 44 pt, 48 dp, 44 px au moins pour les quatre tailles. Libellé à 4,5:1 sur chaque fond, en clair et en sombre ; blanc sur <code>--brand-fill</code> seulement.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Mouvement réduit, grande police, RTL, voisins.</b> Ni échelle ni ondes sous « réduire les animations ». À 200 %, le libellé ne se coupe pas : la paire s'empile. En arabe, glyphe et emplacement de fin échangent leur bord, le chevron se retourne. Presser un bouton ne re-rend ni ne repeint aucun voisin. Garde de source : aucun verre dessiné, aucun type du domaine, aucun singleton dans les fichiers de K40.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> La couleur ne porte jamais le sens seule : le danger est aussi le dernier et sous un filet, l'occupé est dit. Un bouton éteint reste atteignable et explique pourquoi. Tab, Entrée et Espace partout.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Seules la transformation et l'opacité s'animent ; l'ombre teintée ne s'anime jamais. La réponse à l'appui part en moins d'une image, avant l'action. Les ondes du <code>hold</code> s'arrêtent hors écran.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8948}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

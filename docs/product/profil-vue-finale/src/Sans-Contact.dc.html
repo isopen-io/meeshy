@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Partage sans contact — le parcours — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.ph1{position:absolute;width:76px;height:136px}
+.ph1>b{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:22px;border:2px solid rgba(238,242,255,.82);background:rgba(255,255,255,.07);box-shadow:0 14px 30px rgba(9,9,11,.35)}
+.ph1.l>b{transform:rotate(65deg)}.ph1.r>b{transform:rotate(-65deg)}
+.ph1.l .av{transform:rotate(-65deg)}.ph1.r .av{transform:rotate(65deg)}
+.ph1.l.go{animation:scNearL 2.8s ease-in-out infinite}.ph1.r.go{animation:scNearR 2.8s ease-in-out infinite}
+.ph1.r.wait>b{border-style:dashed;border-color:rgba(238,242,255,.6)}
+.ond{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:2px solid var(--accent-ink);animation:mxPing 2.6s ease-out infinite}
+.goutte{position:absolute;margin:-23px 0 0 -31px;width:62px;height:46px;background:radial-gradient(circle at 50% 45%,#fff 0%,#F5E9FF 22%,#D8B4FE 52%,rgba(168,85,247,.0) 78%);box-shadow:0 0 34px 10px rgba(216,180,254,.55);animation:mxMorph 3.2s ease-in-out infinite,scDrop 3.2s ease-in-out infinite}
+.perle{position:absolute;width:12px;height:12px;border-radius:50%;background:#F5E9FF;box-shadow:0 0 14px 4px rgba(216,180,254,.6);animation:scPerle 3.2s ease-in-out infinite}
+.tuile{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:8px;min-height:124px;padding:12px 10px 12px 12px;border-radius:22px;border:1.5px solid var(--glass-line);background:rgba(255,255,255,.06)}
+.tuile>.coche{position:absolute;right:9px;top:9px;display:inline-flex}
+.mx .tuile.on{border-color:var(--accent-ink);background:rgba(168,85,247,.26)}
+.tuile>b{font-size:13.5px;font-weight:700;line-height:1.2;text-wrap:balance}
+.tuile>small{font-size:11px;font-weight:600;line-height:1.2;color:var(--ink2)}
+.arrive{position:relative;overflow:hidden;transform:rotate(-3.5deg)}
+.arrive::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(108deg,rgba(255,255,255,0) 38%,rgba(255,255,255,.2) 50%,rgba(255,255,255,0) 62%);background-size:260% 100%;background-position:120% 0;animation:scSheen 5s ease-in-out infinite}
+.qr{position:relative;display:grid;grid-template-columns:repeat(21,1fr);grid-template-rows:repeat(21,1fr);width:150px;height:150px}
+.qr>i{display:block}
+.qr>i.o{background:#1B1140;border-radius:36%;transform:scale(.86)}
+.eye{position:absolute;width:33.34%;height:33.34%;border:7px solid #6D28D9;border-radius:15px;display:flex;align-items:center;justify-content:center}
+.eye>b{display:block;width:58%;height:58%;border-radius:6px;background:#1B1140}
+.vis{position:relative;width:150px;height:150px;flex:none;border-radius:26px;background:rgba(9,9,11,.42);display:flex;align-items:center;justify-content:center;color:var(--ink2)}
+.vis>i{position:absolute;width:34px;height:34px;border:3.5px solid var(--accent-ink)}
+.vis>i:nth-child(1){left:14px;top:14px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}
+.vis>i:nth-child(2){right:14px;top:14px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}
+.vis>i:nth-child(3){left:14px;bottom:14px;border-right:0;border-top:0;border-radius:0 0 0 14px}
+.vis>i:nth-child(4){right:14px;bottom:14px;border-left:0;border-top:0;border-radius:0 0 14px 0}
+.temps{position:relative;display:flex;flex-direction:column;gap:12px;padding:0 20px}
+.temps>hr{width:100%;height:1px;margin:0;border:0;background:var(--glass-line)}
+.mx .temps>.tag{color:var(--accent-ink)}
+@keyframes scNearL{0%,100%{transform:translateX(-7px)}50%{transform:translateX(7px)}}
+@keyframes scNearR{0%,100%{transform:translateX(7px)}50%{transform:translateX(-7px)}}
+@keyframes scDrop{0%,100%{transform:scale(.86,1)}50%{transform:scale(1.18,.9)}}
+@keyframes scPerle{0%,100%{transform:translateY(0) scale(1);opacity:.95}50%{transform:translateY(7px) scale(.6);opacity:.5}}
+@keyframes scSheen{0%,35%{background-position:120% 0}85%,100%{background-position:-40% 0}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column; background: linear-gradient(180deg, #34176E 0px, #1C0F3F 420px, #170C36 1500px, #0F0A22 2300px, #09090B 100%)">
+
+<div aria-hidden="true" style="position: absolute; inset: 0; overflow: hidden; pointer-events: none">
+<div class="orb" style="width: 260px; height: 260px; left: -100px; top: 110px; background: #A855F7; opacity: .5"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -90px; top: 560px; background: #6366F1; opacity: .46; animation-delay: -4s"></div>
+<div class="orb" style="width: 240px; height: 240px; left: -110px; top: 1230px; background: #2ECC71; opacity: .26; animation-delay: -2s"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -100px; top: 1820px; background: #A855F7; opacity: .34; animation-delay: -6s"></div>
+</div>
+
+<header style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 54px 20px 0">
+<button class="ib g" aria-label="Fermer">[[ic:x]]</button>
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:contactless-payment]]</span>
+<h1 class="d" style="font-size: 20px">Sans contact</h1>
+<span class="new">Nouveau</span>
+</div>
+<span aria-hidden="true" style="width: 44px; height: 44px"></span>
+</header>
+
+<section class="rise" style="position: relative; display: flex; flex-direction: column; gap: 6px; padding: 30px 0 0">
+<div class="temps"><hr><span class="tag">1 · Approche</span></div>
+<div aria-hidden="true" style="position: relative; height: 196px">
+<span class="ond" style="left: 195px; top: 84px"></span>
+<span class="ond" style="left: 195px; top: 84px; animation-delay: -.87s"></span>
+<span class="ond" style="left: 195px; top: 84px; animation-delay: -1.74s"></span>
+<span class="ph1 l go" style="left: 54px; top: 38px"><b><span class="av" style="width: 40px; height: 40px; font-size: 15px">AN</span></b></span>
+<span class="ph1 r go wait" style="left: 260px; top: 38px"><b></b></span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 28px; text-align: center">
+<h2 class="d" style="font-size: 26px; text-wrap: balance">Approche le haut de ton téléphone du sien</h2>
+<p style="font-size: 14px; color: var(--ink2); text-wrap: pretty">Rien ne part tant que tu n'as pas choisi.</p>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .1s; position: relative; display: flex; flex-direction: column; gap: 6px; padding: 44px 0 0">
+<div class="temps"><hr><span class="tag">2 · Trouvé</span></div>
+<div aria-hidden="true" style="position: relative; height: 184px">
+<span class="ph1 l" style="left: 81px; top: 32px"><b><span class="av" style="width: 40px; height: 40px; font-size: 15px">AN</span></b></span>
+<span class="ph1 r" style="left: 233px; top: 32px"><b><span class="rise" style="animation-delay: .5s; display: inline-flex"><span class="av" style="width: 40px; height: 40px; font-size: 15px; --accent: #2ECC71">SB</span></span></b></span>
+<span class="goutte" style="left: 195px; top: 74px"></span>
+<span class="perle" style="left: 189px; top: 34px"></span>
+<span class="perle" style="left: 191px; top: 112px; width: 8px; height: 8px; animation-delay: -1.6s"></span>
+</div>
+<div style="padding: 0 20px">
+<div class="glass" style="border-radius: 30px; padding: 20px 16px 18px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px; padding: 0 2px">
+<span class="av" style="width: 48px; height: 48px; font-size: 17px; --accent: #2ECC71">SB</span>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<h2 class="d" style="font-size: 21px">Sofia Benali est là</h2>
+<span class="mono" style="color: #86EFAC">@sofia.b</span>
+</div>
+</div>
+<span class="tag" style="color: var(--ink2); padding: 0 2px">Ce que je donne</span>
+<div role="group" aria-label="Ce que je donne" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<button class="tuile on" role="checkbox" aria-checked="true">
+<span class="coche" style="color: var(--accent-ink)">[[ic:check-circle-fill]]</span>
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:user-focus l]]</span>
+<b>Ma vitrine</b>
+<small>Ce que voit le Public</small>
+</button>
+<button class="tuile" role="checkbox" aria-checked="false">
+<span class="coche" style="color: var(--ink2)">[[ic:circle]]</span>
+<span style="display: inline-flex; color: var(--ink)">[[ic:handshake l]]</span>
+<b>Une demande d'ami</b>
+<small>Elle répond quand elle veut</small>
+</button>
+<button class="tuile" role="checkbox" aria-checked="false" aria-disabled="true" style="border-style: dashed">
+<span class="coche" style="color: var(--ink2)">[[ic:lock-simple]]</span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:phone l]]</span>
+<b style="color: var(--ink2)">Mon numéro</b>
+<small>Proches seulement</small>
+</button>
+</div>
+<button class="btn a" style="width: 100%; min-height: 54px; font-size: 16px">[[ic:contactless-payment]]<span>Donner</span></button>
+<p style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink2)">[[ic:arrows-left-right s]]<span>Chacun choisit de son côté</span></p>
+</div>
+</div>
+</section>
+
+<section style="--accent: #2ECC71; --accent-ink: #86EFAC; position: relative; display: flex; flex-direction: column; gap: 6px; padding: 44px 0 0">
+<div class="temps"><hr><span class="tag" style="color: #D8B4FE">3 · Reçu</span></div>
+<div class="rise" style="animation-delay: .2s; display: flex; flex-direction: column; align-items: center; padding: 26px 0 0">
+<div class="arrive glass" style="width: 300px; border-radius: 34px; padding: 26px 24px 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; background: linear-gradient(160deg, rgba(78,205,196,.26), rgba(255,255,255,.08) 60%)">
+<span class="ring"><span class="av" style="width: 88px; height: 88px; font-size: 31px">SB</span></span>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+<h2 class="d" style="font-size: 27px">Sofia Benali</h2>
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@sofia.b</span>
+</div>
+<p style="font-size: 14.5px; color: var(--ink); text-wrap: balance">Programmatrice de festival. Tunis ⇄ Marseille.</p>
+<span class="chip" style="background: rgba(9,9,11,.3); border-color: var(--glass-line); color: var(--ink)">[[ic:map-pin s]]<span>Marseille</span></span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 30px 20px 0">
+<button class="btn a" style="width: 100%; min-height: 54px; font-size: 16px">[[ic:user-focus]]<span>Voir sa vitrine</span></button>
+<button class="btn q" style="width: 100%; min-height: 54px; border-color: var(--glass-line); color: var(--ink)">[[ic:handshake]]<span>Demander à être amis</span></button>
+<p style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--ok)">[[ic:check-circle s]]<span>Sofia a reçu ta vitrine</span></p>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .3s; position: relative; display: flex; flex-direction: column; gap: 18px; padding: 44px 0 0">
+<div class="temps"><hr><span class="tag">4 · Sans la puce</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 0 20px">
+<div class="glass" style="border-radius: 30px; padding: 14px; display: flex; align-items: center; gap: 16px">
+<div role="img" aria-label="QR de mon profil" style="padding: 10px; border-radius: 22px; background: #F5F3FF; flex: none">
+<div class="qr">
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i>
+<i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i>
+<i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i>
+<i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i>
+<i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i class="o"></i>
+<span class="eye" style="left: 0; top: 0"><b></b></span>
+<span class="eye" style="right: 0; top: 0"><b></b></span>
+<span class="eye" style="left: 0; bottom: 0"><b></b></span>
+<span style="position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; background: #F5F3FF; display: flex; align-items: center; justify-content: center"><span class="av" style="width: 30px; height: 30px; font-size: 11px">AN</span></span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:qr-code l]]</span>
+<h2 class="d" style="font-size: 20px; text-wrap: balance">Montre ce QR</h2>
+<span class="mono" style="font-size: 12px; color: var(--ink2)">meeshy.me/@aissa</span>
+</div>
+</div>
+
+<div aria-hidden="true" style="display: flex; align-items: center; gap: 14px; padding: 0 6px">
+<span style="flex: 1; height: 1px; background: var(--glass-line)"></span>
+<span class="tag" style="color: var(--ink2)">ou</span>
+<span style="flex: 1; height: 1px; background: var(--glass-line)"></span>
+</div>
+
+<div class="glass" style="border-radius: 30px; padding: 14px; display: flex; align-items: center; gap: 16px">
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; padding-left: 6px">
+<h2 class="d" style="font-size: 20px; text-wrap: balance">Ou scanne le sien</h2>
+<p style="font-size: 13px; color: var(--ink2); text-wrap: pretty">Vise son QR, sa carte s'ouvre.</p>
+<button class="btn g sm" style="margin-top: 4px; padding: 0 14px">[[ic:scan s]]<span>Scanner</span></button>
+</div>
+<div class="vis" aria-hidden="true"><i></i><i></i><i></i><i></i>[[ic:scan xl]]</div>
+</div>
+</div>
+</section>
+
+<p style="position: relative; padding: 30px 28px 34px; text-align: center; font-size: 13px; font-weight: 500; color: var(--ink3); text-wrap: balance">Android : même geste, par NFC. Web : QR.</p>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2325}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

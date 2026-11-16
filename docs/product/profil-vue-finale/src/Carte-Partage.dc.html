@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Partager ma position — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.halo{animation:shBreath 4.5s ease-in-out infinite}
+.live{animation:shBlink 1.6s ease-in-out infinite}
+.tile{position:relative;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;min-height:132px;padding:14px 12px;border-radius:24px;background:var(--field);border:1.5px solid var(--line)}
+.tile.on{border:2px solid var(--accent);background:color-mix(in oklab,var(--accent) 16%,var(--field));box-shadow:0 10px 26px color-mix(in oklab,var(--accent) 28%,transparent)}
+.stop{display:flex;flex-direction:column;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;position:relative}
+.stop>i{display:flex;align-items:center;justify-content:center;height:60px}
+.stop>i>b{display:block;border-radius:50%;border:1.5px solid var(--ink3);background:color-mix(in oklab,var(--ink3) 16%,var(--field))}
+.stop.on>i>b{border:2px solid var(--accent);background:color-mix(in oklab,var(--accent) 34%,var(--raised));box-shadow:0 0 0 7px color-mix(in oklab,var(--accent) 16%,transparent)}
+@keyframes shBreath{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.06)}}
+@keyframes shBlink{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 330px; overflow: hidden">
+[[map]]
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(9,9,11,.55) 0%, rgba(9,9,11,0) 34%)"></div>
+<div class="halo" style="position: absolute; left: 195px; top: 184px; width: 132px; height: 132px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); border: 1.5px solid var(--accent); transform: translate(-50%, -50%)"></div>
+<div class="pin" style="left: 195px; top: 184px">
+<span class="av" style="width: 40px; height: 40px; font-size: 15px; border: 3px solid var(--ground)">AN</span>
+</div>
+</div>
+
+<div style="position: relative; height: 260px">
+<span class="tag" style="position: absolute; left: 50%; top: 53px; transform: translateX(-50%); padding: 2px 9px; border-radius: 999px; background: rgba(9,9,11,.72); font-size: 10px; white-space: nowrap; color: var(--ink2)">Pendant le partage</span>
+<div role="status" aria-label="Activité en direct, affichée pendant le partage : position partagée avec Léo" style="position: absolute; left: 45px; top: 76px; width: 300px; height: 40px; border-radius: 20px; background: #000; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 10px 28px rgba(0,0,0,.55); display: flex; align-items: center; gap: 7px; padding: 0 5px 0 12px">
+<span class="live" style="display: inline-flex; color: var(--accent-ink)">[[ic:map-pin-fill s]]</span>
+<span style="flex: 1; min-width: 0; font-size: 11.5px; font-weight: 600; letter-spacing: -.015em; white-space: nowrap; color: var(--ink)">Position partagée avec Léo</span>
+<span class="mono" style="font-size: 12px; font-weight: 700; color: var(--accent-ink)">59:48</span>
+<button style="height: 30px; padding: 0 10px; border-radius: 15px; background: rgba(248,113,113,.2); color: var(--err); font-size: 11.5px; font-weight: 700">Arrêter</button>
+</div>
+
+<span class="glass" style="position: absolute; left: 50%; top: 222px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px 0 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; color: var(--ink); background: rgba(19,17,28,.66)"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+<button class="ib g" aria-label="Fermer" style="position: absolute; left: 16px; top: 200px">[[ic:x]]</button>
+<button class="ib g" aria-label="Recentrer sur moi" style="position: absolute; right: 16px; top: 200px">[[ic:crosshair]]</button>
+</div>
+
+<section class="rise" aria-label="Partager ma position" style="position: relative; flex: 1; background: var(--raised); border-radius: 34px 34px 0 0; border-top: 1px solid var(--line); box-shadow: 0 -18px 44px rgba(0,0,0,.5); padding: 10px 20px 24px; display: flex; flex-direction: column">
+<div style="width: 36px; height: 5px; border-radius: 3px; background: var(--ink3); opacity: .6; align-self: center"></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding-top: 18px">
+<h1 class="d" style="font-size: 24px">Partager ma position</h1>
+<div style="display: flex; align-items: center; gap: 8px">
+<span class="av" style="--accent: #4ECDC4; width: 26px; height: 26px; font-size: 10.5px">LM</span>
+<span style="font-size: 14.5px; color: var(--ink2)">avec <b style="color: var(--ink); font-weight: 600">Léo Marchetti</b></span>
+<span class="chip" style="min-height: 26px; padding: 0 10px; font-size: 12px; margin-left: 2px">[[ic:fire s]]<span>Proche</span></span>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .08s; padding-top: 26px; display: flex; flex-direction: column; gap: 12px">
+<h2 class="d" style="font-size: 17px">Pendant</h2>
+<div role="radiogroup" aria-label="Durée du partage" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<button class="tile on" role="radio" aria-checked="true">
+<span style="position: absolute; right: 10px; top: 10px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #0B0B12">[[ic:check-fat-fill s]]</span>
+<span class="d" style="font-size: 40px; line-height: 1">1</span>
+<span style="font-size: 14px; font-weight: 700">heure</span>
+</button>
+<button class="tile" role="radio" aria-checked="false">
+<span class="d" style="font-size: 40px; line-height: 1; color: var(--ink2)">8</span>
+<span style="font-size: 14px; font-weight: 700; color: var(--ink2)">heures</span>
+</button>
+<button class="tile" role="radio" aria-checked="false" aria-disabled="true" style="border-style: dashed; background: transparent">
+<span style="position: absolute; left: 12px; top: 12px; display: inline-flex; color: var(--ink3)">[[ic:infinity l]]</span>
+<span style="font-size: 12.5px; font-weight: 700; line-height: 1.25; color: var(--ink3)">Jusqu'à ce que j'arrête</span>
+<span style="margin-top: 5px; font-size: 11px; font-weight: 700; white-space: nowrap; color: var(--ink2)">Sang seulement</span>
+<span style="position: absolute; right: 10px; top: 10px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--field); color: var(--ink2)">[[ic:lock-simple s]]</span>
+</button>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .16s; padding-top: 28px; display: flex; flex-direction: column; gap: 12px">
+<h2 class="d" style="font-size: 17px">Précision</h2>
+<div style="border-radius: 26px; background: var(--field); border: 1px solid var(--line); padding: 14px 10px 0; display: flex; flex-direction: column">
+<div role="radiogroup" aria-label="Précision de la position" style="position: relative; display: flex">
+<div style="position: absolute; left: 16.66%; right: 16.66%; top: 29px; height: 3px; border-radius: 2px; background: var(--line)"></div>
+<div style="position: absolute; left: 16.66%; width: 33.34%; top: 29px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--line), var(--accent))"></div>
+<button class="stop" role="radio" aria-checked="false">
+<i><b style="width: 56px; height: 56px"></b></i>
+<span style="font-size: 13.5px; font-weight: 600; color: var(--ink2)">Ville</span>
+</button>
+<button class="stop on" role="radio" aria-checked="true">
+<i><b style="width: 34px; height: 34px"></b></i>
+<span style="font-size: 13.5px; font-weight: 800; color: var(--ink)">Quartier</span>
+</button>
+<button class="stop" role="radio" aria-checked="false">
+<i><b style="width: 10px; height: 10px; background: var(--ink3)"></b></i>
+<span style="font-size: 13.5px; font-weight: 600; color: var(--ink2)">Exact</span>
+</button>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; margin: 14px 4px 0; padding: 13px 4px 14px; border-top: 1px solid var(--line)">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:eye s]]</span>
+<p style="font-size: 12.5px; letter-spacing: -.01em; white-space: nowrap; color: var(--ink2)">Léo te verra dans un rayon d'environ <b style="color: var(--ink); font-weight: 700">600 m</b></p>
+</div>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .24s; padding-top: 16px; display: flex; flex-direction: column">
+<div class="row" style="padding: 8px 0">
+<span class="ib" style="background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-ink)">[[ic:bell]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 600">Prévenir Léo</span><span style="font-size: 12.5px; color: var(--ink3)">Il reçoit une notification</span></span>
+<button class="sw on" role="switch" aria-checked="true" aria-label="Prévenir Léo"></button>
+</div>
+<div class="sep" style="margin: 0 0 0 58px"></div>
+<div class="row" style="padding: 8px 0">
+<span class="ib" style="background: var(--field); color: var(--ink2)">[[ic:battery-medium]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 600">Partager aussi ma batterie</span><span style="font-size: 12.5px; color: var(--ink3)">Pendant le partage seulement</span></span>
+<button class="sw" role="switch" aria-checked="false" aria-label="Partager aussi ma batterie"></button>
+</div>
+</div>
+
+<div class="rise" style="animation-delay: .32s; padding-top: 18px; display: flex; flex-direction: column; gap: 12px">
+<button class="btn a" style="width: 100%; min-height: 56px; font-size: 16px; box-shadow: 0 10px 26px color-mix(in oklab, var(--accent) 40%, transparent)">[[ic:map-pin-fill]]<span>Partager pendant 1 heure</span></button>
+<p style="font-size: 12.5px; text-align: center; color: var(--ink3)">Tu peux arrêter à tout moment. Rien n'est gardé après.</p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1032}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

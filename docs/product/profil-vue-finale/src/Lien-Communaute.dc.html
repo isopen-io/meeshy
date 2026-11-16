@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Lien de communauté — Beatmakers Dakar — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.cc{display:inline-flex;align-items:center;justify-content:center;height:22px;min-width:30px;padding:0 6px;border-radius:7px;background:var(--field);border:1px solid var(--line);font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink2)}
+.act{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;font-size:11.5px;font-weight:600;color:var(--ink2)}
+.who{display:flex;flex-direction:column;align-items:center;gap:8px;flex:none;width:62px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.tick{position:absolute;right:-3px;bottom:-3px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--l-comm);color:#0B0B12;border:2.5px solid var(--ground);animation:lcPop .5s cubic-bezier(.3,1.6,.5,1) .2s both}
+.draw{stroke-dasharray:1;stroke-dashoffset:1;animation:lcDraw .8s cubic-bezier(.3,.8,.3,1) forwards}
+.fade{animation:lcFade .5s ease both}
+@keyframes lcDraw{to{stroke-dashoffset:0}}
+@keyframes lcFade{from{opacity:0}to{opacity:1}}
+@keyframes lcPop{from{transform:scale(0)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.draw{stroke-dashoffset:0}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 520px; overflow: hidden; pointer-events: none">
+<div class="orb" style="width: 240px; height: 240px; left: -90px; top: 40px; background: #FBBF24; opacity: .2"></div>
+<div class="orb" style="width: 190px; height: 190px; right: -80px; top: 260px; background: #F59E0B; opacity: .13; animation-delay: -4s"></div>
+</div>
+
+<header style="position: relative; display: flex; align-items: center; gap: 12px; padding: 54px 16px 0">
+<button class="ib g" aria-label="Retour à mes liens">[[ic:caret-left]]</button>
+<h1 class="d" style="flex: 1; min-width: 0; font-size: 20px">Lien de communauté</h1>
+<button class="ib g" aria-label="Plus d'options">[[ic:dots-three]]</button>
+</header>
+
+<section class="rise" style="position: relative; padding: 20px 20px 0">
+<div class="ticket" style="--cut: 176px; background: linear-gradient(160deg, color-mix(in oklab, var(--l-comm) 24%, var(--raised)), var(--raised) 68%); border-color: color-mix(in oklab, var(--l-comm) 42%, transparent); box-shadow: 0 18px 40px rgba(180,83,9,.24)">
+<div style="height: 176px; padding: 18px 18px 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="ph" style="width: 56px; height: 56px; flex: none; padding: 5px 7px; border-radius: 16px; font-size: 10px; border-color: color-mix(in oklab, var(--l-comm) 50%, transparent)">photo</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span class="tag" style="color: var(--l-comm); display: inline-flex; align-items: center; gap: 5px">[[ic:users-four-fill s]]<span>Communauté</span></span>
+<h2 class="d" style="font-size: 24px; white-space: nowrap">Beatmakers Dakar</h2>
+</div>
+</div>
+<a href="#" class="mono" style="font-size: 16px; font-weight: 700; color: var(--ink); white-space: nowrap">meeshy.me/c/<span style="color: #FDE68A">beatmakers</span></a>
+<button style="display: flex; align-items: center; gap: 10px; min-height: 44px; align-self: flex-start">
+<span style="display: inline-flex">
+<span class="av" style="width: 26px; height: 26px; font-size: 10px; border: 2px solid var(--raised)">AN</span>
+<span class="av" style="--accent: #8D92CB; width: 26px; height: 26px; font-size: 10px; border: 2px solid var(--raised); margin-left: -10px">KB</span>
+<span class="av" style="--accent: #FBBF24; width: 26px; height: 26px; font-size: 10px; border: 2px solid var(--raised); margin-left: -10px">NS</span>
+</span>
+<span style="font-size: 13.5px; color: var(--ink2)">Tu l'animes · <b style="color: var(--ink); font-weight: 700">342 membres</b></span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: flex-start; gap: 2px; padding: 16px 10px 16px">
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:copy]]</span><span>Copier</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:qr-code]]</span><span>QR</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:export]]</span><span>Partager</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:pencil-simple]]</span><span>Modifier</span></button>
+<button class="act" role="switch" aria-checked="true" aria-label="Lien actif"><span style="display: flex; align-items: center; height: 52px"><span class="sw on"></span></span><span style="color: var(--ok)">Actif</span></button>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; position: relative; padding: 30px 20px 0; display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<p class="d" style="font-size: 34px; line-height: 1">342</p>
+<span style="font-size: 12.5px; color: var(--ink3)">membres</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; padding-left: 14px; border-left: 1px solid var(--line)">
+<p class="d" style="font-size: 34px; line-height: 1; color: var(--l-comm)">58</p>
+<span style="font-size: 12.5px; color: var(--ink3)">entrées par ce lien</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; padding-left: 14px; border-left: 1px solid var(--line)">
+<p class="d" style="font-size: 34px; line-height: 1">12</p>
+<span style="font-size: 12.5px; color: var(--ink3)">cette semaine</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .14s; padding: 28px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Entrées sur 30 jours</h2>
+<span style="font-size: 13px; color: var(--ink3)">≈ 2 par jour</span>
+</div>
+<div class="card" style="padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="position: relative; height: 120px">
+<svg viewBox="0 0 314 120" preserveAspectRatio="none" role="img" aria-label="Entrées par jour du 18 octobre au 16 novembre, pic de 5 le 2 novembre" style="display: block; width: 100%; height: 120px; overflow: visible">
+<rect class="fade" x="249" y="0" width="65" height="104" rx="8" fill="#FBBF24" fill-opacity=".09"></rect>
+<line x1="0" y1="104" x2="314" y2="104" stroke="rgba(165,180,252,.22)" stroke-width="1"></line>
+<line x1="0" y1="59" x2="314" y2="59" stroke="rgba(165,180,252,.12)" stroke-width="1" stroke-dasharray="3 5"></line>
+<line x1="0" y1="14" x2="314" y2="14" stroke="rgba(165,180,252,.12)" stroke-width="1" stroke-dasharray="3 5"></line>
+<path class="fade" d="M0 86 C5.4 86 5.4 86 10.8 86 C16.3 86 16.3 68 21.7 68 C27.1 68 27.1 86 32.5 86 C37.9 86 37.9 50 43.3 50 C48.7 50 48.7 68 54.1 68 C59.5 68 59.5 86 65 86 C70.4 86 70.4 68 75.8 68 C81.2 68 81.2 32 86.6 32 C92.0 32 92.0 50 97.4 50 C102.8 50 102.8 86 108.3 86 C113.7 86 113.7 68 119.1 68 C124.5 68 124.5 104 129.9 104 C135.4 104 135.4 68 140.8 68 C146.2 68 146.2 50 151.6 50 C157.0 50 157.0 14 162.4 14 C167.8 14 167.8 68 173.2 68 C178.6 68 178.6 86 184.1 86 C189.5 86 189.5 68 194.9 68 C200.3 68 200.3 50 205.7 50 C211.1 50 211.1 86 216.6 86 C222.0 86 222.0 68 227.4 68 C232.8 68 232.8 68 238.2 68 C243.6 68 243.6 86 249 86 C254.4 86 254.4 68 259.9 68 C265.3 68 265.3 86 270.7 86 C276.1 86 276.1 50 281.5 50 C286.9 50 286.9 68 292.3 68 C297.8 68 297.8 86 303.2 86 C308.6 86 308.6 68 314 68 L314 104 L0 104 Z" fill="#FBBF24" fill-opacity=".15"></path>
+<path class="draw" pathLength="1" d="M0 86 C5.4 86 5.4 86 10.8 86 C16.3 86 16.3 68 21.7 68 C27.1 68 27.1 86 32.5 86 C37.9 86 37.9 50 43.3 50 C48.7 50 48.7 68 54.1 68 C59.5 68 59.5 86 65 86 C70.4 86 70.4 68 75.8 68 C81.2 68 81.2 32 86.6 32 C92.0 32 92.0 50 97.4 50 C102.8 50 102.8 86 108.3 86 C113.7 86 113.7 68 119.1 68 C124.5 68 124.5 104 129.9 104 C135.4 104 135.4 68 140.8 68 C146.2 68 146.2 50 151.6 50 C157.0 50 157.0 14 162.4 14 C167.8 14 167.8 68 173.2 68 C178.6 68 178.6 86 184.1 86 C189.5 86 189.5 68 194.9 68 C200.3 68 200.3 50 205.7 50 C211.1 50 211.1 86 216.6 86 C222.0 86 222.0 68 227.4 68 C232.8 68 232.8 68 238.2 68 C243.6 68 243.6 86 249 86 C254.4 86 254.4 68 259.9 68 C265.3 68 265.3 86 270.7 86 C276.1 86 276.1 50 281.5 50 C286.9 50 286.9 68 292.3 68 C297.8 68 297.8 86 303.2 86 C308.6 86 308.6 68 314 68" fill="none" stroke="#FBBF24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+<circle class="fade" cx="162.4" cy="14" r="4.5" fill="#09090B" stroke="#FBBF24" stroke-width="2.5"></circle>
+<circle class="fade" cx="314" cy="68" r="4.5" fill="#FBBF24" stroke="#13111C" stroke-width="2.5"></circle>
+</svg>
+<span class="fade" style="position: absolute; left: 174px; top: -2px; display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px; background: var(--l-comm); color: #0B0B12; font-size: 11.5px; font-weight: 700; white-space: nowrap">5 le 2 nov.</span>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink3)">
+<span>18 oct.</span>
+<span>2 nov.</span>
+<span style="color: var(--l-comm); font-weight: 700">16 nov.</span>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .2s; padding: 28px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<h2 class="d" style="font-size: 22px">Règles d'entrée</h2>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:door-open s]]<span>Entrée libre</span></span>
+<span class="chip">[[ic:user s]]<span>Rôle : Membre</span></span>
+<span class="chip">[[ic:flag-banner s]]<span>Tous pays</span></span>
+<span class="chip">[[ic:infinity s]]<span>Sans expiration</span></span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .26s; padding: 32px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Entrées récentes</h2>
+<a href="#" style="font-size: 13.5px; font-weight: 700; color: var(--l-comm); min-height: 44px; display: inline-flex; align-items: center">Tout voir</a>
+</div>
+
+<div class="card" style="overflow: hidden">
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #8D92CB; width: 42px; height: 42px; font-size: 15px">KB</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="font-weight: 700">@koffi_beats</span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint il y a 2 h</span>
+</div>
+<span class="cc">CI</span>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: color-mix(in oklab, var(--l-comm) 8%, transparent)">
+<span class="av" style="--accent: #FBBF24; width: 42px; height: 42px; font-size: 15px">NS</span>
+<div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 700">@nadia.snd</span><span class="cc">SN</span></span>
+<span style="display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--l-comm); white-space: nowrap">[[ic:hourglass-medium s]]<span>En attente de validation</span></span>
+</div>
+<button class="ib" aria-label="Accepter nadia.snd" style="background: var(--ok); color: #0B0B12">[[ic:check]]</button>
+<button class="ib" aria-label="Refuser nadia.snd" style="background: rgba(248,113,113,.16); color: var(--err)">[[ic:x]]</button>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #60A5FA; width: 42px; height: 42px; font-size: 15px">SK</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="font-weight: 700">@samba.k</span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint il y a 5 h</span>
+</div>
+<span class="cc">SN</span>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #F472B6; width: 42px; height: 42px; font-size: 15px">LO</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="font-weight: 700">@lou.prod</span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint hier</span>
+</div>
+<span class="cc">FR</span>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #34D399; width: 42px; height: 42px; font-size: 15px">BF</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="font-weight: 700">@baye_fall221</span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint il y a 2 j</span>
+</div>
+<span class="cc">SN</span>
+</div>
+
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .32s; padding: 32px 0 0; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 20px">
+<h2 class="d" style="font-size: 22px">Envoyer l'invitation</h2>
+<span style="font-size: 13px; color: var(--ink3)">2 choisis</span>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 6px; padding: 4px 20px 0">
+<button class="who" role="checkbox" aria-checked="true"><span style="position: relative; display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--ground), 0 0 0 5px var(--l-comm)"><span class="av" style="--accent: #4ECDC4; width: 56px; height: 56px; font-size: 19px">LM</span><span class="tick">[[ic:check s]]</span></span><span style="color: var(--ink)">Léo</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="av" style="--accent: #FF6B6B; width: 56px; height: 56px; font-size: 19px">MO</span><span>Mina</span></button>
+<button class="who" role="checkbox" aria-checked="true"><span style="position: relative; display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--ground), 0 0 0 5px var(--l-comm)"><span class="av" style="--accent: #9B59B6; width: 56px; height: 56px; font-size: 19px">KM</span><span class="tick" style="animation-delay: .3s">[[ic:check s]]</span></span><span style="color: var(--ink)">Kwame</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="av" style="--accent: #F8B500; width: 56px; height: 56px; font-size: 19px">TR</span><span>Tomás</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="av" style="--accent: #3498DB; width: 56px; height: 56px; font-size: 19px">YT</span><span>Yuki</span></button>
+</div>
+<div style="padding: 4px 20px 0; display: flex">
+<button class="btn a" style="--accent: var(--l-comm); flex: 1; box-shadow: 0 10px 26px rgba(251,191,36,.28)">[[ic:user-plus]]<span>Inviter 2 personnes</span></button>
+</div>
+</section>
+
+<footer style="padding: 36px 20px 24px; display: flex; flex-direction: column; gap: 10px">
+<button class="btn q">[[ic:door]]<span>Fermer les entrées</span></button>
+<button class="btn x">[[ic:trash]]<span>Supprimer ce lien</span></button>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1704}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

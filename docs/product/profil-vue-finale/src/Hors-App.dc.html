@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Le profil hors de l'app — planche système</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.stage{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:340px;padding:22px;border-radius:22px;overflow:hidden;border:1px solid var(--line);background:radial-gradient(130% 90% at 15% 0%,color-mix(in oklab,var(--tint,#6366F1) 36%,#0B0B14),#0B0B14 72%)}
+.stage>*{position:relative}
+.num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:12px;color:var(--ink2);flex:none}
+.app{display:inline-flex;align-items:center;justify-content:center;border-radius:28%;background:linear-gradient(150deg,var(--brand-fill),#3730A3);color:#fff;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;flex:none;box-shadow:0 10px 24px rgba(79,70,229,.45)}
+.blk{background:#000;border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 40px rgba(0,0,0,.5)}
+.tel{position:absolute;border-radius:26px;border:2px solid rgba(255,255,255,.28);background:linear-gradient(170deg,#1E1B33,#100E1B);box-shadow:0 16px 36px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
+.wv{position:absolute;border-radius:50%;border:2px solid var(--accent-ink);animation:mxPing 2.6s ease-out infinite}
+.qr{position:relative;display:grid;grid-template-columns:repeat(13,6px);grid-auto-rows:6px;width:98px;height:98px;padding:10px;border-radius:18px;background:#EEF2FF;flex:none}
+.qr>b{background:#1E1B4B;border-radius:1.5px}
+.qr>em{position:absolute;width:26px;height:26px;border:5px solid #1E1B4B;border-radius:8px;background:#EEF2FF;box-shadow:0 0 0 3px #EEF2FF}
+.qr>em::after{content:"";position:absolute;inset:3px;border-radius:2.5px;background:#7E22CE}
+.menu{display:flex;flex-direction:column;width:100%}
+.menu>button{display:flex;align-items:center;gap:14px;min-height:50px;padding:0 16px;font-weight:600;font-size:14.5px;color:var(--ink)}
+.menu>button+button{border-top:1px solid var(--line)}
+.tile{display:flex;flex-direction:column;justify-content:space-between;gap:18px;flex:1;min-width:0;min-height:150px;padding:18px;border-radius:30px;text-align:left}
+.shape{animation:mxMorph 8s ease-in-out infinite}
+@keyframes hxNudge{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes hxPress{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.55)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 48px">
+<div style="display: flex; flex-direction: column; gap: 16px; max-width: 820px">
+<span class="tag">Profil Meeshy · planche système</span>
+<h1 class="d" style="font-size: 56px">Le profil hors de l'app</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); text-wrap: pretty">Tes proches, ton lien et ta position restent à portée de pouce sur l'écran verrouillé, l'accueil et le système. Quinze surfaces, une seule main : mêmes avatars, mêmes billets, mêmes boutons ronds.</p>
+</div>
+<div style="display: flex; gap: 10px; flex: none">
+<span class="chip" style="min-height: 44px; padding: 0 18px; font-size: 14px">[[ic:apple-logo s]]<span>iOS · 6</span></span>
+<span class="chip" style="min-height: 44px; padding: 0 18px; font-size: 14px">[[ic:android-logo s]]<span>Android · 6</span></span>
+<span class="chip" style="min-height: 44px; padding: 0 18px; font-size: 14px">[[ic:browser s]]<span>Web · 3</span></span>
+</div>
+</header>
+
+<section style="display: flex; flex-direction: column; gap: 24px; --tint: #6D28D9">
+<div style="display: flex; align-items: baseline; gap: 16px">
+<span class="tag">iOS</span>
+<h2 class="d" style="font-size: 30px">Verre liquide, du verrou au poignet</h2>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<article class="card rise" style="padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">1</span><span class="tag">iOS · Activité en direct</span></div>
+<div class="stage" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="blk" style="display: flex; align-items: center; gap: 9px; width: 100%; height: 42px; padding: 0 14px 0 7px; border-radius: 999px">
+<span class="av" style="width: 28px; height: 28px; font-size: 11px">LM</span>
+<span style="font-size: 12.5px; font-weight: 600; flex: 1; min-width: 0; white-space: nowrap">Léo partage sa position</span>
+<span class="mono" style="font-weight: 700; color: var(--accent-ink)">41:20</span>
+</div>
+<span class="tag" style="font-size: 10px">Compacte, puis étendue</span>
+<div class="blk" style="display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 18px; border-radius: 36px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="position: relative; display: inline-flex"><span class="av" style="width: 52px; height: 52px; font-size: 19px">LM</span><span class="dot on" style="position: absolute; right: -2px; bottom: -2px; border-color: #000"></span></span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-size: 12px; color: var(--ink2)">Partage sa position</span><span class="d" style="font-size: 19px">Léo Marchetti</span></div>
+<span class="d" style="font-size: 24px; color: var(--accent-ink)">41:20</span>
+</div>
+<span class="bar" style="background: rgba(255,255,255,.14)"><i style="width: 69%"></i></span>
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="display: inline-flex; align-items: center; gap: 6px; flex: 1; font-size: 12.5px; color: var(--ink2)">[[ic:map-pin s]]<span>Alfama · quartier</span></span>
+<button class="btn a sm">[[ic:map-trifold s]]<span>Carte</span></button>
+</div>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Le compte à rebours du partage de Léo vit en haut de l'écran. Un appui long l'étend, un appui ouvre la carte.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .05s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">2</span><span class="tag">iOS · Écran verrouillé</span></div>
+<div class="stage" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="orb" style="position: absolute; width: 200px; height: 200px; left: -40px; top: 20px; background: #A855F7; opacity: .6"></div>
+<div class="orb" style="position: absolute; width: 170px; height: 170px; right: -30px; bottom: 0; background: #4ECDC4; opacity: .4; animation-delay: -4s"></div>
+<div class="glass" style="display: flex; flex-direction: column; gap: 12px; width: 100%; padding: 14px; border-radius: 30px">
+<div style="display: flex; align-items: center; gap: 8px">
+<span class="app" style="width: 22px; height: 22px; font-size: 12px; box-shadow: none">M</span>
+<span style="font-size: 12px; font-weight: 700; color: var(--ink); flex: 1">Meeshy</span>
+<span style="font-size: 12px; color: var(--ink)">encore 42 min</span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="av" style="width: 46px; height: 46px">LM</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-size: 15.5px; font-weight: 700">Léo partage sa position</span><span style="font-size: 13px; color: var(--ink)">Alfama · Lisbonne</span></div>
+</div>
+<div style="position: relative; overflow: hidden; height: 132px; border-radius: 20px; border: 1px solid var(--glass-line)">
+[[map]]
+<span style="position: absolute; left: 58%; top: 48%; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); border: 1.5px solid var(--accent)"></span>
+<span class="pin" style="left: 58%; top: 48%"><span class="av" style="width: 34px; height: 34px; font-size: 12px; border: 2px solid #0B0B12">LM</span></span>
+<span class="chip glass" style="position: absolute; left: 8px; bottom: 8px; min-height: 28px; padding: 0 10px; font-size: 11.5px; color: var(--ink)">[[ic:map-pin-fill s]]<span>Quartier</span></span>
+</div>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">La carte de Léo arrive sans déverrouiller. Le cercle dit la précision, jamais plus.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .1s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">3</span><span class="tag" style="flex: 1">iOS · Widgets d'accueil</span><span class="new">Nouveau</span></div>
+<div class="stage">
+<div style="display: flex; align-items: center; gap: 16px; width: 100%">
+<div class="glass" style="display: flex; flex-direction: column; gap: 10px; width: 154px; height: 154px; padding: 14px; border-radius: 32px; flex: none">
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink)">[[ic:circles-three s]]<span>Mes proches</span></span>
+<div style="display: grid; grid-template-columns: repeat(2, 44px); gap: 8px 22px; justify-content: center">
+<span style="position: relative; display: inline-flex; --accent: #4ECDC4"><span class="av">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; border-color: #1B1730"></span></span>
+<span style="position: relative; display: inline-flex; --accent: #FF6B6B"><span class="av">MO</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; border-color: #1B1730"></span></span>
+<span style="position: relative; display: inline-flex; --accent: #9B59B6"><span class="av">KM</span></span>
+<span style="position: relative; display: inline-flex; --accent: #3498DB"><span class="av">YT</span></span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<span class="tag">Petit · 2 × 2</span>
+<span style="font-size: 13px; color: var(--ink2)">Un appui sur un avatar ouvre sa vitrine.</span>
+</div>
+</div>
+<div class="glass" style="display: flex; align-items: center; gap: 16px; width: 100%; height: 154px; padding: 14px 18px 14px 14px; border-radius: 32px">
+<div class="qr" aria-hidden="true">
+<em style="left: 10px; top: 10px"></em><em style="right: 10px; top: 10px"></em><em style="left: 10px; bottom: 10px"></em>
+<b></b><i></i><b></b><b></b><b></b><b></b><b></b><b></b><i></i><b></b><i></i><i></i><b></b><i></i><i></i><i></i><i></i><b></b><b></b><b></b><b></b><i></i><b></b><b></b><i></i><b></b><i></i><b></b><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><i></i><b></b><i></i><i></i><b></b><i></i><b></b><b></b><i></i><i></i><b></b><i></i><i></i><b></b><b></b><i></i><b></b><b></b><i></i><b></b><i></i><i></i><b></b><b></b><i></i><i></i><i></i><i></i><b></b><i></i><i></i><b></b><b></b><b></b><b></b><i></i><b></b><i></i><b></b><b></b><i></i><i></i><b></b><i></i><i></i><b></b><b></b><i></i><i></i><b></b><i></i><i></i><b></b><i></i><b></b><i></i><b></b><b></b><i></i><i></i><b></b><i></i><i></i><i></i><b></b><i></i><i></i><i></i><i></i><b></b><i></i><b></b><b></b><b></b><b></b><b></b><i></i><i></i><b></b><i></i><b></b><b></b><b></b><b></b><b></b><b></b><i></i><b></b><b></b><i></i><i></i><b></b><b></b><b></b><i></i><i></i><i></i><i></i><i></i><b></b><b></b><i></i><b></b><i></i><i></i><b></b><b></b><b></b><b></b><i></i><b></b><i></i><b></b><i></i><i></i><b></b><i></i><b></b><i></i><i></i><b></b><i></i><b></b><b></b><i></i><b></b><i></i><b></b><b></b><i></i><b></b>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0">
+<span class="tag" style="color: var(--ink2)">Mon lien · moyen 4 × 2</span>
+<span class="mono" style="font-size: 13.5px; color: var(--ink)">meeshy.me/@aissa</span>
+<span style="display: flex; align-items: baseline; gap: 8px; margin-top: 6px"><span class="d" style="font-size: 34px; color: var(--accent-ink)">57</span><span style="font-size: 12.5px; color: var(--ink2)">visites aujourd'hui</span></span>
+</div>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Mes proches en quatre avatars, mon QR prêt à être montré sans ouvrir l'app.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .15s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">4</span><span class="tag">iOS · Bouton Action et raccourci</span></div>
+<div class="stage" style="--accent: #4ECDC4; --accent-ink: #7FE3DC; align-items: stretch">
+<div style="display: flex; align-items: center; gap: 0; width: 100%; height: 150px">
+<div style="position: relative; width: 62px; height: 150px; flex: none">
+<span style="position: absolute; left: 14px; top: 0; bottom: 0; width: 80px; border-radius: 30px 0 0 30px; border: 2px solid rgba(255,255,255,.28); border-right: 0; background: linear-gradient(90deg, #2A2648, rgba(42,38,72,0))"></span>
+<span style="position: absolute; left: 8px; top: 44px; width: 8px; height: 34px; border-radius: 4px; background: var(--accent); transform-origin: right center; animation: hxPress 2.4s ease-in-out infinite"></span>
+<span class="wv" style="left: -8px; top: 41px; width: 40px; height: 40px"></span>
+<span style="position: absolute; left: 9px; top: 92px; width: 6px; height: 44px; border-radius: 3px; background: rgba(255,255,255,.28)"></span>
+</div>
+<div class="glass" style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; padding: 12px 16px 12px 12px; border-radius: 999px">
+<span class="ib" style="background: var(--accent); color: #0B0B12">[[ic:radio]]</span>
+<div style="display: flex; flex-direction: column; min-width: 0"><span style="font-size: 12px; color: var(--ink)">Maintenir</span><span style="font-size: 15px; font-weight: 700; white-space: nowrap">Talkie avec Léo</span></div>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px; border-radius: 26px; background: linear-gradient(140deg, #4ECDC4, #2A9D96)">
+<span style="display: inline-flex; color: #0B0B12">[[ic:radio l]]</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0; color: #0B0B12"><span style="font-size: 12px; font-weight: 600">Raccourci</span><span class="d" style="font-size: 15.5px; white-space: nowrap">Maintenir : Talkie avec Léo</span></div>
+<span class="av" style="width: 36px; height: 36px; font-size: 13px; background: #0B0B12; color: #7FE3DC">LM</span>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Le bouton du côté devient un talkie : tu maintiens, tu parles à un Proche, tu relâches.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .2s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">5</span><span class="tag" style="flex: 1">iOS · Carte de contact par rapprochement</span><span class="new">Nouveau</span></div>
+<div class="stage">
+<div style="position: relative; width: 300px; height: 214px">
+<span class="wv" style="left: 110px; top: 12px; width: 80px; height: 80px"></span>
+<span class="wv" style="left: 110px; top: 12px; width: 80px; height: 80px; animation-delay: -1.3s"></span>
+<div class="tel" style="left: 12px; top: 44px; width: 96px; height: 172px; transform: rotate(34deg); transform-origin: 50% 50%"><span class="av" style="width: 48px; height: 48px; transform: rotate(-34deg)">AN</span></div>
+<div class="tel" style="left: 192px; top: 44px; width: 96px; height: 172px; transform: rotate(-34deg); transform-origin: 50% 50%; --accent: #2ECC71"><span class="av" style="width: 48px; height: 48px; transform: rotate(34deg)">SB</span></div>
+<span style="position: absolute; left: 134px; top: 36px; width: 32px; height: 32px; border-radius: 50%; background: #EEF2FF; color: #1E1B4B; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 24px rgba(216,180,254,.9)">[[ic:contactless-payment s]]</span>
+</div>
+<div class="glass" style="display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px">
+<span class="d" style="font-size: 17px">Aïssa</span>
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:arrows-left-right]]</span>
+<span class="d" style="font-size: 17px">Sofia</span>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Deux téléphones se touchent par le haut : les vitrines s'échangent, chacun choisit ce qu'il donne.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .25s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">6</span><span class="tag">iOS · Montre</span></div>
+<div class="stage" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div style="position: relative; width: 200px; height: 240px">
+<span style="position: absolute; left: 50px; top: -40px; width: 100px; height: 60px; border-radius: 18px 18px 0 0; background: linear-gradient(180deg, rgba(42,39,64,0), #2A2740)"></span>
+<span style="position: absolute; left: 50px; bottom: -40px; width: 100px; height: 60px; border-radius: 0 0 18px 18px; background: linear-gradient(0deg, rgba(42,39,64,0), #2A2740)"></span>
+<span style="position: absolute; right: -9px; top: 62px; width: 10px; height: 34px; border-radius: 4px; background: #3A3658"></span>
+<div class="blk" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-radius: 58px; border: 5px solid #2A2740">
+<span style="position: relative; display: inline-flex"><span class="ring"><span class="av" style="width: 62px; height: 62px; font-size: 23px">LM</span></span><span class="dot on" style="position: absolute; right: 2px; bottom: 2px; border-color: #000"></span></span>
+<div style="display: flex; flex-direction: column; align-items: center"><span class="d" style="font-size: 20px">Léo</span><span style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--accent-ink)">[[ic:navigation-arrow s]]<span>à 2,4 km</span></span></div>
+<button class="btn a sm" style="width: 100%">[[ic:radio s]]<span>Talkie</span></button>
+</div>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Au poignet, l'essentiel : qui partage sa position, à quelle distance, et un bouton pour lui parler.</p>
+</article>
+
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 24px; --tint: #0F766E">
+<div style="display: flex; align-items: baseline; gap: 16px">
+<span class="tag">Android</span>
+<h2 class="d" style="font-size: 30px">Surfaces tonales, formes qui bougent</h2>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<article class="card rise" style="padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">7</span><span class="tag">Android · Notification en cours</span></div>
+<div class="stage" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="tonal" style="display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 16px; border-radius: 28px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2)">
+<span class="app" style="width: 20px; height: 20px; font-size: 11px; border-radius: 50%; box-shadow: none">M</span>
+<span style="font-weight: 700; flex: 1">Meeshy · En cours</span>
+<span class="chip" style="min-height: 24px; padding: 0 9px; font-size: 11.5px; background: color-mix(in oklab, var(--accent) 20%, transparent); color: var(--accent-ink); border-color: transparent">[[ic:timer s]]<span>42 min</span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="av" style="width: 48px; height: 48px">LM</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-size: 16px; font-weight: 700">Léo partage sa position</span><span style="font-size: 13px; color: var(--ink2)">Alfama · précision quartier</span></div>
+</div>
+<span class="bar" style="background: var(--deep)"><i style="width: 70%"></i></span>
+<div style="display: flex; gap: 8px">
+<button class="btn sm" style="flex: 1; padding: 0 10px; background: var(--accent); color: #0B0B12">[[ic:map-trifold s]]<span>Carte</span></button>
+<button class="btn sm" style="flex: 1; padding: 0 10px; background: var(--deep); color: var(--ink)">[[ic:navigation-arrow s]]<span>Y aller</span></button>
+<button class="btn sm" style="flex: 1; padding: 0 10px; background: var(--deep); color: var(--ink)">[[ic:chat-circle s]]<span>Écrire</span></button>
+</div>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Épinglée tant que le partage dure. Trois actions sans ouvrir l'app.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .05s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">8</span><span class="tag" style="flex: 1">Android · Tuile de réglages rapides</span><span class="new">Nouveau</span></div>
+<div class="stage">
+<div style="display: flex; gap: 12px; width: 100%">
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0">
+<span class="tag">Actif</span>
+<button class="tile" aria-pressed="true" style="background: var(--accent); color: #0B0B12">
+[[ic:ghost-fill l]]
+<span style="display: flex; flex-direction: column"><span style="font-size: 15px; font-weight: 700">Mode fantôme</span><span style="font-size: 12.5px; font-weight: 600">Position masquée</span></span>
+</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0">
+<span class="tag">Inactif</span>
+<button class="tile tonal" aria-pressed="false" style="color: var(--ink)">
+[[ic:ghost l]]
+<span style="display: flex; flex-direction: column"><span style="font-size: 15px; font-weight: 700">Mode fantôme</span><span style="font-size: 12.5px; color: var(--ink2)">Désactivé</span></span>
+</button>
+</div>
+</div>
+<div style="display: flex; gap: 12px; width: 100%; opacity: .45" aria-hidden="true">
+<span style="flex: 1; height: 56px; border-radius: 28px; border: 1.5px dashed var(--line)"></span>
+<span style="flex: 1; height: 56px; border-radius: 28px; border: 1.5px dashed var(--line)"></span>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Un appui dans le volet : plus personne ne te voit sur la carte, même ton cercle Sang.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .1s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">9</span><span class="tag">Android · Widget redimensionnable</span></div>
+<div class="stage">
+<div style="position: relative; width: 100%; padding: 10px">
+<span style="position: absolute; inset: 0; border-radius: 38px; border: 1.5px dashed var(--ink3)"></span>
+<span style="position: absolute; left: 50%; top: -6px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--ink)"></span>
+<span style="position: absolute; left: 50%; bottom: -6px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--ink)"></span>
+<span style="position: absolute; top: 50%; left: -6px; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: var(--ink)"></span>
+<span style="position: absolute; top: 50%; right: -6px; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: var(--ink)"></span>
+<div class="tonal" style="position: relative; display: flex; flex-direction: column; gap: 16px; padding: 18px; border-radius: 30px">
+<div style="display: flex; align-items: center; gap: 8px">
+<span class="d" style="font-size: 18px; flex: 1">Mes proches</span>
+<span class="chip" style="min-height: 28px; padding: 0 10px; font-size: 12px; background: var(--deep); border-color: transparent">2 en ligne</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; text-align: center">
+<span style="display: flex; flex-direction: column; align-items: center; gap: 6px; --accent: #4ECDC4"><span style="position: relative; display: inline-flex"><span class="av shape" style="width: 54px; height: 54px">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; border-color: var(--field)"></span></span><span style="font-size: 12px; font-weight: 600">Léo</span></span>
+<span style="display: flex; flex-direction: column; align-items: center; gap: 6px; --accent: #FF6B6B"><span style="position: relative; display: inline-flex"><span class="av" style="width: 54px; height: 54px; border-radius: 18px">MO</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; border-color: var(--field)"></span></span><span style="font-size: 12px; font-weight: 600">Mina</span></span>
+<span style="display: flex; flex-direction: column; align-items: center; gap: 6px; --accent: #9B59B6"><span class="av shape" style="width: 54px; height: 54px; animation-delay: -4s">KM</span><span style="font-size: 12px; font-weight: 600; color: var(--ink2)">Kwame</span></span>
+<span style="display: flex; flex-direction: column; align-items: center; gap: 6px; --accent: #3498DB"><span class="av" style="width: 54px; height: 54px; border-radius: 50% 50% 50% 14px">YT</span><span style="font-size: 12px; font-weight: 600; color: var(--ink2)">Yuki</span></span>
+</div>
+<button class="btn sm" style="background: var(--deep); color: var(--ink); border-radius: 18px">[[ic:map-trifold s]]<span>Voir la carte de mes proches</span></button>
+</div>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Il s'étire de deux à huit avatars. Chaque forme se métamorphose quand la présence change.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .15s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">10</span><span class="tag">Android · Raccourcis d'app</span></div>
+<div class="stage" style="align-items: flex-start">
+<div class="tonal menu" style="border-radius: 26px; overflow: hidden; box-shadow: 0 18px 40px rgba(0,0,0,.45)">
+<button><span style="display: inline-flex; color: var(--accent-ink)">[[ic:qr-code]]</span><span style="flex: 1">Mon QR</span><span style="display: inline-flex; color: var(--ink3)">[[ic:dots-six-vertical s]]</span></button>
+<button><span style="display: inline-flex; color: var(--accent-ink)">[[ic:scan]]</span><span style="flex: 1">Scanner</span><span style="display: inline-flex; color: var(--ink3)">[[ic:dots-six-vertical s]]</span></button>
+<button><span style="display: inline-flex; color: var(--accent-ink)">[[ic:map-pin]]</span><span style="flex: 1">Partager ma position</span><span style="display: inline-flex; color: var(--ink3)">[[ic:dots-six-vertical s]]</span></button>
+<button><span style="display: inline-flex; color: var(--accent-ink)">[[ic:radio]]</span><span style="flex: 1">Talkie</span><span style="display: inline-flex; color: var(--ink3)">[[ic:dots-six-vertical s]]</span></button>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; padding-left: 14px">
+<span class="app" style="width: 60px; height: 60px; font-size: 30px; border-radius: 50%">M</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink2)">[[ic:hand-tap s]]<span>Appui long sur l'icône</span></span>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Quatre gestes du profil sans passer par l'accueil. Chacun se glisse seul sur l'écran.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .2s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">11</span><span class="tag">Android · Étiquette NFC</span></div>
+<div class="stage">
+<div style="position: relative; width: 300px; height: 216px">
+<span class="wv" style="left: 22px; top: 86px; width: 116px; height: 116px"></span>
+<div style="position: absolute; left: 22px; top: 86px; width: 116px; height: 116px; border-radius: 50%; background: #EEF2FF; border: 2px dashed #6366F1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #1E1B4B; transform: rotate(-8deg); box-shadow: 0 14px 30px rgba(0,0,0,.45)">
+[[ic:contactless-payment l]]
+<span class="mono" style="font-size: 10.5px; font-weight: 700">@aissa</span>
+</div>
+<div class="tel" style="left: 150px; top: 0; width: 112px; height: 200px; rotate: 12deg; flex-direction: column; gap: 8px; animation: hxNudge 3.2s ease-in-out infinite">
+<span class="av" style="width: 48px; height: 48px">AN</span>
+<span class="d" style="font-size: 13px">Aïssa Ndiaye</span>
+<span class="sk" style="width: 62px; height: 6px"></span>
+<span class="sk" style="width: 44px; height: 6px"></span>
+</div>
+</div>
+<div class="tonal" style="display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 18px">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:user-focus]]</span>
+<span style="font-size: 14.5px; font-weight: 700">Approche : ouvre ma vitrine</span>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Un autocollant sur l'étui, la platine ou la porte du studio. On approche, ma vitrine s'ouvre.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .25s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">12</span><span class="tag">Android · Bulle de conversation</span></div>
+<div class="stage" style="--accent: #4ECDC4; --accent-ink: #7FE3DC; align-items: stretch; justify-content: space-between">
+<div style="display: flex; flex-direction: column; gap: 10px; opacity: .5" aria-hidden="true">
+<span class="sk" style="width: 60%; height: 12px; animation: none"></span>
+<span class="sk" style="width: 86%; height: 12px; animation: none"></span>
+<span class="sk" style="width: 44%; height: 12px; animation: none"></span>
+</div>
+<div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-right: -8px">
+<div class="tonal" style="display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 22px 22px 6px 22px; max-width: 214px; box-shadow: 0 14px 30px rgba(0,0,0,.4)">
+<span style="font-size: 12px; font-weight: 700; color: var(--accent-ink)">Léo</span>
+<span style="font-size: 14px">Je suis à Alfama, tu me rejoins ?</span>
+</div>
+<button aria-label="Ouvrir la bulle de Léo" style="position: relative; display: inline-flex; flex: none; animation: hxNudge 4s ease-in-out infinite">
+<span class="av" style="width: 68px; height: 68px; font-size: 25px; border: 3px solid var(--field); box-shadow: 0 14px 30px rgba(0,0,0,.5)">LM</span>
+<span style="position: absolute; left: -4px; top: -4px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--err); color: #0B0B12; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center">2</span>
+<span class="dot on" style="position: absolute; right: 2px; bottom: 2px; border-color: var(--field)"></span>
+</button>
+</div>
+<div style="display: flex; justify-content: center">
+<span class="tonal" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--ink2)">[[ic:x s]]<span>Glisse ici pour fermer</span></span>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Léo flotte au-dessus des autres apps. Un appui ouvre le fil, un appui long ouvre sa vitrine.</p>
+</article>
+
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 24px; --tint: #1D4ED8">
+<div style="display: flex; align-items: baseline; gap: 16px">
+<span class="tag">Web</span>
+<h2 class="d" style="font-size: 30px">Installée, partagée, rappelée</h2>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<article class="card rise" style="padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">13</span><span class="tag">Web · PWA installée</span></div>
+<div class="stage" style="justify-content: flex-end">
+<div class="menu" style="width: 236px; border-radius: 16px; overflow: hidden; background: #1C1A2B; border: 1px solid var(--glass-line); box-shadow: 0 18px 40px rgba(0,0,0,.5)">
+<span class="tag" style="padding: 12px 16px 6px">Raccourcis</span>
+<button>[[ic:qr-code]]<span>Mon QR</span></button>
+<button>[[ic:link]]<span style="flex: 1">Nouveau lien</span><span class="mono" style="font-size: 11px; color: var(--ink3)">Ctrl N</span></button>
+<button style="color: var(--ink2)"><span class="app" style="width: 22px; height: 22px; font-size: 12px; box-shadow: none">M</span><span>Meeshy</span></button>
+</div>
+<div class="glass" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 22px">
+<span style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,.1)" aria-hidden="true"></span>
+<span style="position: relative; display: inline-flex"><span class="app" style="width: 48px; height: 48px; font-size: 25px">M</span><span style="position: absolute; left: 50%; bottom: -7px; width: 16px; height: 4px; margin-left: -8px; border-radius: 2px; background: var(--ink)"></span></span>
+<span style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,.1)" aria-hidden="true"></span>
+<span style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,.1)" aria-hidden="true"></span>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Clic droit sur l'icône installée : mon QR ou un nouveau lien, en un geste.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .05s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">14</span><span class="tag">Web · Partage natif du navigateur</span></div>
+<div class="stage" style="justify-content: flex-end; padding-bottom: 0">
+<div style="display: flex; flex-direction: column; gap: 16px; width: 100%; padding: 10px 18px 22px; border-radius: 28px 28px 0 0; background: #1C1A2B; border: 1px solid var(--glass-line); border-bottom: 0; box-shadow: 0 -14px 40px rgba(0,0,0,.45)">
+<span style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: var(--ink3)"></span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 13px; color: var(--ink2)">Partager</span>
+<span class="mono" style="font-size: 16px; font-weight: 700; color: var(--ink)">meeshy.me/@aissa</span>
+</div>
+<div class="tonal" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 20px">
+<span class="av">AN</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-size: 14.5px; font-weight: 700">Aïssa Ndiaye</span><span style="font-size: 12.5px; color: var(--ink2)">Designer sonore à Dakar</span></div>
+<button class="ib" aria-label="Copier le lien" style="background: var(--deep); color: var(--ink)">[[ic:copy]]</button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; text-align: center; font-size: 12px; font-weight: 600; color: var(--ink2)">
+<button style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:chat-circle]]</span><span>Messages</span></button>
+<button style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:envelope-simple]]</span><span>E-mail</span></button>
+<button style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:qr-code]]</span><span>QR</span></button>
+<button style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:dots-three]]</span><span>Plus</span></button>
+</div>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Le bouton Partager ouvre la feuille du système, avec l'aperçu riche de ma vitrine.</p>
+</article>
+
+<article class="card rise" style="animation-delay: .1s; padding: 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">15</span><span class="tag">Web · Notification de retour</span></div>
+<div class="stage" style="--accent: #4ECDC4; --accent-ink: #7FE3DC; justify-content: flex-start">
+<div style="display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 16px; border-radius: 18px; background: #1C1A2B; border: 1px solid var(--glass-line); box-shadow: 0 18px 40px rgba(0,0,0,.5)">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2)">
+<span class="app" style="width: 20px; height: 20px; font-size: 11px; box-shadow: none">M</span>
+<span style="font-weight: 700">Meeshy</span>
+<span class="mono" style="font-size: 11.5px; flex: 1; color: var(--ink3)">meeshy.me</span>
+<button aria-label="Fermer la notification" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -12px -12px -12px 0; color: var(--ink2)">[[ic:x s]]</button>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="av" style="width: 48px; height: 48px">LM</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-size: 15.5px; font-weight: 700">Léo était sur Meeshy récemment</span><span style="font-size: 13px; color: var(--ink2)">Envoie-lui un mot tant qu'il est là.</span></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button class="btn p sm" style="flex: 1">[[ic:chat-circle s]]<span>Écrire</span></button>
+<button class="btn q sm" style="flex: 1">[[ic:user-focus s]]<span>Sa vitrine</span></button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 4px 6px">
+<span style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink2)">[[ic:clock-countdown s]]<span>Une fois toutes les 3 heures au plus</span></span>
+<span style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink2)">[[ic:eye-slash s]]<span>Sans heure exacte, sans point de présence</span></span>
+<span style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink2)">[[ic:bell-simple s]]<span>Chacun peut la couper dans ses réglages</span></span>
+</div>
+</div>
+<p style="font-size: 13.5px; color: var(--ink2)">Le retour d'un contact s'annonce avec tact : un mot, deux boutons, rien de plus précis.</p>
+</article>
+
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":3166}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

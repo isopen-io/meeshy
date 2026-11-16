@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K30 MeeshyTicket</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.th{display:flex;align-items:center;gap:10px;height:76px;padding:0 10px 0 14px}
+.tt{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.tt>h3{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc{font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr;text-align:start}
+.ts{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px 14px}
+.fg{font-size:13.5px;color:var(--ink2)}
+.fg>b{font-size:20px;color:var(--ink)}
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--ink2)}
+.act>.ib{width:52px;height:52px;color:var(--ink)}
+.qr{position:relative;display:block;width:72px;height:72px;border-radius:14px;background:#EEF2FF;flex:none;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.qr::before{content:"";position:absolute;inset:6px;background:conic-gradient(#1E1B4B 25%,#0000 0 50%,#1E1B4B 0 75%,#0000 0) 0 0/8px 8px,conic-gradient(from 90deg,#1E1B4B 25%,#0000 0 62%,#1E1B4B 0 80%,#0000 0) 4px 0/20px 12px,conic-gradient(from 180deg,#0000 40%,#1E1B4B 0 65%,#0000 0) 0 4px/28px 20px}
+.qr>em{position:absolute;width:20px;height:20px;border:4px solid #1E1B4B;border-radius:6px;background:#EEF2FF;box-shadow:0 0 0 3px #EEF2FF}
+.qr>em::after{content:"";position:absolute;inset:2px;border-radius:2px;background:#4F46E5}
+.tk-ghost{background:transparent;border:1.5px dashed color-mix(in srgb,var(--ink3) 62%,transparent)}
+.tk-ghost::before,.tk-ghost::after{border-style:dashed;border-color:color-mix(in srgb,var(--ink3) 62%,transparent)}
+.tk-sel{border-color:var(--sel,var(--brand-soft));box-shadow:0 0 0 2px var(--sel,var(--brand-soft)),0 14px 34px rgba(79,70,229,.3)}
+.tk-sel::before,.tk-sel::after{border:2px solid var(--sel,var(--brand-soft));width:20px;height:20px;margin-top:-10px}
+.tk-sel::before{left:-12px}.tk-sel::after{right:-12px}
+.tk-hov{transform:translateY(-4px);border-color:rgba(165,180,252,.42);box-shadow:0 22px 44px rgba(0,0,0,.5)}
+.tk-drag{transform:rotate(-2.5deg) scale(1.03) translate(10px,-8px);border-color:rgba(165,180,252,.5);box-shadow:0 30px 60px rgba(0,0,0,.62)}
+.tk-press{transform:scale(.97);background:var(--field)}
+.strike{text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:var(--err)}
+.fl{position:relative;width:340px;height:166px;perspective:1100px}
+.fl>.ticket{position:absolute;inset:0;display:flex;flex-direction:column;will-change:transform}
+.fl>.ticket>.ts{flex:1}
+.fl>.fa{animation:tkFront 5s infinite}
+.fl>.fz{transform:rotateY(-90deg);animation:tkBack 5s infinite}
+.tap{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.6);opacity:0;pointer-events:none;z-index:3}
+.tap.t1{animation:tkTap1 5s infinite}
+.tap.t2{animation:tkTap2 5s infinite}
+.swa{display:inline-flex;width:52px;height:32px;border-radius:999px;background:var(--field);border:1px solid var(--line);padding:3px;flex:none;animation:tkSwBg 5s infinite}
+.swa::after{content:"";width:24px;height:24px;border-radius:50%;background:var(--ink3);animation:tkSwKnob 5s infinite}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--warn);opacity:.22;animation:tkHap 5s infinite}
+.side{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;font-weight:700;color:var(--ink)}
+.side>i{font-style:normal;position:absolute}
+.side>i:first-child{animation:tkLabA 5s infinite}
+.side>i:last-child{opacity:0;animation:tkLabB 5s infinite}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lg{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lg>.kan{position:static;margin-top:1px}
+.lg>div{display:flex;flex-direction:column;gap:2px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.lg>div>b{font-size:14.5px;font-weight:700}
+.lg>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+@keyframes tkFront{
+0%,26%{transform:rotateY(0) scale(1);animation-timing-function:cubic-bezier(.5,0,.9,.5)}
+31%,75%{transform:rotateY(90deg) scale(1.05);animation-timing-function:cubic-bezier(.2,1.5,.4,1)}
+81%,100%{transform:rotateY(0) scale(1)}
+}
+@keyframes tkBack{
+0%,31%{transform:rotateY(-90deg) scale(1.05);animation-timing-function:cubic-bezier(.2,1.5,.4,1)}
+37%,70%{transform:rotateY(0) scale(1);animation-timing-function:cubic-bezier(.5,0,.9,.5)}
+75%,100%{transform:rotateY(-90deg) scale(1.05)}
+}
+@keyframes tkTap1{0%,17%{opacity:0;transform:scale(1.5)}22%{opacity:1;transform:scale(1)}26%{opacity:1;transform:scale(.8)}31%,100%{opacity:0;transform:scale(.8)}}
+@keyframes tkTap2{0%,61%{opacity:0;transform:scale(1.5)}66%{opacity:1;transform:scale(1)}70%{opacity:1;transform:scale(.8)}75%,100%{opacity:0;transform:scale(.8)}}
+@keyframes tkSwBg{0%,26%{background:var(--field)}31%,70%{background:var(--ok)}75%,100%{background:var(--field)}}
+@keyframes tkSwKnob{0%,26%{transform:none;background:var(--ink3)}31%,70%{transform:translateX(20px);background:#0B0B12}75%,100%{transform:none;background:var(--ink3)}}
+@keyframes tkHap{0%,29%{opacity:.22;transform:scale(1)}31%{opacity:1;transform:scale(1.9)}37%,73%{opacity:.22;transform:scale(1)}75%{opacity:1;transform:scale(1.9)}81%,100%{opacity:.22;transform:scale(1)}}
+@keyframes tkLabA{0%,29%{opacity:1}32%,74%{opacity:0}77%,100%{opacity:1}}
+@keyframes tkLabB{0%,29%{opacity:0}32%,74%{opacity:1}77%,100%{opacity:0}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #6366F1; opacity: .26"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #34D399; opacity: .14; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 960px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K30 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyTicket</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Tout ce qui se partage par une adresse se montre en billet à encoches, qui se retourne</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 800px">Une carte, deux encoches, un pointillé de coupe. Au-dessus, ce que c'est. En dessous, ce qu'on en fait. Derrière, le QR et les détails.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px; padding-top: 4px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il présente, il ne sait pas ce qu'il présente</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dessine <b>une seule forme</b> : carte de rayon 22, deux encoches de 18, un pointillé qui sépare le corps du talon.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Range cinq choses à leur place : <code>glyph</code>, <code>title</code>, <code>code</code> en chasse fixe, <code>figure</code> en grand, et les emplacements <code>trailing</code> et <code>stub</code>.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><b>Se retourne</b> quand <code>isFlipped</code> change, et montre <code>back</code> à la même taille, encoches au même endroit.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Tient en quatre tailles (<code>hero</code>, <code>row</code>, <code>compact</code>, <code>mini</code>) et dit son état : fantôme, barré, sélectionné, déplacé.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre des boutons du talon ni leur libellé : <b>K02</b> <code>MeeshyGlassButton</code> et <b>K32</b> <code>MeeshyLabeledAction</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le QR du verso ni son inclinaison : <b>K31</b> <code>MeeshyCodeCard</code>. Le billet n'en donne que la place.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le chiffre en bande et sa mini-courbe : <b>K34</b> <code>MeeshyFigures</code>. La jauge d'un quota : <b>K42</b>. Le graphique à axe : <b>K50</b>. Le menu (…) : <b>K18</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Copier, partager, ouvrir, expirer, compter, mettre en forme un nombre, décider de se retourner : <b>l'app</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Dix parties, une seule découpe</h2><p>Le billet héros et une rangée, à deux fois leur taille. Les encoches sont découpées dans la forme : le fond de l'hôte passe au travers, quel qu'il soit.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 24px; align-items: stretch">
+<div class="kcell kc" style="padding: 56px 40px; align-items: center; justify-content: center; gap: 56px">
+<div style="position: relative; width: 680px">
+<article class="ticket" style="zoom: 2; width: 340px; --cut: 125px; background: linear-gradient(160deg, #1E1B4B, var(--raised) 70%); border-color: rgba(129,140,248,.38); box-shadow: 0 18px 40px rgba(67,56,202,.28)">
+<div style="display: flex; align-items: center; gap: 12px; height: 124px; padding: 0 18px">
+<div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0">
+<span class="tag">Mon lien de profil</span>
+<a href="#" class="mono" style="font-size: 20px; font-weight: 700; color: var(--ink); white-space: nowrap">meeshy.me/<span style="color: var(--brand-soft)">@aissa</span></a>
+<span style="font-size: 12.5px; color: var(--ink2)"><b style="font-weight: 700; color: var(--ink)">1 719 visites</b> ce mois</span>
+</div>
+<button class="qr" aria-label="Agrandir mon QR de profil"><em style="left: 6px; top: 6px"></em><em style="right: 6px; top: 6px"></em><em style="left: 6px; bottom: 6px"></em></button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; gap: 4px; padding: 16px 10px 16px">
+<button class="act"><span class="ib g">[[ic:copy]]</span><span>Copier</span></button>
+<button class="act"><span class="ib g">[[ic:qr-code]]</span><span>QR</span></button>
+<button class="act"><span class="ib g">[[ic:paper-plane-tilt]]</span><span>Envoyer</span></button>
+<button class="act"><span class="ib g">[[ic:contactless-payment]]</span><span>Sans contact</span></button>
+</div>
+</article>
+<span class="kan" style="left: 46px; top: -11px">1</span>
+<span class="kan" style="left: 8px; top: 52px">2</span>
+<span class="kan" style="left: 8px; top: 108px">3</span>
+<span class="kan" style="left: 8px; top: 166px">4</span>
+<span class="kan" style="left: 634px; top: 40px">5</span>
+<span class="kan" style="left: 20px; top: 239px">6</span>
+<span class="kan" style="left: 329px; top: 239px">7</span>
+<span class="kan" style="left: 8px; top: 324px">8</span>
+<span class="kan" style="left: 300px; top: 270px">9</span>
+</div>
+<div style="position: relative; width: 680px">
+<article class="ticket" style="zoom: 2; width: 340px; --cut: 77px">
+<div class="th"><span class="ib" style="background: var(--l-share); color: #0B0B12">[[ic:chats-circle]]</span><div class="tt"><h3 class="d">Studio — invités</h3><span class="mono tc">meeshy.me/chat/studio-invites</span></div><button class="ib g" aria-label="Copier le lien Studio — invités">[[ic:copy]]</button></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">23</b> / 50 arrivées</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--warn)">[[ic:clock s]]<span>expire dans 6 j</span></span></div>
+</article>
+<span class="kan" style="left: 8px; top: 20px">10</span>
+</div>
+</div>
+<div class="card" style="padding: 26px; display: flex; flex-direction: column; gap: 18px">
+<div class="lg">
+<span class="kan">1</span><div><b>Carte</b><span>Rayon 22 · bord 1 px · fond <code>raised</code>. En <code>hero</code>, la teinte passe dans le fond en dégradé. Jeton <code>ticket.radius</code>.</span></div>
+<span class="kan">2</span><div><b><code>title</code></b><span>Nunito 800, 17 px, une ligne. En <code>hero</code>, il devient sur-titre de 11 px.</span></div>
+<span class="kan">3</span><div><b><code>code</code></b><span>JetBrains Mono : 20 · 12 · 11,5 px selon la taille. Jamais traduit, toujours de gauche à droite.</span></div>
+<span class="kan">4</span><div><b><code>figure</code></b><span>Le grand chiffre, déjà mis en forme par l'hôte. Nunito 20 à 26 px ; sous le code en <code>hero</code>, en tête du talon en <code>row</code>.</span></div>
+<span class="kan">5</span><div><b><code>trailing</code></b><span>Emplacement de fin, cible 44 px au moins. Ici la vignette de QR, 72 px : <code>MeeshyCodeCard</code> en <code>mini</code>, de <b>K31</b>.</span></div>
+<span class="kan">6</span><div><b>Encoches</b><span>Deux demi-disques de 18 px, centrés sur la coupe. Jeton <code>ticket.notch</code>.</span></div>
+<span class="kan">7</span><div><b>Pointillé de coupe</b><span>1,5 px, tirets, marges de 16 px. Sa hauteur est <code>cut</code> : 125 · 77 · 61 px.</span></div>
+<span class="kan">8</span><div><b><code>stub</code></b><span>Le talon. Marges 16 / 10 px. L'hôte y pose une rangée d'actions ou un fait.</span></div>
+<span class="kan">9</span><div><b>Action du talon</b><span>Bouton rond de verre de 52 px et libellé de 12 px : K32, jamais redessiné ici.</span></div>
+<span class="kan">10</span><div style="border-bottom: 0; padding-bottom: 0"><b><code>tint</code> + <code>glyph</code></b><span>En <code>row</code> et <code>compact</code> : pastille pleine de 44 px à la teinte, glyphe de 22 px.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois tailles, quatre teintes, neuf états</h2><p>Tout est à taille réelle. La forme ne change jamais : seuls le fond, le bord, l'encre et la hauteur de coupe bougent.</p></header>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+<div class="kcell kc">
+<article class="ticket" style="--cut: 125px; background: linear-gradient(160deg, #1E1B4B, var(--raised) 70%); border-color: rgba(129,140,248,.38); box-shadow: 0 18px 40px rgba(67,56,202,.28)">
+<div style="display: flex; align-items: center; gap: 12px; height: 124px; padding: 0 18px">
+<div style="display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0">
+<span class="tag">Mon lien de profil</span>
+<a href="#" class="mono" style="font-size: 20px; font-weight: 700; color: var(--ink); white-space: nowrap">meeshy.me/<span style="color: var(--brand-soft)">@aissa</span></a>
+<span style="font-size: 12.5px; color: var(--ink2)"><b style="font-weight: 700; color: var(--ink)">1 719 visites</b> ce mois</span>
+</div>
+<button class="qr" aria-label="Agrandir mon QR de profil"><em style="left: 6px; top: 6px"></em><em style="right: 6px; top: 6px"></em><em style="left: 6px; bottom: 6px"></em></button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; gap: 4px; padding: 16px 10px 16px">
+<button class="act"><span class="ib g">[[ic:copy]]</span><span>Copier</span></button>
+<button class="act"><span class="ib g">[[ic:qr-code]]</span><span>QR</span></button>
+<button class="act"><span class="ib g">[[ic:paper-plane-tilt]]</span><span>Envoyer</span></button>
+<button class="act"><span class="ib g">[[ic:contactless-payment]]</span><span>Sans contact</span></button>
+</div>
+</article>
+<div class="cp"><b><code>hero</code></b><span class="kcap">Un par écran. Code en 20 px, coupe à 125 px, talon d'actions libellées.</span></div>
+</div>
+
+<div class="kcell kc">
+<article class="ticket" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--brand-fill); color: #fff">[[ic:cursor-click]]</span><div class="tt"><h3 class="d">Réel Dakar la nuit</h3><span class="mono tc">meeshy.me/l/dkr-nuit</span></div><button class="ib g" aria-label="Copier le lien Réel Dakar la nuit">[[ic:copy]]</button></div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px 16px">
+<div style="display: flex; flex-direction: column; flex: none"><span class="d" style="font-size: 26px">1 284</span><span style="font-size: 12px; color: var(--ink2)">clics</span></div>
+<svg viewBox="0 0 140 44" preserveAspectRatio="none" aria-hidden="true" style="display: block; flex: 1; min-width: 0; height: 44px; overflow: visible">
+<path d="M2 36 L24 30 L47 33 L70 20 L93 24 L116 10 L138 5" fill="none" stroke="#A5B4FC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+<circle cx="138" cy="5" r="3.5" fill="#EEF2FF"></circle>
+</svg>
+<span class="chip" style="flex: none">[[ic:flag-banner s]]<span>31 pays</span></span>
+</div>
+</article>
+<div class="cp"><b><code>row</code></b><span class="kcap">La rangée de liste. Pastille de 44 px, coupe à 77 px, <code>figure</code> en tête du talon. La courbe est à K34.</span></div>
+</div>
+
+<div class="kcell kc">
+<div style="display: flex; gap: 14px">
+<a href="#" class="ticket" style="--cut: 61px; display: flex; flex-direction: column; flex: none; width: 150px; color: var(--ink)">
+<span style="display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 14px"><span class="ib" style="width: 36px; height: 36px; background: var(--deep); color: var(--ink2)">[[ic:globe-hemisphere-west]]</span><span class="d" style="font-size: 16px">Site</span></span>
+<span class="cut" style="margin: 0 14px"></span>
+<span class="mono" style="font-size: 11.5px; line-height: 1.45; min-height: 60px; padding: 12px 14px 14px; color: var(--ink2)">aissandiaye.studio</span>
+</a>
+<a href="#" class="ticket" style="--cut: 61px; display: flex; flex-direction: column; flex: none; width: 150px; color: var(--ink)">
+<span style="display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 14px"><span class="ib" style="width: 36px; height: 36px; background: var(--deep); color: var(--ink2)">[[ic:vinyl-record]]</span><span class="d" style="font-size: 16px">Musique</span></span>
+<span class="cut" style="margin: 0 14px"></span>
+<span class="mono" style="font-size: 11.5px; line-height: 1.45; min-height: 60px; padding: 12px 14px 14px; color: var(--ink2)">soundcloud.com/<wbr>aissa</span>
+</a>
+</div>
+<div class="cp"><b><code>compact</code></b><span class="kcap">Pour un rail. 150 px de large, pastille de 36 px, coupe à 61 px, le code sur deux lignes dans le talon. Ni <code>figure</code> ni <code>trailing</code>.</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px">
+<div class="kcell kc" style="align-items: center">
+<a href="#" class="ticket" style="--cut: 61px; display: flex; flex-direction: column; width: 192px; color: var(--ink)">
+<span style="display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 14px"><span class="ib" style="width: 36px; height: 36px; background: var(--l-share); color: #0B0B12">[[ic:chats-circle]]</span><span class="d" style="font-size: 16px">Partage</span></span>
+<span class="cut" style="margin: 0 14px"></span>
+<span class="mono" style="font-size: 11.5px; line-height: 1.45; padding: 12px 14px 14px; color: var(--ink2)">meeshy.me/chat/<wbr>studio-invites</span>
+</a>
+<div class="cp" style="align-self: stretch"><b>Teinte 1</b><span class="kcap"><code>tint</code> = <code>#818CF8</code>, encre sombre.</span></div>
+</div>
+<div class="kcell kc" style="align-items: center">
+<a href="#" class="ticket" style="--cut: 61px; display: flex; flex-direction: column; width: 192px; color: var(--ink)">
+<span style="display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 14px"><span class="ib" style="width: 36px; height: 36px; background: var(--brand-fill); color: #fff">[[ic:cursor-click]]</span><span class="d" style="font-size: 16px">Suivi</span></span>
+<span class="cut" style="margin: 0 14px"></span>
+<span class="mono" style="font-size: 11.5px; line-height: 1.45; padding: 12px 14px 14px; color: var(--ink2)">meeshy.me/l/<wbr>dkr-nuit</span>
+</a>
+<div class="cp" style="align-self: stretch"><b>Teinte 2</b><span class="kcap"><code>tint</code> = <code>#4F46E5</code>, encre blanche : la recette choisit l'encre au contraste.</span></div>
+</div>
+<div class="kcell kc" style="align-items: center">
+<a href="#" class="ticket" style="--cut: 61px; display: flex; flex-direction: column; width: 192px; color: var(--ink)">
+<span style="display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 14px"><span class="ib" style="width: 36px; height: 36px; background: var(--l-comm); color: #0B0B12">[[ic:users-four]]</span><span class="d" style="font-size: 16px">Communauté</span></span>
+<span class="cut" style="margin: 0 14px"></span>
+<span class="mono" style="font-size: 11.5px; line-height: 1.45; padding: 12px 14px 14px; color: var(--ink2)">meeshy.me/c/<wbr>beatmakers</span>
+</a>
+<div class="cp" style="align-self: stretch"><b>Teinte 3</b><span class="kcap"><code>tint</code> = <code>#FBBF24</code>, encre sombre.</span></div>
+</div>
+<div class="kcell kc" style="align-items: center">
+<a href="#" class="ticket" style="--cut: 61px; display: flex; flex-direction: column; width: 192px; color: var(--ink)">
+<span style="display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 14px"><span class="ib" style="width: 36px; height: 36px; background: var(--l-aff); color: #0B0B12">[[ic:gift]]</span><span class="d" style="font-size: 16px">Parrainage</span></span>
+<span class="cut" style="margin: 0 14px"></span>
+<span class="mono" style="font-size: 14px; font-weight: 700; letter-spacing: .06em; line-height: 1.45; padding: 12px 14px 14px; color: var(--l-aff)">AISSA-7K2</span>
+</a>
+<div class="cp" style="align-self: stretch"><b>Teinte 4</b><span class="kcap"><code>tint</code> = <code>#34D399</code>. Un code court peut prendre la teinte (<code>codeTinted</code>).</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+
+<div class="kcell kc">
+<article class="ticket" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--l-comm); color: #0B0B12">[[ic:users-four]]</span><div class="tt"><h3 class="d">Beatmakers Dakar</h3><span class="mono tc">meeshy.me/c/beatmakers</span></div><button class="ib g" aria-label="Copier le lien Beatmakers Dakar">[[ic:copy]]</button></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">342</b> membres</span>
+<span style="display: inline-flex; align-items: center">
+<span class="av" style="width: 30px; height: 30px; font-size: 9.5px; --accent: #FF6B6B; border: 2px solid var(--raised)">MO</span>
+<span class="av" style="width: 30px; height: 30px; font-size: 9.5px; --accent: #F8B500; border: 2px solid var(--raised); margin-left: -8px">TR</span>
+<span class="av" style="width: 30px; height: 30px; font-size: 9.5px; --accent: #9B59B6; border: 2px solid var(--raised); margin-left: -8px">KM</span>
+</span></div>
+</article>
+<div class="cp"><b>Repos</b><span class="kcap">Fond <code>raised</code>, bord <code>line</code>. Aucune ombre : le billet est posé.</span></div>
+</div>
+
+<div class="kcell kc">
+<article class="ticket tk-press" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--l-comm); color: #0B0B12">[[ic:users-four]]</span><div class="tt"><h3 class="d">Beatmakers Dakar</h3><span class="mono tc">meeshy.me/c/beatmakers</span></div><button class="ib g" aria-label="Copier le lien Beatmakers Dakar">[[ic:copy]]</button></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">342</b> membres</span><span class="chip">[[ic:users-three s]]<span>Ouverte</span></span></div>
+</article>
+<div class="cp"><b>Pressé</b><span class="kcap">Échelle 0,97 et fond <code>field</code>, dès le doigt posé. Presser un bouton du talon ne presse pas le billet.</span></div>
+</div>
+
+<div class="kcell kc">
+<article class="ticket tk-sel" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--l-comm); color: #0B0B12">[[ic:users-four]]</span><div class="tt"><h3 class="d">Beatmakers Dakar</h3><span class="mono tc">meeshy.me/c/beatmakers</span></div><span class="ib" style="background: var(--brand-soft); color: #0B0B12; width: 32px; height: 32px; margin-right: 6px">[[ic:check s]]</span></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">342</b> membres</span><span class="chip">[[ic:users-three s]]<span>Ouverte</span></span></div>
+</article>
+<div class="cp"><b>Sélectionné</b><span class="kcap">Liseré de 2 px qui suit aussi les encoches, coche à la place de <code>trailing</code>. Dit « sélectionné ».</span></div>
+</div>
+
+<div class="kcell kc">
+<div style="position: relative">
+<article class="ticket tk-hov" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--brand-fill); color: #fff">[[ic:cursor-click]]</span><div class="tt"><h3 class="d">Mon profil</h3><span class="mono tc">meeshy.me/l/aissa</span></div><button class="ib g" aria-label="Copier le lien Mon profil">[[ic:copy]]</button></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">412</b> clics</span><span class="chip">[[ic:user-focus s]]<span>Vers ma vitrine</span></span></div>
+</article>
+<span style="position: absolute; left: 58%; top: 34px; color: var(--ink); display: inline-flex; filter: drop-shadow(0 2px 4px rgba(0,0,0,.6))">[[ic:cursor-fill]]</span>
+</div>
+<div class="cp"><b>Survolé <span style="font-weight: 500; color: var(--ink3)">· web, iPad au pointeur</span></b><span class="kcap">Monte de 4 px, bord plus clair, ombre. Jamais au doigt.</span></div>
+</div>
+
+<div class="kcell kc">
+<div style="position: relative">
+<div style="position: absolute; inset: 0; border-radius: 22px; border: 1.5px dashed rgba(129,140,248,.5); background: rgba(99,102,241,.08)"></div>
+<article class="ticket tk-drag" style="--cut: 77px">
+<div class="th"><span style="display: inline-flex; color: var(--ink3)">[[ic:dots-six-vertical]]</span><span class="ib" style="background: var(--l-share); color: #0B0B12">[[ic:chats-circle]]</span><div class="tt"><h3 class="d">Studio — invités</h3><span class="mono tc">meeshy.me/chat/studio-invites</span></div></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">23</b> / 50 arrivées</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--warn)">[[ic:clock s]]<span>expire dans 6 j</span></span></div>
+</article>
+</div>
+<div class="cp"><b>En cours de déplacement</b><span class="kcap">Soulevé à 1,03, penché de 2,5°, grande ombre. Sa place reste en pointillé. Au clavier : « Monter », « Descendre ».</span></div>
+</div>
+
+<div class="kcell kc">
+<article class="ticket tk-ghost" style="--cut: 77px">
+<div class="th"><span class="ib" style="border: 1.5px dashed color-mix(in srgb, var(--ink3) 62%, transparent); color: var(--ink3)">[[ic:lock-simple]]</span><div class="tt"><h3 class="d" style="color: var(--ink2)">Lien de communauté</h3><span class="mono tc" style="color: var(--ink3)">meeshy.me/c/…</span></div></div>
+<div class="cut"></div>
+<div class="ts"><span style="font-size: 13px; color: var(--ink2)">Crée d'abord une communauté.</span><button class="btn q sm">Créer</button></div>
+</article>
+<div class="cp"><b>Verrouillé-fantôme</b><span class="kcap">Pas de fond, tout le contour en tirets. Il dit ce qui manque et garde une sortie. Dit « indisponible ».</span></div>
+</div>
+
+<div class="kcell kc">
+<article class="ticket" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--field); color: var(--ink3)">[[ic:chats-circle]]</span><div class="tt"><h3 class="d strike" style="color: var(--ink2)">Atelier d'octobre</h3><span class="mono tc strike" style="color: var(--ink3)">meeshy.me/chat/atelier-oct</span></div><span class="chip" style="color: var(--err); border-color: rgba(248,113,113,.4); background: rgba(248,113,113,.1); margin-right: 6px">Expiré</span></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d" style="color: var(--ink2)">50</b> / 50 arrivées</span><button class="btn q sm">Prolonger</button></div>
+</article>
+<div class="cp"><b>Barré</b><span class="kcap">Titre et code barrés de rouge, pastille éteinte. Le mot « Expiré » est écrit : la couleur ne le dit jamais seule.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="ticket" style="--cut: 77px" aria-hidden="true">
+<div class="th"><span class="sk" style="width: 44px; height: 44px; border-radius: 50%; flex: none"></span><div class="tt" style="gap: 8px"><span class="sk" style="width: 62%; height: 16px"></span><span class="sk" style="width: 84%; height: 11px"></span></div></div>
+<div class="cut"></div>
+<div class="ts"><span class="sk" style="width: 96px; height: 20px"></span><span class="sk" style="width: 78px; height: 30px; border-radius: 999px"></span></div>
+</div>
+<div class="cp"><b>Chargement</b><span class="kcap">La découpe reste, le contenu est un squelette : <code>MeeshySkeleton(.ticket)</code> de <b>K38</b>. Seulement si le cache est vide.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="padding: 28px 28px 22px">
+<article class="ticket" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--l-aff); color: #fff">[[ic:gift]]</span><div class="tt"><h3 class="d">Parrainage</h3><span class="mono" style="font-size: 14px; font-weight: 700; letter-spacing: .06em; color: var(--l-aff)">AISSA-7K2</span></div><button class="ib g" aria-label="Copier mon code de parrainage">[[ic:copy]]</button></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">14</b> filleuls</span><span class="chip">[[ic:qr-code s]]<span>QR du code</span></span></div>
+</article>
+</div>
+<div class="cp" style="padding: 0 28px 28px"><b>Thème clair</b><span class="kcap">Mêmes jetons, valeurs claires. Les encoches laissent voir le blanc de l'hôte.</span></div>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">Quatre formes de plus, deux emplacements, et l'état écrit dans une pastille</h3></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="width: 100%; padding: 14px; border-radius: 18px; background: var(--ground)"><article class="ticket" style="--cut: 32px; display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 0 12px"><span style="display: inline-flex; color: var(--ink3)">[[ic:dots-six-vertical]]</span><div class="tt"><b style="font-size: 14px">Site</b><span class="mono tc">aissandiaye.studio</span></div><span class="sw on" role="switch" aria-checked="true" aria-label="Site, affichée"></span></article></div></div><span class="kcap"><b style="color: var(--ink)"><code>row</code> sur une ligne</b> Encoche à mi-hauteur. <code>leading</code> : la poignée de <b>K52</b>. <code>trailing</code> : l'interrupteur de <b>K06</b>.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="width: 100%; padding: 14px; border-radius: 18px; background: var(--ground)"><article class="ticket" style="--cut: 58px; border-style: dashed"><div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px 12px"><b style="font-size: 14px; color: var(--ink2)">Nom du lien</b><span class="mono tc">meeshy.me/chat/…</span></div><div class="cut"></div><div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px 14px 12px; font-size: 11px; color: var(--ink2)"><span><b class="d" style="display: block; font-size: 16px; color: var(--ink)">50</b>places</span><span><b class="d" style="display: block; font-size: 16px; color: var(--ink)">7 j</b>durée</span><span><b class="d" style="display: block; font-size: 16px; color: var(--ink)">Public</b>accès</span></div></article></div></div><span class="kcap"><b style="color: var(--ink)"><code>kind: draft</code></b> Le billet en cours de création : titre en <b>K08</b> sans boîte, talon de trois valeurs de <b>K34</b>, mis à jour à chaque saisie.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><article class="ticket" style="--cut: 74px; width: 104px; background: var(--ground)"><div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px 10px"><span class="ib" style="width: 36px; height: 36px; background: var(--l-comm); color: #0B0B12">[[ic:users-four s]]</span><b style="font-size: 12px">Beatmakers</b></div><div class="cut" style="margin: 0 10px"></div><div style="padding: 8px; text-align: center"><b class="d" style="font-size: 16px">342</b><span class="kcap" style="display: block; font-size: 11px">membres</span></div></article></div><span class="kcap"><b style="color: var(--ink)"><code>size: mini</code></b> Vertical, 104 de large, pour un rail : pastille, titre, un chiffre. Ni code ni <code>trailing</code>.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="width: 100%; padding: 14px; border-radius: 18px; background: var(--ground)"><article class="ticket" style="--cut: 62px"><div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px 12px"><div class="tt"><b style="font-size: 14px">Studio — invités</b><span class="mono tc" style="text-decoration: line-through; text-decoration-color: var(--err)">meeshy.me/chat/studio-old</span></div><span class="chip" style="min-height: 24px; padding: 0 9px; font-size: 11px; color: var(--err)">Introuvable</span></div><div class="cut"></div><div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 12px; font-size: 12px; color: var(--ink2)"><span><b style="color: var(--ink)">50 / 50</b> arrivées</span><span class="chip" style="min-height: 24px; padding: 0 9px; font-size: 11px">Complet</span></div></article></div></div><span class="kcap"><b style="color: var(--ink)"><code>status</code> · états terminaux</b> La pastille d'état est une <b>K41</b>, posée dans <code>status</code> : expiré, désactivé, introuvable (adresse barrée), complet. Toujours un mot écrit.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Il se retourne sur sa tranche</h2><p>Un seul mouvement propre : <code>motion.flip</code>. Le recto part, la tranche passe, le verso arrive avec un léger rebond. Les encoches ne bougent pas de place.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; align-items: stretch">
+
+<div class="kcell kc" style="align-items: center; justify-content: center; gap: 34px; padding: 44px 28px; min-height: 420px">
+<div class="fl" style="zoom: 1.4">
+<article class="ticket fa" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--l-aff); color: #0B0B12">[[ic:gift]]</span><div class="tt"><h3 class="d">Parrainage</h3><span class="mono" style="font-size: 14px; font-weight: 700; letter-spacing: .06em; color: var(--l-aff)">AISSA-7K2</span></div><button class="ib g" aria-label="Copier mon code de parrainage">[[ic:copy]]</button></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">14</b> filleuls</span><button class="chip" style="min-height: 44px">[[ic:qr-code s]]<span>QR du code</span></button></div>
+</article>
+<article class="ticket fz" style="--cut: 77px; background: linear-gradient(200deg, color-mix(in oklab, var(--l-aff) 16%, var(--raised)), var(--raised) 62%)">
+<div class="th"><span class="ib" style="background: var(--l-aff); color: #0B0B12">[[ic:gift]]</span><div class="tt"><h3 class="d">Parrainage</h3><span style="font-size: 12px; color: var(--ink2)">Fais scanner ce code</span></div><button class="ib g" aria-label="Revenir au recto">[[ic:arrow-u-up-left]]</button></div>
+<div class="cut"></div>
+<div class="ts" style="justify-content: flex-start; gap: 14px; padding: 8px 18px 10px">
+<span class="qr" style="width: 64px; height: 64px; border-radius: 12px"><em style="left: 6px; top: 6px; width: 18px; height: 18px"></em><em style="right: 6px; top: 6px; width: 18px; height: 18px"></em><em style="left: 6px; bottom: 6px; width: 18px; height: 18px"></em></span>
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0"><span class="mono" style="font-size: 16px; font-weight: 700; letter-spacing: .06em; color: var(--l-aff)">AISSA-7K2</span><span style="font-size: 12.5px; color: var(--ink2)">14 filleuls · créé en mars 2026</span></div>
+</div>
+</article>
+<span class="tap t1" style="left: 268px; top: 122px"></span>
+<span class="tap t2" style="left: 308px; top: 38px"></span>
+</div>
+<div style="display: flex; align-items: center; gap: 22px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="swa"></span><code>isFlipped</code></div>
+<div style="display: flex; align-items: center; gap: 10px"><span class="hap"></span><span style="font-size: 13px; color: var(--ink2)">haptique, à la tranche</span></div>
+<div class="side" style="position: relative; width: 60px; height: 18px"><i>recto</i><i>verso</i></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell" style="justify-content: flex-start; gap: 20px; padding: 18px 22px; min-height: 0; flex: 1; background: var(--ground)">
+<span class="step">1</span>
+<div style="width: 170px; height: 83px; flex: none"><article class="ticket" style="zoom: .5; width: 340px; height: 166px; --cut: 77px"><div class="th"><span class="ib" style="background: var(--l-aff); color: #0B0B12">[[ic:gift]]</span><div class="tt"><h3 class="d">Parrainage</h3><span class="mono" style="font-size: 14px; font-weight: 700; color: var(--l-aff)">AISSA-7K2</span></div></div><div class="cut"></div><div class="ts"><span class="fg"><b class="d">14</b> filleuls</span><span class="chip">[[ic:qr-code s]]<span>QR du code</span></span></div></article></div>
+<div style="display: flex; flex-direction: column; gap: 3px"><b style="font-size: 14.5px">0 ms · recto</b><span class="kcap">L'hôte passe <code>isFlipped</code> à vrai. Le billet se soulève : échelle 1 → 1,05.</span></div>
+</div>
+<div class="kcell" style="justify-content: flex-start; gap: 20px; padding: 18px 22px; min-height: 0; flex: 1; background: var(--ground)">
+<span class="step">2</span>
+<div style="width: 170px; height: 83px; flex: none; perspective: 500px"><article class="ticket" style="zoom: .5; width: 340px; height: 166px; --cut: 77px; transform: rotateY(66deg) scale(1.05)"><div class="th"><span class="ib" style="background: var(--l-aff); color: #0B0B12">[[ic:gift]]</span><div class="tt"><h3 class="d">Parrainage</h3><span class="mono" style="font-size: 14px; font-weight: 700; color: var(--l-aff)">AISSA-7K2</span></div></div><div class="cut"></div><div class="ts"><span class="fg"><b class="d">14</b> filleuls</span></div></article></div>
+<div style="display: flex; flex-direction: column; gap: 3px"><b style="font-size: 14.5px">250 ms · la tranche</b><span class="kcap">À 90°, le recto cède la place au verso. Un tic rigide, un seul. Le recto devient inerte.</span></div>
+</div>
+<div class="kcell" style="justify-content: flex-start; gap: 20px; padding: 18px 22px; min-height: 0; flex: 1; background: var(--ground)">
+<span class="step">3</span>
+<div style="width: 170px; height: 83px; flex: none"><article class="ticket" style="zoom: .5; width: 340px; height: 166px; --cut: 77px; display: flex; flex-direction: column; background: linear-gradient(200deg, color-mix(in oklab, var(--l-aff) 16%, var(--raised)), var(--raised) 62%)"><div class="th"><span class="ib" style="background: var(--l-aff); color: #0B0B12">[[ic:gift]]</span><div class="tt"><h3 class="d">Parrainage</h3></div></div><div class="cut"></div><div class="ts" style="justify-content: flex-start; gap: 14px; padding: 8px 18px 10px"><span class="qr" style="width: 64px; height: 64px; border-radius: 12px"><em style="left: 6px; top: 6px; width: 18px; height: 18px"></em><em style="right: 6px; top: 6px; width: 18px; height: 18px"></em><em style="left: 6px; bottom: 6px; width: 18px; height: 18px"></em></span><span class="mono" style="font-size: 16px; font-weight: 700; color: var(--l-aff)">AISSA-7K2</span></div></article></div>
+<div style="display: flex; flex-direction: column; gap: 3px"><b style="font-size: 14.5px">500 ms · verso</b><span class="kcap">Le verso se pose avec un rebond de 5°. Le lecteur d'écran annonce « verso » et y place le focus.</span></div>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">motion.flip</b> · durée et ressort de K26, la tranche à mi-course · déclencheur : <span style="color: var(--accent-ink)">isFlipped</span> change, jamais un geste caché · haptique : rigid à la tranche, celle du jeton · mouvement réduit : fondu réduit de K26 (160 ms), sans rotation</div>
+<div class="spec"><b style="color: var(--ink)">motion.morph</b> (pressé, soulevé) · durée et ressort de K26 · déclencheur : doigt posé, début du déplacement · haptique : light au toucher, celle du jeton · mouvement réduit : le fond change, l'échelle non</div>
+<div class="spec"><b style="color: var(--ink)">motion.rise</b> · entrée d'une liste de billets, décalage de K26 par rang, quatre rangs au plus · déclencheur : première apparition, jamais au retour sur l'écran · haptique : aucune · mouvement réduit : fondu réduit de K26</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<div class="h">Élément</div><div class="h">iOS · MeeshyUI/Kit/MeeshyTicket.swift</div><div class="h">Android · me.meeshy.ui.component.kit</div><div class="h">Web · components/kit/meeshy-ticket.tsx</div>
+<div><b>Composant</b></div>
+<div><code>MeeshyTicket(title:<wbr>code:<wbr>tint:<wbr>systemImage:<wbr>figure:<wbr>size:<wbr>isFlipped:<wbr>stub:<wbr>leading:<wbr>trailing:<wbr>status:<wbr>back:)</code></div>
+<div><code>MeeshyTicket(title, code, modifier, tint, icon, figure, size, isFlipped, stub, leading, trailing, status, back)</code></div>
+<div><code>&lt;MeeshyTicket title code tint glyph figure size isFlipped stub leading trailing status back /&gt;</code></div>
+<div><b>Tailles</b></div>
+<div><code>MeeshyTicketSize { hero, row, compact, mini }</code></div>
+<div><code>enum class MeeshyTicketSize</code> identique</div>
+<div><code>'hero' | 'row' | 'compact' | 'mini'</code></div>
+<div><b>Variantes</b></div>
+<div><code>MeeshyTicketKind { normal, draft, ghost, struck, loading }</code></div>
+<div><code>enum class MeeshyTicketKind</code> identique</div>
+<div><code>'normal' | 'draft' | 'ghost' | 'struck' | 'loading'</code></div>
+<div><b>États</b></div>
+<div><code>isSelected</code>, <code>isDragging</code>, <code>.disabled(_:)</code></div>
+<div><code>isSelected</code>, <code>isDragging</code>, <code>enabled</code></div>
+<div><code>isSelected</code>, <code>isDragging</code>, <code>disabled</code></div>
+<div><b>Emplacements</b> (<code>slot</code>)</div>
+<div><code>@ViewBuilder stub</code>, <code>leading</code>, <code>trailing</code>, <code>status</code>, <code>back</code></div>
+<div><code>stub</code>, <code>leading</code>, <code>trailing</code>, <code>status</code>, <code>back</code> : <code>@Composable () -&gt; Unit</code></div>
+<div><code>stub</code>, <code>leading</code>, <code>trailing</code>, <code>status</code>, <code>back</code> : <code>ComponentChildren</code></div>
+<div><b>Retournement</b></div>
+<div><code>isFlipped: Binding&lt;Bool&gt;</code></div>
+<div><code>isFlipped: Boolean</code>, <code>onFlippedChange</code></div>
+<div><code>isFlipped</code>, <code>onFlippedChange</code></div>
+<div><b>Forme seule</b></div>
+<div><code>MeeshyTicketShape(cut:notch:radius:)</code> : <code>Shape</code></div>
+<div><code>MeeshyTicketShape(cut, notch, radius)</code> : <code>Shape</code></div>
+<div><code>meeshyTicketMask(cut, notch)</code> : CSS</div>
+<div style="border-bottom: 0"><b>Recette</b></div>
+<div style="border-bottom: 0"><code>MeeshyTicketRecipe.resolve(size:<wbr>kind:<wbr>tint:<wbr>isSelected:<wbr>isPressed:<wbr>isHovered:<wbr>isDragging:<wbr>isFlipped:<wbr>reduceMotion:)</code></div>
+<div style="border-bottom: 0"><code>MeeshyTicketRecipe.resolve(…)</code>, JVM pure</div>
+<div style="border-bottom: 0"><code>meeshyTicketRecipe(…)</code> : classes et propriétés <code>--kit-ticket-*</code></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+<div class="par"><code>title: String</code><span>Obligatoire. Une ligne, coupée à la fin.</span></div>
+<div class="par"><code>code: String</code><span>Obligatoire. Chasse fixe, jamais traduit, de gauche à droite.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte de la pastille. Sans elle : la marque.</span></div>
+<div class="par"><code>systemImage</code> · <code>icon</code> · <code>glyph</code><span>Glyphe de la pastille, nommé selon la plateforme (iOS · Android · web), <code>nil</code> par défaut. Sans lui, pas de pastille.</span></div>
+<div class="par"><code>figure: String? = nil</code><span>Le grand chiffre, déjà mis en forme. <code>figureCaption</code> pour son unité.</span></div>
+<div class="par"><code>size = .row</code><span><code>hero</code>, <code>row</code>, <code>compact</code> ou <code>mini</code> (vertical, pour un rail).</span></div>
+<div class="par"><code>kind = .normal</code><span><code>ghost</code> et <code>struck</code> demandent <code>statusLabel</code>, le mot écrit. <code>draft</code> : le billet se met à jour à la saisie.</span></div>
+<div class="par"><code>leading</code> · <code>status</code><span>Emplacements : une poignée de <b>K52</b> en tête, une pastille d'état de <b>K41</b> à côté du titre. <code>trailing</code> reçoit aussi l'interrupteur de <b>K06</b>.</span></div>
+<div class="par"><code>showsFaces = false</code><span>Deux points sous le billet : <b>K03</b> en <code>indicator</code>, « recto, 1 sur 2 ».</span></div>
+<div class="par"><code>isFlipped = false</code><span>Sans <code>back</code>, il est ignoré.</span></div>
+<div class="par"><code>codeTinted = false</code><span>Donne la teinte au code. Pour un code court.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Nom dit. Par défaut : titre, code, chiffre, état.</span></div>
+<div class="par"><code>onPress: (() -&gt; Void)? = nil</code><span>Sans lui, le billet n'est pas un bouton.</span></div>
+<div class="par"><code>flipLabels = (« recto », « verso »)</code><span>Les deux mots annoncés au retournement.</span></div>
+</div>
+<p style="font-size: 14px; line-height: 1.5; color: var(--ink2); max-width: 900px">Aucun type du domaine dans une signature : ni lien, ni profil, ni famille, ni cercle. Le billet ne copie rien, n'ouvre rien, ne compte rien. L'app lui donne des chaînes, une couleur, un glyphe et cinq emplacements.</p>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une forme, trois façons de la découper</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<h3 class="d" style="font-size: 20px">iOS · SwiftUI</h3></div>
+<ul>
+<li><code>MeeshyTicketShape</code> : un seul tracé, rectangle arrondi moins deux demi-cercles. Fond, bord et <code>contentShape</code> en sortent.</li>
+<li>Retournement : <code>rotation3DEffect</code> sur l'axe vertical, mené par <code>MeeshyMotion.flip</code>.</li>
+<li>Haptique : <code>sensoryFeedback(.impact(flexibility: .rigid), trigger:)</code> à la tranche.</li>
+<li>Déplacement : <code>.draggable</code> et <code>contentShape(.dragPreview, MeeshyTicketShape())</code> : l'aperçu garde ses encoches.</li>
+<li>Pointillé : <code>StrokeStyle(lineWidth: 1.5, dash: [6, 4])</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : pas de <code>sensoryFeedback</code>, le tic passe par <code>HapticFeedback.rigid()</code>. « Réduire les animations » : fondu enchaîné, aucune rotation.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<h3 class="d" style="font-size: 20px">Android · Compose</h3></div>
+<ul>
+<li><code>MeeshyTicketShape</code> : un <code>Path</code> soustrait par <code>PathOperation.Difference</code>, mis en cache par taille.</li>
+<li>Surface <b>tonale</b>, sans flou. Les boutons du talon prennent la surface tonale de K01.</li>
+<li>Retournement : <code>graphicsLayer</code> (<code>rotationY</code>, <code>cameraDistance</code>), lu en phase de dessin : aucune recomposition.</li>
+<li>Haptique : <code>HapticFeedbackType.ContextClick</code> à la tranche.</li>
+<li>Pointillé : <code>PathEffect.dashPathEffect</code>. Déplacement : <code>dragAndDropSource</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation du système à zéro : <code>Crossfade</code> sec. Sous API 31, pas d'ombre colorée : ombre neutre.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<h3 class="d" style="font-size: 20px">Web · Preact</h3></div>
+<ul>
+<li>Encoches par <code>mask</code> (deux <code>radial-gradient</code>) : vraiment découpées, sans couleur de fond à connaître.</li>
+<li>Retournement : <code>perspective</code>, <code>rotateY</code>, <code>backface-visibility</code>. Le côté caché porte <code>inert</code>.</li>
+<li>Pressé et survolé en CSS : <code>:active</code>, <code>:hover</code> sous <code>@media (hover: hover)</code>. Aucun état, aucun écouteur.</li>
+<li>Un <code>&lt;article&gt;</code> ; s'il a <code>onPress</code>, un lien étiré dessous, jamais un bouton dans un bouton.</li>
+<li>Déplacement : pointeur et clavier, annoncé par une région <code>aria-live</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>mask</code> : deux disques peints à <code>--kit-ticket-notch</code>. Sans <code>inert</code> : <code>aria-hidden</code> et <code>tabindex="-1"</code>. Pas d'haptique sur ordinateur.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Douze lignes de liens, zéro billet</h2><p>Aucune ligne du code n'a d'encoche ni de verso. La découpe est à créer. Ce qui existe déjà, c'est la grammaire : pastille, titre, faits, gestes au-dessus.</p></header>
+<div class="card" style="overflow: hidden">
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/link-families-parts.tsx</span><p><span class="be">Devient le composant</span> <code>FamilyRow</code> : déjà agnostique (<code>disc</code>, <code>title</code>, <code>meta</code>, <code>actions</code>), lien étiré, gestes posés au-dessus. Avec <code>FamilyDisc</code> et <code>FamilySkeleton</code>. Il gagne la découpe, le talon et le verso.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/links-parts.tsx</span><p><code>ShareLinkRow</code> et <code>ShareLinksSkeleton</code> : la jumelle écrite avant <code>FamilyRow</code>, 72 px. Elle est rebranchée, puis retirée.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift</span><p><span class="be">Devient le composant</span> <code>shareLinkRow</code> : la plus complète des quatre (pastille active ou éteinte, expiration, nom dit avec l'état, K02 pour copier). Elle perd <code>MyShareLink</code> et monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift</span><p><code>trackingLinkRow</code>. Mêmes pièces, autre teinte. Rebranchée. Comme <code>communityLinkRow</code> de <code>CommunityLinksView.swift</code> et <code>tokenRow</code> de <code>AffiliateView.swift</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift</span><p><code>linkCard</code> : la carte d'une famille au hub. Elle devient un billet <code>row</code> avec son compte en <code>figure</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/conversations/…/links/TrackingLinksScreen.kt</span><p><span class="be">Devient le composant</span> <code>TrackingRow</code>, avec <code>LinkIconBadge</code> et <code>linkSurface</code> de <code>LinksChrome.kt</code>. Il quitte <code>:feature:conversations</code> pour <code>:sdk-ui</code>, sans <code>TrackingLink</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/conversations/…/MyShareLinksScreen.kt</span><p><code>ShareLinkRow</code>. Rebranchée, comme <code>CommunityRow</code> (<code>links/CommunityLinksScreen.kt</code>), <code>TokenRow</code> (<code>links/AffiliateScreen.kt</code>) et <code>HubCard</code> (<code>links/LinksHubScreen.kt</code>).</p></div>
+<div class="twin"><span class="pf">Verso</span><span class="mono">MeeshyUI/Game/GameReferralQR.swift · links/QrLinkShare.kt · apps/web/src/lib/qr.ts</span><p>Les trois fabriques de QR. Elles vont à K31 ; le billet ne fait que leur ouvrir <code>back</code>.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Cinq écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+
+<div class="kcell kc" style="grid-column: span 2">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: flex-end; gap: 8px"><span class="av" style="width: 30px; height: 30px; font-size: 10px; --accent: #4ECDC4">LM</span><span style="padding: 10px 14px; border-radius: 20px 20px 20px 6px; background: var(--field); font-size: 14.5px">Viens, on prépare la sortie de samedi.</span></div>
+<article class="ticket" style="--cut: 77px; margin-left: 38px">
+<div class="th"><span class="ib" style="background: var(--l-share); color: #0B0B12">[[ic:chats-circle]]</span><div class="tt"><h3 class="d">Sortie de samedi</h3><span class="mono tc">meeshy.me/chat/sortie-samedi</span></div></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">6</b> déjà là</span><button class="btn p sm">Rejoindre</button></div>
+</article>
+</div>
+<div class="cp"><b>Conversation</b><span class="kcap">Une invitation reçue dans un fil. Le talon porte « Rejoindre ».</span></div>
+</div>
+
+<div class="kcell kc" style="grid-column: span 2">
+<article class="ticket" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--l-comm); color: #0B0B12">[[ic:users-four]]</span><div class="tt"><h3 class="d">Photo de rue</h3><span class="mono tc">meeshy.me/c/photo-de-rue</span></div><button class="ib g" aria-label="Partager le billet de Photo de rue">[[ic:export]]</button></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">1 204</b> membres</span>
+<span style="display: inline-flex; align-items: center">
+<span class="av" style="width: 30px; height: 30px; font-size: 9.5px; --accent: #4ECDC4; border: 2px solid var(--raised)">LM</span>
+<span class="av" style="width: 30px; height: 30px; font-size: 9.5px; --accent: #F8B500; border: 2px solid var(--raised); margin-left: -8px">TR</span>
+<span class="av" style="width: 30px; height: 30px; font-size: 9.5px; --accent: #3498DB; border: 2px solid var(--raised); margin-left: -8px">YT</span>
+</span></div>
+</article>
+<div class="cp"><b>Communauté</b><span class="kcap">Le billet d'entrée, en tête de la page d'une communauté. Verso : son QR.</span></div>
+</div>
+
+<div class="kcell kc" style="grid-column: span 2">
+<article class="ticket" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--accent); color: #0B0B12">[[ic:percent]]</span><div class="tt"><h3 class="d">Pack Néon</h3><span class="mono" style="font-size: 14px; font-weight: 700; letter-spacing: .06em; color: var(--accent-ink)">NEON-20</span></div><button class="ib g" aria-label="Copier le code NEON-20">[[ic:copy]]</button></div>
+<div class="cut"></div>
+<div class="ts"><span class="fg"><b class="d">−20 %</b> encore 5 j</span><button class="btn a sm">Appliquer</button></div>
+</article>
+<div class="cp"><b>Boutique de packs</b><span class="kcap">Un code promo. <code>codeTinted</code>, <code>figure</code> pour la remise.</span></div>
+</div>
+
+<div class="kcell kc" style="grid-column: span 3">
+<article class="ticket" style="--cut: 77px; background: linear-gradient(160deg, color-mix(in oklab, #FBBF24 18%, var(--raised)), var(--raised) 60%); border-color: rgba(251,191,36,.34)">
+<div class="th"><span class="ib" style="background: var(--warn); color: #0B0B12">[[ic:trophy]]</span><div class="tt"><h3 class="d">Laissez-passer · Saison 4</h3><span class="mono tc">S4 · OR III · 1 860 étincelles</span></div><span class="chip" style="margin-right: 6px">[[ic:sparkle s]]<span>Actif</span></span></div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; gap: 16px; padding: 12px 18px 16px"><span class="fg" style="flex: none"><b class="d">Niveau 24</b></span><span class="bar" style="flex: 1"><i style="width: 62%; background: var(--warn)"></i></span><span style="font-size: 12.5px; color: var(--ink2); flex: none">25 dans 340</span></div>
+</article>
+<div class="cp"><b>Jeu</b><span class="kcap">Le laissez-passer de saison. La teinte passe dans le fond, comme en <code>hero</code>.</span></div>
+</div>
+
+<div class="kcell kc" style="grid-column: span 3">
+<article class="ticket" style="--cut: 77px">
+<div class="th"><span class="ib" style="background: var(--info); color: #0B0B12">[[ic:laptop]]</span><div class="tt"><h3 class="d">Ordinateur d'Aïssa</h3><span class="mono tc">A3F2 · 9C1E · 77B0 · D410</span></div><span class="chip" style="color: var(--ok); margin-right: 6px">[[ic:seal-check s]]<span>Vérifié</span></span></div>
+<div class="cut"></div>
+<div class="ts"><span style="font-size: 13px; color: var(--ink2)">Relié à Lisbonne, aujourd'hui</span><button class="btn x sm">Déconnecter</button></div>
+</article>
+<div class="cp"><b>Réglages · appareils reliés</b><span class="kcap">Le code est l'empreinte de l'appareil. Verso : le QR à faire scanner pour vérifier.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque taille × variante × état rend la coupe (125, 77, 61), le fond, le bord et l'encre du tableau. Vecteurs <code>K30-MeeshyTicket.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Forme.</b> Les encoches sont centrées sur la coupe à toute largeur. Un fond d'hôte rouge se voit au travers : rien n'est peint.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Retournement.</b> <code>isFlipped</code> est la seule cause. Le côté caché n'est ni touchable ni lu. Un seul tic rigide par retournement, à la tranche.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Un seul élément : titre, code, chiffre, puis l'état en mots (« expiré », « indisponible », « sélectionné », « verso »). Chaque bouton du talon reste nommé à part.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Tout ce qui se touche fait 44 pt, 48 dp ou 44 px. Encre de la pastille choisie au contraste : 4,5:1 sur les quatre teintes, en clair comme en sombre.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit et RTL.</b> Fondu de 160 ms, zéro rotation. En arabe, tout se reflète sauf le code, qui reste de gauche à droite.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Retourner, presser ou soulever un billet ne re-rend ni ne repeint aucun autre billet de la liste. Garde de source : aucun type du domaine, aucun singleton, aucun verre dessiné dans les fichiers de K30.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le retournement est toujours une action nommée (« Voir le verso »), jamais un geste seul. En très grande police, le code passe sur deux lignes et la coupe descend avec lui.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Seules la transformation et l'opacité s'animent. Le verso n'est construit qu'au premier retournement. Cinquante billets défilent sans image perdue ; rien n'est retenu une fois l'écran quitté.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8189}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

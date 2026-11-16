@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K33 MeeshyCircleScale</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:150px}
+.i0{--i:0%}.i1{--i:8%}.i2{--i:18%}.i3{--i:32%}.i4{--i:52%}.i5{--i:100%}
+.cs-d{display:flex;gap:4px;width:358px}
+.cs-d>*{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0}
+.cs-d b{display:flex;align-items:center;justify-content:center;width:58px;height:58px;border-radius:50%;border:1.5px solid var(--accent);background:color-mix(in oklab,var(--accent) var(--i),transparent);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:18px;color:var(--ink);animation:mxMorph 8s ease-in-out infinite}
+.cs-d>:nth-child(2) b{animation-delay:-1.5s}.cs-d>:nth-child(3) b{animation-delay:-3s}.cs-d>:nth-child(4) b{animation-delay:-4.5s}.cs-d>:nth-child(5) b{animation-delay:-6s}.cs-d>:nth-child(6) b{animation-delay:-7s}
+.cs-d .i5 b{color:#0B0B12}
+.cs-d span{font-size:10px;font-weight:600;letter-spacing:-.02em;color:var(--ink2);white-space:nowrap}
+.cs-d .on b{box-shadow:0 0 0 3px var(--ground),0 0 0 5px var(--accent)}
+.cs-d .on span{color:var(--ink);font-weight:800}
+.cs-d .pr b{transform:scale(.92);filter:brightness(1.25)}
+.cs-d.off{opacity:.4}
+.cs-d.sm{width:auto;gap:10px}
+.cs-d.sm b{width:44px;height:44px;font-size:15px}
+.cs-p{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px 0 10px;border-radius:999px;border:1.5px solid color-mix(in oklab,var(--accent) 62%,transparent);background:color-mix(in oklab,var(--accent) var(--i),transparent);font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
+.cs-p.i0,.cs-p.i1,.cs-p.i2{color:var(--accent-ink)}
+.mx .cs-p.i5{color:#0B0B12;border-color:transparent}
+.cs-p.lg{height:44px;padding:0 18px 0 14px;font-size:15px;gap:8px}
+.cs-p.xs{height:26px;padding:0 10px 0 8px;font-size:11.5px;gap:5px;border-width:1px}
+.cs-p.pr{transform:scale(.94);filter:brightness(1.25)}
+.cs-p.off{opacity:.4}
+.cs-n{display:grid;gap:6px;align-items:center}
+.cs-n>i{display:block;height:12px;border-radius:999px;background:var(--field);border:1px solid var(--line)}
+.cs-n>i[class]{background:color-mix(in oklab,var(--accent) var(--i),transparent);border-color:color-mix(in oklab,var(--accent) 62%,transparent)}
+.cs-r{position:relative;width:300px;height:290px;flex:none}
+.cs-r>.halo{position:absolute;left:50%;top:50%;width:300px;height:300px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,color-mix(in oklab,var(--accent) 22%,transparent) 0%,transparent 62%)}
+.orbit{position:absolute;left:50%;top:50%;width:0;height:0;animation:ccBreathe 6s ease-in-out infinite}
+.orbit>i{position:absolute;left:0;top:0;border-radius:50%;border:1.5px solid var(--line);background:rgba(165,180,252,.035);transform:translate(-50%,-50%)}
+.orbit>i.lit{border:4px solid var(--accent);box-shadow:0 0 26px color-mix(in oklab,var(--accent) 55%,transparent),inset 0 0 18px color-mix(in oklab,var(--accent) 30%,transparent)}
+.orbit>i.oth{border:1.5px dashed var(--oth,var(--ink2))}
+.orbit>.mk{position:absolute;display:inline-flex;border-radius:50%;border:3px solid var(--ground)}
+.spoke{position:absolute;height:0;border-top:1.5px dashed var(--line)}
+.spoke::before{content:"";position:absolute;left:-4px;top:-4.5px;width:7px;height:7px;border-radius:50%;background:var(--ink3)}
+.spoke.lit{border-top-color:var(--accent)}
+.spoke.lit::before{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.lvl{position:absolute;left:300px;font-size:11.5px;font-weight:600;color:var(--ink3);line-height:16px;white-space:nowrap}
+.lvl.lit{color:var(--accent-ink);font-weight:800;font-size:13px}
+.law{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.law>div{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px;border-radius:18px;background:var(--raised);border:1px solid var(--line)}
+.law b{display:block;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--accent);background:color-mix(in oklab,var(--accent) var(--i),transparent)}
+.law code{font-size:13px}
+.law span{font-size:11.5px;color:var(--ink2);text-align:center}
+.tap{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.6);opacity:0;pointer-events:none;z-index:3;animation:csTap 6s infinite}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--warn);opacity:.22;animation:csHap 6s infinite}
+.mv-lit{animation:csLit 6s infinite}
+.mv-mk{animation:csMk 6s infinite}
+.mv-st{display:inline-grid}
+.mv-st>*{grid-area:1/1;justify-self:center}
+.mv-a{animation:csOut 6s infinite}
+.mv-b{opacity:0;animation:csIn 6s infinite}
+.mv-ha b{animation:csHaloA 6s infinite}
+.mv-hb b{animation:csHaloB 6s infinite}
+.mv-ha span{animation:csInkA 6s infinite}
+.mv-hb span{animation:csInkB 6s infinite}
+.mv-num{display:inline-grid}
+.mv-num>*{grid-area:1/1;font-style:normal}
+.mv-num>.mv-a{animation-name:csRollOut}
+.mv-num>.mv-b{animation-name:csRollIn}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.prow{display:flex;align-items:center;gap:12px;min-height:56px}
+.prow>div{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.prow>div>b{font-size:14.5px;font-weight:700}
+.prow>div>span{font-size:12.5px;color:var(--ink2)}
+@keyframes ccBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+@keyframes csLit{0%,24%{width:156px;height:156px;animation-timing-function:cubic-bezier(.3,1.35,.5,1)}34%,78%{width:116px;height:116px;animation-timing-function:cubic-bezier(.3,1.35,.5,1)}88%,100%{width:156px;height:156px}}
+@keyframes csMk{0%,24%{transform:translate(-17px,10px);animation-timing-function:cubic-bezier(.3,1.35,.5,1)}34%,78%{transform:none;animation-timing-function:cubic-bezier(.3,1.35,.5,1)}88%,100%{transform:translate(-17px,10px)}}
+@keyframes csOut{0%,24%{opacity:1;transform:none}31%,80%{opacity:0;transform:scale(.9)}88%,100%{opacity:1;transform:none}}
+@keyframes csIn{0%,26%{opacity:0;transform:scale(.9)}34%,78%{opacity:1;transform:none}85%,100%{opacity:0;transform:scale(.9)}}
+@keyframes csRollOut{0%,24%{opacity:1;transform:none}31%,80%{opacity:0;transform:translateY(-10px)}88%,100%{opacity:1;transform:none}}
+@keyframes csRollIn{0%,26%{opacity:0;transform:translateY(10px)}34%,78%{opacity:1;transform:none}85%,100%{opacity:0;transform:translateY(10px)}}
+@keyframes csHaloA{0%,24%{box-shadow:0 0 0 3px var(--ground),0 0 0 5px var(--accent)}32%,80%{box-shadow:0 0 0 3px var(--ground),0 0 0 5px transparent}88%,100%{box-shadow:0 0 0 3px var(--ground),0 0 0 5px var(--accent)}}
+@keyframes csHaloB{0%,26%{box-shadow:0 0 0 3px var(--ground),0 0 0 5px transparent}34%,78%{box-shadow:0 0 0 3px var(--ground),0 0 0 5px var(--accent)}86%,100%{box-shadow:0 0 0 3px var(--ground),0 0 0 5px transparent}}
+@keyframes csInkA{0%,24%{color:var(--ink)}32%,80%{color:var(--ink3)}88%,100%{color:var(--ink)}}
+@keyframes csInkB{0%,26%{color:var(--ink3)}34%,78%{color:var(--ink)}86%,100%{color:var(--ink3)}}
+@keyframes csTap{0%,15%{opacity:0;transform:scale(1.5)}20%{opacity:1;transform:scale(1)}24%{opacity:1;transform:scale(.8)}29%,100%{opacity:0;transform:scale(.8)}}
+@keyframes csHap{0%,31%{opacity:.22;transform:scale(1)}34%{opacity:1;transform:scale(1.9)}40%,100%{opacity:.22;transform:scale(1)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .24"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #4ECDC4; opacity: .14; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 980px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K33 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyCircleScale</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un niveau de proximité se lit par l'intensité : pastilles, pilule de relation, anneaux concentriques</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 800px">Une seule teinte, de plus en plus pleine. Le niveau le plus bas n'a qu'un contour, le plus haut est plein. Trois formes d'un même composant, une seule loi.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il montre un rang, il ne sait pas ce qu'on range</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Montre <b>un niveau parmi N</b> (2 à 8), du plus bas au plus haut, par l'intensité d'<b>une seule teinte</b>.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Prend trois formes : <code>dots</code> (pastilles à compte), <code>pill</code> (glyphe et nom), <code>rings</code> (anneaux, niveau courant allumé).</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose un <b>second niveau</b> à côté du premier (<code>other</code>) : « lui t'accorde · tu lui accordes ».</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit toujours le niveau <b>en mots</b> : nom, rang (« 5 sur 6 »), compte. L'intensité ne porte jamais le sens seule.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Décider du niveau, ni de ce qu'il ouvre : la loi d'accès reste à <b>l'app</b>. Ce qui est fermé se montre avec <b>K37</b> <code>MeeshyLockedRow</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La rangée d'une personne (avatar, présence, accessoire) : <b>K39</b> <code>MeeshyPersonRow</code>, qui prend la pilule en accessoire.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Les puces à choix multiple : <b>K04</b>. Une jauge continue : <b>K42</b>. La feuille qui s'ouvre au toucher : <b>K15</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Nommer les niveaux, les traduire, compter les personnes, proposer de monter ou de descendre : <b>l'app</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Trois formes, treize parties, une loi</h2><p>Pastilles et pilule à deux fois leur taille, anneaux à deux fois aussi. Les mesures sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: stretch">
+<div class="kcell kc" style="padding: 56px 36px; align-items: center; justify-content: center; gap: 64px">
+
+<div style="position: relative; width: 716px">
+<div class="cs-d" style="zoom: 2">
+<span class="i1"><b>128</b><span>Communauté</span></span>
+<span class="i2"><b>46</b><span>Connaissance</span></span>
+<span class="i3"><b>31</b><span>Ami</span></span>
+<span class="i4 on"><b>9</b><span>Proche</span></span>
+<span class="i5"><b>3</b><span>Sang</span></span>
+</div>
+<span class="kan" style="left: 2px; top: -6px">1</span>
+<span class="kan" style="left: 241px; top: 22px">2</span>
+<span class="kan" style="left: 304px; top: 130px">3</span>
+<span class="kan" style="left: 552px; top: -14px">4</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 72px">
+<div style="position: relative">
+<span class="cs-p i4" style="zoom: 2; --accent:#4ECDC4;--accent-ink:#7FE3DC">[[ic:fire-fill s]]<span>Proche</span></span>
+<span class="kan" style="left: 12px; top: -12px">5</span>
+<span class="kan" style="right: 28px; top: -12px">6</span>
+</div>
+<div style="position: relative; width: 320px">
+<div class="cs-n" style="zoom: 2; grid-template-columns: repeat(6, minmax(0, 1fr))"><i class="i0"></i><i class="i1"></i><i class="i2"></i><i class="i3"></i><i class="i4"></i><i></i></div>
+<span class="kan" style="left: 149px; top: -24px">7</span>
+</div>
+</div>
+
+<div style="position: relative; width: 780px; height: 600px; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div style="zoom: 2; position: relative; width: 390px; height: 300px">
+<div aria-hidden="true" style="position: absolute; left: 152px; top: 150px; width: 300px; height: 300px; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 22%, transparent) 0%, transparent 62%)"></div>
+<div class="orbit" style="left: 152px; top: 150px">
+<i style="width: 276px; height: 276px"></i>
+<i style="width: 236px; height: 236px"></i>
+<i style="width: 196px; height: 196px"></i>
+<i style="width: 156px; height: 156px"></i>
+<i class="lit" style="width: 116px; height: 116px"></i>
+<i class="oth" style="width: 68px; height: 68px; --oth: #D8B4FE"></i>
+<span class="av" style="position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; font-size: 14px; --accent: #A855F7">AN</span>
+<span class="mk" style="left: -77px; top: 1px">
+<span class="av" style="width: 48px; height: 48px; font-size: 17px">LM</span>
+</span>
+</div>
+<div class="spoke" style="left: 221px; top: 30px; width: 73px"></div>
+<div class="spoke" style="left: 211px; top: 48px; width: 83px"></div>
+<div class="spoke" style="left: 201px; top: 65px; width: 93px"></div>
+<div class="spoke" style="left: 191px; top: 82px; width: 103px"></div>
+<div class="spoke lit" style="left: 181px; top: 100px; width: 113px"></div>
+<div class="spoke" style="left: 169px; top: 121px; width: 125px"></div>
+<span class="lvl" style="top: 22px">Public</span>
+<span class="lvl" style="top: 40px">Communauté</span>
+<span class="lvl" style="top: 57px">Connaissance</span>
+<span class="lvl" style="top: 74px">Ami</span>
+<span class="lvl lit" style="top: 92px">Proche</span>
+<span class="lvl" style="top: 113px">Sang</span>
+</div>
+<span class="kan" style="left: 293px; top: 565px">8</span>
+<span class="kan" style="left: 375px; top: 371px">9</span>
+<span class="kan" style="left: 361px; top: 289px">10</span>
+<span class="kan" style="left: 293px; top: 329px">11</span>
+<span class="kan" style="left: 140px; top: 300px">12</span>
+<span class="kan" style="left: 700px; top: 186px">13</span>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 22px">
+<div class="lgd">
+<span class="kan">1</span><div><b>Pastille</b><span>58 px, bord 1,5 px à la teinte, fond à l'intensité du rang. Sa forme vit (<code>motion.float</code>). Jeton <code>scale.dot</code>.</span></div>
+<span class="kan">2</span><div><b>Compte</b><span>Nunito 900, 18 px, chiffres à chasse fixe. Zéro s'écrit « 0 ». Sans <code>counts</code>, le glyphe du niveau prend sa place.</span></div>
+<span class="kan">3</span><div><b><code>title</code></b><span>10 px, une ligne, jamais rétréci : s'il ne tient pas, la rangée passe sur deux.</span></div>
+<span class="kan">4</span><div><b>Halo du niveau courant</b><span>Anneau de 2 px à 3 px de la pastille, nom en encre forte. Jeton <code>scale.halo</code>.</span></div>
+<span class="kan">5</span><div><b><code>glyph</code></b><span>16 px, version pleine au niveau courant. L'encre est choisie au contraste par la recette.</span></div>
+<span class="kan">6</span><div><b>Pilule</b><span>Hauteur 34 (26 · 34 · 44), rayon plein, bord 1,5 px à 62 %, fond à l'intensité. Cible de 44 si elle se touche.</span></div>
+<span class="kan">7</span><div><b>Crans</b><span>Forme <code>dots</code> en taille <code>compact</code> : 12 px de haut, écart 6. Chaque cran garde l'intensité de son rang ; au-dessus du courant, il s'éteint.</span></div>
+<span class="kan">8</span><div><b>Anneau</b><span>Un par niveau, le plus bas dehors. Trait 1,5 px, 20 px entre deux anneaux. Jeton <code>scale.ring</code>.</span></div>
+<span class="kan">9</span><div><b>Anneau allumé</b><span><code>current</code>. Trait 4 px à la teinte, lueur de 26 px. Un seul à la fois.</span></div>
+<span class="kan">10</span><div><b>Anneau en tirets</b><span><code>other</code>. Tirets de 1,5 px à <code>otherTint</code>. Jamais de lueur.</span></div>
+<span class="kan">11</span><div><b><code>center</code></b><span>Emplacement de 40 px au centre : celui qui regarde.</span></div>
+<span class="kan">12</span><div><b><code>marker</code></b><span>Emplacement de 48 px posé SUR l'anneau allumé, détouré de 3 px. Il suit l'anneau quand le niveau change.</span></div>
+<span class="kan">13</span><div style="border-bottom: 0; padding-bottom: 0"><b>Légende à rayons</b><span><code>showsTitles</code>. Un rayon en tirets par anneau, le nom au bout ; le courant en gras à la teinte.</span></div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 26px; border-radius: 26px; border: 1.5px dashed var(--line)">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 24px">
+<h3 class="d" style="font-size: 20px">La loi d'intensité se compte depuis le haut</h3>
+<span class="mono" style="color: var(--ink2)">MeeshyCircleScaleRecipe.intensity(level:of:)</span>
+</div>
+<div class="law">
+<div class="i0"><b></b><code>contour</code><span>6e en partant du haut, et au-delà</span></div>
+<div class="i1"><b></b><code>8 %</code><span>5e</span></div>
+<div class="i2"><b></b><code>18 %</code><span>4e</span></div>
+<div class="i3"><b></b><code>32 %</code><span>3e</span></div>
+<div class="i4"><b></b><code>52 %</code><span>2e</span></div>
+<div class="i5"><b></b><code>100 %</code><span>le plus haut, encre sombre</span></div>
+</div>
+<p style="font-size: 14px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Le même nom a donc la même intensité partout, que l'hôte passe cinq niveaux ou six. Trois niveaux ou moins : un cran sur deux (100 · 32 · 8), pour garder l'écart. Ces six valeurs vivent dans la recette, nulle part ailleurs : ni l'app ni une feuille de style ne les réécrit.</p>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois formes, trois longueurs, sept états</h2><p>Tout est à taille réelle. La teinte est celle de l'hôte : ici l'accent d'Aïssa, celui de Léo, puis une teinte de sens.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell kc">
+<div class="stage">
+<div class="cs-d">
+<button class="i1" aria-label="Communauté, 128 personnes"><b>128</b><span>Communauté</span></button>
+<button class="i2" aria-label="Connaissance, 46 personnes"><b>46</b><span>Connaissance</span></button>
+<button class="i3" aria-label="Ami, 31 personnes"><b>31</b><span>Ami</span></button>
+<button class="i4" aria-label="Proche, 9 personnes"><b>9</b><span>Proche</span></button>
+<button class="i5" aria-label="Sang, 3 personnes"><b>3</b><span>Sang</span></button>
+</div>
+</div>
+<div class="cp"><b><code>.dots</code> · cinq niveaux à compte</b><span class="kcap">« Mes cercles ». Chaque pastille est un bouton ; aucune n'est allumée, il n'y a pas de niveau courant.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<span class="cs-p i0">[[ic:globe s]]<span>Public</span></span>
+<span class="cs-p i1">[[ic:users-three s]]<span>Communauté</span></span>
+<span class="cs-p i2">[[ic:hand-waving s]]<span>Connaissance</span></span>
+<span class="cs-p i3">[[ic:handshake s]]<span>Ami</span></span>
+<span class="cs-p i4">[[ic:fire-fill s]]<span>Proche</span></span>
+<span class="cs-p i5">[[ic:drop-fill s]]<span>Sang</span></span>
+</div>
+</div>
+<div class="cp"><b><code>.pill</code> · six niveaux</b><span class="kcap">La pilule de relation, du contour au plein. Une seule s'affiche à la fois ; les six sont là pour la gamme.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 22px; --accent:#34D399;--accent-ink:#6EE7B7">
+<div class="cs-d sm">
+<span class="i1"><b>[[ic:shield]]</b><span>Faible</span></span>
+<span class="i3 on"><b>[[ic:shield-check]]</b><span>Correct</span></span>
+<span class="i5"><b>[[ic:shield-star]]</b><span>Solide</span></span>
+</div>
+<div style="display: flex; gap: 10px">
+<span class="cs-p i1">[[ic:shield s]]<span>Faible</span></span>
+<span class="cs-p i3">[[ic:shield-check-fill s]]<span>Correct</span></span>
+<span class="cs-p i5">[[ic:shield-star s]]<span>Solide</span></span>
+</div>
+</div>
+<div class="cp"><b>Trois niveaux, une autre teinte</b><span class="kcap">Un cran sur deux : 8 · 32 · 100. Sans <code>counts</code>, la pastille porte le glyphe. <code>tint</code> = vert de sens.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="--accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div class="cs-r" role="img" aria-label="Proche, 5 sur 6">
+<div class="halo"></div>
+<div class="orbit">
+<i style="width: 276px; height: 276px"></i><i style="width: 236px; height: 236px"></i><i style="width: 196px; height: 196px"></i><i style="width: 156px; height: 156px"></i><i class="lit" style="width: 116px; height: 116px"></i><i style="width: 68px; height: 68px"></i>
+<span class="av" style="position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; font-size: 14px; --accent: #A855F7">AN</span>
+<span class="mk" style="left: -77px; top: 1px"><span class="av" style="width: 48px; height: 48px; font-size: 17px">LM</span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b><code>.rings</code> · six niveaux, sans légende</b><span class="kcap">L'anneau courant allumé, <code>center</code> et <code>marker</code> remplis. Sans <code>other</code>, aucun anneau en tirets.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="--accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div style="position: relative; width: 350px; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 26px; background: var(--raised); border: 1px solid var(--line)">
+<div aria-hidden="true" style="position: absolute; top: 46px; bottom: 46px; left: calc(72px + (100% - 98px) * 0.6667); width: calc((100% - 98px) / 6 + 12px); border-radius: 14px; background: color-mix(in oklab, var(--accent) 14%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent)"></div>
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<span style="font-size: 13px; color: var(--ink2)">Lui t'accorde</span>
+<span class="d" style="font-size: 16px; color: var(--accent-ink)">Proche</span>
+</div>
+<div role="img" aria-label="Léo t'accorde Proche, 5 sur 6" class="cs-n" style="position: relative; grid-template-columns: 28px repeat(6, minmax(0, 1fr))">
+<span class="av" style="width: 28px; height: 28px; font-size: 10.5px">LM</span>
+<i class="i0"></i><i class="i1"></i><i class="i2"></i><i class="i3"></i><i class="i4"></i><i></i>
+</div>
+<div aria-hidden="true" style="position: relative; display: grid; grid-template-columns: 28px repeat(6, minmax(0, 1fr)); gap: 6px; justify-items: center; color: var(--ink3)">
+<span></span>
+[[ic:globe s]][[ic:users-three s]][[ic:hand-waving s]][[ic:handshake s]]<span style="display: inline-flex; color: var(--accent-ink)">[[ic:fire-fill s]]</span>[[ic:drop s]]
+</div>
+<div role="img" aria-label="Tu accordes Sang à Léo, 6 sur 6" class="cs-n" style="position: relative; grid-template-columns: 28px repeat(6, minmax(0, 1fr)); --accent: #A855F7">
+<span class="av" style="width: 28px; height: 28px; font-size: 10.5px">AN</span>
+<i class="i0"></i><i class="i1"></i><i class="i2"></i><i class="i3"></i><i class="i4"></i><i class="i5"></i>
+</div>
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<span style="font-size: 13px; color: var(--ink2)">Tu lui accordes</span>
+<span class="d" style="font-size: 16px; color: #D8B4FE">Sang</span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Deux jauges face à face</b><span class="kcap">Deux <code>.dots</code> en <code>compact</code>, un <code>leading</code> chacune, chacune sa teinte. Le cadre marque le niveau commun : le plus bas des deux. Avec <code>compares</code>, les crans alignés sont la jauge segmentée de <b>K42</b>.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="--accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div class="cs-r" role="img" aria-label="Proche, 5 sur 6. Autre niveau : Sang">
+<div class="halo"></div>
+<div class="orbit">
+<i style="width: 276px; height: 276px"></i><i style="width: 236px; height: 236px"></i><i style="width: 196px; height: 196px"></i><i style="width: 156px; height: 156px"></i><i class="lit" style="width: 116px; height: 116px"></i><i class="oth" style="width: 68px; height: 68px; --oth: #D8B4FE"></i>
+<span class="av" style="position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; font-size: 14px; --accent: #A855F7">AN</span>
+<span class="mk" style="left: -77px; top: 1px"><span class="av" style="width: 48px; height: 48px; font-size: 17px">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px"></span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b><code>.rings</code> avec <code>other</code></b><span class="kcap">Courant : Proche, allumé. Autre : Sang, en tirets à la teinte d'Aïssa. Le point de présence appartient au <code>marker</code>, pas à K33.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 22px">
+<div class="cs-d sm">
+<span class="i3"><b>31</b><span>Repos</span></span>
+<span class="i3 pr"><b>31</b><span>Pressé</span></span>
+<span class="i3 on"><b>31</b><span>Courant</span></span>
+</div>
+<div style="display: flex; gap: 10px">
+<span class="cs-p i3">[[ic:handshake s]]<span>Ami</span></span>
+<span class="cs-p i3 pr">[[ic:handshake s]]<span>Ami</span></span>
+<span class="cs-p i3">[[ic:handshake-fill s]]<span>Ami</span>[[ic:caret-down s]]</span>
+</div>
+</div>
+<div class="cp"><b>Repos · pressé · courant</b><span class="kcap">Pressé : échelle 0,92 et fond éclairci, dès le doigt posé. La pilule qui ouvre un choix prend un <code>trailing</code>.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 22px">
+<div class="cs-d sm off">
+<span class="i1"><b>128</b><span>Communauté</span></span>
+<span class="i3"><b>31</b><span>Ami</span></span>
+<span class="i5"><b>3</b><span>Sang</span></span>
+</div>
+<div class="cs-d sm">
+<span class="i1"><b>[[ic:users-three]]</b><span>Communauté</span></span>
+<span class="i3"><b>[[ic:handshake]]</b><span>Ami</span></span>
+<span class="i5"><b>[[ic:drop]]</b><span>Sang</span></span>
+</div>
+</div>
+<div class="cp"><b>Désactivé · comptes en attente</b><span class="kcap">Désactivé : 40 %, plus de toucher. En attente des comptes : les glyphes, à la bonne intensité. Jamais de squelette quand le cache répond.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="cs-d">
+<span class="i1"><b>0</b><span>Communauté</span></span>
+<span class="i2"><b>2</b><span>Connaissance</span></span>
+<span class="i3"><b>0</b><span>Ami</span></span>
+<span class="i4"><b>1</b><span>Proche</span></span>
+<span class="i5"><b>0</b><span>Sang</span></span>
+</div>
+</div>
+<div class="cp"><b>Vide</b><span class="kcap">Un niveau sans personne garde sa pastille et son intensité : zéro est une réponse, pas une absence.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="flex: 1; display: flex; flex-direction: column; gap: 18px; align-items: center; justify-content: center; padding: 28px 28px 22px; --accent:#A855F7">
+<div class="cs-d" style="width: 352px">
+<span class="i1"><b>128</b><span>Communauté</span></span>
+<span class="i2"><b>46</b><span>Connaissance</span></span>
+<span class="i3"><b>31</b><span>Ami</span></span>
+<span class="i4 on"><b>9</b><span>Proche</span></span>
+<span class="i5"><b>3</b><span>Sang</span></span>
+</div>
+<div style="display: flex; gap: 8px">
+<span class="cs-p i1">[[ic:users-three s]]<span>Communauté</span></span>
+<span class="cs-p i4">[[ic:fire-fill s]]<span>Proche</span></span>
+<span class="cs-p i5">[[ic:drop-fill s]]<span>Sang</span></span>
+</div>
+</div>
+<div class="cp" style="padding: 0 28px 28px"><b>Thème clair</b><span class="kcap">Mêmes intensités sur fond blanc. L'encre passe au sombre du thème ; le plein garde son encre sombre.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 18px">
+<div style="display: flex; gap: 8px; --accent:#FBBF24;--accent-ink:#FCD34D"><span class="cs-p i2">[[ic:medal s]]<span>Argent</span></span><span class="cs-p i4">[[ic:medal-fill s]]<span>Or</span></span><span class="cs-p i5">[[ic:crown-fill s]]<span>Diamant</span></span></div>
+<div style="display: flex; gap: 8px; --accent:#818CF8;--accent-ink:#C7D2FE"><span class="cs-p xs i2">[[ic:user s]]<span>Membre</span></span><span class="cs-p xs i4">[[ic:shield-check s]]<span>Modération</span></span><span class="cs-p xs i5">[[ic:crown-fill s]]<span>Admin</span></span></div>
+<div style="display: flex; gap: 8px; align-items: center; --accent:#4ECDC4;--accent-ink:#7FE3DC"><span class="cs-p lg i4">[[ic:fire-fill]]<span>Proche</span></span><span class="cs-p lg i5">[[ic:drop-fill]]<span>Sang</span></span></div>
+</div>
+<div class="cp"><b>Teintes et tailles de pilule</b><span class="kcap"><code>regular</code> 34, <code>compact</code> 26 (dans une rangée), <code>large</code> 44. La teinte change, la loi non.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, 96px); gap: 16px 8px; justify-content: center">
+<span class="cs-d" style="width: auto; display: contents">
+<span class="i1"><b style="width: 68px; height: 68px; font-size: 22px">128</b><span style="font-size: 14px">Communauté</span></span>
+<span class="i2"><b style="width: 68px; height: 68px; font-size: 22px">46</b><span style="font-size: 14px">Connaissance</span></span>
+<span class="i3"><b style="width: 68px; height: 68px; font-size: 22px">31</b><span style="font-size: 14px">Ami</span></span>
+<span class="i4"><b style="width: 68px; height: 68px; font-size: 22px">9</b><span style="font-size: 14px">Proche</span></span>
+<span class="i5"><b style="width: 68px; height: 68px; font-size: 22px">3</b><span style="font-size: 14px">Sang</span></span>
+</span>
+</div>
+</div>
+<div class="cp"><b>Très grande police</b><span class="kcap">Les noms grandissent, la rangée passe à trois par ligne. Aucun nom n'est coupé ni rétréci.</span></div>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">Une échelle verticale, une pilule en trois matières, un trait entre deux personnes</h3></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; flex-direction: column; --accent:#4ECDC4"><div style="display: flex; align-items: center; gap: 12px"><span class="i5" style="display: block; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--accent); background: color-mix(in oklab, var(--accent) var(--i), transparent)"></span><span style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">Sang</span></div><span style="display: block; width: 0; height: 10px; margin-left: 8px; border-left: 1.5px solid var(--line)"></span><div style="display: flex; align-items: center; gap: 12px"><span class="i4" style="display: block; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--accent); background: color-mix(in oklab, var(--accent) var(--i), transparent); box-shadow: 0 0 0 3px var(--raised), 0 0 0 5px var(--accent)"></span><span style="font-size: 12.5px; font-weight: 800; color: var(--ink)">Proche</span><span class="chip" style="min-height: 22px; padding: 0 8px; font-size: 10.5px">ici</span></div><span style="display: block; width: 0; height: 10px; margin-left: 8px; border-left: 1.5px solid var(--line)"></span><div style="display: flex; align-items: center; gap: 12px"><span class="i3" style="display: block; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--accent); background: color-mix(in oklab, var(--accent) var(--i), transparent)"></span><span style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">Ami</span></div><span style="display: block; width: 0; height: 10px; margin-left: 8px; border-left: 1.5px solid var(--line)"></span><div style="display: flex; align-items: center; gap: 12px"><span class="i2" style="display: block; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--accent); background: color-mix(in oklab, var(--accent) var(--i), transparent)"></span><span style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">Connaissance</span></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>.ladder</code></b> L'échelle verticale : des nœuds reliés, le plus haut en haut, un marqueur au niveau courant. Chaque nœud garde l'intensité de son rang.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; flex-direction: column; align-items: center; gap: 12px; --accent:#4ECDC4;--accent-ink:#7FE3DC"><div style="display: flex; gap: 8px"><span class="cs-p i0" style="color: var(--accent-ink)">[[ic:fire s]]<span>Proche</span></span><span class="cs-p glass" style="border-color: var(--glass-line); color: var(--ink)">[[ic:fire-fill s]]<span>Proche</span>[[ic:caret-down s]]</span></div><div style="display: flex; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 700"><span>Léo Marchetti</span><span style="display: inline-flex; color: var(--accent-ink)">[[ic:fire-fill s]]</span></div></div></div><span class="kcap"><b style="color: var(--ink)">Pilule en contour, en verre · glyphe seul</b> <code>pillStyle</code> : <code>outline</code> ou <code>glass</code>, en 34 ou 26, avec chevron quand elle ouvre un choix. <code>glyphOnly</code> : le glyphe du niveau, accolé à un nom.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; flex-direction: column; gap: 16px; align-items: center"><div style="display: flex; align-items: center"><span class="av" style="width: 44px; height: 44px; font-size: 15px; --accent: #A855F7">AN</span><span style="display: block; width: 64px; border-top: 3px solid #4ECDC4"></span><span class="av" style="width: 44px; height: 44px; font-size: 15px; --accent: #4ECDC4">LM</span></div><div style="display: flex; align-items: center"><span class="av" style="width: 44px; height: 44px; font-size: 15px; --accent: #A855F7">AN</span><span style="display: block; width: 64px; border-top: 2px dashed var(--ink3)"></span><span class="av" style="width: 44px; height: 44px; font-size: 15px; --accent: #2ECC71">SB</span></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>.link</code></b> Le lien entre deux emplacements : trait plein à l'intensité du niveau quand il est établi, pointillé quand il est demandé.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="glass" style="display: inline-flex; gap: 2px; padding: 5px; border-radius: 999px; --accent:#A855F7"><span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; color: var(--ink2)">[[ic:globe s]]</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; color: var(--ink2)">[[ic:users-three s]]</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; color: var(--ink2)">[[ic:hand-waving s]]</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; color: var(--ink2)">[[ic:handshake s]]</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; color: #0B0B12; background: var(--ink)">[[ic:fire-fill s]]</span><span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; color: var(--ink2)">[[ic:drop s]]</span></div></div><span class="kcap"><b style="color: var(--ink)">Sélecteur à glyphes</b> Choisir un niveau n'est pas à K33 : six crans de <b>K03</b>, ou les puces de <b>K04</b> avec <code>leading</code>. K33 fournit les glyphes et la loi d'intensité.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Le niveau change, tout glisse d'un cran</h2><p>Un seul mouvement propre : quand <code>current</code> change, l'anneau allumé se resserre, le marqueur le suit, la pilule fonce et les comptes roulent. Ici Léo passe d'Ami à Proche, en boucle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: stretch">
+
+<div class="kcell kc" style="padding: 36px; gap: 28px; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span class="tag">En vrai · boucle de 6 s</span>
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2)"><i class="hap"></i><span>retour haptique</span></span>
+</div>
+<div style="display: flex; align-items: center; justify-content: center; gap: 36px">
+<div class="cs-r" aria-hidden="true">
+<div class="halo"></div>
+<div class="orbit">
+<i style="width: 276px; height: 276px"></i><i style="width: 236px; height: 236px"></i><i style="width: 196px; height: 196px"></i><i style="width: 156px; height: 156px"></i><i style="width: 116px; height: 116px"></i><i style="width: 68px; height: 68px"></i>
+<i class="lit mv-lit" style="width: 156px; height: 156px; background: none"></i>
+<span class="av" style="position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; font-size: 14px; --accent: #A855F7">AN</span>
+<span class="mk mv-mk" style="left: -77px; top: 1px"><span class="av" style="width: 48px; height: 48px; font-size: 17px">LM</span></span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 26px; width: 300px">
+<span class="mv-st">
+<span class="cs-p lg i3 mv-a">[[ic:handshake-fill]]<span>Ami</span></span>
+<span class="cs-p lg i4 mv-b">[[ic:fire-fill]]<span>Proche</span></span>
+</span>
+<div class="cs-d sm" style="--accent:#A855F7;--accent-ink:#D8B4FE">
+<span class="i2"><b>46</b><span>Connaissance</span></span>
+<span class="i3 mv-ha"><b><span class="mv-num" style="font-size: inherit; font-weight: inherit; color: inherit; letter-spacing: 0"><i class="mv-a">31</i><i class="mv-b">30</i></span></b><span>Ami</span></span>
+<span class="i4 mv-hb"><b><span class="mv-num" style="font-size: inherit; font-weight: inherit; color: inherit; letter-spacing: 0"><i class="mv-a">9</i><i class="mv-b">10</i></span></b><span>Proche</span></span>
+<span class="i5"><b>3</b><span>Sang</span></span>
+</div>
+<span style="position: relative; display: inline-flex">
+<button class="btn a sm">[[ic:fire s]]<span>Soyons proches</span></button>
+<i class="tap" style="left: 50%; top: 50%"></i>
+</span>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell kc" style="flex: 1; flex-direction: row; align-items: center; gap: 18px; padding: 18px 22px; min-height: 0; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<span class="step">1</span>
+<div style="width: 96px; height: 93px; flex: none"><div class="cs-r" aria-hidden="true" style="zoom: .32"><div class="orbit" style="animation: none"><i style="width: 276px; height: 276px"></i><i style="width: 236px; height: 236px"></i><i style="width: 196px; height: 196px"></i><i class="lit" style="width: 156px; height: 156px; border-width: 9px"></i><i style="width: 116px; height: 116px"></i><i style="width: 68px; height: 68px"></i></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0"><span class="cs-p xs i3" style="align-self: flex-start">[[ic:handshake-fill s]]<span>Ami</span></span><span class="kcap"><b style="color: var(--ink)">Avant.</b> Ami allumé, 32 %. Le doigt se pose : la réponse part tout de suite, sans attendre le réseau.</span></div>
+</div>
+<div class="kcell kc" style="flex: 1; flex-direction: row; align-items: center; gap: 18px; padding: 18px 22px; min-height: 0; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<span class="step">2</span>
+<div style="width: 96px; height: 93px; flex: none"><div class="cs-r" aria-hidden="true" style="zoom: .32"><div class="orbit" style="animation: none"><i style="width: 276px; height: 276px"></i><i style="width: 236px; height: 236px"></i><i style="width: 196px; height: 196px"></i><i style="width: 156px; height: 156px; border: 4px dashed var(--accent); opacity: .5"></i><i class="lit" style="width: 136px; height: 136px; border-width: 9px"></i><i style="width: 116px; height: 116px"></i><i style="width: 68px; height: 68px"></i></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0"><span class="cs-p xs i3" style="align-self: flex-start; --i: 42%">[[ic:fire s]]<span>…</span></span><span class="kcap"><b style="color: var(--ink)">Le passage.</b> L'anneau se resserre, le marqueur glisse avec lui, le fond de la pilule fonce de 32 à 52 %.</span></div>
+</div>
+<div class="kcell kc" style="flex: 1; flex-direction: row; align-items: center; gap: 18px; padding: 18px 22px; min-height: 0; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<span class="step">3</span>
+<div style="width: 96px; height: 93px; flex: none"><div class="cs-r" aria-hidden="true" style="zoom: .32"><div class="orbit" style="animation: none"><i style="width: 276px; height: 276px"></i><i style="width: 236px; height: 236px"></i><i style="width: 196px; height: 196px"></i><i style="width: 156px; height: 156px"></i><i class="lit" style="width: 116px; height: 116px; border-width: 9px"></i><i style="width: 68px; height: 68px"></i></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0"><span class="cs-p xs i4" style="align-self: flex-start">[[ic:fire-fill s]]<span>Proche</span></span><span class="kcap"><b style="color: var(--ink)">Après.</b> Proche allumé, léger rebond, un tic. Les comptes ont roulé : 31 → 30, 9 → 10. Un refus du serveur rejoue le chemin à l'envers.</span></div>
+</div>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">motion.morph</b> (niveau) · 420 ms · ressort à léger rebond · déclencheur : <span style="color: var(--accent-ink)">current</span> change, jamais un geste caché · haptique : un tic moyen en montant, léger en descendant, aucun au premier affichage · mouvement réduit : fondu de 160 ms, rien ne se déplace</div>
+<div class="spec"><b style="color: var(--ink)">motion.travel</b> (marqueur) · même ressort que l'anneau, même départ · il reste SUR l'anneau pendant tout le trajet · mouvement réduit : il change de place d'un coup</div>
+<div class="spec"><b style="color: var(--ink)">motion.float</b> (pastilles) · 8 s · la forme ondule, décalée de 1,5 s d'une pastille à l'autre · déclencheur : à l'écran · mouvement réduit : disques parfaits · <b style="color: var(--ink)">motion.pulse</b> (anneaux) · 6 s · respiration de 3 % · arrêtée hors écran</div>
+<div class="spec"><b style="color: var(--ink)">motion.rise</b> · entrée des pastilles et des anneaux, du plus bas au plus haut, 40 ms d'écart · déclencheur : première apparition, jamais au retour sur l'écran · mouvement réduit : aucune</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyCircleScale.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-circle-scale.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyCircleScale(levels:current:form:…)</code></span><span><code>MeeshyCircleScale(levels, current, modifier, form, …)</code></span><span><code>&lt;MeeshyCircleScale levels current form … /&gt;</code></span>
+<span><b>Niveau</b></span><span><code>MeeshyCircleScaleLevel(title:systemImage:)</code></span><span><code>data class MeeshyCircleScaleLevel(title, icon)</code></span><span><code>type MeeshyCircleScaleLevel = { title; glyph }</code></span>
+<span><b>Formes</b></span><span><code>MeeshyCircleScaleForm { dots, pill, rings, ladder, link }</code></span><span><code>enum class</code> identique</span><span><code>'dots' | 'pill' | 'rings' | 'ladder' | 'link'</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyCircleScaleSize { compact, regular, large }</code></span><span><code>enum class</code> identique</span><span><code>'compact' | 'regular' | 'large'</code></span>
+<span><b>Emplacements</b></span><span><code>leading</code>, <code>trailing</code>, <code>center</code>, <code>marker</code> : <code>@ViewBuilder</code></span><span>mêmes noms, <code>@Composable () -&gt; Unit</code></span><span>mêmes noms, <code>ComponentChildren</code></span>
+<span><b>Loi d'intensité</b></span><span><code>MeeshyCircleScaleRecipe.intensity(level:of:)</code></span><span><code>MeeshyCircleScaleRecipe.intensity(level, of)</code></span><span><code>meeshyCircleScaleIntensity(level, of)</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyCircleScaleRecipe.resolve(count:current:other:form:size:tint:isPressed:isEnabled:)</code></span><span style="border-bottom: 0"><code>MeeshyCircleScaleRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyCircleScaleRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>levels: [Level]</code><span>Obligatoire. 2 à 8 niveaux, du plus bas au plus haut. Titre déjà traduit.</span></div>
+<div class="par"><code>current: Int?</code><span>Le rang allumé, de 0 à N − 1. <code>nil</code> : aucun (les pastilles de « Mes cercles »). Hors bornes : ramené.</span></div>
+<div class="par"><code>other: Int? = nil</code><span>Un second rang. Anneau en tirets, ou point sous la pastille. Ignoré par <code>pill</code>.</span></div>
+<div class="par"><code>counts: [Int]? = nil</code><span><code>dots</code> seulement. Même longueur que <code>levels</code>, sinon ignoré. Mis en forme à la langue courante.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>La teinte unique. Sans elle : l'accent de l'hôte.</span></div>
+<div class="par"><code>otherTint: Color? = nil</code><span>Teinte de l'anneau en tirets. Sans elle : l'encre secondaire.</span></div>
+<div class="par"><code>form = .pill, size = .regular</code><span><code>pill</code> n'affiche que le niveau courant. <code>compact</code> de <code>dots</code> : les crans. <code>ladder</code> : l'échelle verticale. <code>link</code> : le trait entre deux emplacements.</span></div>
+<div class="par"><code>pillStyle = .filled</code><span><code>outline</code>, <code>glass</code> (par K01) ; <code>glyphOnly</code> ne garde que le glyphe, accolé à un nom. Le chevron entre par <code>trailing</code>.</span></div>
+<div class="par"><code>compares = false</code><span>Avec <code>other</code> : deux échelles à crans alignées, tracées par la jauge segmentée de <b>K42</b>, la colonne commune surlignée.</span></div>
+<div class="par"><code>showsTitles = true</code><span>Noms sous les pastilles, légende à rayons des anneaux. Sans eux, le nom reste dit.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Nom dit. Par défaut : le titre du niveau courant.</span></div>
+<div class="par"><code>valueFormat = « %1 sur %2 »</code><span>La valeur dite : « 5 sur 6 ». Deux mots passés par l'hôte pour <code>other</code>.</span></div>
+<div class="par"><code>onSelect: ((Int) -&gt; Void)? = nil</code><span>Sans lui, rien ne se touche. Avec lui : chaque pastille, ou la pilule, devient un bouton.</span></div>
+<div class="par"><code>haptic = .onChange</code><span><code>none</code> laisse l'hôte jouer le sien. Désactivé : <code>.disabled</code>, <code>enabled</code>, <code>disabled</code>.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une loi, trois façons de la peindre</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<h3 class="d" style="font-size: 20px">iOS · SwiftUI</h3></div>
+<ul>
+<li><code>matchedGeometryEffect</code> porte l'anneau allumé et le halo d'un rang à l'autre.</li>
+<li><code>contentTransition(.numericText())</code> fait rouler les comptes.</li>
+<li><code>sensoryFeedback(.impact, trigger: current)</code> pour le tic.</li>
+<li><code>ViewThatFits</code> choisit une rangée ou deux ; <code>Canvas</code> trace anneaux et rayons en une passe.</li>
+<li><code>accessibilityRepresentation</code> : un seul élément, valeur réglable si <code>onSelect</code> existe.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : pas de <code>sensoryFeedback</code>, le tic passe par <code>HapticFeedback</code>, le site unique. Aucun verre ici : posé sur un verre de K01, le fond reste une teinte.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<h3 class="d" style="font-size: 20px">Android · Compose</h3></div>
+<ul>
+<li><code>updateTransition(current)</code> anime ensemble le rayon, l'intensité et la place du marqueur.</li>
+<li><code>MaterialShapes</code> et <code>Morph</code> donnent leur forme vivante aux pastilles.</li>
+<li><code>AnimatedContent</code> fait rouler les comptes ; <code>FlowRow</code> passe sur deux rangées.</li>
+<li><code>drawBehind</code> : anneaux et rayons en phase de dessin, sans recomposition.</li>
+<li><code>semantics</code> : <code>stateDescription</code> « 5 sur 6 », <code>selected</code> sur la pastille courante.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans Material 3 Expressive : pastilles rondes, fixes. Le tic passe par <code>MeeshyHaptics</code>. Cible de 48 dp par débord.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<h3 class="d" style="font-size: 20px">Web · Preact</h3></div>
+<ul>
+<li><code>color-mix()</code> peint l'intensité depuis une propriété <code>--kit-scale-i</code> posée par la recette.</li>
+<li><code>@property</code> la rend animable : le fond fonce sans changer d'élément.</li>
+<li>Anneaux : des bordures CSS, aucune image, aucun <code>canvas</code>.</li>
+<li><code>role="img"</code> et nom dit sans <code>onSelect</code> ; <code>radiogroup</code> et flèches avec lui.</li>
+<li><code>:active</code> et <code>:focus-visible</code> en CSS : aucun état, aucun écouteur au repos.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>color-mix()</code> : six couleurs calculées par la recette. Sans <code>@property</code> : fondu enchaîné de deux fonds. Pas d'haptique hors coque.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Une pastille, quatre rangées, zéro anneau</h2><p>Le code montre déjà un niveau à cinq endroits, avec une couleur PAR niveau (rouge, orange, vert, bleu). K33 garde leur grammaire et leurs témoins, et remplace les quatre couleurs par une teinte et une intensité. Les anneaux n'existent nulle part : à créer.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Profile/Views/ProfileCirclesSection.swift</span><p><span class="be">Devient le composant</span> <code>ProfileCirclePill</code> : la pastille à compte la plus complète. Bouton de 44 pt, compte qui roule, une seule annonce (« Ami, 3 personnes »), cinq colonnes puis trois en grande police. Elle perd <code>ProfileCirclesSummary</code> et <code>ThemeManager</code>, et monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Contacts/ProfileCircleSection.swift</span><p><code>row(_:)</code> : le niveau sur la fiche d'un autre, fond teinté à faible opacité. Rebranchée sur <code>.pill</code> ; la phrase de progression et les boutons restent à l'app.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Contacts/CirclesTab.swift</span><p><code>CircleLevelColor</code> : une couleur par niveau. Retirée à l'intégration. <code>CircleLevelNames</code> (<span class="mono">CirclesPresentation.swift</span>) reste à l'app : c'est elle qui fournit <code>levels</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">feature/profile/…/app/profile/ProfileCircleRow.kt</span><p><span class="be">Devient le composant</span> <code>CircleHeader</code> : glyphe, nom teinté, description fusionnée pour TalkBack. Il quitte <code>:feature:profile</code> pour <code>:sdk-ui</code>, sans <code>ProfileCircle</code>. Android n'a pas de pastilles à compte : <span class="no">à créer</span></p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">sdk-ui/…/ui/component/circles/CircleLevelPresentation.kt</span><p><code>RelationLevel.tint()</code>, <code>levelTitle</code>, <code>levelIcon</code> : déjà dans <code>:sdk-ui</code>, mais ils prennent un type du domaine. Ils deviennent l'adaptateur de l'app ; <code>tint()</code> disparaît.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/user-profile-circle.tsx</span><p><span class="be">Devient le composant</span> <code>ProfileCircleRowView</code> : son en-tête (glyphe, nom, fond <code>color-mix</code> à 10 %) est déjà une intensité. La table <code>LEVEL_TINT</code> devient <code>tint</code> ; montée et descente restent à la route.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/discover-circles-parts.tsx</span><p><code>CircleSectionHeader</code> : point de couleur, glyphe, nom, compte. Rebranché sur une pastille <code>compact</code> à compte. <span class="mono">lib/relations/level-labels.ts</span> fournit <code>levels</code> et reste à l'app.</p></div>
+<div class="twin"><span class="pf">Hors kit</span><span class="mono">packages/shared/utils/relation-access.ts · MeeshySDK/Relations/RelationAccess.swift · core/model/…/relation/RelationAccess.kt</span><p>La loi d'accès, en trois miroirs. Elle ne bouge pas et n'entre jamais dans une signature de K33 : l'app la lit, puis passe un <code>Int</code>.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 16px">
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="d" style="font-size: 18px">Qui voit cette story</span><span class="cs-p xs i4">[[ic:fire-fill s]]<span>Proches</span></span></div>
+<div class="cs-d" style="width: auto">
+<button class="i1" aria-label="Public"><b>[[ic:globe]]</b><span>Public</span></button>
+<button class="i2" aria-label="Connaissances"><b>[[ic:hand-waving]]</b><span>Connaissances</span></button>
+<button class="i3" aria-label="Amis"><b>[[ic:handshake]]</b><span>Amis</span></button>
+<button class="i4 on" aria-label="Proches, sélectionné"><b>[[ic:fire-fill]]</b><span>Proches</span></button>
+<button class="i5" aria-label="Sang"><b>[[ic:drop]]</b><span>Sang</span></button>
+</div>
+</div>
+<div class="cp"><b>Stories · audience</b><span class="kcap"><code>.dots</code> sans compte, avec <code>onSelect</code> : plus la pastille est pleine, plus le cercle est serré. La pilule rappelle le choix dans l'en-tête.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 2px; --accent:#FBBF24;--accent-ink:#FCD34D">
+<div class="prow"><span class="av" style="--accent: #FF6B6B">MO</span><div><b>Mina Okafor</b><span>@mina.o</span></div><span class="cs-p xs i5">[[ic:crown-fill s]]<span>Admin</span></span></div>
+<div class="sep" style="margin: 0"></div>
+<div class="prow"><span class="av" style="--accent: #F8B500">TR</span><div><b>Tomás Ribeiro</b><span>@tomas.r</span></div><span class="cs-p xs i3">[[ic:shield-check s]]<span>Modération</span></span></div>
+<div class="sep" style="margin: 0"></div>
+<div class="prow"><span class="av" style="--accent: #3498DB">YT</span><div><b>Yuki Tanaka</b><span>@yuki.t</span></div><span class="cs-p xs i1">[[ic:user s]]<span>Membre</span></span></div>
+</div>
+<div class="cp"><b>Communauté · rôle d'un membre</b><span class="kcap"><code>.pill</code> en <code>compact</code>, trois niveaux, teinte de la famille « communauté ». Elle se pose en accessoire d'une rangée K39.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="gap: 28px; --accent:#FBBF24;--accent-ink:#FCD34D">
+<div style="width: 174px; height: 168px; flex: none"><div class="cs-r" role="img" aria-label="Ligue Or, 3 sur 5" style="zoom: .58"><div class="halo"></div><div class="orbit"><i style="width: 276px; height: 276px"></i><i style="width: 224px; height: 224px"></i><i class="lit" style="width: 172px; height: 172px; border-width: 6px"></i><i style="width: 120px; height: 120px"></i><i style="width: 68px; height: 68px"></i><span style="position: absolute; left: -22px; top: -22px; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; color: var(--accent-ink)">[[ic:trophy xl]]</span><span class="mk" style="left: -94px; top: 14px; border-width: 5px"><span class="av" style="width: 56px; height: 56px; font-size: 20px; --accent: #A855F7">AN</span></span></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start">
+<span class="cs-p lg i3">[[ic:medal-fill]]<span>Or III</span></span>
+<span class="d" style="font-size: 22px">Niveau 24</span>
+<span style="font-size: 13px; color: var(--ink2)">1 860 étincelles · encore 2 ligues</span>
+</div>
+</div>
+<div class="cp"><b>Jeu · ligue</b><span class="kcap"><code>.rings</code> à cinq niveaux : Bronze dehors, Diamant au centre. Le trophée est le <code>center</code>, l'avatar le <code>marker</code>.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 14px; --accent:#34D399;--accent-ink:#6EE7B7">
+<label for="k33pw" style="font-size: 13px; font-weight: 600; color: var(--ink2)">Nouveau mot de passe</label>
+<div style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; border-radius: 16px; background: var(--field); border: 1px solid var(--line)">
+<span style="color: var(--ink3); display: inline-flex">[[ic:lock-key]]</span>
+<input id="k33pw" type="password" value="dakarlanuit24" style="flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--ink); font: inherit; letter-spacing: .2em">
+<span class="cs-p xs i3">[[ic:shield-check-fill s]]<span>Correct</span></span>
+</div>
+<div class="cs-n" role="img" aria-label="Force : Correct, 2 sur 3" style="grid-template-columns: repeat(3, minmax(0, 1fr))"><i class="i1"></i><i class="i3"></i><i></i></div>
+<span style="font-size: 13px; color: var(--ink2)">Ajoute un signe pour le rendre solide.</span>
+</div>
+<div class="cp"><b>Réglages · force du mot de passe</b><span class="kcap">Les crans (<code>.dots</code> <code>compact</code>) et la pilule, trois niveaux, vert de sens. Le mot écrit dit la force : la couleur ne la porte pas seule.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Loi.</b> Pour N de 2 à 8, chaque rang rend l'intensité du tableau, comptée depuis le haut ; trois niveaux ou moins sautent un cran. Vecteurs <code>K33-MeeshyCircleScale.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Même nom, même intensité.</b> Le même niveau rend le même fond en <code>dots</code>, en <code>pill</code> et en crans, que l'hôte passe cinq niveaux ou six.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Un seul élément par échelle : « Proche, 5 sur 6 », et « 9 personnes » avec un compte. Avec <code>onSelect</code>, chaque pastille est un bouton nommé, la courante est dite sélectionnée.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Jamais la couleur seule.</b> Sans <code>showsTitles</code>, le nom reste dit. En niveaux de gris, deux rangs voisins se distinguent par le glyphe ou le nom.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Tout ce qui se touche fait 44 pt, 48 dp ou 44 px. L'encre choisie par la recette tient 4,5:1 sur les six intensités, en clair et en sombre, pour les teintes du catalogue.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit et RTL.</b> Fondu de 160 ms, aucune forme qui ondule, aucun déplacement. En arabe, la rangée va du plus bas à droite au plus haut à gauche ; les anneaux ne se reflètent pas, leur légende si.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Changer <code>current</code> ou un compte ne re-rend que les deux rangs touchés. Garde de source : aucun type du domaine, aucun singleton, aucune des six valeurs d'intensité hors de <code>MeeshyCircleScaleRecipe</code>, aucune couleur par niveau.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le niveau est toujours écrit ou dit, jamais seulement teinté. En très grande police, les pastilles passent à trois par rangée et la légende des anneaux se range dessous, en liste.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Seules la transformation, l'opacité et la couleur de fond s'animent. Les anneaux se tracent en une passe. Les formes vivantes s'arrêtent hors écran ; rien n'est retenu une fois l'écran quitté.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8672}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

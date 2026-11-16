@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K34 MeeshyFigures</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.stage{flex:1;display:flex;flex-direction:column;align-items:stretch;justify-content:center;min-height:150px}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.fig{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fig>.v{font-size:34px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink)}
+.fig>.u{display:flex;align-items:center;gap:6px;min-height:20px;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+.fig.hero>.v{font-size:48px}
+.fig.sm>.v{font-size:24px}
+.band{display:grid;gap:0}
+.band>.fig+.fig{padding-inline-start:16px;border-inline-start:1px solid var(--line)}
+.tr{display:inline-flex;align-items:center;gap:2px;height:20px;padding:0 7px 0 5px;border-radius:999px;font-size:11px;font-weight:700;background:color-mix(in oklab,var(--ok) 16%,transparent);color:var(--ok);white-space:nowrap}
+.tr>.ic{width:12px;height:12px}
+.tr.dn{background:color-mix(in oklab,var(--err) 15%,transparent);color:var(--err)}
+.tr.fl{background:var(--field);color:var(--ink2)}
+.spk{display:block;flex:none;overflow:visible;color:var(--tint,var(--l-track))}
+.bars{display:flex;align-items:flex-end;gap:3px;height:128px}
+.bars>i{display:block;flex:1;min-height:3px;border-radius:4px 4px 2px 2px;background:var(--tint,var(--l-track));opacity:.62;transform-origin:bottom}
+.bars>i.pk{opacity:1;background:linear-gradient(180deg,color-mix(in oklab,var(--tint,var(--l-track)) 55%,#fff),var(--tint,var(--l-track)));box-shadow:0 0 18px color-mix(in oklab,var(--tint,var(--l-track)) 60%,transparent)}
+.pkl{position:absolute;display:flex;align-items:center;gap:6px}
+.pkl>.glass{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:999px;font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap}
+.pkl>i{width:14px;height:0;border-top:1.5px dashed var(--ink2)}
+.ax{display:flex;justify-content:space-between;font-size:11px;color:var(--ink3)}
+.cc{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;flex:none;background:var(--deep);border:1px solid var(--line);color:var(--ink);font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:12px;font-weight:700}
+.shr{display:flex;align-items:center;gap:12px}
+.shr>div{display:flex;flex-direction:column;gap:7px;flex:1;min-width:0}
+.shr>div>div{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.shr b{font-weight:600;font-size:15px}
+.shr .bar>i{background:var(--tint,var(--l-track));transform-origin:left}
+.roll{display:inline-flex;align-items:flex-end;line-height:1.12}
+.roll>span{display:block;height:1.12em}
+.roll>.w{overflow:hidden}
+.roll>.w.mid{-webkit-mask-image:linear-gradient(180deg,transparent,#000 18%,#000 70%,transparent);mask-image:linear-gradient(180deg,transparent,#000 18%,#000 70%,transparent)}
+.roll>.w>span{display:flex;flex-direction:column}
+.roll>.w b{display:block;height:1.12em;font-weight:inherit}
+.dm .hd{animation:fgFade 5s infinite}
+.dm .t10>span{animation:fgTens 5s cubic-bezier(.2,.9,.25,1) infinite}
+.dm .t1>span{animation:fgUnits 5s cubic-bezier(.2,.9,.25,1) infinite}
+.dm .tr{animation:fgPop 5s infinite}
+.dm .ln{stroke-dasharray:100;animation:fgDraw 5s infinite}
+.dm .pt{transform-box:fill-box;transform-origin:center;animation:fgDot 5s infinite}
+.dm .bars>i{animation:fgGrow 5s cubic-bezier(.2,.9,.25,1) infinite both}
+.dm .bars>i.td{animation-name:fgToday;animation-delay:0s!important}
+.dm .shr .bar>i{animation:fgFill 5s cubic-bezier(.2,.9,.25,1) infinite}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--ink3);opacity:.3}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.demo{border-radius:20px;background:var(--ground);border:1px solid var(--line);padding:20px 18px;min-height:132px;display:flex;flex-direction:column;justify-content:center}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line);margin-top:auto}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.leg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 28px;align-items:start}
+.leg>div{display:grid;grid-template-columns:22px minmax(0,1fr);gap:3px 12px;align-items:start}
+.leg .kan{position:static;margin-top:1px;grid-row:span 2}
+.leg b{font-size:14.5px;font-weight:700}
+.leg p{grid-column:2;font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+@keyframes fgFade{0%{opacity:0}5%,93%{opacity:1}100%{opacity:0}}
+@keyframes fgTens{0%,34%{transform:none}50%,100%{transform:translateY(-1.12em)}}
+@keyframes fgUnits{0%,28%{transform:none}52%,100%{transform:translateY(-7.84em)}}
+@keyframes fgPop{0%,48%{opacity:0;transform:scale(.6)}54%{opacity:1;transform:scale(1.15)}60%,100%{opacity:1;transform:scale(1)}}
+@keyframes fgDraw{0%,6%{stroke-dashoffset:100}26%,100%{stroke-dashoffset:0}}
+@keyframes fgDot{0%,24%{opacity:0;transform:scale(.2)}30%{opacity:1;transform:scale(1.6)}36%,46%{opacity:1;transform:scale(1)}52%{transform:scale(1.9)}60%,100%{opacity:1;transform:scale(1)}}
+@keyframes fgGrow{0%{transform:scaleY(.04)}16%,90%{transform:none}100%{transform:scaleY(.04)}}
+@keyframes fgToday{0%{transform:scaleY(.04)}22%,44%{transform:scaleY(.55)}54%,90%{transform:none}100%{transform:scaleY(.04)}}
+@keyframes fgFill{0%,4%{transform:scaleX(0)}24%,92%{transform:none}100%{transform:scaleX(0)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #6366F1; opacity: .24"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #A855F7; opacity: .18; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 960px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K34 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyFigures</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un chiffre se montre en grand avec sa courbe ou ses barres, sans tableau de bord</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 800px">Un nombre, son unité, et au besoin un petit dessin qui dit d'où il vient. Deux à quatre chiffres se rangent en bande. Rien à régler, rien à lire deux fois.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il montre un nombre, il ne le calcule pas</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>une valeur en grand</b>, en Nunito, et son <b>unité</b> dessous. Les deux se lisent d'un bloc : « 1 284 clics ».</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Range <b>2 à 4 chiffres en bande</b>, séparés par des filets, tous à la même taille et sur la même ligne de base.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Ajoute au besoin <b>un seul dessin</b> : une mini-courbe de 7 points sans axe (<code>MeeshySpark</code>), ou une jauge de part.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit ses trois états sans changer de forme : chargement, vide (« — »), mise à jour. Quand la valeur change, <b>le chiffre roule</b>.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Mettre un nombre en forme (espaces, « 12 k », « 2,4 Go », pourcentage), calculer une tendance ou un pic : <b>l'hôte</b>. <code>value</code> arrive déjà écrit.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Les barres, le pic nommé, toute série à axe ou à sélection : <b>K50</b> <code>MeeshyChart</code>, que l'hôte pose sous la bande. Les puces « 7 j · 30 j » sont <b>K04</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La carte ou le billet autour : <b>l'hôte</b> et <b>K30</b>. L'anneau de progression : <b>K09</b>. La jauge d'une rangée de part : <b>K42</b>, que <code>MeeshyShareBar</code> pose. La forme d'onde : <b>K35</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>L'état d'erreur avec « Réessayer » et le vide illustré : <b>K38</b>. Les ressorts et les durées : <b>K26</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Cinq parties, huit mesures</h2><p>Les cinq parties à deux fois leur taille. Une bande de trois chiffres, le graphique de K50 que l'hôte pose dessous, puis un chiffre avec sa courbe et deux rangées de part.</p></header>
+<div class="kcell kc" style="flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 56px; padding: 72px 56px 60px; background: radial-gradient(60% 90% at 26% 36%, rgba(99,102,241,.14), var(--ground) 72%)">
+
+<div style="position: relative; width: 660px; flex: none">
+<div style="zoom: 2; width: 330px; display: flex; flex-direction: column; gap: 26px">
+<div class="band" style="grid-template-columns: 1.15fr 1.25fr .8fr">
+<div class="fig"><span class="d v">1 284</span><span class="u">clics<span class="tr">[[ic:arrow-up s]]12 %</span></span></div>
+<div class="fig"><span class="d v">912</span><span class="u">visiteurs uniques</span></div>
+<div class="fig"><span class="d v">31</span><span class="u">pays</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="position: relative">
+<div class="bars" style="height: 104px">
+<i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 45%"></i><i class="pk" style="height: 100%"></i><i style="height: 79%"></i><i style="height: 57%"></i><i style="height: 41%"></i><i style="height: 30%"></i><i style="height: 24%"></i><i style="height: 22%"></i><i style="height: 18%"></i><i style="height: 14%"></i><i style="height: 13%"></i><i style="height: 21%"></i><i style="height: 27%"></i><i style="height: 17%"></i><i style="height: 11%"></i>
+</div>
+<div class="pkl" style="right: 157px; top: -2px"><span class="glass">3 nov. <span style="color: var(--ink3)">·</span> <span class="d" style="font-size: 15px">214</span></span><i></i></div>
+</div>
+<div class="mono ax"><span>18 oct.</span><span>28 oct.</span><span>7 nov.</span><span>16 nov.</span></div>
+</div>
+</div>
+<span class="kan" style="left: -30px; top: 24px">1</span>
+<span class="kan" style="left: -30px; top: 88px">2</span>
+<span class="kan" style="left: 186px; top: 86px">3</span>
+<span class="kan" style="left: 226px; top: -30px">4</span>
+<span class="kan" style="left: 560px; top: 262px">6</span>
+<span class="kan" style="left: 66px; top: 186px">7</span>
+</div>
+
+<div style="position: relative; width: 480px; flex: none">
+<div style="zoom: 2; width: 240px; display: flex; flex-direction: column; gap: 26px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div class="fig"><span class="d v">57</span><span class="u">visites aujourd'hui</span></div>
+<svg class="spk" width="72" height="28" viewBox="0 0 72 28" aria-hidden="true" style="margin-bottom: 22px"><path d="M2 22L13 17L24 20L35 11L46 14L57 7L68 4L68 28L2 28Z" fill="currentColor" fill-opacity=".14"></path><path d="M2 22L13 17L24 20L35 11L46 14L57 7L68 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="68" cy="4" r="3" fill="currentColor"></circle></svg>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="shr"><span class="cc" style="background: var(--brand-fill); color: #fff; border-color: transparent">SN</span><div><div><b>Sénégal</b><span class="d" style="font-size: 17px">38 %</span></div><span class="bar"><i style="width: 38%"></i></span></div></div>
+<div class="shr"><span class="cc">FR</span><div><div><b>France</b><span class="d" style="font-size: 17px">24 %</span></div><span class="bar"><i style="width: 24%"></i></span></div></div>
+</div>
+</div>
+<span class="kan" style="left: 396px; top: -18px">5</span>
+<span class="kan" style="left: -30px; top: 200px">8</span>
+</div>
+
+</div>
+<div class="leg">
+<div><span class="kan">1</span><b>Valeur</b><p>Nunito 800, chiffres tabulaires. 48, 34 ou 24 px. Encre <code>--ink</code>, une ligne, jamais coupée : elle rétrécit jusqu'à 60 %.</p></div>
+<div><span class="kan">2</span><b>Unité</b><p>Inter 12,5 px, <code>--ink2</code>, 2 px sous la valeur. Une ligne. Elle est dite après la valeur.</p></div>
+<div><span class="kan">3</span><b>Tendance</b><p>Puce de 20 px : flèche de 12 et texte de l'hôte. <code>--ok</code>, <code>--err</code> ou neutre. Le sens est une flèche, pas seulement une couleur.</p></div>
+<div><span class="kan">4</span><b>Filet</b><p>1 px <code>--line</code>, toute la hauteur du chiffre, 16 px avant le suivant. Seulement entre deux chiffres, jamais au bord.</p></div>
+<div><span class="kan">5</span><b>Courbe · <code>MeeshySpark</code></b><p>7 points, 72 × 28. Trait de 2 px arrondi, aire à 14 %, point final de 6. Ni axe ni graduation.</p></div>
+<div><span class="kan">6</span><b>Barres · <code>MeeshyChart</code> de <b>K50</b></b><p>Posées par l'hôte sous la bande, 16 px plus bas. K34 ne les dessine pas : leurs mesures sont sur la fiche K50.</p></div>
+<div><span class="kan">7</span><b>Pic · <b>K50</b></b><p>La plus haute barre et la pilule qui la nomme appartiennent au graphique. La bande ne connaît que ses chiffres.</p></div>
+<div><span class="kan">8</span><b>Rangée de part · <code>MeeshyShareBar</code></b><p>Pastille de 38, libellé, pourcentage Nunito 17, jauge de 8 px : une <code>MeeshyMeter</code> de <b>K42</b>. Quatre rangées au plus, de la plus grande à la plus petite.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois tailles, cinq parties, trois états</h2><p>À taille réelle. Chaque cellule est un cas que le catalogue du kit doit montrer.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell kc"><div class="stage">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div class="fig hero"><span class="d v">1 719</span><span class="u">visites ce mois</span></div>
+<div class="fig"><span class="d v">412</span><span class="u">clics</span></div>
+<div class="fig sm"><span class="d v">14</span><span class="u">filleuls</span></div>
+</div>
+</div><div class="cp"><b>Trois tailles</b><span class="kcap"><code>hero</code> 48 pour un chiffre seul · <code>large</code> 34 par défaut · <code>compact</code> 24 dans un billet.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div class="band" style="grid-template-columns: repeat(3, minmax(0, 1fr))">
+<div class="fig"><span class="d v">412</span><span class="u"><span class="tr">[[ic:arrow-up s]]12 %</span></span></div>
+<div class="fig"><span class="d v">57</span><span class="u"><span class="tr dn">[[ic:arrow-down s]]8 %</span></span></div>
+<div class="fig"><span class="d v">31</span><span class="u"><span class="tr fl">[[ic:minus s]]stable</span></span></div>
+</div>
+</div><div class="cp"><b>Tendance</b><span class="kcap">Hausse, baisse, stable. Le texte vient de l'hôte ; la flèche dit le sens même sans la couleur.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div class="fig"><span class="d v">57</span><span class="u">visites aujourd'hui</span></div>
+<svg class="spk" width="72" height="28" viewBox="0 0 72 28" role="img" aria-label="En hausse sur 7 jours, de 21 à 57" style="margin-bottom: 22px"><path d="M2 22L13 17L24 20L35 11L46 14L57 7L68 4L68 28L2 28Z" fill="currentColor" fill-opacity=".14"></path><path d="M2 22L13 17L24 20L35 11L46 14L57 7L68 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="68" cy="4" r="3" fill="currentColor"></circle></svg>
+</div>
+</div><div class="cp"><b>Avec sa courbe</b><span class="kcap">7 points, à droite du chiffre, posée sur sa ligne de base. Elle a une phrase pour nom, pas sept nombres.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div class="band" style="grid-template-columns: 1.3fr 1fr">
+<div class="fig"><span class="d v">1 719</span><span class="u">visites ce mois</span></div>
+<div class="fig"><span class="d v">57</span><span class="u">aujourd'hui</span></div>
+</div>
+</div><div class="cp"><b>Bande de deux</b><span class="kcap">Le minimum. En dessous, c'est un chiffre seul, sans filet.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div class="band" style="grid-template-columns: 1.15fr 1fr 1fr">
+<div class="fig"><span class="d v">12 480</span><span class="u">messages</span></div>
+<div class="fig"><span class="d v">86</span><span class="u">conversations</span></div>
+<div class="fig"><span class="d v">9 310</span><span class="u">traductions</span></div>
+</div>
+</div><div class="cp"><b>Bande de trois</b><span class="kcap">Le cas courant. Les colonnes suivent la largeur des valeurs, jamais des tiers forcés.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div class="band" style="grid-template-columns: 1.2fr 1.25fr 1fr 1fr">
+<div class="fig sm"><span class="d v">3 204</span><span class="u">messages</span></div>
+<div class="fig sm" style="padding-inline-start: 12px"><span class="d v">1 870</span><span class="u">traductions</span></div>
+<div class="fig sm" style="padding-inline-start: 12px"><span class="d v">3</span><span class="u">langues</span></div>
+<div class="fig sm" style="padding-inline-start: 12px"><span class="d v">312</span><span class="u">jours</span></div>
+</div>
+</div><div class="cp"><b>Bande de quatre</b><span class="kcap">Le maximum. Sous 360 px de large, la bande passe d'elle-même en <code>compact</code>.</span></div></div>
+
+<div class="kcell kc" style="grid-column: span 2"><div class="stage">
+<div style="display: grid; grid-template-columns: 318px 250px; justify-content: space-around; gap: 40px; align-items: end">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="position: relative">
+<div class="bars" role="img" aria-label="Clics par jour sur 30 jours, du 18 octobre au 16 novembre. Pic le 3 novembre : 214 clics.">
+<i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 45%"></i><i class="pk" style="height: 100%"></i><i style="height: 79%"></i><i style="height: 57%"></i><i style="height: 41%"></i><i style="height: 30%"></i><i style="height: 24%"></i><i style="height: 22%"></i><i style="height: 18%"></i><i style="height: 14%"></i><i style="height: 13%"></i><i style="height: 21%"></i><i style="height: 27%"></i><i style="height: 17%"></i><i style="height: 11%"></i>
+</div>
+<div class="pkl" style="right: 151px; top: -2px"><span class="glass">3 nov. <span style="color: var(--ink3)">·</span> <span class="d" style="font-size: 15px">214</span></span><i></i></div>
+</div>
+<div class="mono ax"><span>18 oct.</span><span>28 oct.</span><span>7 nov.</span><span>16 nov.</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 250px">
+<div style="position: relative">
+<div class="bars" role="img" aria-label="Visites par jour sur 7 jours. Pic aujourd'hui : 57 visites." style="gap: 8px; height: 128px">
+<i style="height: 37%"></i><i style="height: 49%"></i><i style="height: 42%"></i><i style="height: 68%"></i><i style="height: 60%"></i><i style="height: 84%"></i><i class="pk" style="height: 100%"></i>
+</div>
+<div class="pkl" style="right: 38px; top: -2px"><span class="glass">Auj. <span style="color: var(--ink3)">·</span> <span class="d" style="font-size: 15px">57</span></span><i></i></div>
+</div>
+<div class="mono ax"><span>10 nov.</span><span>16 nov.</span></div>
+</div>
+</div>
+</div><div class="cp"><b>Avec le graphique de K50</b><span class="kcap">Les barres de 30 et de 7 jours sont une <code>MeeshyChart</code> de <b>K50</b>, pic compris. K34 lui laisse la place sous la bande et partage sa teinte.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="shr"><span class="cc" style="background: var(--brand-fill); color: #fff; border-color: transparent">SN</span><div><div><b>Sénégal</b><span class="d" style="font-size: 17px">38 %</span></div><span class="bar"><i style="width: 38%"></i></span></div></div>
+<div class="shr"><span class="cc">FR</span><div><div><b>France</b><span class="d" style="font-size: 17px">24 %</span></div><span class="bar"><i style="width: 24%"></i></span></div></div>
+<div class="shr"><span class="cc">CI</span><div><div><b>Côte d'Ivoire</b><span class="d" style="font-size: 17px">11 %</span></div><span class="bar"><i style="width: 11%"></i></span></div></div>
+</div>
+</div><div class="cp"><b>Rangées de part</b><span class="kcap">La première pastille est pleine. La jauge ne descend jamais sous 4 px : une part minuscule reste visible.</span></div></div>
+
+<div class="kcell kc"><div class="stage" aria-busy="true">
+<div class="band" style="grid-template-columns: 1.15fr 1.25fr .8fr">
+<div class="fig" style="gap: 8px"><span class="sk" style="height: 30px; width: 84px; margin-top: 4px"></span><span class="sk" style="height: 11px; width: 40px"></span></div>
+<div class="fig" style="gap: 8px"><span class="sk" style="height: 30px; width: 58px; margin-top: 4px"></span><span class="sk" style="height: 11px; width: 96px"></span></div>
+<div class="fig" style="gap: 8px"><span class="sk" style="height: 30px; width: 38px; margin-top: 4px"></span><span class="sk" style="height: 11px; width: 30px"></span></div>
+</div>
+</div><div class="cp"><b>Chargement</b><span class="kcap">Squelette de la même forme, filets compris : <code>MeeshySkeleton</code> de <b>K38</b>. Seulement sur cache vide : une valeur connue, même ancienne, reste affichée.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div class="band" style="grid-template-columns: 1.15fr 1.25fr .8fr">
+<div class="fig"><span class="d v" style="color: var(--ink3)">—</span><span class="u">clics</span></div>
+<div class="fig"><span class="d v" style="color: var(--ink3)">—</span><span class="u">visiteurs uniques</span></div>
+<div class="fig"><span class="d v" style="color: var(--ink3)">—</span><span class="u">pays</span></div>
+</div>
+</div><div class="cp"><b>Vide</b><span class="kcap">« — » à l'encre discrète, l'unité reste. Dit « aucune donnée », jamais « zéro ». Un vrai zéro s'écrit 0.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div class="band" style="grid-template-columns: 1.15fr 1.25fr .8fr">
+<div class="fig"><span class="d v"><span class="roll"><span>1 2</span><span class="w mid"><span style="transform: translateY(-.3em)"><b>8</b><b>9</b></span></span><span class="w mid"><span style="transform: translateY(-3.66em); filter: blur(.4px)"><b>4</b><b>5</b><b>6</b><b>7</b><b>8</b><b>9</b><b>0</b><b>1</b></span></span></span></span><span class="u">clics</span></div>
+<div class="fig"><span class="d v">912</span><span class="u">visiteurs uniques</span></div>
+<div class="fig"><span class="d v">31</span><span class="u">pays</span></div>
+</div>
+</div><div class="cp"><b>Mise à jour</b><span class="kcap">Seuls les chiffres qui changent roulent, chacun dans sa colonne. Les voisins ne bougent pas : les chiffres sont tabulaires.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div class="band" style="grid-template-columns: repeat(3, minmax(0, 1fr))">
+<div class="fig" style="--tint: var(--l-comm)"><span class="d v">342</span><span class="u">membres</span><span class="bar" style="margin-top: 8px; margin-inline-end: 14px"><i style="width: 68%; background: var(--tint)"></i></span></div>
+<div class="fig" style="--tint: var(--l-aff)"><span class="d v">14</span><span class="u">filleuls</span><span class="bar" style="margin-top: 8px; margin-inline-end: 14px"><i style="width: 28%; background: var(--tint)"></i></span></div>
+<div class="fig" style="--tint: var(--accent)"><span class="d v">64 %</span><span class="u">batterie</span><span class="bar" style="margin-top: 8px"><i style="width: 64%; background: var(--tint)"></i></span></div>
+</div>
+</div><div class="cp"><b>Teinte</b><span class="kcap"><code>tint</code> colore la courbe et la jauge, et passe au graphique de K50. Le chiffre reste à l'encre : son contraste ne dépend d'aucune teinte.</span></div></div>
+
+<div class="kcell kc" style="padding: 0; overflow: hidden"><div class="mx" data-theme="light" style="flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 28px">
+<div class="stage">
+<div style="display: flex; flex-direction: column; gap: 18px">
+<div class="band" style="grid-template-columns: 1.15fr 1.25fr .8fr">
+<div class="fig"><span class="d v">1 284</span><span class="u">clics<span class="tr">[[ic:arrow-up s]]12 %</span></span></div>
+<div class="fig"><span class="d v">912</span><span class="u">visiteurs uniques</span></div>
+<div class="fig"><span class="d v">31</span><span class="u">pays</span></div>
+</div>
+<div class="shr"><span class="cc" style="background: var(--brand-fill); color: #fff; border-color: transparent">SN</span><div><div><b>Sénégal</b><span class="d" style="font-size: 17px">38 %</span></div><span class="bar"><i style="width: 38%"></i></span></div></div>
+</div>
+</div><div class="cp"><b>Thème clair</b><span class="kcap">Mêmes mesures. Les teintes passent à leur version foncée, le filet à l'indigo 18 %.</span></div>
+</div></div>
+
+<div class="kcell kc"><div class="stage">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="fig" style="padding-bottom: 12px; border-bottom: 1px solid var(--line)"><span class="d v" style="font-size: 44px">12 480</span><span class="u" style="font-size: 17px">messages</span></div>
+<div class="fig"><span class="d v" style="font-size: 44px">86</span><span class="u" style="font-size: 17px">conversations</span></div>
+</div>
+</div><div class="cp"><b>Grande police</b><span class="kcap">Aux tailles d'accessibilité la bande s'empile, et les filets se couchent. Aucun mot n'est tronqué.</span></div></div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">Des tuiles, un plafond, un minuteur ; les graphiques détaillés sont à K50</h3></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; gap: 10px; width: 100%"><button class="tonal" style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; padding: 12px 14px; border-radius: 20px"><span style="display: inline-flex; color: var(--accent-ink)">[[ic:chat-circle s]]</span><b class="d" style="font-size: 22px; font-variant-numeric: tabular-nums">6</b><span class="kcap">conversations</span></button><button class="tonal" style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; padding: 12px 14px; border-radius: 20px"><span style="display: inline-flex; color: var(--accent-ink)">[[ic:users-three s]]</span><b class="d" style="font-size: 22px; font-variant-numeric: tabular-nums">3</b><span class="kcap">communautés</span></button></div></div><span class="kcap"><b style="color: var(--ink)"><code>MeeshyFigureTile</code></b> La tuile touchable : glyphe, chiffre, libellé, teinte. Une cible de 44 au moins, un seul nom dit.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="tonal" style="display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 14px 16px; border-radius: 20px"><div style="display: flex; align-items: center; justify-content: space-between"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink2)">[[ic:battery-medium s]]Batterie</span><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--ok)"><span class="dot on" style="width: 9px; height: 9px; border: 0"></span>direct</span></div><b class="d" style="font-size: 24px">64 %</b><div class="bar"><i style="width: 64%; background: var(--ok)"></i></div><div style="display: flex; align-items: center; justify-content: space-between"><span class="kcap">il y a 2 min</span><button class="ib" aria-label="Rafraîchir" style="width: 30px; height: 30px; color: var(--ink2)">[[ic:arrows-clockwise s]]</button></div></div></div><span class="kcap"><b style="color: var(--ink)">Tuile d'état</b> Valeur en texte, pied libre : jauge de <b>K42</b> ou phrase, fraîcheur, action de rafraîchissement, témoin de direct. Périmée : bord en pointillé.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; flex-direction: column; gap: 14px; width: 100%"><div style="display: flex; flex-direction: column; gap: 6px"><span><b class="d" style="font-size: 28px">23</b><span class="d" style="font-size: 18px; color: var(--ink3)"> / 50</span><span class="kcap"> arrivées</span></span><div class="bar"><i style="width: 46%; background: var(--l-share)"></i></div></div><span class="mono" style="font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink)">41:58</span></div></div><span class="kcap"><b style="color: var(--ink)">Valeur / plafond · minuteur</b> <code>limit</code> pose le plafond en encre discrète et une <b>K42</b> dessous. Le minuteur garde des chiffres de largeur fixe : rien ne tremble.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; gap: 0; width: 100%"><div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 26px; color: var(--accent-ink)">1 719</b><span class="kcap">visites ce mois</span></div><div style="flex: 1; display: flex; flex-direction: column; gap: 2px; padding-left: 16px; border-left: 1px solid var(--line)"><b class="d" style="font-size: 26px">57</b><span class="kcap">aujourd'hui</span></div><div style="flex: 1; display: flex; flex-direction: column; gap: 2px; margin-left: 12px; padding: 0 0 0 12px; border-left: 1.5px dashed var(--ink3)"><b class="d" style="font-size: 26px; color: var(--ink3)">—</b><span class="kcap">à venir</span></div></div></div><span class="kcap"><b style="color: var(--ink)">Mis en avant · fantôme</b> Une bande sans graphique : un chiffre à la teinte par <code>isEmphasized</code>, un chiffre fantôme en tirets par <code>isGhost</code>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Le chiffre roule, le dessin pousse</h2><p>Un nouveau clic arrive : 1 284 devient 1 291. Les chiffres qui changent roulent vers le haut, la barre du jour monte, la tendance se pose. Boucle de 5 secondes.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 24px; align-items: stretch">
+
+<div class="kcell kc dm" style="padding: 44px 48px; justify-content: center; background: radial-gradient(70% 90% at 30% 30%, rgba(99,102,241,.16), var(--ground) 72%)">
+<div style="display: flex; flex-direction: column; gap: 30px; width: 440px; align-self: center">
+<div class="hd" style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div class="fig hero"><span class="d v"><span class="roll"><span>1 2</span><span class="w t10"><span><b>8</b><b>9</b></span></span><span class="w t1"><span><b>4</b><b>5</b><b>6</b><b>7</b><b>8</b><b>9</b><b>0</b><b>1</b></span></span></span></span><span class="u" style="font-size: 14px">clics<span class="tr">[[ic:arrow-up s]]7 aujourd'hui</span></span></div>
+<svg class="spk" width="96" height="36" viewBox="0 0 72 28" aria-hidden="true" style="margin-bottom: 26px"><path class="ln" pathLength="100" d="M2 22L13 17L24 20L35 11L46 14L57 7L68 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><circle class="pt" cx="68" cy="4" r="3" fill="currentColor"></circle></svg>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div class="bars" style="height: 112px">
+<i style="height: 0%"></i><i style="height: 0%; animation-delay: .02s"></i><i style="height: 0%; animation-delay: .04s"></i><i style="height: 0%; animation-delay: .06s"></i><i style="height: 0%; animation-delay: .08s"></i><i style="height: 0%; animation-delay: .1s"></i><i style="height: 0%; animation-delay: .12s"></i><i style="height: 0%; animation-delay: .14s"></i><i style="height: 0%; animation-delay: .16s"></i><i style="height: 0%; animation-delay: .18s"></i><i style="height: 0%; animation-delay: .2s"></i><i style="height: 0%; animation-delay: .22s"></i><i style="height: 0%; animation-delay: .24s"></i><i style="height: 0%; animation-delay: .26s"></i><i style="height: 0%; animation-delay: .28s"></i><i style="height: 45%; animation-delay: .3s"></i><i class="pk" style="height: 100%; animation-delay: .32s"></i><i style="height: 79%; animation-delay: .34s"></i><i style="height: 57%; animation-delay: .36s"></i><i style="height: 41%; animation-delay: .38s"></i><i style="height: 30%; animation-delay: .4s"></i><i style="height: 24%; animation-delay: .42s"></i><i style="height: 22%; animation-delay: .44s"></i><i style="height: 18%; animation-delay: .46s"></i><i style="height: 14%; animation-delay: .48s"></i><i style="height: 13%; animation-delay: .5s"></i><i style="height: 21%; animation-delay: .52s"></i><i style="height: 27%; animation-delay: .54s"></i><i style="height: 17%; animation-delay: .56s"></i><i class="td" style="height: 20%; opacity: 1"></i>
+</div>
+<div class="mono ax"><span>18 oct.</span><span>28 oct.</span><span>7 nov.</span><span>16 nov.</span></div>
+</div>
+<div class="shr"><span class="cc" style="background: var(--brand-fill); color: #fff; border-color: transparent">SN</span><div><div><b>Sénégal</b><span class="d" style="font-size: 17px">38 %</span></div><span class="bar"><i style="width: 38%"></i></span></div></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; flex: 1">
+<div class="kcell kc" style="padding: 20px; min-height: 0; gap: 14px">
+<span class="step">1</span>
+<div class="stage" style="min-height: 90px"><div class="fig"><span class="d v">1 284</span><span class="u">clics</span></div></div>
+<div class="cp"><b>Posé</b><span class="kcap">La valeur connue. À la première apparition, rien ne roule.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; min-height: 0; gap: 14px">
+<span class="step">2</span>
+<div class="stage" style="min-height: 90px"><div class="fig"><span class="d v"><span class="roll"><span>1 2</span><span class="w mid"><span style="transform: translateY(-.3em)"><b>8</b><b>9</b></span></span><span class="w mid"><span style="transform: translateY(-3.66em); filter: blur(.4px)"><b>4</b><b>5</b><b>6</b><b>7</b><b>8</b><b>9</b><b>0</b><b>1</b></span></span></span></span><span class="u">clics</span></div></div>
+<div class="cp"><b>Ça roule</b><span class="kcap">Deux colonnes sur quatre bougent. La largeur du nombre ne change pas.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; min-height: 0; gap: 14px">
+<span class="step">3</span>
+<div class="stage" style="min-height: 90px"><div class="fig"><span class="d v">1 291</span><span class="u">clics<span class="tr">[[ic:arrow-up s]]7</span></span></div></div>
+<div class="cp"><b>Reposé</b><span class="kcap">La tendance arrive après le chiffre, jamais avant.</span></div>
+</div>
+</div>
+<div class="spec"><b style="color: var(--ink)">motion.morph</b> (le chiffre roule) · 450 ms · ressort amorti, sans rebond · déclencheur : <span style="color: var(--accent-ink)">value</span> change, sens du roulement donné par l'ordre des deux valeurs · haptique : aucune · mouvement réduit : échange sec</div>
+<div class="spec"><b style="color: var(--ink)">motion.rise</b> (courbe, jauge ; les barres suivent K50) · 900 ms · déclencheur : première apparition, puis seul le point qui change · haptique : aucune · mouvement réduit : posé d'emblée</div>
+<div class="spec"><b style="color: var(--ink)">motion.pulse</b> (point final de la courbe) · un seul battement de 400 ms · déclencheur : le dernier point change · haptique : aucune · mouvement réduit : aucun battement</div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Cinq noms, les mêmes partout</h2><p>Aucun type du domaine : ni lien, ni profil, ni statistique. Des chaînes déjà écrites, des nombres nus et une teinte.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyFigures.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-figures.tsx</span>
+<span><b>Chiffre</b></span><span><code>MeeshyFigure(value:unit:tint:trend:size:)</code></span><span><code>MeeshyFigure(value, unit, modifier, tint, trend, size)</code></span><span><code>&lt;MeeshyFigure value unit tint trend size /&gt;</code></span>
+<span><b>Bande</b> · 2 à 4</span><span><code>MeeshyFigureBand { MeeshyFigure(…) }</code></span><span><code>MeeshyFigureBand { MeeshyFigure(…) }</code></span><span><code>&lt;MeeshyFigureBand&gt;…&lt;/MeeshyFigureBand&gt;</code></span>
+<span><b>Courbe</b></span><span><code>MeeshySpark(points:tint:summary:)</code></span><span><code>MeeshySpark(points, summary, modifier, tint)</code></span><span><code>&lt;MeeshySpark points tint summary /&gt;</code></span>
+<span><b>Tuile</b></span><span><code>MeeshyFigureTile(value:unit:systemImage:tint:footer:)</code></span><span><code>MeeshyFigureTile(value, unit, modifier, icon, tint, footer)</code></span><span><code>&lt;MeeshyFigureTile value unit glyph tint footer /&gt;</code></span>
+<span><b>Rangée de part</b></span><span><code>MeeshyShareBar(title:value:share:tint:leading:)</code></span><span><code>MeeshyShareBar(title, value, share, modifier, tint, leading)</code></span><span><code>&lt;MeeshyShareBar title value share tint leading /&gt;</code></span>
+<span><b>Tailles</b> · <code>enum</code></span><span><code>MeeshyFigureSize { hero, large, compact }</code></span><span><code>enum class</code> identique</span><span><code>'hero' | 'large' | 'compact'</code></span>
+<span><b>Tendance</b> · <code>enum</code></span><span><code>MeeshyFigureTrend { up(String), down(String), flat(String) }</code></span><span><code>sealed interface</code> identique</span><span><code>{ direction: 'up' | 'down' | 'flat', text }</code></span>
+<span><b>Emplacements</b> · <code>slot</code></span><span><code>accessory</code> (à droite du chiffre) · <code>leading</code> (pastille de la rangée)</span><span><code>accessory</code> · <code>leading</code></span><span><code>accessory</code> · <code>leading</code></span>
+<span style="border-bottom: 0"><b>Recette</b> en valeurs</span><span style="border-bottom: 0"><code>MeeshyFiguresRecipe.resolve(size:count:width:trend:isLoading:isEmpty:isStacked:)</code></span><span style="border-bottom: 0"><code>MeeshyFiguresRecipe.resolve(…)</code></span><span style="border-bottom: 0"><code>meeshyFiguresRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>value: String? = nil</code><span>Déjà écrite par l'hôte : « 1 284 », « 2,4 Go », « 38 % ». Absente : « — ».</span></div>
+<div class="par"><code>unit: String</code><span>Obligatoire, non vide. Une ligne sous le chiffre, dite après lui.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Courbe, jauge, glyphe d'une tuile. Sans elle : la teinte de l'hôte. Jamais le chiffre.</span></div>
+<div class="par"><code>trend: MeeshyFigureTrend? = nil</code><span>Sens et texte : <code>.up("12 %")</code>. Absente : pas de puce.</span></div>
+<div class="par"><code>points: [Double] = []</code><span>Courbe : 7 points. Moins de deux : rien n'est dessiné. Une série plus longue ou à axe va à <b>K50</b>.</span></div>
+<div class="par"><code>limit: String? = nil</code><span>La forme « valeur / plafond » : « 23 / 50 », le plafond en encre discrète, une <code>MeeshyMeter</code> de <b>K42</b> en pied.</span></div>
+<div class="par"><code>isEmphasized = false</code><span>Un seul chiffre de la bande, mis en avant à la teinte.</span></div>
+<div class="par"><code>freshness: String? = nil</code><span>Tuile d'état : « il y a 2 min ». <code>isStale</code> la borde en pointillé, <code>isLive</code> pose le témoin de direct, <code>onRefresh</code> l'action.</span></div>
+<div class="par"><code>isGhost = false</code><span>État fantôme : contour en tirets, valeur « — », pour un chiffre qui n'existe pas encore.</span></div>
+<div class="par"><code>share: Double</code><span>De 0 à 1, borné. La largeur de la jauge d'une rangée de part.</span></div>
+<div class="par"><code>size = .large</code><span>Une bande donne la même taille à tous ses chiffres.</span></div>
+<div class="par"><code>isLoading = false</code><span>Squelette de la même forme. Ignoré dès qu'une valeur existe.</span></div>
+<div class="par"><code>rolls = true</code><span>Le chiffre roule quand <code>value</code> change. Jamais à l'apparition.</span></div>
+<div class="par"><code>summary: String</code><span>Obligatoire avec <code>points</code>. La phrase dite à la place du dessin.</span></div>
+<div class="par"><code>onPress: (() -&gt; Void)? = nil</code><span>Présent : toute la bande est un seul bouton, un seul nom.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Trois façons de faire rouler un chiffre</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<h3 class="d" style="font-size: 22px">iOS</h3></div>
+<div class="demo">
+<div class="band" style="grid-template-columns: 1.1fr 1.15fr 1fr">
+<div class="fig sm"><span class="d v">12 480</span><span class="u">messages</span></div>
+<div class="fig sm"><span class="d v">86</span><span class="u">conversations</span></div>
+<div class="fig sm"><span class="d v">9 310</span><span class="u">traductions</span></div>
+</div>
+</div>
+<ul>
+<li><code>contentTransition(.numericText(value:))</code> fait rouler chaque chiffre dans le bon sens ; <code>monospacedDigit()</code> tient les colonnes.</li>
+<li>Courbe dessinée en <code>Canvas</code> : pas de Swift Charts pour sept points.</li>
+<li><code>accessibilityChartDescriptor</code> : le graphique audio de VoiceOver lit <code>points</code>.</li>
+<li><code>AnyLayout</code> empile la bande aux tailles d'accessibilité ; <code>minimumScaleFactor(0.6)</code> pour la valeur.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : <code>numericText()</code> sans sens de roulement. « Réduire les animations » : échange sec.</p>
+</div>
+
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<h3 class="d" style="font-size: 22px">Android</h3></div>
+<div class="demo tonal" style="border-radius: 28px">
+<div class="band" style="grid-template-columns: 1.1fr 1.15fr 1fr">
+<div class="fig sm"><span class="d v" style="font-weight: 900">12 480</span><span class="u">messages</span></div>
+<div class="fig sm"><span class="d v" style="font-weight: 900">86</span><span class="u">conversations</span></div>
+<div class="fig sm"><span class="d v" style="font-weight: 900">9 310</span><span class="u">traductions</span></div>
+</div>
+</div>
+<ul>
+<li>Un <code>AnimatedContent</code> par chiffre, <code>slideInVertically</code> et <code>slideOutVertically</code> ; <code>fontFeatureSettings = "tnum"</code>.</li>
+<li>Courbe en <code>Canvas</code>, <code>drawPath</code>, lue en phase de dessin : aucune recomposition par point.</li>
+<li><code>clearAndSetSemantics</code> : la bande est un nœud, <code>contentDescription</code> = les paires valeur et unité.</li>
+<li>Bande posée sur une surface tonale, rayon 28, quand l'hôte est Material 3 Expressive.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation du système à zéro : échange sec, courbe posée d'emblée.</p>
+</div>
+
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<h3 class="d" style="font-size: 22px">Web</h3></div>
+<div class="demo">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div class="fig sm"><span class="d v">1 284</span><span class="u">clics</span></div>
+<div style="position: relative; flex: 1; max-width: 190px">
+<div class="bars" style="height: 64px; gap: 2px">
+<i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 0%"></i><i style="height: 45%"></i><i class="pk" style="height: 100%"></i><i style="height: 79%"></i><i style="height: 57%"></i><i style="height: 41%"></i><i style="height: 30%"></i><i style="height: 24%"></i><i style="height: 22%"></i><i style="height: 18%"></i><i style="height: 14%"></i><i style="height: 13%"></i><i style="height: 21%"></i><i style="height: 27%; opacity: 1; outline: 2px solid var(--ink); outline-offset: 2px"></i><i style="height: 17%"></i><i style="height: 11%"></i>
+</div>
+<span class="mono" style="position: absolute; right: 2px; top: 6px; font-size: 11px; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 3px 7px">14 nov. · 58</span>
+</div>
+</div>
+</div>
+<ul>
+<li>Une colonne par chiffre, déplacée par <code>transform</code> ; <code>font-variant-numeric: tabular-nums</code>.</li>
+<li>SVG avec <code>vector-effect: non-scaling-stroke</code> et <code>role="img"</code> nommé par <code>summary</code>.</li>
+<li>Une tuile est un <code>&lt;button&gt;</code> : <code>:focus-visible</code> en CSS. Le parcours d'une série au clavier est à <b>K50</b>.</li>
+<li><code>@container</code> : la bande passe en <code>compact</code> selon sa propre largeur, pas celle de la fenêtre.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> <code>prefers-reduced-motion</code> : échange sec. Sans requêtes de conteneur : <code>compact</code> sous 360 px de fenêtre.</p>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Quatorze fichiers dessinent déjà un chiffre</h2><p>Relevé dans le dépôt le 16 novembre 2026. Le plus complet de chaque plateforme devient le composant ; les autres s'y rebranchent, écran par écran.</p></header>
+<div class="card" style="display: flex; flex-direction: column; overflow: hidden">
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Profile/Views/ProfileActivityBand.swift</span><p><span class="be">Devient le composant</span> Trois nombres en bande, <code>contentTransition(.numericText())</code>, empilement aux tailles d'accessibilité, un seul élément VoiceOver. Il perd ses cartes teintées et son type <code>UserStats</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Profile/Views/StatsTimelineChart.swift</span><p>Swift Charts, ligne et aire, avec <code>accessibilitySummary(for:)</code>. Donne à <code>MeeshySpark</code> sa règle de phrase dite ; ses séries longues vont à <b>K50</b>. Rebranché.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Profile/Views/UserStatsView.swift</span><p><code>statCard(_:)</code> : une carte par chiffre, en grille. Rebranché sur <code>MeeshyFigure</code>, la carte reste à l'hôte.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">Features/Links/Views/TrackingLinkDetailView.swift</span><p><code>bigStatCard</code>, <code>breakdownCard</code>, <code>breakdownRow</code> : la rangée devient <code>MeeshyShareBar</code>, sa jauge au <code>GeometryReader</code> une <code>MeeshyMeter</code> de K42.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">feature/profile/…/ProfileCompactStatsBand.kt</span><p><span class="be">Devient le composant</span> <code>ProfileStatChipsRow</code>, son squelette de même forme et <code>statChipSpokenLabel</code>. Le plus complet : il a déjà l'état de chargement.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">feature/profile/…/StatsTimeline.kt · UserStatsScreen.kt</span><p><code>StatsTimelineBuilder.build</code> : la mise à l'échelle des points, pure. Elle entre dans la recette. L'écran est rebranché.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">feature/conversations/…/links/TrackingLinkDetailSections.kt</span><p><code>TrackingMainStats</code>, <code>BreakdownCard</code>, <code>BreakdownBar</code> : miroir de l'iOS. Rebranchés sur la bande et la rangée de part.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/admin/stat-card.tsx</span><p><span class="be">Devient le composant</span> <code>AdminStatCard</code> : valeur déjà écrite, <code>delta</code>, <code>trend</code>, états prête, squelette et erreur sans saut de mise en page. Il perd sa carte et son « admin ».</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/admin/charts/sparkline.tsx · bar-chart.tsx · chart-scale.ts</span><p><code>AdminSparkline</code> nommée par une phrase et <code>sparkPath</code>, la loi pure d'échelle, reprise telle quelle. <code>AdminBarChart</code> part à <b>K50</b>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/share-link-detail-parts.tsx · apps/web/src/components/conversation-stats-section.tsx</span><p><code>LinkStatTiles</code>, <code>ArrivalLanguages</code> et la section de statistiques d'une conversation. Rebranchés.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Le même chiffre, quatre écrans sans profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell kc" style="--tint: var(--l-comm)"><div class="stage">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="ib" style="width: 36px; height: 36px; border-radius: 12px; background: var(--l-comm); color: #0B0B12">[[ic:users-four s]]</span><b style="font-size: 14px">Photo de rue</b></div>
+<div class="band" style="grid-template-columns: 1.3fr 1fr">
+<div class="fig sm"><span class="d v">1 204</span><span class="u">membres</span></div>
+<div class="fig sm"><span class="d v">38</span><span class="u">ce mois<span class="tr">[[ic:arrow-up s]]</span></span></div>
+</div>
+<svg class="spk" width="100%" height="28" viewBox="0 0 72 28" preserveAspectRatio="none" role="img" aria-label="Membres en hausse sur 7 jours"><path d="M2 23L13 21L24 18L35 19L46 13L57 10L68 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path></svg>
+</div>
+</div><div class="cp"><b>Communauté</b><span class="kcap">L'en-tête d'une communauté : deux chiffres et la courbe de la semaine, à sa couleur.</span></div></div>
+
+<div class="kcell kc" style="padding: 0; overflow: hidden"><div style="flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 28px; --tint: #EEF2FF; background: linear-gradient(160deg, color-mix(in oklab, #4ECDC4 46%, var(--ground)), var(--ground) 78%)">
+<div class="stage">
+<div class="glass" style="border-radius: 24px; padding: 16px 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px">
+<div class="fig"><span class="d v">248</span><span class="u" style="color: var(--ink)">[[ic:eye s]]vues</span></div>
+<svg class="spk" width="72" height="28" viewBox="0 0 72 28" role="img" aria-label="Vues en baisse depuis ce matin" style="margin-bottom: 22px"><path d="M2 20L13 8L24 5L35 9L46 14L57 19L68 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="68" cy="22" r="3" fill="currentColor"></circle></svg>
+</div>
+</div><div class="cp"><b>Story</b><span class="kcap">Sous ma story, sur le verre de K01 : les vues et leur rythme depuis la publication.</span></div>
+</div></div>
+
+<div class="kcell kc" style="--tint: #FBBF24"><div class="stage">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 10px">
+<div class="fig"><span class="d v">1 860</span><span class="u"><span style="color: #FBBF24; display: inline-flex">[[ic:sparkle-fill s]]</span>étincelles</span></div>
+<span class="tr" style="margin-bottom: 4px">[[ic:arrow-up s]]120</span>
+</div>
+<div class="bars" role="img" aria-label="Étincelles gagnées par jour sur 7 jours. Pic samedi." style="height: 56px; gap: 6px">
+<i style="height: 30%"></i><i style="height: 46%"></i><i style="height: 22%"></i><i style="height: 58%"></i><i style="height: 40%"></i><i class="pk" style="height: 100%"></i><i style="height: 64%"></i>
+</div>
+</div>
+</div><div class="cp"><b>Jeu</b><span class="kcap">Ma Légende : les étincelles en grand ; la semaine en sept barres dorées est une <b>K50</b>.</span></div></div>
+
+<div class="kcell kc"><div class="stage">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="fig"><span class="d v">2,4 Go</span><span class="u">sur cet appareil</span></div>
+<div class="shr" style="--tint: var(--accent)"><span class="cc" style="width: 32px; height: 32px">[[ic:image s]]</span><div><div><b style="font-size: 13.5px">Photos</b><span class="d" style="font-size: 15px">52 %</span></div><span class="bar"><i style="width: 52%"></i></span></div></div>
+<div class="shr" style="--tint: var(--info)"><span class="cc" style="width: 32px; height: 32px">[[ic:video-camera s]]</span><div><div><b style="font-size: 13.5px">Vidéos</b><span class="d" style="font-size: 15px">31 %</span></div><span class="bar"><i style="width: 31%"></i></span></div></div>
+</div>
+</div><div class="cp"><b>Réglages</b><span class="kcap">Données et stockage : le poids total, puis ce qui le remplit, rangée par rangée.</span></div></div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque taille × nombre de chiffres × largeur rend la police, les colonnes, les filets et le passage en <code>compact</code> du tableau. Vecteurs <code>K34-MeeshyFigures.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Échelle des points.</b> Pour 0, 1, 2, 7 et 31 points, des valeurs égales, nulles ou négatives : aucune division par zéro, une courbe toujours dans son cadre. Le socle, le pic et sa pilule sont témoignés par <b>K50</b>.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Une bande est un seul élément : « 1 284 clics, 912 visiteurs uniques, 31 pays ». Un dessin est une image nommée par <code>summary</code>. « — » se dit « aucune donnée ».</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Le chiffre roule.</b> Changer <code>value</code> anime seulement les chiffres qui diffèrent ; la largeur du nombre ne bouge pas. À la première apparition et avec <code>rolls</code> faux : rien ne roule.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Trois états, une forme.</b> Chargement, vide et valeur occupent le même encombrement au pixel. <code>isLoading</code> est ignoré dès qu'une valeur existe : jamais de squelette sur un cache non vide.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Contraste et cible.</b> Valeur et unité à 4,5:1 en clair et en sombre, calculé depuis la recette. Courbe et jauge à 3:1 sur leur fond. Avec <code>onPress</code>, la bande fait 44 pt, 48 dp, 44 px de haut au moins.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit, grande police, RTL.</b> Ni roulement ni pousse. À 200 %, la bande s'empile sans mot coupé. En arabe, l'ordre des chiffres et la jauge se reflètent ; le temps d'un graphique reste de gauche à droite.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Changer un chiffre ne re-rend ni ne repeint les autres chiffres de la bande. Garde de source : aucun type du domaine, aucun singleton, aucune mise en forme de nombre dans les fichiers de K34.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Un chiffre n'est jamais seul : son unité est toujours écrite. La couleur ne porte ni la tendance ni le pic ; une flèche et un mot le disent. Un dessin se lit en une phrase.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Seules la transformation et l'opacité s'animent. Une courbe est un seul tracé. Douze chiffres à l'écran sans image perdue quand l'un roule ; rien ne s'anime hors écran.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":7916}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

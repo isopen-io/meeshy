@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>États vides — quand il n'y a encore rien · iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.step{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:color-mix(in oklab,var(--accent) 20%,transparent);color:var(--accent-ink);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:12px;letter-spacing:0;flex:none}
+.rule{flex:1;height:1px;background:var(--line)}
+.gh{border:1.5px dashed rgba(165,180,252,.34);background:rgba(165,180,252,.035);animation:evBreath 4.6s ease-in-out infinite}
+.gl{display:block;height:10px;border-radius:999px;background:rgba(165,180,252,.13)}
+.gt{position:relative;border-radius:22px}
+.gt::before,.gt::after{content:"";position:absolute;top:var(--cut,96px);width:20px;height:20px;margin-top:-10px;border-radius:50%;background:var(--ground);border:1.5px dashed rgba(165,180,252,.34)}
+.gt::before{left:-11px;clip-path:inset(-2px -2px -2px 50%)}
+.gt::after{right:-11px;clip-path:inset(-2px 50% -2px -2px)}
+.halo{position:absolute;border-radius:50%;filter:blur(34px);opacity:.34;animation:mxFloat 10s ease-in-out infinite;pointer-events:none}
+.bob{animation:evBob 5s ease-in-out infinite}
+.dash{stroke-dasharray:3 7;animation:evDash 2.4s linear infinite}
+@keyframes evBreath{0%,100%{opacity:.72;transform:scale(1)}50%{opacity:1;transform:scale(1.012)}}
+@keyframes evBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes evDash{to{stroke-dashoffset:-20}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column; padding: 54px 0 24px">
+
+<section class="rise" style="display: flex; flex-direction: column; gap: 20px; padding: 0 20px">
+<div style="display: flex; align-items: center; gap: 8px"><span class="step">1</span><span class="tag">Face Liens, aucun lien</span><span class="rule"></span></div>
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h1 class="d" style="font-size: 32px">Mes liens</h1>
+<button class="ib g" aria-label="Scanner un code">[[ic:scan]]</button>
+</div>
+<div style="position: relative; padding: 0 4px">
+<div class="halo" style="width: 190px; height: 150px; left: 80px; top: 20px; background: var(--brand)"></div>
+<div class="gt gh" style="--cut: 104px; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 14px; height: 104px; padding: 0 20px">
+<span class="bob" style="display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; border: 1.5px dashed var(--brand-soft); color: var(--brand-soft)">[[ic:link l]]</span>
+<span style="display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0">
+<span class="gl" style="width: 62%; height: 14px"></span>
+<span class="gl" style="width: 38%"></span>
+</span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:qr-code l]]</span>
+</div>
+<div style="height: 0; border-top: 1.5px dashed rgba(165,180,252,.34); margin: 0 18px"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px">
+<span class="mono" style="font-size: 14px; color: var(--ink3)">meeshy.me/@aissa</span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:copy s]]</span>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center">
+<h2 class="d" style="font-size: 24px">Ton premier lien t'attend</h2>
+<button class="btn p" style="align-self: stretch">[[ic:link]]<span>Créer mon lien de profil</span></button>
+<div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap">
+<button class="chip" style="min-height: 44px; color: var(--ink)"><span style="display: inline-flex; color: var(--l-share)">[[ic:chats-circle s]]</span><span>Partage</span></button>
+<button class="chip" style="min-height: 44px; color: var(--ink)"><span style="display: inline-flex; color: var(--brand-soft)">[[ic:cursor-click s]]</span><span>Suivi</span></button>
+<button class="chip" style="min-height: 44px; color: var(--ink)"><span style="display: inline-flex; color: var(--l-aff)">[[ic:gift s]]</span><span>Parrainage</span></button>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; display: flex; flex-direction: column; gap: 20px; padding: 44px 20px 0">
+<div style="display: flex; align-items: center; gap: 8px"><span class="step">2</span><span class="tag">Mes adresses, vide</span><span class="rule"></span></div>
+<div style="display: flex; align-items: center; gap: 12px">
+<button class="ib g" aria-label="Retour">[[ic:caret-left]]</button>
+<h1 class="d" style="font-size: 26px">Mes adresses</h1>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 6px 0 2px">
+<div class="gh" style="display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 18px 0 8px; border-radius: 999px; width: 86%">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(165,180,252,.1); color: var(--ink2)">[[ic:globe-hemisphere-west]]</span>
+<span class="gl" style="flex: 1"></span>
+<span class="tag" style="letter-spacing: .04em">Site</span>
+</div>
+<div class="gh" style="display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 18px 0 8px; border-radius: 999px; width: 100%; animation-delay: -1.5s">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(165,180,252,.1); color: var(--ink2)">[[ic:vinyl-record]]</span>
+<span class="gl" style="flex: 1"></span>
+<span class="tag" style="letter-spacing: .04em">Musique</span>
+</div>
+<div class="gh" style="display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 18px 0 8px; border-radius: 999px; width: 74%; animation-delay: -3s">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(165,180,252,.1); color: var(--ink2)">[[ic:camera]]</span>
+<span class="gl" style="flex: 1"></span>
+<span class="tag" style="letter-spacing: .04em">Photos</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center">
+<h2 class="d" style="font-size: 24px; text-wrap: balance">Ajoute ton site, ta musique, tes photos</h2>
+<button class="btn q" style="align-self: stretch; color: var(--ink)">[[ic:plus]]<span>Ajouter une adresse</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .14s; display: flex; flex-direction: column; gap: 20px; padding: 44px 20px 0">
+<div style="display: flex; align-items: center; gap: 8px"><span class="step">3</span><span class="tag">Publications, vide</span><span class="rule"></span></div>
+<h2 class="d" style="font-size: 22px">Publications</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="gh" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 156px; border-radius: 18px; color: var(--ink3); font-size: 11px; font-weight: 600">[[ic:film-reel l]]<span>réel</span></div>
+<div class="gh" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 156px; border-radius: 18px; color: var(--ink3); font-size: 11px; font-weight: 600; animation-delay: -1.5s">[[ic:image l]]<span>photo</span></div>
+<div class="gh" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 156px; border-radius: 18px; color: var(--ink3); font-size: 11px; font-weight: 600; animation-delay: -3s">[[ic:circle-dashed l]]<span>story</span></div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center">
+<h2 class="d" style="font-size: 24px">Rien de publié pour l'instant</h2>
+<button class="btn a" style="align-self: stretch">[[ic:plus]]<span>Publier quelque chose</span></button>
+</div>
+<div style="--accent:#4ECDC4;--accent-ink:#7FE3DC; display: flex; align-items: center; gap: 12px; margin-top: 6px; padding: 12px 16px 12px 12px; border-radius: 20px; border: 1.5px dashed rgba(165,180,252,.34)">
+<span class="av" style="width: 36px; height: 36px; font-size: 13px">LM</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span class="tag" style="font-size: 10px">Chez un autre</span>
+<span style="font-size: 15px; font-weight: 600; color: var(--ink)">Léo n'a encore rien publié</span>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .2s; display: flex; flex-direction: column; gap: 20px; padding: 44px 20px 0">
+<div style="display: flex; align-items: center; gap: 8px"><span class="step">4</span><span class="tag">Carte, personne ne partage</span><span class="rule"></span></div>
+<div style="position: relative; overflow: hidden; height: 200px; border-radius: 26px; border: 1px solid var(--line)">
+[[map]]
+<div style="position: absolute; inset: 0; background: radial-gradient(90% 90% at 50% 45%, rgba(9,9,11,.38), rgba(9,9,11,.78))"></div>
+<span class="gh" style="position: absolute; left: 22%; top: 30%; width: 38px; height: 38px; border-radius: 50%"></span>
+<span class="gh" style="position: absolute; left: 47%; top: 46%; width: 48px; height: 48px; border-radius: 50%; animation-delay: -1.5s"></span>
+<span class="gh" style="position: absolute; left: 72%; top: 22%; width: 32px; height: 32px; border-radius: 50%; animation-delay: -3s"></span>
+<div style="position: absolute; left: 12px; top: 12px; display: flex">
+<span class="chip glass" style="color: var(--ink)">[[ic:map-trifold s]]<span>Mes proches</span></span>
+</div>
+<div style="position: absolute; right: 12px; bottom: 12px; display: flex">
+<button class="ib g" aria-label="Agrandir la carte">[[ic:arrows-out-simple]]</button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center">
+<h2 class="d" style="font-size: 24px; text-wrap: balance">Aucun proche ne partage sa position</h2>
+<button class="btn a" style="align-self: stretch">[[ic:map-pin]]<span>Partager la mienne</span></button>
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; font-weight: 700; color: var(--accent-ink)">[[ic:hand-waving s]]<span>Demander à Léo</span></a>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .26s; display: flex; flex-direction: column; gap: 20px; padding: 44px 0 0">
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 20px"><span class="step">5</span><span class="tag">Léo ne partage pas sa position</span><span class="rule"></span></div>
+<div style="--accent:#4ECDC4;--accent-ink:#7FE3DC; position: relative; overflow: hidden; height: 500px">
+[[map]]
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(9,9,11,.5), rgba(9,9,11,.2) 40%, rgba(9,9,11,.6))"></div>
+<div style="position: absolute; left: 16px; right: 16px; top: 16px; display: flex; align-items: center; justify-content: space-between">
+<button class="ib g" aria-label="Fermer la carte">[[ic:x]]</button>
+<span class="chip glass" style="color: var(--ink)">[[ic:map-pin s]]<span>De passage à Lisbonne</span></span>
+</div>
+<span class="gh" style="position: absolute; left: 50%; top: 122px; width: 64px; height: 64px; margin-left: -32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--ink2)">[[ic:gps-slash]]</span>
+<div class="glass" style="position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 10px 18px 18px; border-radius: 34px; text-align: center; background: rgba(19,17,28,.72)">
+<span style="width: 40px; height: 5px; border-radius: 999px; background: var(--glass-line)"></span>
+<span class="av" style="width: 64px; height: 64px; font-size: 23px; margin-top: 2px">LM</span>
+<h2 class="d" style="font-size: 21px; text-wrap: balance">Léo ne partage pas sa position en ce moment</h2>
+<div style="display: flex; flex-direction: column; gap: 10px; align-self: stretch">
+<button class="btn a">[[ic:hand-waving]]<span>Lui demander</span></button>
+<button class="btn q" style="color: var(--ink)">[[ic:map-pin]]<span>Partager la mienne</span></button>
+</div>
+</div>
+</div>
+</section>
+
+<section class="rise" style="--accent:#2ECC71;--accent-ink:#86EFAC; animation-delay: .32s; display: flex; flex-direction: column; gap: 20px; padding: 44px 20px 0">
+<div style="display: flex; align-items: center; gap: 8px"><span class="step" style="--accent:#A855F7;--accent-ink:#D8B4FE">6</span><span class="tag">En commun, rien encore</span><span class="rule"></span></div>
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">En commun</h2>
+<span class="chip" style="color: var(--ink)">[[ic:hand-waving s]]<span>Connaissance</span></span>
+</div>
+<div style="position: relative; display: flex; align-items: center; justify-content: center; gap: 0; padding: 22px 0 10px">
+<div class="halo" style="width: 130px; height: 110px; left: 34px; top: 12px; background: #A855F7"></div>
+<div class="halo" style="width: 130px; height: 110px; right: 34px; top: 12px; background: #2ECC71; animation-delay: -5s"></div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<span class="av bob" style="--accent:#A855F7; width: 84px; height: 84px; font-size: 30px">AN</span>
+<span style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">Toi</span>
+</div>
+<svg aria-hidden="true" viewBox="0 0 96 84" style="position: relative; width: 96px; height: 84px; flex: none; margin-bottom: 26px">
+<path class="dash" d="M6 42 H 90" fill="none" stroke="#8D92CB" stroke-width="2" stroke-linecap="round"></path>
+</svg>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<span class="av bob" style="width: 84px; height: 84px; font-size: 30px; animation-delay: -2.5s">SB</span>
+<span style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">Sofia</span>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="gh" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px; border-radius: 18px; color: var(--ink3); font-size: 11.5px; font-weight: 600">[[ic:chat-circle]]<span>Conversations</span></div>
+<div class="gh" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px; border-radius: 18px; color: var(--ink3); font-size: 11.5px; font-weight: 600; animation-delay: -1.5s">[[ic:users-three]]<span>Communautés</span></div>
+<div class="gh" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px; border-radius: 18px; color: var(--ink3); font-size: 11.5px; font-weight: 600; animation-delay: -3s">[[ic:handshake]]<span>Amis</span></div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center">
+<h2 class="d" style="font-size: 24px; text-wrap: balance">Vous n'avez encore rien en commun</h2>
+<button class="btn a" style="align-self: stretch">[[ic:chat-circle]]<span>Envoyer un premier message</span></button>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":3069}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

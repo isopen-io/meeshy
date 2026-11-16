@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mes actions — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.act{display:flex;flex-direction:column;align-items:center;gap:9px;min-width:0}
+.act>b{font-size:12px;font-weight:600;letter-spacing:-.01em;color:var(--ink);text-align:center;line-height:1.2}
+.act:nth-child(2n) .ib{animation:actBob 6s ease-in-out infinite}
+.act:nth-child(2n+1) .ib{animation:actBob 6s ease-in-out -3s infinite}
+.badge{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;flex:none;background:color-mix(in oklab,var(--c,var(--brand-soft)) 18%,transparent);color:var(--c,var(--brand-soft))}
+@keyframes actBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<header style="position: relative; height: 150px; overflow: hidden; background: linear-gradient(170deg, #1E1B4B 0%, #09090B 100%)">
+<div class="orb" style="width: 150px; height: 150px; right: -40px; top: -30px; background: #6366F1; opacity: .35"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 50px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 12px; padding: 60px 16px 0 20px">
+<span class="av" style="width: 40px; height: 40px; font-size: 15px; box-shadow: 0 0 0 2px rgba(255,255,255,.3)">AN</span>
+<div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<h1 class="d" style="font-size: 34px">Actions</h1>
+<span class="mono" style="font-size: 13.5px; color: var(--ink2)">@aissa</span>
+</div>
+</div>
+</header>
+
+<section class="rise" style="position: relative; padding: 14px 20px 0; display: flex; flex-direction: column; gap: 18px">
+<div aria-hidden="true" style="position: absolute; inset: -30px 0 -70px; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 62%, transparent); mask-image: linear-gradient(180deg, transparent, #000 18%, #000 62%, transparent)">
+<div class="orb" style="width: 190px; height: 190px; left: -30px; top: 90px; background: #A855F7; opacity: .42"></div>
+<div class="orb" style="width: 170px; height: 170px; right: -20px; top: 170px; background: #4F46E5; opacity: .5; animation-delay: -4s"></div>
+<div class="orb" style="width: 110px; height: 110px; left: 150px; top: 60px; background: #34D399; opacity: .16; animation-delay: -2s"></div>
+</div>
+<h2 class="d" style="position: relative; font-size: 22px">Montrer</h2>
+<div style="position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px 6px">
+<button class="act"><span class="ib g lg">[[ic:export l]]</span><b>Partager</b></button>
+<button class="act"><span class="ib g lg">[[ic:qr-code l]]</span><b>Mon QR</b></button>
+<button class="act"><span class="ib g lg">[[ic:scan l]]</span><b>Scanner</b></button>
+<button class="act"><span class="ib g lg">[[ic:contactless-payment l]]</span><b>Sans contact</b></button>
+<button class="act"><span class="ib g lg">[[ic:eye l]]</span><b>Voir comme</b></button>
+<button class="act"><span class="ib g lg">[[ic:pencil-simple l]]</span><b>Modifier</b></button>
+<button class="act"><span class="ib g lg">[[ic:map-trifold l]]</span><b>Ma carte</b></button>
+<button class="act"><span class="ib g lg" style="color: var(--accent-ink)">[[ic:smiley l]]</span><b>Mon statut</b></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px; text-wrap: balance">Ce que je partage avec mes proches</h2>
+<div class="card" style="display: flex; flex-direction: column; padding: 6px 0">
+
+<div class="row" style="padding-top: 12px; padding-bottom: 12px">
+<span class="badge" style="--c: var(--ink2)">[[ic:map-pin]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="font-weight: 700">Ma position</span>
+<span style="font-size: 13px; color: var(--ink2)">Non partagée — tu n'es visible par personne</span>
+</div>
+<button class="btn a sm">Partager</button>
+</div>
+<div class="sep"></div>
+
+<div class="row">
+<span class="badge" style="--c: var(--ok)">[[ic:battery-medium]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span id="lb-bat" style="font-weight: 700">Ma batterie</span>
+<span style="font-size: 13px; color: var(--ink2)">Visible par mes Proches</span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-labelledby="lb-bat"></button>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; margin: 0 12px 10px; padding: 8px 8px 8px 12px; border-radius: 18px; background: var(--field); border: 1px solid var(--line)">
+<span class="av" style="width: 36px; height: 36px; font-size: 12.5px; --accent: #FF6B6B">MO</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span style="font-weight: 700; font-size: 14px; line-height: 1.25">Mina demande ta batterie</span>
+<span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink2)">[[ic:battery-medium s]]<span>Sang · à l'instant</span></span>
+</div>
+<button class="btn p sm">Envoyer</button>
+</div>
+<div class="sep"></div>
+
+<div class="row">
+<span class="badge" style="--c: var(--warn)">[[ic:phone-slash]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span id="lb-inj" style="font-weight: 700">Téléphone injoignable</span>
+<span style="font-size: 13px; color: var(--ink2)">Prévenir mes Proches</span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-labelledby="lb-inj"></button>
+</div>
+<div class="sep"></div>
+
+<div class="row" style="align-items: flex-start; padding-top: 14px; padding-bottom: 14px">
+<span class="badge" style="--c: var(--ink2)">[[ic:ghost]]</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 8px"><span id="lb-gho" style="font-weight: 700">Mode fantôme</span><span class="new">Nouveau</span></span>
+<span style="font-size: 13px; color: var(--ink2); text-wrap: pretty">Masque ma position pour tous, Sang compris</span>
+</div>
+<button class="sw" role="switch" aria-checked="false" aria-labelledby="lb-gho" style="margin-top: 4px"></button>
+</div>
+<div class="sep"></div>
+
+<div class="row">
+<span class="badge" style="--c: var(--info)">[[ic:bell-ringing]]</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0">
+<span id="lb-ret" style="font-weight: 700; line-height: 1.3; text-wrap: pretty">Prévenir mes contacts quand je reviens</span>
+</div>
+<button class="sw on" role="switch" aria-checked="true" aria-labelledby="lb-ret"></button>
+</div>
+
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .16s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px">Qui me voit</h2>
+<div class="card" style="display: flex; flex-direction: column; padding: 6px 0">
+
+<button class="row" style="width: 100%">
+<span class="badge" style="--c: var(--ok)">[[ic:eye]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="font-weight: 700">En ligne</span>
+<span style="font-size: 13px; color: var(--ink2)">Visible par mes Amis</span>
+</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+<div class="sep"></div>
+
+<button class="row" style="width: 100%">
+<span class="badge" style="--c: var(--warn)">[[ic:clock]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="font-weight: 700">Vu à</span>
+<span style="font-size: 13px; color: var(--ink2)">Visible par mes Proches</span>
+</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+<div class="sep"></div>
+
+<div class="row">
+<span class="badge">[[ic:magnifying-glass]]</span>
+<span id="lb-rech" style="flex: 1; min-width: 0; font-weight: 700; line-height: 1.3">Me trouver dans la recherche</span>
+<button class="sw on" role="switch" aria-checked="true" aria-labelledby="lb-rech"></button>
+</div>
+<div class="sep"></div>
+
+<div class="row">
+<span class="badge">[[ic:user-plus]]</span>
+<span id="lb-dem" style="flex: 1; min-width: 0; font-weight: 700; line-height: 1.3">Recevoir des demandes d'amis</span>
+<button class="sw on" role="switch" aria-checked="true" aria-labelledby="lb-dem"></button>
+</div>
+
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .24s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px">Mes contenus</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<button class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 14px; min-height: 148px; border-radius: 24px; background: linear-gradient(160deg, color-mix(in oklab, var(--warn) 16%, var(--raised)), var(--raised) 70%)">
+<span style="color: var(--warn); display: inline-flex">[[ic:star-fill l]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto">
+<span class="d" style="font-size: 30px">48</span>
+<span style="font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--ink2)">Messages favoris</span>
+</span>
+</button>
+<button class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 14px; min-height: 148px; border-radius: 24px; background: linear-gradient(160deg, color-mix(in oklab, var(--brand) 22%, var(--raised)), var(--raised) 70%)">
+<span style="color: var(--brand-soft); display: inline-flex">[[ic:bookmark-simple-fill l]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto">
+<span class="d" style="font-size: 30px">112</span>
+<span style="font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--ink2)">Publications enregistrées</span>
+</span>
+</button>
+<button class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 14px; min-height: 148px; border-radius: 24px; background: linear-gradient(160deg, color-mix(in oklab, var(--accent) 20%, var(--raised)), var(--raised) 70%)">
+<span style="color: var(--accent-ink); display: inline-flex">[[ic:stack-fill l]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; margin-top: auto">
+<span class="d" style="font-size: 30px">6</span>
+<span style="font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--ink2)">Mes packs</span>
+</span>
+</button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .32s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px">Mon compte</h2>
+<div class="card" style="display: flex; flex-direction: column; padding: 6px 0">
+<button class="row" style="width: 100%">
+<span class="badge" style="--c: var(--info)">[[ic:chart-bar]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span style="font-weight: 700">Statistiques</span><span style="font-size: 13px; color: var(--ink2)">12 480 messages · 86 conversations</span></span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="width: 100%">
+<span class="badge" style="--c: var(--warn)">[[ic:trophy]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span style="font-weight: 700">Ma Légende</span><span style="font-size: 13px; color: var(--ink2)">Niveau 24 · rang Or III</span></span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="width: 100%">
+<span class="badge" style="--c: var(--ok)">[[ic:shield-check]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><span style="font-weight: 700">Sécurité</span><span style="font-size: 13px; color: var(--ink2)">Téléphone à vérifier</span></span>
+<span style="width: 8px; height: 8px; border-radius: 50%; background: var(--warn)"></span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="width: 100%">
+<span class="badge" style="--c: var(--ink2)">[[ic:gear-six]]</span>
+<span style="flex: 1; min-width: 0; font-weight: 700">Réglages</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .4s; margin-top: 32px; padding: 24px 20px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column">
+<button class="btn x" style="width: 100%; min-height: 54px">[[ic:sign-out]]<span>Se déconnecter</span></button>
+</section>
+
+<nav aria-label="Faces du profil" style="position: sticky; bottom: 0; margin-top: 28px; padding: 28px 12px 24px; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.92) 46%)">
+<div class="seg glass">
+<button>[[ic:user-focus]]<span>Vitrine</span></button>
+<button>[[ic:link]]<span>Liens</span></button>
+<button class="on" aria-current="page">[[ic:lightning-fill]]<span>Actions</span></button>
+</div>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2081}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

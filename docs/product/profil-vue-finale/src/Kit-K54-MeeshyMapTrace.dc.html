@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K54 MeeshyMapTrace</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:860px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:16px;padding:14px 14px 20px}
+.cp{display:flex;flex-direction:column;gap:4px;padding:0 8px}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.mp{position:relative;overflow:hidden;border-radius:18px;border:1px solid var(--line);flex:none}
+.leo{--accent:#4ECDC4;--accent-ink:#7FE3DC}
+.mina{--accent:#FF6B6B;--accent-ink:#FFA3A3}
+.sang{--accent:#F87171;--accent-ink:#FCA5A5}
+.tom{--accent:#F8B500;--accent-ink:#FFD35C}
+.me{--accent:#A855F7;--accent-ink:#D8B4FE}
+
+.blur{position:absolute;border-radius:50%;transform:translate(-50%,-50%);background:color-mix(in oklab,var(--accent) 18%,transparent);border:1.5px solid var(--accent)}
+.spot{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center}
+.spot .av{position:relative;width:48px;height:48px;font-size:17px;border:3px solid var(--ground);box-shadow:0 10px 24px rgba(0,0,0,.55)}
+.spot.own .av{width:38px;height:38px;font-size:13px;border:2.5px solid #fff;box-shadow:0 6px 16px rgba(0,0,0,.5)}
+.spot.sm .av{width:40px;height:40px;font-size:14px}
+.spot.old .av{filter:grayscale(1) brightness(.72)}
+
+.tr{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.tr path,.tr line{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.tr .u{stroke:#0B0B12;stroke-opacity:.55;stroke-width:7}
+.tr .t{stroke:var(--accent-ink);stroke-width:4;stroke-dasharray:1 9;animation:k54Ants 1.4s linear infinite}
+.tr .lk{stroke:#EEF2FF;stroke-width:2.5;stroke-dasharray:2 9;animation:k54Link 1.4s linear infinite}
+.tr .hh{stroke:var(--accent);stroke-opacity:.16;stroke-width:16}
+.tr .hg{stroke-width:7}
+.tr .fix{animation:none}
+.tr.old{filter:grayscale(1);opacity:.6}
+.tr.old .t,.tr.old .lk{animation:none}
+.knot{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#0B0B12;border:3px solid var(--accent)}
+.stop{position:absolute;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px 0 9px;border-radius:999px;font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap;background:rgba(19,17,28,.62)}
+.stop>b{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-weight:700;font-size:11.5px;color:var(--accent-ink)}
+.stop.now{border-color:color-mix(in oklab,var(--accent) 60%,transparent)}
+.mid{position:absolute;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:999px;font-size:12.5px;font-weight:700;white-space:nowrap;color:var(--ink);background:rgba(19,17,28,.62)}
+.mid>span:first-child{display:flex;color:var(--accent-ink)}
+.dist{position:absolute;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;background:rgba(19,17,28,.86);border:1px solid var(--accent);color:var(--ink);white-space:nowrap;font-size:11.5px}
+.hd{position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 0 0 5px color-mix(in oklab,var(--accent) 30%,transparent),0 4px 10px rgba(0,0,0,.5);offset-rotate:0deg}
+.hd.st{margin:-9px 0 0 -9px}
+.trip{position:absolute;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px 0 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;color:var(--ink);background:rgba(19,17,28,.66)}
+.lmap{background:linear-gradient(115deg,transparent 46%,#fff 46% 50%,transparent 50%),linear-gradient(24deg,transparent 58%,#fff 58% 61%,transparent 61%),radial-gradient(circle at 78% 24%,#CDE7D2 0 46px,transparent 47px),linear-gradient(160deg,#BFD9F2 0 22%,transparent 22%),#E6E4F0}
+
+.leg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 28px;align-items:start}
+.leg>div{display:grid;grid-template-columns:22px minmax(0,1fr);gap:3px 12px;align-items:start}
+.leg .kan{position:static;margin-top:1px;grid-row:span 2}
+.leg b{font-size:14.5px;font-weight:700}
+.leg p{grid-column:2;font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line);margin-top:auto}
+.twin{display:grid;grid-template-columns:110px minmax(0,1.05fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;vertical-align:1px;margin-inline-end:4px}
+.be.no{background:var(--warn)}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.rule{display:flex;align-items:flex-start;gap:16px;padding:22px 26px;border-radius:26px;background:linear-gradient(120deg,color-mix(in oklab,var(--warn) 12%,var(--raised)),var(--raised) 60%);border:1px solid color-mix(in oklab,var(--warn) 35%,var(--line))}
+.todo{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:16px;border:1.5px dashed var(--line);font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.todo>.ic{color:var(--warn);margin-top:1px}
+.bub{border-radius:22px 22px 22px 8px;background:var(--field);border:1px solid var(--line);padding:6px 6px 10px;display:flex;flex-direction:column;gap:8px}
+.phs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.phs>span{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:12px;background:var(--field);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink);opacity:.38;animation:6s steps(1) infinite}
+.phs>span:nth-child(1){animation-name:k54P1}.phs>span:nth-child(2){animation-name:k54P2}.phs>span:nth-child(3){animation-name:k54P3}.phs>span:nth-child(4){animation-name:k54P4}
+.scr{position:relative;flex:1;height:6px;border-radius:999px;background:var(--field)}
+.scr>i{position:absolute;inset:0;border-radius:999px;background:var(--accent);transform-origin:0 50%}
+.scr>s{position:absolute;inset:0}
+.scr>s>u{position:absolute;left:0;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.scr>em{position:absolute;top:-3px;width:2px;height:12px;border-radius:1px;background:var(--ink3)}
+
+.ra .rv{stroke:#fff;stroke-width:16;stroke-dasharray:100 100;animation:k54Reveal 6s linear infinite}
+.ra .who{animation:k54Fade 6s linear infinite}
+.ra .mid{animation:k54Mid 6s infinite}
+.ra .arr{animation:k54Arr 6s infinite}
+.rb .hg{stroke-dasharray:100 100;animation:k54Draw 6s linear infinite}
+.rb .hd{animation:k54Head 6s linear infinite}
+.rb .k2{animation:k54K2 6s infinite}
+.rb .k3{animation:k54K3 6s infinite}
+.rb .s2{animation:k54S2 6s infinite}
+.rb .s3{animation:k54S3 6s infinite}
+.rb .s4{animation:k54S4 6s infinite}
+.rbs .scr>i{animation:k54Fill 6s linear infinite}
+.rbs .scr>s{animation:k54Thumb 6s linear infinite}
+@keyframes k54Ants{to{stroke-dashoffset:-20}}
+@keyframes k54Link{to{stroke-dashoffset:-22}}
+@keyframes k54Reveal{0%,5%{stroke-dashoffset:100;opacity:1}27%,92%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+@keyframes k54Fade{0%,92%{opacity:1}100%{opacity:0}}
+@keyframes k54Mid{0%,27%{opacity:0;transform:translate(-50%,-30%) scale(.86)}34%,92%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(1)}}
+@keyframes k54Arr{0%,24%{transform:translate(-50%,-50%) scale(1)}29%{transform:translate(-50%,-50%) scale(1.14)}35%,100%{transform:translate(-50%,-50%) scale(1)}}
+@keyframes k54Draw{0%,8%{stroke-dashoffset:100;opacity:1}70%,92%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+@keyframes k54Head{0%{offset-distance:0%;opacity:0}4%,8%{offset-distance:0%;opacity:1}70%,92%{offset-distance:100%;opacity:1}100%{offset-distance:100%;opacity:0}}
+@keyframes k54Fill{0%,8%{transform:scaleX(0)}70%,92%{transform:scaleX(1)}100%{transform:scaleX(1)}}
+@keyframes k54Thumb{0%,8%{transform:translateX(0)}70%,100%{transform:translateX(100%)}}
+@keyframes k54K2{0%,24%{opacity:.3;transform:scale(.8)}27%{opacity:1;transform:scale(1.35)}31%,92%{opacity:.75;transform:scale(1)}100%{opacity:.3;transform:scale(.8)}}
+@keyframes k54K3{0%,45%{opacity:.3;transform:scale(.8)}48%{opacity:1;transform:scale(1.35)}52%,92%{opacity:1;transform:scale(1)}100%{opacity:.3;transform:scale(.8)}}
+@keyframes k54S2{0%,25%{opacity:0;transform:translateY(6px)}30%,92%{opacity:1;transform:none}100%{opacity:0;transform:none}}
+@keyframes k54S3{0%,46%{opacity:0;transform:translateY(6px)}51%,92%{opacity:1;transform:none}100%{opacity:0;transform:none}}
+@keyframes k54S4{0%,69%{opacity:0;transform:translateY(6px)}74%,92%{opacity:1;transform:none}100%{opacity:0;transform:none}}
+@keyframes k54P1{0%{opacity:1}27%,100%{opacity:.38}}
+@keyframes k54P2{0%{opacity:.38}27%{opacity:1}34%,100%{opacity:.38}}
+@keyframes k54P3{0%{opacity:.38}34%{opacity:1}92%,100%{opacity:.38}}
+@keyframes k54P4{0%{opacity:.38}92%{opacity:1}100%{opacity:.38}}
+</style>
+</helmet>
+<div class="mx leo" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 32px">
+<div class="orb" style="width: 300px; height: 300px; right: 120px; top: -60px; background: var(--accent); opacity: .16"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #F87171; opacity: .18; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 980px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K54 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyMapTrace</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un chemin sur une carte est un seul tracé : il avance vers quelqu'un ou raconte d'où l'on vient</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">Des points qui défilent disent « on y va ». Un trait épais qui pâlit vers le passé dit « voilà d'où je viens ». Trois genres, une seule recette, et aucune idée de ce qu'est une rue : le tracé relie les points qu'on lui donne.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il relie des points, il ne sait pas par où passer</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Trace <b>un chemin</b> entre les points reçus, à la teinte passée, sur un liseré sombre qui le garde lisible sur toute carte.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit le <b>sens</b> : les points défilent du premier point vers le dernier (<code>route</code>, <code>link</code>) ; le trait va du plus pâle au plein dans le temps (<code>history</code>).</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose les <b>nœuds d'arrêt</b> cerclés et place les étiquettes : une au milieu, une par arrêt. Les étiquettes sont des K41.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Suit une <b>position 0–1</b> : le trait se dessine jusqu'à elle, une tête de lecture s'y tient. Se désature quand <code>isStale</code> est vrai.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Calculer un itinéraire, une distance ou une durée, parler à un fournisseur de carte, projeter des coordonnées : <b>l'hôte</b>. Le texte « 2,4 km · 30 min à pied » arrive tout fait.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Les personnes aux extrémités, leur disque de flou, leur onde : <b>K36</b>. Le tracé s'arrête sous l'épingle, il ne la dessine pas.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La forme des étiquettes : <b>K41</b>. Leur verre : <b>K01</b>. Le bouton rond qui lance la relecture : <b>K02</b>. La jauge du temps sous la carte : <b>K42</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Faire avancer la relecture, choisir le jour, décider qu'une position est périmée : <b>l'hôte</b>. Les ressorts et les durées : <b>K26</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Deux tracés, douze repères</h2><p>À deux fois leur taille, sur le fond de carte commun. À gauche, l'itinéraire d'Aïssa vers Léo. À droite, la journée de Mina, avec sa tête de lecture.</p></header>
+<div class="kcell" style="padding: 0; overflow: hidden; height: 540px">
+<div style="position: absolute; inset: 0">[[map]]</div>
+<div style="position: absolute; left: 0; top: 0; width: 648px; height: 270px; zoom: 2">
+<svg class="tr" aria-hidden="true">
+<path class="u" d="M60 215 C 80 150, 150 160, 205 82"></path>
+<path class="t" d="M60 215 C 80 150, 150 160, 205 82"></path>
+</svg>
+<svg class="tr sang" aria-hidden="true">
+<defs>
+<linearGradient id="k54g0" gradientUnits="userSpaceOnUse" x1="310" y1="212" x2="576" y2="60">
+<stop offset="0" stop-color="#F87171" stop-opacity=".12"></stop>
+<stop offset=".4" stop-color="#F87171" stop-opacity=".45"></stop>
+<stop offset="1" stop-color="#F87171" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path class="hh" d="M310 212 C 326 176, 348 158, 380 124 S 458 126, 500 170 S 552 112, 576 60"></path>
+<path class="hg" stroke="url(#k54g0)" d="M310 212 C 326 176, 348 158, 380 124 S 458 126, 500 170 S 552 112, 576 60"></path>
+</svg>
+<div class="blur" style="left: 215px; top: 70px; width: 96px; height: 96px"></div>
+<div class="pin spot" style="left: 215px; top: 70px"><span class="av">LM</span></div>
+<div class="pin spot own me" style="left: 60px; top: 215px"><span class="av">AN</span></div>
+<span class="glass mid" style="left: 188px; top: 190px"><span>[[ic:person-simple-walk s]]</span><span>2,4 km · 30 min à pied</span></span>
+<span class="knot sang" style="left: 310px; top: 212px; opacity: .55"></span>
+<span class="knot sang" style="left: 380px; top: 124px; opacity: .75"></span>
+<span class="knot sang" style="left: 500px; top: 170px"></span>
+<span class="hd st sang" style="left: 545px; top: 151px"></span>
+<span class="stop glass sang" style="left: 292px; top: 228px"><b>09:10</b>Maison</span>
+<span class="stop glass sang" style="left: 322px; top: 74px"><b>12:30</b>Marché</span>
+<span class="stop glass sang" style="left: 440px; top: 190px"><b>15:05</b>Studio</span>
+<span class="stop glass now sang" style="left: 448px; top: 20px"><b>17:42</b>Ici</span>
+<div class="pin spot mina" style="left: 576px; top: 60px"><span class="av">MO</span></div>
+</div>
+<span class="kan" style="left: 296px; top: 214px">1</span>
+<span class="kan" style="left: 112px; top: 336px">2</span>
+<span class="kan" style="left: 566px; top: 372px">3</span>
+<span class="kan" style="left: 132px; top: 462px">4</span>
+<span class="kan" style="left: 700px; top: 284px">5</span>
+<span class="kan" style="left: 862px; top: 186px">6</span>
+<span class="kan" style="left: 1010px; top: 300px">7</span>
+<span class="kan" style="left: 632px; top: 134px">8</span>
+<span class="kan" style="left: 1116px; top: 286px">9</span>
+<span class="kan" style="left: 640px; top: 392px">10</span>
+<span class="kan" style="left: 1196px; top: 150px">11</span>
+<span class="kan" style="left: 884px; top: 26px">12</span>
+<span class="glass trip" style="left: 24px; bottom: 24px"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+</div>
+<div class="card leg" style="padding: 28px">
+<div><span class="kan">1</span><b>Trait</b><p>Points ronds de 4 tous les 10, à la teinte <code>tint</code>. Sur tablette et grand écran : 4,5 tous les 11. Ce sont eux qui défilent.</p></div>
+<div><span class="kan">2</span><b>Liseré</b><p>Même chemin, dessous : 7 de large, <code>#0B0B12</code> à 55 %. Il porte le contraste : sans lui, un trait clair se perd sur un parc ou un fleuve.</p></div>
+<div><span class="kan">3</span><b>Étiquette de milieu</b><p>K41 de 34 sur verre K01 : un glyphe à la teinte, un texte opaque. Posée à 12 du milieu du chemin, du côté libre. Absente par défaut.</p></div>
+<div><span class="kan">4</span><b>Sens</b><p>Du premier point vers le dernier, 20 par cycle de 1,4 s. L'hôte choisit l'ordre des points : c'est lui qui dit qui va vers qui.</p></div>
+<div><span class="kan">5</span><b>Halo</b><p>Genre <code>history</code>. Tout le chemin en 16 de large, teinte à 16 %. Il reste entier pendant la relecture : on voit où l'on va arriver.</p></div>
+<div><span class="kan">6</span><b>Trait d'historique</b><p>7 de large, bouts ronds. Dégradé d'opacité le long du chemin : 12 % au départ, 45 % à 40 %, plein à l'arrivée.</p></div>
+<div><span class="kan">7</span><b>Nœud d'arrêt</b><p>14, cœur <code>#0B0B12</code>, cercle de 3 à la teinte. Son opacité suit son âge : de 55 % pour le plus ancien à 100 %.</p></div>
+<div><span class="kan">8</span><b>Étiquette d'arrêt</b><p>K41 de 30 sur verre : la valeur en chasse fixe 11,5 à la teinte, le titre en 12 gras. Elle ne recouvre jamais le trait.</p></div>
+<div><span class="kan">9</span><b>Tête de lecture</b><p>Disque blanc de 18, cercle de 3 et auréole de 5 à la teinte. Présente si <code>progress</code> est donné, posée à cette fraction du chemin.</p></div>
+<div><span class="kan">10</span><b>Départ</b><p>Le bout le plus pâle. Le trait commence sous le premier nœud, jamais avant : aucun point inventé hors de la liste reçue.</p></div>
+<div><span class="kan">11</span><b>Arrivée</b><p>Le trait finit plein, sous l'épingle. L'épingle est une K36 posée par l'hôte, par-dessus : le tracé ne dessine personne.</p></div>
+<div><span class="kan">12</span><b>Dernière étiquette</b><p>Cerclée à la teinte à 60 %. Avec <code>onStopPress</code>, chaque étiquette devient un bouton de 44 de haut au toucher. Le trait, lui, ne se touche pas.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois genres, quatre états</h2><p>Tout est à taille réelle. Le genre change le dessin du trait. L'état change sa vie : entier, en relecture, périmé, immobile.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell kc">
+<div class="mp" style="height: 250px">[[map]]
+<svg class="tr" aria-hidden="true"><path class="u" d="M64 196 C 110 116, 210 186, 288 98"></path><path class="t" d="M64 196 C 110 116, 210 186, 288 98"></path></svg>
+<div class="blur" style="left: 300px; top: 84px; width: 106px; height: 106px"></div>
+<div class="pin spot" style="left: 300px; top: 84px"><span class="av">LM</span></div>
+<div class="pin spot own me" style="left: 64px; top: 196px"><span class="av">AN</span></div>
+<span class="glass mid" style="left: 196px; top: 196px"><span>[[ic:person-simple-walk s]]</span><span>2,4 km · 30 min à pied</span></span>
+</div>
+<div class="cp"><b>route</b><span class="kcap"><code>kind: route</code>. Pointillé qui avance de l'un vers l'autre, sur son liseré. Le chemin suit les points reçus, lissés.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 250px">[[map]]
+<svg class="tr" aria-hidden="true"><line class="lk" x1="112" y1="92" x2="298" y2="184"></line></svg>
+<div class="blur" style="left: 112px; top: 92px; width: 132px; height: 132px"></div>
+<div class="pin spot" style="left: 112px; top: 92px"><span class="av">LM</span></div>
+<div class="pin spot own me" style="left: 298px; top: 184px"><span class="av">AN</span></div>
+<span class="dist mono" style="left: 212px; top: 142px">2,4 km</span>
+</div>
+<div class="cp"><b>link</b><span class="kcap"><code>kind: link</code>. Deux points, une droite de 2,5 à l'encre claire, sa distance au milieu. Il dit « à vol d'oiseau », pas « par là ».</span></div>
+</div>
+
+<div class="kcell kc sang">
+<div class="mp" style="height: 250px">[[map]]
+<svg class="tr" aria-hidden="true">
+<defs><linearGradient id="k54g1" gradientUnits="userSpaceOnUse" x1="50" y1="200" x2="300" y2="56"><stop offset="0" stop-color="#F87171" stop-opacity=".12"></stop><stop offset=".4" stop-color="#F87171" stop-opacity=".45"></stop><stop offset="1" stop-color="#F87171" stop-opacity="1"></stop></linearGradient></defs>
+<path class="hh" d="M50 200 C 62 165, 84 150, 110 118 S 190 118, 226 160 S 276 100, 300 56"></path>
+<path class="hg" stroke="url(#k54g1)" d="M50 200 C 62 165, 84 150, 110 118 S 190 118, 226 160 S 276 100, 300 56"></path>
+</svg>
+<span class="knot" style="left: 50px; top: 200px; opacity: .55"></span>
+<span class="knot" style="left: 110px; top: 118px; opacity: .75"></span>
+<span class="knot" style="left: 226px; top: 160px"></span>
+<span class="stop glass" style="left: 22px; top: 212px"><b>09:10</b>Maison</span>
+<span class="stop glass" style="left: 52px; top: 70px"><b>12:30</b>Marché</span>
+<span class="stop glass" style="left: 176px; top: 178px"><b>15:05</b>Studio</span>
+<span class="stop glass now" style="left: 176px; top: 22px"><b>17:42</b>Ici</span>
+<div class="pin spot mina" style="left: 300px; top: 56px"><span class="av">MO</span></div>
+</div>
+<div class="cp"><b>history</b><span class="kcap"><code>kind: history</code>. Chemin épais du plus pâle au plein, halo large, nœuds cerclés, arrêts horodatés. Aucun point ne défile.</span></div>
+</div>
+
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell kc sang">
+<div class="mp" style="height: 210px">[[map]]
+<svg class="tr" aria-hidden="true">
+<defs><linearGradient id="k54g2" gradientUnits="userSpaceOnUse" x1="36" y1="172" x2="240" y2="48"><stop offset="0" stop-color="#F87171" stop-opacity=".12"></stop><stop offset=".4" stop-color="#F87171" stop-opacity=".45"></stop><stop offset="1" stop-color="#F87171" stop-opacity="1"></stop></linearGradient></defs>
+<path class="hh" d="M36 172 C 46 142, 66 128, 88 100 S 150 104, 176 136 S 222 84, 240 48"></path>
+<path class="hg" stroke="url(#k54g2)" d="M36 172 C 46 142, 66 128, 88 100 S 150 104, 176 136 S 222 84, 240 48"></path>
+</svg>
+<span class="knot" style="left: 36px; top: 172px; opacity: .55"></span>
+<span class="knot" style="left: 88px; top: 100px; opacity: .75"></span>
+<span class="knot" style="left: 176px; top: 136px"></span>
+<div class="pin spot sm mina" style="left: 240px; top: 48px"><span class="av">MO</span></div>
+</div>
+<div class="cp"><b>Repos</b><span class="kcap"><code>progress: nil</code>. Le chemin entier, pas de tête de lecture. Les nœuds sont là, les étiquettes sont au choix de l'hôte.</span></div>
+</div>
+
+<div class="kcell kc sang">
+<div class="mp" style="height: 210px">[[map]]
+<svg class="tr" aria-hidden="true">
+<defs><linearGradient id="k54g3" gradientUnits="userSpaceOnUse" x1="36" y1="172" x2="240" y2="48"><stop offset="0" stop-color="#F87171" stop-opacity=".12"></stop><stop offset=".4" stop-color="#F87171" stop-opacity=".45"></stop><stop offset="1" stop-color="#F87171" stop-opacity="1"></stop></linearGradient></defs>
+<path class="hh" d="M36 172 C 46 142, 66 128, 88 100 S 150 104, 176 136 S 222 84, 240 48"></path>
+<path class="hg" stroke="url(#k54g3)" pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="55" d="M36 172 C 46 142, 66 128, 88 100 S 150 104, 176 136 S 222 84, 240 48"></path>
+</svg>
+<span class="knot" style="left: 36px; top: 172px; opacity: .55"></span>
+<span class="knot" style="left: 88px; top: 100px; opacity: .75"></span>
+<span class="knot" style="left: 176px; top: 136px; opacity: .3"></span>
+<span class="hd" style="offset-path: path('M36 172 C 46 142, 66 128, 88 100 S 150 104, 176 136 S 222 84, 240 48'); offset-distance: 45%"></span>
+<span class="stop glass now" style="left: 150px; top: 76px"><b>13:48</b></span>
+<div class="spot sm mina" style="left: 240px; top: 48px; opacity: .45"><span class="av">MO</span></div>
+</div>
+<div class="cp"><b>Relecture</b><span class="kcap"><code>progress: 0.45</code>. Le trait s'arrête à la tête, le halo montre la suite, les nœuds à venir sont à 30 %.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<svg class="tr old" aria-hidden="true"><path class="u" d="M48 166 C 84 96, 160 150, 216 72"></path><path class="t" d="M48 166 C 84 96, 160 150, 216 72"></path></svg>
+<div class="spot old" style="left: 226px; top: 60px"><span class="av">LM</span></div>
+<div class="pin spot own me" style="left: 48px; top: 166px"><span class="av">AN</span></div>
+<span class="glass mid" style="left: 160px; top: 172px; color: var(--ink2)"><span style="color: var(--ink3)">[[ic:clock-counter-clockwise s]]</span><span>il y a 12 min</span></span>
+</div>
+<div class="cp"><b>Périmé</b><span class="kcap"><code>isStale</code>. Désaturé, à 60 %, immobile. L'âge est dit en mots par l'étiquette, jamais par la couleur seule.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<svg class="tr" aria-hidden="true"><path class="u" d="M48 166 C 84 96, 160 150, 216 72"></path><path class="t fix" d="M48 166 C 84 96, 160 150, 216 72"></path></svg>
+<div class="spot" style="left: 226px; top: 60px"><span class="av">LM</span></div>
+<div class="spot own me" style="left: 48px; top: 166px"><span class="av">AN</span></div>
+<span class="glass mid" style="left: 160px; top: 172px"><span>[[ic:person-simple-walk s]]</span><span>2,4 km · 30 min à pied</span></span>
+</div>
+<div class="cp"><b>Mouvement réduit</b><span class="kcap">Le trait est fixe : mêmes points, aucun défilement. Le sens reste lisible par l'étiquette et par l'ordre de lecture.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mx mp lmap" data-theme="light" style="height: 210px; --accent: #0F766E; --accent-ink: #0F766E">
+<svg class="tr" aria-hidden="true"><path class="u" style="stroke-opacity: .7" d="M48 166 C 84 96, 160 150, 216 72"></path><path class="t" style="stroke: #7FE3DC" d="M48 166 C 84 96, 160 150, 216 72"></path></svg>
+<div class="spot" style="left: 226px; top: 60px"><span class="av" style="border-color: #fff; color: #fff">LM</span></div>
+<div class="spot own" style="left: 48px; top: 166px; --accent: #A855F7"><span class="av">AN</span></div>
+<span class="glass mid" style="left: 160px; top: 172px; background: rgba(255,255,255,.82)"><span>[[ic:person-simple-walk s]]</span><span>2,4 km · 30 min à pied</span></span>
+</div>
+<div class="cp"><b>Sur carte claire</b><span class="kcap"><code>onLightMap</code>. Le liseré passe à 70 % : c'est lui qui tient le trait, la teinte ne change pas. Étiquette sur verre clair.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<svg class="tr" aria-hidden="true"><path class="u" d="M48 166 C 84 96, 160 150, 216 72"></path><path class="t" d="M48 166 C 84 96, 160 150, 216 72"></path></svg>
+<div class="pin spot" style="left: 226px; top: 60px"><span class="av">LM</span></div>
+<div class="pin spot own me" style="left: 48px; top: 166px"><span class="av">AN</span></div>
+</div>
+<div class="cp"><b>Sans étiquette</b><span class="kcap"><code>midCaption: nil</code>. Le trait seul. Aucune place réservée, aucune pilule vide.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<svg class="tr" aria-hidden="true"><path class="u" d="M52 150 C 96 80, 170 130, 222 60"></path><path class="t" d="M52 150 C 96 80, 170 130, 222 60"></path></svg>
+<svg class="tr mina" aria-hidden="true"><path class="u" d="M52 150 C 90 190, 130 150, 168 172"></path><path class="t" d="M52 150 C 90 190, 130 150, 168 172"></path></svg>
+<div class="spot sm" style="left: 232px; top: 50px"><span class="av">LM</span></div>
+<div class="spot sm mina" style="left: 180px; top: 172px"><span class="av">MO</span></div>
+<div class="pin spot own me" style="left: 52px; top: 150px"><span class="av">AN</span></div>
+</div>
+<div class="cp"><b>Deux tracés</b><span class="kcap">Un composant par chemin, chacun à sa teinte. Les liserés ne se mélangent pas : le dernier posé passe devant.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<div class="spot sm" style="left: 150px; top: 96px"><span class="av">LM</span></div>
+<div class="pin spot own me" style="left: 122px; top: 118px"><span class="av">AN</span></div>
+<span class="stop glass" style="left: 50%; top: 150px; transform: translateX(-50%); color: var(--ink2)">Chemin de 18 : rien</span>
+</div>
+<div class="cp"><b>Trop court</b><span class="kcap">Sous 24 de long à l'écran, ou avec moins de deux points : rien n'est dessiné. Sous 96, l'étiquette de milieu est cachée.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">L'un avance, l'autre se relit</h2><p>Deux boucles réelles. À gauche, un itinéraire naît puis défile sans fin. À droite, une journée se redessine au rythme de la tête de lecture.</p></header>
+<div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 24px">
+<div class="kcell kc" style="gap: 14px">
+<div class="mp ra" style="height: 340px">[[map]]
+<svg class="tr who" aria-hidden="true">
+<defs><mask id="k54m" maskUnits="userSpaceOnUse" x="0" y="0" width="900" height="400"><path class="rv" pathLength="100" d="M150 270 C 200 170, 360 260, 505 122"></path></mask></defs>
+<g mask="url(#k54m)"><path class="u" d="M150 270 C 200 170, 360 260, 505 122"></path><path class="t" d="M150 270 C 200 170, 360 260, 505 122"></path></g>
+</svg>
+<div class="blur" style="left: 520px; top: 108px; width: 106px; height: 106px"></div>
+<div class="pin spot arr" style="left: 520px; top: 108px"><span class="av">LM</span><span class="dot on" style="position: absolute; right: -2px; bottom: -2px"></span></div>
+<div class="pin spot own me" style="left: 150px; top: 270px"><span class="av">AN</span></div>
+<span class="glass mid" style="left: 318px; top: 250px"><span>[[ic:person-simple-walk s]]</span><span>2,4 km · 30 min à pied</span></span>
+<span class="glass trip" style="left: 14px; top: 14px"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+</div>
+<div class="phs" aria-hidden="true">
+<span><span class="step">1</span>Tracé</span>
+<span><span class="step">2</span>Arrivée</span>
+<span><span class="step">3</span>Défilement</span>
+<span><span class="step">4</span>Sortie</span>
+</div>
+<div class="cp"><b>route · boucle de 6 s</b><span class="kcap">Le trait se déroule du départ vers l'arrivée, l'étiquette monte à sa place, puis les points avancent tant que le tracé est à l'écran. Aucun haptique : rien n'a été touché.</span></div>
+</div>
+<div class="kcell kc sang" style="gap: 14px">
+<div class="mp rb" style="height: 340px">[[map]]
+<svg class="tr" aria-hidden="true">
+<defs><linearGradient id="k54g4" gradientUnits="userSpaceOnUse" x1="70" y1="290" x2="450" y2="70"><stop offset="0" stop-color="#F87171" stop-opacity=".12"></stop><stop offset=".4" stop-color="#F87171" stop-opacity=".45"></stop><stop offset="1" stop-color="#F87171" stop-opacity="1"></stop></linearGradient></defs>
+<path class="hh" d="M70 290 C 90 230, 130 210, 170 160 S 290 160, 340 225 S 420 130, 450 70"></path>
+<path class="hg" stroke="url(#k54g4)" pathLength="100" d="M70 290 C 90 230, 130 210, 170 160 S 290 160, 340 225 S 420 130, 450 70"></path>
+</svg>
+<span class="knot" style="left: 70px; top: 290px; opacity: .55"></span>
+<span class="knot k2" style="left: 170px; top: 160px"></span>
+<span class="knot k3" style="left: 340px; top: 225px"></span>
+<span class="stop glass" style="left: 88px; top: 292px"><b>09:10</b>Maison</span>
+<span class="stop glass s2" style="left: 96px; top: 108px"><b>12:30</b>Marché</span>
+<span class="stop glass s3" style="left: 222px; top: 246px"><b>15:05</b>Studio</span>
+<span class="stop glass now s4" style="left: 318px; top: 22px"><b>17:42</b>Ici</span>
+<div class="spot mina" style="left: 450px; top: 70px"><span class="av">MO</span></div>
+<span class="hd" style="offset-path: path('M70 290 C 90 230, 130 210, 170 160 S 290 160, 340 225 S 420 130, 450 70')"></span>
+</div>
+<div class="rbs" style="display: flex; align-items: center; gap: 16px; padding: 0 8px">
+<button class="ib g" aria-label="Mettre la relecture en pause" style="color: var(--ink)">[[ic:pause-fill]]</button>
+<span class="mono" style="color: var(--ink2)">09:10</span>
+<span class="scr" aria-hidden="true"><em style="left: 27.7%"></em><em style="left: 62.3%"></em><i></i><s><u></u></s></span>
+<span class="mono" style="color: var(--accent-ink)">17:42</span>
+</div>
+<div class="cp" style="margin-top: auto"><b>history · relecture, boucle de 6 s</b><span class="kcap">Le trait suit <code>progress</code>, sans retard. Chaque nœud franchi s'allume et son étiquette monte. Le bouton (K02) et la jauge (K42) sont à l'hôte : ce sont eux qui donnent la position.</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="mp" style="height: 170px">[[map]]
+<svg class="tr" aria-hidden="true"><path class="u" pathLength="100" stroke-dasharray="29 100" d="M60 136 C 130 50, 220 130, 318 56"></path><path class="t fix" style="stroke-dasharray: 1 9 1 9 1 9 1 9 1 9 1 9 1 9 1 9 1 9 1 400" d="M60 136 C 130 50, 220 130, 318 56"></path></svg>
+<div class="spot" style="left: 330px; top: 48px; opacity: .55"><span class="av">LM</span></div>
+<div class="pin spot own me" style="left: 60px; top: 136px"><span class="av">AN</span></div>
+</div>
+<div class="cp"><b style="display: flex; align-items: center; gap: 10px"><span class="step">1</span>Il se déroule</b><span class="kcap">Liseré et points ensemble, du premier point au dernier, à vitesse constante. Jamais par les deux bouts.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 170px">[[map]]
+<svg class="tr" aria-hidden="true"><path class="u" d="M60 136 C 130 50, 220 130, 318 56"></path><path class="t" d="M60 136 C 130 50, 220 130, 318 56"></path></svg>
+<div class="pin spot" style="left: 330px; top: 48px"><span class="av">LM</span></div>
+<div class="pin spot own me" style="left: 60px; top: 136px"><span class="av">AN</span></div>
+<span class="glass mid" style="left: 206px; top: 132px"><span>[[ic:person-simple-walk s]]</span><span>2,4 km · 30 min à pied</span></span>
+</div>
+<div class="cp"><b style="display: flex; align-items: center; gap: 10px"><span class="step">2</span>Il avance</b><span class="kcap">Les points glissent de 20 toutes les 1,4 s. Seul le décalage du pointillé bouge : ni le chemin ni la carte ne sont repeints.</span></div>
+</div>
+<div class="kcell kc sang">
+<div class="mp" style="height: 170px">[[map]]
+<svg class="tr" aria-hidden="true">
+<defs><linearGradient id="k54g5" gradientUnits="userSpaceOnUse" x1="50" y1="140" x2="330" y2="40"><stop offset="0" stop-color="#F87171" stop-opacity=".12"></stop><stop offset=".4" stop-color="#F87171" stop-opacity=".45"></stop><stop offset="1" stop-color="#F87171" stop-opacity="1"></stop></linearGradient></defs>
+<path class="hh" d="M50 140 C 80 90, 120 110, 150 80 S 230 80, 260 118 S 310 80, 330 40"></path>
+<path class="hg" stroke="url(#k54g5)" pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="42" d="M50 140 C 80 90, 120 110, 150 80 S 230 80, 260 118 S 310 80, 330 40"></path>
+</svg>
+<span class="knot" style="left: 50px; top: 140px; opacity: .55"></span>
+<span class="knot" style="left: 150px; top: 80px; opacity: .75"></span>
+<span class="knot" style="left: 260px; top: 118px; opacity: .3"></span>
+<span class="hd" style="offset-path: path('M50 140 C 80 90, 120 110, 150 80 S 230 80, 260 118 S 310 80, 330 40'); offset-distance: 58%"></span>
+</div>
+<div class="cp"><b style="display: flex; align-items: center; gap: 10px"><span class="step">3</span>Il se relit</b><span class="kcap">La tête et le bout du trait sont au même point, à chaque image. Vers l'avant comme vers l'arrière : le doigt peut revenir.</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">Défilement</b> · 1,4 s par cycle, linéaire, en boucle · <code>motion.travel</code> · tant que <code>route</code> ou <code>link</code> est à l'écran · aucun haptique · réduit : trait fixe, mêmes points</div>
+<div class="spec"><b style="color: var(--ink)">Déroulé</b> · 1,3 s pour un chemin entier, vitesse constante · <code>motion.travel</code> · à l'apparition du tracé · aucun haptique · réduit : fondu de 150 ms</div>
+<div class="spec"><b style="color: var(--ink)">Étiquettes</b> · 420 ms · ressort <code>motion.rise</code> (de 6 plus bas, 0,86 vers 1) · à la fin du déroulé, ou au nœud franchi · aucun haptique · réduit : posées d'un coup</div>
+<div class="spec"><b style="color: var(--ink)">Relecture</b> · aucune durée propre : le trait suit <code>progress</code> à l'image près · <code>motion.travel</code> · à chaque changement de <code>progress</code> · aucun haptique · réduit : inchangé, c'est le doigt qui mène</div>
+<div class="spec"><b style="color: var(--ink)">Nœud franchi</b> · 240 ms · ressort <code>motion.pulse</code> (pic 1,35) · quand <code>progress</code> passe sa fraction · un tic léger, seulement si un doigt tient la jauge · réduit : opacité posée, tic gardé</div>
+<div class="spec"><b style="color: var(--ink)">Périmé</b> · 300 ms · fondu <code>motion.collapse</code> vers gris et 60 % · au changement de <code>isStale</code> · aucun haptique · réduit : posé d'un coup</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Que des valeurs opaques. Aucune personne, aucun trajet, aucune coordonnée géographique, aucun fournisseur de carte dans une signature : le tracé reçoit des points d'écran et des textes.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<div class="h">Élément</div><div class="h">iOS · MeeshyUI/Kit/MeeshyMapTrace.swift</div><div class="h">Android · me.meeshy.ui.component.kit</div><div class="h">Web · components/kit/meeshy-map-trace.tsx</div>
+<div style="font-weight: 700">Tracé</div><div><code>MeeshyMapTrace(label:points:kind:tint:progress:stops:midLabel:)</code></div><div><code>MeeshyMapTrace(label, points, kind, tint, progress, stops, modifier, midLabel)</code></div><div><code>&lt;MeeshyMapTrace label points kind tint progress stops midLabel /&gt;</code></div>
+<div style="font-weight: 700">Genre <span style="font-weight: 400; color: var(--ink2)">(enum)</span></div><div><code>MeeshyMapTraceKind { route, link, history }</code></div><div><code>enum class</code> identique</div><div><code>'route' | 'link' | 'history'</code></div>
+<div style="font-weight: 700">Points</div><div><code>[CGPoint]</code>, dans le repère de la vue</div><div><code>List&lt;Offset&gt;</code>, en pixels du nœud</div><div><code>readonly { x, y }[]</code>, en <code>px</code> du conteneur</div>
+<div style="font-weight: 700">Arrêt</div><div><code>MeeshyMapTraceStop(id:pointIndex:value:title:)</code></div><div><code>data class</code> identique, <code>@Immutable</code></div><div><code>{ id, pointIndex, value, title }</code></div>
+<div style="font-weight: 700">Tailles <span style="font-weight: 400; color: var(--ink2)">(enum)</span></div><div><code>MeeshyMapTraceWeight { regular, large }</code> : 4 sur 7, 4,5 sur 8. <code>link</code> 2,5 et <code>history</code> 7 sur 16, fixes</div><div>idem, en <code>dp</code></div><div>idem, en <code>px</code> ; <code>vector-effect: non-scaling-stroke</code></div>
+<div style="font-weight: 700">Emplacements <span style="font-weight: 400; color: var(--ink2)">(slot)</span></div><div><code>@ViewBuilder midLabel</code>, <code>stopLabel: (Stop) -> View</code></div><div><code>midLabel: @Composable () -> Unit</code>, <code>stopLabel</code></div><div><code>midLabel</code>, <code>stopLabel: (stop) => ComponentChildren</code></div>
+<div style="font-weight: 700">Recette en valeurs</div><div><code>MeeshyMapTraceRecipe.resolve(kind:weight:tint:progress:isStale:onLightMap:reduceMotion:)</code></div><div>idem</div><div><code>meeshyMapTraceRecipe(…)</code> : classes et propriétés <code>--kit-trace-*</code></div>
+<div style="font-weight: 700">Loi pure du chemin</div><div><code>MeeshyMapTracePath.resolve(points:kind:)</code> : chemin lissé, longueur, fractions des arrêts</div><div>idem</div><div><code>meeshyMapTracePath(…)</code> : l'attribut <code>d</code> et les fractions</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>label: String</code><span>Obligatoire, non vide. Ce que dit le lecteur d'écran : « Trajet vers Léo, 2,4 km, 30 minutes à pied ». L'hôte le compose.</span></div>
+<div class="par"><code>points</code><span>Deux au moins, dans l'ordre du sens. Déjà projetés par l'hôte. À chaque déplacement de carte, l'hôte repasse la liste.</span></div>
+<div class="par"><code>kind = route</code><span><code>link</code> ne lit que le premier et le dernier point. <code>history</code> ne défile jamais.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte du trait, du halo, des nœuds et de la tête. Nulle : la couleur de marque du thème.</span></div>
+<div class="par"><code>progress: Double? = nil</code><span>De 0 à 1, borné. Nul : chemin entier, pas de tête. Donné : trait jusqu'à cette fraction et tête dessus.</span></div>
+<div class="par"><code>stops = []</code><span><code>pointIndex</code> désigne un des points reçus. <code>value</code> et <code>title</code> sont des textes opaques : « 12:30 », « Marché ».</span></div>
+<div class="par"><code>midCaption: String? = nil</code><span>Raccourci de <code>midLabel</code> : un K41 de verre avec ce texte. <code>midSystemImage</code> (Android <code>midIcon</code>, web <code>midGlyph</code>) lui ajoute un glyphe.</span></div>
+<div class="par"><code>isStale: Bool = false</code><span>Désaturé, 60 %, immobile. La tête de lecture reste si <code>progress</code> est donné.</span></div>
+<div class="par"><code>isAnimated: Bool = true</code><span>Faux : trait fixe. Le réglage « réduire les animations » du système l'emporte toujours.</span></div>
+<div class="par"><code>smoothing: Bool = true</code><span>Courbe lissée passant par chaque point. Faux : segments droits. Sans effet sur <code>link</code>.</span></div>
+<div class="par"><code>onLightMap: Bool = false</code><span>Liseré à 70 % au lieu de 55 %, étiquettes sur verre clair. L'hôte sait quel fond il a posé.</span></div>
+<div class="par"><code>onStopPress: ((id) -> Void)? = nil</code><span>Nul : les étiquettes sont du texte. Donné : chacune est un bouton nommé « 12:30, Marché ».</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Un chemin dessiné, pas une couche de carte</h2><p>Sur les trois plateformes, le tracé est une vue posée par-dessus la carte, dans le repère de l'écran. C'est ce qui lui donne le même dessin partout, et le défilement que les couches de carte n'ont pas.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Un <code>Path</code> SwiftUI et <code>StrokeStyle(lineWidth:lineCap:dash:dashPhase:)</code>. Le défilement anime <code>dashPhase</code> dans un <code>TimelineView(.animation)</code>, à l'arrêt hors écran.</li>
+<li>Historique : <code>.trim(from: 0, to: progress)</code> et un <code>LinearGradient</code> en trait. La tête se place par <code>Path.trimmedPath</code> et son point courant.</li>
+<li>L'hôte projette avec <code>MapReader</code> et <code>MapProxy.convert(_:to:)</code>, puis pose le tracé en <code>overlay</code> de la carte.</li>
+<li>Étiquettes : K41 sur <code>glassEffect</code> par K01. Tic du nœud : <code>sensoryFeedback(.selection)</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 et <code>MKMapView</code> : l'hôte convertit par <code>convert(_:toPointTo:)</code> et repasse les points à <code>regionDidChange</code>. Pas de <code>MKPolylineRenderer</code> : son pointillé ne défile pas et son dessin diffère des deux autres plateformes.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Un <code>Canvas</code> : <code>drawPath</code> avec <code>PathEffect.dashPathEffect(intervals, phase)</code>. La phase vient de <code>rememberInfiniteTransition</code>, lue en phase de dessin.</li>
+<li>Historique : <code>PathMeasure.getSegment(0f, length * progress, …)</code> et <code>Brush.linearGradient</code>. La tête par <code>PathMeasure.getPosition</code>.</li>
+<li>Posé dans la <code>Box</code> de <code>TileMapView</code>, au-dessus des tuiles et sous les marqueurs. L'hôte projette avec la même loi que ses marqueurs.</li>
+<li>Pas de verre : étiquettes sur surface tonale, par K01. Tic : <code>HapticFeedbackType.TextHandleMove</code> par le site unique.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Animations coupées dans le système : phase figée à 0, déroulé remplacé par un fondu. Sous API 28, le dégradé en trait reste exact ; rien d'autre à replier.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Un <code>svg</code> en position absolue, <code>pointer-events: none</code>. Le trait est un <code>path</code> : <code>stroke-dasharray</code> et <code>stroke-dashoffset</code> animé par une <code>@keyframes</code>.</li>
+<li>Historique : <code>pathLength="1"</code> et <code>stroke-dashoffset: calc(1 - var(--kit-trace-progress))</code>. Aucun état, aucun minuteur.</li>
+<li>Tête : <code>offset-path: path(…)</code> et <code>offset-distance</code>, lus sur la même propriété. L'hôte projette avec <code>screenPoint</code> de <code>lib/map/slippy.ts</code>.</li>
+<li>Étiquettes : K41 sur <code>backdrop-filter</code> par K01. Arrêts touchables : de vrais <code>button</code>, hors du <code>svg</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>offset-path</code> : la tête est placée par <code>getPointAtLength</code>. Sans <code>color-mix</code> : teintes déjà calculées par la recette. Sous <code>prefers-reduced-motion</code> : aucune boucle.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Aucune carte du dépôt ne trace un chemin</h2><p>Relevé dans le dépôt le 16 novembre 2026. <code>MapPolyline</code> et <code>MKPolyline</code> : zéro occurrence dans <code>apps/ios</code> et <code>packages/MeeshySDK</code>. <code>Polyline(</code> : zéro dans <code>apps/android</code>. Aucun <code>polyline</code> ni pointillé posé sur une carte dans <code>apps/web/src</code>.</p></header>
+<div class="rule">
+<span style="display: inline-flex; color: var(--warn)">[[ic:warning-circle l]]</span>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<b class="d" style="font-size: 20px">Aucun jumeau : le composant est à créer, sur trois socles qui existent</b>
+<p style="font-size: 14.5px; line-height: 1.5; color: var(--ink2)">Les trois cartes posent des épingles et des disques, jamais un trait. Ce qui existe : la projection de chaque plateforme, qui reste à l'hôte, et deux dessins voisins dont la technique passe dans la recette. L'historique de position n'existe que côté serveur.</p>
+</div>
+</div>
+<div class="card" style="overflow: hidden">
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Contacts/SharedLocationsMapSection.swift</span><p><span class="be no">À créer</span><code>MKMapView</code>, <code>MKCircle</code> et son <code>MKCircleRenderer</code> pour seule surcouche. Aucun tracé. Cet écran adopte K54 en premier, avec K36.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveMap.swift</span><p>La carte SwiftUI du SDK, iOS 16 comme 17 et plus. C'est sur elle que l'hôte pose le tracé en surcouche. Elle n'entre pas dans K54.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/location/TileMapView.kt</span><p><span class="be no">À créer</span><code>markers</code> et l'emplacement <code>marker</code>, rien entre les tuiles et eux. Il lui faut un emplacement de surcouche : c'est l'affaire du lot d'intégration.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/river/RiverLaneCanvas.kt</span><p>Le dessin le plus proche : des connecteurs en <code>PathEffect.dashPathEffect</code>, sautés hors écran. Sa technique passe dans la recette ; le fichier reste où il est.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/contacts/src/main/kotlin/me/meeshy/app/contacts/circles/SharedLocationsMapSection.kt</span><p>La carte des positions partagées : épingles et disques en <code>drawBehind</code>. Premier écran Android à recevoir le tracé.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/shared-locations-map-view.tsx</span><p><span class="be no">À créer</span>Épingles en position absolue, aucun <code>svg</code> de chemin. Le tracé s'y pose comme une couche de plus, sous les épingles.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/lib/map/slippy.ts</span><p><code>screenPoint(point, view)</code> : la projection. Elle reste à l'hôte, qui lui passe ses coordonnées et remet des points d'écran à K54.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/game-constellation.tsx</span><p>Un trait qui se remplit par <code>pathLength</code> et <code>strokeDasharray</code>. C'est la technique du dessin progressif de <code>history</code>. <span class="mono">bubble-location.test.tsx</span> est le seul fichier <code>bubble-location*</code> : un témoin, sans tracé.</p></div>
+<div class="twin"><span class="pf">Serveur</span><span class="mono">services/gateway/src/routes/me/blood-location.ts</span><p>L'historique de 30 jours existe ici seulement. Aucun client ne le dessine : <code>history</code> n'a pas de jumeau, sur aucune plateforme.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Partout où deux lieux ont quelque chose à se dire</h2><p>Le genre et les textes changent, le tracé non. K36 reste l'épingle d'une personne ; K54 est ce qui les relie.</p></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="bub">
+<div class="mp" style="height: 150px; border-radius: 18px 18px 14px 14px">[[map]]
+<svg class="tr" aria-hidden="true"><line class="lk" x1="56" y1="108" x2="206" y2="52"></line></svg>
+<div class="spot sm" style="left: 206px; top: 52px"><span class="av">LM</span></div>
+<div class="spot own me" style="left: 56px; top: 108px"><span class="av">AN</span></div>
+<span class="dist mono" style="left: 124px; top: 96px">2,4 km</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 13.5px; font-weight: 600"><span style="display: flex; color: var(--ink2)">[[ic:map-pin s]]</span><span>Alfama · encore 42 min</span></div>
+</div>
+<div class="cp" style="margin-top: auto"><b>Conversation</b><span class="kcap">Position partagée dans une bulle : <code>link</code> entre lui et moi, avec la distance.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 196px">[[map]]
+<svg class="tr" aria-hidden="true"><path class="u" d="M48 160 C 80 90, 150 150, 214 66"></path><path class="t" d="M48 160 C 80 90, 150 150, 214 66"></path></svg>
+<div class="spot sm me" style="left: 224px; top: 54px"><span class="av">[[ic:map-pin]]</span></div>
+<div class="pin spot sm" style="left: 48px; top: 160px"><span class="av">LM</span></div>
+<span class="glass mid" style="left: 164px; top: 152px"><span>[[ic:navigation-arrow s]]</span><span>Léo arrive · 8 min</span></span>
+</div>
+<div class="cp" style="margin-top: auto"><b>Rendez-vous</b><span class="kcap">« J'arrive » : <code>route</code> de la personne vers le lieu, l'étiquette dit le temps restant.</span></div>
+</div>
+<div class="kcell kc me">
+<div class="mp" style="height: 196px">[[map]]
+<svg class="tr" aria-hidden="true">
+<defs><linearGradient id="k54g6" gradientUnits="userSpaceOnUse" x1="40" y1="160" x2="236" y2="48"><stop offset="0" stop-color="#A855F7" stop-opacity=".12"></stop><stop offset=".4" stop-color="#A855F7" stop-opacity=".45"></stop><stop offset="1" stop-color="#A855F7" stop-opacity="1"></stop></linearGradient></defs>
+<path class="hh" d="M40 160 C 60 110, 100 130, 124 96 S 180 110, 196 84 S 224 70, 236 48"></path>
+<path class="hg" stroke="url(#k54g6)" d="M40 160 C 60 110, 100 130, 124 96 S 180 110, 196 84 S 224 70, 236 48"></path>
+</svg>
+<span class="knot" style="left: 40px; top: 160px; opacity: .55"></span>
+<span class="knot" style="left: 124px; top: 96px; opacity: .75"></span>
+<span class="knot" style="left: 236px; top: 48px"></span>
+<span class="stop glass now" style="left: 136px; top: 128px"><b>3,1 km</b>Alfama</span>
+</div>
+<div class="cp" style="margin-top: auto"><b>Stories</b><span class="kcap">Carte d'une story géolocalisée : <code>history</code> de la balade, sans personne au bout.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 196px; --accent: #FBBF24; --accent-ink: #FCD34D">[[map]]
+<svg class="tr" aria-hidden="true">
+<defs><linearGradient id="k54g7" gradientUnits="userSpaceOnUse" x1="44" y1="150" x2="232" y2="60"><stop offset="0" stop-color="#FBBF24" stop-opacity=".12"></stop><stop offset=".4" stop-color="#FBBF24" stop-opacity=".45"></stop><stop offset="1" stop-color="#FBBF24" stop-opacity="1"></stop></linearGradient></defs>
+<path class="hh" d="M44 150 C 80 170, 110 90, 150 110 S 200 100, 232 60"></path>
+<path class="hg" stroke="url(#k54g7)" pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="36" d="M44 150 C 80 170, 110 90, 150 110 S 200 100, 232 60"></path>
+</svg>
+<span class="hd" style="offset-path: path('M44 150 C 80 170, 110 90, 150 110 S 200 100, 232 60'); offset-distance: 64%"></span>
+<div class="spot own me" style="left: 44px; top: 150px"><span class="av">AN</span></div>
+<div class="spot sm leo" style="left: 232px; top: 60px; opacity: .5"><span class="av">LM</span></div>
+<span class="glass mid" style="left: 150px; top: 160px"><span>[[ic:hand-waving s]]</span><span>Bring en chemin</span></span>
+</div>
+<div class="cp" style="margin-top: auto"><b>Bring</b><span class="kcap">Le parcours d'un Bring : <code>history</code> et <code>progress</code>, la tête dit où il en est.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque genre × taille × <code>isStale</code> × <code>onLightMap</code> rend l'épaisseur, le liseré, le pointillé, le halo et les opacités du tableau. Vecteurs <code>K54-MeeshyMapTrace.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Chemin et position.</b> Mêmes points, même chemin sur les trois plateformes, à 0,5 près. Moins de deux points, ou moins de 24 de long : rien. <code>link</code> : une droite du premier au dernier point. <code>progress</code> borné entre 0 et 1 : le bout du trait et la tête sont au même point, un arrêt est « franchi » dès que sa fraction est atteinte.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Sens.</b> Le défilement va du premier point vers le dernier, y compris en RTL : une carte ne se reflète pas. Seules les étiquettes inversent leur ordre interne (titre, puis valeur).</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Le tracé est une image nommée par <code>label</code>. Avec <code>progress</code>, sa valeur est celle de l'arrêt courant. Avec <code>onStopPress</code>, chaque étiquette est un bouton. Trait, halo et nœuds sont muets.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Contraste et cible.</b> Trait sur liseré : 3:1 au moins sur le fond commun et sur carte claire. Textes d'étiquette : 4,5:1. Étiquette touchable : 44 pt, 48 dp, 44 px de haut, sans changer son dessin.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit.</b> Aucune boucle : trait fixe, déroulé remplacé par un fondu. La relecture au doigt reste. <code>isStale</code> et <code>isAnimated: false</code> donnent le même trait immobile.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et source.</b> Le défilement ne repeint ni la carte ni les épingles. Garde de source : aucun type du domaine, aucune coordonnée géographique, aucun import de carte, aucun verre dessiné dans les fichiers de K54.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le tracé n'est jamais le seul chemin vers l'information : la distance, la durée et les arrêts sont aussi dans la feuille de l'hôte, en texte. Le lecteur d'écran lit le tracé une fois, puis ses arrêts dans l'ordre du temps. Les étiquettes ne grandissent pas au-delà de 150 %.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Seuls le décalage du pointillé, la fraction dessinée et l'opacité s'animent. Jamais le chemin, le flou ni l'ombre. Un chemin de 500 points pendant un déplacement de carte : aucune image perdue. À l'arrêt hors écran. Rien de retenu une fois la carte quittée.</span></p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · les mesures.</b> Le canevas dessine le pointillé en 1 sur 9 (iOS), 2 sur 9 (Android, web) et 1 sur 10 (iPad). La fiche retient 1 sur 9, et 1 sur 10 en <code>large</code>.</span></div>
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · la teinte.</b> L'itinéraire prend l'accent clair de la personne, l'historique le rouge du cercle Sang, le lien l'encre claire. Une seule règle doit entrer dans les écrans.</span></div>
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · le numéro.</b> K54 est proposé. Il se confirme à l'ouverture du lot, avec son issue et son milestone, après K36 et K41 dont il dépend.</span></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8664}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

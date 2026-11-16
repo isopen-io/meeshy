@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K44 MeeshySectionHeader</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;flex-direction:column;align-items:stretch;justify-content:center;flex:1;min-height:120px;gap:14px}
+.hd{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px}
+.tl{display:inline-flex;align-items:baseline;gap:8px;min-width:0}
+.lk{display:inline-flex;align-items:center;gap:3px;min-height:44px;font-size:13.5px;font-weight:700;color:var(--accent-ink);white-space:nowrap}
+.mx a.lk{color:var(--accent-ink)}
+.live{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;animation:mxPulse 2.2s ease-out infinite}
+.num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--brand-soft);color:#0B0B12;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:14px;flex:none}
+.num.todo{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink3);color:var(--ink3)}
+.num.done{background:var(--ok)}
+.mx kbd{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;border-radius:7px;background:var(--field);border:1px solid var(--line);border-bottom-width:2.5px;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:700;line-height:1;color:var(--ink2);flex:none}
+.mx .btn.p kbd{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.34);color:#fff}
+.med{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;flex:none;background:color-mix(in oklab,var(--c,var(--accent)) 22%,transparent);color:var(--ci,var(--accent-ink))}
+.br{display:flex;align-items:center;gap:12px}
+.br>i{flex:1;height:1px;background:var(--line)}
+.col{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:999px;background:rgba(19,17,28,.62);border:1px solid var(--line);-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6)}
+.tbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;background:var(--deep);color:var(--ink2);flex:none}
+.gh{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:20px;background:var(--raised);border:1px solid var(--line)}
+.gh>span{display:block;height:9px;border-radius:5px;background:var(--field)}
+.gr{display:flex;align-items:center;gap:10px}
+.gr>i{display:block;width:30px;height:30px;border-radius:50%;background:var(--field);flex:none}
+.gr>span{display:block;flex:1;height:9px;border-radius:5px;background:var(--field)}
+.pr{background:color-mix(in oklab,var(--ink) 9%,transparent);border-radius:14px;box-shadow:0 0 0 6px color-mix(in oklab,var(--ink) 9%,transparent);transform:scale(.985)}
+.fo{border-radius:12px;outline:2px solid var(--ink);outline-offset:4px}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.stp{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.zone{position:absolute;border:1.5px dashed var(--warn);border-radius:14px;pointer-events:none}
+.mv-line{position:relative;border-radius:14px;animation:shPress 8s ease-out infinite}
+.mv-chev{display:inline-flex;animation:shChev 8s cubic-bezier(.3,1.4,.4,1) infinite}
+.mv-body{overflow:hidden;animation:shBody 8s cubic-bezier(.3,1.15,.4,1) infinite}
+.mv-cnt{animation:shCnt 8s ease-in-out infinite}
+.mv-tap{position:absolute;right:6px;top:50%;width:32px;height:32px;margin-top:-16px;border-radius:50%;border:2px solid var(--ink);opacity:0;pointer-events:none;animation:shTap 8s ease-out infinite}
+.mv-num{position:relative;animation:shNum 8s cubic-bezier(.3,1.5,.5,1) infinite}
+.mv-num>*{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.mv-dg{animation:shDg 8s ease-in-out infinite}
+.mv-ck{animation:shCk 8s cubic-bezier(.3,1.5,.5,1) infinite}
+.mv-sum{animation:shCk 8s ease-in-out infinite}
+@keyframes shTap{0%,14%{opacity:0;transform:scale(.5)}17%{opacity:.9;transform:scale(.8)}26%{opacity:0;transform:scale(1.7)}27%,58%{opacity:0;transform:scale(.5)}61%{opacity:.9;transform:scale(.8)}70%,100%{opacity:0;transform:scale(1.7)}}
+@keyframes shPress{0%,15%{background:transparent;transform:none}18%{background:color-mix(in oklab,var(--ink) 9%,transparent);transform:scale(.985)}24%,59%{background:transparent;transform:none}62%{background:color-mix(in oklab,var(--ink) 9%,transparent);transform:scale(.985)}68%,100%{background:transparent;transform:none}}
+@keyframes shChev{0%,18%{transform:rotate(0)}27%,62%{transform:rotate(180deg)}71%,100%{transform:rotate(360deg)}}
+@keyframes shBody{0%,18%{max-height:150px;opacity:1}28%,62%{max-height:0;opacity:0}73%,100%{max-height:150px;opacity:1}}
+@keyframes shCnt{0%,22%{opacity:0;transform:scale(.6)}29%,61%{opacity:1;transform:none}66%,100%{opacity:0;transform:scale(.6)}}
+@keyframes shNum{0%,40%{background:var(--brand-soft);transform:none}44%{transform:scale(.86)}50%,90%{background:var(--ok);transform:none}96%,100%{background:var(--brand-soft);transform:none}}
+@keyframes shDg{0%,42%{opacity:1}46%,92%{opacity:0}97%,100%{opacity:1}}
+@keyframes shCk{0%,44%{opacity:0;transform:scale(.5)}51%,90%{opacity:1;transform:none}95%,100%{opacity:0;transform:scale(.5)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .18; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K44 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshySectionHeader</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Une section s'annonce toujours de la même façon : un titre, ce qu'elle compte, et ce qu'on peut y faire</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">« Mes cercles », « Liens créés · 5 actifs », « Conversations 6 · Tout voir ». Le profil annonce une section soixante fois, et chaque écran recompose la ligne à la main. K44 en fait une seule, en cinq formes, qui sait se replier.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il annonce, il ne contient rien</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>une ligne</b> de 44 de haut au moins : une tête optionnelle, le titre, son compteur accolé, et un seul accessoire de fin.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Se dit <b>titre</b> à l'accessibilité, avec son niveau. Le compteur est lu avec le titre : « Conversations, 6 ».</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Prend <b>cinq formes</b> dans une recette : titre de section, sur-titre de groupe, séparateur, étape numérotée, bandeau de colonne.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Devient <b>repliable</b> sur demande : toute la ligne se touche, le chevron tourne, l'état ouvert ou fermé est dit.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le corps de la section, ni son repli : la surface est à <b>K43</b>, la hauteur qui s'anime à <b>K26</b> <code>motion.collapse</code>, posée par l'hôte.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Ses accessoires : la pastille est <b>K41</b>, l'emblème <b>K45</b>, les puces <b>K04</b>, le bouton libellé <b>K40</b>, le bouton rond <b>K02</b>, la touche <b>K55</b>. Des étapes reliées par une trace : <b>K53</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre du bandeau de colonne : <b>K01</b> <code>MeeshyGlassTone</code>. Le titre d'une feuille basse : <b>K15</b>. L'option qui s'ouvre dans la pilule : <b>K11</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Compter, trier, filtrer, décider si la section existe ou s'ouvre d'abord : <b>l'app</b>. Il reçoit un nombre et un texte.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:text-h-two xl]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : un titre, un nombre, un seul geste de fin</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Le titre dit ce qu'on regarde, le compteur combien, l'accessoire ce qu'on peut y faire. Jamais deux accessoires de fin : s'il en faut deux, le second descend dans le corps. Une section vide n'a pas d'en-tête, sauf si l'en-tête porte l'action qui la remplit.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une ligne, six parties, une cible</h2><p>L'en-tête « Conversations » de la suite « En commun », agrandi 1,8 fois, avec toutes ses parties remplies, puis le séparateur d'un fil. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="padding: 56px 40px 44px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div style="position: relative; width: 648px">
+<div style="zoom: 1.8; width: 360px; display: flex; flex-direction: column; gap: 14px">
+<div class="hd">
+<span style="display: inline-flex; align-items: center; gap: 10px; min-width: 0">
+<span class="med">[[ic:chat-circle s]]</span>
+<span class="tl"><h3 class="d" style="font-size: 22px">Conversations</h3><span class="d" style="font-size: 16px; color: var(--ink3)">6</span></span>
+<span class="live"></span>
+</span>
+<a href="#" class="lk">Tout voir[[ic:caret-right s]]</a>
+</div>
+<div class="gh" style="gap: 12px">
+<div class="gr"><i></i><span></span><span style="flex: none; width: 34px"></span></div>
+<div class="gr"><i></i><span style="flex: none; width: 150px"></span></div>
+</div>
+<div class="br" style="padding: 4px 2px"><i></i><span class="tag">Aujourd'hui</span><i></i></div>
+<div class="gh" style="align-self: flex-start; width: 210px; border-radius: 18px 18px 18px 6px"><span></span><span style="width: 62%"></span></div>
+</div>
+<span class="zone" style="right: -8px; top: 0; width: 178px; height: 79px"></span>
+<span class="kan" style="left: 18px; top: -18px">1</span>
+<span class="kan" style="left: 190px; top: -18px">2</span>
+<span class="kan" style="left: 366px; top: -14px">3</span>
+<span class="kan" style="left: 376px; top: 68px">4</span>
+<span class="kan" style="left: 500px; top: -18px">5</span>
+<span class="kan" style="right: -19px; top: 60px">6</span>
+<span class="kan" style="left: 96px; top: 321px">7</span>
+</div>
+</div>
+<div class="card" style="padding: 26px; align-self: start">
+<div class="lgd">
+<span class="kan">1</span><div><b>Tête</b><span>Optionnelle. Un emblème K45 de 32 (44 dans un bandeau de colonne) ou un numéro d'ordre de 26. Écart de 10 avec le titre. Elle ne se touche pas.</span></div>
+<span class="kan">2</span><div><b>Titre</b><span>Nunito 800, 22 px (19 dans une feuille, 26 en colonne large), encre <code>ink</code>. Une ligne ; trop long, il passe sur deux lignes, jamais tronqué.</span></div>
+<span class="kan">3</span><div><b>Compteur accolé</b><span>Nunito 16 px, encre <code>ink3</code>, sur la ligne de base du titre, écart de 8. Un nombre déjà formaté par l'hôte. Absent à zéro.</span></div>
+<span class="kan">4</span><div><b>Témoin « en direct »</b><span>Optionnel. Point de 8 au jeton <code>ok</code>, centré, écart de 10, pulsé par <code>motion.pulse</code>. Il dit que le contenu arrive tout seul.</span></div>
+<span class="kan">5</span><div><b>Accessoire de fin</b><span>Un seul, au bord de fin : lien à chevron (13,5 px, 700, <code>accent-ink</code>), compteur, pastille, puces, bouton, touche ou chevron de repli.</span></div>
+<span class="kan">6</span><div><b>Zone de toucher</b><span>44 de haut au moins (trait jaune), quelle que soit la taille du texte. Repliable : la zone est la ligne entière.</span></div>
+<span class="kan">7</span><div style="border-bottom: 0; padding-bottom: 0"><b>Filet</b><span>Forme séparateur seulement. 1 px au jeton <code>line</code>, de part et d'autre d'un sur-titre de 11 px en capitales, écart de 12 ; ou au-dessus, en tête.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Cinq formes, huit accessoires, six états</h2><p>Tout est à taille réelle. Les spécimens sont ceux des écrans du profil : mêmes mots, mêmes glyphes, mêmes mesures.</p></header>
+
+<span class="tag">Formes</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="hd" style="align-items: baseline"><h3 class="d" style="font-size: 22px">Mes cercles</h3><button class="lk">2 demandes à répondre</button></div>
+<div class="hd" style="--accent: #4ECDC4; --accent-ink: #7FE3DC"><h3 class="d" style="font-size: 22px; display: inline-flex; align-items: center; gap: 10px">En direct<span class="live"></span></h3><span class="chip" style="color: var(--accent-ink)">[[ic:fire s]]<span>Entre Proches</span></span></div>
+</div>
+<div class="cp"><b>title</b><span class="kcap">Le défaut. Titre de 22, accessoire au bord de fin. Marge de 20 dans la page, 14 jusqu'au corps (Main, Autre-Vitrine).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 6px">
+<div style="display: flex; align-items: center; gap: 8px; min-height: 28px"><span class="tag">Mon lien de profil</span><span class="new">Nouveau</span></div>
+<div class="gh"><span style="width: 58%"></span><span style="width: 34%"></span></div>
+<div class="tag" style="padding: 16px 0 4px">Pas sur la carte</div>
+<div class="gh" style="padding: 10px 14px"><div class="gr"><i style="opacity: .5"></i><span style="flex: none; width: 120px"></span></div></div>
+</div>
+<div class="cp"><b>overline</b><span class="kcap">Sur-titre de groupe : 11 px, 700, capitales, encre <code>ink3</code>. Au-dessus d'un billet ou d'un groupe de rangées (Moi-Liens, Carte-Proches).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 22px">
+<div class="br"><i></i><span class="tag">Branche Communauté</span><i></i></div>
+<div class="br" aria-hidden="true" style="gap: 14px"><i></i><span class="tag" style="color: var(--ink2)">ou</span><i></i></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><hr style="width: 100%; height: 1px; margin: 0; border: 0; background: var(--line)"><span class="tag">2 · Trouvé</span></div>
+</div>
+<div class="cp"><b>divider</b><span class="kcap">Un filet et un libellé : centré entre deux filets, ou en tête sous son filet. Il coupe un flux, il n'ouvre rien (Lien-Suivi-Creer, Sans-Contact).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 6px">
+<div class="hd" style="justify-content: flex-start"><span class="num done">[[ic:check s]]</span><h3 class="d" style="font-size: 19px; color: var(--ink2)">Que veux-tu partager ?</h3><span style="flex: 1"></span><span style="font-size: 13px; color: var(--ink3)">Studio</span></div>
+<div class="hd" style="justify-content: flex-start"><span class="num">2</span><h3 class="d" style="font-size: 19px">Règle ton lien de partage</h3></div>
+<div class="hd" style="justify-content: flex-start"><span class="num todo">3</span><h3 class="d" style="font-size: 19px; color: var(--ink3)">Partage-le</h3></div>
+</div>
+<div class="cp"><b>step</b><span class="kcap">Pastille numérotée de 26 et titre de 19. Fait : coche sur <code>ok</code>, titre atténué, résumé en fin. En cours : aplat de la teinte. À faire : contour seul (Lien-Creer).</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="col"><span class="ib" style="background: color-mix(in oklab, var(--accent) 24%, transparent); color: var(--accent-ink)">[[ic:user-focus-fill]]</span><h3 class="d" style="font-size: 26px">Vitrine</h3><kbd>1</kbd><span style="flex: 1"></span><span class="btn g sm">[[ic:pencil-simple s]]<span>Modifier</span><kbd>E</kbd></span></div>
+<div class="hd" style="padding: 0 4px"><span style="display: inline-flex; align-items: center; gap: 10px; flex: 1; min-width: 0"><span class="ib" style="background: color-mix(in oklab, var(--brand) 26%, transparent); color: var(--ink2)">[[ic:link]]</span><h3 class="d" style="font-size: 28px">Mes liens</h3></span><span class="btn p sm">[[ic:plus s]]<span>Nouveau</span><kbd>N</kbd></span></div>
+</div>
+<div class="cp"><b>column</b><span class="kcap">Bandeau d'une colonne large : emblème de 44, titre de 26 à 28, raccourci, action. En capsule de verre (K01) quand il colle en haut au défilement (Web-Moi, Web-Lien).</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="display: flex; flex-direction: column; gap: 18px; padding: 20px; flex: 1">
+<div class="stage" style="gap: 4px">
+<div class="hd"><span class="tl"><h3 class="d" style="font-size: 22px">Conversations</h3><span class="d" style="font-size: 16px; color: var(--ink3)">6</span></span><a href="#" class="lk">Tout voir[[ic:caret-right s]]</a></div>
+<div class="hd" style="justify-content: flex-start"><span class="num">1</span><h3 class="d" style="font-size: 19px">Que veux-tu suivre ?</h3></div>
+<div class="br" style="padding-top: 8px"><i></i><span class="tag">Aujourd'hui</span><i></i></div>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes jetons. Le lien de fin passe au violet foncé (7,1:1), le compteur à l'indigo atténué (5,6:1).</span></div>
+</div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Accessoires de fin</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><div class="hd"><h3 class="d" style="font-size: 22px">Publications</h3><a href="#" class="lk">Tout voir[[ic:caret-right s]]</a></div></div>
+<div class="cp"><b>Lien à chevron</b><span class="kcap">Mène à la liste entière. Le chevron suit le sens de lecture. Le texte peut être une valeur : « 248 médias ».</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><div class="hd" style="align-items: baseline"><h3 class="d" style="font-size: 22px">Liens créés</h3><span style="font-size: 13px; color: var(--ink3)">5 actifs</span></div></div>
+<div class="cp"><b>Compteur de fin</b><span class="kcap">Un texte inerte, 13 px, <code>ink3</code>, aligné sur la ligne de base. Il qualifie ; le compteur accolé, lui, dénombre.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><div class="hd" style="justify-content: flex-start"><h3 class="d" style="font-size: 22px">Mes adresses</h3><span class="new">Nouveau</span></div></div>
+<div class="cp"><b>Pastille</b><span class="kcap">Une K41, accolée au titre ou en fin : « Nouveau », un délai, un niveau. Inerte, lue après le titre.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><div class="hd"><h3 class="d" style="font-size: 22px">Les clics</h3><span role="group" aria-label="Période" style="display: flex; gap: 6px"><button class="chip" style="min-height: 44px">7 j</button><button class="chip on" aria-pressed="true" style="min-height: 44px">30 j</button></span></div></div>
+<div class="cp"><b>Puces</b><span class="kcap">Une rangée K04 de deux ou trois choix, hauts de 44. Au-delà de trois, elle descend sous l'en-tête.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><div class="hd"><h3 class="d" style="font-size: 22px">Ma position</h3><span class="btn a sm">Partager</span></div></div>
+<div class="cp"><b>Bouton</b><span class="kcap">Un K40 de 44, quand la section a une action à elle. Plein s'il est seul sur l'écran, de verre ou à contour sinon.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><div class="hd"><span style="display: inline-flex; align-items: center; gap: 10px"><h3 class="d" style="font-size: 22px">Liens</h3><kbd>2</kbd></span><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink3)">Créer<kbd>N</kbd></span></div></div>
+<div class="cp"><b>Touche</b><span class="kcap">Une K55, accolée au titre (y aller) ou en fin (y agir). Au pointeur seulement ; jamais dessinée sur un téléphone.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><div class="hd"><h3 class="d" style="font-size: 22px; text-wrap: balance">Ajouter une adresse</h3><span class="ib" style="color: var(--ink2)">[[ic:caret-up]]</span></div></div>
+<div class="cp"><b>Chevron de repli</b><span class="kcap">Vers le haut : ouvert. Il se retourne quand la section se ferme. Vertical : rien à refléter en arabe.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage"><div class="hd"><h3 class="d" style="font-size: 24px">Mes adresses</h3><span class="tbtn">[[ic:plus]]</span></div></div>
+<div class="cp"><b>Bouton rond</b><span class="kcap">Un K02 de 44. Sur Android : carré-arrondi tonal de rayon 14, titre de 24, sans flou (Android-Liens).</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">États</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="hd"><span class="tl"><h3 class="d" style="font-size: 22px">Épinglées</h3><span class="d" style="font-size: 16px; color: var(--ink3)">3</span></span><span class="ib" style="color: var(--ink2)">[[ic:caret-up]]</span></div>
+<div class="gh" style="gap: 12px"><div class="gr"><i></i><span></span></div><div class="gr"><i></i><span style="flex: none; width: 140px"></span></div></div>
+</div>
+<div class="cp"><b>Déplié</b><span class="kcap">Toute la ligne est un bouton, dit « Épinglées, 3, titre, développé ». Le corps appartient à l'hôte.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="hd"><span class="tl"><h3 class="d" style="font-size: 22px">Épinglées</h3><span class="d" style="font-size: 16px; color: var(--ink3)">3</span></span><span style="display: inline-flex; align-items: center; gap: 6px"><span style="display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--brand-fill); color: #fff; font-size: 12px; font-weight: 700">2</span><span class="ib" style="color: var(--ink2); transform: rotate(180deg)">[[ic:caret-up]]</span></span></div>
+<div class="sep" style="margin: 0"></div>
+</div>
+<div class="cp"><b>Replié</b><span class="kcap">Chevron retourné, corps démonté. Une pastille K41 dit ce que le repli cache : ici deux non-lus. Dit « réduit ».</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="hd pr"><span class="tl"><h3 class="d" style="font-size: 22px">Épinglées</h3><span class="d" style="font-size: 16px; color: var(--ink3)">3</span></span><span class="ib" style="color: var(--ink2)">[[ic:caret-up]]</span></div>
+<div class="gh" style="gap: 12px"><div class="gr"><i></i><span></span></div></div>
+</div>
+<div class="cp"><b>Pressé</b><span class="kcap">Repliable seulement : voile à 9 % sur toute la ligne, échelle 0,985, dès le doigt posé. Un en-tête statique ne répond pas.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="hd"><span class="tl"><h3 class="d" style="font-size: 22px">Publications</h3></span><a href="#" class="lk fo" style="min-height: 36px; padding: 0 4px">Tout voir[[ic:caret-right s]]</a></div>
+</div>
+<div class="cp"><b>Focus clavier</b><span class="kcap">Anneau de 2 px à 4 px de l'accessoire, ou de la ligne si elle se replie. Jamais d'anneau au doigt. Le titre seul ne prend pas le focus.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="hd"><span class="tl" style="align-items: center"><h3 class="d" style="font-size: 22px">Amis en commun</h3><span class="sk" style="width: 22px; height: 14px; border-radius: 6px"></span></span></div>
+</div>
+<div class="cp"><b>Compteur en attente</b><span class="kcap">Cache vide : le titre est là tout de suite, le nombre est un squelette de 22 × 14, <code>MeeshySkeleton(.line)</code> de K38. Cache servi : le nombre du cache, sans squelette.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div style="display: flex; flex-direction: column; gap: 2px"><span class="tl"><h3 class="d" style="font-size: 30px; line-height: 1.1">Médias partagés</h3></span><a href="#" class="lk" style="font-size: 18px; align-self: flex-start">248 médias[[ic:caret-right s]]</a></div>
+</div>
+<div class="cp"><b>Très grande police</b><span class="kcap">Quand titre et accessoire ne tiennent plus sur une ligne, l'accessoire passe dessous, au bord de début. Rien n'est tronqué.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">La ligne répond, le chevron se retourne, l'étape se coche</h2><p>L'en-tête ne bouge que pour dire un changement d'état. Au toucher d'une ligne repliable, le chevron tourne d'un demi-tour et l'hôte replie son corps sur <code>motion.collapse</code>. Une étape franchie change de pastille par <code>motion.morph</code>. Le témoin « en direct » bat sur <code>motion.pulse</code>, et l'en-tête entre avec sa section par <code>motion.rise</code>.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; align-items: start; min-height: 276px; flex: 1; padding: 14px 6px 0">
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="hd mv-line"><span class="tl"><h3 class="d" style="font-size: 22px">Épinglées</h3><span class="d" style="font-size: 16px; color: var(--ink3)">3</span></span><span style="display: inline-flex; align-items: center; gap: 6px"><span class="mv-cnt" style="display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--brand-fill); color: #fff; font-size: 12px; font-weight: 700">2</span><span class="ib mv-chev" style="color: var(--ink2)">[[ic:caret-up]]</span></span><span class="mv-tap"></span></div>
+<div class="mv-body">
+<div class="gh" style="gap: 12px"><div class="gr"><i style="background: #4ECDC4; opacity: .8"></i><span></span><span style="flex: none; width: 20px; background: var(--brand-fill)"></span></div><div class="gr"><i style="background: #FF6B6B; opacity: .8"></i><span style="flex: none; width: 130px"></span></div><div class="gr"><i style="background: #F8B500; opacity: .8"></i><span></span><span style="flex: none; width: 20px; background: var(--brand-fill)"></span></div></div>
+</div>
+<div class="hd"><span class="tl"><h3 class="d" style="font-size: 22px">Non lues</h3><span class="d" style="font-size: 16px; color: var(--ink3)">12</span></span><span class="live"></span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div class="hd" style="justify-content: flex-start"><span class="num mv-num"><span class="mv-dg">1</span><span class="mv-ck">[[ic:check s]]</span></span><h3 class="d" style="font-size: 19px">Que veux-tu partager ?</h3><span style="flex: 1"></span><span class="mv-sum" style="font-size: 13px; color: var(--ink3)">Studio</span></div>
+<div class="gh"><span style="width: 72%"></span><span style="width: 46%"></span></div>
+<div class="hd" style="justify-content: flex-start; margin-top: 8px"><span class="num todo">2</span><h3 class="d" style="font-size: 19px; color: var(--ink3)">Règle ton lien de partage</h3></div>
+</div>
+</div>
+<span class="spec">durée : motion.collapse pour le chevron et le corps, motion.morph pour la pastille d'étape, motion.pulse pour le témoin · courbe : ressorts de K26 · déclencheur : toucher bref de la ligne repliable, étape validée par l'hôte · haptique : léger à l'ouverture comme à la fermeture ; aucun pour une étape, l'action qui la valide joue le sien · mouvement réduit : chevron posé retourné, corps affiché ou retiré sans glissement, point fixe</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="stp">1</span><b style="font-size: 14.5px">Le doigt se pose</b></div>
+<div style="display: flex; align-items: center; gap: 16px">
+<div class="hd pr" style="flex: none; width: 150px; min-height: 36px; padding: 0 4px"><b class="d" style="font-size: 15px">Épinglées</b><span style="display: inline-flex; color: var(--ink2)">[[ic:caret-up s]]</span></div>
+<span class="kcap">La ligne entière se voile en moins d'une image, avant toute action. Le relâcher dans la cible bascule l'état.</span>
+</div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="stp">2</span><b style="font-size: 14.5px">Le chevron tourne, le corps suit</b></div>
+<div style="display: flex; align-items: center; gap: 16px">
+<div style="flex: none; width: 150px; display: flex; flex-direction: column; gap: 6px"><div class="hd" style="min-height: 36px; padding: 0 4px"><b class="d" style="font-size: 15px">Épinglées</b><span style="display: inline-flex; color: var(--ink2); transform: rotate(90deg)">[[ic:caret-up s]]</span></div><div class="gh" style="padding: 6px 10px; opacity: .5; border-radius: 12px"><span style="height: 6px"></span></div></div>
+<span class="kcap"><code>motion.collapse</code> : demi-tour du chevron et hauteur du corps partent ensemble. L'en-tête ne se déplace pas.</span>
+</div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="stp">3</span><b style="font-size: 14.5px">Replié, il dit ce qu'il cache</b></div>
+<div style="display: flex; align-items: center; gap: 16px">
+<div class="hd" style="flex: none; width: 150px; min-height: 36px; padding: 0 4px"><b class="d" style="font-size: 15px">Épinglées</b><span style="display: inline-flex; align-items: center; gap: 5px"><span style="display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--brand-fill); color: #fff; font-size: 10.5px; font-weight: 700">2</span><span style="display: inline-flex; color: var(--ink2); transform: rotate(180deg)">[[ic:caret-up s]]</span></span></div>
+<span class="kcap">La pastille naît en fondu une fois le corps parti. Elle s'efface dès que la section se rouvre.</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Un titre, un nombre, deux emplacements. Aucune signature ne nomme une conversation, un lien, un cercle ou un réglage : l'hôte passe un texte déjà traduit, un entier, et ses propres vues en tête et en fin.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshySectionHeader.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-section-header.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshySectionHeader(_ title:form:size:count:…leading:trailing:)</code></span><span><code>MeeshySectionHeader(title, modifier, form, size, count, …, leading, trailing)</code></span><span><code>&lt;MeeshySectionHeader title form size count … leading trailing /&gt;</code></span>
+<span><b>Formes</b></span><span><code>MeeshySectionHeaderForm { title, overline, divider, step, column }</code></span><span><code>enum class</code> identique</span><span><code>'title' | 'overline' | 'divider' | 'step' | 'column'</code></span>
+<span><b>Tailles</b></span><span><code>MeeshySectionHeaderSize { compact, regular, large }</code> : titres 19, 22, 26</span><span>idem ; <code>regular</code> rend 24</span><span><code>'compact' | 'regular' | 'large'</code></span>
+<span><b>Étape</b></span><span><code>MeeshySectionHeaderStep { todo, current, done }</code></span><span><code>enum class</code> identique</span><span><code>'todo' | 'current' | 'done'</code></span>
+<span><b>Filet</b></span><span><code>MeeshySectionHeaderRule { centered, leading }</code></span><span>idem</span><span><code>'centered' | 'leading'</code></span>
+<span><b>Repli</b></span><span><code>MeeshySectionHeaderDisclosure { none, expanded(Bool) }</code></span><span><code>sealed interface</code> identique</span><span><code>{ expanded: boolean, controls?: string }</code></span>
+<span><b>Emplacements</b></span><span><code>leading</code>, <code>trailing</code> : <code>@ViewBuilder</code></span><span>mêmes noms, <code>@Composable () -&gt; Unit</code></span><span>mêmes noms, <code>ComponentChildren</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshySectionHeaderRecipe.resolve(form:size:step:rule:tint:isExpanded:isPressed:isSticky:)</code></span><span style="border-bottom: 0"><code>MeeshySectionHeaderRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshySectionHeaderRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>title: String</code><span>Obligatoire, non vide, déjà traduit. C'est le nom dit.</span></div>
+<div class="par"><code>form = .title</code><span>La forme. <code>divider</code> et <code>overline</code> ignorent <code>count</code> et <code>leading</code>.</span></div>
+<div class="par"><code>size = .regular</code><span>22. <code>compact</code> : 19, dans une feuille. <code>large</code> : 26, en colonne.</span></div>
+<div class="par"><code>count: Int? = nil</code><span>Compteur accolé. <code>nil</code> ou zéro : absent. Formaté selon la langue.</span></div>
+<div class="par"><code>isPending: Bool = false</code><span>Le compte attend : <code>MeeshySkeleton(.line)</code> de K38 à la place du nombre, cache vide seulement.</span></div>
+<div class="par"><code>isLive: Bool = false</code><span>Le point pulsé. Dit « en direct » après le titre.</span></div>
+<div class="par"><code>index: Int? = nil</code><span>Numéro d'ordre de <code>step</code>. Avec <code>step = .current</code> par défaut.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte opaque de la pastille d'étape et du lien de fin. Sans elle : l'accent ambiant.</span></div>
+<div class="par"><code>level: Int = 2</code><span>Niveau de titre dit : 1 à 6. Une colonne large passe ses sections à 3.</span></div>
+<div class="par"><code>disclosure = .none</code><span><code>expanded(true)</code> rend la ligne touchable et pose le chevron en fin.</span></div>
+<div class="par"><code>onToggle: ((Bool) -&gt; Void)? = nil</code><span>Reçoit l'état demandé. L'hôte replie son corps ; K44 n'en garde aucun.</span></div>
+<div class="par"><code>isSticky: Bool = false</code><span><code>column</code> : passe en capsule de verre, demandée à K01, quand l'hôte dit qu'il colle.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Un titre partout, dit par le système</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Titre : <code>accessibilityAddTraits(.isHeader)</code> et <code>accessibilityHeading(.h2)</code> ; compteur et témoin fondus par <code>accessibilityElement(children: .combine)</code>.</li>
+<li>Repliable : un <code>Button</code> sur toute la ligne, <code>contentShape(Rectangle())</code>, valeur « développé / réduit » en <code>accessibilityValue</code>.</li>
+<li>Chevron : <code>rotationEffect</code> animé au ressort de <code>motion.collapse</code> ; <code>sensoryFeedback(.selection, trigger:)</code>.</li>
+<li>Collant : en-tête d'une <code>Section</code> dans <code>LazyVStack(pinnedViews: .sectionHeaders)</code> ; verre par K01 (<code>glassEffect</code> sur iOS 26).</li>
+<li>Très grande police : <code>ViewThatFits</code> choisit la ligne ou l'empilement.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : <code>sensoryFeedback</code> absent, haptique par le site unique de l'app. iOS 16 à 25 : verre dessiné de K01 pour le bandeau collant. Sans <code>DisclosureGroup</code> : K44 ne l'emploie pas, il dessine son chevron.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Titre : <code>semantics(mergeDescendants = true) { heading() }</code> ; le compteur entre dans le même nœud.</li>
+<li>Repliable : <code>clickable(role = Role.Button)</code> sur la rangée, <code>stateDescription</code> « développé / réduit », cible de 48 dp.</li>
+<li>Chevron : <code>animateFloatAsState</code> puis <code>graphicsLayer { rotationZ }</code>, lu en phase de dessin.</li>
+<li>Collant : <code>stickyHeader { }</code> d'une <code>LazyColumn</code> ; surface tonale, jamais de flou.</li>
+<li>Formes : titre de 24, bouton de fin carré-arrondi (rayon 14), pastille d'étape en <code>MaterialShapes</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation à zéro : chevron posé, aucune rotation. Sans forme expressive : disque. <code>fontScale</code> 2,0 : l'accessoire passe sous le titre par un <code>FlowRow</code>.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément : <code>&lt;h2&gt;</code> à <code>&lt;h6&gt;</code> selon <code>level</code> ; repliable, le titre contient un <code>&lt;button aria-expanded aria-controls&gt;</code>.</li>
+<li>Séparateur : <code>role="separator"</code> avec son libellé ; purement décoratif (« ou »), <code>aria-hidden</code>.</li>
+<li>Collant : <code>position: sticky</code> et <code>animation-timeline: scroll()</code> pour passer en capsule ; verre par K01 (<code>backdrop-filter</code>).</li>
+<li>Chevron : <code>rotate</code> en CSS sur <code>[aria-expanded]</code> ; pressé en <code>:active</code>, anneau en <code>:focus-visible</code>.</li>
+<li>Touche : <code>aria-keyshortcuts</code> sur la cible ; la K55 n'est rendue que sous <code>(hover: hover) and (pointer: fine)</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>animation-timeline</code> : un <code>IntersectionObserver</code> pose <code>isSticky</code>. Sans <code>backdrop-filter</code> : fond plein à 72 %. <code>prefers-reduced-motion</code> : chevron sans transition.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">L'en-tête repliable existe trois fois, ses cousins sont partout</h2><p>Relevé dans le dépôt le 16 novembre 2026. Chaque plateforme a déjà un en-tête repliable abouti, dont celui d'Android dans son SDK d'interface. Sur iOS, vingt-deux fichiers déclarent un <code>…SectionHeader</code> ou un <code>sectionHeader(…)</code> local, et quatre un <code>DisclosureGroup</code>.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/CollapsibleSection.kt</span><p><span class="be">Devient le composant</span> <code>CollapsibleSectionHeader</code> : titre, teinte opaque, <code>count</code>, <code>foldedUnread</code>, <code>stateDescription</code>, icône en emplacement, toucher bref qui replie. Déjà public et agnostique : il gagne <code>form</code> et <code>trailing</code>, et descend dans <code>component/kit</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/settings/SettingsSectionHeader.kt</span><p>Icône et titre en capitales teintés, déjà dit <code>heading()</code> : c'est la forme <code>overline</code>. Devient un alias, puis s'efface.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/conversations/…/ConversationSectionHeader.kt</span><p>L'hôte de la liste : il choisit titre, glyphe et couleur de la section, puis appelle l'en-tête. Rebranché sur K44 ; la décision reste à l'app. <span class="mono">feature/auth/…/AuthInfoDisclosure.kt</span> garde son (i), qui n'est pas un titre.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift</span><p><span class="be">Devient le composant</span> <code>SectionHeaderView</code> : compte, état déplié, non-lus cachés, ressort d'appui. Il perd son type <code>ConversationSection</code> au profit de <code>title</code>, <code>count</code> et <code>tint</code>, et monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/<wbr>ConversationListView+SectionHeader.swift</span><p><code>ConversationListSectionHeader</code> : la cible de dépôt, le registre de cadres et le choix de peau. Reste à l'app, autour de K44.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Profile/Views/ProfileSectionChrome.swift</span><p><code>ProfileSectionHeader</code> : glyphe et titre teintés, trait <code>.isHeader</code>. Forme <code>overline</code>, comme ses jumeaux <span class="mono">Settings/Views/SecuritySectionChrome.swift</span> et <span class="mono">Main/Components/ConversationDashboardView+SectionChrome.swift</span>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/Bubble/MessageDaySeparator.swift</span><p>Le séparateur de jour d'un fil : forme <code>divider</code>. Sa pilule collante (<span class="mono">MessageDayStickyOverlay.swift</span>) reste à l'app.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/collapsible-section.tsx</span><p><span class="be">Devient le composant</span> <code>CollapsibleSection</code> : un vrai <code>&lt;button&gt;</code>, <code>aria-expanded</code>, <code>aria-controls</code>, cible de 44, chevron vertical. Son en-tête part en K44 ; le démontage du corps replié reste à l'hôte.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/grouped-section.tsx</span><p><code>GroupedSection</code> : la même encre de titre, sans geste. Son titre devient K44 <code>overline</code>, sa carte K43. <span class="mono">appearance-picker-sections.tsx</span> et le <code>DayPill</code> de <span class="mono">thread-chrome.tsx</span> suivent.</p></div>
+<div class="twin"><span class="pf">Profil</span><span class="mono">aucun jumeau</span><p><span class="no">À créer</span> Les formes <code>step</code> et <code>column</code>, le témoin « en direct » et le compteur accolé en Nunito : dessinés par ce canevas, absents du code. Ils naissent directement en K44.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 4px">
+<div class="hd"><span style="display: inline-flex; align-items: center; gap: 10px"><span class="med" style="--c: var(--warn); --ci: var(--warn)">[[ic:push-pin s]]</span><span class="tl"><b class="d" style="font-size: 18px">Épinglées</b><span class="d" style="font-size: 14px; color: var(--ink3)">3</span></span></span><span class="ib" style="color: var(--ink2)">[[ic:caret-up]]</span></div>
+<div class="gr" style="padding: 4px 0"><i style="background: #4ECDC4; opacity: .85"></i><span></span></div>
+<div class="gr" style="padding: 4px 0 8px"><i style="background: #FF6B6B; opacity: .85"></i><span style="flex: none; width: 110px"></span></div>
+<div class="hd"><span style="display: inline-flex; align-items: center; gap: 10px"><span class="med" style="--c: var(--brand); --ci: var(--ink2)">[[ic:chat-circle s]]</span><span class="tl"><b class="d" style="font-size: 18px">Non lues</b><span class="d" style="font-size: 14px; color: var(--ink3)">4</span></span></span><span style="display: inline-flex; align-items: center; gap: 6px"><span style="display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--brand-fill); color: #fff; font-size: 12px; font-weight: 700">12</span><span class="ib" style="color: var(--ink2); transform: rotate(180deg)">[[ic:caret-up]]</span></span></div>
+</div>
+<div class="cp"><b>Liste de conversations</b><span class="kcap">Sections repliables à emblème. Repliée, « Non lues » compte 4 conversations et garde en pastille ses 12 messages cachés.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 8px">
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px; color: var(--info); padding-left: 4px">[[ic:bell s]]<span>Notifications</span></span>
+<div class="gh" style="padding: 12px 14px; gap: 14px"><div class="gr"><span></span><span class="sw on"></span></div></div>
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px; color: var(--ok); padding: 10px 0 0 4px">[[ic:shield-check s]]<span>Confidentialité</span></span>
+<div class="gh" style="padding: 12px 14px"><div class="gr"><span style="flex: none; width: 130px"></span></div></div>
+</div>
+<div class="cp"><b>Réglages</b><span class="kcap">Forme <code>overline</code> avec glyphe, à la teinte du groupe, au-dessus de chaque carte K43.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #4ECDC4">
+<div class="stage" style="gap: 12px">
+<div class="gh" style="align-self: flex-start; width: 150px; border-radius: 18px 18px 18px 6px; padding: 12px"><span></span><span style="width: 60%"></span></div>
+<div class="br"><i></i><span class="tag">Aujourd'hui</span><i></i></div>
+<div class="gh" style="align-self: flex-end; width: 170px; border-radius: 18px 18px 6px 18px; padding: 12px; background: color-mix(in oklab, var(--accent) 20%, var(--raised))"><span style="background: color-mix(in oklab, var(--accent) 45%, transparent)"></span><span style="width: 45%; background: color-mix(in oklab, var(--accent) 45%, transparent)"></span></div>
+</div>
+<div class="cp"><b>Fil de conversation</b><span class="kcap">Forme <code>divider</code> centrée : le séparateur de date. Dit « Aujourd'hui, séparateur ».</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #FBBF24; --accent-ink: #FBBF24">
+<div class="stage" style="gap: 8px">
+<div class="hd"><span class="tl"><b class="d" style="font-size: 22px">Membres</b><span class="d" style="font-size: 16px; color: var(--ink3)">42</span></span><a href="#" class="lk">Tout voir[[ic:caret-right s]]</a></div>
+<div style="display: flex">
+<span class="av" style="--accent: #FF6B6B; width: 40px; height: 40px; font-size: 14px; box-shadow: 0 0 0 3px var(--ground)">MO</span>
+<span class="av" style="--accent: #9B59B6; width: 40px; height: 40px; font-size: 14px; margin-left: -8px; box-shadow: 0 0 0 3px var(--ground)">KM</span>
+<span class="av" style="--accent: #3498DB; width: 40px; height: 40px; font-size: 14px; margin-left: -8px; box-shadow: 0 0 0 3px var(--ground)">YT</span>
+<span class="av" style="--accent: #F8B500; width: 40px; height: 40px; font-size: 14px; margin-left: -8px; box-shadow: 0 0 0 3px var(--ground)">TR</span>
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-left: -8px; border-radius: 50%; background: var(--field); box-shadow: 0 0 0 3px var(--ground); font-size: 12px; font-weight: 700; color: var(--ink2)">+38</span>
+</div>
+</div>
+<div class="cp"><b>Communauté</b><span class="kcap">Forme <code>title</code> : « Membres 42 » et son lien, au-dessus d'un groupe d'avatars <b>K48</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque forme × taille × étape rend les valeurs du tableau : police, graisse, encre, écarts, hauteur. <code>count</code> nul ou zéro ne rend ni nombre ni écart. Vecteurs <code>K44-MeeshySectionHeader.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Rôle titre, au niveau de <code>level</code>. Nom : titre, puis compteur, puis « en direct ». Repliable : un seul bouton, valeur « développé » ou « réduit ». Le chevron et le point sont masqués.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Un seul geste.</b> Repliable : <code>onToggle</code> part une fois, au relâcher dans la cible, avec l'état demandé. Statique : la ligne ne répond pas, seul l'accessoire se touche. Aucun état d'ouverture n'est gardé par K44.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Ligne et accessoire font 44 pt au moins, 48 dp sur Android, quelle que soit la taille. Titre, compteur et lien tiennent 4,5:1 en clair et en sombre, pastille d'étape comprise.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Grande police et RTL.</b> À 200 %, l'accessoire passe sous le titre, rien n'est tronqué. En arabe : tête, compteur et accessoire se reflètent, le chevron du lien se retourne, celui du repli ne change pas.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit.</b> Chevron posé sans rotation, pastille d'étape échangée sans ressort, point fixe. Le voile d'appui reste.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Un compteur qui change ne re-rend ni l'accessoire ni le corps ; un repli ne re-peint pas l'en-tête voisin. Garde de source : aucun type du domaine, aucun singleton, aucune police ni couleur hors de <code>MeeshySectionHeaderRecipe</code> ; le verre ne vient que de K01 ; jamais deux accessoires de fin. Non-régression : la liste de conversations garde ses instantanés.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Les titres forment le plan de l'écran : le rotor et la touche H y sautent, dans l'ordre, sans niveau manquant. Replié ne veut pas dire muet : le compteur et la pastille de ce qui est caché restent lus.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Une ligne de texte, aucun flou hors du bandeau collant. Seules la rotation et l'opacité s'animent ; la hauteur est l'affaire de l'hôte. Le point pulsé s'arrête hors écran.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8381}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

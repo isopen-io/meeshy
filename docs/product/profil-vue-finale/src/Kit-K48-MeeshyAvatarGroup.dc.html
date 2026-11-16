@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K48 MeeshyAvatarGroup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:170px}
+.stk{--bg:var(--ground);--bw:3px;--ov:-9px;position:relative;display:inline-flex;align-items:center;flex:none}
+.stk>.av{border:var(--bw) solid var(--bg);margin-inline-start:var(--ov)}
+.stk>.av:first-child{margin-inline-start:0}
+.stk>.more{background:var(--field);color:var(--ink2)}
+.s26{--bw:2px;--ov:-10px}.s26>.av{width:26px;height:26px;font-size:10px}
+.s30{--bw:2px;--ov:-8px}.s30>.av{width:30px;height:30px;font-size:9.5px}
+.s40>.av{width:40px;height:40px;font-size:13px}.s40>.more{font-size:12.5px}
+.s44{--ov:-10px}.s44>.av{width:44px;height:44px;font-size:15px}
+.s56{--bw:3.5px;--ov:-13px}.s56>.av{width:56px;height:56px;font-size:19px}
+.s72{--bw:4px;--ov:-17px}.s72>.av{width:72px;height:72px;font-size:25px}
+.sum{font-size:13.5px;font-weight:600;color:var(--ink2);line-height:1.3;text-align:start}
+.sum b{color:var(--ink);font-weight:700}
+.duo{position:relative;display:flex;align-items:center;justify-content:center;height:96px;width:146px;isolation:isolate;flex:none}
+.duo>.av{position:absolute;top:12px;width:72px;height:72px;font-size:25px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.duo>.me{left:4px;animation:agMe 4.6s ease-in-out infinite}
+.duo>.you{right:4px;mix-blend-mode:screen;animation:agYou 4.6s ease-in-out infinite}
+.duo>.halo{position:absolute;left:50%;top:50%;width:26px;height:58px;margin:-29px 0 0 -13px;border-radius:50%;background:#fff;opacity:.34;filter:blur(9px);animation:agHalo 4.6s ease-in-out infinite;pointer-events:none}
+.duo.still>*{animation:none}
+.mx[data-theme=light] .duo>.you{mix-blend-mode:multiply}
+.mx[data-theme=light] .duo>.av{box-shadow:0 10px 26px rgba(67,56,202,.2)}
+.rail{display:flex;overflow-x:auto;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.who{display:flex;flex-direction:column;align-items:center;gap:8px;flex:none;width:62px;font-size:12.5px;font-weight:600;color:var(--ink2);text-align:center}
+.who .av{width:56px;height:56px;font-size:19px}
+.who.on{color:var(--ink)}
+.who.off{opacity:.4}
+.mx{--tint:var(--brand-soft);--tick:var(--brand-fill);--tick-ink:#fff}
+.cw{--bg:var(--ground);position:relative;display:inline-flex;border-radius:50%}
+.cw.sel{box-shadow:0 0 0 2.5px var(--bg),0 0 0 5px var(--tint)}
+.cw>.dot{position:absolute;inset-inline-end:-2px;bottom:-2px;border-color:var(--bg)}
+.tick{position:absolute;inset-inline-end:-4px;bottom:-4px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--tick);color:var(--tick-ink);border:2.5px solid var(--bg)}
+.comm{--tint:var(--l-comm);--tick:var(--l-comm);--tick-ink:#0B0B12}
+.mx[data-theme=light] .comm{--tick-ink:#fff}
+.end{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;color:var(--ink)}
+.swap{display:inline-grid}
+.swap>*{grid-area:1/1}
+.cw.live{animation:agRing 6s infinite}
+.tick.live{animation:agTick 6s cubic-bezier(.3,1.6,.5,1) infinite}
+.who.live{animation:agInk 6s infinite}
+.swap.s1>.a{animation:agA 6s infinite}.swap.s1>.b{animation:agB 6s infinite}
+.swap.s2>.a{animation:agC 6s infinite}.swap.s2>.b{animation:agD 6s infinite}
+.fin{position:absolute;left:50%;top:11px;width:34px;height:34px;margin-left:-17px;border-radius:50%;background:rgba(255,255,255,.26);border:1.5px solid rgba(255,255,255,.6);opacity:0;pointer-events:none;animation:agFin 6s ease-in-out infinite}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--warn);opacity:.22;animation:agHap 6s infinite}
+.stk>.av.in{animation:agIn 6s cubic-bezier(.3,1.3,.5,1) infinite}
+.tdots{display:inline-flex;align-items:center;gap:3px}
+.tdots>i{width:5px;height:5px;border-radius:50%;background:var(--ink2);animation:agDot 1.2s ease-in-out infinite}
+.tdots>i:nth-child(2){animation-delay:.15s}.tdots>i:nth-child(3){animation-delay:.3s}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.slot{outline:1.5px dashed color-mix(in oklab,var(--warn) 70%,transparent);outline-offset:7px;border-radius:50%}
+.sz{display:flex;flex-direction:column;align-items:center;gap:10px}
+.sz>.mono{color:var(--ink2);font-size:11.5px}
+.kan{font-style:normal;font-family:Inter,system-ui,sans-serif;z-index:3}
+@keyframes agMe{0%,100%{transform:translateX(0)}50%{transform:translateX(5px)}}
+@keyframes agYou{0%,100%{transform:translateX(0)}50%{transform:translateX(-5px)}}
+@keyframes agHalo{0%,100%{opacity:.2;transform:scaleX(.7)}50%{opacity:.5;transform:scaleX(1.5)}}
+@keyframes agFin{0%,8%{opacity:0;transform:scale(1.3)}14%,18%{opacity:1;transform:scale(1)}21%{opacity:1;transform:scale(.8)}27%,100%{opacity:0;transform:scale(1.3)}}
+@keyframes agRing{0%,20%{box-shadow:0 0 0 0 var(--bg),0 0 0 0 var(--tint)}27%,84%{box-shadow:0 0 0 2.5px var(--bg),0 0 0 5px var(--tint)}92%,100%{box-shadow:0 0 0 0 var(--bg),0 0 0 0 var(--tint)}}
+@keyframes agTick{0%,21%{transform:scale(0)}29%{transform:scale(1.35)}35%,84%{transform:scale(1)}92%,100%{transform:scale(0)}}
+@keyframes agInk{0%,21%{color:var(--ink2)}27%,84%{color:var(--ink)}92%,100%{color:var(--ink2)}}
+@keyframes agA{0%,22%{opacity:1}27%,86%{opacity:0}92%,100%{opacity:1}}
+@keyframes agB{0%,22%{opacity:0}27%,86%{opacity:1}92%,100%{opacity:0}}
+@keyframes agC{0%,42%{opacity:1}48%,88%{opacity:0}94%,100%{opacity:1}}
+@keyframes agD{0%,42%{opacity:0}48%,88%{opacity:1}94%,100%{opacity:0}}
+@keyframes agHap{0%,20%{opacity:.22;transform:scale(1)}24%{opacity:1;transform:scale(1.9)}30%,100%{opacity:.22;transform:scale(1)}}
+@keyframes agIn{0%,40%{margin-inline-start:-40px;opacity:0;transform:scale(.4)}50%,88%{margin-inline-start:-9px;opacity:1;transform:none}95%,100%{margin-inline-start:-40px;opacity:0;transform:scale(.4)}}
+@keyframes agDot{0%,60%,100%{transform:none;opacity:.5}30%{transform:translateY(-3px);opacity:1}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #FF6B6B; opacity: .16"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #A855F7; opacity: .2; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 980px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K48 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyAvatarGroup</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Plusieurs personnes ensemble se montrent d'une seule façon : en pile, en duo, en rangée nommée ou en grille</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 820px">L'hôte passe ses avatars ; le groupe les serre, les détoure, compte ce qui déborde et dit une seule phrase.</p>
+</div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 22px">
+<span class="stk s56" aria-hidden="true">
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #4ECDC4">LM</span>
+<span class="av" style="--accent: #9B59B6">KM</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+<span class="av more" style="font-size: 16px">+8</span>
+</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il range des visages, il ne sait pas qui ils sont</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose des avatars selon <b>quatre dispositions</b> : <code>stack</code> (pile chevauchée), <code>duo</code> (deux visages fondus), <code>rail</code> (rangée défilante nommée), <code>grid</code> (grille en tuile).</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><b>Détoure</b> chaque cellule à la couleur du fond, <b>plafonne</b> à <code>max</code> et écrit le reste dans une cellule « +N ».</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Porte la <b>sélection</b> : aucune, une seule, plusieurs. Double anneau, coche de coin, et le compte rendu à l'hôte.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit <b>une phrase</b> pour la pile et le duo (« Mina, Kwame et 10 autres »), et <b>un nom par cellule</b> pour la rangée et la grille.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Dessiner un avatar, un anneau de story ni un point de présence : c'est <b>l'emplacement <code>cell</code></b>, rempli par le <code>MeeshyAvatar</code> de l'hôte. Qui voit un point vert : la loi de présence, côté app.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Choisir qui passe devant, ni écrire le résumé : <b>l'app</b> trie et compose la phrase. Il ne compte que ce qui déborde.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La rangée d'UNE personne avec son accessoire : <b>K39</b>. Le voyage d'un avatar vers la fiche : <b>K29</b>. La coche elle-même : <b>K41</b>. Le reflet du squelette : <b>K38</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre de la tuile ou de la cellule d'action : <b>K01</b>. Le bouton rond « Chercher » : <b>K02</b>. Le rail de vignettes de médias : <b>K20</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:users-three xl]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : un groupe, une disposition, une phrase</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 980px">Aujourd'hui chaque écran chevauche ses avatars à sa façon : 6 px ici, 8 px là, avec ou sans liseré, avec ou sans « +N ». Après K48, ceux qui écrivent, ceux qui ont vu, les amis en commun et les destinataires d'un envoi se serrent de la même manière. Seuls changent la taille et ce qu'on en dit.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Deux dispositions, sept parties</h2><p>La pile et la rangée à deux fois leur taille. Les mesures sont celles de la taille réelle : pile en 40, rangée en 56.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="flex-direction: column; align-items: flex-start; gap: 72px; padding: 68px 48px 56px; background: var(--ground)">
+
+<div style="display: flex; align-items: center; gap: 26px">
+<span class="stk" style="--bw: 6px; --ov: -18px">
+<span class="av" style="--accent: #FF6B6B; width: 80px; height: 80px; font-size: 26px">MO</span>
+<span class="av" style="--accent: #F8B500; width: 80px; height: 80px; font-size: 26px">TR</span>
+<span class="av" style="--accent: #3498DB; width: 80px; height: 80px; font-size: 26px">YT</span>
+<span class="av" style="--accent: #9B59B6; width: 80px; height: 80px; font-size: 26px">KM</span>
+<span class="av more" style="width: 80px; height: 80px; font-size: 25px">+8</span>
+<i class="kan" style="left: 29px; top: -16px">1</i>
+<i class="kan" style="left: 60px; bottom: -14px">2</i>
+<i class="kan" style="left: 277px; top: -16px">3</i>
+</span>
+<span style="position: relative; display: inline-flex; align-items: center; gap: 14px">
+<span class="sum" style="font-size: 27px">Mina, Kwame<br>et 10 autres</span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:caret-right l]]</span>
+<i class="kan" style="left: 0; top: -30px">6</i>
+</span>
+</div>
+
+<div style="display: flex; align-items: flex-start; gap: 20px">
+<span class="who on" style="position: relative; width: 124px; gap: 16px; font-size: 25px">
+<span class="cw sel" style="box-shadow: 0 0 0 5px var(--bg), 0 0 0 10px var(--tint)">
+<span class="av" style="--accent: #FF6B6B; width: 112px; height: 112px; font-size: 38px">MO</span>
+<span class="tick" style="width: 48px; height: 48px; border-width: 5px; inset-inline-end: -8px; bottom: -8px">[[ic:check l]]</span>
+</span>
+<span>Mina</span>
+<i class="kan" style="left: 0; top: -14px">5</i>
+</span>
+<span class="who" style="position: relative; width: 124px; gap: 16px; font-size: 25px">
+<span class="cw slot"><span class="av" style="--accent: #F8B500; width: 112px; height: 112px; font-size: 38px">TR</span></span>
+<span>Tomás</span>
+<i class="kan" style="left: 51px; top: -22px">1</i>
+<i class="kan" style="left: -6px; bottom: 6px">4</i>
+</span>
+<span class="who" style="position: relative; width: 124px; gap: 16px; font-size: 25px">
+<span class="cw"><span class="av" style="--accent: #3498DB; width: 112px; height: 112px; font-size: 38px">YT</span></span>
+<span>Yuki</span>
+</span>
+<span class="who" style="position: relative; width: 124px; gap: 16px; font-size: 25px">
+<span class="end glass" style="width: 112px; height: 112px">[[ic:magnifying-glass xl]]</span>
+<span>Chercher</span>
+<i class="kan" style="left: 51px; top: -11px">7</i>
+</span>
+</div>
+
+</div>
+<div class="lgd" style="align-content: start">
+<i class="kan">1</i><div><b>Cellule</b><span><code>cell</code> · emplacement rond de 26, 40, 44, 56 ou 72. L'hôte y pose son <code>MeeshyAvatar</code>, avec sa présence et son anneau. Le groupe ne le redessine pas.</span></div>
+<i class="kan">2</i><div><b>Détourage</b><span><code>surface</code> · liseré de 2 (26), 3 (40, 44), 3,5 (56) ou 4 px (72) à la couleur du fond. Chevauchement : 10, 9, 10, 13, 17 px. La première cellule passe au-dessus.</span></div>
+<i class="kan">3</i><div><b>Débordement</b><span>« +N » · même diamètre, <code>--field</code>, Nunito 900 en <code>--ink2</code>. N = <code>count − max</code>. Au-delà de 99 : « 99+ ». Jamais « +0 ».</span></div>
+<i class="kan">4</i><div><b>Libellé de cellule</b><span><code>caption</code> · Inter 12,5 / 600, <code>--ink2</code>, centré, une ligne, à 8 px sous la cellule. Rangée et grille seulement. Colonne de 62 px.</span></div>
+<i class="kan">5</i><div><b>Marque de sélection</b><span>Double anneau : 2,5 px de fond puis 2,5 px de <code>tint</code>. Coche K41 de 24 px au coin de fin, liseré de 2,5. Le libellé passe en <code>--ink</code>.</span></div>
+<i class="kan">6</i><div><b>Résumé et chevron</b><span><code>summary</code> · 13,5 / 600, <code>--ink2</code>, deux lignes au plus, à 12 px de la pile. <code>showsChevron</code> ajoute le chevron de 16 px.</span></div>
+<i class="kan">7</i><div style="border-bottom: 0"><b>Cellule d'action de fin</b><span><code>trailing</code> · emplacement de même diamètre, en dernier dans la rangée. Ici un K02 de verre et son libellé « Chercher ».</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Quatre dispositions, trois sélections, quatre états</h2><p>Tout est à taille réelle, comme dans les écrans du profil. L'accent de chaque cellule est celui de la personne ; l'anneau de sélection prend la teinte que l'hôte lui donne.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 14px">
+<div class="ticket" style="--cut: 61px">
+<div style="display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 14px">
+<span class="ib" style="width: 38px; height: 38px; background: var(--l-comm); color: #0B0B12">[[ic:users-four]]</span>
+<span style="display: flex; flex-direction: column; min-width: 0"><b style="font-size: 14.5px">Beatmakers Dakar</b><span class="mono" style="color: var(--ink2)">meeshy.me/c/beatmakers</span></span>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 18px 12px">
+<span style="font-size: 13.5px; color: var(--ink2)"><b class="d" style="font-size: 20px; color: var(--ink)">342</b> membres</span>
+<span class="stk s30" style="--bg: var(--raised)" role="img" aria-label="Mina, Tomás, Kwame et 339 autres membres">
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+<span class="av" style="--accent: #9B59B6">KM</span>
+</span>
+</div>
+</div>
+<div class="card" style="border-radius: 22px; padding: 6px 18px">
+<button style="display: flex; align-items: center; gap: 10px; min-height: 44px">
+<span class="stk s26" style="--bg: var(--raised)">
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+<span class="av">AN</span>
+</span>
+<span style="font-size: 13.5px; color: var(--ink2)">Mène à <b style="color: var(--ink); font-weight: 700">Studio</b> · 8 membres</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Pile compacte, sur un billet</b><span class="kcap"><code>stack</code> en 30 et en 26, détourée à la couleur du billet (<code>surface</code>). Sans « +N » : le chiffre est déjà écrit à côté.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<button style="display: flex; align-items: center; gap: 12px; min-height: 48px">
+<span class="stk s40">
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+<span class="av" style="--accent: #3498DB">YT</span>
+<span class="av" style="--accent: #9B59B6">KM</span>
+<span class="av more">+8</span>
+</span>
+<span class="sum">Mina, Kwame<br>et 10 autres</span>
+</button>
+</div>
+<div class="cp"><b>Pile, débordement et résumé</b><span class="kcap"><code>stack</code> en 40, <code>max: 4</code>, <code>count: 12</code>. Une seule cible de 48 px pour le tout : toucher ouvre la liste, faite de K39.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="gap: 14px; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div class="duo" role="img" aria-label="Aïssa et Léo">
+<span class="av me" style="--accent: #A855F7">AN</span>
+<span class="av you">LM</span>
+<span class="halo"></span>
+</div>
+<span class="chip glass" style="color: var(--ink)">[[ic:fire-fill s]]<span>Proches depuis mars</span></span>
+</div>
+<div class="cp"><b>Duo</b><span class="kcap"><code>duo</code> en 72 : deux cellules fondues de 6 px, la seconde en fusion lumineuse, un halo au contact. Un seul nom accessible : « Aïssa et Léo ».</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="align-items: stretch; flex-direction: column; justify-content: center; margin: 0 -28px">
+<div class="rail" style="gap: 10px; padding: 8px 28px">
+<button class="who"><span class="cw"><span class="av" style="--accent: #FF6B6B">MO</span><span class="dot on"></span></span><span>Mina</span></button>
+<button class="who"><span class="cw"><span class="av" style="--accent: #4ECDC4">LM</span><span class="dot on"></span></span><span>Léo</span></button>
+<button class="who"><span class="cw"><span class="av" style="--accent: #9B59B6">KM</span><span class="dot aw"></span></span><span>Kwame</span></button>
+<button class="who"><span class="cw"><span class="av" style="--accent: #F8B500">TR</span></span><span>Tomás</span></button>
+<button class="who"><span class="cw"><span class="av" style="--accent: #3498DB">YT</span></span><span>Yuki</span></button>
+<button class="who"><span class="end glass">[[ic:magnifying-glass]]</span><span>Chercher</span></button>
+</div>
+</div>
+<div class="cp"><b>Rangée nommée, avec présence</b><span class="kcap"><code>rail</code> en 56 : colonnes de 62, écart 10, le prénom dessous. Elle défile et sort par le bord. La dernière cellule est <code>trailing</code>.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="align-items: stretch; flex-direction: column; justify-content: center; gap: 10px; margin: 0 -28px">
+<span class="tag" style="padding: 0 28px">Suggestions</span>
+<div class="rail" role="radiogroup" aria-label="Suggestions" style="gap: 10px; padding: 8px 28px">
+<button class="who on" role="radio" aria-checked="true"><span class="cw sel"><span class="av" style="--accent: #FF6B6B">MO</span><span class="tick">[[ic:check s]]</span></span><span>Mina</span></button>
+<button class="who" role="radio" aria-checked="false"><span class="cw"><span class="av" style="--accent: #F8B500">TR</span></span><span>Tomás</span></button>
+<button class="who" role="radio" aria-checked="false"><span class="cw"><span class="av" style="--accent: #3498DB">YT</span></span><span>Yuki</span></button>
+<button class="who" role="radio" aria-checked="false"><span class="cw"><span class="av" style="--accent: #2ECC71">SB</span></span><span>Sofia</span></button>
+<button class="who"><span class="end glass">[[ic:magnifying-glass]]</span><span>Chercher</span></button>
+</div>
+</div>
+<div class="cp"><b>Sélection unique</b><span class="kcap"><code>selection: .single(0)</code> : un seul choisi à la fois, l'anneau passe de l'un à l'autre. Teinte par défaut : l'indigo de marque.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage comm" style="align-items: stretch; flex-direction: column; justify-content: center; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<span class="d" style="font-size: 18px">Envoyer l'invitation</span>
+<span style="font-size: 13px; color: var(--ink3)">2 choisis</span>
+</div>
+<div role="group" aria-label="Destinataires" style="display: flex; justify-content: space-between; gap: 6px; padding: 6px 0">
+<button class="who on" role="checkbox" aria-checked="true"><span class="cw sel"><span class="av" style="--accent: #4ECDC4">LM</span><span class="tick">[[ic:check s]]</span></span><span>Léo</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="cw"><span class="av" style="--accent: #FF6B6B">MO</span></span><span>Mina</span></button>
+<button class="who on" role="checkbox" aria-checked="true"><span class="cw sel"><span class="av" style="--accent: #9B59B6">KM</span><span class="tick">[[ic:check s]]</span></span><span>Kwame</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="cw"><span class="av" style="--accent: #F8B500">TR</span></span><span>Tomás</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="cw"><span class="av" style="--accent: #3498DB">YT</span></span><span>Yuki</span></button>
+</div>
+</div>
+<div class="cp"><b>Sélection multiple, avec compteur</b><span class="kcap"><code>selection: .multiple([0, 2])</code>, <code>tint</code> à la couleur de la famille. Le groupe rend le compte ; l'hôte écrit « 2 choisis » et son bouton.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="gap: 20px">
+<div class="glass" style="display: flex; flex-direction: column; gap: 10px; width: 154px; height: 154px; padding: 14px; border-radius: 32px; flex: none">
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink)">[[ic:handshake s]]<span>Mes amis</span></span>
+<div role="img" aria-label="Léo, Mina, Kwame et Yuki" style="display: grid; grid-template-columns: repeat(2, 44px); gap: 8px 22px; justify-content: center">
+<span class="cw" style="--bg: #1B1730; --accent: #4ECDC4"><span class="av">LM</span><span class="dot on" style="inset-inline-end: -3px; bottom: -3px"></span></span>
+<span class="cw" style="--bg: #1B1730; --accent: #FF6B6B"><span class="av">MO</span><span class="dot on" style="inset-inline-end: -3px; bottom: -3px"></span></span>
+<span class="cw" style="--accent: #9B59B6"><span class="av">KM</span></span>
+<span class="cw" style="--accent: #3498DB"><span class="av">YT</span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Grille 2 × 2, en tuile</b><span class="kcap"><code>grid(columns: 2)</code> en 44, écarts de 22 et 8. La tuile de verre et son titre sont à l'hôte (K01). Sans prénoms : la tuile dit les quatre noms d'un coup.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="tonal" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 30px">
+<div style="display: grid; grid-template-columns: repeat(4, 44px); gap: 14px 16px">
+<span class="cw" style="--bg: var(--field); --accent: #4ECDC4"><span class="av">LM</span><span class="dot on" style="inset-inline-end: -3px; bottom: -3px"></span></span>
+<span class="cw" style="--bg: var(--field); --accent: #FF6B6B"><span class="av">MO</span><span class="dot on" style="inset-inline-end: -3px; bottom: -3px"></span></span>
+<span class="cw" style="--accent: #9B59B6"><span class="av">KM</span></span>
+<span class="cw" style="--accent: #F8B500"><span class="av">TR</span></span>
+<span class="cw" style="--accent: #3498DB"><span class="av">YT</span></span>
+<span class="cw" style="--accent: #2ECC71"><span class="av">SB</span></span>
+<span class="cw"><span class="av">AN</span></span>
+<span class="av" style="background: var(--deep); color: var(--ink2); font-size: 14px">+5</span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Grille 2 × 4, avec débordement</b><span class="kcap"><code>grid(columns: 4)</code>, <code>max: 7</code> : la huitième case est le « +5 ». Deux rangées au plus ; au-delà, c'est une liste. Ici sur surface tonale, comme sur Android.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 20px">
+<div style="display: flex; justify-content: space-between; gap: 6px">
+<button class="who on" role="checkbox" aria-checked="true"><span class="cw sel"><span class="av" style="--accent: #4ECDC4">LM</span><span class="tick">[[ic:check s]]</span></span><span>Léo</span></button>
+<button class="who off" role="checkbox" aria-checked="false" disabled><span class="cw"><span class="av" style="--accent: #2ECC71">SB</span></span><span>Sofia</span></button>
+<span class="who" aria-hidden="true"><span class="sk" style="width: 56px; height: 56px; border-radius: 50%"></span><span class="sk" style="width: 40px; height: 10px"></span></span>
+<span class="who" aria-hidden="true"><span class="sk" style="width: 56px; height: 56px; border-radius: 50%"></span><span class="sk" style="width: 32px; height: 10px"></span></span>
+<span class="who" aria-hidden="true" style="opacity: .5"><span class="sk" style="width: 56px; height: 56px; border-radius: 50%"></span><span class="sk" style="width: 44px; height: 10px"></span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 48px" aria-hidden="true">
+<span class="stk s40"><span class="av sk"></span><span class="av sk"></span><span class="av sk"></span></span>
+<span class="sk" style="width: 110px; height: 12px"></span>
+</div>
+</div>
+<div class="cp"><b>Choisi · désactivé · squelette</b><span class="kcap">Désactivée : la cellule à 40 %, ni cible ni anneau, dite « indisponible ». Squelette : l'atome <code>MeeshySkeleton</code> de K38 aux mêmes diamètres et chevauchements, seulement si le cache est vide.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 22px">
+<div style="display: flex; align-items: flex-end; gap: 24px">
+<span class="sz"><span class="stk s26"><span class="av" style="--accent: #FF6B6B">MO</span><span class="av" style="--accent: #F8B500">TR</span><span class="av" style="--accent: #3498DB">YT</span></span><span class="mono">26 · −10</span></span>
+<span class="sz"><span class="stk s40"><span class="av" style="--accent: #FF6B6B">MO</span><span class="av" style="--accent: #F8B500">TR</span><span class="av" style="--accent: #3498DB">YT</span></span><span class="mono">40 · −9</span></span>
+<span class="sz"><span class="stk s44"><span class="av" style="--accent: #FF6B6B">MO</span><span class="av" style="--accent: #F8B500">TR</span><span class="av" style="--accent: #3498DB">YT</span></span><span class="mono">44 · −10</span></span>
+</div>
+<div style="display: flex; align-items: flex-end; gap: 24px">
+<span class="sz"><span class="stk s56"><span class="av" style="--accent: #FF6B6B">MO</span><span class="av" style="--accent: #F8B500">TR</span><span class="av" style="--accent: #3498DB">YT</span></span><span class="mono">56 · −13</span></span>
+<span class="sz"><span class="stk s72"><span class="av" style="--accent: #FF6B6B">MO</span><span class="av" style="--accent: #F8B500">TR</span></span><span class="mono">72 · −17</span></span>
+</div>
+</div>
+<div class="cp"><b>Cinq tailles de cellule</b><span class="kcap">Diamètre et chevauchement, en px. Le chevauchement vaut un quart du diamètre à partir de 40, plus serré en 26. Pas de diamètre libre.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="mx" data-theme="light" style="width: 100%; padding: 18px 16px; border-radius: 26px; display: flex; flex-direction: column; gap: 16px">
+<button style="display: flex; align-items: center; gap: 12px; min-height: 48px">
+<span class="stk s40">
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+<span class="av" style="--accent: #3498DB">YT</span>
+<span class="av more">+9</span>
+</span>
+<span class="sum">Mina, Kwame<br>et 10 autres</span>
+</button>
+<div style="display: flex; gap: 10px">
+<button class="who on" role="radio" aria-checked="true"><span class="cw sel"><span class="av" style="--accent: #FF6B6B">MO</span><span class="tick">[[ic:check s]]</span></span><span>Mina</span></button>
+<button class="who" role="radio" aria-checked="false"><span class="cw"><span class="av" style="--accent: #4ECDC4">LM</span><span class="dot on"></span></span><span>Léo</span></button>
+<button class="who" role="radio" aria-checked="false"><span class="cw"><span class="av" style="--accent: #F8B500">TR</span></span><span>Tomás</span></button>
+<button class="who" role="radio" aria-checked="false"><span class="cw"><span class="av" style="--accent: #3498DB">YT</span></span><span>Yuki</span></button>
+</div>
+</div>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes jetons. Le détourage et le liseré de la coche suivent le fond clair ; le « +N » passe sur <code>--field</code> clair, encre indigo.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 12px; --accent:#4ECDC4">
+<div class="duo still" role="img" aria-label="Aïssa et Léo">
+<span class="av me" style="--accent: #A855F7">AN</span>
+<span class="av you">LM</span>
+<span class="halo"></span>
+</div>
+<span class="kcap" style="max-width: 130px">Halo fixe à 34 %, cellules immobiles.</span>
+</div>
+<button dir="rtl" style="display: flex; align-items: center; gap: 12px; min-height: 48px">
+<span class="stk s40">
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+<span class="av" style="--accent: #3498DB">YT</span>
+<span class="av more"><bdi dir="ltr">+9</bdi></span>
+</span>
+<span class="sum">مينا، كوامي<br>و10 آخرون</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-left s]]</span>
+</button>
+</div>
+<div class="cp"><b>Mouvement réduit · droite à gauche</b><span class="kcap">Sous « réduire les animations », le duo ne respire plus. En arabe, la pile part de la droite, le « +N » finit à gauche, le chevron se retourne.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Il respire à deux, il marque qui est choisi</h2><p>Trois mouvements lui appartiennent : l'anneau et la coche qui se posent, le halo du duo, et la cellule qui rejoint la pile. Tous sortent de la table de K26.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px">
+
+<div class="kcell kc" style="gap: 26px; padding: 36px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span class="tag">En vrai, en boucle de 6 s</span>
+<span style="display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; color: var(--ink3)"><i class="hap"></i><span>haptique</span></span>
+</div>
+<div class="comm" style="display: flex; flex-direction: column; gap: 14px; width: 390px; align-self: center; padding: 22px 20px; border-radius: 28px; border: 1px solid var(--line)">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<span class="d" style="font-size: 20px">Envoyer l'invitation</span>
+<span class="swap s1" style="font-size: 13px; color: var(--ink3); justify-items: end"><span class="a">1 choisi</span><span class="b">2 choisis</span></span>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 6px; padding: 6px 0">
+<span class="who on"><span class="cw sel"><span class="av" style="--accent: #4ECDC4">LM</span><span class="tick">[[ic:check s]]</span></span><span>Léo</span></span>
+<span class="who"><span class="cw"><span class="av" style="--accent: #FF6B6B">MO</span></span><span>Mina</span></span>
+<span class="who live" style="position: relative"><span class="cw live"><span class="av" style="--accent: #9B59B6">KM</span><span class="tick live">[[ic:check s]]</span></span><span>Kwame</span><i class="fin" aria-hidden="true"></i></span>
+<span class="who"><span class="cw"><span class="av" style="--accent: #F8B500">TR</span></span><span>Tomás</span></span>
+<span class="who"><span class="cw"><span class="av" style="--accent: #3498DB">YT</span></span><span>Yuki</span></span>
+</div>
+<span class="btn a" style="--accent: var(--l-comm); box-shadow: 0 10px 26px rgba(251,191,36,.28)">[[ic:user-plus]]<span class="swap s1"><span class="a">Inviter 1 personne</span><span class="b">Inviter 2 personnes</span></span></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-radius: 22px; border: 1px solid var(--line); --accent:#4ECDC4">
+<div class="duo" role="img" aria-label="Aïssa et Léo">
+<span class="av me" style="--accent: #A855F7">AN</span>
+<span class="av you">LM</span>
+<span class="halo"></span>
+</div>
+<span class="kcap">Le duo respire : 5 px l'un vers l'autre, le halo s'ouvre au contact.</span>
+</div>
+<div style="display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 12px 18px; border-radius: 22px; border: 1px solid var(--line)">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 48px">
+<span class="stk s40">
+<span class="av" style="--accent: #4ECDC4">LM</span>
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av in" style="--accent: #9B59B6">KM</span>
+</span>
+<span class="swap s2 sum"><span class="a">Léo et Mina<br>ont vu</span><span class="b">Léo, Mina et Kwame<br>ont vu</span></span>
+</div>
+<span class="kcap">Kwame rejoint la pile : il sort de derrière Mina.</span>
+</div>
+</div>
+<div class="cp"><b>Choisir, respirer, rejoindre</b><span class="kcap">Toucher Kwame : l'anneau s'écarte de l'avatar, la coche saute une fois, le compteur et le bouton de l'hôte suivent. Le duo ne s'arrête jamais ; la pile ne bouge que quand son contenu change.</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell" style="min-height: 0; padding: 18px 20px; justify-content: flex-start; align-items: flex-start; gap: 16px; background: var(--ground)">
+<span class="step">1</span>
+<div class="comm" style="display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0">
+<div style="display: flex; gap: 10px; padding: 6px 4px 0">
+<span class="who on"><span class="cw sel"><span class="av" style="--accent: #4ECDC4">LM</span><span class="tick">[[ic:check s]]</span></span><span>Léo</span></span>
+<span class="who"><span class="cw"><span class="av" style="--accent: #FF6B6B">MO</span></span><span>Mina</span></span>
+<span class="who"><span class="cw"><span class="av" style="--accent: #9B59B6">KM</span></span><span>Kwame</span></span>
+</div>
+<span class="kcap"><b style="color: var(--ink)">Repos.</b> Léo est choisi, Kwame est nu. Aucun anneau caché, aucune place gardée pour la coche.</span>
+</div>
+</div>
+<div class="kcell" style="min-height: 0; padding: 18px 20px; justify-content: flex-start; align-items: flex-start; gap: 16px; background: var(--ground)">
+<span class="step">2</span>
+<div class="comm" style="display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0">
+<div style="display: flex; gap: 10px; padding: 6px 4px 0">
+<span class="who on"><span class="cw sel"><span class="av" style="--accent: #4ECDC4">LM</span><span class="tick">[[ic:check s]]</span></span><span>Léo</span></span>
+<span class="who"><span class="cw"><span class="av" style="--accent: #FF6B6B">MO</span></span><span>Mina</span></span>
+<span class="who on"><span class="cw" style="box-shadow: 0 0 0 1.2px var(--bg), 0 0 0 2.6px var(--tint)"><span class="av" style="--accent: #9B59B6">KM</span><span class="tick" style="transform: scale(1.35)">[[ic:check s]]</span></span><span>Kwame</span></span>
+</div>
+<span class="kcap"><b style="color: var(--ink)">Doigt levé, 90 ms.</b> L'anneau est à mi-course, la coche dépasse à 1,35. Le tic haptique part ici.</span>
+</div>
+</div>
+<div class="kcell" style="min-height: 0; padding: 18px 20px; justify-content: flex-start; align-items: flex-start; gap: 16px; background: var(--ground)">
+<span class="step">3</span>
+<div class="comm" style="display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0">
+<div style="display: flex; gap: 10px; padding: 6px 4px 0">
+<span class="who on"><span class="cw sel"><span class="av" style="--accent: #4ECDC4">LM</span><span class="tick">[[ic:check s]]</span></span><span>Léo</span></span>
+<span class="who"><span class="cw"><span class="av" style="--accent: #FF6B6B">MO</span></span><span>Mina</span></span>
+<span class="who on"><span class="cw sel"><span class="av" style="--accent: #9B59B6">KM</span><span class="tick">[[ic:check s]]</span></span><span>Kwame</span></span>
+</div>
+<span class="kcap"><b style="color: var(--ink)">Posé, 260 ms.</b> Anneau de 5, coche à 1, prénom en <code>--ink</code>. L'hôte reçoit le nouvel ensemble et écrit « 2 choisis ».</span>
+</div>
+</div>
+</div>
+
+</div>
+<div class="spec"><b style="color: var(--ink)">sélection</b> · <b style="color: var(--ink)">motion.pulse</b> : anneau de 0 à 5 px en 180 ms, coche à 1,35 puis 1, 260 ms, ressort à léger rebond · déclencheur : <span style="color: var(--accent-ink)">selection</span> change · haptique : un tic de sélection par bascule · mouvement réduit : fondu de 120 ms, sans saut</div>
+<div class="spec"><b style="color: var(--ink)">duo</b> · <b style="color: var(--ink)">motion.float</b> : 4,6 s, aller-retour doux, 5 px par cellule, halo de 20 à 50 % · déclencheur : à l'écran, en boucle ; s'arrête hors champ · haptique : aucune · mouvement réduit : cellules immobiles, halo fixe à 34 %</div>
+<div class="spec"><b style="color: var(--ink)">pile</b> · entrée d'une cellule : <b style="color: var(--ink)">motion.rise</b>, 320 ms, de 0,4 à 1, les suivantes glissent par transformation · sortie : <b style="color: var(--ink)">motion.collapse</b>, 240 ms · « +N » : le chiffre change sans animation · vers la fiche : la cellule part par <b style="color: var(--ink)">motion.travel</b> (K29) · mouvement réduit : fondu seul</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Un nombre, une disposition, un emplacement de cellule. Aucune signature ne nomme un utilisateur, un membre, un ami ou un cercle : l'hôte donne des indices et des mots.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyAvatarGroup.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-avatar-group.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyAvatarGroup(count:layout:size:max:selection:summary:…cell:trailing:)</code></span><span><code>MeeshyAvatarGroup(count, modifier, layout, size, max, selection, summary, …, trailing, cell)</code></span><span><code>&lt;MeeshyAvatarGroup count layout size max selection summary cell trailing … /&gt;</code></span>
+<span><b>Dispositions</b></span><span><code>MeeshyAvatarGroupLayout { stack, duo, rail, grid(columns: Int) }</code></span><span><code>sealed interface</code> identique</span><span><code>'stack' | 'duo' | 'rail' | { grid: 2 | 3 | 4 }</code></span>
+<span><b>Sélection</b></span><span><code>MeeshyAvatarGroupSelection { none, single(Int?), multiple(Set&lt;Int&gt;) }</code></span><span><code>sealed interface</code> identique</span><span><code>{ single: number | null } | { multiple: ReadonlySet&lt;number&gt; }</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyAvatarGroupSize { s26, s40, s44, s56, s72 }</code> en pt</span><span>idem, en dp</span><span><code>26 | 40 | 44 | 56 | 72</code>, en <code>rem</code></span>
+<span><b>Emplacements</b></span><span><code>cell: (Int, CGFloat) -&gt; View</code>, <code>trailing</code> : <code>@ViewBuilder</code></span><span><code>cell: @Composable (Int, Dp) -&gt; Unit</code>, <code>trailing</code></span><span><code>cell: (index, size) =&gt; ComponentChildren</code>, <code>trailing</code></span>
+<span><b>Squelette</b></span><span><code>MeeshyAvatarGroupSkeleton(layout:size:count:)</code> : des <code>MeeshySkeleton</code> de K38, aucun reflet propre</span><span><code>MeeshyAvatarGroupSkeleton(layout, size, count)</code></span><span><code>&lt;MeeshyAvatarGroupSkeleton layout size count /&gt;</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyAvatarGroupRecipe.resolve(layout:size:count:max:selection:isReducedMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyAvatarGroupRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyAvatarGroupRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>count: Int</code><span>Obligatoire. Combien ils sont en tout. Zéro : le groupe ne rend rien.</span></div>
+<div class="par"><code>layout = .stack</code><span><code>duo</code> exige <code>count == 2</code>. <code>grid</code> prend 2 à 4 colonnes, deux rangées au plus.</span></div>
+<div class="par"><code>size = .s40</code><span>Le diamètre remis à <code>cell</code>. Chevauchement et liseré en découlent par la recette.</span></div>
+<div class="par"><code>max: Int = 4</code><span>Cellules montrées avant le « +N ». De 2 à 5 en pile. Sans effet en <code>rail</code>, qui défile.</span></div>
+<div class="par"><code>cell: (index, size)</code><span>L'avatar de l'hôte pour ce rang. Appelé pour les seuls rangs visibles.</span></div>
+<div class="par"><code>caption: ((Int) -&gt; String?)? = nil</code><span>Le mot sous la cellule, et son nom accessible. Rangée et grille.</span></div>
+<div class="par"><code>summary: String? = nil</code><span>La phrase à côté de la pile, écrite par l'hôte. <code>showsChevron: Bool = false</code>.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Ce que dit la pile ou le duo. Par défaut : <code>summary</code>. Obligatoire sans résumé.</span></div>
+<div class="par"><code>selection = .none</code><span>Des rangs, jamais des identifiants. <code>onSelectionChange</code> rend le nouvel état.</span></div>
+<div class="par"><code>isEnabled: ((Int) -&gt; Bool)? = nil</code><span>Éteint une cellule à 40 %. Elle sort de l'ordre de sélection.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte de l'anneau et de la coche. Défaut : l'indigo de marque. <code>surface: Color?</code> : le fond du détourage, celui de l'hôte par défaut.</span></div>
+<div class="par"><code>onPress: (() -&gt; Void)? = nil</code><span>Pile et duo : une seule cible. Sans lui, une image nommée. <code>breathes: Bool = true</code> pour le duo.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Un vrai trou entre deux visages, trois façons de le percer</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Pile : un <code>Layout</code> propre (iOS 16), <code>zIndex</code> décroissant. Détourage percé pour de vrai : <code>compositingGroup()</code> et <code>blendMode(.destinationOut)</code>, donc juste aussi sur du verre K01.</li>
+<li>Duo : <code>blendMode(.screen)</code> sur la seconde cellule, halo conduit par <code>PhaseAnimator</code>, coupé par <code>accessibilityReduceMotion</code>.</li>
+<li>Rangée : <code>ScrollView(.horizontal)</code>, <code>LazyHStack</code>, <code>scrollTargetBehavior(.viewAligned)</code>. Cellules <code>Equatable</code> : en choisir une ne réévalue pas les autres.</li>
+<li>Sélection : <code>sensoryFeedback(.selection, trigger:)</code> par le site unique de K26 ; <code>.isSelected</code> dans les traits.</li>
+<li>Pile et duo : <code>accessibilityElement(children: .ignore)</code> et <code>label</code>. Rangée : un élément par cellule.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : pas de <code>PhaseAnimator</code> ni d'alignement de défilement ; <code>TimelineView</code> pour le halo, défilement libre, haptique par <code>HapticFeedback</code>.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Pile : <code>Layout</code> sur mesure, placement lu en phase de placement. Détourage : <code>graphicsLayer(compositingStrategy = Offscreen)</code> et <code>BlendMode.Clear</code>.</li>
+<li>Duo : <code>BlendMode.Screen</code>, <code>rememberInfiniteTransition</code> lu en phase de dessin. Aucune recomposition pendant la respiration.</li>
+<li>Rangée : <code>LazyRow</code> avec <code>key</code> et <code>contentPadding</code>, <code>animateItem()</code> à l'entrée et à la sortie.</li>
+<li>Sélection : <code>selectableGroup()</code> et <code>selectable</code> (unique), <code>toggleable</code> (multiple) ; tic par <code>HapticFeedbackType.SegmentTick</code>.</li>
+<li>Surface tonale plutôt que verre pour la tuile ; cible de 48 dp par cellule de rangée.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation à zéro : anneau posé d'un coup, duo fixe. Sans <code>SegmentTick</code> (API &lt; 34) : <code>TextHandleMove</code>.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Pile : <code>&lt;ul&gt;</code> et <code>margin-inline-start</code> négative. Détourage par <code>mask: radial-gradient()</code> sur la cellule recouverte ; le RTL ne demande aucune règle.</li>
+<li>Duo : <code>mix-blend-mode: screen</code> dans un <code>isolation: isolate</code>, halo en <code>@keyframes</code>, coupé sous <code>prefers-reduced-motion</code>.</li>
+<li>Rangée : <code>overflow-x: auto</code>, <code>scroll-snap-type: x proximity</code>, sans écouteur. Flèches gauche et droite entre cellules (un seul arrêt de tabulation).</li>
+<li>Sélection : <code>role="radiogroup"</code> et <code>role="radio"</code>, ou <code>role="group"</code> et <code>role="checkbox"</code>, avec <code>aria-checked</code>.</li>
+<li>Pile et duo : <code>role="img"</code> et <code>aria-label</code> ; dans un bouton quand <code>onPress</code> existe.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>mask</code> : un liseré plein à la couleur de <code>surface</code>, comme sur la planche. Sans fusion : opacité de 88 % sur la seconde cellule.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Trois piles, trois rangées, aucun duo</h2><p>Recherche faite dans le dépôt le 16 novembre 2026. Les piles se chevauchent de 6 ou de 8 px selon l'écran, une seule sait compter son « +N ». Celle-là donne sa loi ; les autres s'y rebranchent aux lots d'intégration.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/…/app/chat/Typing.kt</span><p><span class="be">Devient la loi du « +N »</span> <code>TypingAvatarStack</code> : <code>visible</code>, <code>overflow</code>, <code>maxVisible</code>, pure et déjà témoignée par <span class="mono">feature/chat/src/test/…/TypingAvatarStackTest.kt</span>. Elle perd <code>TypingParticipant</code> et ne garde que des nombres.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/…/app/chat/ChatTypingViews.kt</span><p><code>TypingAvatarCluster</code> : la pile dessinée, <code>Arrangement.spacedBy((-6).dp)</code>. Rebranchée sur <code>stack</code> en 26 ; les points de frappe restent à l'app.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/stories/…/app/stories/StoryRingCell.kt</span><p><code>StoryRingCell</code> et <span class="mono">StoryRingPresentation.kt</span> : avatar, anneau, prénom dessous. C'est la cellule de <code>rail</code> ; ses pastilles (ajout, humeur) restent dans l'emplacement <code>cell</code>. <code>RecentsRow</code> de <span class="mono">chat/share/ShareRecipientsZone.kt</span> (un <code>LazyRow</code>) s'y rebranche.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift</span><p><span class="be">Devient la pile</span> <code>typingAvatarStack</code> et <code>typingFace</code> : déjà dans MeeshyUI, un <code>ZStack</code> de <code>MeeshyAvatar</code> décalés, largeur calculée, liseré par cellule. Il sort de la vue et prend la loi du « +N ».</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/ConversationView+Header.swift</span><p><code>HStack(spacing: -6)</code> sur <code>topActiveMembers</code>, et la même écriture dans <span class="mono">Features/Main/Views/FeedPostCard+CommentsPreview.swift</span>. Deux piles de plus, rebranchées.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Share/ShareRecipientRow.swift</span><p><span class="be">Devient la cellule de rangée</span> <code>ShareRecentChip</code> : <code>Equatable</code>, présence et <code>isSelected</code> en valeurs. <code>StoryRingCell</code> (<span class="mono">Features/Stories/Views/StoryTrayView+RingCell.swift</span>) et le rail de visages de <span class="mono">Features/Focal/Summary/FaceRampView.swift</span> s'y rebranchent.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/active-members-stack.tsx</span><p><span class="be">Devient la pile</span> <code>ActiveMembersStack</code> : 28 px, chevauchement de 8, cibles de 44 gardées malgré le chevauchement. Elle perd ses contextes (anneaux, humeurs, présence) ; sa sélection reste <span class="mono">lib/view/top-active-members.ts</span>, côté app.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/story-rail.tsx</span><p>La rangée défilante du web (<code>overflow-x-auto</code>, sans barre). Rebranchée sur <code>rail</code>. <span class="mono">components/author-avatar.tsx</span> et <span class="mono">components/avatar-ring.tsx</span> ne bougent pas : ce sont eux que l'hôte pose dans <code>cell</code>. Aucun <code>-ml-2</code> ni <code>-space-x-</code> dans <span class="mono">components</span>.</p></div>
+<div class="twin"><span class="pf">Duo · grille</span><span class="mono">aucun jumeau sur les trois plateformes</span><p><span class="no">À créer</span> Deux avatars fondus n'existent que dans des illustrations d'accueil (<span class="mono">apps/android/feature/auth/…/illustrations/FriendsIllustration.kt</span>), qui ne sont pas rebranchées. Aucune grille d'avatars en tuile dans le code.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Six groupes qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell kc">
+<div class="stage">
+<div class="glass" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border-radius: 22px">
+<span class="av" style="--accent: #6366F1; border-radius: 14px; width: 40px; height: 40px; font-size: 14px">BD</span>
+<span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<b style="font-size: 15px">Beatmakers Dakar</b>
+<span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink2)">
+<span class="stk s26" style="--bg: #1B1730" role="img" aria-label="Mina, Kwame et Tomás écrivent">
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #9B59B6">KM</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+</span>
+<span>écrivent</span><span class="tdots" aria-hidden="true"><i></i><i></i><i></i></span>
+</span>
+</span>
+</div>
+</div>
+<div class="cp"><b>Conversation de groupe · qui écrit</b><span class="kcap"><code>stack</code> en 26, <code>max: 3</code>. L'ordre est celui de la première frappe : la pile ne se réordonne pas à chaque touche.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: flex-end; gap: 8px">
+<div style="max-width: 250px; padding: 11px 15px; border-radius: 20px 20px 6px 20px; background: var(--brand-fill); color: #fff; font-size: 14.5px; line-height: 1.4">La prise de 21 h est la bonne. Je l'envoie au mix ce soir.</div>
+<button style="display: flex; align-items: center; gap: 8px; min-height: 44px">
+<span style="font-size: 12px; color: var(--ink3)">Vu par</span>
+<span class="stk s26">
+<span class="av" style="--accent: #4ECDC4">LM</span>
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+<span class="av more" style="font-size: 9px">+2</span>
+</span>
+</button>
+</div>
+<div class="cp"><b>Message · lecteurs</b><span class="kcap">Accusés de lecture en <code>stack</code> de 26, « +2 » compris. Toucher ouvre le détail ; chaque lecteur y est une rangée K39.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="glass" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 22px; border-radius: 30px">
+<div role="img" aria-label="Léo, Mina, Kwame et Tomás" style="display: grid; grid-template-columns: repeat(2, 56px); gap: 12px 18px">
+<span class="cw" style="--accent: #4ECDC4; box-shadow: 0 0 0 2.5px #1B1730, 0 0 0 5px var(--ok)"><span class="av" style="width: 56px; height: 56px; font-size: 19px">LM</span></span>
+<span class="cw" style="--accent: #FF6B6B"><span class="av" style="width: 56px; height: 56px; font-size: 19px">MO</span></span>
+<span class="cw" style="--accent: #9B59B6"><span class="av" style="width: 56px; height: 56px; font-size: 19px">KM</span></span>
+<span class="cw" style="--accent: #F8B500"><span class="av" style="width: 56px; height: 56px; font-size: 19px; opacity: .4">TR</span></span>
+</div>
+<span style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">Léo parle · 12:48</span>
+</div>
+</div>
+<div class="cp"><b>Appel · participants</b><span class="kcap"><code>grid(columns: 2)</code> en 56. L'anneau vert de qui parle est posé par l'hôte dans <code>cell</code> ; qui n'a pas décroché est une cellule éteinte.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="align-items: stretch; flex-direction: column; justify-content: center; gap: 10px; margin: 0 -28px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 28px"><span class="tag">Transférer à</span><span style="font-size: 13px; color: var(--ink3)">2 choisis</span></div>
+<div class="rail" role="group" aria-label="Destinataires" style="gap: 10px; padding: 8px 28px">
+<button class="who on" role="checkbox" aria-checked="true"><span class="cw sel"><span class="av" style="--accent: #4ECDC4">LM</span><span class="tick">[[ic:check s]]</span></span><span>Léo</span></button>
+<button class="who on" role="checkbox" aria-checked="true"><span class="cw sel"><span class="av" style="--accent: #6366F1; border-radius: 18px">BD</span><span class="tick">[[ic:check s]]</span></span><span>Beatmakers</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="cw"><span class="av" style="--accent: #FF6B6B">MO</span><span class="dot on"></span></span><span>Mina</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="cw"><span class="av" style="--accent: #9B59B6">KM</span></span><span>Kwame</span></button>
+<button class="who" role="checkbox" aria-checked="false"><span class="cw"><span class="av" style="--accent: #F8B500">TR</span></span><span>Tomás</span></button>
+<button class="who"><span class="end glass">[[ic:magnifying-glass]]</span><span>Chercher</span></button>
+</div>
+</div>
+<div class="cp"><b>Transfert · destinataires récents</b><span class="kcap"><code>rail</code> et <code>selection: .multiple</code>. Une conversation de groupe prend la même cellule : l'hôte y pose un avatar carré-arrondi.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 14px">
+<div style="position: relative; height: 84px; border-radius: 22px; overflow: hidden; background: linear-gradient(120deg, color-mix(in oklab, var(--l-comm) 50%, #0B0B12), #1E1B4B)">
+<div class="orb" style="width: 110px; height: 110px; left: -20px; top: -40px; background: var(--l-comm); opacity: .45"></div>
+<span class="d" style="position: absolute; left: 16px; bottom: 12px; font-size: 19px">Photo de rue</span>
+</div>
+<button style="display: flex; align-items: center; gap: 12px; min-height: 48px">
+<span class="stk s40">
+<span class="av" style="--accent: #4ECDC4">LM</span>
+<span class="av" style="--accent: #F8B500">TR</span>
+<span class="av" style="--accent: #3498DB">YT</span>
+</span>
+<span class="sum">Léo, Tomás<br>et 1 201 autres membres</span>
+<span style="color: var(--ink3); display: inline-flex; margin-inline-start: auto">[[ic:caret-right s]]</span>
+</button>
+</div>
+<div class="cp"><b>Communauté · membres</b><span class="kcap">Ceux que je connais passent devant ; c'est l'app qui les choisit. La pile ne montre pas de « +1201 » : le résumé le dit mieux.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div style="position: relative; width: 190px; height: 210px; border-radius: 26px; overflow: hidden; background: linear-gradient(160deg, #3B1D60, #0B0B12)">
+<div class="orb" style="width: 140px; height: 140px; right: -40px; top: -30px; background: #A855F7; opacity: .4"></div>
+<span class="ph" style="position: absolute; inset: 0; border: 0; border-radius: 0; opacity: .25"></span>
+<button class="glass" style="position: absolute; left: 10px; bottom: 10px; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px 0 8px; border-radius: 999px">
+<span class="stk s26" style="--bg: #2A2140">
+<span class="av" style="--accent: #FF6B6B">MO</span>
+<span class="av" style="--accent: #4ECDC4">LM</span>
+<span class="av" style="--accent: #9B59B6">KM</span>
+</span>
+<span style="display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700">[[ic:eye s]]<span>128</span></span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Story · vues</b><span class="kcap">Les trois derniers regards dans une pilule de verre K10. Sur une image, <code>surface</code> ne suffit plus : le détourage est percé pour de vrai.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Le compte.</b> Pour tout <code>count</code> et tout <code>max</code> : cellules visibles, valeur du « +N », jamais « +0 », « 99+ » au-delà. <code>cell</code> n'est appelé que pour les rangs visibles. Vecteurs <code>K48-MeeshyAvatarGroup.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>La recette.</b> Chaque taille × disposition rend le chevauchement, le liseré, l'écart et la largeur totale du tableau. La pile a le même encombrement avec ou sans « +N » à nombre de cellules égal.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Pile et duo : un seul élément, nommé par <code>label</code>, bouton seulement avec <code>onPress</code>. Rangée : une cellule, un nom, « sélectionné » ou non, « indisponible » si éteinte. Le « +N » ne se lit jamais seul.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Sélection.</b> <code>single</code> : un seul rang à la fois, retoucher le choisi le relâche. <code>multiple</code> : l'ensemble rendu est exact, un tic par bascule, aucun pour une cellule éteinte.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Pile entière : 44 pt, 48 dp, 44 px au moins, même en 26. Cellule de rangée : colonne de 62, cible de 56 × 80. Prénom 4,5:1, anneau de sélection 3:1 sur le fond, en clair et en sombre.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit et RTL.</b> Duo immobile, halo fixe ; anneau et coche en fondu. En arabe la pile part de la droite, la coche et le point de présence passent au coin de fin, le chevron se retourne.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisines et source.</b> Choisir une cellule ne re-rend aucune autre ; la respiration du duo ne recompose rien. Garde de source : aucun type du domaine, aucun singleton, aucun avatar dessiné dans les fichiers de K48, aucun verre hors de K01. Non-régression : le lot ne rebranche aucun jumeau et ne change aucun écran.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Un groupe se dit par des noms, jamais par « 4 avatars ». La sélection ne tient pas à la couleur seule : anneau, coche et prénom renforcé. À 200 %, les prénoms passent sur deux lignes ; les cellules ne grandissent pas.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Au repos, une pile ne coûte ni flou ni animation. Le duo n'anime que transformation et opacité, et s'arrête hors champ. Une rangée de 200 cellules ne monte que celles à l'écran.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8437}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
