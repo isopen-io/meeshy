@@ -600,7 +600,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     var storeRefreshGeneration: Int = 0
 
     nonisolated deinit {
-        // socketHandler deinit handles room leave & typing cleanup
+        let stillOpen = socketHandler?.isActive == true // l'écran quitté s'est déjà fermé (#18556)
         socketHandler = nil
         newerPagesChain?.cancel()
         // Only undo the singleton mutations `start()` performed. A throwaway VM
@@ -610,13 +610,9 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         // the live VM's `start()` had just set and fed the re-render storm.
         guard hasStarted else { return }
         APIClient.shared.anonymousSessionToken = nil
-        // Relinquish THIS screen's opening so cross-conversation surfaces
-        // (back-button pill on other screens) resume counting it. The engine
-        // counts openings per conversation, so the close is order-safe by
-        // construction: on a fast A→B switch, `deinit(A)` running after
-        // `start(B)` closes A only — B stays open; and the same conversation
-        // shown in two iPad windows stays open until its LAST screen goes.
-        syncEngine.closeConversation(conversationId)
+        // Rend l'ouverture de CET écran s'il ne l'a pas rendue en partant (`noteScreenLeft`). Le moteur compte par
+        // conversation : sur A→B rapide, `deinit(A)` après `start(B)` ne ferme que A ; deux fenêtres, la dernière.
+        if stillOpen { syncEngine.closeConversation(conversationId) }
     }
 
     // MARK: - Load Messages (initial)
@@ -704,22 +700,21 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     ///   affichés, remontés par l'observateur de visibilité. `nil` signifie
     ///   « appelant non informé » et laisse le gateway sur son repli
     ///   historique par fenêtre temporelle, qui sur-déclare.
-    ///
     ///   Rapporter dix messages sur deux cents ne veut pas dire que la
     ///   conversation est lue — le badge ne tombe donc PAS sur un lot
     ///   quelconque. Il tombe quand le lot contient le message le PLUS RÉCENT :
     ///   à cet instant l'utilisateur n'a plus de retard, et c'est exactement ce
     ///   que compte le badge.
-    ///
     ///   Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
+        afterReadVisit.note(displayed: (messageIds ?? []) + visibleIds, among: messages) // vu, même en REGARD (#18556)
+        consumeAfterReadOnExit(late: true)
         guard startupDependencies.readGate.marksReading else { return }
         #if DEBUG
         VitrineRendu.shared.conversationAffichee(self, visibles: visibleIds)
         #endif
-        afterReadVisit.note(displayed: (messageIds ?? []) + visibleIds, among: messages)
         let caughtUpId = caughtUpMessageId(seen: messageIds, visible: visibleIds)
         if caughtUpId == nil, let messageIds { notePartialRead(seen: messageIds) }
         sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpId)
@@ -732,7 +727,6 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// structurellement jamais y faire avancer le curseur serveur, quel que
     /// soit le nombre de fois où l'utilisateur rouvre la conversation — d'où
     /// un badge bloqué à vie au-delà du seuil de 25 non-lus.
-    ///
     /// La preuve de consultation y est DIFFÉRENTE (Résumé affiché jusqu'au
     /// bout, Rivière stabilisée au présent) et vient de l'appelant plutôt que
     /// d'un lot `seen` — ce rattrapage avance donc directement le curseur
@@ -741,8 +735,9 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// aucun `MessageStatusEntry.readAt` individuel n'est gelé pour un
     /// message que le lecteur n'a pas vu bulle par bulle.
     func markCaughtUpFromSummaryOrRiver() {
-        guard startupDependencies.readGate.marksReading else { return }
         afterReadVisit.noteAll(among: messages)
+        consumeAfterReadOnExit(late: true) // la sortie du Résumé rattrape APRÈS la porte (#18556)
+        guard startupDependencies.readGate.marksReading else { return }
         // Marquée non lue à l'instant (iPad, depuis la liste) : la sortie ne rattrape pas — elle effacerait la pastille.
         guard !ExplicitUnreadMarks.consume(conversationId) else { return }
         guard !hasNewerMessages, let newest = newestServerMessageId() else { return }

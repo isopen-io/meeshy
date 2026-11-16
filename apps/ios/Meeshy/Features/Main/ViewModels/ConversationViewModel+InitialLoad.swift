@@ -251,6 +251,13 @@ extension ConversationViewModel {
     /// L'écran de cette conversation est quitté par navigation (#10830).
     func noteScreenLeft() {
         ConversationCatchUpGate.shared.depart(self)
+        if socketHandler?.deactivate() == true { syncEngine.closeConversation(conversationId) } // #18556 — sans attendre la deinit
+    }
+
+    /// L'écran revenu (`.task` rejoué) se rouvre ; ce qu'on y lit attend la prochaine sortie (#18556).
+    func reopenScreen() {
+        afterReadVisit.resume()
+        if socketHandler?.activate() == true { syncEngine.openConversation(conversationId) }
     }
 
     /// Le rattrapage `after` à partir d'un curseur : la reconnexion part de ce qui est détenu maintenant,

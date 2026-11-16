@@ -107,8 +107,9 @@ final class ConversationSocketHandler {
     /// sur des singletons partagés → doit être appelé hors évaluation de body
     /// (le `.task` de la vue, via `ConversationViewModel.start()`, satisfait
     /// cette contrainte). Idempotent.
-    func activate() {
-        guard !didActivate else { return }
+    @discardableResult
+    func activate() -> Bool {
+        guard !didActivate else { return false }
         didActivate = true
         // **L'oreille AVANT la question** (#5947). `joinConversation` pose au
         // serveur la seule question dont la réponse dit « tu n'es plus membre » ;
@@ -131,6 +132,26 @@ final class ConversationSocketHandler {
         ConversationViewingReporter.shared.conversationOpened(conversationId)
         NotificationToastManager.shared.onConversationOpened(conversationId)
         NotificationCoordinator.shared.markConversationRead(conversationId)
+        return true
+    }
+
+    /// Vrai entre `activate()` et `deactivate()` : la conversation est à l'écran.
+    nonisolated var isActive: Bool { didActivate }
+
+    /// L'écran QUITTÉ, sans attendre la `deinit` (#18556) : un modèle encore
+    /// retenu après le retour à la liste gardait la conversation « ouverte » —
+    /// ses bannières in-app restaient tues jusqu'à l'ouverture d'une autre.
+    /// `activate()` rouvre au retour de l'écran.
+    @discardableResult
+    func deactivate() -> Bool {
+        guard didActivate else { return false }
+        didActivate = false
+        stopTypingEmission()
+        NotificationToastManager.shared.onConversationClosed(conversationId)
+        if ConversationViewingReporter.shared.conversationClosed(conversationId) {
+            MessageSocketManager.shared.leaveConversation(conversationId)
+        }
+        return true
     }
 
     // UNE file ordonnée par handler ACTIVÉ, créée ici et jamais pour les
