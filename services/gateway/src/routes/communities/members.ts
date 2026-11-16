@@ -16,6 +16,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateCoMemberPresence, type MemberUser } from './member-presence';
 import { isAddableUser } from './addable-user';
+import { scheduleCommunityMemberBroadcastFrom, communityMemberRoleOf } from '../../services/community-member-broadcast';
 import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
@@ -376,6 +377,9 @@ const community = await fastify.prisma.community.findFirst({
 
       if (!existingMember?.isActive) {
         scheduleCommunityAddedAnnouncement(fastify.prisma, { communityId: id, actorId: userId, recipientIds: [validatedData.userId] });
+        scheduleCommunityMemberBroadcastFrom(fastify, {
+          kind: 'joined', communityId: id, userId: validatedData.userId, role: communityMemberRoleOf(member.role), via: 'invited',
+        });
       }
 
       // Critère STRICT avec le viewer réel (l'admin qui vient d'ajouter le
@@ -545,6 +549,10 @@ const community = await fastify.prisma.community.findFirst({
         return sendNotFound(reply, 'Member not found in this community');
       }
 
+      scheduleCommunityMemberBroadcastFrom(fastify, {
+        kind: 'role-updated', communityId: id, userId: updatedMember.userId, role: communityMemberRoleOf(updatedMember.role),
+      });
+
       return sendSuccess(reply, updatedMember);
     } catch (error) {
       logger.error('Error updating member role', error as Error);
@@ -673,6 +681,8 @@ const community = await fastify.prisma.community.findFirst({
           { communityId: id, userId: memberId, now: leftAt },
         );
       }
+
+      scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'left', communityId: id, userId: memberId, reason: 'removed' });
 
       return sendSuccess(reply, { message: 'Member removed successfully' });
     } catch (error) {

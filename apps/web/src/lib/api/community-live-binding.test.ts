@@ -26,7 +26,7 @@ const until = async (ready: () => boolean) => {
   expect(ready()).toBe(true);
 };
 
-describe('les communautés vivantes, montées avec la connexion (#18435)', () => {
+describe('les communautés vivantes, montées avec la connexion (#18435, #18766)', () => {
   test('un community:updated renomme le détail en cache sans écran de communauté ouvert', async () => {
     const queryClient = new QueryClient();
     const cached: CommunitySummary = {
@@ -36,7 +36,10 @@ describe('les communautés vivantes, montées avec la connexion (#18435)', () =>
     queryClient.setQueryData(communityQueryKey(CLUB), cached);
     const { socket, handlers } = fakeSocket();
     const off = bindCommunityLiveLazily({ socket, queryClient });
-    await until(() => handlers.size === 1);
+    await until(() => handlers.has('community:updated'));
+    expect([...handlers.keys()].sort()).toEqual(
+      ['community:member-joined', 'community:member-left', 'community:member-role-updated', 'community:updated'],
+    );
 
     handlers.get('community:updated')?.({
       communityId: CLUB, identifier: 'mshy_club', name: 'Nouveau', description: null, avatar: null, banner: null,

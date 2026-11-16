@@ -34,3 +34,52 @@ export interface CommunityUpdatedEventData {
   readonly memberCount: number;
   readonly updatedAt: string;
 }
+
+/**
+ * L'EFFECTIF d'une communauté (#18766, seconde tranche de #16857) — trois
+ * noms, découpés comme la jumelle conversation (`participant:joined`,
+ * `participant:left`, `participant:role-updated`).
+ *
+ * Audience : la room personnelle de chaque membre ACTIF après l'écriture, du
+ * créateur, et de la personne CONCERNÉE (qui apprend son propre départ ou
+ * retrait sur ses autres appareils). Jamais un non-membre, jamais un ancien
+ * membre tiers.
+ *
+ * La charge ne nomme la personne que par son identifiant, comme la liste des
+ * membres que chaque destinataire lit déjà : ni profil, ni présence, ni
+ * coordonnées. Un client qui veut le profil relit la liste, qui repasse par
+ * les gardes de la passerelle. `memberCount` compte les membres ACTIFS après
+ * l'écriture ; `at` est une chaîne ISO.
+ */
+export type CommunityMemberRole = 'admin' | 'moderator' | 'member';
+
+/** Comment la personne est entrée : d'elle-même, ou par un tiers (invitation, ajout). */
+export type CommunityMemberJoinVia = 'self' | 'invited';
+
+/** Comment la personne est sortie : d'elle-même, ou retirée par un administrateur. */
+export type CommunityMemberLeftReason = 'left' | 'removed';
+
+export interface CommunityMemberJoinedEventData {
+  readonly communityId: string;
+  readonly userId: string;
+  readonly role: CommunityMemberRole;
+  readonly via: CommunityMemberJoinVia;
+  readonly memberCount: number;
+  readonly at: string;
+}
+
+export interface CommunityMemberLeftEventData {
+  readonly communityId: string;
+  readonly userId: string;
+  readonly reason: CommunityMemberLeftReason;
+  readonly memberCount: number;
+  readonly at: string;
+}
+
+export interface CommunityMemberRoleUpdatedEventData {
+  readonly communityId: string;
+  readonly userId: string;
+  readonly role: CommunityMemberRole;
+  readonly memberCount: number;
+  readonly at: string;
+}
