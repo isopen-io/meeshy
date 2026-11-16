@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import MeeshySDK
+import MeeshyUI
 import os
 
 private extension Logger {
@@ -17,9 +18,10 @@ private extension Logger {
 /// - Sur la sortie intégrée, la voix sort sur le HAUT-PARLEUR avec un gain ×2 ; avec des écouteurs, un casque ou des
 ///   AirPods, ni redirection ni gain (#17087, `TalkieOutputPlan`). Un changement de sortie en pleine prise de parole
 ///   réapplique la règle aussitôt.
-/// - Le bouton silencieux est RESPECTÉ : quand rien d'autre ne joue dans l'app, la session passe en `.ambient`, qui se
-///   tait en mode silencieux et se mêle à la musique d'une autre app sans la couper. Quand l'app joue déjà (un vocal,
-///   une story), sa catégorie est gardée : le talkie ne casse pas ce qui sonne.
+/// - Ce qu'on écoutait se tait pendant la voix, puis reprend (#18820, `TalkieListeningHold`) : les lecteurs Meeshy se
+///   mettent en pause, la musique d'une autre app s'interrompt (session sans mélange, `InterruptingVoiceSessionLaw`) ;
+///   la voix finie, la session se rend en prévenant les autres apps et les lecteurs Meeshy reprennent. Quand rien ne
+///   joue, la session est `.soloAmbient` : le bouton silencieux reste respecté.
 /// - Pendant un appel, rien ne sort : la passerelle coupe déjà (`cut`), et la session reste à l'appel.
 @MainActor
 final class TalkieVoicePlayer: TalkieSink {
@@ -55,9 +57,17 @@ final class TalkieVoicePlayer: TalkieSink {
 
     nonisolated deinit {}
 
-    init(isInCall: @escaping () -> Bool = { CallManager.isCallActiveFlag }, meter: any TalkieLevelMetering = TalkieLevelMeter.incoming) {
+    /// Ce qu'on écoutait, mis en pause pendant la voix et rendu à sa fin (#18820).
+    private let listening: TalkieListeningHold
+
+    init(
+        isInCall: @escaping () -> Bool = { CallManager.isCallActiveFlag },
+        meter: any TalkieLevelMetering = TalkieLevelMeter.incoming,
+        listening: TalkieListeningHold = TalkieListeningHold(session: TalkieCoordinatorVoiceSession(), listening: MeeshyListeningPause())
+    ) {
         self.isInCall = isInCall
         self.meter = meter
+        self.listening = listening
         engine.attach(voicesMixer)
         engine.attach(booster)
         engine.connect(voicesMixer, to: booster, format: nil)
@@ -151,7 +161,7 @@ final class TalkieVoicePlayer: TalkieSink {
     // MARK: - Sortie
 
     private func prepareOutput() {
-        if !Self.systemActivatedSession { MediaSessionCoordinator.shared.activateMixableVoicePlayback() }
+        listening.begin(systemSession: Self.systemActivatedSession)
         applyOutputPlan()
         observeOutputChanges()
     }
@@ -216,11 +226,39 @@ final class TalkieVoicePlayer: TalkieSink {
         engine.stop()
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
-        guard !Self.systemActivatedSession else {
-            Self.onSystemSessionIdle?()
-            return
-        }
-        MediaSessionCoordinator.shared.releaseMixableVoicePlayback()
+        let systemSession = Self.systemActivatedSession
+        listening.end(systemSession: systemSession)
+        guard systemSession else { return }
+        Self.onSystemSessionIdle?()
+    }
+}
+
+/// La session de la voix, posée par le coordinateur de l'app (#18820).
+@MainActor
+final class TalkieCoordinatorVoiceSession: TalkieVoiceSessionProviding {
+    nonisolated deinit {}
+
+    func activateVoice() { MediaSessionCoordinator.shared.activateInterruptingVoicePlayback() }
+
+    func releaseVoice() { MediaSessionCoordinator.shared.releaseInterruptingVoicePlayback() }
+}
+
+/// Les lecteurs Meeshy reçoivent le signal d'une interruption — ceux qui jouent se mettent en pause, et reprennent à sa
+/// fin s'ils n'ont pas été mis en pause entre-temps (`InterruptionResumeLedger`) ; les lecteurs à timeline (story) et la
+/// séance Ensemble suivent `PlaybackInterruption`. Un appel qui a pris la main garde l'interruption à son compte.
+@MainActor
+final class MeeshyListeningPause: MeeshyListeningProviding {
+    nonisolated deinit {}
+
+    func pauseListening() {
+        PlaybackInterruption.shared.begin()
+        MediaSessionCoordinator.shared.interruptMeeshyPlayback()
+    }
+
+    func resumeListening() {
+        guard !CallManager.isCallActiveFlag else { return }
+        MediaSessionCoordinator.shared.resumeMeeshyPlayback()
+        PlaybackInterruption.shared.end()
     }
 }
 

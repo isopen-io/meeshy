@@ -159,7 +159,7 @@ public actor MediaSessionCoordinator {
 
     /// Single, lock-serialized entry point for publishing on `events`. See
     /// `_eventsLock`.
-    private nonisolated func emit(_ event: Event) {
+    nonisolated func emit(_ event: Event) {
         _eventsLock.withLock { _ in events.send(event) }
     }
 

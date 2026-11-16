@@ -8,12 +8,14 @@ import Foundation
 /// d'un contenu passe par `ContentPlaybackSessionLaw`.
 ///
 /// La liste blanche nomme ce qui n'est PAS du contenu : l'appel, sa sonnerie
-/// de retour, et la timeline du composer, qui porte sa propre piste.
+/// de retour, la timeline du composer, qui porte sa propre piste, et la loi de
+/// la voix du talkie, qui RETIRE le mélange (#18820).
 struct ContentPlaybackMixingSourceGuardTests {
 
     private static let allowed: Set<String> = [
         "CallAudioSessionController.swift",
         "CallAudioSessionTuning.swift",
+        "InterruptingVoiceSessionLaw.swift",
         "RingbackTonePlayer.swift",
         "StoryTimelineEngine.swift",
     ]
