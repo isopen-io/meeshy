@@ -125,7 +125,8 @@ final class ConversationSocketHandlerNoticeRefreshTests: XCTestCase {
 
     func test_captureNotice_redeliveredUnderSameId_rewritesItsCount() async throws {
         let (sut, socket, db, delegate) = try makeSUT()
-        _ = (sut, delegate)
+        _ = delegate
+        await sut.persistence?.start()
 
         socket.simulateMessage(captureNotice(count: 2))
         try await Task.sleep(nanoseconds: 300_000_000)

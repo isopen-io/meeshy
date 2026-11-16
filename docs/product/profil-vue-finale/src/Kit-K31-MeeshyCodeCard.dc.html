@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K31 MeeshyCodeCard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{margin-top:1px}
+.li b{font-weight:700}
+.cell{flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;overflow:hidden}
+.cell>.cv{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.cell>.cp{display:flex;flex-direction:column;gap:4px;padding:16px 20px 20px;border-top:1px solid var(--line)}
+.cell>.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stg{background:linear-gradient(165deg,color-mix(in oklab,var(--accent) 48%,#1E1B4B) 0%,color-mix(in oklab,var(--accent) 20%,var(--ground)) 56%,var(--ground) 100%)}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:130px minmax(0,1fr) minmax(0,1.2fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.leg{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 14px;align-items:start}
+.leg>.kan{position:static;margin-top:1px}
+.leg b{font-size:15px;font-weight:700}
+.leg p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+
+.mx{--k31-m1:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 21 21'><path d='M8.38 .38h.24v.24h-.24zM9.38 .38h.24v.24h-.24zM10.38 .38h.24v.24h-.24zM12.38 .38h.24v.24h-.24zM9.38 1.38h.24v.24h-.24zM11.38 1.38h.24v.24h-.24zM12.38 1.38h.24v.24h-.24zM8.38 2.38h.24v.24h-.24zM10.38 2.38h.24v.24h-.24zM11.38 2.38h.24v.24h-.24zM12.38 2.38h.24v.24h-.24zM11.38 4.38h.24v.24h-.24zM8.38 5.38h.24v.24h-.24zM11.38 5.38h.24v.24h-.24zM8.38 6.38h.24v.24h-.24zM10.38 6.38h.24v.24h-.24zM12.38 6.38h.24v.24h-.24zM8.38 7.38h.24v.24h-.24zM9.38 7.38h.24v.24h-.24zM2.38 8.38h.24v.24h-.24zM6.38 8.38h.24v.24h-.24zM7.38 8.38h.24v.24h-.24zM13.38 8.38h.24v.24h-.24zM16.38 8.38h.24v.24h-.24zM.38 9.38h.24v.24h-.24zM1.38 9.38h.24v.24h-.24zM3.38 9.38h.24v.24h-.24zM5.38 9.38h.24v.24h-.24zM7.38 9.38h.24v.24h-.24zM14.38 9.38h.24v.24h-.24zM15.38 9.38h.24v.24h-.24zM17.38 9.38h.24v.24h-.24zM19.38 9.38h.24v.24h-.24zM20.38 9.38h.24v.24h-.24zM2.38 10.38h.24v.24h-.24zM4.38 10.38h.24v.24h-.24zM5.38 10.38h.24v.24h-.24zM6.38 10.38h.24v.24h-.24zM7.38 10.38h.24v.24h-.24zM13.38 10.38h.24v.24h-.24zM14.38 10.38h.24v.24h-.24zM15.38 10.38h.24v.24h-.24zM17.38 10.38h.24v.24h-.24zM18.38 10.38h.24v.24h-.24zM1.38 11.38h.24v.24h-.24zM2.38 11.38h.24v.24h-.24zM5.38 11.38h.24v.24h-.24zM7.38 11.38h.24v.24h-.24zM13.38 11.38h.24v.24h-.24zM14.38 11.38h.24v.24h-.24zM18.38 11.38h.24v.24h-.24zM19.38 11.38h.24v.24h-.24zM20.38 11.38h.24v.24h-.24zM3.38 12.38h.24v.24h-.24zM4.38 12.38h.24v.24h-.24zM6.38 12.38h.24v.24h-.24zM14.38 12.38h.24v.24h-.24zM15.38 12.38h.24v.24h-.24zM16.38 12.38h.24v.24h-.24zM17.38 12.38h.24v.24h-.24zM8.38 13.38h.24v.24h-.24zM9.38 13.38h.24v.24h-.24zM10.38 13.38h.24v.24h-.24zM13.38 13.38h.24v.24h-.24zM15.38 13.38h.24v.24h-.24zM16.38 13.38h.24v.24h-.24zM18.38 13.38h.24v.24h-.24zM8.38 14.38h.24v.24h-.24zM9.38 14.38h.24v.24h-.24zM10.38 14.38h.24v.24h-.24zM11.38 14.38h.24v.24h-.24zM14.38 14.38h.24v.24h-.24zM15.38 14.38h.24v.24h-.24zM16.38 14.38h.24v.24h-.24zM18.38 14.38h.24v.24h-.24zM20.38 14.38h.24v.24h-.24zM9.38 15.38h.24v.24h-.24zM10.38 15.38h.24v.24h-.24zM11.38 15.38h.24v.24h-.24zM12.38 15.38h.24v.24h-.24zM14.38 15.38h.24v.24h-.24zM15.38 15.38h.24v.24h-.24zM18.38 15.38h.24v.24h-.24zM19.38 15.38h.24v.24h-.24zM20.38 15.38h.24v.24h-.24zM8.38 16.38h.24v.24h-.24zM9.38 16.38h.24v.24h-.24zM10.38 16.38h.24v.24h-.24zM13.38 16.38h.24v.24h-.24zM16.38 16.38h.24v.24h-.24zM17.38 16.38h.24v.24h-.24zM18.38 16.38h.24v.24h-.24zM8.38 17.38h.24v.24h-.24zM9.38 17.38h.24v.24h-.24zM12.38 17.38h.24v.24h-.24zM15.38 17.38h.24v.24h-.24zM18.38 17.38h.24v.24h-.24zM9.38 18.38h.24v.24h-.24zM12.38 18.38h.24v.24h-.24zM13.38 18.38h.24v.24h-.24zM15.38 18.38h.24v.24h-.24zM18.38 18.38h.24v.24h-.24zM19.38 18.38h.24v.24h-.24zM20.38 18.38h.24v.24h-.24zM8.38 19.38h.24v.24h-.24zM9.38 19.38h.24v.24h-.24zM10.38 19.38h.24v.24h-.24zM11.38 19.38h.24v.24h-.24zM13.38 19.38h.24v.24h-.24zM16.38 19.38h.24v.24h-.24zM18.38 19.38h.24v.24h-.24zM20.38 19.38h.24v.24h-.24zM10.38 20.38h.24v.24h-.24zM11.38 20.38h.24v.24h-.24zM12.38 20.38h.24v.24h-.24zM15.38 20.38h.24v.24h-.24zM16.38 20.38h.24v.24h-.24zM17.38 20.38h.24v.24h-.24zM18.38 20.38h.24v.24h-.24zM20.38 20.38h.24v.24h-.24z' stroke='%23000' stroke-width='.62' stroke-linejoin='round'/><rect x='2' y='2' width='3' height='3' rx='.95'/><rect x='16' y='2' width='3' height='3' rx='.95'/><rect x='2' y='16' width='3' height='3' rx='.95'/></svg>");--k31-m2:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 21 21'><rect x='0.5' y='0.5' width='6' height='6' rx='1.8' fill='none' stroke='%23000'/><rect x='14.5' y='0.5' width='6' height='6' rx='1.8' fill='none' stroke='%23000'/><rect x='0.5' y='14.5' width='6' height='6' rx='1.8' fill='none' stroke='%23000'/></svg>")}
+.qr{position:relative;display:block;flex:none;width:220px;height:220px}
+.qr::before,.qr::after{content:"";position:absolute;inset:0}
+.qr::before{background:var(--qr-ink,#1B1140);-webkit-mask:var(--k31-m1) center/100% 100% no-repeat;mask:var(--k31-m1) center/100% 100% no-repeat}
+.qr::after{background:var(--qr-tint,#6D28D9);-webkit-mask:var(--k31-m2) center/100% 100% no-repeat;mask:var(--k31-m2) center/100% 100% no-repeat}
+.qr>.ctr{position:absolute;z-index:1;left:50%;top:50%;width:25.5%;height:25.5%;transform:translate(-50%,-50%);border-radius:50%;background:var(--qr-plate,#F5F3FF);display:flex;align-items:center;justify-content:center;color:var(--qr-tint,#6D28D9)}
+.plate{display:flex;padding:16px;border-radius:28px;background:var(--qr-plate,#F5F3FF);box-shadow:0 14px 30px rgba(9,9,11,.35)}
+.pcard{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center}
+.pcard::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(108deg,rgba(255,255,255,0) 38%,rgba(255,255,255,.18) 50%,rgba(255,255,255,0) 62%);background-size:260% 100%;background-position:120% 0}
+.pcard.live{animation:k31Float 7s ease-in-out infinite}
+.pcard.live::after{animation:k31Sheen 5.5s ease-in-out infinite}
+.pcard.flat::after{display:none}
+.big{width:318px;border-radius:34px;padding:22px 24px 20px;gap:18px}
+.cmp{width:228px;border-radius:28px;padding:18px 18px 14px;gap:12px}
+.cmp .plate{padding:12px;border-radius:22px}
+.cmp .qr{width:160px;height:160px}
+.mini{display:flex;padding:6px;border-radius:14px;background:var(--qr-plate,#F5F3FF);flex:none}
+.mini .qr{width:72px;height:72px}
+.ret{position:absolute;inset:26px}
+.ret>b{position:absolute;width:38px;height:38px;border:4px solid var(--accent-ink);animation:k31Aim 1.8s ease-in-out infinite}
+.ret>b:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-radius:16px 0 0 0}
+.ret>b:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-radius:0 16px 0 0}
+.ret>b:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 16px}
+.ret>b:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 16px 0}
+.ret>i{position:absolute;left:10px;right:10px;top:10px;height:3px;border-radius:3px;background:var(--accent-ink);box-shadow:0 0 18px 4px color-mix(in oklab,var(--accent) 70%,transparent);animation:k31Scan 2.6s ease-in-out infinite}
+.halo{box-shadow:0 0 0 6px rgba(255,255,255,.14),0 0 54px 10px rgba(245,243,255,.55);animation:k31Halo 3.2s ease-in-out infinite}
+
+.scene{perspective:1100px}
+.tl{animation:k31Tilt 5s cubic-bezier(.45,0,.3,1) infinite;transform-style:preserve-3d;will-change:transform}
+.tl::after{animation:k31TiltSheen 5s cubic-bezier(.45,0,.3,1) infinite}
+.tl .plate{animation:k31Par 5s cubic-bezier(.45,0,.3,1) infinite}
+.tl .ctr{animation:k31ParC 5s cubic-bezier(.45,0,.3,1) infinite}
+.tph{display:inline-flex;animation:k31Phone 5s cubic-bezier(.45,0,.3,1) infinite}
+.tcur{position:absolute;left:0;right:0;bottom:0;height:4px;border-radius:4px;background:var(--field)}
+.tcur>i{position:absolute;top:-4px;left:50%;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--accent-ink);animation:k31Cur 5s cubic-bezier(.45,0,.3,1) infinite}
+.sb{position:relative;display:flex;align-items:center;justify-content:center;height:210px;border-radius:22px;overflow:hidden;perspective:700px}
+.sb .pcard{width:124px;border-radius:20px;padding:12px 12px 10px;gap:8px}
+.sb .plate{padding:8px;border-radius:14px;box-shadow:0 8px 16px rgba(9,9,11,.35)}
+.sb .qr{width:84px;height:84px}
+@keyframes k31Float{0%,100%{transform:rotate(-3deg) translateY(0)}50%{transform:rotate(-1.8deg) translateY(-9px)}}
+@keyframes k31Sheen{0%,35%{background-position:120% 0}85%,100%{background-position:-40% 0}}
+@keyframes k31Tilt{0%,10%{transform:rotateY(0) rotateX(0)}32%,40%{transform:rotateY(-16deg) rotateX(6deg)}66%,74%{transform:rotateY(16deg) rotateX(-6deg)}92%,100%{transform:rotateY(0) rotateX(0)}}
+@keyframes k31TiltSheen{0%,10%{background-position:40% 0}32%,40%{background-position:112% 0}66%,74%{background-position:-32% 0}92%,100%{background-position:40% 0}}
+@keyframes k31Par{0%,10%{transform:translate(0,0)}32%,40%{transform:translate(7px,-3px)}66%,74%{transform:translate(-7px,3px)}92%,100%{transform:translate(0,0)}}
+@keyframes k31ParC{0%,10%{transform:translate(-50%,-50%)}32%,40%{transform:translate(calc(-50% + 6px),calc(-50% - 3px))}66%,74%{transform:translate(calc(-50% - 6px),calc(-50% + 3px))}92%,100%{transform:translate(-50%,-50%)}}
+@keyframes k31Phone{0%,10%{transform:rotate(0)}32%,40%{transform:rotate(-16deg)}66%,74%{transform:rotate(16deg)}92%,100%{transform:rotate(0)}}
+@keyframes k31Cur{0%,10%{transform:translateX(0)}32%,40%{transform:translateX(-150px)}66%,74%{transform:translateX(150px)}92%,100%{transform:translateX(0)}}
+@keyframes k31Aim{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.9);opacity:.7}}
+@keyframes k31Scan{0%,100%{transform:translateY(0)}50%{transform:translateY(238px)}}
+@keyframes k31Halo{0%,100%{box-shadow:0 0 0 6px rgba(255,255,255,.14),0 0 54px 10px rgba(245,243,255,.55)}50%{box-shadow:0 0 0 8px rgba(255,255,255,.18),0 0 70px 16px rgba(245,243,255,.7)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .2"></div>
+<div class="orb" style="width: 230px; height: 230px; right: -30px; top: -40px; background: #6366F1; opacity: .26; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 920px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K31 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyCodeCard</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un QR se présente sur une carte de verre qui suit l'inclinaison du téléphone</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 800px">Tu donnes une chaîne, une teinte et une légende. Il dessine le même carré sur les trois plateformes, module pour module, et le pose sur un verre qui prend la lumière quand on bouge.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il montre un code, il ne sait pas ce qu'il ouvre</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Encode <b>une chaîne opaque</b> en matrice QR et la dessine : modules arrondis, trois yeux à la teinte, pastille au centre. C'est <code>MeeshyCodeMatrix</code>.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Pose la matrice sur <b>une plaque toujours claire</b>, dans une carte de verre, avec une légende dessous. C'est <code>MeeshyCodeCard</code>.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Suit <b>l'inclinaison</b> : la carte pivote, le reflet balaie, la plaque et la pastille glissent en parallaxe. Capteur, pointeur, ou rien.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Pousse <b>la luminosité</b> au maximum tant qu'il est à l'écran, et la rend en partant.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Fabriquer l'adresse, le jeton ou le secret : <b>l'app</b>. Il reçoit <code>payload</code> et ne le lit pas.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Le verre de la carte : <b>K01</b>. Les ressorts et les durées : <b>K26</b>. Le billet autour d'une miniature : <b>K30</b>.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Ouvrir la caméra et décoder : <b>l'app</b>. La variante de visée ne dessine que le cadre, par-dessus l'image qu'on lui donne.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Copier, envoyer, enregistrer l'image : la grille d'actions est <b>K32</b>. Le menu « ce que montre le QR » : <b>K18</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Deux pièces : la matrice, et la carte qui la porte</h2></header>
+<div style="display: grid; grid-template-columns: 760px minmax(0, 1fr); gap: 40px; align-items: center">
+<div class="kcell stg" style="padding: 56px 0; overflow: hidden">
+<div class="orb" style="width: 280px; height: 280px; left: -60px; top: 60px; background: #A855F7; opacity: .4"></div>
+<div class="orb" style="width: 240px; height: 240px; right: -50px; bottom: 80px; background: #6366F1; opacity: .4; animation-delay: -4s"></div>
+<div style="position: relative; width: 541px">
+<div class="pcard glass big" style="zoom: 1.7">
+<div style="display: flex; align-items: center; gap: 14px; align-self: stretch">
+<span class="ring"><span class="av" style="width: 72px; height: 72px; font-size: 26px">AN</span></span>
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span class="d" style="font-size: 25px">Aïssa Ndiaye</span>
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@aissa</span>
+</div>
+</div>
+<div class="plate" role="img" aria-label="QR de démonstration"><span class="qr"><span class="ctr"><span class="av" style="width: 46px; height: 46px; font-size: 17px">AN</span></span></span></div>
+<div style="display: flex; align-items: center; gap: 8px; color: var(--ink)">[[ic:link s]]<span class="mono" style="font-size: 14px">meeshy.me/@aissa</span></div>
+</div>
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 541px; height: 100%; border-radius: 58px; pointer-events: none; background: linear-gradient(108deg, rgba(255,255,255,0) 60%, rgba(255,255,255,.2) 70%, rgba(255,255,255,0) 80%)"></div>
+<span class="kan" style="left: 500px; top: -11px">1</span>
+<span class="kan" style="left: 478px; top: 168px">2</span>
+<span class="kan" style="left: -11px; top: 96px">3</span>
+<span class="kan" style="left: 45px; top: 196px">4</span>
+<span class="kan" style="left: 262px; top: 268px">5</span>
+<span class="kan" style="left: 100px; top: 505px">6</span>
+<span class="kan" style="left: 305px; top: 372px">7</span>
+<span class="kan" style="left: 84px; top: 673px">8</span>
+</div>
+</div>
+<div class="leg" style="row-gap: 18px">
+<span class="kan">1</span><div><b>Carte</b> <code>MeeshyCodeCard</code><p>Verre de K01, rayon 34, marges 22 / 24 / 20, écart 18. Largeur = côté du code + 98. Dessinée ici à 1,7 × : 318 px en vrai.</p></div>
+<span class="kan">2</span><div><b>Reflet</b><p>Une bande de blanc à 18 % au plus, inclinée à 108°, large d'un quart de la carte. Sa place suit l'inclinaison. Les modules gardent 9:1 sous elle.</p></div>
+<span class="kan">3</span><div><b>Emplacement</b> <code>header</code><p>Facultatif. L'hôte y pose ce qu'il veut : ici un avatar de 72 et deux lignes. Vide, la carte commence à la plaque.</p></div>
+<span class="kan">4</span><div><b>Plaque</b><p>Toujours claire, <code>#F5F3FF</code>, dans les deux thèmes. Rayon 28, marge 16. Elle tient la zone de silence ; 4 modules pleins en <code>plain</code>.</p></div>
+<span class="kan">5</span><div><b>Modules</b> <code>MeeshyCodeMatrix</code><p>Chaque module sombre : un carré à 86 % de sa case, coins à 36 %. Encre <code>#1B1140</code>, jamais thématisée. Correction M.</p></div>
+<span class="kan">6</span><div><b>Yeux</b><p>Trois repères de 7 modules : anneau d'un module à la teinte, rayon 2,3 modules ; pupille de 3 modules à l'encre. Leur géométrie ne s'arrondit pas plus.</p></div>
+<span class="kan">7</span><div><b>Emplacement</b> <code>center</code><p>Pastille de 25 % du côté (56 pour 220), fond de la plaque. Elle couvre 6,5 % du code ; la correction M en tolère 15. Absente sous 120 px.</p></div>
+<span class="kan">8</span><div><b>Légende</b> <code>caption</code><p>Une ligne en mono 14, précédée d'une icône que l'hôte choisit. Elle dit en clair ce que le code porte. Absente en miniature.</p></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois variantes, trois tailles, quatre états</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 520px">
+<div class="orb" style="width: 200px; height: 200px; left: -60px; top: 40px; background: #A855F7; opacity: .45"></div>
+<div class="pcard glass big live">
+<div style="display: flex; align-items: center; gap: 14px; align-self: stretch">
+<span class="ring"><span class="av" style="width: 72px; height: 72px; font-size: 26px">AN</span></span>
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span class="d" style="font-size: 25px">Aïssa Ndiaye</span>
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@aissa</span>
+</div>
+</div>
+<div class="plate" role="img" aria-label="QR du lien meeshy.me/@aissa"><span class="qr"><span class="ctr"><span class="av" style="width: 46px; height: 46px; font-size: 17px">AN</span></span></span></div>
+<div style="display: flex; align-items: center; gap: 8px; color: var(--ink)">[[ic:link s]]<span class="mono" style="font-size: 14px">meeshy.me/@aissa</span></div>
+</div>
+</div>
+<div class="cp"><b>Grande · <code>glass</code> · 220</b><span class="kcap">Celle de l'écran « Ma carte ». Verre, reflet, inclinaison. Le défaut.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="mx cv" data-theme="light" style="height: 520px; background: #E9E7F5">
+<div class="pcard flat big" style="background: #FFFFFF; border: 1px solid var(--line); --qr-ink: #000000; --qr-tint: #000000; --qr-plate: #FFFFFF">
+<div style="display: flex; align-items: center; gap: 14px; align-self: stretch">
+<span class="av" style="width: 72px; height: 72px; font-size: 26px">AN</span>
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span class="d" style="font-size: 25px">Aïssa Ndiaye</span>
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@aissa</span>
+</div>
+</div>
+<div class="plate" role="img" aria-label="QR du lien meeshy.me/@aissa, version à imprimer" style="padding: 0; box-shadow: none; border-radius: 0"><span class="qr" style="width: 252px; height: 252px"><span class="ctr"><span class="av" style="width: 52px; height: 52px; font-size: 19px">AN</span></span></span></div>
+<div style="display: flex; align-items: center; gap: 8px; color: var(--ink)">[[ic:link s]]<span class="mono" style="font-size: 14px">meeshy.me/@aissa</span></div>
+</div>
+</div>
+<div class="cp"><b>Claire · <code>plain</code></b><span class="kcap">Pour l'image enregistrée et l'impression. Fond blanc, encre noire, ni verre ni reflet ni inclinaison.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 520px">
+<div class="pcard glass flat big" style="padding: 22px 24px 20px">
+<div style="display: flex; align-items: center; gap: 10px; align-self: stretch; min-height: 44px">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:scan]]</span>
+<span class="d" style="font-size: 20px">Vise un code</span>
+</div>
+<div style="position: relative; width: 252px; height: 316px; border-radius: 28px; overflow: hidden">
+<div class="ph" style="position: absolute; inset: 0; border-radius: 28px">caméra</div>
+<div class="ret" aria-hidden="true"><b></b><b style="animation-delay: -.2s"></b><b style="animation-delay: -.4s"></b><b style="animation-delay: -.6s"></b><i></i></div>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; color: var(--ink)"><span class="mono" style="font-size: 14px">Tiens le code dans le cadre</span></div>
+</div>
+</div>
+<div class="cp"><b>Visée · <code>reticle</code></b><span class="kcap">En cours de lecture. Même carte, même rayon ; le cadre et le trait se posent sur l'image que l'hôte donne dans <code>viewfinder</code>.</span></div>
+</div>
+
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell cell">
+<div class="cv" style="height: 240px; padding: 0 28px">
+<div class="ticket" style="--cut: 50%; display: flex; align-items: center; gap: 16px; width: 100%; padding: 16px 20px">
+<span class="mini" role="img" aria-label="QR du lien meeshy.me/l/dkr-nuit" style="--qr-tint: #4338CA"><span class="qr"></span></span>
+<span style="display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1">
+<span class="tag" style="color: var(--l-track)">Lien de suivi</span>
+<span class="d" style="font-size: 19px">Réel Dakar la nuit</span>
+<span class="mono" style="color: var(--ink2)">meeshy.me/l/dkr-nuit</span>
+</span>
+<span style="display: flex; flex-direction: column; align-items: flex-end">
+<span class="d" style="font-size: 26px">1 284</span>
+<span style="font-size: 12px; color: var(--ink2)">clics</span>
+</span>
+</div>
+</div>
+<div class="cp"><b>Miniature · 72</b><span class="kcap">La matrice seule sur sa plaque (rayon 14, marge 6), dans un billet de K30. Ni pastille, ni légende, ni mouvement. Toucher l'agrandit.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 240px; gap: 22px">
+<div class="mini"><span class="qr"></span></div>
+<div class="plate" style="padding: 12px; border-radius: 22px"><span class="qr" style="width: 120px; height: 120px"><span class="ctr"><span style="display: inline-flex">[[ic:link s]]</span></span></span></div>
+</div>
+<div class="cp"><b>Tailles · 72, 160, 220</b><span class="kcap">Trois côtés, pas de côté libre. Un module ne descend jamais sous 3 px à l'écran : au-delà de 24 modules de côté, la miniature est refusée.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 240px; gap: 18px">
+<span class="mini" style="--qr-tint: #6D28D9"><span class="qr"></span></span>
+<span class="mini" style="--qr-tint: #4338CA"><span class="qr"></span></span>
+<span class="mini" style="--qr-tint: #047857"><span class="qr"></span></span>
+</div>
+<div class="cp"><b>Teinte · <code>tint</code></b><span class="kcap">Elle ne colore que les trois anneaux et l'icône du centre. La recette l'assombrit jusqu'à 4,5:1 sur la plaque ; l'encre des modules ne change pas.</span></div>
+</div>
+
+</div>
+<span class="tag" style="padding-top: 10px">États · il se prépare, il est prêt, il s'éclaire, il reste à plat</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 320px">
+<div class="pcard glass flat cmp" aria-busy="true">
+<div class="plate"><span class="sk" style="display: block; width: 160px; height: 160px; border-radius: 14px; background-image: linear-gradient(100deg, #E4E0F7 30%, #CFC8F2 50%, #E4E0F7 70%)"></span></div>
+<span class="sk" style="display: block; width: 120px; height: 12px; margin: 3px 0"></span>
+</div>
+</div>
+<div class="cp"><b>Génération</b><span class="kcap">Sans <code>payload</code>, ou pendant l'encodage au-delà d'une image : squelette à la place de la matrice, <code>MeeshySkeleton(.card)</code> de <b>K38</b>. La carte a déjà sa taille finale.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 320px">
+<div class="pcard glass cmp live" style="animation-delay: -2s">
+<div class="plate" role="img" aria-label="QR du lien meeshy.me/@aissa"><span class="qr"><span class="ctr"><span class="av" style="width: 32px; height: 32px; font-size: 12px">AN</span></span></span></div>
+<span style="display: flex; align-items: center; gap: 7px">[[ic:link s]]<span class="mono">meeshy.me/@aissa</span></span>
+</div>
+</div>
+<div class="cp"><b>Prêt</b><span class="kcap">La matrice remplace le squelette en fondu, sans que rien ne bouge autour. L'inclinaison commence ici.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 320px; flex-direction: column; gap: 14px">
+<div class="pcard glass flat cmp" style="overflow: visible">
+<div class="plate halo" role="img" aria-label="QR du lien meeshy.me/@aissa" style="--qr-plate: #FFFFFF"><span class="qr"><span class="ctr"><span class="av" style="width: 32px; height: 32px; font-size: 12px">AN</span></span></span></div>
+<span style="display: flex; align-items: center; gap: 7px">[[ic:link s]]<span class="mono">meeshy.me/@aissa</span></span>
+</div>
+<span class="chip glass" style="color: var(--ink)">[[ic:sun-fill s]]<span>Écran au maximum</span></span>
+</div>
+<div class="cp"><b>Luminosité poussée</b><span class="kcap">Dès que la moitié de la carte est visible : écran à 100 % en 300 ms, plaque en blanc pur. Rendu à la valeur d'avant en sortant ou en arrière-plan.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 320px">
+<div class="pcard glass flat cmp">
+<div class="plate" role="img" aria-label="QR du lien meeshy.me/@aissa"><span class="qr"><span class="ctr"><span class="av" style="width: 32px; height: 32px; font-size: 12px">AN</span></span></span></div>
+<span style="display: flex; align-items: center; gap: 7px">[[ic:link s]]<span class="mono">meeshy.me/@aissa</span></span>
+</div>
+</div>
+<div class="cp"><b>À plat · <code>tilt: none</code></b><span class="kcap">Sous « réduire les animations », sans capteur, ou en économie d'énergie : carte droite, aucun reflet. Le code est le même.</span></div>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">La plaque sort de la carte ; la carte gagne un verso et un cadre qui dit où il en est</h3></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: flex-end; gap: 18px"><span class="mini" role="img" aria-label="QR, plaque de 72" style="--qr-tint: #6D28D9"><span class="qr"></span></span><span class="mini" role="img" aria-label="QR, plaque de 56" style="--qr-tint: #1B1140; padding: 5px; border-radius: 11px"><span class="qr" style="width: 46px; height: 46px"></span></span></div></div><span class="kcap"><b style="color: var(--ink)"><code>MeeshyCodePlate</code></b> La plaque et sa matrice, sorties de la carte et posées à plat : dans un billet, une rangée, une notification. De 56 à 220 ; à 56, les yeux perdent leur teinte.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><span class="mini" role="img" aria-label="QR du profil" style="position: relative; overflow: hidden; --qr-tint: #6D28D9"><span class="qr" style="width: 96px; height: 96px"></span><span style="position: absolute; left: 6px; right: 6px; top: 46%; height: 2px; border-radius: 2px; background: #A855F7; box-shadow: 0 0 10px #A855F7"></span></span><button class="btn q sm" style="min-height: 36px; font-size: 12.5px">[[ic:download-simple s]]<span>Image</span></button></div></div><span class="kcap"><b style="color: var(--ink)"><code>style: plain</code> sur le web</b> À plat, sans verre ni inclinaison : une ligne de balayage passe une fois à l'arrivée, et l'action « Image » enregistre le même carré.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="glass" style="display: flex; flex-direction: column; align-items: center; gap: 8px; width: 170px; padding: 18px 14px; border-radius: 24px; text-align: center"><span class="av" style="width: 52px; height: 52px; font-size: 19px">AN</span><b class="d" style="font-size: 16px">Aïssa Ndiaye</b><span class="kcap">Designer sonore à Dakar.</span></div></div><span class="kcap"><b style="color: var(--ink)"><code>face: identity</code></b> Le verso sans code : <code>header</code> seul (avatar, nom, bio) sur la même carte de verre. Le retournement est celui de <b>K30</b>, <code>motion.flip</code>.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: flex-start; gap: 18px"><span style="display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink2)"><span style="display: inline-flex; color: var(--ink3)">[[ic:corners-out xl]]</span>repos</span><span style="display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink2)"><span style="display: inline-flex; color: var(--accent-ink)">[[ic:corners-out xl]]</span>cherche</span><span style="display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink2)"><span style="display: inline-flex; color: var(--ok)">[[ic:corners-out xl]]</span>trouvé</span></div></div><span class="kcap"><b style="color: var(--ink)">Cadre de visée · trois états</b> <code>reticle</code> : coins à l'encre au repos, à l'accent et battants pendant la recherche (<code>motion.pulse</code>), verts et serrés sur le code trouvé.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Tu penches, la carte pivote et la lumière passe</h2></header>
+<div style="display: grid; grid-template-columns: 520px minmax(0, 1fr); gap: 32px; align-items: stretch">
+
+<div class="kcell stg scene" style="flex-direction: column; gap: 26px; padding: 44px 28px 32px; overflow: hidden">
+<div class="orb" style="width: 240px; height: 240px; left: -70px; top: 60px; background: #A855F7; opacity: .45"></div>
+<div class="orb" style="width: 200px; height: 200px; right: -60px; bottom: 120px; background: #6366F1; opacity: .45; animation-delay: -4s"></div>
+<div class="pcard glass big tl">
+<div style="display: flex; align-items: center; gap: 14px; align-self: stretch">
+<span class="ring"><span class="av" style="width: 72px; height: 72px; font-size: 26px">AN</span></span>
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span class="d" style="font-size: 25px">Aïssa Ndiaye</span>
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@aissa</span>
+</div>
+</div>
+<div class="plate" role="img" aria-label="QR du lien meeshy.me/@aissa"><span class="qr"><span class="ctr"><span class="av" style="width: 46px; height: 46px; font-size: 17px">AN</span></span></span></div>
+<div style="display: flex; align-items: center; gap: 8px; color: var(--ink)">[[ic:link s]]<span class="mono" style="font-size: 14px">meeshy.me/@aissa</span></div>
+</div>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; width: 340px">
+<span class="tph" style="color: var(--ink)">[[ic:device-mobile xl]]</span>
+<div style="position: relative; width: 100%; height: 22px">
+<div class="tcur"><i></i></div>
+</div>
+<div class="mono" style="display: flex; justify-content: space-between; width: 100%; color: var(--ink2)"><span>−16°</span><span>à plat</span><span>+16°</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 20px; min-width: 0">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="sb stg"><div class="pcard glass" style="transform: rotateY(-22deg) rotateX(8deg)"><div class="plate" style="transform: translate(3px,-1px)"><span class="qr"></span></div><span class="sk" style="display: block; width: 60px; height: 6px; animation: none"></span><span aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(108deg, rgba(255,255,255,0) 66%, rgba(255,255,255,.28) 80%, rgba(255,255,255,0) 94%)"></span></div></div>
+<span style="display: flex; align-items: flex-start; gap: 10px"><span class="step">1</span><span class="kcap"><b style="color: var(--ink)">Penché à gauche.</b> La carte pivote jusqu'à 16°. Le reflet part vers le bord de fin, la plaque glisse de 7 px.</span></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="sb stg"><div class="pcard glass"><div class="plate"><span class="qr"></span></div><span class="sk" style="display: block; width: 60px; height: 6px; animation: none"></span><span aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(108deg, rgba(255,255,255,0) 36%, rgba(255,255,255,.2) 50%, rgba(255,255,255,0) 64%)"></span></div></div>
+<span style="display: flex; align-items: flex-start; gap: 10px"><span class="step">2</span><span class="kcap"><b style="color: var(--ink)">À plat.</b> Carte droite, reflet au centre, au plus faible. C'est la pose où on scanne : rien ne gêne la lecture.</span></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="sb stg"><div class="pcard glass" style="transform: rotateY(22deg) rotateX(-8deg)"><div class="plate" style="transform: translate(-3px,1px)"><span class="qr"></span></div><span class="sk" style="display: block; width: 60px; height: 6px; animation: none"></span><span aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(108deg, rgba(255,255,255,0) 6%, rgba(255,255,255,.28) 20%, rgba(255,255,255,0) 34%)"></span></div></div>
+<span style="display: flex; align-items: flex-start; gap: 10px"><span class="step">3</span><span class="kcap"><b style="color: var(--ink)">Penché à droite.</b> Tout s'inverse. La pastille du centre glisse un peu plus que la plaque : c'est la profondeur.</span></span>
+</div>
+</div>
+<div class="spec"><b style="color: var(--ink)">inclinaison</b> · suit le capteur, lissé par le ressort de <b style="color: var(--accent-ink)">motion.float</b> · borne ±16° en lacet, ±6° en tangage · déclencheur : l'attitude du téléphone (<code>device</code>) ou la place du pointeur (<code>pointer</code>) · haptique : aucune · mouvement réduit : <code>none</code>, carte droite, pas de reflet</div>
+<div class="spec"><b style="color: var(--ink)">reflet et parallaxe</b> · sans durée propre, fonctions de l'angle · reflet : de 112 % à −32 % de la carte · plaque ±7 px, pastille ±6 px de plus, en sens inverse du pivot · seules transformation et position de fond s'animent</div>
+<div class="spec"><b style="color: var(--ink)">arrivée</b> · <b style="color: var(--accent-ink)">motion.rise</b> · 700 ms · sortie douce · déclencheur : apparition de la carte · haptique : aucune · mouvement réduit : fondu de 200 ms</div>
+<div class="spec"><b style="color: var(--ink)">prêt</b> · fondu de 200 ms du squelette vers la matrice · déclencheur : matrice encodée · haptique : aucune · mouvement réduit : immédiat</div>
+<div class="spec"><b style="color: var(--ink)">visée</b> · <b style="color: var(--accent-ink)">motion.pulse</b> sur les quatre coins, trait qui descend en 2,6 s · code trouvé : les coins se serrent sur lui (<b style="color: var(--accent-ink)">motion.morph</b>, 320 ms) · haptique : succès · mouvement réduit : cadre fixe, pas de trait</div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Mêmes noms sur les trois plateformes</h2></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span>
+<span class="h">iOS · MeeshyUI/Kit/MeeshyCodeCard.swift</span>
+<span class="h">Android · me.meeshy.ui.component.kit</span>
+<span class="h">Web · components/kit/meeshy-code-card.tsx</span>
+
+<span><b>Carte</b></span>
+<span><code>MeeshyCodeCard(payload:label:caption:tint:style:size:tilt:face:center:header:viewfinder:)</code></span>
+<span><code>MeeshyCodeCard(payload, label, modifier, caption, tint, style, size, tilt, face, center, header, viewfinder)</code></span>
+<span><code>&lt;MeeshyCodeCard payload label caption tint style size tilt face center header viewfinder /&gt;</code></span>
+
+<span><b>Matrice dessinée</b></span>
+<span><code>MeeshyCodeMatrix(payload:label:tint:side:center:)</code></span>
+<span><code>MeeshyCodeMatrix(payload, label, side, modifier, tint, center)</code></span>
+<span><code>&lt;MeeshyCodeMatrix payload label tint side center /&gt;</code></span>
+
+<span><b>Plaque seule</b></span>
+<span><code>MeeshyCodePlate(payload:label:tint:side:)</code></span>
+<span><code>MeeshyCodePlate(payload, label, side, modifier, tint)</code></span>
+<span><code>&lt;MeeshyCodePlate payload label tint side /&gt;</code></span>
+
+<span><b>Encodeur pur</b></span>
+<span><code>MeeshyCodeMatrix.encode(_ payload: String) -&gt; MeeshyCodeModules?</code></span>
+<span><code>MeeshyCodeMatrix.encode(payload: String): MeeshyCodeModules?</code></span>
+<span><code>encodeMeeshyCode(payload: string): MeeshyCodeModules | null</code></span>
+
+<span><b>Variantes</b></span>
+<span><code>enum MeeshyCodeCardStyle { glass, plain, reticle }</code></span>
+<span><code>enum class MeeshyCodeCardStyle { Glass, Plain, Reticle }</code></span>
+<span><code>'glass' | 'plain' | 'reticle'</code></span>
+
+<span><b>Tailles</b></span>
+<span><code>enum MeeshyCodeCardSize { mini, compact, large }</code> : 72, 160, 220</span>
+<span><code>enum class</code> identique, en dp</span>
+<span><code>72 | 160 | 220</code>, en <code>rem</code></span>
+
+<span><b>Inclinaison</b></span>
+<span><code>enum MeeshyCodeCardTilt { device, pointer, none }</code></span>
+<span><code>enum class</code> identique</span>
+<span><code>'device' | 'pointer' | 'none'</code></span>
+
+<span><b>Emplacements</b></span>
+<span><code>center</code>, <code>header</code>, <code>viewfinder</code> : <code>@ViewBuilder</code></span>
+<span>trois <code>@Composable () -&gt; Unit</code></span>
+<span>trois <code>ComponentChildren</code></span>
+
+<span style="border-bottom: 0"><b>Recette</b></span>
+<span style="border-bottom: 0"><code>MeeshyCodeCardRecipe.resolve(style:size:tilt:tint:angle:isReady:reduceMotion:)</code></span>
+<span style="border-bottom: 0">idem</span>
+<span style="border-bottom: 0"><code>meeshyCodeCardRecipe(…)</code> : propriétés <code>--kit-code-*</code></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="tag">Paramètres opaques, mêmes défauts partout</span>
+<p style="font-size: 14px; line-height: 1.55"><code>payload: String?</code> (obligatoire ; <code>nil</code> ⇒ état génération). Jamais lu, jamais journalisé, jamais mis dans un nom accessible.</p>
+<p style="font-size: 14px; line-height: 1.55"><code>label: String</code> (obligatoire) : le nom dit au lecteur d'écran. <code>caption: String? = nil</code> : la ligne visible.</p>
+<p style="font-size: 14px; line-height: 1.55"><code>tint: Color? = nil</code> (l'encre du thème, assombrie par la recette) · <code>style = glass</code> · <code>size = large</code>.</p>
+<p style="font-size: 14px; line-height: 1.55"><code>tilt = device</code> : sur le web, <code>device</code> retombe sur <code>pointer</code> sans capteur. <code>mini</code> et <code>plain</code> forcent <code>none</code>.</p>
+<p style="font-size: 14px; line-height: 1.55"><code>face = code</code> (<code>identity</code> : le verso sans code) · <code>reticleState = idle</code> (<code>seeking</code>, <code>found</code>), lu seulement en <code>reticle</code>.</p>
+<p style="font-size: 14px; line-height: 1.55"><code>boostsBrightness: Bool = true</code> · <code>onPress: (() -&gt; Void)? = nil</code> (agrandir une miniature : c'est l'hôte qui décide).</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="tag">Ce que la recette rend, en valeurs</span>
+<p style="font-size: 14px; line-height: 1.55">Côté, marge de la plaque, rayons, largeur de la carte, présence de la pastille et de la légende, pour chaque <code>style</code> × <code>size</code>.</p>
+<p style="font-size: 14px; line-height: 1.55">Pour un <code>angle</code> donné : pivot borné, place du reflet, décalage de la plaque et de la pastille. Une fonction pure, la même sur les trois.</p>
+<p style="font-size: 14px; line-height: 1.55">La teinte servie, après assombrissement à 4,5:1 sur la plaque. L'encre et la plaque ne dépendent pas du thème.</p>
+<p style="font-size: 14px; line-height: 1.55">Aucun type du domaine dans une signature : ni personne, ni lien, ni jeton, ni appareil. Une chaîne, une couleur, trois emplacements.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Le même carré, le capteur de chacun</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<span class="d" style="font-size: 22px">iOS</span></span>
+<ul>
+<li>Inclinaison : <code>CMMotionManager</code>, <code>deviceMotion.attitude</code> à 60 Hz, démarré à l'apparition, arrêté à la disparition.</li>
+<li>Pivot : <code>rotation3DEffect</code> sur deux axes ; reflet et parallaxe en <code>offset</code>, sans mise en page.</li>
+<li>Matrice : un seul <code>Canvas</code>, un <code>Path</code> pour tous les modules. Verre : K01 (<code>glassEffect</code> sur iOS 26).</li>
+<li>Luminosité : <code>UIScreen.brightness</code>, valeur d'avant gardée et rendue, y compris au passage en arrière-plan.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans capteur (simulateur, Mac) ou en mode économie d'énergie : <code>none</code>. iPad au pointeur : <code>pointer</code> par <code>onContinuousHover</code>.</p>
+</div>
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<span class="d" style="font-size: 22px">Android</span></span>
+<ul>
+<li>Inclinaison : <code>SensorManager</code>, <code>TYPE_GAME_ROTATION_VECTOR</code>, écouté tant que la carte est composée et l'activité au premier plan.</li>
+<li>Pivot : <code>graphicsLayer { rotationX; rotationY; cameraDistance }</code>, angle lu en phase de dessin : aucune recomposition.</li>
+<li>Matrice : <code>Canvas</code> et <code>drawRoundRect</code>. Carte : surface tonale de K01, pas de flou ; le reflet reste.</li>
+<li>Luminosité : <code>WindowManager.LayoutParams.screenBrightness = 1f</code> sur la fenêtre, remis à <code>BRIGHTNESS_OVERRIDE_NONE</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Capteur absent : <code>TYPE_ACCELEROMETER</code>, sinon <code>none</code>. « Supprimer les animations » : <code>none</code>.</p>
+</div>
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<span class="d" style="font-size: 22px">Web</span></span>
+<ul>
+<li>Inclinaison : <code>deviceorientation</code> sur mobile, après <code>DeviceOrientationEvent.requestPermission()</code> là où Safari l'exige ; <code>pointermove</code> sur grand écran.</li>
+<li>Pivot : l'angle écrit dans <code>--kit-code-tilt-x</code> et <code>-y</code> ; <code>transform: perspective() rotateX() rotateY()</code> en CSS, hors du rendu Preact.</li>
+<li>Matrice : un <code>&lt;svg&gt;</code> d'un seul <code>&lt;path&gt;</code>, <code>role="img"</code>. Verre : <code>backdrop-filter</code> par K01.</li>
+<li>Impression : <code>@media print</code> sert <code>plain</code> d'office.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Aucune API de luminosité : la plaque passe en blanc pur, rien d'autre. Permission refusée ou <code>prefers-reduced-motion</code> : <code>none</code>.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">L'encodeur existe trois fois, à l'identique. La carte, nulle part</h2></header>
+<div class="card" style="display: flex; flex-direction: column; overflow: hidden">
+<div class="twin"><span class="pf">iOS · SDK</span><span class="mono">MeeshyUI/Game/GameQRCode.swift</span><p><span class="be">Devient le composant</span> <code>GameQRCode</code> et <code>GameQRMatrix</code> : l'encodeur ISO 18004 pur, correction M, écrit pour que le carré soit le même partout. Il devient <code>MeeshyCodeMatrix.encode</code>, avec ses matrices de référence (<code>GameQRCodeTests</code>).</p></div>
+<div class="twin"><span class="pf">Android · modèle</span><span class="mono">core/model/…/game/GameQrCode.kt</span><p><span class="be">Devient le composant</span> Le miroir Kotlin, JVM pure. Même sort, mêmes vecteurs.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/lib/qr.ts</span><p><span class="be">Devient le composant</span> <code>encodeQr</code>, l'original des deux miroirs. <code>lib/game-photo/referral-qr.ts</code> garde sa règle (4 modules de silence, 2 px par module) : elle entre dans la recette.</p></div>
+<div class="twin"><span class="pf">iOS · SDK</span><span class="mono">MeeshyUI/Game/GameReferralQR.swift</span><p><code>GameReferralQRSquare</code> et <code>GameReferralQRView</code> : le peintre par suites de modules. Il lui manque l'arrondi, les yeux à la teinte et la pastille. Android : <span class="mono">sdk-ui/…/component/game/GameReferralQrSquare.kt</span>.</p></div>
+<div class="twin"><span class="pf">iOS · app</span><span class="mono">Features/Game/Choreography/GameTilt.swift</span><p><code>GameTiltSource</code> : CoreMotion, arrêté avec la vue. C'est la source de <code>tilt: device</code>. Android : <span class="mono">sdk-ui/…/component/game/GameTilt.kt</span>. Web : <span class="mono">lib/game/gl/browser-env.ts</span>.</p></div>
+<div class="twin"><span class="pf">iOS · app</span><span class="mono">Features/Links/Views/TrackingLinkDetailView.swift</span><p><code>generateQRAndShare</code> par <code>CIQRCodeGenerator</code> : un autre masque que le web pour le même lien. Remplacé par <code>plain</code>. Même cas : <span class="mono">Features/Settings/Views/EncryptedDevices/EncryptedDeviceCodeView.swift</span> (<code>PairingQRImage</code>).</p></div>
+<div class="twin"><span class="pf">Android · app</span><span class="mono">feature/profile/…/ProfileShareSheet.kt</span><p><code>QRCodeWriter</code> de ZXing sur une carte blanche fixe : le seul QR de profil du produit. Premier écran rebranché. Même cas : <span class="mono">feature/conversations/…/links/QrLinkShare.kt</span>.</p></div>
+<div class="twin"><span class="pf">À trancher</span><span class="mono">Features/Settings/Views/TwoFactorSetupView.swift</span><p>Le QR de la double authentification arrive en image du serveur (<code>qrCodeDataUrl</code>), sur iOS comme sur Android (<span class="mono">feature/settings/…/TwoFactorSetupContent.kt</span>). Le dessiner sur l'appareil demande que le serveur serve l'adresse <code>otpauth</code> : consigné, pas décidé ici.</p></div>
+</div>
+<p style="font-size: 14px; line-height: 1.5; color: var(--ink2)">La carte de verre qui s'incline : <b style="color: var(--ink)">aucun jumeau, à créer</b> sur les trois plateformes. K31 ne rebranche aucun écran : les lots d'intégration s'en chargent, avec captures.</p>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre codes qui n'ont rien d'un profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 330px; --accent: #34D399">
+<div class="pcard glass cmp live" style="--qr-tint: #047857">
+<div class="plate" role="img" aria-label="QR de parrainage"><span class="qr"><span class="ctr"><span style="display: inline-flex">[[ic:gift]]</span></span></span></div>
+<span style="display: flex; align-items: center; gap: 7px">[[ic:gift s]]<span class="mono" style="font-size: 14px; font-weight: 700">AISSA-7K2</span></span>
+</div>
+</div>
+<div class="cp"><b>Jeu · parrainage</b><span class="kcap">Le code d'invitation, teinté au vert de la famille. 14 filleuls sont passés par lui.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv" style="height: 330px; padding: 0 22px">
+<div class="ticket" style="--cut: 108px; display: flex; flex-direction: column; width: 100%">
+<div style="display: flex; align-items: center; gap: 14px; padding: 16px 18px; height: 108px">
+<span class="mini" role="img" aria-label="QR du lien de suivi" style="--qr-tint: #4338CA"><span class="qr"></span></span>
+<span style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span class="tag" style="color: var(--l-track)">Suivi</span>
+<span class="d" style="font-size: 17px">Mon profil</span>
+</span>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding: 14px 18px 16px">
+<span class="mono" style="color: var(--ink2)">meeshy.me/l/aissa</span>
+<span style="display: flex; align-items: baseline; gap: 5px"><span class="d" style="font-size: 24px">412</span><span style="font-size: 12px; color: var(--ink2)">clics</span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Liens · lien de suivi</b><span class="kcap">En miniature dans le billet ; l'image partagée sort en <code>plain</code>, le même carré.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="cv stg" style="height: 330px; --accent: #6366F1">
+<div class="pcard glass cmp live" style="--qr-tint: #4338CA; animation-delay: -3s">
+<div class="plate" role="img" aria-label="Code d'appairage de cet appareil"><span class="qr"><span class="ctr"><span style="display: inline-flex">[[ic:lock-key]]</span></span></span></div>
+<span style="display: flex; align-items: center; gap: 7px">[[ic:timer s]]<span class="mono">Expire dans 1:48</span></span>
+</div>
+</div>
+<div class="cp"><b>Réglages · appareil chiffré</b><span class="kcap">Le code d'appairage, à lire avec ton autre appareil. La légende porte le compte à rebours de l'hôte.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="mx cv" data-theme="light" style="height: 330px; background: #E9E7F5">
+<div class="pcard flat" style="width: 212px; padding: 16px 16px 14px; gap: 12px; border-radius: 22px; background: #FFFFFF; border: 1px solid var(--line); --qr-ink: #000000; --qr-tint: #000000; --qr-plate: #FFFFFF">
+<span role="img" aria-label="QR de la double authentification" style="display: flex"><span class="qr" style="width: 180px; height: 180px"><span class="ctr"><span style="display: inline-flex">[[ic:shield-check]]</span></span></span></span>
+<span class="mono" style="color: var(--ink)">JBSW Y3DP EHPK 3PXP</span>
+</div>
+</div>
+<div class="cp"><b>Sécurité · double authentification</b><span class="kcap">En <code>plain</code> : lu par une autre app, il n'a besoin ni de verre ni de mouvement. La clé en légende, pour la taper.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="wit">[[ic:seal-check]]<span><b>Même carré.</b> Pour chaque chaîne des vecteurs, la matrice est identique module pour module sur les trois plateformes : version, masque, côté.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Lisible.</b> Chaque <code>style</code> × <code>size</code> rendu en image se décode et rend le <code>payload</code>, pastille comprise, reflet au plus fort.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Angle borné, place du reflet et décalages sont ceux des vecteurs pour −16°, 0° et +16° ; <code>mini</code> et <code>plain</code> rendent zéro partout.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Teinte.</b> Toute teinte servie atteint 4,5:1 sur la plaque. Encre et plaque ne changent pas entre clair et sombre.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Capteur et écran.</b> Le capteur s'arrête et la luminosité revient à sa valeur à la disparition, en arrière-plan, et si la carte est retirée en plein mouvement.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Une image nommée par <code>label</code>, valeur = <code>caption</code>. Le <code>payload</code> n'apparaît dans aucun nom. Avec <code>onPress</code> : un bouton, cible de 44.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit.</b> <code>tilt</code> résolu à <code>none</code>, aucun reflet, fondu de 200 ms à l'arrivée ; le cadre de visée est fixe.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>RTL et grande police.</b> La matrice ne se reflète jamais. <code>header</code> et légende suivent le sens ; la légende passe à la ligne sans élargir la carte.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Incliner ne re-rend ni l'hôte ni les voisins. Garde de source : aucun type du domaine, aucun singleton, aucun verre dessiné dans les fichiers de K31.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Un code ne se lit pas à l'oreille : la carte dit son nom et sa légende, et l'hôte offre toujours la même adresse en texte à copier. L'inclinaison n'est jamais le seul moyen de voir quoi que ce soit.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Encodage sous une image pour 120 octets ; un seul tracé pour toute la matrice, mis en cache par <code>payload</code>. Pendant l'inclinaison : une transformation, aucune mise en page, 120 images par seconde. Rien de retenu une fois l'écran quitté.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":7863}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

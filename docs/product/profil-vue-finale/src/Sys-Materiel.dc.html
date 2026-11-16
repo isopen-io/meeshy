@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Système — le matériel au service du profil</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.col{display:flex;flex-direction:column;overflow:hidden}
+.col>header{position:relative;overflow:hidden;display:flex;flex-direction:column;gap:22px;padding:28px 28px 26px;background:linear-gradient(160deg,color-mix(in oklab,var(--t) 46%,var(--ground)),color-mix(in oklab,var(--t) 12%,var(--raised)) 78%,var(--raised))}
+.col>header>.hd{position:relative;display:flex;align-items:center;gap:16px}
+.col>header h2{font-size:32px}
+.dev{display:inline-flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:20px;flex:none;background:var(--t);color:#0B0B12;box-shadow:0 10px 26px color-mix(in oklab,var(--t) 40%,transparent)}
+.stage{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:104px;border-radius:22px;overflow:hidden;border:1px solid var(--glass-line);background:linear-gradient(140deg,color-mix(in oklab,var(--t) 60%,var(--ground)),color-mix(in oklab,var(--brand) 46%,var(--ground)))}
+.rows{display:flex;flex-direction:column;justify-content:space-between;flex:1;padding:10px 0 14px}
+.hw{display:flex;align-items:flex-start;gap:16px;padding:13px 28px}
+.hw+.hw{border-top:1px solid var(--line)}
+.hw>i{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:16px;flex:none;background:color-mix(in oklab,var(--t) 16%,transparent);border:1px solid color-mix(in oklab,var(--t) 34%,transparent);color:var(--t)}
+.hw>div{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;padding-top:2px}
+.hw b{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:16px;font-weight:700;color:var(--ink)}
+.hw p{font-size:14px;line-height:1.42;color:var(--ink2);text-wrap:pretty}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:8px;background:var(--field);border:1px solid var(--line);border-bottom-width:2.5px;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:var(--ink)}
+.mini{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:92px;height:76px;border-radius:14px;font-size:11.5px;font-weight:700;color:var(--ink)}
+.cookie{position:absolute;width:74px;height:74px;background:color-mix(in oklab,var(--t) 55%,transparent);animation:mxMorph 6s ease-in-out infinite}
+.fb{display:grid;grid-template-columns:minmax(0,1.12fr) 28px minmax(0,1fr);align-items:center;gap:10px;padding:16px 16px;border-radius:22px;background:var(--raised);border:1px solid var(--line)}
+.fb>span{display:flex;align-items:center;gap:10px;min-width:0;font-size:14.5px;line-height:1.3;font-weight:600}
+.fb>span:first-child{color:var(--ink3)}
+.fb>span:last-child{color:var(--ink);font-weight:700}
+.fb>em{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--field);color:var(--ink2);font-style:normal}
+.fb u{position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;flex:none;text-decoration:none;background:var(--field);border:1px dashed var(--line);color:var(--ink3)}
+.fb u::after{content:"";position:absolute;left:7px;right:7px;top:50%;height:2px;border-radius:2px;background:var(--err);transform:rotate(-38deg)}
+.fb s{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;flex:none;text-decoration:none;background:color-mix(in oklab,var(--ok) 16%,transparent);border:1px solid color-mix(in oklab,var(--ok) 36%,transparent);color:var(--ok)}
+.fb u.set::after{display:none}
+.bounce{animation:smBounce 1.8s cubic-bezier(.3,1.6,.5,1) infinite}
+.fade{animation:smFade 2.6s ease-in-out infinite}
+@keyframes smBounce{0%,60%,100%{transform:scale(1)}72%{transform:scale(.84)}86%{transform:scale(1.08)}}
+@keyframes smFade{0%,100%{opacity:1}50%{opacity:.25}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 280px; height: 280px; right: 160px; top: -120px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -50px; background: #34D399; opacity: .16; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 0">
+<span class="tag">Profil Meeshy · système</span>
+<h1 class="d" style="font-size: 56px">Le matériel au service du profil</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2)">Même fiche, même ordre, mêmes gestes. Chaque plateforme y ajoute ce qu'elle seule sait faire.</p>
+</div>
+<div style="position: relative; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex: none; width: 290px">
+<span class="chip">[[ic:user-focus s]]<span>Vitrine</span></span>
+<span class="chip">[[ic:link s]]<span>Liens</span></span>
+<span class="chip">[[ic:lightning s]]<span>Actions</span></span>
+<span class="chip on">3 plateformes · 32 capacités</span>
+</div>
+</header>
+
+<section style="display: flex; flex-direction: column; gap: 20px">
+<span class="tag">Ce que chaque appareil apporte</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+
+<article class="card col rise" style="--t: #C084FC">
+<header>
+<div class="orb" style="width: 200px; height: 200px; right: -60px; top: -80px; background: #A855F7; opacity: .5"></div>
+<div class="hd">
+<span class="dev">[[ic:device-mobile l]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px"><h2 class="d">iPhone et iPad</h2><span style="font-size: 13.5px; color: var(--ink2)">Verre, profondeur, toucher</span></div>
+</div>
+<div class="stage">
+<div class="orb" style="width: 120px; height: 120px; left: 20px; top: -30px; background: #E879F9; opacity: .8"></div>
+<div class="orb" style="width: 110px; height: 110px; right: 30px; top: 30px; background: #6366F1; opacity: .8; animation-delay: -4s"></div>
+<div class="seg glass" style="position: relative">
+<span class="on">[[ic:user-focus-fill s]]<span>Vitrine</span></span>
+<span style="color: var(--ink)">[[ic:link s]]<span>Liens</span></span>
+<span style="color: var(--ink)">[[ic:lightning s]]<span>Actions</span></span>
+</div>
+<span class="ib g" style="position: relative; width: 56px; height: 56px">[[ic:chat-circle]]</span>
+</div>
+</header>
+<div class="rows">
+<div class="hw"><i>[[ic:drop-half]]</i><div><b>Verre liquide</b><p>Les barres et les boutons flottent et réfractent ta bannière.</p></div></div>
+<div class="hw"><i>[[ic:gauge]]</i><div><b>Écran 120 Hz</b><p>L'en-tête se replie et la pilule glisse sans une image perdue.</p></div></div>
+<div class="hw"><i>[[ic:vibrate]]</i><div><b>Moteur haptique</b><p>Un retour par geste : changer de face, poser l'épingle, retourner la carte.</p></div></div>
+<div class="hw"><i>[[ic:compass]]</i><div><b>Gyroscope</b><p>Incline le téléphone : la bannière et la carte QR bougent en parallaxe.</p></div></div>
+<div class="hw"><i>[[ic:broadcast]]</i><div><b>Activité en direct et îlot</b><p>Un partage de position ou un Talkie en cours reste sous tes yeux, hors de l'app.</p></div></div>
+<div class="hw"><i>[[ic:contactless-payment]]</i><div><b>Rapprochement de deux iPhone <span class="new">Nouveau</span></b><p>Approche les deux téléphones : vos fiches s'échangent.</p></div></div>
+<div class="hw"><i>[[ic:navigation-arrow]]</i><div><b>Puce de proximité</b><p>« Mina est à 300 m », avec une flèche qui pointe vers elle.</p></div></div>
+<div class="hw"><i>[[ic:camera]]</i><div><b>Caméra</b><p>Scanne un QR de profil, recadre et retouche ton avatar.</p></div></div>
+<div class="hw"><i>[[ic:squares-four]]</i><div><b>Widgets et écran verrouillé</b><p>Tes Proches et ton QR à portée de pouce, sans ouvrir l'app.</p></div></div>
+<div class="hw"><i>[[ic:radio]]</i><div><b>Bouton Action</b><p>Un appui long : Talkie avec le Proche que tu as choisi.</p></div></div>
+<div class="hw"><i>[[ic:device-tablet]]</i><div><b>iPad</b><p>Deux colonnes, pointeur aimanté, clavier, glisser-déposer.</p></div></div>
+</div>
+</article>
+
+<article class="card col rise" style="--t: #34D399; animation-delay: .08s">
+<header>
+<div class="orb" style="width: 200px; height: 200px; right: -60px; top: -80px; background: #34D399; opacity: .36"></div>
+<div class="hd">
+<span class="dev">[[ic:device-mobile l]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px"><h2 class="d">Android</h2><span style="font-size: 13.5px; color: var(--ink2)">Formes, tonal, sans contact</span></div>
+</div>
+<div class="stage">
+<div class="seg tonal" style="position: relative; border-radius: 26px">
+<span style="color: var(--ink); gap: 7px; padding: 0 8px 0 5px"><span class="cookie" style="position: static; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--t); color: #0B0B12">[[ic:user-focus-fill s]]</span><span>Vitrine</span></span>
+<span style="padding: 0 8px">[[ic:link s]]<span>Liens</span></span>
+<span style="padding: 0 8px">[[ic:lightning s]]<span>Actions</span></span>
+</div>
+<span class="ib" style="position: relative; width: 56px; height: 56px; border-radius: 18px; background: var(--t); color: #0B0B12">[[ic:chat-circle]]</span>
+</div>
+</header>
+<div class="rows">
+<div class="hw"><i>[[ic:shapes]]</i><div><b>Formes Material 3 Expressive</b><p>Boutons et pastilles de cercle changent de forme sous ton doigt.</p></div></div>
+<div class="hw"><i>[[ic:arrow-u-up-left]]</i><div><b>Retour prédictif</b><p>La fiche rétrécit sous le doigt et laisse voir l'écran d'avant.</p></div></div>
+<div class="hw"><i>[[ic:contactless-payment]]</i><div><b>NFC</b><p>Approche le téléphone pour ouvrir une vitrine, ou lis une étiquette posée sur un mur.</p></div></div>
+<div class="hw"><i>[[ic:share-network]]</i><div><b>Partage à proximité</b><p>Ton lien de profil part vers les appareils autour de toi.</p></div></div>
+<div class="hw"><i>[[ic:ghost]]</i><div><b>Tuile de réglages rapides</b><p>Le mode fantôme en un geste, depuis le volet.</p></div></div>
+<div class="hw"><i>[[ic:bell-ringing]]</i><div><b>Notification en cours</b><p>Si tu partages ta position, elle reste affichée, avec le temps restant et Arrêter.</p></div></div>
+<div class="hw"><i>[[ic:squares-four]]</i><div><b>Raccourcis d'app et widgets</b><p>Appui long sur l'icône : Mon QR, Scanner, Mes liens. Les widgets se redimensionnent.</p></div></div>
+<div class="hw"><i>[[ic:chat-circle]]</i><div><b>Bulles de conversation</b><p>Un Proche reste en bulle par-dessus tout, sa fiche à un toucher.</p></div></div>
+<div class="hw"><i>[[ic:book-open]]</i><div><b>Pliables et tablettes</b><p>Fiche à gauche, carte à droite. Rien ne passe sous la charnière.</p></div></div>
+<div class="hw"><i>[[ic:vibrate]]</i><div><b>Vibreur riche</b><p>Un retour net par geste : face, épingle, retournement.</p></div></div>
+</div>
+</article>
+
+<article class="card col rise" style="--t: #60A5FA; animation-delay: .16s">
+<header>
+<div class="orb" style="width: 200px; height: 200px; right: -60px; top: -80px; background: #6366F1; opacity: .5"></div>
+<div class="hd">
+<span class="dev">[[ic:desktop l]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px"><h2 class="d">Web et ordinateur</h2><span style="font-size: 13.5px; color: var(--ink2)">Large, clavier, partout</span></div>
+</div>
+<div class="stage">
+<span class="mini glass">[[ic:user-focus-fill]]<span>Vitrine</span></span>
+<span class="mini glass">[[ic:link]]<span>Liens</span></span>
+<span class="mini glass">[[ic:lightning]]<span>Actions</span></span>
+</div>
+</header>
+<div class="rows">
+<div class="hw"><i>[[ic:swap]]</i><div><b>Transitions de vue</b><p>L'avatar de la liste devient celui de la fiche, sans coupure.</p></div></div>
+<div class="hw"><i>[[ic:scroll]]</i><div><b>Animations pilotées par le défilement</b><p>La bannière se replie au rythme exact de ta molette.</p></div></div>
+<div class="hw"><i>[[ic:selection-background]]</i><div><b>Flou d'arrière-plan</b><p>Barres et feuilles laissent passer les couleurs de la bannière.</p></div></div>
+<div class="hw"><i>[[ic:columns]]</i><div><b>Trois faces côte à côte</b><p>Vitrine, Liens et Actions visibles ensemble sur grand écran.</p></div></div>
+<div class="hw"><i>[[ic:keyboard]]</i><div><b>Clavier</b><p style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap; padding-top: 3px"><span class="kbd">1</span><span class="kbd">2</span><span class="kbd">3</span><span style="margin-right: 6px">faces</span><span class="kbd">E</span><span class="kbd">N</span><span class="kbd">M</span><span class="kbd">⌘K</span></p></div></div>
+<div class="hw"><i>[[ic:cursor]]</i><div><b>Survol et pointeur fin</b><p>Survole un avatar : une mini-fiche s'ouvre. Les commandes se resserrent.</p></div></div>
+<div class="hw"><i>[[ic:hand-grabbing]]</i><div><b>Glisser-déposer</b><p>Dépose une image sur l'avatar ou la bannière pour la changer.</p></div></div>
+<div class="hw"><i>[[ic:export]]</i><div><b>Partage natif et copie</b><p>Le navigateur propose ses apps. Sinon, le lien est copié.</p></div></div>
+<div class="hw"><i>[[ic:download-simple]]</i><div><b>Application installable</b><p>Une icône, des raccourcis vers Mon QR et Mes liens, des notifications.</p></div></div>
+<div class="hw"><i>[[ic:link]]</i><div><b>Aperçu de lien riche <span class="new">Nouveau</span></b><p>Chaque lien de profil s'affiche avec le nom, l'avatar et la couleur de la personne.</p></div></div>
+<div class="hw"><i>[[ic:cloud-slash]]</i><div><b>Hors ligne par le cache</b><p>La dernière fiche vue s'ouvre sans réseau.</p></div></div>
+</div>
+</article>
+
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .24s; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span class="tag">Repli</span>
+<h2 class="d" style="font-size: 32px">Quand l'appareil ne sait pas faire</h2>
+</div>
+<p style="font-size: 15px; color: var(--ink2); max-width: 460px; text-align: right">La fiche reste entière. Seul l'effet change, jamais la commande.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="fb"><span><u>[[ic:compass]]</u>Pas de gyroscope</span><em>[[ic:arrow-right s]]</em><span><s>[[ic:waves]]</s>La bannière flotte seule</span></div>
+<div class="fb"><span><u>[[ic:contactless-payment]]</u>Pas de NFC</span><em>[[ic:arrow-right s]]</em><span><s>[[ic:qr-code]]</s>QR</span></div>
+<div class="fb"><span><u>[[ic:drop-half]]</u>Pas de verre</span><em>[[ic:arrow-right s]]</em><span><s>[[ic:stack]]</s>Surface tonale</span></div>
+<div class="fb"><span><u>[[ic:vibrate]]</u>Pas de haptique</span><em>[[ic:arrow-right s]]</em><span><s class="bounce">[[ic:arrows-in-simple]]</s>Micro-rebond visuel</span></div>
+<div class="fb"><span><u>[[ic:broadcast]]</u>Pas d'activité en direct</span><em>[[ic:arrow-right s]]</em><span><s>[[ic:bell-ringing]]</s>Notification en cours</span></div>
+<div class="fb"><span><u class="set">[[ic:person-simple-run]]</u>Mouvement réduit</span><em>[[ic:arrow-right s]]</em><span><s class="fade">[[ic:circle-half]]</s>Fondus</span></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2001}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

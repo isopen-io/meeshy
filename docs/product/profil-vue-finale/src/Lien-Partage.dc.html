@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Lien de partage — arrivées — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.pill{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.cc{display:inline-flex;align-items:center;justify-content:center;height:22px;min-width:30px;padding:0 6px;border-radius:7px;background:var(--field);border:1px solid var(--line);font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink2)}
+.act{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;font-size:11.5px;font-weight:600;color:var(--ink2)}
+.grow>i{transform-origin:left center;animation:lpGrow 1.1s cubic-bezier(.2,.9,.25,1) both}
+.nudge{animation:lpNudge 5s cubic-bezier(.3,1.2,.5,1) infinite}
+@keyframes lpGrow{from{transform:scaleX(0)}to{transform:none}}
+@keyframes lpNudge{0%,70%,100%{transform:none}80%{transform:translateX(10px)}90%{transform:translateX(-3px)}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 520px; overflow: hidden; pointer-events: none">
+<div class="orb" style="width: 240px; height: 240px; left: -90px; top: 40px; background: #6366F1; opacity: .34"></div>
+<div class="orb" style="width: 190px; height: 190px; right: -80px; top: 250px; background: #818CF8; opacity: .2; animation-delay: -4s"></div>
+</div>
+
+<header style="position: relative; display: flex; align-items: center; gap: 12px; padding: 54px 16px 0">
+<button class="ib g" aria-label="Retour à mes liens">[[ic:caret-left]]</button>
+<h1 class="d" style="flex: 1; min-width: 0; font-size: 20px">Lien de partage</h1>
+<button class="ib g" aria-label="Plus d'options">[[ic:dots-three]]</button>
+</header>
+
+<section class="rise" style="position: relative; padding: 20px 20px 0">
+<div class="ticket" style="--cut: 176px; background: linear-gradient(160deg, color-mix(in oklab, var(--l-share) 30%, var(--raised)), var(--raised) 68%); border-color: color-mix(in oklab, var(--l-share) 42%, transparent); box-shadow: 0 18px 40px rgba(67,56,202,.28)">
+<div style="height: 176px; padding: 18px 18px 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="ib" style="width: 48px; height: 48px; background: var(--l-share); color: #0B0B12">[[ic:chats-circle-fill]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span class="tag" style="color: var(--l-share)">Partage de conversation</span>
+<h2 class="d" style="font-size: 24px">Studio — invités</h2>
+</div>
+</div>
+<a href="#" class="mono" style="font-size: 16px; font-weight: 700; color: var(--ink); white-space: nowrap">meeshy.me/chat/<span style="color: #C7D2FE">studio-invites</span></a>
+<button style="display: flex; align-items: center; gap: 10px; min-height: 44px; align-self: flex-start">
+<span style="display: inline-flex">
+<span class="av" style="--accent: #FF6B6B; width: 26px; height: 26px; font-size: 10px; border: 2px solid var(--raised)">MO</span>
+<span class="av" style="--accent: #F8B500; width: 26px; height: 26px; font-size: 10px; border: 2px solid var(--raised); margin-left: -10px">TR</span>
+<span class="av" style="width: 26px; height: 26px; font-size: 10px; border: 2px solid var(--raised); margin-left: -10px">AN</span>
+</span>
+<span style="font-size: 13.5px; color: var(--ink2)">Mène à <b style="color: var(--ink); font-weight: 700">Studio</b> · 8 membres</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: flex-start; gap: 2px; padding: 16px 10px 16px">
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:copy]]</span><span>Copier</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:qr-code]]</span><span>QR</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:export]]</span><span>Partager</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px; color: var(--ink)">[[ic:pencil-simple]]</span><span>Modifier</span></button>
+<button class="act" role="switch" aria-checked="true" aria-label="Lien actif"><span style="display: flex; align-items: center; height: 52px"><span class="sw on"></span></span><span style="color: var(--ok)">Actif</span></button>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; position: relative; padding: 30px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span class="tag">Entrées</span>
+<p class="d" style="font-size: 40px; line-height: 1"><span>23</span><span style="color: var(--ink3); font-size: 24px"> / 50</span></p>
+</div>
+<span class="chip" style="color: var(--warn); border-color: color-mix(in oklab, var(--warn) 40%, transparent); background: color-mix(in oklab, var(--warn) 10%, transparent)">[[ic:clock-countdown s]]<span>expire dans 6 jours</span></span>
+</div>
+<div class="bar grow" role="img" aria-label="23 entrées sur 50, soit 46 %" style="height: 12px"><i style="width: 46%; background: linear-gradient(90deg, var(--brand-fill), var(--l-share))"></i></div>
+<div style="display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink3)">
+<span>46 % du quota</span>
+<span>encore 27 places</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .14s; padding: 28px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<h2 class="d" style="font-size: 22px">Qui peut entrer</h2>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:user s]]<span>Invités sans compte</span></span>
+<span class="chip">[[ic:at s]]<span>Pseudo demandé</span></span>
+<span class="chip">[[ic:clock-counter-clockwise s]]<span>Historique visible</span></span>
+<span class="chip">[[ic:flag-banner s]]<span>Tous pays</span></span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .2s; padding: 32px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Arrivées <span style="color: var(--ink3); font-size: 16px">23</span></h2>
+<a href="#" style="font-size: 13.5px; font-weight: 700; color: var(--l-share); min-height: 44px; display: inline-flex; align-items: center">Tout voir</a>
+</div>
+
+<div class="card" style="overflow: hidden">
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #FF6B6B; width: 42px; height: 42px; font-size: 15px">MO</span>
+<div style="display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0">
+<span style="font-weight: 700">Mina Okafor</span>
+<span style="display: flex; align-items: center; gap: 6px"><span class="pill" style="background: color-mix(in oklab, var(--l-share) 18%, transparent); color: var(--ink)">[[ic:seal-check s]]<span>Compte Meeshy</span></span><span class="cc">PT</span></span>
+</div>
+<span style="font-size: 12px; color: var(--ink3); white-space: nowrap">il y a 12 min</span>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #8D92CB; width: 42px; height: 42px; font-size: 15px">BF</span>
+<div style="display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0">
+<span style="font-weight: 700">bamba_flow</span>
+<span style="display: flex; align-items: center; gap: 6px"><span class="pill" style="background: var(--field); color: var(--ink3)">[[ic:user s]]<span>Invité</span></span><span class="cc">SN</span></span>
+<span style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink3); white-space: nowrap">[[ic:eye-slash s]]<span>e-mail fourni</span><span class="mono" style="font-size: 11.5px">b•••@•••.sn</span></span>
+</div>
+<span style="font-size: 12px; color: var(--ink3); white-space: nowrap; align-self: flex-start; padding-top: 3px">il y a 40 min</span>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #F8B500; width: 42px; height: 42px; font-size: 15px">TR</span>
+<div style="display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0">
+<span style="font-weight: 700">Tomás Ribeiro</span>
+<span style="display: flex; align-items: center; gap: 6px"><span class="pill" style="background: color-mix(in oklab, var(--l-share) 18%, transparent); color: var(--ink)">[[ic:seal-check s]]<span>Compte Meeshy</span></span><span class="cc">PT</span></span>
+</div>
+<span style="font-size: 12px; color: var(--ink3); white-space: nowrap">il y a 2 h</span>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="overflow: hidden; background: var(--field)">
+<div style="display: flex; align-items: stretch">
+<div class="nudge" style="flex: 1; min-width: 0; margin-left: -24px; display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--raised); border-radius: 0 18px 18px 0; box-shadow: 10px 0 24px rgba(0,0,0,.35)">
+<span class="av" style="--accent: #8D92CB; width: 42px; height: 42px; font-size: 15px">KB</span>
+<div style="display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0">
+<span style="font-weight: 700">kora.bleue</span>
+<span style="display: flex; align-items: center; gap: 6px"><span class="pill" style="background: var(--field); color: var(--ink3)">[[ic:user s]]<span>Invité</span></span><span class="cc">CI</span></span>
+</div>
+</div>
+<div style="flex: none; width: 164px; display: flex; align-items: stretch; gap: 6px; padding: 6px 8px">
+<button style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; border-radius: 16px; background: color-mix(in oklab, var(--l-share) 22%, transparent); color: var(--ink); font-size: 11px; font-weight: 700">[[ic:identification-card]]<span>Voir la fiche</span></button>
+<button style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; border-radius: 16px; background: rgba(248,113,113,.16); color: var(--err); font-size: 11px; font-weight: 700">[[ic:user-minus]]<span>Retirer</span></button>
+</div>
+</div>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #2ECC71; width: 42px; height: 42px; font-size: 15px">SB</span>
+<div style="display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0">
+<span style="font-weight: 700">Sofia Benali</span>
+<span style="display: flex; align-items: center; gap: 6px"><span class="pill" style="background: color-mix(in oklab, var(--l-share) 18%, transparent); color: var(--ink)">[[ic:seal-check s]]<span>Compte Meeshy</span></span><span class="cc">FR</span></span>
+</div>
+<span style="font-size: 12px; color: var(--ink3); white-space: nowrap">hier</span>
+</div>
+<div class="sep" style="margin: 0 14px"></div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px">
+<span class="av" style="--accent: #8D92CB; width: 42px; height: 42px; font-size: 15px">LO</span>
+<div style="display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0">
+<span style="font-weight: 700">lola.onde</span>
+<span style="display: flex; align-items: center; gap: 6px"><span class="pill" style="background: var(--field); color: var(--ink3)">[[ic:user s]]<span>Invité</span></span><span class="cc">FR</span></span>
+<span style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink3); white-space: nowrap">[[ic:eye-slash s]]<span>e-mail fourni</span><span class="mono" style="font-size: 11.5px">l••@•••••.fr</span></span>
+</div>
+<span style="font-size: 12px; color: var(--ink3); white-space: nowrap; align-self: flex-start; padding-top: 3px">il y a 3 j</span>
+</div>
+
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .26s; padding: 32px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Arrivées par pays</h2>
+<span style="font-size: 13px; color: var(--ink3)">4 pays</span>
+</div>
+<div class="card" style="display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 14px; padding: 18px">
+<span class="cc">SN</span><span class="bar grow" style="height: 10px"><i style="width: 100%; background: var(--l-share)"></i></span><span class="d" style="font-size: 17px; min-width: 20px; text-align: right">11</span>
+<span class="cc">FR</span><span class="bar grow" style="height: 10px"><i style="width: 55%; background: var(--l-share); animation-delay: .1s"></i></span><span class="d" style="font-size: 17px; min-width: 20px; text-align: right">6</span>
+<span class="cc">PT</span><span class="bar grow" style="height: 10px"><i style="width: 27%; background: var(--l-share); animation-delay: .2s"></i></span><span class="d" style="font-size: 17px; min-width: 20px; text-align: right">3</span>
+<span class="cc">CI</span><span class="bar grow" style="height: 10px"><i style="width: 27%; background: var(--l-share); animation-delay: .3s"></i></span><span class="d" style="font-size: 17px; min-width: 20px; text-align: right">3</span>
+</div>
+</section>
+
+<footer style="padding: 32px 20px 24px; display: flex; flex-direction: column; gap: 10px">
+<button class="btn q">[[ic:arrow-counter-clockwise]]<span>Remettre le compteur à zéro</span></button>
+<button class="btn x">[[ic:link-break]]<span>Désactiver le lien</span></button>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1663}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

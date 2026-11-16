@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPad paysage — la fiche et la carte côte à côte</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;position:relative}
+.act>span:last-child{font-size:12.5px;font-weight:600;line-height:1.2;text-align:center;color:var(--ink)}
+.trail{stroke-dasharray:1 10;animation:ipTrail 1.4s linear infinite}
+.halo{animation:ipHalo 4.5s ease-in-out infinite}
+.drag{animation:ipDrag 3.2s ease-in-out infinite}
+.ptr{animation:ipPtr 2.6s ease-in-out infinite}
+.kbd{display:inline-flex;align-items:center;justify-content:center;gap:2px;height:26px;min-width:26px;padding:0 7px;border-radius:8px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);font-size:12.5px;font-weight:700;color:var(--ink)}
+@keyframes ipTrail{to{stroke-dashoffset:-22}}
+@keyframes ipHalo{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.05)}}
+@keyframes ipDrag{0%,100%{transform:translate(0,0) rotate(-7deg)}50%{transform:translate(-4px,6px) rotate(-4deg)}}
+@keyframes ipPtr{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.12)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1194px; min-height: 834px; display: grid; grid-template-columns: 420px minmax(0, 1fr); --accent:#4ECDC4;--accent-ink:#7FE3DC">
+
+<aside aria-label="Fiche de Léo" style="position: relative; display: flex; flex-direction: column; border-right: 1px solid var(--line); min-width: 0">
+
+<header style="position: relative; height: 240px; overflow: hidden; background: linear-gradient(165deg, #0F766E 0%, #134E4A 48%, #09090B 100%)">
+<div class="orb" style="width: 200px; height: 200px; left: -60px; top: 10px; background: #4ECDC4; opacity: .6"></div>
+<div class="orb" style="width: 170px; height: 170px; right: -50px; top: 70px; background: #6366F1; opacity: .6; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 110px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+
+<nav aria-label="Faces du profil" style="position: relative; padding: 24px 16px 0">
+<div class="seg glass" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%">
+<button>[[ic:user-focus]]<span>Vitrine</span></button>
+<button>[[ic:link]]<span>Liens</span></button>
+<button class="on" aria-current="page">[[ic:lightning-fill]]<span>Actions</span></button>
+</div>
+</nav>
+</header>
+
+<section class="rise" style="position: relative; margin-top: -78px; padding: 0 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: flex-end; gap: 12px">
+<button class="ring" aria-label="Voir la story de Léo" style="background: var(--ground)">
+<span class="av" style="width: 104px; height: 104px; font-size: 38px">LM</span>
+<span class="dot on" style="position: absolute; right: 7px; bottom: 7px; width: 20px; height: 20px; border-width: 4px"></span>
+</button>
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 10px">
+<button class="chip glass" style="color: var(--ink)">[[ic:smiley s]]<span>En vadrouille</span></button>
+<button class="chip" style="background: var(--accent); color: #0B0B12; border-color: transparent; font-weight: 700">[[ic:fire-fill s]]<span>Proche</span>[[ic:caret-down s]]</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 class="d" style="font-size: 34px">Léo Marchetti</h1>
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@leo.m</span>
+<span style="font-size: 13px; color: var(--ink3)">Lisbonne · en ligne</span>
+</div>
+</div>
+
+<p style="font-size: 16px; line-height: 1.45; color: var(--ink); text-wrap: pretty">Photographe de rue. Lyon ⇄ Lisbonne.</p>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:translate s]]<span>Italien</span></span>
+<span class="chip">Français</span>
+<span class="chip">Portugais</span>
+<span class="chip">[[ic:lock-key s]]<span>Chiffré</span></span>
+</div>
+</section>
+
+<section class="rise" aria-label="Actions avec Léo" style="animation-delay: .08s; padding: 58px 16px 0">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px 4px">
+
+<div class="act">
+<div class="drag" aria-hidden="true" style="position: absolute; left: 44px; top: -46px; z-index: 3; width: 68px; height: 68px">
+<div class="ph" style="width: 68px; height: 68px; border-radius: 14px; border: 2px solid #fff; box-shadow: 0 16px 30px rgba(0,0,0,.6); font-size: 10.5px; padding: 6px 7px">photo</div>
+<span style="position: absolute; right: -8px; top: -8px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ok); color: #0B0B12; border: 2.5px solid var(--ground)">[[ic:plus s]]</span>
+</div>
+<button class="ib g lg" aria-label="Écrire à Léo, dépose la photo ici" style="background: color-mix(in oklab, var(--accent) 24%, transparent); outline: 2px dashed var(--accent); outline-offset: 4px; color: var(--accent-ink); transform: scale(1.06)">[[ic:chat-circle l]]</button>
+<span style="color: var(--accent-ink); font-weight: 700">Écrire</span>
+</div>
+
+<div class="act"><button class="ib g lg" aria-label="Appeler Léo">[[ic:phone l]]</button><span>Appeler</span></div>
+<div class="act"><button class="ib g lg" aria-label="Appel vidéo avec Léo">[[ic:video-camera l]]</button><span>Vidéo</span></div>
+<div class="act"><button class="ib g lg" aria-label="Talkie, maintenir pour parler">[[ic:radio l]]</button><span>Talkie</span></div>
+<div class="act"><button class="ib g lg" aria-label="Regarder ou écouter ensemble">[[ic:monitor-play l]]</button><span>Ensemble</span></div>
+<div class="act"><button class="ib g lg" aria-label="Envoyer un bring">[[ic:hand-waving l]]</button><span>Bring</span></div>
+<div class="act"><button class="ib lg" aria-label="Carte, affichée à droite" aria-pressed="true" style="background: var(--accent); color: #0B0B12; box-shadow: 0 10px 26px rgba(78,205,196,.45)">[[ic:map-trifold l]]</button><span style="color: var(--accent-ink); font-weight: 700">Carte</span></div>
+<div class="act"><button class="ib g lg" aria-label="Envoyer le profil de Léo">[[ic:paper-plane-tilt l]]</button><span>Envoyer</span></div>
+
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .16s; padding: 30px 20px 0; display: flex; flex-direction: column; gap: 12px">
+<h2 class="d" style="font-size: 20px">En direct</h2>
+<div class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 18px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="ib" style="background: color-mix(in oklab, var(--accent) 20%, transparent); color: var(--accent-ink)">[[ic:music-notes]]</span>
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0">
+<span style="font-weight: 700">Écoute en cours</span>
+<span style="font-size: 13px; color: var(--ink2)">Rejoins-le avec Ensemble</span>
+</div>
+<div class="wave" style="height: 28px">
+<i style="height: 40%"></i><i style="height: 80%"></i><i style="height: 100%"></i><i style="height: 55%"></i><i style="height: 75%"></i><i style="height: 35%"></i><i style="height: 90%"></i><i style="height: 50%"></i>
+</div>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:battery-medium s]]<span>64 %</span></span>
+<span class="chip" style="color: var(--accent-ink)">[[ic:map-pin-fill s]]<span>Alfama · 42 min</span></span>
+</div>
+</div>
+</section>
+
+<section style="padding: 18px 2px 24px; display: flex; flex-direction: column">
+<button class="row" style="color: var(--err); width: 100%">
+<span class="ib" style="background: rgba(248,113,113,.13)">[[ic:prohibit]]</span>
+<span style="flex: 1; font-weight: 600">Bloquer Léo</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="color: var(--err); width: 100%">
+<span class="ib" style="background: rgba(248,113,113,.13)">[[ic:flag]]</span>
+<span style="flex: 1; font-weight: 600">Signaler</span>
+[[ic:caret-right s]]
+</button>
+</section>
+
+</aside>
+
+<main aria-label="Carte" style="position: relative; overflow: hidden; min-height: 834px; min-width: 0">
+[[map]]
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 200px; background: linear-gradient(180deg, rgba(9,9,11,.6), rgba(9,9,11,0))"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 240px; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.7))"></div>
+
+<svg aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible">
+<path d="M470 336 C 462 452, 330 420, 214 548" fill="none" stroke="#0B0B12" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"></path>
+<path class="trail" d="M470 336 C 462 452, 330 420, 214 548" fill="none" stroke="#7FE3DC" stroke-width="4.5" stroke-linecap="round"></path>
+</svg>
+
+<div class="halo" style="position: absolute; left: 470px; top: 290px; width: 250px; height: 250px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); border: 1.5px solid var(--accent)"></div>
+<div style="position: absolute; left: 470px; top: 322px; width: 18px; height: 18px; background: var(--ground); transform: translate(-50%, -50%) rotate(45deg); border-radius: 3px"></div>
+<div class="pin" style="left: 470px; top: 290px">
+<span class="av" style="width: 64px; height: 64px; font-size: 23px; border: 3px solid var(--ground); box-shadow: 0 10px 24px rgba(0,0,0,.5)">LM</span>
+</div>
+<div class="glass" style="position: absolute; left: 470px; top: 190px; transform: translateX(-50%); display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; background: rgba(19,17,28,.62)">
+<span class="dot on" style="width: 10px; height: 10px; border: 0"></span><span>Léo · Alfama</span>
+</div>
+
+<div style="position: absolute; left: 200px; top: 560px; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(168,85,247,.22)">
+<span class="av" style="--accent:#A855F7; width: 40px; height: 40px; font-size: 14px; border: 2.5px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.5)">AN</span>
+</div>
+<div style="position: absolute; left: 200px; top: 600px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 5px; white-space: nowrap">
+<span class="glass" style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--ink); background: rgba(19,17,28,.68)">[[ic:airplane-tilt s]]<span>De passage à Lisbonne</span></span>
+<span style="font-size: 12px; font-weight: 600; color: var(--ink2); text-shadow: 0 1px 6px #09090B">Ma position — non partagée</span>
+</div>
+
+<div class="glass" style="position: absolute; left: 356px; top: 442px; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 15px; border-radius: 999px; font-size: 13.5px; font-weight: 700; white-space: nowrap; background: rgba(19,17,28,.68)">
+<span style="display: flex; color: var(--accent-ink)">[[ic:person-simple-walk s]]</span>
+<span>2,4 km · 30 min à pied</span>
+</div>
+
+<div style="position: absolute; left: 24px; right: 24px; top: 24px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px">
+<button class="ib g" aria-label="Carte en plein écran" style="width: 48px; height: 48px">[[ic:arrows-out]]</button>
+<button class="btn g sm" style="padding: 0 16px"><span style="display: flex; color: var(--accent-ink)">[[ic:circle-dashed s]]</span><span>Précision quartier</span></button>
+</div>
+
+<div class="glass rise" role="tooltip" style="animation-delay: .3s; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px 0 10px; border-radius: 14px; font-size: 13px; font-weight: 600; color: var(--ink2); white-space: nowrap; background: rgba(19,17,28,.66)">
+<span style="display: flex; gap: 4px"><span class="kbd">[[ic:command s]]</span><span class="kbd">M</span></span><span style="color: var(--ink)">Carte</span>
+<span style="width: 1px; height: 18px; background: var(--glass-line)"></span>
+<span style="display: flex; gap: 4px"><span class="kbd">[[ic:command s]]</span><span class="kbd">[[ic:arrow-elbow-down-left s]]</span></span><span style="color: var(--ink)">Écrire</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<button class="ib g" aria-label="Calques de la carte" style="width: 48px; height: 48px">[[ic:stack]]</button>
+<button class="ib g" aria-label="Me centrer" style="width: 48px; height: 48px">[[ic:crosshair]]</button>
+</div>
+</div>
+
+<section class="glass rise" aria-label="Position de Léo" style="animation-delay: .2s; position: absolute; left: 24px; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 16px; padding: 18px 28px 18px 20px; border-radius: 30px; background: rgba(19,17,28,.72)">
+<span class="ib lg" style="background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--accent-ink)">[[ic:map-pin-fill l]]</span>
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0">
+<h2 class="d" style="font-size: 26px">Alfama</h2>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink2)">
+<span>Précision quartier</span>
+<span style="color: var(--ink3)">·</span>
+<span style="display: inline-flex; align-items: center; gap: 5px; color: var(--ink); font-weight: 600">[[ic:timer s]]encore 42 min</span>
+</div>
+<span class="bar" style="height: 5px; max-width: 280px"><i style="width: 70%"></i></span>
+</div>
+<button class="ib g" aria-label="Partager ma position avec Léo" style="width: 52px; height: 52px">[[ic:map-pin]]</button>
+<div style="position: relative; display: flex">
+<button class="btn a" style="min-height: 56px; padding: 0 28px; font-size: 16px; transform: scale(1.08); background: color-mix(in oklab, var(--accent) 62%, #fff); box-shadow: 0 0 0 7px rgba(127,227,220,.20), 0 14px 34px rgba(78,205,196,.5)">[[ic:navigation-arrow]]<span>Itinéraire</span></button>
+<span aria-hidden="true" style="position: absolute; left: -64px; top: -44px; width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,.14)"></span>
+<span aria-hidden="true" style="position: absolute; left: -34px; top: -22px; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.22)"></span>
+<span class="ptr" aria-hidden="true" style="position: absolute; left: calc(100% - 20px); top: 42px; width: 28px; height: 28px; border-radius: 50%; background: rgba(30,30,46,.38); border: 1.5px solid rgba(255,255,255,.8); box-shadow: 0 4px 12px rgba(0,0,0,.35)"></span>
+</div>
+</section>
+</main>
+
+<button aria-label="Redimensionner les deux colonnes" style="position: absolute; left: 420px; top: 417px; transform: translate(-50%, -50%); z-index: 4; display: flex; align-items: center; justify-content: center; width: 24px; height: 72px; border-radius: 999px; background: var(--raised); border: 1px solid var(--glass-line); box-shadow: 0 8px 22px rgba(0,0,0,.5); cursor: col-resize">
+<span style="width: 5px; height: 40px; border-radius: 999px; background: var(--ink2)"></span>
+</button>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1194,"height":1031}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

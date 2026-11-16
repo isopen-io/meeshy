@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Léo sur la carte — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.trail{stroke-dasharray:1 9;animation:cpTrail 1.4s linear infinite}
+.halo{animation:cpHalo 4.5s ease-in-out infinite}
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0}
+.act>span:last-child{font-size:12px;font-weight:600;line-height:1.2;text-align:center;color:var(--ink)}
+@keyframes cpTrail{to{stroke-dashoffset:-20}}
+@keyframes cpHalo{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.05)}}
+</style>
+</helmet>
+<div class="mx" style="--accent:#4ECDC4;--accent-ink:#7FE3DC; width: 390px; min-height: 844px; position: relative; display: flex; flex-direction: column">
+
+<div style="position: absolute; inset: 0; overflow: hidden">
+[[map]]
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 250px; overflow: hidden; background: linear-gradient(180deg, rgba(15,118,110,.62) 0%, rgba(19,78,74,.34) 46%, rgba(9,9,11,0) 100%)">
+<div class="orb" style="width: 190px; height: 190px; left: -70px; top: -70px; background: #4ECDC4; opacity: .30"></div>
+<div class="orb" style="width: 170px; height: 170px; right: -60px; top: -50px; background: #6366F1; opacity: .34; animation-delay: -4s"></div>
+</div>
+</div>
+
+<main style="position: relative; height: 458px; flex: none">
+
+<svg aria-hidden="true" viewBox="0 0 390 462" style="position: absolute; inset: 0; width: 390px; height: 462px; overflow: visible">
+<path d="M124 196 C 150 226, 168 244, 190 268" fill="none" stroke="#8D92CB" stroke-width="1.5" stroke-dasharray="3 5" stroke-linecap="round"></path>
+<path d="M179 266 L 192 270 L 189 257" fill="none" stroke="#8D92CB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M226 326 C 214 392, 150 372, 66 414" fill="none" stroke="#0B0B12" stroke-opacity=".55" stroke-width="7" stroke-linecap="round"></path>
+<path class="trail" d="M226 326 C 214 392, 150 372, 66 414" fill="none" stroke="#7FE3DC" stroke-width="4" stroke-linecap="round"></path>
+</svg>
+
+<div style="position: absolute; left: 14px; top: 110px; width: 112px; height: 112px; border-radius: 50%; border: 1.5px dashed var(--ink3); display: flex; align-items: center; justify-content: center; color: var(--ink3)">
+<span class="d" style="font-size: 34px; opacity: .5">LM</span>
+</div>
+
+<div class="halo" style="position: absolute; left: 226px; top: 284px; width: 190px; height: 190px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); border: 1.5px solid var(--accent)"></div>
+
+<div style="position: absolute; left: 226px; top: 311px; width: 16px; height: 16px; background: var(--ground); transform: translate(-50%, -50%) rotate(45deg); border-radius: 3px"></div>
+<div class="pin" style="left: 226px; top: 284px">
+<span class="av" style="width: 56px; height: 56px; font-size: 20px; border: 3px solid var(--ground); box-shadow: 0 10px 24px rgba(0,0,0,.5)">LM</span>
+</div>
+
+<div style="position: absolute; left: 66px; top: 414px; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%; background: rgba(168,85,247,.22)">
+<span class="av" style="--accent:#A855F7; width: 36px; height: 36px; font-size: 13px; border: 2.5px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.5)">AN</span>
+</div>
+
+<div class="glass" style="position: absolute; left: 96px; top: 364px; display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; background: rgba(19,17,28,.62)">
+<span style="display: flex; color: var(--accent-ink)">[[ic:person-simple-walk s]]</span>
+<span>2,4 km · 30 min à pied</span>
+</div>
+
+<span class="glass" style="position: absolute; left: 100px; top: 404px; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px 0 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; color: var(--ink); background: rgba(19,17,28,.66)"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 54px; display: flex; align-items: flex-start; justify-content: space-between">
+<button class="ib g" aria-label="Revenir à la fiche de Léo">[[ic:caret-down]]</button>
+<button class="btn g sm" style="min-height: 44px; padding: 0 16px">
+<span style="display: flex; color: var(--accent-ink)">[[ic:eye s]]</span><span>Vue quartier</span>
+</button>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<button class="ib g" aria-label="Calques de la carte">[[ic:stack]]</button>
+<button class="ib g" aria-label="Me centrer">[[ic:crosshair]]</button>
+<button class="ib g" aria-label="Boussole">[[ic:compass]]</button>
+</div>
+</div>
+
+</main>
+
+<section class="glass rise" style="position: relative; flex: 1; display: flex; flex-direction: column; gap: 18px; padding: 10px 20px 24px; border-radius: 34px 34px 0 0; border-bottom: 0; background: rgba(19,17,28,.72)">
+<span aria-hidden="true" style="align-self: center; width: 36px; height: 5px; border-radius: 999px; background: var(--ink3); opacity: .6"></span>
+
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="position: relative; display: flex"><span class="av">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; border-color: #16131F"></span></span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<h1 class="d" style="font-size: 22px">Léo Marchetti</h1>
+<span style="font-size: 13.5px; color: var(--ink2)">Alfama, Lisbonne</span>
+</div>
+<span class="chip" style="color: var(--accent-ink)">[[ic:fire s]]<span>Proche</span></span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 10px; color: var(--ok); font-size: 13.5px; font-weight: 600">
+<span class="dot on" style="border: 0; width: 9px; height: 9px; margin: 0 4px"></span>
+<span>Position en direct · mise à jour il y a 20 s</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 9px">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="display: flex; color: var(--accent-ink)">[[ic:clock-countdown s]]</span>
+<span style="font-size: 13px; color: var(--ink2); flex: 1">Partage pour 1 h</span>
+<span class="d" style="font-size: 15px">encore 42 min</span>
+</div>
+<div class="bar"><i style="width: 70%"></i></div>
+</div>
+
+<div style="display: flex; gap: 6px; align-items: flex-start">
+<button class="act"><span class="ib lg" style="background: var(--accent); color: #0B0B12; box-shadow: 0 8px 22px rgba(78,205,196,.35)">[[ic:navigation-arrow-fill l]]</span><span>Itinéraire</span></button>
+<button class="act"><span class="ib g lg">[[ic:chat-circle l]]</span><span>Écrire</span></button>
+<button class="act"><span class="ib g lg">[[ic:phone l]]</span><span>Appeler</span></button>
+<button class="act"><span class="ib g lg">[[ic:map-pin l]]</span><span>Partager<br>la mienne</span></button>
+</div>
+
+<button class="row" style="padding: 6px 14px 6px 8px; min-height: 56px; border-radius: 20px; background: var(--glass); border: 1px solid var(--glass-line); width: 100%">
+<span class="ib" style="background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-ink)">[[ic:hourglass]]</span>
+<span style="flex: 1; font-weight: 700">Demander à prolonger</span>
+<span style="display: flex; color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

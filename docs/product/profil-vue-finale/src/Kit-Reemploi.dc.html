@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — réemploi : ce qu'on ne redessine pas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.rc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;padding:36px;border-radius:40px;background:var(--raised);border:1px solid var(--line)}
+.rc.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.rc>header{grid-column:1/-1;display:flex;align-items:flex-start;justify-content:space-between;gap:48px;padding-bottom:10px}
+.rc>header>div:first-child{display:flex;flex-direction:column;gap:12px;max-width:720px}
+.rc>header h2{font-size:28px}
+.use{display:flex;flex-direction:column;gap:6px;width:340px;flex:none;padding:14px 18px;border-radius:18px;background:var(--field);border:1px solid var(--line)}
+.use>p{font-size:14px;line-height:1.45;color:var(--ink)}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:16px;padding:20px;background:var(--ground);min-height:0}
+.vw{position:relative;display:flex;align-items:center;justify-content:center;flex:1;min-height:132px}
+.stg{position:relative;overflow:hidden;border-radius:20px;background:linear-gradient(140deg,color-mix(in oklab,var(--accent) 58%,var(--ground)),color-mix(in oklab,var(--brand) 50%,var(--ground)))}
+.stg.q{background:linear-gradient(160deg,color-mix(in oklab,var(--accent) 20%,var(--ground)),color-mix(in oklab,var(--brand) 16%,var(--ground)))}
+.cp{display:flex;flex-direction:column;gap:3px;min-height:60px}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.ask,.same{grid-column:1/-1;display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-radius:18px;font-size:14px;line-height:1.5;color:var(--ink)}
+.ask{background:color-mix(in oklab,var(--warn) 8%,transparent);border:1.5px dashed color-mix(in oklab,var(--warn) 55%,transparent)}
+.ask>span:first-child{display:inline-flex;color:var(--warn)}
+.same{border:1px solid var(--line);color:var(--ink2)}
+.same>span:first-child{display:inline-flex;color:var(--ok)}
+.ask b,.same b{font-weight:700;color:var(--ink)}
+.sg{padding:5px}
+.sg>*{min-height:44px;padding:0 11px;font-size:12.5px}
+.fab{width:52px;height:52px;background:var(--brand-fill);color:#fff;box-shadow:0 8px 22px rgba(79,70,229,.5)}
+.grp{display:flex;flex-direction:column;width:100%;border-radius:20px;background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.grp>.row{min-height:58px;padding:8px 14px;gap:12px}
+.rt{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.rt>b{font-size:14px;font-weight:600;color:var(--ink)}
+.rt>span{font-size:12px;color:var(--ink2)}
+.cd{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;flex:none}
+.cd>i{display:block;width:30px;height:30px;border-radius:50%;background:var(--c)}
+.cd.on>i{box-shadow:0 0 0 3px var(--ground),0 0 0 5.5px var(--ink)}
+.cd.ho>i{background:none;border:2px dashed var(--ink3);display:flex;align-items:center;justify-content:center;color:var(--ink2)}
+.fd{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:8px 14px;border-radius:16px;background:var(--field);color:var(--ink)}
+.fd .lb{font-size:11px;font-weight:600;color:var(--ink3)}
+.fd .tx{font-size:14px;line-height:1.4;color:var(--ink)}
+.fd .ct{font-size:11.5px;font-weight:600;color:var(--ink3);white-space:nowrap}
+.caret{display:inline-block;width:2px;height:17px;margin-left:1px;vertical-align:-3px;border-radius:2px;background:var(--brand-soft);animation:krBlink 1.1s steps(2,jump-none) infinite}
+.pr{position:relative;display:inline-flex;align-items:center;justify-content:center;width:var(--d,44px);height:var(--d,44px);border-radius:50%;flex:none}
+.pr::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(var(--c,var(--ink)) calc(var(--p,50)*1%),color-mix(in srgb,var(--ink) 18%,transparent) 0);-webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - var(--w,4px) - .5px),#000 calc(100% - var(--w,4px)));mask:radial-gradient(farthest-side,#0000 calc(100% - var(--w,4px) - .5px),#000 calc(100% - var(--w,4px)))}
+.pr.ind::before{background:conic-gradient(var(--c,#fff) 18%,rgba(255,255,255,.25) 0);animation:mxSpin 1s linear infinite}
+.sp{display:inline-flex;align-items:center;min-height:48px;border-radius:999px;background:var(--brand-fill);color:#fff;font-weight:700;font-size:15px;box-shadow:0 8px 22px rgba(79,70,229,.45)}
+.sp>span{display:inline-flex;align-items:center;gap:9px;min-height:48px;padding:0 18px}
+.sp>span+span{padding:0 14px 0 12px;border-left:1px solid rgba(255,255,255,.32)}
+.sp.df{background:color-mix(in oklab,var(--brand) 26%,var(--ground));color:var(--ink);box-shadow:none}
+.cps{display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:7px 16px;min-height:44px;border-radius:22px;font-size:13.5px;font-weight:600;color:var(--ink)}
+.cps .dt{font-weight:500;color:var(--ink2);font-size:12.5px}
+.cps>button{min-height:32px;padding:0 13px;border-radius:999px;background:var(--ink);color:var(--ground);font-size:13px;font-weight:700;margin-right:-8px;white-space:nowrap}
+.sh{position:relative;background:var(--raised);border-top:1px solid var(--line);border-radius:22px 22px 0 0;padding:8px 14px 14px;display:flex;flex-direction:column;gap:8px}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--ink3);opacity:.55;align-self:center}
+.shh{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px}
+.shh>b{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;font-size:16px}
+.shx{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.1);color:var(--ink)}
+.shr{display:flex;align-items:center;gap:10px;min-height:44px;font-size:13.5px;font-weight:600;color:var(--ink)}
+.shr>span:nth-child(2){flex:1}
+.shr>span:nth-child(3){display:inline-flex;color:var(--ink3)}
+.mn{width:236px;border-radius:20px;overflow:hidden;display:flex;flex-direction:column}
+.mn>button{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:0 16px;font-size:14px;font-weight:600;color:var(--ink)}
+.mn>button+button{border-top:1px solid rgba(255,255,255,.1)}
+.mn>button.x{color:var(--err)}
+.th{display:flex;align-items:flex-end;justify-content:center;gap:7px}
+.th>.ph{padding:5px 6px;border-radius:10px;font-size:10px}
+.th>.cur{box-shadow:0 0 0 2px var(--ground),0 0 0 4px #fff}
+.th>.add{display:inline-flex;align-items:center;justify-content:center;border-radius:10px;border:1.5px dashed var(--ink3);color:var(--ink2)}
+.ix{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:20px;background:var(--raised);border:1px solid var(--line);min-width:0}
+.ix>p{font-size:12.5px;line-height:1.35;color:var(--ink2)}
+.ix.ev{border-color:color-mix(in oklab,var(--warn) 55%,transparent);border-style:dashed}
+.tn{position:absolute;left:10px;top:10px;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;font-weight:700;color:var(--ink);opacity:.85}
+@keyframes krBlink{0%{opacity:1}100%{opacity:0}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 280px; height: 280px; right: 160px; top: -120px; background: #A855F7; opacity: .2"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -50px; background: #6366F1; opacity: .26; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 14px; max-width: 860px">
+<span class="tag">Profil Meeshy · kit · réemploi</span>
+<h1 class="d" style="font-size: 56px">Ce qu'on ne redessine pas</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2)">Le profil est fait du kit. Quatorze composants existent déjà : on les pose tels quels, avec leurs noms et leurs lois. Là où le profil demande plus, c'est le composant qui évolue. Jamais un jumeau.</p>
+</div>
+<div style="position: relative; display: flex; align-items: stretch; gap: 12px">
+<div class="card" style="display: flex; flex-direction: column; gap: 2px; padding: 14px 20px; border-radius: 22px"><b class="d" style="font-size: 34px">14</b><span class="kcap">composants réemployés</span></div>
+<div class="card" style="display: flex; flex-direction: column; gap: 2px; padding: 14px 20px; border-radius: 22px"><b class="d" style="font-size: 34px; color: var(--warn)">7</b><span class="kcap">évolutions à consigner</span></div>
+<div class="card" style="display: flex; flex-direction: column; gap: 2px; padding: 14px 20px; border-radius: 22px"><b class="d" style="font-size: 34px; color: var(--ok)">0</b><span class="kcap">jumeau créé</span></div>
+</div>
+</header>
+
+<section style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 24px">
+<span class="tag">Treize besoins du profil, quatorze composants déjà là</span>
+<span class="kcap" style="display: inline-flex; align-items: center; gap: 8px"><span style="display: inline-block; width: 18px; height: 12px; border-radius: 4px; border: 1.5px dashed var(--warn)"></span>Bord pointillé : le profil lui demande une évolution</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px">
+<div class="ix"><span class="knum re" style="align-self: flex-start">K01</span><p>Le verre de toute commande flottante</p></div>
+<div class="ix ev"><span class="knum re" style="align-self: flex-start">K02</span><p>Le bouton rond de verre</p></div>
+<div class="ix ev"><span class="knum re" style="align-self: flex-start">K03</span><p>Le sélecteur des trois faces</p></div>
+<div class="ix"><span class="knum re" style="align-self: flex-start">K04</span><p>Les puces : langues, familles, cercles</p></div>
+<div class="ix"><span class="knum re" style="align-self: flex-start">K06</span><p>La rangée à bascule</p></div>
+<div class="ix"><span class="knum re" style="align-self: flex-start">K07</span><p>Les pastilles de couleur d'accent</p></div>
+<div class="ix ev"><span class="knum re" style="align-self: flex-start">K08</span><p>Les champs : bio, adresse, UTM</p></div>
+<div class="ix ev"><span class="knum re" style="align-self: flex-start">K09</span><p>L'anneau du temps restant</p></div>
+<div class="ix ev"><span class="knum re" style="align-self: flex-start">K10</span><p>La pilule du bas</p></div>
+<div class="ix ev"><span class="knum re" style="align-self: flex-start">K13</span><p>L'action principale et son choix</p></div>
+<div class="ix"><span class="knum re" style="align-self: flex-start">K14</span><p>Hors ligne, refus, échec, direct</p></div>
+<div class="ix"><span class="knum re" style="align-self: flex-start">K15</span><p>Les feuilles basses</p></div>
+<div class="ix"><span class="knum re" style="align-self: flex-start">K18</span><p>Le menu (…) d'une fiche ou d'un billet</p></div>
+<div class="ix ev"><span class="knum re" style="align-self: flex-start">K20</span><p>Le rail de vignettes</p></div>
+</div>
+</section>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K01 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyGlassTone</span></div>
+<h2 class="d">Tout verre passe par une seule entrée : la matière selon l'appareil, le ton selon ce qu'il y a dessous.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Le verre de toute commande flottante : en-tête, pilule du bas, capsules, menus.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw stg">
+<div class="orb" style="width: 150px; height: 150px; left: -30px; top: -50px; background: var(--accent); opacity: .7"></div>
+<div class="orb" style="width: 130px; height: 130px; right: -20px; bottom: -50px; background: var(--brand-soft); opacity: .7; animation-delay: -4s"></div>
+<span class="tn">deep</span>
+<span class="glass" style="position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px; font-size: 14px; font-weight: 700">[[ic:eye s]]<span>Vue par : Public</span>[[ic:caret-down s]]</span>
+</div>
+<div class="cp"><b>Sur la bannière vivante</b><span class="kcap">Ton <code>deep</code>, le défaut sur une image ou une couleur moyenne.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw" style="border-radius: 20px; border: 1px solid var(--line)">
+<span class="tn">theme</span>
+<span class="glass" style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px 0 8px; border-radius: 999px"><span class="av" style="width: 36px; height: 36px; font-size: 13px">AN</span><span style="display: flex; flex-direction: column"><b style="font-size: 14px">Aïssa Ndiaye</b><span class="mono" style="font-size: 11.5px; color: var(--ink2)">@aissa</span></span></span>
+</div>
+<div class="cp"><b>Sur le fond de l'app</b><span class="kcap">Ton <code>theme</code> : l'en-tête replié, à l'encre du thème.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mx vw" data-theme="light" style="border-radius: 20px; overflow: hidden; background: linear-gradient(140deg, #F3E8FF, #E0E7FF)">
+<span class="tn">onLight</span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="ib g" style="color: var(--ink)">[[ic:caret-left]]</span><span class="ib g" style="color: var(--ink)">[[ic:export]]</span><span class="ib g" style="color: var(--ink)">[[ic:dots-three]]</span></span>
+</div>
+<div class="cp"><b>Sur une bannière claire</b><span class="kcap">Ton <code>onLight</code> : le même verre, encre sombre.</span></div>
+</div>
+<div class="same"><span>[[ic:check-circle]]</span><span><b>Rien de plus.</b> Le profil ne choisit jamais une matière : il passe un ton, ou laisse celui de l'hôte.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K02 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyGlassButton</span></div>
+<h2 class="d">Un disque qui porte un glyphe seul, se touche et dit son nom.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Retour, partager, (…) et fermer : tous les boutons ronds de 44 et 48.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw stg">
+<div class="orb" style="width: 150px; height: 150px; left: 40px; top: -60px; background: var(--accent); opacity: .7"></div>
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 0 16px">
+<button class="ib g" aria-label="Retour">[[ic:caret-left]]</button>
+<span style="display: flex; gap: 8px"><button class="ib g" aria-label="Partager la fiche">[[ic:export]]</button><button class="ib g" aria-label="Plus">[[ic:dots-three]]</button></span>
+</div>
+</div>
+<div class="cp"><b>En tête de la Vitrine</b><span class="kcap"><code>normal</code>, 44, seuls sur la bannière. Le nom est dit, jamais écrit.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg">
+<div class="orb" style="width: 140px; height: 140px; right: 10px; top: -40px; background: var(--brand-soft); opacity: .7; animation-delay: -3s"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 14px">
+<button class="ib g" aria-label="Partager la fiche">[[ic:export]]</button>
+<button class="ib" aria-label="Plus" aria-expanded="true" style="background: #fff; color: #0B0B12; box-shadow: 0 8px 22px rgba(0,0,0,.3)">[[ic:dots-three]]</button>
+</div>
+</div>
+<div class="cp"><b>Le (…) ouvert</b><span class="kcap"><code>active</code> : disque blanc plein, état dit par <code>expanded</code>. Il ancre K18.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw">
+<div style="display: flex; align-items: center; gap: 18px">
+<span style="position: relative; display: inline-flex"><button class="ib g" aria-label="Mes cercles, 2 demandes à répondre">[[ic:circles-three]]</button><span style="position: absolute; right: -4px; top: -4px; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--err); color: #0B0B12; font-size: 11px; font-weight: 800; border: 2px solid var(--ground)">2</span></span>
+<button class="shx" aria-label="Fermer">[[ic:x s]]</button>
+<button class="ib" aria-label="Retirer" style="background: var(--err); color: #0B0B12">[[ic:trash]]</button>
+</div>
+</div>
+<div class="cp"><b>Pastille, doux, destructif</b><span class="kcap">Emplacement <code>badge</code> « 2 demandes » · ✕ de feuille <code>soft</code> en 36 · <code>destructive</code>.</span></div>
+</div>
+<div class="ask"><span>[[ic:plus-circle]]</span><span><b>Ce que le profil lui demande en plus.</b> Les tailles 56, 60 et 64 : la grille de la face Actions (K32) pose ce disque en grand, et la fiche s'arrête à 48. C'est une taille de plus dans <code>MeeshyGlassButtonSize</code>, pas un second bouton.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K03 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshySegmented</span></div>
+<h2 class="d">Un choix exclusif entre deux à quatre options courtes, la courante en pastille pleine.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Le sélecteur des trois faces, rôle <code>tabs</code>, posé dans la pilule K10. La pastille glisse d'une face à l'autre.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw stg">
+<div class="orb" style="width: 150px; height: 150px; left: -30px; top: -50px; background: var(--accent); opacity: .7"></div>
+<div class="seg sg glass" style="position: relative">
+<button class="on" aria-current="page">[[ic:user-focus-fill s]]<span>Vitrine</span></button>
+<button>[[ic:link s]]<span>Liens</span></button>
+<button>[[ic:lightning s]]<span>Actions</span></button>
+</div>
+</div>
+<div class="cp"><b>Vitrine</b><span class="kcap">Première option courante. Glyphe plein sur la face active.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg q">
+<div class="seg sg glass" style="position: relative">
+<button>[[ic:user-focus s]]<span>Vitrine</span></button>
+<button class="on" aria-current="page">[[ic:link-fill s]]<span>Liens</span></button>
+<button>[[ic:lightning s]]<span>Actions</span></button>
+</div>
+</div>
+<div class="cp"><b>Liens</b><span class="kcap">La pastille a glissé au milieu : <code>motion.morph</code>, retour haptique léger.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg q">
+<div class="seg sg glass" style="position: relative">
+<button>[[ic:user-focus s]]<span>Vitrine</span></button>
+<button>[[ic:link s]]<span>Liens</span></button>
+<button class="on" aria-current="page">[[ic:lightning-fill s]]<span>Actions</span></button>
+</div>
+</div>
+<div class="cp"><b>Actions</b><span class="kcap">Dernière option courante. Retoucher la courante ne change rien.</span></div>
+</div>
+<div class="ask"><span>[[ic:plus-circle]]</span><span><b>Ce que le profil lui demande en plus.</b> Un glyphe à côté du libellé de chaque segment. La fiche dit aujourd'hui « un segment est un texte » et « ni icône » : l'option gagne un glyphe facultatif, plein quand elle est courante. Le reste (rôle <code>tabs</code>, répartition, RTL, clavier) est déjà là.</span></div>
+</article>
+
+<article class="rc two rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K10 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyGlassPill</span></div>
+<h2 class="d">Un seul bloc de verre posé en bas porte une rangée d'emplacements, et se retire par son bord.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>La pilule du bas, dans la zone du pouce, avec son bouton contextuel selon la face.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw stg" style="align-items: flex-end; padding: 0 12px 14px; min-height: 136px; --accent: #4ECDC4">
+<div class="orb" style="width: 150px; height: 150px; left: 60px; top: -70px; background: var(--accent); opacity: .6"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<div class="seg sg glass"><button class="on" aria-current="page">[[ic:user-focus-fill s]]<span>Vitrine</span></button><button>[[ic:link s]]<span>Liens</span></button><button>[[ic:lightning s]]<span>Actions</span></button></div>
+<button class="ib fab" aria-label="Écrire à Léo">[[ic:chat-circle]]</button>
+</div>
+</div>
+<div class="cp"><b>Vitrine de Léo · Écrire</b><span class="kcap">Disposition <code>hug</code>, ancrée par <code>MeeshyGlassPillDock</code> à 12 des bords.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg q" style="align-items: flex-end; padding: 0 12px 14px; min-height: 136px">
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<div class="seg sg glass"><button>[[ic:user-focus s]]<span>Vitrine</span></button><button class="on" aria-current="page">[[ic:link-fill s]]<span>Liens</span></button><button>[[ic:lightning s]]<span>Actions</span></button></div>
+<button class="ib fab" aria-label="Créer un lien">[[ic:plus]]</button>
+</div>
+</div>
+<div class="cp"><b>Mes liens · Créer</b><span class="kcap">Le bouton change de glyphe, la pilule ne bouge pas.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg q" style="align-items: flex-end; padding: 0 12px 14px; min-height: 136px">
+<div class="seg sg glass" style="position: relative"><button>[[ic:user-focus s]]<span>Vitrine</span></button><button>[[ic:link s]]<span>Liens</span></button><button class="on" aria-current="page">[[ic:lightning-fill s]]<span>Actions</span></button></div>
+</div>
+<div class="cp"><b>Actions · rien à droite</b><span class="kcap">Sans bouton contextuel, la pilule se recentre seule.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg q" style="align-items: stretch; flex-direction: column; justify-content: flex-end; min-height: 136px">
+<div class="seg sg" style="position: absolute; left: 50%; top: 12px; transform: translateX(-50%); border: 1.5px dashed var(--ink3); opacity: .5"><button>[[ic:user-focus s]]<span>Vitrine</span></button><button>[[ic:link s]]<span>Liens</span></button><button>[[ic:lightning s]]<span>Actions</span></button></div>
+<div class="sh"><span class="grab"></span><div class="shh"><b>Léo et toi</b><span class="shx">[[ic:x s]]</span></div></div>
+</div>
+<div class="cp"><b>Une feuille s'ouvre · rangée</b><span class="kcap">Présence <code>stowed</code> : elle sort par le bas, seule la feuille parle.</span></div>
+</div>
+<div class="ask"><span>[[ic:plus-circle]]</span><span><b>Ce que le profil lui demande en plus.</b> Un bouton contextuel à droite, hors du verre. Aujourd'hui <code>primary</code> vit dans la pilule : le profil demande un emplacement de fin à l'ancrage (<code>MeeshyGlassPillDock</code>), qui garde l'écart de 10 et recentre la pilule quand il est vide.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K13 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshySplitActionButton</span></div>
+<h2 class="d">Un bouton plein porte l'action principale et, derrière un filet, le choix de ce qui part.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>« Créer le lien » et son choix de famille, l'envoi en cours, l'envoi qui attend le réseau.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw"><button class="sp"><span>Créer le lien</span><span aria-hidden="true">[[ic:caret-down s]]</span></button></div>
+<div class="cp"><b>Prêt, avec son choix</b><span class="kcap"><code>ready</code>. Le chevron ouvre la famille : partage, suivi, communauté.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><button class="sp" aria-busy="true"><span><span class="pr ind" style="--d: 22px; --w: 3px"></span>Création…</span></button></div>
+<div class="cp"><b>En cours</b><span class="kcap"><code>busy</code> : l'anneau K09 et un mot, ni filet ni chevron.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><button class="sp df"><span>[[ic:cloud-slash s]]Au retour en ligne</span></button></div>
+<div class="cp"><b>Différé, hors ligne</b><span class="kcap"><code>deferred</code> : voile doux, sans ombre. Le lien partira seul.</span></div>
+</div>
+<div class="ask"><span>[[ic:plus-circle]]</span><span><b>Ce que le profil lui demande en plus.</b> Se réduire au glyphe seul pour servir de bouton contextuel rond (Écrire, Créer). <code>fallbackGlyph</code> n'apparaît aujourd'hui que faute de place : le profil demande une largeur <code>glyph</code> choisie par l'hôte, avec les mêmes phases.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K04 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyChipRow</span></div>
+<h2 class="d">Une rangée de capsules d'où l'on choisit une option ou plusieurs, qui défile, se replie ou partage sa largeur.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Langues de la Vitrine, filtres de famille des Liens, cercles d'audience d'une adresse.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw"><div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px"><span class="chip">[[ic:translate s]]<span>Français</span></span><span class="chip">Wolof</span><span class="chip">Anglais</span></div></div>
+<div class="cp"><b>Langues d'Aïssa</b><span class="kcap">Mode <code>actions</code>, disposition <code>wrap</code>. Glyphe de tête sur la principale.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw" style="overflow: hidden; justify-content: flex-start; -webkit-mask: linear-gradient(90deg, #000 78%, #0000); mask: linear-gradient(90deg, #000 78%, #0000)"><div style="display: flex; gap: 8px"><span class="chip on">Tous</span><span class="chip">[[ic:chats-circle s]]<span>Partage</span></span><span class="chip">[[ic:cursor-click s]]<span>Suivi</span></span><span class="chip">[[ic:users-four s]]<span>Communauté</span></span><span class="chip">[[ic:gift s]]<span>Parrainage</span></span></div></div>
+<div class="cp"><b>Familles de liens</b><span class="kcap">Mode <code>single</code>, <code>scroll</code> : le bord de fin s'estompe, il reste des puces.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px"><span class="chip on">[[ic:globe s]]<span>Public</span></span><span class="chip">[[ic:handshake s]]<span>Ami</span></span><span class="chip">[[ic:fire s]]<span>Proche</span></span><span class="chip">[[ic:drop s]]<span>Sang</span></span></div></div>
+<div class="cp"><b>Qui voit cette adresse</b><span class="kcap">Mode <code>single</code>, <code>wrap</code>. Un niveau fermé n'est pas grisé : il est absent.</span></div>
+</div>
+<div class="same"><span>[[ic:check-circle]]</span><span><b>Rien de plus.</b> Glyphe de tête, estompe de bord, choix simple ou multiple : tout est dans la fiche.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K06 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyToggleRow</span></div>
+<h2 class="d">Une ligne de liste qui se touche tout entière, avec son accessoire de fin.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Batterie, téléphone injoignable, mode fantôme, et les lignes à valeur des réglages de ma fiche.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw"><div class="grp"><div class="row"><span style="display: inline-flex; color: var(--ink2)">[[ic:battery-medium]]</span><span class="rt"><b>Partager ma batterie</b><span>Visible par tes 9 Proches</span></span><span class="sw on" role="switch" aria-checked="true" aria-label="Partager ma batterie"></span></div></div></div>
+<div class="cp"><b>Bascule ouverte</b><span class="kcap">Accessoire <code>toggle</code>, sous-titre. Toute la ligne bascule, 46 pt au moins.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div class="grp"><div class="row"><span style="display: inline-flex; color: var(--ink2)">[[ic:phone-slash]]</span><span class="rt"><b>Prévenir mes Proches</b><span>Si mon téléphone est injoignable</span></span><span class="sw" role="switch" aria-checked="false" aria-label="Prévenir mes Proches"></span></div><div class="sep" style="margin: 0 14px"></div><div class="row"><span style="display: inline-flex; color: var(--ink2)">[[ic:ghost]]</span><span class="rt"><b>Mode fantôme</b><span>Ta position Sang se met en pause</span></span><span class="sw" role="switch" aria-checked="false" aria-label="Mode fantôme"></span></div></div></div>
+<div class="cp"><b>Groupe avec filet</b><span class="kcap">Deux bascules fermées. Le filet appartient à la ligne (<code>showsDivider</code>).</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div class="grp"><div class="row"><span style="display: inline-flex; color: var(--ink2)">[[ic:user-plus]]</span><span class="rt"><b>Recevoir des demandes d'amis</b></span><span style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink2)">Tout le monde[[ic:caret-right s]]</span></div><div class="sep" style="margin: 0 14px"></div><div class="row"><span style="display: inline-flex; color: var(--err)">[[ic:prohibit]]</span><span class="rt"><b style="color: var(--err)">Bloquer Rui</b></span></div></div></div>
+<div class="cp"><b>Valeur et destructif</b><span class="kcap">Accessoire <code>value</code> avec chevron · variante <code>destructive</code>, en dernier.</span></div>
+</div>
+<div class="same"><span>[[ic:check-circle]]</span><span><b>Rien de plus.</b> Les trois plateformes sont livrées sous les mêmes noms : la fiche porte iOS, le web (§ 10) et Android (§ 11).</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K07 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyColorDots</span></div>
+<h2 class="d">Des disques de couleur dont un seul est courant, cerclé. Toucher un disque le choisit.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>La couleur d'accent choisie, dans « Modifier ma fiche ». La gamme reste à l'app.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw"><div style="display: flex; flex-wrap: wrap; justify-content: center; max-width: 264px">
+<span class="cd on" style="--c: #A855F7"><i></i></span><span class="cd" style="--c: #6366F1"><i></i></span><span class="cd" style="--c: #4ECDC4"><i></i></span><span class="cd" style="--c: #FF6B6B"><i></i></span><span class="cd" style="--c: #F8B500"><i></i></span><span class="cd" style="--c: #3498DB"><i></i></span>
+<span class="cd" style="--c: #2ECC71"><i></i></span><span class="cd" style="--c: #EC4899"><i></i></span><span class="cd" style="--c: #F97316"><i></i></span><span class="cd" style="--c: #14B8A6"><i></i></span><span class="cd" style="--c: #9B59B6"><i></i></span><span class="cd" style="--c: #94A3B8"><i></i></span>
+</div></div>
+<div class="cp"><b>Ma couleur : violet</b><span class="kcap"><code>s32</code>, <code>wrap</code>. Cellule de 44, la courante cerclée. La bannière suit en direct.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div style="display: flex; justify-content: center">
+<span class="cd ho on"><i>[[ic:magic-wand s]]</i></span><span class="cd" style="--c: #A855F7"><i></i></span><span class="cd" style="--c: #6366F1"><i></i></span><span class="cd" style="--c: #4ECDC4"><i></i></span><span class="cd" style="--c: #FF6B6B"><i></i></span><span class="cd" style="--c: #F8B500"><i></i></span>
+</div></div>
+<div class="cp"><b>« Automatique » en tête</b><span class="kcap">Disque <code>hollow</code> à glyphe : la couleur vient de ton nom, comme avant.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mx vw" data-theme="light" style="border-radius: 20px">
+<div style="display: flex; justify-content: center"><span class="cd" style="--c: #A855F7"><i></i></span><span class="cd" style="--c: #6366F1"><i></i></span><span class="cd on" style="--c: #4ECDC4"><i></i></span><span class="cd" style="--c: #FF6B6B"><i></i></span><span class="cd" style="--c: #F8B500"><i></i></span><span class="cd" style="--c: #3498DB"><i></i></span></div>
+</div>
+<div class="cp"><b>Thème clair, sur une ligne</b><span class="kcap">Disposition <code>row</code>. Le cercle prend l'encre du thème.</span></div>
+</div>
+<div class="same"><span>[[ic:check-circle]]</span><span><b>Rien de plus.</b> Pas de couleur libre, pas de pastille « + » : la gamme d'accent est une liste que l'app passe.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K08 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyField</span></div>
+<h2 class="d">Une boîte arrondie où l'on tape une ligne, un paragraphe ou un nombre, avec son compteur.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>La bio, une adresse personnelle, les champs UTM d'un lien de suivi.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw"><div class="fd" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 10px 14px"><span class="lb">Bio</span><span class="tx">Designer sonore à Dakar. Je parle wolof, j'écris en français, je rêve en anglais.<span class="caret"></span></span></div></div>
+<div class="cp"><b>Bio · 81 / 500</b><span class="kcap"><code>paragraph</code> à légende. Compteur <code>hosted</code> : l'en-tête de la feuille le porte.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div class="fd"><span style="display: inline-flex; color: var(--ink2)">[[ic:globe-hemisphere-west]]</span><span class="mono" style="flex: 1; font-size: 13.5px; color: var(--ink)">aissandiaye.studio<span class="caret"></span></span><span class="ct">18 / 120</span></div></div>
+<div class="cp"><b>Une adresse</b><span class="kcap"><code>token</code> : ni correction ni majuscule. Tête à icône, compteur en ligne.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div style="display: flex; gap: 10px; width: 100%"><div class="fd" style="flex-direction: column; align-items: stretch; gap: 2px; padding: 8px 12px"><span class="lb">Source</span><span class="mono" style="font-size: 13px; color: var(--ink)">instagram</span></div><div class="fd" style="flex-direction: column; align-items: stretch; gap: 2px; padding: 8px 12px"><span class="lb">Campagne</span><span class="mono" style="font-size: 13px; color: var(--ink)">dakar-nuit</span></div></div></div>
+<div class="cp"><b>UTM, deux champs côte à côte</b><span class="kcap"><code>token</code> à légende, comme « Début · Fin » du composer.</span></div>
+</div>
+<div class="ask"><span>[[ic:plus-circle]]</span><span><b>Ce que le profil lui demande en plus.</b> Une saisie d'adresse : clavier d'URL, point et barre oblique à portée. <code>token</code> s'en approche mais garde le clavier par défaut. Une valeur de plus dans <code>MeeshyFieldInput</code> ; le refus d'une adresse mal formée reste à K14.</span></div>
+</article>
+
+<article class="rc rise" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K09 · réemploi</span><span class="mono" style="font-size: 16px; color: #D8B4FE">MeeshyProgressRing</span></div>
+<h2 class="d">Un seul anneau dit où en est ce qui est en cours : une piste, un arc depuis midi, un centre.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Le temps qui reste à un partage de position, l'envoi d'un média, un lien qui expire.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw"><div style="display: flex; align-items: center; gap: 16px"><span class="pr" style="--d: 72px; --w: 6px; --p: 70; --c: var(--accent)"><span style="display: flex; flex-direction: column; align-items: center; line-height: 1"><b class="d" style="font-size: 22px">42</b><span style="font-size: 10.5px; font-weight: 700; color: var(--ink2)">min</span></span></span><span style="display: flex; flex-direction: column; gap: 2px"><b style="font-size: 15px">Léo partage sa position</b><span style="font-size: 13px; color: var(--ink2)">Alfama · au quartier</span></span></div></div>
+<div class="cp"><b>Encore 42 min</b><span class="kcap">Diamètre 72, teinte <code>solid</code> à l'accent de Léo, <code>center</code> posé par l'hôte.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div class="grp"><div class="row"><span class="av" style="width: 40px; height: 40px; font-size: 14px">LM</span><span class="rt"><b>Léo Marchetti</b><span>Alfama · encore 42 min</span></span><span class="pr" style="--d: 22px; --w: 3px; --p: 70; --c: var(--accent)"></span></div></div></div>
+<div class="cp"><b>Petit, dans une rangée</b><span class="kcap">22 : une ligne sans chiffre. La valeur est dite par <code>valueText</code>.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div style="display: flex; align-items: center; gap: 14px"><span style="position: relative; display: inline-flex"><span class="ph" style="width: 64px; height: 64px; border-radius: 14px"></span><span class="pr" style="position: absolute; left: 12px; top: 12px; --d: 40px; --w: 4px; --p: 60; --c: #fff; background: rgba(0,0,0,.5)"><b style="font-size: 11px">60 %</b></span></span><span style="font-size: 13px; color: var(--ink2)">Envoi de la bannière</span></div></div>
+<div class="cp"><b>Une opération en vol</b><span class="kcap">40, pourcentage, disque d'ombre <code>scrim</code> : son rôle d'origine.</span></div>
+</div>
+<div class="ask" style="--accent: #A855F7"><span>[[ic:plus-circle]]</span><span><b>Ce que le profil lui demande en plus.</b> Dire un temps qui s'écoule, pas seulement une opération : la fiche exclut « une jauge d'une mesure fixe ». À trancher à l'ouverture du lot : le rôle s'élargit au compte à rebours, et la complétion de la fiche reste une barre. Le lot Android n'est pas livré.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K14 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyStatusCapsule</span></div>
+<h2 class="d">Une capsule de verre dit en une phrase ce qui vient d'être refusé, limité ou raté, avec au plus une action.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Hors ligne, demande qui n'est pas partie, lien refusé, partage de position en direct.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw stg q"><div class="cps glass" role="status"><span style="display: inline-flex; color: var(--ink2)">[[ic:wifi-slash s]]</span><span>Hors ligne <span class="dt">· à jour il y a 3 h</span></span></div></div>
+<div class="cp"><b>Hors ligne, le cache répond</b><span class="kcap"><code>info</code>, icône et message. La fiche reste lisible dessous.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg q"><div class="cps glass" role="alert" style="max-width: calc(100% - 8px); gap: 8px; padding: 7px 14px; font-size: 13px"><span style="display: inline-flex; color: var(--warn)">[[ic:warning s]]</span><span style="white-space: nowrap">Ta demande n'est pas partie</span><button>Réessayer</button></div></div>
+<div class="cp"><b>Échec, une sortie</b><span class="kcap"><code>failure</code>, <code>persistent</code> : elle reste tant que l'hôte ne la retire pas.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg q" style="--accent: #4ECDC4"><div class="cps glass" role="status"><span class="pr" style="--d: 24px; --w: 3px; --p: 70; --c: var(--accent)"></span><span>Léo partage sa position <span class="dt">· 42 min</span></span></div></div>
+<div class="cp"><b>Activité en direct</b><span class="kcap">Emplacement <code>leading</code> : l'anneau K09. Aucune action, donc aucun appui.</span></div>
+</div>
+<div class="same"><span>[[ic:check-circle]]</span><span><b>Rien de plus.</b> Une capsule par hôte, la dernière remplace. Elle s'ancre au-dessus de la pilule du bas ; c'est l'hôte qui la place.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K15 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyAnchoredSheet</span></div>
+<h2 class="d">Une feuille opaque ancrée en bas, qui publie sa place pour que l'hôte se réduise au-dessus d'elle.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Notre cercle, la fiche sur la carte, signaler, créer un lien. Une seule à la fois.</p></div>
+</header>
+<div class="kcell kc">
+<div class="stg" style="display: flex; flex-direction: column; justify-content: flex-end; flex: 1; min-height: 250px; --accent: #4ECDC4">
+<div class="orb" style="width: 140px; height: 140px; left: 30px; top: -50px; background: var(--accent); opacity: .6"></div>
+<div class="sh"><span class="grab"></span><div class="shh"><b>Léo et toi</b><span class="shx">[[ic:x s]]</span></div>
+<div class="shr"><span style="display: inline-flex; color: var(--warn)">[[ic:fire-fill]]</span><span>Vous êtes proches</span></div>
+<div class="shr"><span style="display: inline-flex; color: var(--ink2)">[[ic:handshake]]</span><span>Restons amis</span><span>[[ic:caret-right s]]</span></div>
+<div class="shr"><span style="display: inline-flex; color: var(--err)">[[ic:user-minus]]</span><span style="color: var(--err)">Annuler le lien</span></div>
+</div>
+</div>
+<div class="cp"><b>« Léo et toi » · courte</b><span class="kcap">Hauteur <code>content</code>, poignée, titre, ✕. La Vitrine se réduit au-dessus.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stg" style="display: flex; flex-direction: column; justify-content: flex-end; flex: 1; min-height: 250px; background: var(--deep); --accent: #4ECDC4">
+[[map]]
+<span style="position: absolute; left: 58%; top: 34%; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 18%, transparent); border: 1.5px solid var(--accent)"></span>
+<span class="pin" style="left: 58%; top: 34%"><span class="av" style="width: 36px; height: 36px; font-size: 13px">LM</span></span>
+<div class="sh"><span class="grab"></span>
+<div style="display: flex; align-items: center; gap: 10px"><span class="av" style="width: 40px; height: 40px; font-size: 14px">LM</span><span class="rt"><b>Léo Marchetti</b><span>Alfama · encore 42 min</span></span><span class="ib g" style="width: 40px; height: 40px">[[ic:navigation-arrow s]]</span></div>
+</div>
+</div>
+<div class="cp"><b>La fiche devient feuille basse</b><span class="kcap">Crans <code>detents</code>, dehors <code>passesThrough</code> : la carte reste vivante.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stg q" style="display: flex; flex-direction: column; justify-content: flex-end; flex: 1; min-height: 250px">
+<div class="sh" style="padding-top: 8px"><span class="grab"></span><div class="shh"><b>Signaler Rui</b><span class="shx">[[ic:x s]]</span></div>
+<div class="shr"><span style="display: inline-flex; color: var(--ink2)">[[ic:megaphone]]</span><span>Spam</span></div>
+<div class="shr"><span style="display: inline-flex; color: var(--ink2)">[[ic:mask-happy]]</span><span>Faux profil</span><span style="color: var(--ink)">[[ic:check s]]</span></div>
+<div class="shr"><span style="display: inline-flex; color: var(--ink2)">[[ic:hand-fist]]</span><span>Haine</span></div>
+<div class="shr"><span style="display: inline-flex; color: var(--ink2)">[[ic:dots-three]]</span><span>Autre</span></div>
+</div>
+</div>
+<div class="cp"><b>Signaler · haute, qui défile</b><span class="kcap">Fraction <code>tall</code> 0,62. Les huit motifs sont des lignes K06 à coche.</span></div>
+</div>
+<div class="same"><span>[[ic:check-circle]]</span><span><b>Rien de plus.</b> Vide, chargement, erreur et hors ligne sont ceux du contenu : la feuille garde sa hauteur pendant qu'ils changent.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K18 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyObjectMenu</span></div>
+<h2 class="d">Un menu de verre ancré à son (…), la ligne destructive toujours en dernier et en rouge.</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Le (…) d'un billet, celui d'une fiche. Jamais à l'appui long.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw stg q" style="flex-direction: column; align-items: flex-end; gap: 10px; padding: 14px">
+<div style="display: flex; align-items: center; gap: 10px; align-self: stretch"><span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><b style="font-size: 14px">Réel Dakar la nuit</b><span class="mono" style="font-size: 11.5px; color: var(--ink2)">meeshy.me/l/dkr-nuit</span></span><button class="ib" aria-label="Options du lien" aria-expanded="true" style="background: #fff; color: #0B0B12">[[ic:dots-three]]</button></div>
+<div class="mn glass" role="menu">
+<button role="menuitem"><span>Copier l'adresse</span>[[ic:copy s]]</button>
+<button role="menuitem"><span>Afficher le QR</span>[[ic:qr-code s]]</button>
+<button role="menuitem"><span>Partager</span>[[ic:export s]]</button>
+<button role="menuitem"><span>Modifier</span>[[ic:pencil-simple s]]</button>
+<button role="menuitem" class="x"><span>Supprimer</span>[[ic:trash s]]</button>
+</div>
+</div>
+<div class="cp"><b>Le (…) d'un billet</b><span class="kcap">Bord <code>below</code>, aligné <code>end</code>. « Supprimer » descend seul en dernier.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg" style="flex-direction: column; align-items: flex-end; gap: 10px; padding: 14px; --accent: #4ECDC4">
+<div class="orb" style="width: 150px; height: 150px; left: -20px; top: -50px; background: var(--accent); opacity: .55"></div>
+<button class="ib" aria-label="Options de la fiche" aria-expanded="true" style="position: relative; background: #fff; color: #0B0B12">[[ic:dots-three]]</button>
+<div class="mn glass" role="menu" style="position: relative">
+<button role="menuitem"><span>Envoyer le profil</span>[[ic:paper-plane-tilt s]]</button>
+<button role="menuitem"><span>Copier le lien</span>[[ic:copy s]]</button>
+<button role="menuitem"><span>Voir sur la carte</span>[[ic:map-trifold s]]</button>
+<button role="menuitem"><span>Signaler</span>[[ic:flag s]]</button>
+<button role="menuitem" class="x"><span>Bloquer</span>[[ic:prohibit s]]</button>
+</div>
+</div>
+<div class="cp"><b>Le (…) de la fiche de Léo</b><span class="kcap">Ton <code>deep</code> sur la bannière. Le verre ne recouvre jamais son bouton.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw stg q" style="flex-direction: column; align-items: flex-end; justify-content: flex-start; gap: 10px; padding: 14px">
+<div style="display: flex; align-items: center; gap: 10px; align-self: stretch"><span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><b style="font-size: 14px">Photo de rue</b><span style="font-size: 11.5px; color: var(--ink2)">1 204 membres · lien de communauté</span></span><button class="ib" aria-label="Options du lien" aria-expanded="true" style="background: #fff; color: #0B0B12">[[ic:dots-three]]</button></div>
+<div class="mn glass" role="menu">
+<button role="menuitem"><span>Copier l'adresse</span>[[ic:copy s]]</button>
+<button role="menuitem"><span>Afficher le QR</span>[[ic:qr-code s]]</button>
+<button role="menuitem"><span>Partager</span>[[ic:export s]]</button>
+</div>
+</div>
+<div class="cp"><b>Sans ligne destructive</b><span class="kcap">Un lien qui n'est pas à moi : ce que je ne peux pas faire est absent, pas grisé.</span></div>
+</div>
+<div class="same"><span>[[ic:check-circle]]</span><span><b>Rien de plus.</b> L'app passe les lignes ; l'ordre « destructive en dernier » ne dépend d'aucun écran. « Bloquer » demande sa confirmation à l'app, pas au menu.</span></div>
+</article>
+
+<article class="rc rise">
+<header>
+<div>
+<div style="display: flex; align-items: center; gap: 12px"><span class="knum re">K20 · réemploi</span><span class="mono" style="font-size: 16px; color: var(--accent-ink)">MeeshyThumbnailRow</span></div>
+<h2 class="d">Une rangée de vignettes ordonnées, sans cadre ni verre, qui cercle la courante et finit par « + ».</h2>
+</div>
+<div class="use"><span class="tag">Dans le profil</span><p>Les stories à la une de la Vitrine, les médias partagés avec Léo.</p></div>
+</header>
+<div class="kcell kc">
+<div class="vw"><div class="th">
+<span class="ph cur" style="width: 54px; height: 96px">story</span><span class="ph" style="width: 54px; height: 96px">story</span><span class="ph" style="width: 54px; height: 96px">réel</span><span class="ph" style="width: 54px; height: 96px">story</span><span class="add" style="width: 54px; height: 96px">[[ic:plus]]</span>
+</div></div>
+<div class="cp"><b>Ma Vitrine · à la une</b><span class="kcap"><code>tileHeight</code> 96, 9:16. Le « + » existe parce que <code>onAdd</code> est passé.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw" style="--accent: #4ECDC4"><div class="th">
+<span class="ph" style="width: 54px; height: 96px">story</span><span class="ph cur" style="width: 54px; height: 96px">réel</span><span class="ph" style="width: 54px; height: 96px">story</span><span class="ph" style="width: 54px; height: 96px">story</span>
+</div></div>
+<div class="cp"><b>Vitrine de Léo</b><span class="kcap">Sans <code>onAdd</code> ni <code>onMove</code> : ni « + », ni réordonnancement, ni croix.</span></div>
+</div>
+<div class="kcell kc">
+<div class="vw"><div class="th" style="align-items: center">
+<span class="ph" style="width: 62px; height: 62px">photo</span><span class="ph" style="width: 62px; height: 62px">photo</span><span style="position: relative; display: inline-flex"><span class="ph" style="width: 62px; height: 62px"></span><span class="pr" style="position: absolute; left: 20px; top: 20px; --d: 22px; --w: 3px; --p: 60; --c: #fff"></span></span><span class="ph" style="width: 62px; height: 62px">photo</span><span class="ph" style="width: 62px; height: 62px">son</span>
+</div></div>
+<div class="cp"><b>Médias partagés avec Léo</b><span class="kcap"><code>aspectRatio</code> 1. La troisième s'envoie : statut <code>sending</code>, anneau K09.</span></div>
+</div>
+<div class="ask"><span>[[ic:plus-circle]]</span><span><b>Ce que le profil lui demande en plus.</b> Une légende d'une ligne sous la vignette (« Dakar », « Studio ») pour les stories à la une. La fiche dit « ni numéro, ni nom dessiné » : un emplacement <code>caption</code> facultatif, absent par défaut, garde le composer intact.</span></div>
+</article>
+
+<section style="display: flex; flex-direction: column; gap: 20px">
+<header style="display: flex; flex-direction: column; gap: 8px; max-width: 860px">
+<span class="tag">À consigner</span>
+<h2 class="d" style="font-size: 34px">Sept évolutions, zéro jumeau</h2>
+<p style="font-size: 16px; line-height: 1.5; color: var(--ink2)">Chaque ligne devient une issue sur le composant qu'elle touche. Tant qu'elle n'est pas tranchée, le profil se pose sur ce que la fiche offre déjà.</p>
+</header>
+<div class="kapi" style="grid-template-columns: .8fr 1.5fr 1.5fr">
+<span class="h">Composant</span><span class="h">Ce que le profil demande</span><span class="h">Ce que la fiche dit aujourd'hui</span>
+<span><code>K02 MeeshyGlassButton</code></span><span>Tailles 56, 60 et 64 pour la grille d'actions (K32).</span><span>Quatre tailles : 36, 40, 44, 48.</span>
+<span><code>K03 MeeshySegmented</code></span><span>Un glyphe facultatif par segment, plein sur la courante.</span><span>« Un segment est un texte, sur une ligne. » Ni icône.</span>
+<span><code>K08 MeeshyField</code></span><span>Une saisie d'adresse, au clavier d'URL.</span><span>Cinq saisies : recherche, jeton, phrase, paragraphe, nombre.</span>
+<span><code>K09 MeeshyProgressRing</code></span><span>Dire un temps qui s'écoule (« encore 42 min »). Lot Android.</span><span>Une opération en vol ; « aucune jauge d'une mesure fixe ».</span>
+<span><code>K10 MeeshyGlassPill</code></span><span>Un emplacement de fin à l'ancrage, hors du verre.</span><span><code>primary</code> vit dans la pilule, toujours en dernier.</span>
+<span><code>K13 MeeshySplitActionButton</code></span><span>Une largeur réduite au glyphe, choisie par l'hôte.</span><span><code>fallbackGlyph</code> seulement quand aucun libellé ne tient.</span>
+<span style="border-bottom: 0"><code>K20 MeeshyThumbnailRow</code></span><span style="border-bottom: 0">Une légende facultative sous la vignette.</span><span style="border-bottom: 0">« Ni numéro, ni nom dessiné. »</span>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":10197}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

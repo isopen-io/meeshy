@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — la carte du kit · 13 réemployés, 30 nouveaux</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:28px}
+.sec>header{display:flex;flex-direction:column;gap:8px}
+.sec>header>h2{font-size:38px}
+.sec>header>p{font-size:16px;line-height:1.5;color:var(--ink2);max-width:820px}
+.knum.sm{height:24px;padding:0 8px;font-size:11.5px;border-radius:8px}
+.band{display:flex;gap:24px;padding:22px 24px;border-radius:32px}
+.bl{display:flex;flex-direction:column;justify-content:center;gap:4px;width:190px;flex:none}
+.bl>h3{font-size:25px}
+.bl>p{font-size:12.5px;line-height:1.4;color:var(--ink2)}
+.t{position:relative;z-index:2;display:flex;flex-direction:column;align-items:flex-start;gap:6px;height:100px;padding:10px 9px 9px;border-radius:16px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--line),0 8px 18px rgba(0,0,0,.28);min-width:0}
+.t.n{background:#1B1838;box-shadow:inset 0 0 0 1px rgba(129,140,248,.42),0 8px 18px rgba(0,0,0,.28)}
+.t.k{box-shadow:inset 0 0 0 2px var(--lk),0 0 22px color-mix(in oklab,var(--lk) 34%,transparent)}
+.t>.mono{font-size:11px;line-height:1.25;color:var(--ink)}
+.t>em{font-style:normal;font-size:11px;font-weight:600;color:var(--ink3);margin-top:auto}
+.t.z{background:none;box-shadow:inset 0 0 0 1px var(--line);border:0;outline:1.5px dashed var(--line);outline-offset:-1.5px}
+.t.w{flex-direction:row;align-items:center;gap:14px;height:76px;padding:0 18px}
+.t.w>.mono{font-size:13.5px}
+.t.w>em{margin:0 0 0 auto;font-size:12.5px;color:var(--ink2)}
+.t.e{height:96px;padding:14px 16px;gap:4px;background:#17142B}
+.t.e>b{display:flex;align-items:center;gap:8px;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;font-size:19px}
+.t.e>em{font-size:12px}
+.wire{fill:none;stroke-width:2;stroke-linecap:round;opacity:.38}
+.flow{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:3 13;animation:kcFlow 1.6s linear infinite}
+@keyframes kcFlow{to{stroke-dashoffset:-32}}
+.lg{display:inline-flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2)}
+.lg>i{display:block;width:26px;height:3px;border-radius:2px;background:var(--lk)}
+.cell{position:relative;width:410px;height:624px}
+.fone{position:absolute;left:75px;top:0;width:260px;height:540px;border-radius:36px;overflow:hidden;background:var(--ground);box-shadow:0 0 0 1px var(--glass-line),0 0 0 7px #15131F,0 0 0 8px var(--line),0 34px 60px rgba(0,0,0,.55)}
+.fone>*{position:absolute}
+.lb{position:absolute;z-index:3;display:flex;flex-direction:column;gap:3px;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:9.5px;font-weight:500;color:var(--ink2);white-space:nowrap}
+.lb.l{right:348px;align-items:flex-end}
+.lb.r{left:348px;align-items:flex-start}
+.lb.b{align-items:center;transform:translateX(-50%)}
+.ld{position:absolute;z-index:3;height:0;border-top:1.5px solid var(--warn)}
+.ld::after{content:"";position:absolute;top:-5px;right:-4px;width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 3px rgba(11,11,18,.55)}
+.ld.r::after{right:auto;left:-4px}
+.lv{position:absolute;z-index:3;width:0;top:530px;border-left:1.5px solid var(--warn)}
+.lv::after{content:"";position:absolute;top:-4px;left:-5px;width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 3px rgba(11,11,18,.55)}
+.mib{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;flex:none;color:var(--ink)}
+.mseg{padding:4px;gap:2px}
+.mseg>*{min-height:36px;min-width:36px;padding:0 9px;font-size:10.5px;gap:5px}
+.mchip{min-height:26px;padding:0 9px;font-size:10.5px;gap:4px}
+.mrow{display:flex;align-items:center;gap:9px;left:16px;right:16px;height:40px;padding:0 11px;border-radius:14px;background:var(--raised);border:1px solid var(--line);font-size:11px;font-weight:600}
+.act{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10.5px;font-weight:600;color:var(--ink2)}
+.act>.ib{width:50px;height:50px;color:var(--ink)}
+.fam{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:10px;flex:none;color:#0B0B12}
+.qr{position:relative;display:block;width:72px;height:72px;border-radius:14px;background:#EEF2FF;flex:none;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.qr::before{content:"";position:absolute;inset:6px;background:conic-gradient(#1E1B4B 25%,#0000 0 50%,#1E1B4B 0 75%,#0000 0) 0 0/8px 8px,conic-gradient(from 90deg,#1E1B4B 25%,#0000 0 62%,#1E1B4B 0 80%,#0000 0) 4px 0/20px 12px,conic-gradient(from 180deg,#0000 40%,#1E1B4B 0 65%,#0000 0) 0 4px/28px 20px}
+.qr>em{position:absolute;width:20px;height:20px;border:4px solid #1E1B4B;border-radius:6px;background:#EEF2FF;box-shadow:0 0 0 3px #EEF2FF}
+.nc{display:flex;flex-direction:column;gap:12px;padding:24px;border-radius:26px;background:var(--raised);border:1px solid var(--line);min-height:206px}
+.nc>div{display:flex;align-items:center;justify-content:space-between;color:var(--accent-ink)}
+.nc>.mono{font-size:14px;color:var(--accent-ink)}
+.nc>p{font-size:15px;line-height:1.45;color:var(--ink)}
+.nc>em{font-style:normal;margin-top:auto;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.mc{display:flex;flex-direction:column;gap:12px;padding:26px 24px;border-radius:28px;background:var(--raised);border:1px solid var(--line);min-height:250px}
+.mc>.mw{font-size:34px;font-weight:700;color:var(--accent-ink);letter-spacing:-.01em}
+.mc>p{font-size:14.5px;line-height:1.5;color:var(--ink2)}
+.mv{display:flex;flex-direction:column;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid var(--line)}
+.mv>span{display:flex;align-items:center;gap:8px}
+.mv>span>i{display:inline-flex}
+.mv code{font-size:12.5px}
+.spin{width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;animation:kcSpin .9s linear infinite}
+@keyframes kcSpin{to{transform:rotate(360deg)}}
+.mp{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line);font-size:12px;line-height:1.3;color:var(--ink2)}
+.rc{display:flex;flex-direction:column;gap:14px;padding:26px 22px;border-radius:28px;background:var(--raised);border:1px solid var(--line)}
+.rc>span{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:20px;background:var(--field);color:var(--accent-ink)}
+.rc>h3{font-size:20px}
+.rc>p{font-size:14px;line-height:1.5;color:var(--ink2)}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 88px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 320px; height: 320px; right: 220px; top: -150px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 240px; height: 240px; right: -20px; top: -70px; background: #6366F1; opacity: .28; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 700px">
+<span class="tag">Profil Meeshy · kit · carte d'entrée</span>
+<h1 class="d" style="font-size: 64px">Le profil est fait du kit</h1>
+<p style="font-size: 20px; line-height: 1.5; color: var(--ink2)">13 réemployés, 30 nouveaux : treize composants du kit repris tels quels, trente écrits ici pour servir partout. La liste est close à K55.</p>
+</div>
+<div style="position: relative; display: flex; align-items: stretch; gap: 14px">
+<div class="glass" style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; border-radius: 24px; min-width: 150px">
+<span class="d" style="font-size: 44px">13</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2)"><span class="knum re sm">K01</span>réemployés</span>
+</div>
+<div class="glass" style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; border-radius: 24px; min-width: 150px">
+<span class="d" style="font-size: 44px">30</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2)"><span class="knum sm">K26</span>nouveaux</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; border-radius: 24px; min-width: 170px; border: 1.5px dashed var(--line)">
+<span class="d" style="font-size: 44px">43</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2)">[[ic:lock-simple s]]employés en tout</span>
+</div>
+</div>
+</header>
+
+<section class="sec">
+<header>
+<span class="tag">01 · Les quatre étages</span>
+<h2 class="d">De la matière à l'écran</h2>
+<p>Chaque étage ne se sert que de ceux du dessous. Lis de bas en haut : le verre et le mouvement, puis les atomes, puis les assemblages, puis les écrans.</p>
+</header>
+
+<div style="position: relative; display: flex; flex-direction: column; gap: 60px; width: 1296px">
+<svg viewBox="0 0 1296 1064" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 1296px; height: 1064px; z-index: 1; pointer-events: none">
+<g stroke="#818CF8">
+<path class="wire" d="M290.1 650 V628 C290.1 598 696.9 598 696.9 568 V434"></path>
+<path class="flow" d="M290.1 650 V628 C290.1 598 696.9 598 696.9 568 V434"></path>
+<path class="wire" d="M696.9 334 V200 C696.9 170 755 170 755 140 V118"></path>
+<path class="flow" d="M696.9 334 V200 C696.9 170 755 170 755 140 V118"></path>
+</g>
+<g stroke="#D8B4FE">
+<path class="wire" d="M464.4 966 V434"></path>
+<path class="flow" d="M464.4 966 V434"></path>
+<path class="wire" d="M464.4 334 V200 C464.4 170 545.8 170 545.8 140 V118"></path>
+<path class="flow" d="M464.4 334 V200 C464.4 170 545.8 170 545.8 140 V118"></path>
+</g>
+<g stroke="#34D399">
+<path class="wire" d="M813.1 966 V628 C813.1 598 348.2 598 348.2 568 V434"></path>
+<path class="flow" d="M813.1 966 V628 C813.1 598 348.2 598 348.2 568 V434"></path>
+<path class="wire" d="M348.2 334 V200 C348.2 170 964.2 170 964.2 140 V118"></path>
+<path class="flow" d="M348.2 334 V200 C348.2 170 964.2 170 964.2 140 V118"></path>
+</g>
+<g stroke="#60A5FA">
+<path class="wire" d="M1045.5 966 V434"></path>
+<path class="flow" d="M1045.5 966 V434"></path>
+<path class="wire" d="M1045.5 334 V200 C1045.5 170 1173.4 170 1173.4 140 V118"></path>
+<path class="flow" d="M1045.5 334 V200 C1045.5 170 1173.4 170 1173.4 140 V118"></path>
+</g>
+</svg>
+
+<div class="band" style="height: 140px; background: linear-gradient(100deg, rgba(168,85,247,.20), rgba(99,102,241,.14))">
+<div class="bl"><span class="tag">Étage 4</span><h3 class="d">Écrans du profil</h3><p>Ce que tu vois.</p></div>
+<div style="flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
+<div class="t e"><b>[[ic:user-focus]]<span>Vitrine</span></b><em>Qui je suis</em></div>
+<div class="t e k" style="--lk: #D8B4FE"><b>[[ic:link]]<span>Liens</span></b><em>Ce qui amène vers moi</em></div>
+<div class="t e k" style="--lk: #818CF8"><b>[[ic:lightning]]<span>Actions</span></b><em>Ce que je peux faire</em></div>
+<div class="t e k" style="--lk: #34D399"><b>[[ic:map-trifold]]<span>Carte</span></b><em>Où sont mes proches</em></div>
+<div class="t e k" style="--lk: #60A5FA"><b>[[ic:warning-circle]]<span>États</span></b><em>Vide, erreur, hors ligne</em></div>
+</div>
+</div>
+
+<div class="band" style="height: 368px; background: rgba(99,102,241,.11)">
+<div class="bl"><span class="tag">Étage 3</span><h3 class="d">Assemblages</h3><p>Des atomes posés ensemble, avec une règle. Vingt-cinq.</p></div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 12px">
+<div style="display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 12px">
+<div class="t"><span class="knum re sm">K03</span><span class="mono">Segmented</span><em>faces</em></div>
+<div class="t"><span class="knum re sm">K10</span><span class="mono">GlassPill</span><em>pilule</em></div>
+<div class="t"><span class="knum re sm">K13</span><span class="mono">SplitAction<wbr>Button</span><em>contexte</em></div>
+<div class="t"><span class="knum re sm">K14</span><span class="mono">Status<wbr>Capsule</span><em>statut</em></div>
+<div class="t"><span class="knum re sm">K15</span><span class="mono">Anchored<wbr>Sheet</span><em>feuille</em></div>
+<div class="t"><span class="knum re sm">K18</span><span class="mono">ObjectMenu</span><em>menu</em></div>
+<div class="t"><span class="knum re sm">K20</span><span class="mono">Thumbnail<wbr>Row</span><em>rail</em></div>
+<div class="t n"><span class="knum sm">K27</span><span class="mono">Living<wbr>Banner</span><em>bannière</em></div>
+<div class="t n"><span class="knum sm">K28</span><span class="mono">Collapsing<wbr>Hero</span><em>en-tête</em></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; padding: 0 calc((100% + 12px) / 18)">
+<div class="t n k" style="--lk: #34D399"><span class="knum sm">K29</span><span class="mono">Avatar<wbr>Morph</span><em>voyage</em></div>
+<div class="t n k" style="--lk: #D8B4FE"><span class="knum sm">K30</span><span class="mono">Ticket</span><em>billet</em></div>
+<div class="t n"><span class="knum sm">K31</span><span class="mono">CodeCard</span><em>QR</em></div>
+<div class="t n k" style="--lk: #818CF8"><span class="knum sm">K32</span><span class="mono">Labeled<wbr>Action</span><em>action</em></div>
+<div class="t n"><span class="knum sm">K34</span><span class="mono">Figures</span><em>chiffres</em></div>
+<div class="t n"><span class="knum sm">K36</span><span class="mono">MapPin</span><em>épingle</em></div>
+<div class="t n k" style="--lk: #60A5FA"><span class="knum sm">K38</span><span class="mono">StateBlock</span><em>états</em></div>
+<div class="t n"><span class="knum sm">K39</span><span class="mono">PersonRow</span><em>personne</em></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 12px">
+<div class="t n"><span class="knum sm">K43</span><span class="mono">GroupCard</span><em>carte</em></div>
+<div class="t n"><span class="knum sm">K44</span><span class="mono">Section<wbr>Header</span><em>section</em></div>
+<div class="t n"><span class="knum sm">K47</span><span class="mono">Choice<wbr>Tiles</span><em>choix</em></div>
+<div class="t n"><span class="knum sm">K48</span><span class="mono">Avatar<wbr>Group</span><em>groupe</em></div>
+<div class="t n"><span class="knum sm">K49</span><span class="mono">MediaGrid</span><em>médias</em></div>
+<div class="t n"><span class="knum sm">K50</span><span class="mono">Chart</span><em>graphique</em></div>
+<div class="t n"><span class="knum sm">K52</span><span class="mono">Reorder<wbr>List</span><em>ordre</em></div>
+<div class="t n"><span class="knum sm">K54</span><span class="mono">MapTrace</span><em>tracé</em></div>
+<div class="t z"><span style="color: var(--ink3)">[[ic:lock-simple s]]</span><span class="mono">K55</span><em>liste close</em></div>
+</div>
+</div>
+</div>
+
+<div class="band" style="height: 256px; background: rgba(99,102,241,.07)">
+<div class="bl"><span class="tag">Étage 2</span><h3 class="d">Atomes</h3><p>Une pièce, un rôle. Dix-sept, plus le squelette que K38 expose.</p></div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 12px">
+<div style="display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 12px">
+<div class="t k" style="--lk: #818CF8"><span class="knum re sm">K02</span><span class="mono">Glass<wbr>Button</span><em>bouton rond</em></div>
+<div class="t"><span class="knum re sm">K04</span><span class="mono">ChipRow</span><em>puces</em></div>
+<div class="t"><span class="knum re sm">K06</span><span class="mono">ToggleRow</span><em>bascule</em></div>
+<div class="t"><span class="knum re sm">K07</span><span class="mono">ColorDots</span><em>accent</em></div>
+<div class="t"><span class="knum re sm">K08</span><span class="mono">Field</span><em>champ</em></div>
+<div class="t"><span class="knum re sm">K09</span><span class="mono">Progress<wbr>Ring</span><em>anneau</em></div>
+<div class="t n"><span class="knum sm">K33</span><span class="mono">Circle<wbr>Scale</span><em>proximité</em></div>
+<div class="t n"><span class="knum sm">K35</span><span class="mono">Wave<wbr>Player</span><em>son</em></div>
+<div class="t n"><span class="knum sm">K37</span><span class="mono">LockedRow</span><em>verrou</em></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 12px">
+<div class="t n"><span class="knum sm">K40</span><span class="mono">Button</span><em>bouton</em></div>
+<div class="t n"><span class="knum sm">K41</span><span class="mono">Badge</span><em>pastille</em></div>
+<div class="t n"><span class="knum sm">K42</span><span class="mono">Meter</span><em>jauge</em></div>
+<div class="t n"><span class="knum sm">K45</span><span class="mono">Medallion</span><em>médaillon</em></div>
+<div class="t n"><span class="knum sm">K46</span><span class="mono">Note</span><em>note</em></div>
+<div class="t n"><span class="knum sm">K51</span><span class="mono">Translation<wbr>Mark</span><em>traduit</em></div>
+<div class="t n"><span class="knum sm">K53</span><span class="mono">Stepper</span><em>crans</em></div>
+<div class="t n"><span class="knum sm">K55</span><span class="mono">KeyHint</span><em>touche</em></div>
+<div class="t n z"><span class="knum sm" style="background: none; box-shadow: inset 0 0 0 1px rgba(129,140,248,.6); color: var(--ink2)">K38</span><span class="mono">Skeleton</span><em>squelette</em></div>
+</div>
+</div>
+</div>
+
+<div class="band" style="height: 120px; background: linear-gradient(100deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); box-shadow: inset 0 1px 0 rgba(255,255,255,.14)">
+<div class="bl"><span class="tag">Étage 1</span><h3 class="d">Matière</h3><p>Ce dont tout est fait.</p></div>
+<div style="flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<div class="t w k" style="--lk: #D8B4FE"><span class="knum re">K01</span><span class="mono">MeeshyGlassTone</span><em>le verre</em></div>
+<div class="t w n k" style="--lk: #34D399"><span class="knum">K26</span><span class="mono">MeeshyMotion</span><em>le mouvement</em></div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap">
+<div style="display: flex; align-items: center; gap: 22px; flex-wrap: wrap">
+<span class="lg" style="--lk: #818CF8"><i></i><span class="mono">K02 → K32 → Actions</span></span>
+<span class="lg" style="--lk: #D8B4FE"><i></i><span class="mono">K01 → K30 → Liens</span></span>
+<span class="lg" style="--lk: #34D399"><i></i><span class="mono">K26 → K29 → Carte</span></span>
+<span class="lg" style="--lk: #60A5FA"><i></i><span class="mono">K26 → K38 → États</span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 18px">
+<span class="lg"><span class="knum re sm">K02</span>existe déjà</span>
+<span class="lg"><span class="knum sm">K30</span>nouveau</span>
+<span class="kcap">Tous les noms portent le préfixe <code>Meeshy</code>.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header>
+<span class="tag">02 · Sur l'écran</span>
+<h2 class="d">Les trois faces, démontées</h2>
+<p>Rien n'est dessiné pour le profil seul. Chaque pièce porte son numéro, les réemployées comme les nouvelles : boutons K40, pastilles K41, cartes K43, en-têtes de section K44.</p>
+</header>
+
+<div style="display: grid; grid-template-columns: repeat(3, 410px); gap: 33px">
+
+<div style="display: flex; flex-direction: column; gap: 26px">
+<div style="display: flex; align-items: center; gap: 10px; padding-left: 75px">[[ic:user-focus]]<h3 class="d" style="font-size: 24px">Vitrine</h3><span class="kcap">de Léo, vue par Aïssa</span></div>
+<div class="cell" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="fone">
+<div style="left: 0; top: 0; width: 260px; height: 150px; overflow: hidden; background: linear-gradient(140deg, #1F6F6A, #2B2A6B)">
+<div class="orb" style="width: 130px; height: 130px; left: 20px; top: -40px; background: #4ECDC4; opacity: .7"></div>
+<div class="orb" style="width: 120px; height: 120px; right: -10px; top: 40px; background: #818CF8; opacity: .7; animation-delay: -4s"></div>
+</div>
+<button class="mib glass" aria-label="Retour" style="left: 12px; top: 14px">[[ic:caret-left s]]</button>
+<button class="mib glass" aria-label="Plus" style="right: 12px; top: 14px">[[ic:dots-three s]]</button>
+<span class="ring" style="left: 14px; top: 108px; background: var(--ground)"><span class="av" style="width: 66px; height: 66px; font-size: 24px">LM</span></span>
+<span class="dot on" style="left: 72px; top: 164px"></span>
+<span class="glass" style="right: 12px; top: 112px; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700">[[ic:trophy s]]<span>Niv. 18</span></span>
+<div style="left: 16px; top: 192px; display: flex; flex-direction: column; gap: 2px">
+<h3 class="d" style="font-size: 19px">Léo Marchetti</h3>
+<span class="mono" style="font-size: 10.5px; color: var(--ink2)">@leo.m · Lisbonne</span>
+</div>
+<span style="right: 14px; top: 196px; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px 0 8px; border-radius: 999px; border: 1.5px solid var(--accent); font-size: 11px; font-weight: 700">[[ic:fire s]]<span>Proche</span></span>
+<div style="left: 16px; top: 250px; display: flex; gap: 6px">
+<span class="chip mchip">Italien</span><span class="chip mchip">Français</span><span class="chip mchip">Portugais</span>
+</div>
+<div class="mrow" style="top: 288px; height: 44px">
+<span class="mib" style="width: 28px; height: 28px; background: var(--accent); color: #0B0B12">[[ic:play-fill s]]</span>
+<span class="wave" style="height: 22px; flex: 1"><i style="height: 40%"></i><i style="height: 80%"></i><i style="height: 55%"></i><i style="height: 100%"></i><i style="height: 60%"></i><i style="height: 85%"></i><i style="height: 45%"></i><i style="height: 70%"></i><i style="height: 95%"></i><i style="height: 50%"></i><i style="height: 75%"></i><i style="height: 35%"></i><i style="height: 65%"></i><i style="height: 90%"></i><i style="height: 45%"></i><i style="height: 60%"></i><i style="height: 30%"></i></span>
+<span class="mono" style="font-size: 10px; color: var(--ink2)">0:12</span>
+</div>
+<div style="left: 16px; right: 16px; top: 342px; height: 16px; display: flex; align-items: center; gap: 6px"><b class="d" style="font-size: 12.5px">Publications</b><span style="font-size: 10.5px; color: var(--ink3)">48</span><span style="margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--accent-ink)">Tout voir</span></div>
+<div style="left: 16px; top: 366px; display: flex; gap: 8px">
+<span class="ph" style="width: 51px; height: 60px; border-radius: 12px; padding: 5px; font-size: 9px">photo</span>
+<span class="ph" style="width: 51px; height: 60px; border-radius: 12px; padding: 5px; font-size: 9px">réel</span>
+<span class="ph" style="width: 51px; height: 60px; border-radius: 12px; padding: 5px; font-size: 9px">photo</span>
+<span class="ph" style="width: 51px; height: 60px; border-radius: 12px; padding: 5px; font-size: 9px">photo</span>
+</div>
+<div class="mrow" style="top: 436px; color: var(--ink2)">[[ic:lock-simple s]]<span style="flex: 1">Position continue</span><span class="chip mchip" style="min-height: 22px">[[ic:drop s]]<span>Sang</span></span></div>
+<div class="seg mseg glass" style="left: 12px; bottom: 12px"><span class="on">[[ic:user-focus-fill s]]<span>Vitrine</span></span><span>[[ic:link s]]</span><span>[[ic:lightning s]]</span></div>
+<button class="mib" aria-label="Écrire" style="right: 12px; bottom: 12px; width: 44px; height: 44px; background: var(--brand-fill); color: #fff; box-shadow: 0 8px 22px rgba(79,70,229,.45)">[[ic:chat-circle]]</button>
+</div>
+<span class="lb l" style="top: 38px"><span class="knum sm">K27</span>LivingBanner</span><i class="ld" style="left: 64px; top: 50px; width: 70px"></i>
+<span class="lb l" style="top: 134px"><span class="knum sm">K29</span>AvatarMorph</span><i class="ld" style="left: 64px; top: 146px; width: 25px"></i>
+<span class="lb l" style="top: 251px"><span class="knum re sm">K04</span>ChipRow</span><i class="ld" style="left: 64px; top: 263px; width: 27px"></i>
+<span class="lb l" style="top: 338px"><span class="knum sm">K44</span>SectionHeader</span><i class="ld" style="left: 64px; top: 350px; width: 17px"></i>
+<span class="lb l" style="top: 384px"><span class="knum re sm">K20</span>ThumbRow</span><i class="ld" style="left: 64px; top: 396px; width: 27px"></i>
+<span class="lb r" style="top: 19px"><span class="knum re sm">K02</span>GlassButton</span><i class="ld r" style="left: 324px; top: 31px; width: 22px"></i>
+<span class="lb r" style="top: 62px"><span class="knum sm">K28</span>Collaps.Hero</span><i class="ld r" style="left: 270px; top: 74px; width: 76px"></i>
+<span class="lb r" style="top: 112px"><span class="knum sm">K41</span>Badge</span><i class="ld r" style="left: 323px; top: 124px; width: 23px"></i>
+<span class="lb r" style="top: 198px"><span class="knum sm">K33</span>CircleScale</span><i class="ld r" style="left: 322px; top: 210px; width: 24px"></i>
+<span class="lb r" style="top: 298px"><span class="knum sm">K35</span>WavePlayer</span><i class="ld r" style="left: 320px; top: 310px; width: 26px"></i>
+<span class="lb r" style="top: 444px"><span class="knum sm">K37</span>LockedRow</span><i class="ld r" style="left: 320px; top: 456px; width: 26px"></i>
+<i class="lv" style="left: 130px; height: 28px"></i><span class="lb b" style="left: 130px; top: 560px"><span class="knum re sm">K03</span>Segmented</span>
+<i class="lv" style="left: 232px; height: 28px"></i><span class="lb b" style="left: 224px; top: 560px"><span class="knum re sm">K10</span>GlassPill</span>
+<i class="lv" style="left: 301px; height: 28px"></i><span class="lb b" style="left: 309px; top: 560px"><span class="knum sm">K40</span>Button rond</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 26px">
+<div style="display: flex; align-items: center; gap: 10px; padding-left: 75px">[[ic:link]]<h3 class="d" style="font-size: 24px">Liens</h3><span class="kcap">d'Aïssa, chez elle</span></div>
+<div class="cell">
+<div class="fone">
+<h3 class="d" style="left: 16px; top: 20px; font-size: 19px">Mes liens</h3>
+<button class="mib glass" aria-label="Scanner" style="right: 12px; top: 14px">[[ic:scan s]]</button>
+<div style="left: -30px; top: 40px; width: 200px; height: 170px; border-radius: 50%; background: #A855F7; opacity: .32; filter: blur(34px)"></div>
+<div class="glass" style="left: 16px; right: 16px; top: 58px; height: 118px; border-radius: 22px; display: flex; align-items: center; gap: 12px; padding: 0 14px">
+<span class="qr"><em style="left: 6px; top: 6px"></em><em style="right: 6px; top: 6px"></em><em style="left: 6px; bottom: 6px"></em></span>
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span class="mono" style="font-size: 10.5px; color: var(--ink)">meeshy.me/@aissa</span>
+<span class="d" style="font-size: 24px">1 719</span>
+<span style="font-size: 10px; color: var(--ink2)">visites ce mois</span>
+<svg viewBox="0 0 110 22" aria-hidden="true" style="width: 110px; height: 22px"><polyline points="1,18 14,14 27,16 40,9 53,12 66,6 79,10 92,4 109,7" fill="none" stroke="#D8B4FE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+</div>
+</div>
+<div style="left: 16px; top: 188px; display: flex; gap: 6px">
+<span class="chip mchip on">Tous</span><span class="chip mchip">Partage</span><span class="chip mchip">Suivi</span>
+</div>
+<div style="left: 16px; right: 16px; top: 226px; height: 16px; display: flex; align-items: center; gap: 6px"><b class="d" style="font-size: 12.5px">Actifs</b><span style="font-size: 10.5px; color: var(--ink3)">4</span><span style="margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--ink2)">Trier</span></div>
+<div class="ticket" style="left: 16px; right: 16px; top: 252px; height: 94px; border-radius: 18px; --cut: 52px">
+<div style="display: flex; align-items: center; gap: 9px; height: 52px; padding: 0 6px 0 11px">
+<span class="fam" style="background: var(--l-share)">[[ic:chats-circle s]]</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px"><b style="font-size: 12px">Studio — invités</b><span class="mono" style="font-size: 9px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">meeshy.me/chat/studio-invites</span></div>
+<button class="mib" aria-label="Plus" style="width: 28px; height: 28px; color: var(--ink2)">[[ic:dots-three s]]</button>
+</div>
+<div class="cut" style="margin: 0 12px"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 0"><span style="font-size: 11px; color: var(--ink2)"><b style="font-size: 15px; color: var(--ink)">23</b> / 50 arrivées</span><span style="width: 24px; height: 24px; border-radius: 50%; background: conic-gradient(var(--l-share) 46%, var(--field) 0); -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 5px), #000 calc(100% - 4px)); mask: radial-gradient(farthest-side, #0000 calc(100% - 5px), #000 calc(100% - 4px))"></span></div>
+</div>
+<div class="ticket" style="left: 16px; right: 16px; top: 356px; height: 94px; border-radius: 18px; --cut: 52px">
+<div style="display: flex; align-items: center; gap: 9px; height: 52px; padding: 0 6px 0 11px">
+<span class="fam" style="background: var(--l-track)">[[ic:cursor-click s]]</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px"><b style="font-size: 12px">Réel Dakar la nuit</b><span class="mono" style="font-size: 9px; color: var(--ink2)">meeshy.me/l/dkr-nuit</span></div>
+<button class="mib" aria-label="Plus" style="width: 28px; height: 28px; color: var(--ink2)">[[ic:dots-three s]]</button>
+</div>
+<div class="cut" style="margin: 0 12px"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 0"><span style="font-size: 11px; color: var(--ink2)"><b style="font-size: 15px; color: var(--ink)">1 284</b> clics</span><span style="display: flex; align-items: flex-end; gap: 3px; height: 22px"><i style="width: 4px; height: 30%; border-radius: 2px; background: var(--brand-soft)"></i><i style="width: 4px; height: 55%; border-radius: 2px; background: var(--brand-soft)"></i><i style="width: 4px; height: 100%; border-radius: 2px; background: var(--brand-soft)"></i><i style="width: 4px; height: 70%; border-radius: 2px; background: var(--brand-soft)"></i><i style="width: 4px; height: 45%; border-radius: 2px; background: var(--brand-soft)"></i><i style="width: 4px; height: 60%; border-radius: 2px; background: var(--brand-soft)"></i></span></div>
+</div>
+<div class="seg mseg glass" style="left: 12px; bottom: 12px"><span>[[ic:user-focus s]]</span><span class="on">[[ic:link-fill s]]<span>Liens</span></span><span>[[ic:lightning s]]</span></div>
+<button class="mib" aria-label="Créer un lien" style="right: 12px; bottom: 12px; width: 44px; height: 44px; background: var(--brand-fill); color: #fff; box-shadow: 0 8px 22px rgba(79,70,229,.45)">[[ic:plus]]</button>
+</div>
+<span class="lb l" style="top: 98px"><span class="knum sm">K31</span>CodeCard</span><i class="ld" style="left: 64px; top: 110px; width: 27px"></i>
+<span class="lb l" style="top: 222px"><span class="knum sm">K44</span>SectionHeader</span><i class="ld" style="left: 64px; top: 234px; width: 17px"></i>
+<span class="lb l" style="top: 276px"><span class="knum sm">K30</span>Ticket</span><i class="ld" style="left: 64px; top: 288px; width: 27px"></i>
+<span class="lb r" style="top: 19px"><span class="knum re sm">K02</span>GlassButton</span><i class="ld r" style="left: 324px; top: 31px; width: 22px"></i>
+<span class="lb r" style="top: 96px"><span class="knum sm">K34</span>Figures</span><i class="ld r" style="left: 276px; top: 108px; width: 70px"></i>
+<span class="lb r" style="top: 189px"><span class="knum re sm">K04</span>ChipRow</span><i class="ld r" style="left: 262px; top: 201px; width: 84px"></i>
+<span class="lb r" style="top: 266px"><span class="knum re sm">K18</span>ObjectMenu</span><i class="ld r" style="left: 320px; top: 278px; width: 26px"></i>
+<span class="lb r" style="top: 312px"><span class="knum re sm">K09</span>Progr.Ring</span><i class="ld r" style="left: 320px; top: 324px; width: 26px"></i>
+<span class="lb r" style="top: 416px"><span class="knum sm">K50</span>Chart</span><i class="ld r" style="left: 320px; top: 428px; width: 26px"></i>
+<i class="lv" style="left: 168px; height: 28px"></i><span class="lb b" style="left: 160px; top: 560px"><span class="knum re sm">K03</span>Segmented</span>
+<i class="lv" style="left: 232px; height: 28px"></i><span class="lb b" style="left: 232px; top: 560px"><span class="knum re sm">K10</span>GlassPill</span>
+<i class="lv" style="left: 301px; height: 28px"></i><span class="lb b" style="left: 311px; top: 560px"><span class="knum sm">K40</span>Button rond</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 26px">
+<div style="display: flex; align-items: center; gap: 10px; padding-left: 75px">[[ic:lightning]]<h3 class="d" style="font-size: 24px">Actions</h3><span class="kcap">avec Léo</span></div>
+<div class="cell" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="fone">
+<div style="left: 30px; top: 110px; width: 200px; height: 200px; border-radius: 50%; background: #4ECDC4; opacity: .26; filter: blur(40px)"></div>
+<div style="left: 14px; right: 14px; top: 14px; height: 44px; display: flex; align-items: center; gap: 10px">
+<span style="position: relative; display: inline-flex"><span class="av" style="width: 36px; height: 36px; font-size: 13px">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; width: 13px; height: 13px"></span></span>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 1px"><b style="font-size: 13px">Léo Marchetti</b><span style="font-size: 10.5px; color: var(--ink2)">En ligne · Proche</span></div>
+[[ic:fire s]]
+</div>
+<div style="left: 14px; right: 14px; top: 76px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 14px">
+<div class="act"><button class="ib g" aria-label="Écrire">[[ic:chat-circle]]</button><span>Écrire</span></div>
+<div class="act"><button class="ib g" aria-label="Appeler">[[ic:phone]]</button><span>Appeler</span></div>
+<div class="act"><button class="ib g" aria-label="Vidéo">[[ic:video-camera]]</button><span>Vidéo</span></div>
+<div class="act"><button class="ib g" aria-label="Talkie">[[ic:radio]]</button><span>Talkie</span></div>
+<div class="act"><button class="ib g" aria-label="Ensemble">[[ic:monitor-play]]</button><span>Ensemble</span></div>
+<div class="act"><button class="ib g" aria-label="Bring">[[ic:hand-waving]]</button><span>Bring</span></div>
+<div class="act"><button class="ib g" aria-label="Carte">[[ic:map-trifold]]</button><span>Carte</span></div>
+<div class="act"><button class="ib g" aria-label="Ma position">[[ic:map-pin]]</button><span>Position</span></div>
+<div class="act"><button class="ib g" aria-label="Envoyer le profil">[[ic:paper-plane-tilt]]</button><span>Envoyer</span></div>
+</div>
+<div style="left: 16px; right: 16px; top: 328px; height: 89px; border-radius: 16px; background: var(--raised); border: 1px solid var(--line); display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 9px; height: 44px; padding: 0 11px; font-size: 11px; font-weight: 600">[[ic:battery-medium s]]<span style="flex: 1">Partager ma batterie</span><span class="sw on" style="transform: scale(.72); margin-right: -8px"></span></div>
+<div style="height: 1px; margin-left: 36px; background: var(--line)"></div>
+<div style="display: flex; align-items: center; gap: 9px; height: 44px; padding: 0 11px; font-size: 11px; font-weight: 600; color: var(--ink2)">[[ic:lock-simple s]]<span style="flex: 1">Position continue</span><span class="chip mchip" style="min-height: 22px">[[ic:drop s]]<span>Sang</span></span></div>
+</div>
+<div style="left: 16px; right: 16px; top: 430px; display: flex; gap: 8px">
+<span style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; border-radius: 999px; background: rgba(248,113,113,.13); color: var(--err); font-size: 11px; font-weight: 700">[[ic:prohibit s]]<span>Bloquer</span></span>
+<span style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; border-radius: 999px; background: rgba(248,113,113,.13); color: var(--err); font-size: 11px; font-weight: 700">[[ic:flag s]]<span>Signaler</span></span>
+</div>
+<div class="seg mseg glass" style="left: 12px; bottom: 12px"><span>[[ic:user-focus s]]</span><span>[[ic:link s]]</span><span class="on">[[ic:lightning-fill s]]<span>Actions</span></span></div>
+</div>
+<span class="lb l" style="top: 24px"><span class="knum sm">K39</span>PersonRow</span><i class="ld" style="left: 64px; top: 36px; width: 25px"></i>
+<span class="lb l" style="top: 89px"><span class="knum sm">K32</span>Label.Action</span><i class="ld" style="left: 64px; top: 101px; width: 38px"></i>
+<span class="lb l" style="top: 322px"><span class="knum sm">K43</span>GroupCard</span><i class="ld" style="left: 64px; top: 334px; width: 27px"></i>
+<span class="lb l" style="top: 383px"><span class="knum sm">K37</span>LockedRow</span><i class="ld" style="left: 64px; top: 395px; width: 27px"></i>
+<span class="lb r" style="top: 89px"><span class="knum re sm">K02</span>GlassButton</span><i class="ld r" style="left: 309px; top: 101px; width: 37px"></i>
+<span class="lb r" style="top: 173px"><span class="knum re sm">K01</span>GlassTone</span><i class="ld r" style="left: 309px; top: 185px; width: 37px"></i>
+<span class="lb r" style="top: 338px"><span class="knum re sm">K06</span>ToggleRow</span><i class="ld r" style="left: 309px; top: 350px; width: 37px"></i>
+<span class="lb r" style="top: 435px"><span class="knum sm">K40</span>Button</span><i class="ld r" style="left: 320px; top: 447px; width: 26px"></i>
+<i class="lv" style="left: 95px; height: 28px"></i><span class="lb b" style="left: 95px; top: 560px"><span class="knum re sm">K10</span>GlassPill</span>
+<i class="lv" style="left: 206px; height: 28px"></i><span class="lb b" style="left: 206px; top: 560px"><span class="knum re sm">K03</span>Segmented</span>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<div style="display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 56px; align-items: start">
+<header style="display: flex; flex-direction: column; gap: 12px">
+<span class="tag">03 · Réemployé</span>
+<h2 class="d" style="font-size: 38px">Ce qui existe ne se redessine pas</h2>
+<p style="font-size: 16px; line-height: 1.5; color: var(--ink2)">Treize besoins du profil, déjà servis par le kit né de la planche du composer. Le profil prend ces composants tels quels.</p>
+<div style="display: flex; flex-direction: column; gap: 10px; padding-top: 14px">
+<span class="lg">[[ic:arrows-out-simple s]]<span>Trente-trois évolutions les étendent sans les renommer.</span></span>
+<span class="lg">[[ic:prohibit-inset s]]<span>Ce que le système dessine reste hors kit.</span></span>
+</div>
+</header>
+<div class="kapi" style="grid-template-columns: 1.15fr 1fr; background: var(--raised)">
+<div class="h">Besoin du profil</div><div class="h">Composant existant</div>
+<div>Verre de toute commande flottante</div><div><span class="knum re sm">K01</span> <code>MeeshyGlassTone</code></div>
+<div>Bouton rond de verre (44 / 48)</div><div><span class="knum re sm">K02</span> <code>MeeshyGlassButton</code></div>
+<div>Sélecteur des trois faces, pastille qui glisse</div><div><span class="knum re sm">K03</span> <code>MeeshySegmented</code> dans <span class="knum re sm">K10</span> <code>MeeshyGlassPill</code></div>
+<div>Puces : langues, familles de liens, cercles d'audience</div><div><span class="knum re sm">K04</span> <code>MeeshyChipRow</code></div>
+<div>Rangée à bascule : batterie, injoignable, fantôme</div><div><span class="knum re sm">K06</span> <code>MeeshyToggleRow</code></div>
+<div>Pastilles de couleur d'accent</div><div><span class="knum re sm">K07</span> <code>MeeshyColorDots</code></div>
+<div>Champs : bio, adresse, UTM</div><div><span class="knum re sm">K08</span> <code>MeeshyField</code></div>
+<div>Anneau de progression : temps restant, complétion</div><div><span class="knum re sm">K09</span> <code>MeeshyProgressRing</code></div>
+<div>Pilule du bas et bouton contextuel</div><div><span class="knum re sm">K10</span> <code>MeeshyGlassPill</code> + <span class="knum re sm">K13</span> <code>MeeshySplitActionButton</code></div>
+<div>Pilule « hors ligne », refus, échec, activité en direct</div><div><span class="knum re sm">K14</span> <code>MeeshyStatusCapsule</code></div>
+<div>Feuilles basses : carte, cercle, signaler, créer un lien</div><div><span class="knum re sm">K15</span> <code>MeeshyAnchoredSheet</code></div>
+<div>Menu (…) d'une fiche ou d'un billet</div><div><span class="knum re sm">K18</span> <code>MeeshyObjectMenu</code></div>
+<div style="border-bottom: 0">Rail de vignettes : stories à la une, médias partagés</div><div style="border-bottom: 0"><span class="knum re sm">K20</span> <code>MeeshyThumbnailRow</code></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header>
+<span class="tag">04 · Nouveau</span>
+<h2 class="d">Ce que le profil apporte au kit</h2>
+<p>Trente composants nés ici, écrits pour servir ailleurs : conversation, communauté, stories, jeu, appels. Chacun a sa fiche, et sa phrase dit le résultat.</p>
+</header>
+<div style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; align-items: center; gap: 14px"><h3 class="d" style="font-size: 24px">Apportés par le profil</h3><span class="mono" style="font-size: 13px; color: var(--ink2)">K26 – K39</span><span style="flex: 1; height: 1px; background: var(--line)"></span><span class="tag">14 composants</span></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="nc"><div><span class="knum">K26</span>[[ic:wind l]]</div><span class="mono">MeeshyMotion</span><p>Tout mouvement de l'app sort d'une seule table de ressorts, de durées et de retours haptiques.</p><em>Matière</em></div>
+<div class="nc"><div><span class="knum">K27</span>[[ic:image l]]</div><span class="mono">MeeshyLivingBanner</span><p>Une bannière vit (orbes, parallaxe, couleur d'accent) partout où une entité se présente.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K28</span>[[ic:arrows-in-line-vertical l]]</div><span class="mono">MeeshyCollapsingHero</span><p>Un en-tête immersif se replie en barre de verre au défilement, sans image perdue.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K29</span>[[ic:user-circle l]]</div><span class="mono">MeeshyAvatarMorph</span><p>Un avatar VOYAGE d'un écran à l'autre (liste → fiche → épingle de carte) au lieu de réapparaître.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K30</span>[[ic:ticket l]]</div><span class="mono">MeeshyTicket</span><p>Tout ce qui se partage par une adresse se montre en billet à encoches, qui se retourne.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K31</span>[[ic:qr-code l]]</div><span class="mono">MeeshyCodeCard</span><p>Un QR se présente sur une carte de verre qui suit l'inclinaison du téléphone.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K32</span>[[ic:squares-four l]]</div><span class="mono">MeeshyLabeledAction</span><p>Une grille d'actions est faite de boutons ronds de verre libellés, partout la même.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K33</span>[[ic:circles-three l]]</div><span class="mono">MeeshyCircleScale</span><p>Un niveau de proximité se lit par l'intensité : pastilles, pilule de relation, anneaux concentriques.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K34</span>[[ic:chart-line-up l]]</div><span class="mono">MeeshyFigures</span><p>Un chiffre se montre en grand avec sa courbe ou ses barres, sans tableau de bord.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K35</span>[[ic:waveform l]]</div><span class="mono">MeeshyWavePlayer</span><p>Un son court se joue sur une seule forme d'onde vivante.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K36</span>[[ic:map-pin l]]</div><span class="mono">MeeshyMapPin</span><p>Une personne sur une carte est son avatar, son disque de flou et son onde.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K37</span>[[ic:lock-simple l]]</div><span class="mono">MeeshyLockedRow</span><p>Ce qui est fermé à mon niveau se voit, verrouillé, avec ce qui l'ouvre.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K38</span>[[ic:ghost l]]</div><span class="mono">MeeshyStateBlock</span><p>Vide, erreur, refus et chargement ont une seule forme : une image fantôme, une phrase, une sortie.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K39</span>[[ic:user-list l]]</div><span class="mono">MeeshyPersonRow</span><p>Une personne dans une liste est toujours la même rangée : avatar, présence, cercle, accessoire.</p><em>Assemblage</em></div>
+<div style="grid-column: span 2; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 28px 30px; border-radius: 26px; border: 1.5px dashed var(--line)">
+<div class="orb" style="width: 180px; height: 180px; right: -40px; top: -50px; background: #6366F1; opacity: .25"></div>
+<span class="tag" style="position: relative">Numéros proposés</span>
+<p class="d" style="position: relative; font-size: 20px">Ils se confirment à l'ouverture des lots, un lot par composant.</p>
+<p style="position: relative; font-size: 14px; line-height: 1.5; color: var(--ink2)">iOS d'abord, puis Android et le web, avec les mêmes noms.</p>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; align-items: center; gap: 14px"><h3 class="d" style="font-size: 24px">Révélés par l'inventaire</h3><span class="mono" style="font-size: 13px; color: var(--ink2)">K40 – K55</span><span style="flex: 1; height: 1px; background: var(--line)"></span><span class="tag">16 composants</span></div>
+<p style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 820px; margin-top: -8px">Les 54 planches d'écran, relues pièce par pièce le 16 novembre 2026, employaient seize composants que personne n'avait nommés. La liste est close à K55.</p>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="nc"><div><span class="knum">K40</span>[[ic:hand-tap l]]</div><span class="mono">MeeshyButton</span><p>Toute action nommée est une capsule libellée, pleine, de verre, à contour ou en texte, partout la même.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K41</span>[[ic:tag l]]</div><span class="mono">MeeshyBadge</span><p>Une information courte posée sur ou à côté d'autre chose est une seule pastille : glyphe, valeur, teinte.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K42</span>[[ic:gauge l]]</div><span class="mono">MeeshyMeter</span><p>Une mesure fixe se lit sur une jauge linéaire qui dit sa valeur, sa teinte et ce qu'il reste.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K43</span>[[ic:rows l]]</div><span class="mono">MeeshyGroupCard</span><p>Ce qui va ensemble tient dans une seule surface arrondie, avec ses filets en retrait, son en-tête et son pied.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K44</span>[[ic:text-h l]]</div><span class="mono">MeeshySectionHeader</span><p>Une section s'annonce toujours de la même façon : un titre, ce qu'elle compte, et ce qu'on peut y faire.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K45</span>[[ic:medal l]]</div><span class="mono">MeeshyMedallion</span><p>Un glyphe qui nomme une chose sans se toucher est un médaillon teinté, d'une seule recette.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K46</span>[[ic:info l]]</div><span class="mono">MeeshyNote</span><p>Ce que l'écran doit dire sans qu'on l'ait demandé tient en une note en ligne : un glyphe, une phrase, un ton.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K47</span>[[ic:check-square l]]</div><span class="mono">MeeshyChoiceTiles</span><p>Choisir parmi quelques options qui méritent d'être expliquées se fait sur des tuiles, une ou plusieurs à la fois.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K48</span>[[ic:users l]]</div><span class="mono">MeeshyAvatarGroup</span><p>Plusieurs personnes ensemble se montrent d'une seule façon : en pile, en duo, en rangée nommée ou en grille.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K49</span>[[ic:grid-four l]]</div><span class="mono">MeeshyMediaGrid</span><p>Des médias en lecture seule se rangent dans une grille à colonnes, chaque tuile disant son type.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K50</span>[[ic:chart-bar l]]</div><span class="mono">MeeshyChart</span><p>Une série de valeurs se lit sur un graphique sobre qui nomme son pic, ses bornes et ce qu'on y choisit.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K51</span>[[ic:translate l]]</div><span class="mono">MeeshyTranslationMark</span><p>Tout contenu traduit porte la même marque discrète, qui dit d'où il vient et rend l'original d'un geste.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K52</span>[[ic:dots-six-vertical l]]</div><span class="mono">MeeshyReorderList</span><p>Un ordre qui compte se règle en glissant des rangées pleines, avec leur rang et une alternative sans geste.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K53</span>[[ic:plus-minus l]]</div><span class="mono">MeeshyStepper</span><p>Une valeur qui avance par crans se règle ou se suit sur une seule échelle discrète.</p><em>Atome</em></div>
+<div class="nc"><div><span class="knum">K54</span>[[ic:path l]]</div><span class="mono">MeeshyMapTrace</span><p>Un chemin sur une carte est un seul tracé : il avance vers quelqu'un ou raconte d'où l'on vient.</p><em>Assemblage</em></div>
+<div class="nc"><div><span class="knum">K55</span>[[ic:command l]]</div><span class="mono">MeeshyKeyHint</span><p>Un raccourci clavier se montre partout par la même touche, seule, dans un bouton ou en légende.</p><em>Atome</em></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header>
+<span class="tag">05 · Les mots du kit</span>
+<h2 class="d">Un mot, un sens, sur les trois plateformes</h2>
+<p>Six décisions de nommage. Elles priment sur ce qu'une fiche écrit.</p>
+</header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="mc"><span class="tag">01 · Le sens</span><span class="mono mw">kind</span><p>Neutre, accent, réussite, alerte, erreur, destructif : comme K02 et K14.</p><div class="mv"><span><i style="color: var(--ok)">[[ic:check s]]</i><code>MeeshyBadgeKind · MeeshyButtonKind</code></span><span><i style="color: var(--err)">[[ic:x s]]</i><code style="color: var(--ink3); text-decoration: line-through">MeeshyBadgeTone</code></span></div></div>
+<div class="mc"><span class="tag">02 · Le ton du verre</span><span class="mono mw">tone</span><p>Réservé au verre de K01. Aucun autre composant n'a de ton.</p><div class="mv"><span><i style="color: var(--ok)">[[ic:check s]]</i><code>MeeshyGlassTone</code></span><span><i style="color: var(--err)">[[ic:x s]]</i><code style="color: var(--ink3); text-decoration: line-through">MeeshyNoteTone</code></span></div></div>
+<div class="mc"><span class="tag">03 · La teinte libre</span><span class="mono mw">tint</span><p>Elle se passe à côté de <code>kind</code>, et vaut rien par défaut.</p><div class="mv"><span><i style="color: var(--ok)">[[ic:check s]]</i><code>tint: Color? = nil</code></span><span><i style="color: var(--err)">[[ic:x s]]</i><code style="color: var(--ink3); text-decoration: line-through">.custom(Color)</code></span></div></div>
+<div class="mc"><span class="tag">04 · Le glyphe</span><span class="mono mw">glyph</span><p>Le paramètre suit sa plateforme, comme K02. L'emplacement libre porte le même nom sur les trois.</p>
+<div style="display: flex; flex-direction: column; margin-top: auto">
+<div class="mp" style="grid-template-columns: 90px minmax(0, 1fr)"><span>iOS</span><code>systemImage</code></div>
+<div class="mp" style="grid-template-columns: 90px minmax(0, 1fr)"><span>Android</span><code>icon</code></div>
+<div class="mp" style="grid-template-columns: 90px minmax(0, 1fr)"><span>Web</span><code>glyph</code></div>
+<div class="mp" style="grid-template-columns: 90px minmax(0, 1fr)"><span>Emplacement</span><code>glyph</code></div>
+</div></div>
+<div class="mc"><span class="tag">05 · L'attente</span><span class="mono mw">isPending</span><p>Une réponse qu'on attend porte ce nom partout.</p>
+<div style="display: flex; align-items: center; gap: 12px; padding: 6px 0"><button class="btn p sm" aria-label="Envoi en attente" style="gap: 10px"><span class="spin"></span><span>Envoyer</span></button><span class="kcap">Le bouton attend, il ne se répète pas.</span></div>
+<div class="mv"><span><i style="color: var(--ok)">[[ic:check s]]</i><code>isPending</code></span><span><i style="color: var(--err)">[[ic:x s]]</i><code style="color: var(--ink3); text-decoration: line-through">isBusy · busy · pending</code></span></div></div>
+<div class="mc"><span class="tag">06 · Chacun sa pièce</span><span class="mono mw" style="font-size: 22px; line-height: 44px">une frontière nette</span>
+<div style="display: flex; flex-direction: column; gap: 0; margin-top: 2px">
+<div class="mp"><span>Chiffre et mini-courbe</span><span class="knum sm">K34</span><span>Barres, axe, pic</span><span class="knum sm">K50</span></div>
+<div class="mp"><span>La rangée</span><span class="knum sm">K39</span><span>La pile d'avatars</span><span class="knum sm">K48</span></div>
+<div class="mp"><span>La mesure fixe</span><span class="knum sm">K42</span><span>Opération en vol</span><span class="knum sm re">K09</span></div>
+<div class="mp"><span>Le motif expliqué</span><span class="knum sm">K47</span><span>La bascule</span><span class="knum sm re">K06</span></div>
+<div class="mp"><span>Le squelette</span><span class="knum sm">K38</span><span>La touche</span><span class="knum sm">K55</span></div>
+</div></div>
+</div>
+</section>
+
+<section class="sec">
+<header>
+<span class="tag">06 · Les règles du kit</span>
+<h2 class="d">Cinq règles, tenues sur chaque fiche</h2>
+</header>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px">
+<div class="rc"><span>[[ic:atom l]]</span><h3 class="d">Un atome agnostique</h3><p>Paramètres opaques, aucun type « profil », aucun singleton Meeshy. L'orchestration reste côté app.</p></div>
+<div class="rc"><span>[[ic:magnifying-glass l]]</span><h3 class="d">On extrait avant de créer</h3><p>Le jumeau le plus complet déjà dans le code devient le composant.</p></div>
+<div class="rc"><span>[[ic:devices l]]</span><h3 class="d">Mêmes noms partout</h3><p>Une seule API sur les trois plateformes : iOS SwiftUI, Android Compose, Web Preact.</p></div>
+<div class="rc"><span>[[ic:cube-transparent l]]</span><h3 class="d">Le verre a une entrée</h3><p><code>K01</code> seul décide : Liquid Glass sur iOS 26+, verre dessiné ailleurs, surface tonale sur Android.</p></div>
+<div class="rc"><span>[[ic:list-checks l]]</span><h3 class="d">Recette, jetons, témoins</h3><p>Chaque composant a sa recette en valeurs <code>…Recipe</code>, ses jetons et ses tests.</p></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":7022}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

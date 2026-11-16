@@ -152,6 +152,24 @@ final class RiverOverlayPreviewTests: XCTestCase {
         XCTAssertEqual(MessageOverlayCellPreview.displayedFace(bubble, river: nil, message: message), bubble)
     }
 
+    /// La bulle du couloir porte le voile du fil ; l'aperçu d'un message
+    /// flouté rend la bulle du fil, voile levé (#18856).
+    func test_displayedFace_blurredMessage_keepsTheUnveiledThreadBubble() {
+        var message = message()
+        message.isBlurred = true
+        let bubble = bubbleFace(for: message)
+        XCTAssertEqual(MessageOverlayCellPreview.displayedFace(bubble, river: face(), message: message), bubble)
+    }
+
+    func test_previewBubble_ofABlurredMessage_isUnveiled() {
+        var message = message()
+        message.isBlurred = true
+        let overlay = MessageOverlayMenu(
+            message: message, contactColor: "#6366F1",
+            messageBubbleFrame: .zero, isPresented: .constant(true))
+        XCTAssertFalse(overlay.previewBubble.message.holdsBlur)
+    }
+
     func test_displayedFace_riverFaceOfAnotherMessage_isIgnored() {
         let message = message(id: "m2")
         let bubble = bubbleFace(for: message)
@@ -383,7 +401,7 @@ final class MessageOverlayPreviewTouchTests: XCTestCase {
 
     func test_resolve_protectedCarousel_staysInert() {
         let photos = [photo(id: "p1"), photo(id: "p2")]
-        for protected in [message(photos, viewOnce: true), message(photos, blurred: true),
+        for protected in [message(photos, viewOnce: true),
                           message(photos, encrypted: true), message(photos, expiresAt: Date().addingTimeInterval(-1))] {
             let touch = MessageOverlayPreviewTouch.resolve(message: protected, readingMode: .bubbles)
             XCTAssertFalse(touch.scrollsCarousel)
@@ -416,14 +434,20 @@ final class MessageOverlayPreviewTouchTests: XCTestCase {
         XCTAssertFalse(touch.offersPlayback)
     }
 
-    func test_resolve_blurredMessage_offersNoPlayback() {
+    func test_resolve_blurredMessage_offersPlayback() {
         let touch = MessageOverlayPreviewTouch.resolve(message: message([video()], blurred: true), readingMode: .focal)
-        XCTAssertFalse(touch.offersPlayback)
+        XCTAssertTrue(touch.offersPlayback, "l'appui long lit la vidéo d'un message flouté (#18856)")
     }
 
-    func test_resolve_blurredPiece_offersNoPlayback() {
+    func test_resolve_blurredPiece_offersPlayback() {
         let touch = MessageOverlayPreviewTouch.resolve(message: message([voice(isBlurred: true)]), readingMode: .bubbles)
-        XCTAssertFalse(touch.offersPlayback)
+        XCTAssertTrue(touch.offersPlayback)
+    }
+
+    func test_resolve_blurredCarousel_scrolls() {
+        let touch = MessageOverlayPreviewTouch.resolve(
+            message: message([photo(id: "p1"), photo(id: "p2")], blurred: true), readingMode: .bubbles)
+        XCTAssertTrue(touch.scrollsCarousel)
     }
 
     func test_resolve_sealedEncryptedMessage_offersNoPlayback() {
@@ -476,8 +500,8 @@ final class MessageOverlayPreviewTouchTests: XCTestCase {
         XCTAssertFalse(MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: "a1", in: message([voice()], viewOnce: true)))
     }
 
-    func test_mayPlayVoice_blurredPiece_isFalse() {
-        XCTAssertFalse(MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: "a1", in: message([voice(isBlurred: true)])))
+    func test_mayPlayVoice_blurredPiece_isTrue() {
+        XCTAssertTrue(MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: "a1", in: message([voice(isBlurred: true)])))
     }
 
     func test_mayPlayVoice_video_isNotAVoice() {

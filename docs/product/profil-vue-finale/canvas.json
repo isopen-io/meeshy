@@ -1,0 +1,1159 @@
+{
+"v": 3,
+"createdOnFiles": {
+"v": 1,
+"at": "2026-11-16T17:41:00Z"
+},
+"title": "Profil Meeshy — vue cible",
+"launch": {
+"view": "canvas"
+},
+"pages": [],
+"boards": {
+"Main.dc.html": {
+"x": 0,
+"y": 0,
+"w": 390,
+"h": 1695,
+"title": "Ma vitrine · iOS",
+"radius": 44
+},
+"Moi-Apercu.dc.html": {
+"x": 470,
+"y": 0,
+"w": 390,
+"h": 2583,
+"title": "Voir comme · par cercle",
+"radius": 44
+},
+"Moi-Edition.dc.html": {
+"x": 940,
+"y": 0,
+"w": 390,
+"h": 2476,
+"title": "Ma vitrine en édition",
+"radius": 44
+},
+"Moi-Liens.dc.html": {
+"x": 1410,
+"y": 0,
+"w": 390,
+"h": 1701,
+"title": "Mes liens · la face Liens",
+"radius": 44
+},
+"Moi-Actions.dc.html": {
+"x": 1880,
+"y": 0,
+"w": 390,
+"h": 2081,
+"title": "Mes actions · la face Actions",
+"radius": 44
+},
+"Prototype.dc.html": {
+"x": 2350,
+"y": 0,
+"w": 390,
+"h": 844,
+"title": "Prototype · les trois faces et la carte",
+"radius": 44,
+"is_interactive": true
+},
+"Lien-Detail.dc.html": {
+"x": 0,
+"y": 3043,
+"w": 390,
+"h": 2116,
+"title": "Détail d'un lien de suivi",
+"radius": 44
+},
+"Lien-Creer.dc.html": {
+"x": 470,
+"y": 3043,
+"w": 390,
+"h": 2127,
+"title": "Créer un lien",
+"radius": 44
+},
+"Lien-Suivi-Creer.dc.html": {
+"x": 940,
+"y": 3043,
+"w": 390,
+"h": 2874,
+"title": "Créer un lien de suivi · cibles et UTM",
+"radius": 44
+},
+"Lien-Partage.dc.html": {
+"x": 1410,
+"y": 3043,
+"w": 390,
+"h": 1663,
+"title": "Lien de partage · arrivées",
+"radius": 44
+},
+"Lien-Communaute.dc.html": {
+"x": 1880,
+"y": 3043,
+"w": 390,
+"h": 1704,
+"title": "Détail d'un lien de communauté",
+"radius": 44
+},
+"Parrainage.dc.html": {
+"x": 2350,
+"y": 3043,
+"w": 390,
+"h": 1796,
+"title": "Parrainage",
+"radius": 44
+},
+"Mes-Adresses.dc.html": {
+"x": 2820,
+"y": 3043,
+"w": 390,
+"h": 1862,
+"title": "Mes adresses",
+"radius": 44
+},
+"Carte-Profil.dc.html": {
+"x": 3290,
+"y": 3043,
+"w": 390,
+"h": 1208,
+"title": "Ma carte de profil · QR et sans contact",
+"radius": 44
+},
+"Sans-Contact.dc.html": {
+"x": 3760,
+"y": 3043,
+"w": 390,
+"h": 2325,
+"title": "Partage sans contact · le parcours",
+"radius": 44
+},
+"Autre-Vitrine.dc.html": {
+"x": 0,
+"y": 6377,
+"w": 390,
+"h": 2009,
+"title": "Vitrine d'un Proche",
+"radius": 44
+},
+"Autre-Publications.dc.html": {
+"x": 470,
+"y": 6377,
+"w": 390,
+"h": 2072,
+"title": "Ses publications",
+"radius": 44
+},
+"Autre-Commun.dc.html": {
+"x": 940,
+"y": 6377,
+"w": 390,
+"h": 1994,
+"title": "En commun",
+"radius": 44
+},
+"Autre-Liens.dc.html": {
+"x": 1410,
+"y": 6377,
+"w": 390,
+"h": 2092,
+"title": "Ses liens",
+"radius": 44
+},
+"Autre-Actions.dc.html": {
+"x": 1880,
+"y": 6377,
+"w": 390,
+"h": 2241,
+"title": "Actions sur un Proche",
+"radius": 44
+},
+"Autre-Cercle.dc.html": {
+"x": 2350,
+"y": 6377,
+"w": 390,
+"h": 2093,
+"title": "Notre cercle",
+"radius": 44
+},
+"Autre-Inconnu.dc.html": {
+"x": 2820,
+"y": 6377,
+"w": 390,
+"h": 2111,
+"title": "Fiche d'un inconnu · cercle Public",
+"radius": 44
+},
+"Carte-Personne.dc.html": {
+"x": 0,
+"y": 9078,
+"w": 390,
+"h": 844,
+"title": "Léo sur la carte",
+"radius": 44
+},
+"Carte-Proches.dc.html": {
+"x": 470,
+"y": 9078,
+"w": 390,
+"h": 1055,
+"title": "Tous mes proches sur la carte",
+"radius": 44
+},
+"Carte-Partage.dc.html": {
+"x": 940,
+"y": 9078,
+"w": 390,
+"h": 1032,
+"title": "Partager ma position",
+"radius": 44
+},
+"Carte-Sang.dc.html": {
+"x": 1410,
+"y": 9078,
+"w": 390,
+"h": 1143,
+"title": "Position Sang · historique et fantôme",
+"radius": 44
+},
+"Etat-Chargement.dc.html": {
+"x": 0,
+"y": 10681,
+"w": 390,
+"h": 2413,
+"title": "Premier chargement · cache vide",
+"radius": 44
+},
+"Etat-Vide.dc.html": {
+"x": 470,
+"y": 10681,
+"w": 390,
+"h": 3069,
+"title": "États vides",
+"radius": 44
+},
+"Etat-Erreur.dc.html": {
+"x": 940,
+"y": 10681,
+"w": 390,
+"h": 3591,
+"title": "Erreurs et refus",
+"radius": 44
+},
+"Etat-HorsLigne.dc.html": {
+"x": 1410,
+"y": 10681,
+"w": 390,
+"h": 1637,
+"title": "Hors ligne · le cache répond",
+"radius": 44
+},
+"Etat-Bloque.dc.html": {
+"x": 1880,
+"y": 10681,
+"w": 390,
+"h": 1467,
+"title": "Personne bloquée",
+"radius": 44
+},
+"Etat-Introuvable.dc.html": {
+"x": 2350,
+"y": 10681,
+"w": 390,
+"h": 844,
+"title": "Profil introuvable ou privé",
+"radius": 44
+},
+"Etat-Demande.dc.html": {
+"x": 2820,
+"y": 10681,
+"w": 390,
+"h": 1869,
+"title": "Demande de connexion",
+"radius": 44
+},
+"Signaler.dc.html": {
+"x": 3290,
+"y": 10681,
+"w": 390,
+"h": 1838,
+"title": "Signaler ou bloquer",
+"radius": 44
+},
+"Android-Vitrine.dc.html": {
+"x": 0,
+"y": 14732,
+"w": 412,
+"h": 2031,
+"title": "Android · vitrine",
+"radius": 36
+},
+"Android-Moi.dc.html": {
+"x": 492,
+"y": 14732,
+"w": 412,
+"h": 2402,
+"title": "Android · ma vitrine et « Voir comme »",
+"radius": 36
+},
+"Android-Liens.dc.html": {
+"x": 984,
+"y": 14732,
+"w": 412,
+"h": 1768,
+"title": "Android · liens",
+"radius": 36
+},
+"Android-Actions.dc.html": {
+"x": 1476,
+"y": 14732,
+"w": 412,
+"h": 2260,
+"title": "Android · actions",
+"radius": 36
+},
+"Android-Carte.dc.html": {
+"x": 1968,
+"y": 14732,
+"w": 412,
+"h": 954,
+"title": "Android · carte",
+"radius": 36
+},
+"Android-Feuilles.dc.html": {
+"x": 2460,
+"y": 14732,
+"w": 412,
+"h": 4947,
+"title": "Android · feuilles et états",
+"radius": 36
+},
+"Web-Public-Mobile.dc.html": {
+"x": 0,
+"y": 20139,
+"w": 390,
+"h": 2018,
+"title": "Web · page publique sur téléphone",
+"radius": 24
+},
+"Web-Public.dc.html": {
+"x": 470,
+"y": 20139,
+"w": 1440,
+"h": 2232,
+"title": "Web · page publique",
+"expand": "fill"
+},
+"Web-Moi.dc.html": {
+"x": 1990,
+"y": 20139,
+"w": 1440,
+"h": 1862,
+"title": "Web · mon profil, trois faces côte à côte",
+"expand": "fill"
+},
+"Web-Autre.dc.html": {
+"x": 3510,
+"y": 20139,
+"w": 1440,
+"h": 1476,
+"title": "Web · profil d'un Proche",
+"expand": "fill"
+},
+"Web-Lien.dc.html": {
+"x": 5030,
+"y": 20139,
+"w": 1440,
+"h": 2293,
+"title": "Web · un lien en grand",
+"expand": "fill"
+},
+"Web-Etats.dc.html": {
+"x": 6550,
+"y": 20139,
+"w": 1440,
+"h": 3787,
+"title": "Web · états et carte des proches",
+"expand": "fill"
+},
+"Apercu-Lien.dc.html": {
+"x": 8070,
+"y": 20139,
+"w": 1200,
+"h": 2579,
+"title": "Aperçu du lien de profil"
+},
+"iPad-Split.dc.html": {
+"x": 0,
+"y": 24386,
+"w": 1194,
+"h": 1031,
+"title": "iPad · fiche et carte côte à côte",
+"radius": 28
+},
+"Hors-App.dc.html": {
+"x": 1274,
+"y": 24386,
+"w": 1440,
+"h": 3166,
+"title": "Hors de l'app · écran verrouillé, widgets, tuiles"
+},
+"Sys-Icones.dc.html": {
+"x": 0,
+"y": 28012,
+"w": 1440,
+"h": 5524,
+"title": "Système · toutes les icônes"
+},
+"Sys-Boutons.dc.html": {
+"x": 1520,
+"y": 28012,
+"w": 1440,
+"h": 4647,
+"title": "Système · boutons et composants"
+},
+"Sys-Mouvement.dc.html": {
+"x": 3040,
+"y": 28012,
+"w": 1440,
+"h": 6704,
+"title": "Système · mouvement et morphisme"
+},
+"Sys-Materiel.dc.html": {
+"x": 4560,
+"y": 28012,
+"w": 1440,
+"h": 2001,
+"title": "Système · matériel par plateforme"
+},
+"Sys-Matrice.dc.html": {
+"x": 6080,
+"y": 28012,
+"w": 1440,
+"h": 4192,
+"title": "Système · matrice des fonctions"
+},
+"Kit-Carte.dc.html": {
+"x": 0,
+"y": 35176,
+"w": 1440,
+"h": 7022,
+"title": "Kit · la carte du kit",
+"expand": "fill"
+},
+"Kit-Reemploi-1.dc.html": {
+"x": 1600,
+"y": 35176,
+"w": 1440,
+"h": 5123,
+"title": "Kit · ce qu'on réemploie (K01–K25) · 1/2",
+"expand": "fill"
+},
+"Kit-Reemploi-2.dc.html": {
+"x": 3080,
+"y": 35176,
+"w": 1440,
+"h": 5101,
+"title": "Kit · ce qu'on réemploie (K01–K25) · 2/2",
+"expand": "fill"
+},
+"Kit-Evolutions-1.dc.html": {
+"x": 4680,
+"y": 35176,
+"w": 1440,
+"h": 6361,
+"title": "Kit · évolutions et hors kit · 1/2",
+"expand": "fill"
+},
+"Kit-Evolutions-2.dc.html": {
+"x": 6160,
+"y": 35176,
+"w": 1440,
+"h": 2204,
+"title": "Kit · évolutions et hors kit · 2/2",
+"expand": "fill"
+},
+"Kit-Adoption.dc.html": {
+"x": 7760,
+"y": 35176,
+"w": 1440,
+"h": 7450,
+"title": "Kit · adoption et ordre de construction",
+"expand": "fill"
+},
+"Kit-K26-MeeshyMotion-1.dc.html": {
+"x": 0,
+"y": 43086,
+"w": 1440,
+"h": 4151,
+"title": "K26 · MeeshyMotion · 1/2",
+"expand": "fill"
+},
+"Kit-K26-MeeshyMotion-2.dc.html": {
+"x": 1480,
+"y": 43086,
+"w": 1440,
+"h": 4732,
+"title": "K26 · MeeshyMotion · 2/2",
+"expand": "fill"
+},
+"Kit-K27-MeeshyLivingBanner.dc.html": {
+"x": 3080,
+"y": 43086,
+"w": 1440,
+"h": 7309,
+"title": "K27 · MeeshyLivingBanner",
+"expand": "fill"
+},
+"Kit-K28-MeeshyCollapsingHero-1.dc.html": {
+"x": 4680,
+"y": 43086,
+"w": 1440,
+"h": 4236,
+"title": "K28 · MeeshyCollapsingHero · 1/2",
+"expand": "fill"
+},
+"Kit-K28-MeeshyCollapsingHero-2.dc.html": {
+"x": 6160,
+"y": 43086,
+"w": 1440,
+"h": 4477,
+"title": "K28 · MeeshyCollapsingHero · 2/2",
+"expand": "fill"
+},
+"Kit-K29-MeeshyAvatarMorph.dc.html": {
+"x": 7760,
+"y": 43086,
+"w": 1440,
+"h": 6976,
+"title": "K29 · MeeshyAvatarMorph",
+"expand": "fill"
+},
+"Kit-K30-MeeshyTicket-1.dc.html": {
+"x": 9360,
+"y": 43086,
+"w": 1440,
+"h": 4060,
+"title": "K30 · MeeshyTicket · 1/2",
+"expand": "fill"
+},
+"Kit-K30-MeeshyTicket-2.dc.html": {
+"x": 10840,
+"y": 43086,
+"w": 1440,
+"h": 4889,
+"title": "K30 · MeeshyTicket · 2/2",
+"expand": "fill"
+},
+"Kit-K31-MeeshyCodeCard-1.dc.html": {
+"x": 12440,
+"y": 43086,
+"w": 1440,
+"h": 3916,
+"title": "K31 · MeeshyCodeCard · 1/2",
+"expand": "fill"
+},
+"Kit-K31-MeeshyCodeCard-2.dc.html": {
+"x": 13920,
+"y": 43086,
+"w": 1440,
+"h": 4519,
+"title": "K31 · MeeshyCodeCard · 2/2",
+"expand": "fill"
+},
+"Kit-K32-MeeshyLabeledAction-1.dc.html": {
+"x": 15520,
+"y": 43086,
+"w": 1440,
+"h": 4832,
+"title": "K32 · MeeshyLabeledAction · 1/2",
+"expand": "fill"
+},
+"Kit-K32-MeeshyLabeledAction-2.dc.html": {
+"x": 17000,
+"y": 43086,
+"w": 1440,
+"h": 4190,
+"title": "K32 · MeeshyLabeledAction · 2/2",
+"expand": "fill"
+},
+"Kit-K33-MeeshyCircleScale-1.dc.html": {
+"x": 18600,
+"y": 43086,
+"w": 1440,
+"h": 4386,
+"title": "K33 · MeeshyCircleScale · 1/2",
+"expand": "fill"
+},
+"Kit-K33-MeeshyCircleScale-2.dc.html": {
+"x": 20080,
+"y": 43086,
+"w": 1440,
+"h": 4890,
+"title": "K33 · MeeshyCircleScale · 2/2",
+"expand": "fill"
+},
+"Kit-K34-MeeshyFigures-1.dc.html": {
+"x": 21680,
+"y": 43086,
+"w": 1440,
+"h": 3955,
+"title": "K34 · MeeshyFigures · 1/2",
+"expand": "fill"
+},
+"Kit-K34-MeeshyFigures-2.dc.html": {
+"x": 23160,
+"y": 43086,
+"w": 1440,
+"h": 4571,
+"title": "K34 · MeeshyFigures · 2/2",
+"expand": "fill"
+},
+"Kit-K35-MeeshyWavePlayer-1.dc.html": {
+"x": 24760,
+"y": 43086,
+"w": 1440,
+"h": 4469,
+"title": "K35 · MeeshyWavePlayer · 1/2",
+"expand": "fill"
+},
+"Kit-K35-MeeshyWavePlayer-2.dc.html": {
+"x": 26240,
+"y": 43086,
+"w": 1440,
+"h": 4350,
+"title": "K35 · MeeshyWavePlayer · 2/2",
+"expand": "fill"
+},
+"Kit-K36-MeeshyMapPin-1.dc.html": {
+"x": 27840,
+"y": 43086,
+"w": 1440,
+"h": 4995,
+"title": "K36 · MeeshyMapPin · 1/2",
+"expand": "fill"
+},
+"Kit-K36-MeeshyMapPin-2.dc.html": {
+"x": 29320,
+"y": 43086,
+"w": 1440,
+"h": 4247,
+"title": "K36 · MeeshyMapPin · 2/2",
+"expand": "fill"
+},
+"Kit-K37-MeeshyLockedRow-1.dc.html": {
+"x": 30920,
+"y": 43086,
+"w": 1440,
+"h": 4528,
+"title": "K37 · MeeshyLockedRow · 1/2",
+"expand": "fill"
+},
+"Kit-K37-MeeshyLockedRow-2.dc.html": {
+"x": 32400,
+"y": 43086,
+"w": 1440,
+"h": 4480,
+"title": "K37 · MeeshyLockedRow · 2/2",
+"expand": "fill"
+},
+"Kit-K38-MeeshyStateBlock-1.dc.html": {
+"x": 34000,
+"y": 43086,
+"w": 1440,
+"h": 5217,
+"title": "K38 · MeeshyStateBlock · 1/2",
+"expand": "fill"
+},
+"Kit-K38-MeeshyStateBlock-2.dc.html": {
+"x": 35480,
+"y": 43086,
+"w": 1440,
+"h": 4650,
+"title": "K38 · MeeshyStateBlock · 2/2",
+"expand": "fill"
+},
+"Kit-K39-MeeshyPersonRow-1.dc.html": {
+"x": 37080,
+"y": 43086,
+"w": 1440,
+"h": 4677,
+"title": "K39 · MeeshyPersonRow · 1/2",
+"expand": "fill"
+},
+"Kit-K39-MeeshyPersonRow-2.dc.html": {
+"x": 38560,
+"y": 43086,
+"w": 1440,
+"h": 4825,
+"title": "K39 · MeeshyPersonRow · 2/2",
+"expand": "fill"
+},
+"Kit-K40-MeeshyButton-1.dc.html": {
+"x": 0,
+"y": 50855,
+"w": 1440,
+"h": 4683,
+"title": "K40 · MeeshyButton · 1/2",
+"expand": "fill"
+},
+"Kit-K40-MeeshyButton-2.dc.html": {
+"x": 1480,
+"y": 50855,
+"w": 1440,
+"h": 4445,
+"title": "K40 · MeeshyButton · 2/2",
+"expand": "fill"
+},
+"Kit-K41-MeeshyBadge-1.dc.html": {
+"x": 3080,
+"y": 50855,
+"w": 1440,
+"h": 4225,
+"title": "K41 · MeeshyBadge · 1/2",
+"expand": "fill"
+},
+"Kit-K41-MeeshyBadge-2.dc.html": {
+"x": 4560,
+"y": 50855,
+"w": 1440,
+"h": 4781,
+"title": "K41 · MeeshyBadge · 2/2",
+"expand": "fill"
+},
+"Kit-K42-MeeshyMeter-1.dc.html": {
+"x": 6160,
+"y": 50855,
+"w": 1440,
+"h": 4255,
+"title": "K42 · MeeshyMeter · 1/2",
+"expand": "fill"
+},
+"Kit-K42-MeeshyMeter-2.dc.html": {
+"x": 7640,
+"y": 50855,
+"w": 1440,
+"h": 4297,
+"title": "K42 · MeeshyMeter · 2/2",
+"expand": "fill"
+},
+"Kit-K43-MeeshyGroupCard-1.dc.html": {
+"x": 9240,
+"y": 50855,
+"w": 1440,
+"h": 4182,
+"title": "K43 · MeeshyGroupCard · 1/2",
+"expand": "fill"
+},
+"Kit-K43-MeeshyGroupCard-2.dc.html": {
+"x": 10720,
+"y": 50855,
+"w": 1440,
+"h": 4486,
+"title": "K43 · MeeshyGroupCard · 2/2",
+"expand": "fill"
+},
+"Kit-K44-MeeshySectionHeader-1.dc.html": {
+"x": 12320,
+"y": 50855,
+"w": 1440,
+"h": 3916,
+"title": "K44 · MeeshySectionHeader · 1/2",
+"expand": "fill"
+},
+"Kit-K44-MeeshySectionHeader-2.dc.html": {
+"x": 13800,
+"y": 50855,
+"w": 1440,
+"h": 4593,
+"title": "K44 · MeeshySectionHeader · 2/2",
+"expand": "fill"
+},
+"Kit-K45-MeeshyMedallion-1.dc.html": {
+"x": 15400,
+"y": 50855,
+"w": 1440,
+"h": 4321,
+"title": "K45 · MeeshyMedallion · 1/2",
+"expand": "fill"
+},
+"Kit-K45-MeeshyMedallion-2.dc.html": {
+"x": 16880,
+"y": 50855,
+"w": 1440,
+"h": 3913,
+"title": "K45 · MeeshyMedallion · 2/2",
+"expand": "fill"
+},
+"Kit-K46-MeeshyNote-1.dc.html": {
+"x": 18480,
+"y": 50855,
+"w": 1440,
+"h": 4105,
+"title": "K46 · MeeshyNote · 1/2",
+"expand": "fill"
+},
+"Kit-K46-MeeshyNote-2.dc.html": {
+"x": 19960,
+"y": 50855,
+"w": 1440,
+"h": 4131,
+"title": "K46 · MeeshyNote · 2/2",
+"expand": "fill"
+},
+"Kit-K47-MeeshyChoiceTiles-1.dc.html": {
+"x": 21560,
+"y": 50855,
+"w": 1440,
+"h": 4121,
+"title": "K47 · MeeshyChoiceTiles · 1/2",
+"expand": "fill"
+},
+"Kit-K47-MeeshyChoiceTiles-2.dc.html": {
+"x": 23040,
+"y": 50855,
+"w": 1440,
+"h": 4785,
+"title": "K47 · MeeshyChoiceTiles · 2/2",
+"expand": "fill"
+},
+"Kit-K48-MeeshyAvatarGroup-1.dc.html": {
+"x": 24640,
+"y": 50855,
+"w": 1440,
+"h": 4477,
+"title": "K48 · MeeshyAvatarGroup · 1/2",
+"expand": "fill"
+},
+"Kit-K48-MeeshyAvatarGroup-2.dc.html": {
+"x": 26120,
+"y": 50855,
+"w": 1440,
+"h": 4231,
+"title": "K48 · MeeshyAvatarGroup · 2/2",
+"expand": "fill"
+},
+"Kit-K49-MeeshyMediaGrid-1.dc.html": {
+"x": 27720,
+"y": 50855,
+"w": 1440,
+"h": 4803,
+"title": "K49 · MeeshyMediaGrid · 1/2",
+"expand": "fill"
+},
+"Kit-K49-MeeshyMediaGrid-2.dc.html": {
+"x": 29200,
+"y": 50855,
+"w": 1440,
+"h": 4094,
+"title": "K49 · MeeshyMediaGrid · 2/2",
+"expand": "fill"
+},
+"Kit-K50-MeeshyChart-1.dc.html": {
+"x": 30800,
+"y": 50855,
+"w": 1440,
+"h": 5395,
+"title": "K50 · MeeshyChart · 1/2",
+"expand": "fill"
+},
+"Kit-K50-MeeshyChart-2.dc.html": {
+"x": 32280,
+"y": 50855,
+"w": 1440,
+"h": 4793,
+"title": "K50 · MeeshyChart · 2/2",
+"expand": "fill"
+},
+"Kit-K51-MeeshyTranslationMark-1.dc.html": {
+"x": 33880,
+"y": 50855,
+"w": 1440,
+"h": 4012,
+"title": "K51 · MeeshyTranslationMark · 1/2",
+"expand": "fill"
+},
+"Kit-K51-MeeshyTranslationMark-2.dc.html": {
+"x": 35360,
+"y": 50855,
+"w": 1440,
+"h": 4206,
+"title": "K51 · MeeshyTranslationMark · 2/2",
+"expand": "fill"
+},
+"Kit-K52-MeeshyReorderList-1.dc.html": {
+"x": 36960,
+"y": 50855,
+"w": 1440,
+"h": 4488,
+"title": "K52 · MeeshyReorderList · 1/2",
+"expand": "fill"
+},
+"Kit-K52-MeeshyReorderList-2.dc.html": {
+"x": 38440,
+"y": 50855,
+"w": 1440,
+"h": 4096,
+"title": "K52 · MeeshyReorderList · 2/2",
+"expand": "fill"
+},
+"Kit-K53-MeeshyStepper-1.dc.html": {
+"x": 40040,
+"y": 50855,
+"w": 1440,
+"h": 4620,
+"title": "K53 · MeeshyStepper · 1/2",
+"expand": "fill"
+},
+"Kit-K53-MeeshyStepper-2.dc.html": {
+"x": 41520,
+"y": 50855,
+"w": 1440,
+"h": 5218,
+"title": "K53 · MeeshyStepper · 2/2",
+"expand": "fill"
+},
+"Kit-K54-MeeshyMapTrace-1.dc.html": {
+"x": 43120,
+"y": 50855,
+"w": 1440,
+"h": 4665,
+"title": "K54 · MeeshyMapTrace · 1/2",
+"expand": "fill"
+},
+"Kit-K54-MeeshyMapTrace-2.dc.html": {
+"x": 44600,
+"y": 50855,
+"w": 1440,
+"h": 4089,
+"title": "K54 · MeeshyMapTrace · 2/2",
+"expand": "fill"
+},
+"Kit-K55-MeeshyKeyHint-1.dc.html": {
+"x": 46200,
+"y": 50855,
+"w": 1440,
+"h": 4815,
+"title": "K55 · MeeshyKeyHint · 1/2",
+"expand": "fill"
+},
+"Kit-K55-MeeshyKeyHint-2.dc.html": {
+"x": 47680,
+"y": 50855,
+"w": 1440,
+"h": 4295,
+"title": "K55 · MeeshyKeyHint · 2/2",
+"expand": "fill"
+}
+},
+"order": [
+"Main.dc.html",
+"Moi-Apercu.dc.html",
+"Moi-Edition.dc.html",
+"Moi-Liens.dc.html",
+"Moi-Actions.dc.html",
+"Prototype.dc.html",
+"Lien-Detail.dc.html",
+"Lien-Creer.dc.html",
+"Lien-Suivi-Creer.dc.html",
+"Lien-Partage.dc.html",
+"Lien-Communaute.dc.html",
+"Parrainage.dc.html",
+"Mes-Adresses.dc.html",
+"Carte-Profil.dc.html",
+"Sans-Contact.dc.html",
+"Autre-Vitrine.dc.html",
+"Autre-Publications.dc.html",
+"Autre-Commun.dc.html",
+"Autre-Liens.dc.html",
+"Autre-Actions.dc.html",
+"Autre-Cercle.dc.html",
+"Autre-Inconnu.dc.html",
+"Carte-Personne.dc.html",
+"Carte-Proches.dc.html",
+"Carte-Partage.dc.html",
+"Carte-Sang.dc.html",
+"Etat-Chargement.dc.html",
+"Etat-Vide.dc.html",
+"Etat-Erreur.dc.html",
+"Etat-HorsLigne.dc.html",
+"Etat-Bloque.dc.html",
+"Etat-Introuvable.dc.html",
+"Etat-Demande.dc.html",
+"Signaler.dc.html",
+"Android-Vitrine.dc.html",
+"Android-Moi.dc.html",
+"Android-Liens.dc.html",
+"Android-Actions.dc.html",
+"Android-Carte.dc.html",
+"Android-Feuilles.dc.html",
+"Web-Public-Mobile.dc.html",
+"Web-Public.dc.html",
+"Web-Moi.dc.html",
+"Web-Autre.dc.html",
+"Web-Lien.dc.html",
+"Web-Etats.dc.html",
+"Apercu-Lien.dc.html",
+"iPad-Split.dc.html",
+"Hors-App.dc.html",
+"Sys-Icones.dc.html",
+"Sys-Boutons.dc.html",
+"Sys-Mouvement.dc.html",
+"Sys-Materiel.dc.html",
+"Sys-Matrice.dc.html",
+"Kit-Carte.dc.html",
+"Kit-Reemploi-1.dc.html",
+"Kit-Reemploi-2.dc.html",
+"Kit-Evolutions-1.dc.html",
+"Kit-Evolutions-2.dc.html",
+"Kit-Adoption.dc.html",
+"Kit-K26-MeeshyMotion-1.dc.html",
+"Kit-K26-MeeshyMotion-2.dc.html",
+"Kit-K27-MeeshyLivingBanner.dc.html",
+"Kit-K28-MeeshyCollapsingHero-1.dc.html",
+"Kit-K28-MeeshyCollapsingHero-2.dc.html",
+"Kit-K29-MeeshyAvatarMorph.dc.html",
+"Kit-K30-MeeshyTicket-1.dc.html",
+"Kit-K30-MeeshyTicket-2.dc.html",
+"Kit-K31-MeeshyCodeCard-1.dc.html",
+"Kit-K31-MeeshyCodeCard-2.dc.html",
+"Kit-K32-MeeshyLabeledAction-1.dc.html",
+"Kit-K32-MeeshyLabeledAction-2.dc.html",
+"Kit-K33-MeeshyCircleScale-1.dc.html",
+"Kit-K33-MeeshyCircleScale-2.dc.html",
+"Kit-K34-MeeshyFigures-1.dc.html",
+"Kit-K34-MeeshyFigures-2.dc.html",
+"Kit-K35-MeeshyWavePlayer-1.dc.html",
+"Kit-K35-MeeshyWavePlayer-2.dc.html",
+"Kit-K36-MeeshyMapPin-1.dc.html",
+"Kit-K36-MeeshyMapPin-2.dc.html",
+"Kit-K37-MeeshyLockedRow-1.dc.html",
+"Kit-K37-MeeshyLockedRow-2.dc.html",
+"Kit-K38-MeeshyStateBlock-1.dc.html",
+"Kit-K38-MeeshyStateBlock-2.dc.html",
+"Kit-K39-MeeshyPersonRow-1.dc.html",
+"Kit-K39-MeeshyPersonRow-2.dc.html",
+"Kit-K40-MeeshyButton-1.dc.html",
+"Kit-K40-MeeshyButton-2.dc.html",
+"Kit-K41-MeeshyBadge-1.dc.html",
+"Kit-K41-MeeshyBadge-2.dc.html",
+"Kit-K42-MeeshyMeter-1.dc.html",
+"Kit-K42-MeeshyMeter-2.dc.html",
+"Kit-K43-MeeshyGroupCard-1.dc.html",
+"Kit-K43-MeeshyGroupCard-2.dc.html",
+"Kit-K44-MeeshySectionHeader-1.dc.html",
+"Kit-K44-MeeshySectionHeader-2.dc.html",
+"Kit-K45-MeeshyMedallion-1.dc.html",
+"Kit-K45-MeeshyMedallion-2.dc.html",
+"Kit-K46-MeeshyNote-1.dc.html",
+"Kit-K46-MeeshyNote-2.dc.html",
+"Kit-K47-MeeshyChoiceTiles-1.dc.html",
+"Kit-K47-MeeshyChoiceTiles-2.dc.html",
+"Kit-K48-MeeshyAvatarGroup-1.dc.html",
+"Kit-K48-MeeshyAvatarGroup-2.dc.html",
+"Kit-K49-MeeshyMediaGrid-1.dc.html",
+"Kit-K49-MeeshyMediaGrid-2.dc.html",
+"Kit-K50-MeeshyChart-1.dc.html",
+"Kit-K50-MeeshyChart-2.dc.html",
+"Kit-K51-MeeshyTranslationMark-1.dc.html",
+"Kit-K51-MeeshyTranslationMark-2.dc.html",
+"Kit-K52-MeeshyReorderList-1.dc.html",
+"Kit-K52-MeeshyReorderList-2.dc.html",
+"Kit-K53-MeeshyStepper-1.dc.html",
+"Kit-K53-MeeshyStepper-2.dc.html",
+"Kit-K54-MeeshyMapTrace-1.dc.html",
+"Kit-K54-MeeshyMapTrace-2.dc.html",
+"Kit-K55-MeeshyKeyHint-1.dc.html",
+"Kit-K55-MeeshyKeyHint-2.dc.html"
+],
+"notes": {
+"t1": {
+"x": 0,
+"y": -300,
+"text": "Moi · les trois faces",
+"kind": "title1",
+"maxW": 2740
+},
+"t2": {
+"x": 0,
+"y": 2743,
+"text": "Liens · tout ce qui amène vers moi",
+"kind": "title1",
+"maxW": 4150
+},
+"t3": {
+"x": 0,
+"y": 6077,
+"text": "L'autre · les trois faces",
+"kind": "title1",
+"maxW": 3210
+},
+"t4": {
+"x": 0,
+"y": 8778,
+"text": "La carte",
+"kind": "title1",
+"maxW": 1800
+},
+"t5": {
+"x": 0,
+"y": 10381,
+"text": "États et garde-fous",
+"kind": "title1",
+"maxW": 3680
+},
+"t6": {
+"x": 0,
+"y": 14432,
+"text": "Android · Material 3 Expressive",
+"kind": "title1",
+"maxW": 2872
+},
+"t7": {
+"x": 0,
+"y": 19839,
+"text": "Web · page publique et grand écran",
+"kind": "title1",
+"maxW": 9270
+},
+"t8": {
+"x": 0,
+"y": 24086,
+"text": "Grands écrans et hors de l'app",
+"kind": "title1",
+"maxW": 2714
+},
+"t9": {
+"x": 0,
+"y": 27712,
+"text": "Système · icônes, boutons, mouvement, matériel",
+"kind": "title1",
+"maxW": 7520
+},
+"k1": {
+"x": 0,
+"y": 34876,
+"text": "Kit · la carte, le réemploi, les évolutions, l'adoption",
+"kind": "title1",
+"maxW": 7900
+},
+"k2": {
+"x": 0,
+"y": 42786,
+"text": "Kit · les composants apportés par le profil (K26 à K39)",
+"kind": "title1",
+"maxW": 7900
+},
+"k3": {
+"x": 0,
+"y": 50555,
+"text": "Kit · les composants révélés par l'inventaire (K40 à K55)",
+"kind": "title1",
+"maxW": 7900
+}
+},
+"designSystems": []
+}

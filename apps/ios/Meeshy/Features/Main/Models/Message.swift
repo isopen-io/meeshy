@@ -145,6 +145,24 @@ extension Message {
     /// (#8009) ? Son appui long ne laisse sortir aucun contenu : ni copie, ni
     /// traduction, ni transfert, ni enregistrement, et son aperçu reste flou.
     nonisolated var holdsBlur: Bool { isBlurred || attachments.contains { $0.declaresBlur } }
+
+    /// **Le message que l'aperçu d'appui long rend : son flou levé** (#18856).
+    /// L'appui long est un coup d'œil : il montre le texte et chaque pièce en
+    /// clair. Seul le FLOU se lève — vue
+    /// unique, flamme et chiffrement restent tels quels — et le message rendu
+    /// ne sert qu'à l'aperçu : le menu lit toujours `holdsBlur` sur l'original.
+    nonisolated var unveiledForPreview: Message {
+        guard holdsBlur else { return self }
+        var unveiled = self
+        unveiled.isBlurred = false
+        unveiled.attachments = attachments.map { attachment in
+            var clear = attachment
+            clear.isBlurred = false
+            clear.effectFlags = attachment.effectFlags.map { $0 & ~MessageEffectFlags.blurred.rawValue }
+            return clear
+        }
+        return unveiled
+    }
 }
 
 // MARK: - Ce qu'un aperçu dit d'un message HORS de sa conversation (#9622)

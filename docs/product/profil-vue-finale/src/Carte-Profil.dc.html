@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ma carte de profil — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.pcard{position:relative;overflow:hidden;animation:cpFloat 7s ease-in-out infinite}
+.pcard::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(108deg,rgba(255,255,255,0) 38%,rgba(255,255,255,.18) 50%,rgba(255,255,255,0) 62%);background-size:260% 100%;background-position:120% 0;animation:cpSheen 5.5s ease-in-out infinite}
+.qr{position:relative;display:grid;grid-template-columns:repeat(21,1fr);grid-template-rows:repeat(21,1fr);width:220px;height:220px}
+.qr>i{display:block}
+.qr>i.o{background:#1B1140;border-radius:36%;transform:scale(.86)}
+.eye{position:absolute;width:33.34%;height:33.34%;border:10.5px solid #6D28D9;border-radius:24px;display:flex;align-items:center;justify-content:center}
+.eye>b{display:block;width:60%;height:60%;border-radius:10px;background:#1B1140}
+.nfc{position:relative;display:flex;align-items:center;justify-content:center;width:112px;height:112px;flex:none;color:var(--accent-ink)}
+.nfc>i{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;border:2px solid var(--accent-ink);animation:mxPing 3s ease-out infinite}
+.nfc .ic{width:64px;height:64px;position:relative}
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0}
+.act>span:last-child{font-size:11px;font-weight:600;line-height:1.25;text-align:center;color:var(--ink);text-wrap:balance}
+@keyframes cpFloat{0%,100%{transform:rotate(-3deg) translateY(0)}50%{transform:rotate(-1.8deg) translateY(-9px)}}
+@keyframes cpSheen{0%,35%{background-position:120% 0}85%,100%{background-position:-40% 0}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column; background: linear-gradient(180deg, #3B1A78 0%, #1C0F3F 46%, #09090B 100%)">
+
+<div aria-hidden="true" style="position: absolute; inset: 0; overflow: hidden; pointer-events: none">
+<div class="orb" style="width: 260px; height: 260px; left: -90px; top: 90px; background: #A855F7; opacity: .55"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -80px; top: 380px; background: #6366F1; opacity: .5; animation-delay: -4s"></div>
+</div>
+
+<header style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 54px 16px 0">
+<button class="ib g" aria-label="Fermer">[[ic:x]]</button>
+<div style="display: flex; align-items: center; gap: 8px">
+<h1 class="d" style="font-size: 20px">Ma carte</h1>
+<span class="new">Nouveau</span>
+</div>
+<button class="btn g sm" style="padding: 0 14px">[[ic:scan s]]<span>Scanner</span></button>
+</header>
+
+<section class="rise" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 34px 0 0">
+
+<div class="pcard glass" style="width: 318px; border-radius: 34px; padding: 22px 24px 20px; display: flex; flex-direction: column; align-items: center; gap: 18px; transform: rotate(-3deg)">
+<div style="display: flex; align-items: center; gap: 14px; align-self: stretch">
+<span class="ring"><span class="av" style="width: 72px; height: 72px; font-size: 26px">AN</span></span>
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span class="d" style="font-size: 25px">Aïssa Ndiaye</span>
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@aissa</span>
+</div>
+</div>
+
+<div role="img" aria-label="QR de mon profil" style="padding: 16px; border-radius: 28px; background: #F5F3FF; box-shadow: 0 14px 30px rgba(9,9,11,.35)">
+<div class="qr">
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i>
+<i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i>
+<i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i>
+<i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i>
+<i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i>
+<span class="eye" style="left: 0; top: 0"><b></b></span>
+<span class="eye" style="right: 0; top: 0"><b></b></span>
+<span class="eye" style="left: 0; bottom: 0"><b></b></span>
+<span style="position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: #F5F3FF; display: flex; align-items: center; justify-content: center"><span class="av" style="width: 46px; height: 46px; font-size: 17px">AN</span></span>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; color: var(--ink)">
+[[ic:link s]]<span class="mono" style="font-size: 14px">meeshy.me/@aissa</span>
+</div>
+</div>
+
+<p style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500; color: var(--ink2)">[[ic:device-mobile s]]<span>Incline ton téléphone : la carte suit</span></p>
+
+<div role="tablist" aria-label="Faces de la carte" style="display: flex; align-items: center; gap: 6px">
+<button role="tab" aria-selected="true" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; font-size: 13px; font-weight: 700; color: var(--ink)"><span style="width: 22px; height: 8px; border-radius: 999px; background: var(--ink)"></span><span>QR</span></button>
+<button role="tab" aria-selected="false" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; font-size: 13px; font-weight: 600; color: var(--ink2)"><span style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.34)"></span><span>Sans contact</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .1s; position: relative; padding: 6px 20px 0">
+<button class="glass" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 18px 10px 12px; border-radius: 30px; overflow: hidden; transform: rotate(1.5deg); text-align: left">
+<span class="nfc"><i></i><i style="animation-delay: -1s"></i><i style="animation-delay: -2s"></i>[[ic:contactless-payment]]</span>
+<span style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<span class="tag" style="color: var(--accent-ink)">Sans contact</span>
+<span class="d" style="font-size: 19px; text-wrap: balance">Approche ton téléphone du sien</span>
+<span style="font-size: 13px; color: var(--ink2); text-wrap: pretty">Vous choisissez chacun ce que vous donnez</span>
+</span>
+</button>
+</section>
+
+<section class="rise" style="animation-delay: .18s; position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 34px 10px 0">
+<button class="act"><span class="ib g" style="width: 56px; height: 56px">[[ic:copy]]</span><span>Copier le lien</span></button>
+<button class="act"><span class="ib g" style="width: 56px; height: 56px">[[ic:paper-plane-tilt]]</span><span>Envoyer dans une conversation</span></button>
+<button class="act"><span class="ib g" style="width: 56px; height: 56px">[[ic:plus-circle]]</span><span>Mettre en story</span></button>
+<button class="act"><span class="ib g" style="width: 56px; height: 56px">[[ic:download-simple]]</span><span>Enregistrer l'image</span></button>
+<button class="act"><span class="ib g" style="width: 56px; height: 56px">[[ic:dots-three]]</span><span>Plus</span></button>
+</section>
+
+<section class="rise" style="animation-delay: .26s; position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding: 30px 20px 28px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; align-self: stretch">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink2)">[[ic:qr-code s]]<span>Ce QR montre : ma vitrine publique</span></span>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; align-self: stretch">
+<button class="chip glass" aria-haspopup="listbox" aria-expanded="true" style="min-height: 44px; padding: 0 16px; color: var(--ink)">[[ic:globe s]]<span>Vitrine publique</span>[[ic:caret-down s]]</button>
+</div>
+<div class="glass" role="listbox" aria-label="Ce que montre le QR" style="align-self: stretch; border-radius: 22px; padding: 6px; display: flex; flex-direction: column">
+<button role="option" aria-selected="true" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 12px; border-radius: 16px; background: rgba(255,255,255,.10)">
+<span style="color: var(--accent-ink); display: inline-flex">[[ic:globe]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14.5px">Vitrine publique</span><span style="font-size: 12.5px; color: var(--ink2)">Ce que tout le monde voit de toi</span></span>
+<span style="color: var(--ok); display: inline-flex">[[ic:check]]</span>
+</button>
+<button role="option" aria-selected="false" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 12px; border-radius: 16px">
+<span style="color: var(--ink2); display: inline-flex">[[ic:user-plus]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 14.5px">Invitation à me rejoindre</span><span style="font-size: 12.5px; color: var(--ink2)">Scanner envoie une demande d'amis</span></span>
+</button>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1208}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

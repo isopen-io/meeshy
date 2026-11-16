@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Signaler ou bloquer — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.motif{display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:10px 14px 10px 12px;border-radius:22px;background:var(--field);border:1.5px solid transparent;text-align:left}
+.motif>i{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:2px solid var(--ink3);flex:none;color:transparent}
+.motif>b{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:var(--glass);border:1px solid var(--glass-line);color:var(--ink2);flex:none}
+.motif>span{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.motif>span>span:first-child{font-weight:700;font-size:15.5px;color:var(--ink)}
+.motif>span>span:last-child{font-size:12.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.motif.on{border-color:var(--err);background:rgba(248,113,113,.10);box-shadow:0 10px 26px rgba(248,113,113,.16)}
+.motif.on>i{background:var(--err);border-color:var(--err);color:#0B0B12;animation:sgPop .5s cubic-bezier(.3,1.6,.5,1) both}
+.motif.on>b{background:rgba(248,113,113,.18);border-color:rgba(248,113,113,.4);color:var(--err)}
+.note{display:block;width:100%;min-height:96px;padding:14px 16px 30px;border-radius:22px;border:1.5px solid var(--line);background:var(--field);color:var(--ink);font:inherit;font-size:15px;line-height:1.45;resize:none;outline:none}
+.note::placeholder{color:var(--ink3)}
+.proof{position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:8px;height:116px;padding:12px;border-radius:20px;background:var(--field);border:1.5px solid var(--brand-soft);text-align:left}
+.proof>em{position:absolute;right:-6px;top:-6px;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--brand-soft);color:#0B0B12;border:2px solid var(--raised)}
+.done{animation:sgPop .7s cubic-bezier(.3,1.6,.5,1) both;animation-delay:.5s}
+@keyframes sgPop{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column; --accent: #9CA3AF; --accent-ink: #D1D5DB">
+
+<header aria-hidden="true" style="position: relative; height: 184px; overflow: hidden; background: linear-gradient(165deg, #2a2a33 0%, #1a1a20 52%, #09090B 100%)">
+<div class="orb" style="width: 210px; height: 210px; left: -50px; top: 10px; background: #8E8E9C; opacity: .35"></div>
+<div class="orb" style="width: 170px; height: 170px; right: -40px; top: 60px; background: #6366F1; opacity: .3; animation-delay: -4s"></div>
+<div style="position: absolute; left: 20px; top: 70px; display: flex; align-items: center; gap: 12px; filter: blur(3px)">
+<span class="av" style="width: 68px; height: 68px; font-size: 24px; background: linear-gradient(140deg, #8E8E9C, #4A4A56)">RS</span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span class="d" style="font-size: 24px">Rui Santos</span><span class="mono" style="color: var(--accent-ink)">@rui.s</span></span>
+</div>
+<div style="position: absolute; inset: 0; background: rgba(9,9,11,.5); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px)"></div>
+</header>
+
+<main style="position: relative; margin-top: -34px; flex: 1; display: flex; flex-direction: column; background: var(--raised); border-radius: 34px 34px 0 0; border-top: 1px solid var(--glass-line); box-shadow: 0 -18px 44px rgba(0,0,0,.5); padding: 10px 20px 24px">
+
+<div style="width: 36px; height: 5px; border-radius: 999px; background: var(--ink3); opacity: .6; align-self: center"></div>
+
+<div class="rise" style="display: flex; align-items: flex-start; gap: 12px; padding-top: 16px">
+<span class="av" style="width: 48px; height: 48px; font-size: 17px; background: linear-gradient(140deg, #8E8E9C, #4A4A56)">RS</span>
+<div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0">
+<h1 class="d" style="font-size: 24px">Signaler Rui</h1>
+<p style="font-size: 14px; color: var(--ink2); text-wrap: pretty">Ton signalement est anonyme. Notre équipe le lit sous 24 h.</p>
+</div>
+<button class="ib g" aria-label="Fermer">[[ic:x]]</button>
+</div>
+
+<section class="rise" style="animation-delay: .06s; padding-top: 24px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="tag">Que se passe-t-il ?</h2>
+<div role="radiogroup" aria-label="Motif du signalement" style="display: flex; flex-direction: column; gap: 8px">
+<button class="motif" role="radio" aria-checked="false"><i></i><b>[[ic:megaphone]]</b><span><span>Spam</span><span>Pubs, liens en boucle, arnaques</span></span></button>
+<button class="motif" role="radio" aria-checked="false"><i></i><b>[[ic:eye-slash]]</b><span><span>Contenu inapproprié</span><span>Images ou propos choquants</span></span></button>
+<button class="motif on" role="radio" aria-checked="true"><i>[[ic:check s]]</i><b>[[ic:shield-warning]]</b><span><span>Harcèlement</span><span>Messages insistants, moqueries</span></span></button>
+<button class="motif" role="radio" aria-checked="false"><i></i><b>[[ic:warning]]</b><span><span>Violence</span><span>Menaces ou appels à faire du mal</span></span></button>
+<button class="motif" role="radio" aria-checked="false"><i></i><b>[[ic:hand-fist]]</b><span><span>Haine</span><span>Attaques sur l'origine, le genre, la foi</span></span></button>
+<button class="motif" role="radio" aria-checked="false"><i></i><b>[[ic:mask-happy]]</b><span><span>Faux profil</span><span>Un compte inventé de toutes pièces</span></span></button>
+<button class="motif" role="radio" aria-checked="false"><i></i><b>[[ic:identification-card]]</b><span><span>Usurpation d'identité</span><span>Il se fait passer pour quelqu'un d'autre</span></span></button>
+<button class="motif" role="radio" aria-checked="false"><i></i><b>[[ic:dots-three]]</b><span><span>Autre</span><span>Raconte-le avec tes mots</span></span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .12s; padding-top: 28px; display: flex; flex-direction: column; gap: 10px">
+<label for="sg-note" class="d" style="font-size: 18px">Dis-nous en plus <span style="font-family: Inter, system-ui, sans-serif; font-weight: 500; font-size: 13px; letter-spacing: 0; color: var(--ink3)">(facultatif)</span></label>
+<div style="position: relative">
+<textarea id="sg-note" class="note" rows="3" maxlength="500" placeholder="Ce qui s'est passé, depuis quand…">Il m'écrit tous les jours depuis que j'ai quitté le groupe, même quand je ne réponds pas.</textarea>
+<span class="mono" style="position: absolute; right: 16px; bottom: 10px; font-size: 11.5px; color: var(--ink3)">89 / 500</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .18s; padding-top: 28px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="d" style="font-size: 18px">Joindre des messages</h2>
+<span style="font-size: 13px; font-weight: 600; color: var(--ink2)">2 joints</span>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px; gap: 12px">
+<button class="proof" aria-pressed="true" aria-label="Message de Rui, hier 23:41, joint">
+<em>[[ic:check s]]</em>
+<span style="font-size: 13px; line-height: 1.35; color: var(--ink)">Réponds. Je sais que tu es là.</span>
+<span style="font-size: 11px; font-weight: 600; color: var(--ink3)">Hier · 23:41</span>
+</button>
+<button class="proof" aria-pressed="true" aria-label="Message de Rui, aujourd'hui 07:12, joint">
+<em>[[ic:check s]]</em>
+<span style="font-size: 13px; line-height: 1.35; color: var(--ink)">Tu ne peux pas m'ignorer comme ça.</span>
+<span style="font-size: 11px; font-weight: 600; color: var(--ink3)">Auj. · 07:12</span>
+</button>
+<button style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 116px; border-radius: 20px; border: 1.5px dashed var(--line); color: var(--ink2); font-size: 12.5px; font-weight: 700">[[ic:plus]]<span>Ajouter</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .24s; padding-top: 28px">
+<div style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 22px; background: var(--field); border: 1px solid var(--line)">
+<span class="ib" style="background: rgba(248,113,113,.14); color: var(--err)">[[ic:prohibit]]</span>
+<span id="sg-block" style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-weight: 700; font-size: 15.5px">Bloquer Rui aussi</span><span style="font-size: 13px; color: var(--ink2)">Il ne sera pas prévenu</span></span>
+<button class="sw on" role="switch" aria-checked="true" aria-labelledby="sg-block" style="margin: 6px 0"></button>
+</div>
+</section>
+
+<div class="rise" style="animation-delay: .3s; padding-top: 24px; display: flex; flex-direction: column; gap: 6px">
+<button class="btn x" style="width: 100%; min-height: 56px; font-size: 16px; background: rgba(248,113,113,.16); border: 1px solid rgba(248,113,113,.35)">[[ic:flag]]<span>Envoyer le signalement</span></button>
+<button class="btn" style="width: 100%; color: var(--ink2)">Annuler</button>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding-top: 30px">
+<span style="height: 1px; flex: 1; background: var(--line)"></span>
+<span class="tag">Après l'envoi</span>
+<span style="height: 1px; flex: 1; background: var(--line)"></span>
+</div>
+
+<section class="rise" style="animation-delay: .36s; margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 20px 20px; border-radius: 30px; background: var(--ground); border: 1px solid var(--line); text-align: center">
+<div style="width: 30px; height: 4px; border-radius: 999px; background: var(--ink3); opacity: .5"></div>
+<span class="done" style="display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin-top: 14px; border-radius: 50%; background: rgba(52,211,153,.14); color: var(--ok)">[[ic:check-circle-fill xl]]</span>
+<h2 class="d" style="font-size: 21px; padding-top: 8px">Merci. C'est entre nos mains.</h2>
+<p style="display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink2)">[[ic:check s]]<span>Rui est bloqué.</span></p>
+<button class="btn g" style="margin-top: 14px; min-width: 180px">Fermer</button>
+</section>
+
+</main>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1838}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Tous mes proches sur la carte — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.blur{position:absolute;border-radius:50%;transform:translate(-50%,-50%);background:color-mix(in oklab,var(--accent) 18%,transparent);border:1.5px solid var(--accent);animation:prHalo 5s ease-in-out infinite}
+.spot{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center}
+.spot>.av{border:3px solid var(--ground);box-shadow:0 10px 24px rgba(0,0,0,.55)}
+.cap{position:absolute;transform:translate(-50%,0);display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:rgba(19,17,28,.72);border:1px solid var(--glass-line);font-size:11px;font-weight:700;color:var(--ink);white-space:nowrap}
+.left{position:relative;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;flex:none;background:conic-gradient(var(--accent) var(--p),rgba(255,255,255,.14) 0);color:var(--accent-ink)}
+.left::before{content:"";position:absolute;inset:3.5px;border-radius:50%;background:#16131F}
+.left>*{position:relative}
+.who{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.who>b{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:var(--ink)}
+.who>span{font-size:12.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.far{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex:none}
+.far>b{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;font-size:16px;color:var(--ink)}
+.far>span{font-size:11.5px;font-weight:600;color:var(--ink2)}
+section>.row{padding-left:20px;padding-right:20px}
+section>.sep{margin-right:20px}
+@keyframes prHalo{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.05)}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div style="position: absolute; inset: 0; overflow: hidden">
+[[map]]
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 200px; background: linear-gradient(180deg, rgba(9,9,11,.72) 0%, rgba(9,9,11,0) 100%)"></div>
+</div>
+
+<main style="position: relative; height: 486px; flex: none">
+
+<div class="blur" style="--accent:#F8B500; left: 300px; top: 262px; width: 172px; height: 172px"></div>
+<div class="blur" style="--accent:#4ECDC4; left: 88px; top: 262px; width: 106px; height: 106px; animation-delay: -2.5s"></div>
+
+<button class="spot" aria-label="Tomás Ribeiro, Cascais, précision ville" style="--accent:#F8B500; left: 300px; top: 262px">
+<span class="av" style="width: 48px; height: 48px; font-size: 17px">TR</span>
+</button>
+<span class="cap" style="left: 300px; top: 322px">ville</span>
+
+<button class="spot" aria-label="Léo Marchetti, Alfama, précision quartier" style="--accent:#4ECDC4; left: 88px; top: 262px">
+<span class="av" style="width: 48px; height: 48px; font-size: 17px">LM</span>
+<span class="dot on" style="position: absolute; right: -2px; bottom: -2px"></span>
+</button>
+<span class="cap" style="left: 88px; top: 322px">quartier</span>
+
+<div class="pin" style="--accent:#A855F7; left: 190px; top: 338px; width: 40px; height: 40px">
+<span class="av" style="width: 38px; height: 38px; font-size: 13px; border: 2.5px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.5)">AN</span>
+</div>
+
+<button class="spot" aria-label="Mina Okafor, Baixa, point exact" style="--accent:#FF6B6B; left: 250px; top: 400px">
+<span style="position: absolute; left: 50%; bottom: -9px; width: 14px; height: 14px; margin-left: -7px; background: var(--ground); transform: rotate(45deg); border-radius: 3px"></span>
+<span class="av" style="position: relative; width: 48px; height: 48px; font-size: 17px">MO</span>
+<span class="dot on" style="position: absolute; right: -2px; bottom: -2px"></span>
+</button>
+
+<span class="glass" style="position: absolute; left: 20px; top: 374px; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px 0 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; color: var(--ink); background: rgba(19,17,28,.66)"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 54px; display: flex; align-items: center; gap: 10px">
+<button class="ib g" aria-label="Retour" style="background: rgba(19,17,28,.55)">[[ic:caret-left]]</button>
+<div class="glass" style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 56px; padding: 8px 18px; border-radius: 28px; background: rgba(19,17,28,.55)">
+<div style="display: flex; align-items: center; gap: 8px">
+<h1 class="d" style="font-size: 19px">Mes proches</h1>
+<span class="new">Nouveau</span>
+</div>
+<span style="font-size: 12.5px; font-weight: 600; color: var(--ink2)">3 partagent leur position</span>
+</div>
+<button class="ib g" aria-label="Filtrer" style="background: rgba(19,17,28,.55)">[[ic:funnel]]</button>
+</div>
+
+<div role="group" aria-label="Filtrer par cercle" style="position: absolute; left: 16px; right: 16px; top: 124px; display: flex; gap: 8px">
+<button class="chip on" aria-pressed="true" style="min-height: 44px; padding: 0 16px">Tous<span style="opacity: .6">3</span></button>
+<button class="chip glass" aria-pressed="false" style="min-height: 44px; color: var(--ink); background: rgba(19,17,28,.55)">[[ic:handshake s]]<span>Amis</span></button>
+<button class="chip glass" aria-pressed="false" style="min-height: 44px; color: var(--ink); background: rgba(19,17,28,.55)">[[ic:fire s]]<span>Proches</span></button>
+<button class="chip glass" aria-pressed="false" style="min-height: 44px; color: var(--ink); background: rgba(19,17,28,.55)">[[ic:drop s]]<span>Sang</span></button>
+</div>
+
+<button class="ib g" aria-label="Recentrer sur moi" style="position: absolute; right: 16px; top: 412px; background: rgba(19,17,28,.55)">[[ic:crosshair]]</button>
+
+</main>
+
+<section class="glass rise" aria-label="Proches par distance" style="position: relative; flex: 1; display: flex; flex-direction: column; border-radius: 34px 34px 0 0; border-bottom: 0; background: rgba(19,17,28,.80); padding-bottom: 24px">
+<div aria-hidden="true" style="align-self: center; width: 36px; height: 5px; margin-top: 10px; border-radius: 999px; background: var(--ink3); opacity: .6"></div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 20px 8px 20px">
+<h2 class="d" style="font-size: 22px">Autour de toi</h2>
+<button class="chip" style="min-height: 44px; background: transparent">[[ic:sort-ascending s]]<span>Du plus près</span></button>
+</div>
+
+<button class="row" style="--accent:#FF6B6B;--accent-ink:#FFA3A3; width: 100%">
+<span style="position: relative; display: flex"><span class="av">MO</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; border-color: #16131F"></span></span>
+<span class="who"><b>Mina Okafor<span style="display: flex; color: var(--ink3)">[[ic:drop s]]</span></b><span>Baixa · point exact</span></span>
+<span class="far"><b>300 m</b><span>continu</span></span>
+<span class="left" style="--p: 100%" aria-hidden="true">[[ic:drop s]]</span>
+</button>
+<div class="sep" style="margin-left: 76px"></div>
+
+<button class="row" style="--accent:#4ECDC4;--accent-ink:#7FE3DC; width: 100%">
+<span style="position: relative; display: flex"><span class="av">LM</span><span class="dot on" style="position: absolute; right: -3px; bottom: -3px; border-color: #16131F"></span></span>
+<span class="who"><b>Léo Marchetti<span style="display: flex; color: var(--ink3)">[[ic:fire s]]</span></b><span>Alfama · quartier</span></span>
+<span class="far"><b>2,4 km</b><span>42 min</span></span>
+<span class="left" style="--p: 70%" aria-hidden="true"></span>
+</button>
+<div class="sep" style="margin-left: 76px"></div>
+
+<button class="row" style="--accent:#F8B500;--accent-ink:#FFD35C; width: 100%">
+<span style="position: relative; display: flex"><span class="av">TR</span></span>
+<span class="who"><b>Tomás Ribeiro<span style="display: flex; color: var(--ink3)">[[ic:handshake s]]</span></b><span>Cascais · ville</span></span>
+<span class="far"><b>24 km</b><span>7 h 05</span></span>
+<span class="left" style="--p: 88%" aria-hidden="true"></span>
+</button>
+
+<div class="tag" style="padding: 16px 20px 4px">Pas sur la carte</div>
+
+<div class="row" style="--accent:#3498DB">
+<span class="av" style="opacity: .4">YT</span>
+<span class="who"><b style="color: var(--ink3)">Yuki Tanaka</b><span style="color: var(--ink3)">Partage terminé il y a 1 h</span></span>
+<button class="btn q sm" style="padding: 0 14px">Redemander</button>
+</div>
+<div class="sep" style="margin-left: 76px"></div>
+
+<div class="row">
+<span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; flex: none; border: 1.5px dashed var(--ink3); color: var(--ink2)">[[ic:ghost]]</span>
+<span class="who"><b>Kwame Mensah<span style="display: flex; color: var(--ink3)">[[ic:fire s]]</span></b><span>En mode fantôme · position en pause</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 0">
+<button class="btn a" style="width: 100%; min-height: 54px">[[ic:map-pin]]<span>Partager ma position</span></button>
+<button style="display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; font-size: 13.5px; font-weight: 600; color: var(--ink2)">
+<span style="display: flex; color: var(--ink3)">[[ic:eye-slash s]]</span>
+<span>Tu n'es visible par personne</span>
+<span style="display: flex; color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1055}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

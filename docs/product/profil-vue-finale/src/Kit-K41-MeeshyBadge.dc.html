@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K41 MeeshyBadge</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:860px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:120px;gap:12px;flex-wrap:wrap}
+.bd{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:22px;min-width:22px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;flex:none;color:var(--ink);--t:var(--ink2);--f:var(--ink3);transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
+.bd .ic{width:13px;height:13px}
+.bd.s18{height:18px;min-width:18px;padding:0 6px;font-size:10px;gap:3px}
+.bd.s18 .ic{width:11px;height:11px}
+.bd.s28{height:28px;min-width:28px;padding:0 10px;font-size:12px}
+.bd.s28 .ic,.bd.s36 .ic{width:16px;height:16px}
+.bd.s36{height:36px;min-width:36px;padding:0 12px;font-size:12.5px;gap:6px}
+.t-a{--t:var(--accent-ink);--f:var(--accent)}
+.t-ok{--t:var(--ok);--f:var(--ok)}
+.t-w{--t:var(--warn);--f:var(--warn)}
+.t-e{--t:var(--err);--f:var(--err)}
+.t-x{--t:#7FE3DC;--f:#4ECDC4}
+.t-i{--t:#C7D2FE;--f:var(--l-track)}
+.mx .bd.to{background:color-mix(in oklab,var(--f) 16%,transparent);color:var(--t)}
+.mx .bd.to.t-n{background:var(--field);color:var(--ink2)}
+.mx .bd.so{background:var(--f);color:#0B0B12;font-weight:800}
+.mx .bd.so.t-n{background:var(--ink);color:var(--ground)}
+.mx[data-theme=light] .bd.so{color:#fff}
+.mx .bd.ou{border:1.5px solid color-mix(in oklab,var(--f) 55%,transparent);color:var(--t)}
+.mx .bd.glass{color:var(--ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.26),0 6px 16px rgba(0,0,0,.26)}
+.mx .bd.glass:is(.t-a,.t-ok,.t-w,.t-e,.t-x){background:color-mix(in oklab,var(--f) 34%,rgba(19,17,28,.5));border-color:color-mix(in oklab,var(--f) 60%,transparent)}
+.mx .bd.glass:is(.t-a,.t-ok,.t-w,.t-e,.t-x) .ic{color:var(--t)}
+.mx .bd.dk{background:rgba(19,17,28,.66)}
+.mx .bd.cd{border-radius:7px;min-width:30px;padding:0 6px;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;background:var(--field);border:1px solid var(--line);color:var(--ink2)}
+.bd.or{padding:0;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:12px}
+.bd.go{padding:0}
+.bd b.tm{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-weight:700;color:var(--accent-ink)}
+.bd>i.pt{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.bd>i.pt.lv{background:#34D399;animation:mxPulse 2.2s ease-out infinite}
+.bd.tl{border-radius:18px 18px 18px 6px}
+.bd.ct{box-shadow:0 0 0 3px var(--cutc,var(--ground))}
+.mx .bd.cur{border-color:color-mix(in oklab,var(--accent) 60%,transparent)}
+.bd.old{filter:saturate(0);opacity:.62}
+.bd.ml{height:auto;width:100%;white-space:normal;justify-content:flex-start;align-items:flex-start;text-align:start;border-radius:14px;padding:9px 12px;line-height:1.35;font-size:12.5px;font-weight:600}
+.bd.pr{transform:scale(.94)}
+.bd.fo{outline:2px solid var(--ink);outline-offset:3px}
+.bd.off{opacity:.4}
+.bd.hit{position:relative}
+.bd.hit::after{content:"";position:absolute;left:-4px;right:-4px;top:50%;height:44px;margin-top:-22px;border-radius:14px}
+.bd.hit.show::after{border:1.5px dashed var(--warn)}
+.mx .bd.and{border-radius:12px;background:var(--field);border:1px solid var(--line);color:var(--ink)}
+.mx .bd.and.tl{border-radius:16px 16px 16px 4px}
+.x2{height:72px;padding:0 28px;font-size:25px;gap:12px}
+.bd.x2 .ic{width:32px;height:32px}
+.bd.x2.tl{border-radius:36px 36px 36px 12px}
+.bd.x2g{height:52px;padding:0 18px;font-size:22px;gap:8px}
+.bd.x2g .ic{width:24px;height:24px}
+.mx .bd.x2k{height:44px;min-width:60px;padding:0 12px;border-radius:14px;font-size:22px;border-width:2px}
+.x2c{height:44px;min-width:44px;padding:0 14px;font-size:23px}
+.bd.x2c.ct{box-shadow:0 0 0 6px var(--raised)}
+.ghost{position:absolute;border:1.5px dashed var(--warn);border-radius:22px;pointer-events:none}
+.mtx{display:grid;grid-template-columns:150px repeat(6,minmax(0,1fr));align-items:center;position:relative;min-height:64px}
+.mtx>*{position:relative;justify-self:center}
+.mtx>.rl{justify-self:start;display:flex;flex-direction:column;gap:2px}
+.mtx>.rl>b{font-size:14px;font-weight:700}
+.mtx>.rl>span{font-size:12px;color:var(--ink3)}
+.mtx>.bg{position:absolute;left:150px;right:0;top:6px;bottom:6px;border-radius:18px;justify-self:stretch;background:linear-gradient(110deg,#4C1D95,#A855F7 38%,#4ECDC4 72%,#1E1B4B);overflow:hidden}
+.mth{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.tile{position:relative;flex:none;border-radius:18px}
+.crow{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 12px;border-radius:20px;background:var(--raised);border:1px solid var(--line)}
+.crow>.who{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.crow>.who>b{display:flex;align-items:center;gap:6px;font-size:14.5px;font-weight:700}
+.crow>.who>span{font-size:12.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow>.end{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none;min-width:38px}
+.crow>.end>small{font-size:11.5px;font-weight:600;color:var(--ink3)}
+.mvb{display:inline-block;height:22px;width:22px;min-width:0;padding:0;overflow:hidden;animation:bdShow 7s infinite,bdWide 7s infinite}
+.roll{display:flex;flex-direction:column;animation:bdRoll 7s infinite}
+.roll>b{display:flex;align-items:center;justify-content:center;height:22px;font-size:12px;font-weight:800}
+.flt{animation:bdFloat 4.2s ease-in-out infinite}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+@keyframes bdShow{0%,9%{transform:scale(0);opacity:0}14%{transform:scale(1.22);opacity:1}19%,31%{transform:scale(1);opacity:1}34%{transform:scale(1.14)}38%,50%{transform:scale(1)}53%{transform:scale(1.14)}57%,69%{transform:scale(1)}72%{transform:scale(1.14)}76%,88%{transform:scale(1);opacity:1}94%,100%{transform:scale(0);opacity:0}}
+@keyframes bdRoll{0%,31%{transform:translateY(0)}35%,50%{transform:translateY(-22px)}54%,69%{transform:translateY(-44px)}73%,100%{transform:translateY(-66px)}}
+@keyframes bdWide{0%,69%{width:22px}74%,100%{width:36px}}
+@keyframes bdFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .18; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K41 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyBadge</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Une information courte posée sur ou à côté d'autre chose est une seule pastille : glyphe, valeur, teinte</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 820px">Un rang, une humeur, un compte de non-lus, un code de pays, une durée de réel, un « Vérifié ». Aujourd'hui chacun a sa capsule. K41 en fait une seule, qui prend quatre surfaces, cinq genres, une teinte libre et quatre hauteurs.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il annote, il ne commande pas</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Montre <b>une</b> information courte : un mot, une valeur, un compte, un code, un rang, une heure, ou un glyphe seul.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Prend sa <b>surface</b> (verre, tonale, aplat, contour), son <b>genre</b> (<code>kind</code>) et sa <b>hauteur</b> (18, 22, 28, 36) dans une seule recette.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>S'<b>ancre</b> : libre, en ligne dans un texte, au coin d'une vignette ou d'un avatar avec détourage, sur un point de carte.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Tient son <b>portillon</b> : un compte à zéro ne rend rien et ne prend aucune place. Au-delà du plafond il écrit « 99+ » et dit le vrai nombre.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre lui-même : <b>K01</b> <code>MeeshyGlassTone</code>. Un bouton rond à glyphe seul : <b>K02</b>. Une action nommée : <b>K40</b> <code>MeeshyButton</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Un choix parmi plusieurs : <b>K04</b> <code>MeeshyChipRow</code>. Une pastille ne se coche pas.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Un message éphémère lié à un geste (« Copié », « Hors ligne ») : <b>K14</b> <code>MeeshyStatusCapsule</code>. Une touche de clavier : <b>K55</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le point de présence d'un avatar (loi 1/3/5), le niveau de cercle (<b>K33</b>), une jauge (<b>K42</b>). Décider quand compter : <b>l'app</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:tag xl]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : la teinte est un sens, pas une décoration</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Un compte à rattraper est rouge (<code>err</code>), toujours, jamais à l'accent de la conversation : c'est la règle déjà gardée sur iOS et le web (#6080). <code>ok</code> dit acquis, <code>warn</code> dit à faire, <code>accent</code> dit « de cette personne », <code>neutral</code> dit seulement. Une pastille sans valeur n'existe pas.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Deux poses, six parties</h2><p>En haut la pastille libellée, en bas la pastille de coin et ses contenus, à deux fois leur taille. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 44px; padding: 36px 40px 44px; background: var(--raised)">
+<div style="position: relative; display: flex; align-items: center; gap: 22px; height: 204px; padding: 0 40px; border-radius: 30px; background: linear-gradient(120deg, #134E4A, #0F766E 48%, #312E81)">
+<span class="av" style="width: 128px; height: 128px; font-size: 44px; --accent: #4ECDC4; border: 5px solid var(--ground)">LM</span>
+<div style="position: relative; display: inline-flex; margin-bottom: 64px">
+<span class="ghost" style="left: -8px; right: -8px; top: -8px; bottom: -8px; border-radius: 30px"></span>
+<span class="bd glass x2 tl">[[ic:smiley]]<span>En vadrouille</span></span>
+<span class="kan" style="right: -11px; top: 25px">1</span>
+<span class="kan" style="left: 33px; top: -11px">2</span>
+<span class="kan" style="left: 160px; bottom: -11px">3</span>
+<span class="kan" style="left: -9px; bottom: -13px">4</span>
+<span class="kan" style="right: 30px; top: -19px">6</span>
+</div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 12px">
+<div style="position: relative; display: inline-flex">
+<span class="av" style="width: 104px; height: 104px; font-size: 36px; --accent: #FF6B6B">MO</span>
+<span class="bd so t-e x2c ct" style="position: absolute; right: -10px; top: -8px">3</span>
+<span class="kan" style="right: -40px; top: 0">5</span>
+<span class="kan" style="right: 0; top: -34px">3</span>
+</div>
+<div style="position: relative; display: inline-flex">
+<span class="tile ph" style="width: 168px; height: 124px; border-radius: 28px; font-size: 14px">réel</span>
+<span class="bd glass x2g" style="position: absolute; right: 14px; top: 14px">[[ic:play-fill]]<span>0:24</span></span>
+<span class="kan" style="right: 92px; top: 3px">2</span>
+<span class="kan" style="right: 4px; top: 56px">3</span>
+</div>
+<div style="position: relative; display: inline-flex; align-items: center; gap: 16px">
+<span class="bd cd x2k">PT</span>
+<span class="bd glass dk cur x2g" style="gap: 12px"><b class="tm">17:42</b><span>Ici</span></span>
+<span class="kan" style="left: 19px; top: -16px">3</span>
+<span class="kan" style="right: -11px; top: -11px">1</span>
+</div>
+</div>
+</div>
+<div class="card" style="padding: 26px">
+<div class="lgd">
+<span class="kan">1</span><div><b>Surface</b><span>Capsule de rayon plein, ou disque quand le contenu tient en un signe. Hauteurs 18 · 22 · 28 · 36. Verre demandé à K01, sinon tonale 16 %, aplat ou contour 1,5.</span></div>
+<span class="kan">2</span><div><b>Tête</b><span>Un glyphe (11, 13 ou 16 px selon la hauteur), un point de 6 px fixe ou pulsé, ou rien. Écart 5 px avec le contenu.</span></div>
+<span class="kan">3</span><div><b>Contenu</b><span>Mot en 700, compte en 800 plafonné « 99+ », code en mono dans un rayon de 7, numéro d'ordre en Nunito 900, heure en chasse fixe.</span></div>
+<span class="kan">4</span><div><b>Queue de bulle</b><span>Optionnelle. Rayon 18 partout, 6 au coin qui regarde l'avatar. Elle suit le bord de début en RTL.</span></div>
+<span class="kan">5</span><div><b>Ancre et détourage</b><span>Au coin d'un avatar ou d'une vignette : anneau de 3 px à la couleur du fond de l'hôte, passée en <code>cutout</code>. Décalage : un quart de la hauteur.</span></div>
+<span class="kan">6</span><div style="border-bottom: 0; padding-bottom: 0"><b>Cible</b><span>Seulement si la pastille se touche : 44 pt, 48 dp, 44 px, débordant la surface sans changer l'encombrement. Inerte, elle n'a ni cible ni rôle.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Quatre surfaces, cinq genres, six contenus</h2><p>Tout est à taille réelle. Les spécimens sont ceux des écrans du profil : mêmes mots, mêmes glyphes, mêmes mesures.</p></header>
+
+<div class="kcell kc" style="gap: 6px; padding: 28px 32px">
+<div class="mtx" style="min-height: 28px"><span class="mth" style="justify-self: start">Surface × genre</span><span class="mth">neutral</span><span class="mth">accent</span><span class="mth">ok</span><span class="mth">warn</span><span class="mth">err</span><span class="mth">teinte libre</span></div>
+<div class="mtx" style="min-height: 76px"><span class="bg"></span><span class="rl"><b>glass</b><span>sur média, bannière, carte</span></span>
+<span class="bd glass s28 t-n">[[ic:trophy]]<span>Or III</span></span>
+<span class="bd glass s28 t-a">[[ic:sparkle-fill]]<span>Niv. 24</span></span>
+<span class="bd glass s28 t-ok">[[ic:seal-check-fill]]<span>Vérifié</span></span>
+<span class="bd glass s28 t-w">[[ic:timer]]<span>6 j</span></span>
+<span class="bd glass s28 t-e">[[ic:prohibit]]<span>Bloqué</span></span>
+<span class="bd glass s28 t-x">[[ic:map-pin-fill]]<span>Alfama</span></span>
+</div>
+<div class="mtx"><span class="rl"><b>tonal</b><span>fond teinté 16 %</span></span>
+<span class="bd to s28 t-n">[[ic:push-pin]]<span>Épinglé</span></span>
+<span class="bd to s28 t-a">[[ic:timer]]<span>42 min</span></span>
+<span class="bd to s28 t-ok">[[ic:seal-check]]<span>Vérifié</span></span>
+<span class="bd to s28 t-w">[[ic:shield-warning]]<span>Non vérifié</span></span>
+<span class="bd to s28 t-e">[[ic:hourglass-low]]<span>Expiré</span></span>
+<span class="bd to s28 t-x">[[ic:cursor-click]]<span>Suivi</span></span>
+</div>
+<div class="mtx"><span class="rl"><b>solid</b><span>aplat, texte sombre</span></span>
+<span class="bd so s28 t-n"><span>Nouveau</span></span>
+<span class="bd so s28 t-a"><span>12</span></span>
+<span class="bd so s28 t-ok">[[ic:check]]<span>Connectés</span></span>
+<span class="bd so s28 t-w"><span>2 demandes</span></span>
+<span class="bd so s28 t-e"><span>99+</span></span>
+<span class="bd so s28 t-x"><span>En ligne</span></span>
+</div>
+<div class="mtx"><span class="rl"><b>outline</b><span>contour 1,5, sans fond</span></span>
+<span class="bd ou s28 t-n"><span>Invité</span></span>
+<span class="bd ou s28 t-a">[[ic:crown]]<span>Admin</span></span>
+<span class="bd ou s28 t-ok">[[ic:lock-key]]<span>Chiffré</span></span>
+<span class="bd ou s28 t-w">[[ic:clock]]<span>En attente</span></span>
+<span class="bd ou s28 t-e">[[ic:flag]]<span>Signalé</span></span>
+<span class="bd ou s28 t-x"><span>@leo.m</span></span>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage">
+<span class="bd to s28 t-ok">[[ic:seal-check]]<span>Vérifié</span></span>
+<span class="bd to s28 t-w">[[ic:shield-warning]]<span>Non vérifié</span></span>
+<span class="bd to s22 t-i" style="color: var(--ink)">[[ic:seal-check]]<span>Compte Meeshy</span></span>
+<span class="bd to s22 t-n" style="color: var(--ink3)">[[ic:user]]<span>Invité</span></span>
+<span class="bd to s28 t-w">[[ic:clock-countdown]]<span>Expire dans 6 j</span></span>
+</div>
+<div class="cp"><b>label</b><span class="kcap">Un mot ou deux, avec ou sans glyphe. Vérification d'un contact (Moi-Edition), nature d'une arrivée, échéance d'un lien (Lien-Partage). Le cercle d'une personne reste la pilule de K33.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<span class="bd so t-e or">1</span>
+<span class="bd so t-e or">3</span>
+<span class="bd so t-e">12</span>
+<span class="bd so t-e">99+</span>
+<span class="bd to s28 t-a">[[ic:hand-waving]]<span>2 / 3</span></span>
+<span class="bd to s28 t-n"><span>2 en ligne</span></span>
+</div>
+<div class="cp"><b>count</b><span class="kcap">Disque à un chiffre, capsule au-delà. Zéro : rien, aucune place. Plus de 99 : « 99+ » à l'œil, le vrai nombre à la voix. Quota « 2 / 3 » en chiffres à chasse fixe.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<span class="bd cd">PT</span><span class="bd cd">SN</span><span class="bd cd">FR</span><span class="bd cd">CI</span>
+<span class="bd glass s28"><b class="tm">17:42</b><span>Ici</span></span>
+<span class="bd glass s28">[[ic:play-fill]]<span>0:24</span></span>
+</div>
+<div class="cp"><b>code · time</b><span class="kcap">Code de pays en mono, rayon 7, 30 px au moins (Lien-Partage). Heure et durée en chasse fixe : elles ne dansent pas quand un chiffre change (Carte-Sang, Autre-Publications).</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<span class="bd to s28 t-a or" style="border: 1.5px solid var(--accent)">1</span>
+<span class="bd to s28 t-n or">2</span>
+<span class="bd to s28 t-n or">3</span>
+<span class="bd so s28 t-ok go">[[ic:check]]</span>
+</div>
+<div class="cp"><b>ordinal</b><span class="kcap">Un rang dans une suite : étape d'un parcours, numéro d'un mode d'emploi (Hors-App). L'étape faite devient un glyphe. La suite elle-même est à K53.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 22px">
+<span class="tile ph" style="width: 84px; height: 84px"><span class="bd glass go" style="position: absolute; right: 6px; top: 6px">[[ic:lock-key]]</span></span>
+<span class="tile ph" style="width: 84px; height: 84px"><span class="bd so t-a go ct" style="position: absolute; right: -5px; top: -5px">[[ic:check]]</span></span>
+<span style="position: relative; display: inline-flex"><span class="av" style="--accent: #3498DB">YT</span><span class="bd to t-n go s18 ct" style="position: absolute; right: -5px; bottom: -4px; background: var(--field)">[[ic:clock]]</span></span>
+</div>
+<div class="cp"><b>glyph</b><span class="kcap">Un glyphe seul dans un disque : cadenas sur un média fermé, coche d'une sélection, horloge d'un partage terminé. Toujours un nom dit, jamais le nom du symbole.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<span class="bd to t-ok" style="height: 20px; padding: 0 7px"><i class="pt"></i><span>Actif</span></span>
+<span class="bd to" style="height: 20px; padding: 0 7px; color: var(--ink3)"><i class="pt"></i><span>En attente</span></span>
+<span class="bd glass s28"><i class="pt lv"></i><span>En direct</span></span>
+</div>
+<div class="cp"><b>tête à point</b><span class="kcap">Un point de 6 px à l'encre de la pastille (Parrainage). Pulsé quand la chose est vivante maintenant. Ce n'est pas la présence d'une personne, qui reste au point d'avatar.</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage">
+<span class="bd to t-n s18"><span>18</span></span>
+<span class="bd to t-n">[[ic:seal-check]]<span>22</span></span>
+<span class="bd to t-n s28">[[ic:seal-check]]<span>28</span></span>
+<span class="bd to t-n s36">[[ic:seal-check]]<span>36</span></span>
+</div>
+<div class="cp"><b>Quatre hauteurs</b><span class="kcap">18 en coin · 22 en ligne · 28 sur une rangée ou une carte · 36 sur une bannière. Texte 10, 11, 12, 12,5.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="position: relative; overflow: hidden; border-radius: 20px; min-height: 150px; align-items: flex-end; justify-content: flex-end; padding: 12px; background: linear-gradient(150deg, #7E22CE, #A855F7 55%, #4338CA)">
+<div class="orb" style="width: 120px; height: 120px; left: -20px; top: -30px; background: #D8B4FE; opacity: .5"></div>
+<button class="bd glass s36 t-n hit" style="position: relative">[[ic:sparkle]]<span>Niv. 24 · 1 860</span></button>
+<button class="bd glass s36 t-n hit" style="position: relative">[[ic:trophy]]<span>Or III</span></button>
+</div>
+<div class="cp"><b>Ancre libre, sur une bannière</b><span class="kcap">Badges de jeu de la Vitrine (Main) : verre, 36, touchables. Ils ouvrent la légende.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="justify-content: flex-start; align-items: flex-end; gap: 10px; flex-wrap: nowrap">
+<span class="av" style="width: 64px; height: 64px; font-size: 22px; --accent: #4ECDC4">LM</span>
+<button class="bd glass s36 tl hit flt" style="margin-bottom: 30px">[[ic:smiley]]<span>En vadrouille</span></button>
+</div>
+<div class="cp"><b>Queue de bulle</b><span class="kcap">L'humeur parle depuis l'avatar (Autre-Vitrine). Rayon 18, 6 au coin tourné vers lui.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><p style="font-size: 14.5px; line-height: 1.9; color: var(--ink)">Léo partage sa position <span class="bd to t-a" style="vertical-align: middle">[[ic:timer]]<span>42 min</span></span> depuis Alfama, arrivé par <span class="bd cd" style="vertical-align: middle">PT</span></p></div>
+<div class="cp"><b>En ligne dans un texte</b><span class="kcap">22 px, centrée sur la hauteur d'x. Elle ne change pas l'interligne et ne se coupe jamais en deux.</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 20px">
+<div class="kcell kc">
+<div style="position: relative; overflow: hidden; height: 232px; border-radius: 20px">
+[[map]]
+<span style="position: absolute; left: 96px; top: 96px; width: 104px; height: 104px; margin: -52px 0 0 -52px; border-radius: 50%; background: color-mix(in oklab, #4ECDC4 18%, transparent); border: 1.5px solid #4ECDC4"></span>
+<span class="av" style="position: absolute; left: 76px; top: 76px; width: 40px; height: 40px; font-size: 13px; --accent: #4ECDC4; border: 3px solid var(--ground)">LM</span>
+<span class="bd dk" style="position: absolute; left: 62px; top: 152px; border: 1px solid var(--glass-line)">quartier</span>
+<span class="bd glass s28 dk" style="position: absolute; left: 216px; top: 30px; height: 30px; padding: 0 11px 0 9px; gap: 7px"><b class="tm">15:05</b><span>Studio</span></span>
+<span class="bd glass s28 dk cur" style="position: absolute; left: 300px; top: 104px; height: 30px; padding: 0 11px 0 9px; gap: 7px"><b class="tm">17:42</b><span>Ici</span></span>
+<span class="bd glass s28 dk" style="position: absolute; left: 200px; top: 186px; padding: 0 11px 0 9px; gap: 6px; font-size: 11.5px"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling]]</span><span>De passage à Lisbonne</span></span>
+</div>
+<div class="cp"><b>Point de carte</b><span class="kcap">Précision sous une épingle (Carte-Proches), arrêts horodatés d'un trajet (Carte-Sang), pilule « De passage » (Carte-Personne). Verre assombri à 66 % pour rester lisible sur toute tuile. L'arrêt courant porte le bord d'accent.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 14px">
+<span class="tile ph" style="width: 104px; height: 138px">réel<span class="bd glass" style="position: absolute; top: 8px; right: 8px; min-height: 26px; height: 26px; padding: 0 9px; gap: 4px; font-size: 11.5px">[[ic:play-fill]]<span>0:24</span></span></span>
+<span class="tile ph" style="width: 104px; height: 138px">photo<span class="bd glass" style="position: absolute; top: 8px; right: 8px; height: 26px; padding: 0 9px; gap: 4px; font-size: 11.5px">[[ic:images]]<span>4</span></span></span>
+</div>
+<div class="cp"><b>Coin d'une vignette</b><span class="kcap">Durée d'un réel, nombre d'images (Autre-Publications). À 8 px des bords, haut de fin. Verre, sans détourage : l'image fait le fond.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 28px">
+<span style="position: relative; display: inline-flex"><span class="av" style="width: 56px; height: 56px; font-size: 19px; --accent: #FF6B6B">MO</span><span class="bd so t-e ct" style="position: absolute; right: -6px; top: -5px">3</span></span>
+<span style="position: relative; display: inline-flex"><span class="av" style="width: 56px; height: 56px; font-size: 19px; --accent: #F8B500">TR</span><span class="bd so t-e ct" style="position: absolute; right: -14px; top: -5px">99+</span></span>
+<span style="position: relative; display: inline-flex"><span class="av" style="width: 56px; height: 56px; font-size: 19px; --accent: #9B59B6">KM</span><span class="bd to t-n go ct" style="position: absolute; right: -5px; bottom: -4px; background: var(--field)">[[ic:ghost]]</span></span>
+</div>
+<div class="cp"><b>Coin d'un avatar</b><span class="kcap">Détourage de 3 px à la couleur du fond : la pastille se lit sur toute couleur d'accent. Elle grandit vers l'extérieur, jamais sur le visage.</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage" style="gap: 18px">
+<button class="bd glass s36 hit show">[[ic:trophy]]<span>Or III</span></button>
+<button class="bd glass s36 pr">[[ic:trophy]]<span>Or III</span></button>
+</div>
+<div class="cp"><b>Touchable · pressé</b><span class="kcap">Rôle bouton, cible de 44 qui déborde. Pressé : échelle 0,94 et réponse du verre de K01.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 18px">
+<button class="bd to s28 t-a fo">[[ic:timer]]<span>42 min</span></button>
+<span class="bd to s28 t-a off">[[ic:timer]]<span>42 min</span></span>
+</div>
+<div class="cp"><b>Focus clavier · désactivé</b><span class="kcap">Anneau de 2 px à 3 px de la surface, au clavier seulement. Désactivé : 40 %, annoncé, non activable.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="gap: 18px">
+<span class="bd to s28 t-x">[[ic:map-pin-fill]]<span>Cascais</span></span>
+<span class="bd to s28 t-x old">[[ic:clock]]<span>il y a 1 h</span></span>
+</div>
+<div class="cp"><b>Courant · périmé</b><span class="kcap">Périmé : désaturé, 62 %, et le mot le dit (« il y a 1 h »). L'état n'est jamais porté par la seule couleur.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><span class="tile ph" style="width: 100%; height: 150px; align-items: flex-end; padding: 8px"><span class="bd glass ml">Lisbonne, 6 h 40. Le tram 28 vide, la lumière qui monte sur Alfama.</span></span></div>
+<div class="cp"><b>Multi-ligne, pleine largeur</b><span class="kcap">Légende sur un média : rayon 14, trois lignes au plus, puis « … ». La traduction porte la marque de K51.</span></div>
+</div>
+<div class="kcell kc" style="grid-column: span 2; padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="display: flex; flex-direction: column; gap: 18px; padding: 28px; flex: 1">
+<div class="stage" style="min-height: 96px">
+<span class="bd to s28 t-ok">[[ic:seal-check]]<span>Vérifié</span></span>
+<span class="bd to s28 t-w">[[ic:shield-warning]]<span>Non vérifié</span></span>
+<span class="bd so t-e">3</span>
+<span class="bd cd">PT</span>
+<span class="bd ou s28 t-a">[[ic:crown]]<span>Admin</span></span>
+<span class="bd glass s28 t-n">[[ic:trophy]]<span>Or III</span></span>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Les genres passent à leurs encres sombres (4,5:1 au moins sur le fond teinté). L'aplat prend un texte blanc. Le verre devient laiteux, par K01.</span></div>
+</div>
+</div>
+<div class="kcell kc" style="grid-column: span 2">
+<div class="stage" style="gap: 10px">
+<button class="bd s36 and"><span style="color: var(--accent-ink); display: inline-flex">[[ic:sparkle-fill]]</span><span>Niv. 31 · 2 410</span></button>
+<button class="bd s36 and"><span style="color: var(--warn); display: inline-flex">[[ic:trophy-fill]]</span><span>Platine I</span></button>
+<button class="bd s36 and tl">[[ic:smiley]]<span>En vadrouille</span></button>
+</div>
+<div class="cp"><b>Android : surface tonale à la place du verre</b><span class="kcap">Même API, même contenu. <code>glass</code> y rend une surface tonale de rayon 12, glyphe plein et teinté (Android-Vitrine). La queue de bulle passe à 16 et 4.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Le compte arrive, roule, s'élargit, puis s'efface</h2><p>Une pastille ne bouge que lorsque sa valeur change. Elle naît par <code>motion.rise</code>, change de largeur par <code>motion.morph</code>, et son point vivant bat sur <code>motion.pulse</code>. La bulle d'humeur respire sur <code>motion.float</code>, quatre cycles, puis se pose.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div class="stage" style="flex-direction: column; gap: 22px; min-height: 250px; flex-wrap: nowrap">
+<div class="crow" style="max-width: 370px">
+<span class="av" style="--accent: #4ECDC4">LM</span>
+<span class="who"><b>Léo Marchetti</b><span>Tu passes au studio ce soir ?</span></span>
+<span class="end"><small>17:42</small><span class="bd so t-e mvb" aria-hidden="true"><span class="roll"><b>1</b><b>2</b><b>3</b><b>99+</b></span></span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 16px">
+<span class="bd glass s28"><i class="pt lv"></i><span>En direct</span></span>
+<span class="bd glass s36 tl flt">[[ic:smiley]]<span>En vadrouille</span></span>
+</div>
+</div>
+<span class="spec">durée : celles de motion.rise et motion.morph · courbe : ressort de K26 · déclencheur : la valeur change (0 → n, n → n+1, n → 0) · haptique : aucun, une pastille ne vibre pas ; léger au toucher si elle est touchable · mouvement réduit : la valeur est remplacée sans échelle ni roulis, le point ne bat plus</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Zéro</b></div>
+<div class="stage" style="min-height: 90px"><div class="crow" style="padding: 8px 10px"><span class="av" style="--accent: #4ECDC4; width: 36px; height: 36px; font-size: 13px">LM</span><span class="who"><b style="font-size: 13.5px">Léo</b><span>Vu</span></span><span class="end"><small>17:40</small></span></div></div>
+<span class="kcap">Rien n'est rendu. La rangée ne garde pas la place : pas de disque vide, pas de trou.</span>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Naissance et roulis</b></div>
+<div class="stage" style="min-height: 90px"><div class="crow" style="padding: 8px 10px"><span class="av" style="--accent: #4ECDC4; width: 36px; height: 36px; font-size: 13px">LM</span><span class="who"><b style="font-size: 13.5px">Léo</b><span>Dispo ?</span></span><span class="end"><small>17:42</small><span class="bd so t-e or">3</span></span></div></div>
+<span class="kcap"><code>motion.rise</code> : échelle 0 vers 1 depuis son centre. Chaque nouveau chiffre monte d'une ligne, avec un sursaut de 14 %.</span>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Plafond</b></div>
+<div class="stage" style="min-height: 90px"><div class="crow" style="padding: 8px 10px"><span class="av" style="--accent: #4ECDC4; width: 36px; height: 36px; font-size: 13px">LM</span><span class="who"><b style="font-size: 13.5px">Léo</b><span>Photo</span></span><span class="end"><small>18:05</small><span class="bd so t-e">99+</span></span></div></div>
+<span class="kcap"><code>motion.morph</code> : le disque s'étire en capsule vers le bord de début. Les voisins ne bougent pas.</span>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Un contenu, une tête, une surface, un genre, une hauteur. Aucune signature ne nomme un rang, un cercle, un pays, un message ou un profil : l'hôte traduit sa donnée en mot ou en nombre avant d'appeler.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyBadge.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-badge.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyBadge(_ content:leading:surface:kind:tint:size:…)</code></span><span><code>MeeshyBadge(content, modifier, leading, surface, kind, tint, size, …)</code></span><span><code>&lt;MeeshyBadge content leading surface kind tint size … /&gt;</code></span>
+<span><b>Contenu</b></span><span><code>MeeshyBadgeContent { label(String), count(Int), code(String), ordinal(Int), time(String), glyph }</code></span><span><code>sealed interface</code> identique</span><span><code>{ label } | { count } | { code } | { ordinal } | { time } | 'glyph'</code></span>
+<span><b>Tête</b></span><span><code>MeeshyBadgeLeading { none, systemImage(String), dot, liveDot }</code></span><span><code>sealed interface</code>, cas <code>Icon(icon)</code></span><span><code>'none' | { glyph } | 'dot' | 'liveDot'</code></span>
+<span><b>Surface</b></span><span><code>MeeshyBadgeSurface { glass, tonal, solid, outline }</code></span><span><code>enum class</code> identique</span><span><code>'glass' | 'tonal' | 'solid' | 'outline'</code></span>
+<span><b>Genre</b></span><span><code>MeeshyBadgeKind { neutral, accent, ok, warn, err }</code>, <code>tint: Color? = nil</code></span><span><code>enum class</code> identique, <code>tint: Color?</code></span><span><code>'neutral' | 'accent' | 'ok' | 'warn' | 'err'</code>, <code>tint?: string</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyBadgeSize { s18, s22, s28, s36 }</code></span><span>idem</span><span><code>18 | 22 | 28 | 36</code></span>
+<span><b>Forme</b></span><span><code>MeeshyBadgeShape { capsule, bubble }</code></span><span>idem</span><span><code>'capsule' | 'bubble'</code></span>
+<span><b>Ancre de coin</b></span><span><code>.meeshyBadge(alignment:cutout:) { MeeshyBadge(…) }</code></span><span><code>Modifier.meeshyBadge(alignment, cutout) { … }</code></span><span><code>&lt;MeeshyBadgeAnchor alignment cutout badge&gt;</code></span>
+<span><b>Emplacements</b></span><span><code>leading</code>, <code>trailing</code> : <code>@ViewBuilder</code></span><span>mêmes noms, <code>@Composable () -&gt; Unit</code></span><span>mêmes noms, <code>ComponentChildren</code></span>
+<span><b>Loi du compte</b></span><span><code>MeeshyBadgeCount.text(_:cap:)</code>, <code>.spoken(_:cap:)</code> : pures</span><span><code>MeeshyBadgeCount</code>, JVM pure</span><span><code>meeshyBadgeCountText(count, cap)</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyBadgeRecipe.resolve(surface:kind:tint:size:shape:content:isCurrent:isStale:isInteractive:isPressed:isEnabled:)</code></span><span style="border-bottom: 0"><code>MeeshyBadgeRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyBadgeRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>content: Content</code><span>Obligatoire. Texte déjà traduit, nombre brut. <code>count</code> à zéro ou négatif : rien n'est rendu.</span></div>
+<div class="par"><code>leading = .none</code><span>Glyphe, point fixe ou point pulsé. Obligatoire quand <code>content</code> vaut <code>glyph</code>.</span></div>
+<div class="par"><code>surface = .tonal</code><span><code>glass</code> est demandé à K01 ; sur Android il rend la surface tonale.</span></div>
+<div class="par"><code>kind = .neutral</code><span>Un sens, pas une couleur.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>La teinte libre, opaque, passée par l'hôte. Donnée, elle remplace la couleur du genre ; le sens dit reste celui de <code>kind</code>.</span></div>
+<div class="par"><code>size = .s22</code><span>18 en coin, 22 en ligne, 28 sur une rangée, 36 sur une bannière.</span></div>
+<div class="par"><code>shape = .capsule</code><span><code>bubble</code> pose la queue au bord de début, en bas.</span></div>
+<div class="par"><code>cap: Int = 99</code><span>Plafond du compte. Au-delà : « <code>cap</code>+ » à l'œil, le vrai nombre à la voix.</span></div>
+<div class="par"><code>of: Int? = nil</code><span>Avec <code>count</code> : écrit le quota « 2 / 3 ». Sans lui, le compte seul.</span></div>
+<div class="par"><code>lineLimit: Int? = 1</code><span><code>nil</code> ou plus de 1 : multi-ligne, pleine largeur, rayon 14.</span></div>
+<div class="par"><code>isCurrent: Bool = false</code><span>Bord d'accent. <code>isStale</code> : désaturé, 62 %.</span></div>
+<div class="par"><code>onPress: (() -&gt; Void)? = nil</code><span>Sans lui : inerte, sans rôle. Avec lui : bouton, cible de 44.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Nom dit. Obligatoire pour <code>glyph</code> et pour un <code>count</code> (« 3 non lus »).</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois matières</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Verre : <code>glassEffect(_:in: .capsule)</code> par K01 sur iOS 26 ; plusieurs badges voisins dans un <code>GlassEffectContainer</code>.</li>
+<li>Compte : <code>contentTransition(.numericText(value:))</code> pour le roulis, <code>monospacedDigit()</code> pour la chasse fixe.</li>
+<li>Bulle : <code>UnevenRoundedRectangle</code> (18, 18, 18, 6), coins lus en <code>layoutDirection</code>.</li>
+<li>Ancre : <code>overlay(alignment:)</code> et <code>alignmentGuide</code> ; détourage par un trait de 3 pt à la couleur <code>cutout</code>, sans <code>blendMode</code>.</li>
+<li>Point vivant : <code>symbolEffect(.pulse)</code> ou <code>phaseAnimator</code>, au jeton <code>motion.pulse</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 à 25 : verre dessiné de K01 (<code>ultraThinMaterial</code> et filet). iOS 16 : pas de <code>numericText(value:)</code>, fondu enchaîné du chiffre. « Réduire la transparence » : fond plein.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Surface : <code>Surface(tonalElevation)</code> de rayon 12 à la place du verre ; <code>solid</code> et <code>outline</code> gardent la capsule.</li>
+<li>Compte : <code>AnimatedContent</code> avec <code>slideInVertically</code> et <code>SizeTransform</code> ; chiffres en <code>FontFeature("tnum")</code>.</li>
+<li>Ancre : <code>Modifier.meeshyBadge</code> mesure l'hôte dans un <code>Layout</code>, comme <code>BadgedBox</code>, avec le détourage en plus.</li>
+<li>Bulle : <code>RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)</code>, miroir automatique en RTL.</li>
+<li>Voix : <code>contentDescription</code> par <code>pluralStringResource</code> ; <code>Role.Button</code> seulement avec <code>onPress</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation à zéro : valeur posée sans transition. Sans couleur dynamique : teintes du thème Meeshy, jamais ceux du fond d'écran.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément : <code>&lt;span&gt;</code> inerte, <code>&lt;button type="button"&gt;</code> avec <code>onPress</code>. Jamais de <code>role</code> posé sur un <code>div</code>.</li>
+<li>Verre : <code>backdrop-filter: blur() saturate()</code> par K01. Tonale : <code>color-mix(in oklab, var(--tint) 16%, transparent)</code>.</li>
+<li>Chiffres : <code>font-variant-numeric: tabular-nums</code>. Roulis : une bande de chiffres translatée, sans relecture de mise en page.</li>
+<li>Détourage : <code>box-shadow: 0 0 0 3px var(--cutout)</code>. Aucun masque, aucun calque de plus.</li>
+<li>Voix : texte visible masqué par <code>aria-hidden</code>, phrase complète en <code>aria-label</code> ; <code>aria-live="polite"</code> laissé à l'hôte.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>backdrop-filter</code> : fond plein à 72 %. Sans <code>color-mix</code> : teinte pré-calculée dans la recette. <code>prefers-reduced-motion</code> : aucun roulis.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Trente pastilles dans le code, trois lois de compte déjà écrites</h2><p>Le dépôt compte plus de trente fichiers « Badge ». Le non-lu est le plus mûr : une loi pure par plateforme, un portillon dans l'atome, le « 99+ » partout. K41 la garde telle quelle et y range les capsules libellées, écrites chacune dans leur écran.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Primitives/UnreadCountBadge.swift</span><p><span class="be">Devient le composant</span> Déjà un atome agnostique : deux paramètres opaques, portillon <code>isVisible(count:)</code> pur, plancher carré de 24, « 99+ ». Il gagne <code>surface</code>, <code>kind</code>, <code>leading</code> et monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Call/Components/CallTypeBadgeView.swift</span><p>Glyphe, libellé, capsule teintée et filet : c'est <code>tonal</code> avec <code>leading: .glyph</code>. Rebranché ; <code>isVideo</code> reste à l'app, qui choisit le glyphe et le mot.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Primitives/MoodBadge.swift</span><p><code>MeeshyMoodBadge</code> : ses lois pures (<code>motion(animates:reduceMotion:hushed:)</code>, <code>hitDiameter</code>, <code>outlineWidth</code>) fournissent la respiration, la cible et le détourage de K41. La bulle du profil prend <code>shape: .bubble</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Composer/ComposerRailDoorBadge.swift</span><p>Le compteur posé sur une porte du rail (#4994) : l'ancre de coin. Rebranché sur <code>.meeshyBadge(alignment:cutout:)</code>. <span class="mono">Game/Wave2/GameBannerBadge.swift</span> et <span class="mono">Lens/Chrome/SectionScrollPill.swift</span> prennent <code>glass</code> en 36 et 28 ; leurs modèles restent à l'app.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/MeeshyUnreadBadge.kt</span><p><span class="be">Devient le composant</span> Même portillon, vrai compte lu par TalkBack. Sa loi <span class="mono">core/model/…/chrome/UnreadBadge.kt</span> (<code>displayedText</code>, <code>spokenCount</code>) devient <code>MeeshyBadgeCount</code> ; <span class="mono">chrome/BadgeCountPolicy.kt</span> reste à l'app.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/identity/RoleBadge.kt</span><p>Icône et libellé d'un rôle, rien pour un membre : <code>outline</code> ou <code>tonal</code>, la table rôle vers genre reste à l'app. <span class="mono">feature/calls/…/CallTypeBadge.kt</span> et <span class="mono">sdk-ui/…/location/LiveLocationBadge.kt</span> suivent.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/core/model/…/model/account/ContactVerificationBadge.kt</span><p>Le verdict Vérifié ou Non vérifié, pur. Il reste à l'app et choisit <code>kind: ok</code> ou <code>warn</code>. <span class="mono">avatar/MoodBadgeMotion.kt</span> et <span class="mono">game/GameBannerBadge.kt</span> : lois gardées, vues rebranchées.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/unread-badge.tsx</span><p><span class="be">Devient le composant</span> <code>UnreadBadge</code>, <code>UnreadCornerBadge</code>, <code>UnreadRungBadge</code> et <code>unreadBadgeText</code> : trois poses déjà réunies sous une loi (#6080), rouge sémantique gardé. Les trois constantes de cotes deviennent la recette.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/attachment-reaction-badge.tsx</span><p>Capsule noire à 55 % au coin bas d'une tuile, teintée quand le lecteur a réagi : l'ancre de vignette avec <code>isCurrent</code>. Rebranché ; la règle « rien sur une pièce masquée » reste chez l'hôte. <span class="mono">app-badge.tsx</span> ne peint rien et n'est pas concerné.</p></div>
+<div class="twin"><span class="pf">Profil</span><span class="mono">aucun jumeau</span><p><span class="no">À créer</span> Code de pays, arrêt horodaté, pilule « De passage », quota « 2 / 3 » : dessinés par ce canevas, absents du code. Ils naissent directement en K41.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 8px; flex-wrap: nowrap">
+<div class="crow"><span class="av" style="--accent: #FF6B6B; width: 40px; height: 40px; font-size: 14px">MO</span><span class="who"><b>Mina <span class="bd ou s18 t-ok go" style="border-width: 1px">[[ic:lock-key]]</span></b><span>On se retrouve ?</span></span><span class="end"><small>17:42</small><span class="bd so t-e or">3</span></span></div>
+<div class="crow"><span class="av" style="--accent: #FBBF24; width: 40px; height: 40px; font-size: 14px">BD</span><span class="who"><b>Beatmakers</b><span>Kwame : la prise 3</span></span><span class="end"><small>16:10</small><span class="bd so t-e">99+</span></span></div>
+</div>
+<div class="cp"><b>Liste de conversations</b><span class="kcap">Non-lus en aplat rouge, plafonnés. « Chiffré » en glyphe seul à côté du nom.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><span class="tile ph" style="width: 100%; height: 190px; align-items: flex-end; padding: 8px"><span class="bd glass" style="position: absolute; top: 8px; right: 8px; height: 26px; padding: 0 9px; gap: 4px; font-size: 11.5px">[[ic:play-fill]]<span>0:41</span></span><span class="bd glass ml">Dakar la nuit, prise 3. Le son est brut.</span></span></div>
+<div class="cp"><b>Réel dans le fil</b><span class="kcap">Durée en coin, légende multi-ligne en pied : deux K41 sur le même média.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 8px; flex-wrap: nowrap">
+<div class="crow"><span class="av" style="width: 40px; height: 40px; font-size: 14px">AN</span><span class="who"><b>Aïssa</b><span>@aissa</span></span><span class="bd to s22 t-w">[[ic:crown]]<span>Créatrice</span></span></div>
+<div class="crow"><span class="av" style="--accent: #9B59B6; width: 40px; height: 40px; font-size: 14px">KM</span><span class="who"><b>Kwame</b><span>@kwame.m</span></span><span class="bd to s22 t-i">[[ic:shield-check]]<span>Admin</span></span></div>
+</div>
+<div class="cp"><b>Membres d'une communauté</b><span class="kcap">Le rôle en fin de rangée. Un simple membre n'a pas de pastille.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 12px; flex-wrap: nowrap">
+<span class="av" style="width: 64px; height: 64px; font-size: 22px; --accent: #4ECDC4">LM</span>
+<span class="bd to s28 t-i" style="border: 1px solid color-mix(in oklab, var(--l-track) 50%, transparent)">[[ic:video-camera-fill]]<span>Appel vidéo</span></span>
+<div style="display: flex; gap: 8px"><span class="bd glass s28 t-w">[[ic:trophy-fill]]<span>3e</span></span><span class="bd glass s28 dk">[[ic:push-pin]]<span>Studio</span></span></div>
+</div>
+<div class="cp"><b>Appel, jeu, carte partagée</b><span class="kcap">Type d'appel sous l'avatar, rang d'un classement, étiquette d'une épingle.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Portillon et plafond.</b> <code>count</code> à 0 ou négatif : aucune vue, aucune place. 100 et plus : « 99+ » affiché, vrai nombre dit. Jamais <code>min(count, 99)</code>. Vecteurs <code>K41-MeeshyBadge.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Inerte : un texte, sans rôle. Avec <code>onPress</code> : un bouton nommé. <code>glyph</code> sans <code>label</code> ne compile pas ou échoue au test. Le glyphe et le point sont masqués à la voix.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque surface × genre × hauteur rend les valeurs du tableau : rayon, marges, corps, encre, filet. Le genre d'un compte à rattraper est <code>err</code> ; un témoin l'écrit sur une conversation à accent turquoise.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Touchable : 44 pt, 48 dp, 44 px, sans changer l'encombrement. Encre sur fond teinté 16 % : 4,5:1 au moins en clair et en sombre. Texte sombre sur aplat, blanc en thème clair.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Chasse fixe.</b> Passer de 0:19 à 0:20, de 9 à 10 non-lus, de 17:59 à 18:00 ne déplace aucun voisin d'un pixel. Le passage à « 99+ » élargit vers le bord de début seulement.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit et RTL.</b> Sans mouvement : valeur remplacée, point fixe, bulle immobile. En arabe : la queue et l'ancre de coin se reflètent, les chiffres et l'heure ne se retournent pas.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et pureté.</b> Un compte qui change ne re-rend ni la rangée ni l'avatar qui le porte. Garde de source : aucun type du domaine, aucun singleton, aucune couleur ni cote hors de <code>MeeshyBadgeRecipe</code> ; le verre ne vient que de K01. Non-régression : les suites d'<code>UnreadCountBadge</code>, de <code>MeeshyUnreadBadge</code> et d'<code>unread-badge</code> passent sans changer une attente.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> La couleur ne porte jamais seule le sens : un mot ou un glyphe la double. La pastille de coin est lue avec son hôte (« Mina, 3 non lus »), pas comme un élément à part. Très grande police : la capsule grandit, puis passe en multi-ligne.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Une liste de 500 rangées porte 500 pastilles : aucune ombre portée hors du verre, aucun flou en <code>tonal</code>, <code>solid</code> ou <code>outline</code>. Seuls la transformation et l'opacité s'animent. Le point vivant s'arrête hors écran.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8798}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

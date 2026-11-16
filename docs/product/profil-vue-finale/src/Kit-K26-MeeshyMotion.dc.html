@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K26 MeeshyMotion</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.st{background:var(--ground);overflow:hidden;padding:0;height:196px}
+.nat{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2)}
+.tn{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:16px;font-weight:700;color:var(--accent-ink)}
+.cv{display:block;flex:none;border-radius:12px;background:var(--field);border:1px solid var(--line)}
+.cv .ax{stroke:var(--ink3);stroke-width:1;stroke-dasharray:2 5;fill:none;opacity:.7}
+.cv .ln{stroke:var(--accent-ink);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.cv .pt{fill:var(--warn)}
+.hp{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.li{display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>.ic{margin-top:1px;color:var(--ink3)}
+.li>span>b{font-weight:700}
+.lg{display:flex;gap:14px;align-items:flex-start}
+.lg>.kan{position:static;flex:none;margin-top:1px}
+.lg>div{display:flex;flex-direction:column;gap:2px;font-size:14px;line-height:1.4;color:var(--ink2)}
+.lg>div>b{font-size:15px;color:var(--ink)}
+
+.mp{position:relative;display:flex;width:236px;padding:5px;border-radius:999px}
+.mp>span{position:relative;z-index:1;flex:1;height:44px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:var(--ink)}
+.mp>i{position:absolute;z-index:2;left:5px;top:5px;width:calc((100% - 10px) / 3);height:44px;border-radius:999px;background:#fff;mix-blend-mode:difference;transform-origin:0 50%}
+.mp.lp>i{animation:kMorph 5s cubic-bezier(.4,0,.2,1) infinite}
+.mp.xl{width:444px;padding:7px}.mp.xl>span{height:62px;font-size:17px}.mp.xl>i{left:7px;top:7px;width:calc((100% - 14px) / 3);height:62px}
+.mp.md{width:330px;padding:6px}.mp.md>span{height:52px;font-size:14.5px}.mp.md>i{left:6px;top:6px;width:calc((100% - 12px) / 3);height:52px}
+.mp.sp>i{animation:kSpring 4s linear infinite}
+@keyframes kMorph{0%,8%{transform:translateX(0) scaleX(1) scaleY(1)}17%{transform:translateX(0) scaleX(2.05) scaleY(.86)}25%{transform:translateX(106%) scaleX(.94) scaleY(1.04)}29%,40%{transform:translateX(100%) scaleX(1) scaleY(1)}49%{transform:translateX(100%) scaleX(2.05) scaleY(.86)}57%{transform:translateX(206%) scaleX(.94) scaleY(1.04)}61%,72%{transform:translateX(200%) scaleX(1) scaleY(1)}82%{transform:translateX(0) scaleX(3) scaleY(.82)}90%{transform:translateX(0) scaleX(.94) scaleY(1.04)}94%,100%{transform:translateX(0) scaleX(1) scaleY(1)}}
+@keyframes kSpring{0%,10%{transform:translateX(0);animation-timing-function:linear(0,.107,.327,.561,.757,.897,.984,1.029,1.045,1.044,1.035,1.024,1)}20.5%,60%{transform:translateX(100%);animation-timing-function:linear(0,.107,.327,.561,.757,.897,.984,1.029,1.045,1.044,1.035,1.024,1)}70.5%,100%{transform:translateX(0)}}
+.cur{position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:1px;background:var(--warn);opacity:0;animation:kCur 4s linear infinite}
+@keyframes kCur{0%,10%{transform:translateX(0);opacity:0}10.1%{transform:translateX(0);opacity:1}20.5%{transform:translateX(403px);opacity:1}27%,59.9%{transform:translateX(403px);opacity:0}60%{transform:translateX(0);opacity:0}60.1%{transform:translateX(0);opacity:1}70.5%{transform:translateX(403px);opacity:1}77%,100%{transform:translateX(403px);opacity:0}}
+.tic{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 13px;border-radius:999px;background:var(--warn);color:#0B0B12;font-size:12.5px;font-weight:700;opacity:.4;animation:kTic 4s ease-out infinite}
+@keyframes kTic{0%,9.5%{opacity:.4;transform:scale(1)}10.5%{opacity:1;transform:scale(1.08)}17%,59.5%{opacity:.4;transform:scale(1)}60.5%{opacity:1;transform:scale(1.08)}67%,100%{opacity:.4;transform:scale(1)}}
+
+.tvm{position:absolute;right:0;top:0;bottom:0;width:52%;overflow:hidden;border-left:1px solid var(--line)}
+.tvx{position:absolute;left:26px;top:30px;animation:kTvX 5s cubic-bezier(.4,0,.2,1) infinite}
+.tvy{display:block;animation:kTvY 5s cubic-bezier(.3,.1,.3,1) infinite}
+.mx .tvy>.av{width:64px;height:64px;font-size:23px;box-shadow:0 0 0 4px var(--ground)}
+.tvp{width:38px;height:38px;opacity:0;animation:kTvP 5s linear infinite}
+@keyframes kTvX{0%,14%,90%,100%{transform:translateX(0)}25.2%,78%{transform:translateX(168px)}}
+@keyframes kTvY{0%,14%,90%,100%{transform:translateY(0) scale(1)}19%{transform:translateY(-16px) scale(.82)}25.2%,78%{transform:translateY(50px) scale(.5)}84%{transform:translateY(-10px) scale(.8)}}
+@keyframes kTvP{0%,25%,79%,100%{opacity:0}27%,77%{opacity:1}}
+
+.fl{perspective:800px}
+.fli{position:relative;width:226px;height:136px;transform-style:preserve-3d;animation:kFlip 5s cubic-bezier(.2,0,0,1) infinite}
+.fli>*{position:absolute;inset:0;-webkit-backface-visibility:hidden;backface-visibility:hidden}
+.fli>.bk{transform:rotateY(180deg)}
+@keyframes kFlip{0%,16%{transform:rotateY(0)}26%,62%{transform:rotateY(180deg)}72%,100%{transform:rotateY(360deg)}}
+
+.cb{position:absolute;left:0;right:0;top:0;height:112px;background:linear-gradient(165deg,#6D28D9 0%,#3B1A78 55%,#09090B 100%);animation:kCb 5s linear infinite}
+.cc{position:absolute;left:18px;right:30px;top:172px;display:flex;flex-direction:column;gap:8px;animation:kCc 5s linear infinite}
+.cc>i{display:block;height:26px;border-radius:9px;background:var(--raised);border:1px solid var(--line)}
+.cg{position:absolute;left:0;right:0;top:0;height:48px;border-radius:0;border-width:0 0 1px;opacity:0;animation:kCg 5s linear infinite}
+.ca{position:absolute;left:18px;top:80px;transform-origin:0 0;animation:kCa 5s linear infinite}
+.mx .ca{width:56px;height:56px;font-size:20px;box-shadow:0 0 0 4px var(--ground)}
+.cn{position:absolute;left:18px;top:144px;font-size:17px;white-space:nowrap;transform-origin:0 0;animation:kCn 5s linear infinite}
+.ct{position:absolute;right:9px;top:58px;width:3px;height:124px;border-radius:2px;background:var(--line)}
+.ct>i{display:block;width:3px;height:40px;border-radius:2px;background:var(--ink2);animation:kCt 5s linear infinite}
+@keyframes kCb{0%,10%,92%,100%{transform:translateY(0)}45%,72%{transform:translateY(-112px)}}
+@keyframes kCc{0%,10%,92%,100%{transform:translateY(0)}45%,72%{transform:translateY(-112px)}}
+@keyframes kCa{0%,10%,92%,100%{transform:translate(0,0) scale(1)}45%,72%{transform:translate(0,-70px) scale(.5)}}
+@keyframes kCn{0%,10%,92%,100%{transform:translate(0,0) scale(1)}45%,72%{transform:translate(38px,-129px) scale(.8)}}
+@keyframes kCg{0%,34%,82%,100%{opacity:0}45%,72%{opacity:1}}
+@keyframes kCt{0%,10%,92%,100%{transform:translateY(0)}45%,72%{transform:translateY(84px)}}
+
+.rs{display:flex;flex-direction:column;gap:8px;width:100%;padding:0 26px}
+.rs>div{display:flex;align-items:center;justify-content:space-between;height:31px;padding:0 12px;border-radius:10px;background:var(--raised);border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--ink);animation:kRise 4s cubic-bezier(.2,.9,.25,1) infinite both}
+.rs>div>.mono{font-size:11px;color:var(--ink3)}
+@keyframes kRise{0%{opacity:0;transform:translateY(16px) scale(.97)}9%,88%{opacity:1;transform:none}94%,100%{opacity:0;transform:translateY(16px) scale(.97)}}
+
+.rd{position:relative;width:236px;height:54px}
+.rd>.mp{position:absolute;left:0;top:0}
+.rd>.b{animation:kFadeB 4s linear infinite}.rd>.a{animation:kFadeA 4s linear infinite}
+@keyframes kFadeA{0%,20%,84%,100%{opacity:1}24%,80%{opacity:0}}
+@keyframes kFadeB{0%,20%,84%,100%{opacity:0}24%,80%{opacity:1}}
+
+.bnc{animation:kBnc 2.4s cubic-bezier(.3,1.6,.5,1) infinite}
+@keyframes kBnc{0%,40%,100%{transform:scale(1)}46%{transform:scale(.92)}54%{transform:scale(1.06)}62%{transform:scale(1)}}
+.swa{position:relative}
+.swa::before{content:"";position:absolute;inset:-1px;border-radius:999px;background:var(--ok);animation:kSwB 4s linear infinite}
+.sw.swa::after{position:relative;animation:kSw 4s cubic-bezier(.3,1.6,.5,1) infinite}
+@keyframes kSw{0%,22%,78%,100%{transform:translateX(0)}32%,68%{transform:translateX(20px)}}
+@keyframes kSwB{0%,22%,78%,100%{opacity:0}30%,70%{opacity:1}}
+.bub{max-width:200px;padding:9px 13px;border-radius:18px;font-size:13.5px;line-height:1.35;animation:kRise 4s cubic-bezier(.2,.9,.25,1) infinite both}
+.law{display:flex;flex-direction:column;gap:12px;padding:28px}
+.law>b{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:44px;line-height:.9;color:var(--accent-ink)}
+.law>h3{font-size:21px}
+.law>p{font-size:14px;line-height:1.5;color:var(--ink2)}
+.pf{display:flex;flex-direction:column;gap:18px;padding:28px}
+.pf>h3{display:flex;align-items:center;gap:10px;font-size:24px}
+.pf .it{display:flex;flex-direction:column;gap:3px;font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.rp{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:16px;background:var(--field);border:1px dashed var(--line);font-size:13px;line-height:1.45;color:var(--ink2)}
+.tw{display:flex;flex-direction:column;gap:5px;padding:14px 0;border-top:1px solid var(--line);font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.tw>.mono{color:var(--ink);font-size:12px;overflow-wrap:anywhere}
+.wit{display:flex;gap:12px;align-items:flex-start;padding:16px 18px;border-radius:18px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45;color:var(--ink)}
+.wit>.ic{color:var(--ok);margin-top:1px}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 160px; top: -140px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 230px; height: 230px; right: -30px; top: -40px; background: #6366F1; opacity: .26; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 960px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K26 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyMotion</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Tout mouvement de l'app sort d'une seule table de ressorts, de durées et de retours haptiques</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 820px">Ce n'est pas un composant qu'on voit : c'est la table que tous les autres appellent. Sept jetons nommés, les mêmes sur iOS, Android et le web. Aucun écran n'écrit plus un ressort à la main.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px; padding-top: 4px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Une table, pas une animation</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 30px; display: flex; flex-direction: column; gap: 16px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<p class="li">[[ic:check-circle]]<span><b>Nomme sept mouvements</b> et donne à chacun sa durée, sa courbe et son retour haptique.</span></p>
+<p class="li">[[ic:check-circle]]<span><b>Rend la même valeur</b> sur les trois plateformes, dans l'unité de chacune (réponse et amorti, raideur, <code>linear()</code>).</span></p>
+<p class="li">[[ic:check-circle]]<span><b>Porte la version réduite</b> de chaque jeton : un fondu court, décidé une fois pour toute l'app.</span></p>
+<p class="li">[[ic:check-circle]]<span><b>Calcule</b> le décalage d'une cascade et l'avancement d'un repli, en fonctions pures.</span></p>
+</div>
+<div class="card" style="padding: 30px; display: flex; flex-direction: column; gap: 16px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<p class="li">[[ic:x-circle]]<span><b>Dessiner quoi que ce soit.</b> La pastille qui glisse : K03. Le billet qui se retourne : K30. L'avatar qui voyage : K29.</span></p>
+<p class="li">[[ic:x-circle]]<span><b>Le verre</b> ni sa réponse au toucher : K01.</span></p>
+<p class="li">[[ic:x-circle]]<span><b>Décider quand un mouvement part.</b> Le déclencheur, l'état et l'ordre des écrans : l'app.</span></p>
+<p class="li">[[ic:x-circle]]<span><b>Jouer une alerte.</b> Sonnerie, succès, erreur : ce ne sont pas des retours de mouvement, ils restent à leur site.</span></p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Ce que porte un jeton</h2><p>Un jeton est une ligne de la table. Ici <code>motion.morph</code>, dessiné à deux fois sa taille : la pastille du sélecteur de faces, et sous elle la courbe qu'elle suit.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 32px; align-items: stretch">
+<div class="kcell" style="background: var(--ground); overflow: hidden; padding: 44px 40px 36px; flex-direction: column; gap: 34px; align-items: center">
+<div class="orb" style="width: 240px; height: 240px; left: 60px; top: -60px; background: var(--accent); opacity: .5"></div>
+<div class="orb" style="width: 200px; height: 200px; right: 80px; top: 20px; background: var(--brand); opacity: .5; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 14px; align-self: flex-start">
+<span class="tn" style="font-size: 26px">motion.morph</span>
+<span class="nat">ressort</span>
+</div>
+<div class="mp xl glass" style="position: relative">
+<i style="transform: translateX(46%) scaleX(1.5) scaleY(.9)"></i>
+<span>Vitrine</span><span>Liens</span><span>Actions</span>
+</div>
+<div style="position: relative; width: 100%">
+<svg class="cv" viewBox="0 0 640 230" width="100%" aria-hidden="true" style="height: auto">
+<line class="ax" x1="40" y1="186" x2="610" y2="186"></line>
+<line class="ax" x1="40" y1="56" x2="610" y2="56"></line>
+<line class="ax" x1="439" y1="30" x2="439" y2="186"></line><circle class="pt" cx="439" cy="50" r="5"></circle>
+<path class="ln" style="stroke: var(--ink3); stroke-width: 2; stroke-dasharray: 5 7" d="M40 186 L230 56 L610 56"></path>
+<path class="ln" style="stroke-width: 4" d="M40.0 186.0 L60.4 183.1 L80.7 175.4 L101.1 164.7 L121.4 152.2 L141.8 139.0 L162.1 125.7 L182.5 113.0 L202.9 101.3 L223.2 90.8 L243.6 81.6 L263.9 73.8 L284.3 67.3 L304.6 62.1 L325.0 58.1 L345.4 55.0 L365.7 52.8 L386.1 51.3 L406.4 50.5 L426.8 50.1 L447.1 50.0 L467.5 50.3 L487.9 50.7 L508.2 51.2 L528.6 51.8 L548.9 52.4 L569.3 53.0 L589.6 53.6 L610.0 54.1"></path>
+<circle class="pt" cx="40" cy="186" r="7"></circle>
+<text x="40" y="214" fill="#8D92CB" font-size="13" font-family="JetBrains Mono, monospace">0 ms</text>
+<text x="560" y="214" fill="#8D92CB" font-size="13" font-family="JetBrains Mono, monospace">420 ms</text>
+<text x="14" y="60" fill="#8D92CB" font-size="13" font-family="JetBrains Mono, monospace">1</text>
+<text x="14" y="190" fill="#8D92CB" font-size="13" font-family="JetBrains Mono, monospace">0</text>
+</svg>
+<span class="kan" style="left: 1.5%; top: 62%">5</span>
+<span class="kan" style="left: 70.5%; top: 5%">4</span>
+<span class="kan" style="left: 82.5%; top: 86.5%">3</span>
+<span class="kan" style="left: 15%; top: 40%">6</span>
+</div>
+<span class="kan" style="left: 12px; top: 49px">1</span>
+<span class="kan" style="left: 330px; top: 49px">2</span>
+</div>
+<div class="card" style="padding: 30px; display: flex; flex-direction: column; gap: 18px; justify-content: center">
+<div class="lg"><span class="kan">1</span><div><b>Nom</b><span>Un verbe, jamais un écran : <code>morph</code>, pas <code>profileTabSwitch</code>. Sept noms, liste fermée.</span></div></div>
+<div class="lg"><span class="kan">2</span><div><b>Nature</b><span>Ressort, durée, piloté ou boucle. Elle dit comment la valeur se lit sur chaque plateforme.</span></div></div>
+<div class="lg"><span class="kan">3</span><div><b>Durée</b><span>Le temps pour être posé à 1 % près. 420 ms ici ; jamais plus de 600 ms hors boucle.</span></div></div>
+<div class="lg"><span class="kan">4</span><div><b>Courbe</b><span>Réponse 0,42 s, amorti 0,7 : la pastille dépasse sa place de 4,6 %, puis s'y pose.</span></div></div>
+<div class="lg"><span class="kan">5</span><div><b>Haptique</b><span>Un seul retour par jeton, à un instant précis. Ici : léger, au toucher.</span></div></div>
+<div class="lg"><span class="kan">6</span><div><b>Version réduite</b><span>Le tireté : un fondu de 160 ms, sans dépassement ni déplacement.</span></div></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Les sept jetons, et leur version réduite</h2><p>Chaque case tourne pour de vrai. La courbe est celle du jeton, tracée à l'échelle de sa durée.</p></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 44px 24px; align-items: start">
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell st">
+<div class="orb" style="width: 150px; height: 150px; left: 10px; top: -30px; background: var(--accent); opacity: .55"></div>
+<div class="orb" style="width: 130px; height: 130px; right: 0; top: 70px; background: var(--brand); opacity: .55; animation-delay: -3s"></div>
+<div class="mp lp glass"><i></i><span>Vitrine</span><span>Liens</span><span>Actions</span></div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="tn">motion.morph</span><span class="nat">ressort</span></div>
+<p class="kcap">Une forme devient une autre : la pastille des faces, un bouton qui devient pilule.</p>
+<div style="display: flex; align-items: center; gap: 14px">
+<svg class="cv" viewBox="0 0 240 96" width="130" height="52" aria-hidden="true"><line class="ax" x1="10" y1="24" x2="230" y2="24"></line><path class="ln" d="M10 76 L21 73.8 L32 68.4 L43 61.4 L54 54 L65 46.8 L76 40.4 L87 34.9 L98 30.6 L109 27.2 L120 24.8 L131 23.2 L142 22.2 L153 21.7 L164 21.6 L175 21.7 L186 22 L197 22.3 L208 22.6 L219 23 L230 23.2"></path></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 22px">420 ms</b><span class="kcap">amorti 0,7</span></div>
+</div>
+<span class="hp">[[ic:vibrate s]]<span>Léger, au toucher</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell st" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="tvm">[[map]]</div>
+<div style="position: absolute; left: 26px; top: 112px; display: flex; flex-direction: column; gap: 7px; width: 104px">
+<b style="font-size: 13px; white-space: nowrap">Léo Marchetti</b>
+<i style="display: block; height: 9px; border-radius: 5px; background: var(--field)"></i>
+<i style="display: block; height: 9px; width: 70%; border-radius: 5px; background: var(--field)"></i>
+</div>
+<span class="pin tvp" style="left: 226px; top: 112px"></span>
+<span class="tvx"><span class="tvy"><span class="av">LM</span></span></span>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="tn">motion.travel</span><span class="nat">ressort</span></div>
+<p class="kcap">Un élément partagé voyage d'un écran à l'autre : l'avatar devient l'épingle.</p>
+<div style="display: flex; align-items: center; gap: 14px">
+<svg class="cv" viewBox="0 0 240 96" width="130" height="52" aria-hidden="true"><line class="ax" x1="10" y1="24" x2="230" y2="24"></line><path class="ln" d="M10 76 L21 73.8 L32 68.7 L43 62.3 L54 55.5 L65 49 L76 43.2 L87 38.3 L98 34.3 L109 31.1 L120 28.6 L131 26.8 L142 25.5 L153 24.6 L164 24 L175 23.7 L186 23.5 L197 23.4 L208 23.4 L219 23.5 L230 23.5"></path></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 22px">560 ms</b><span class="kcap">amorti 0,82</span></div>
+</div>
+<span class="hp">[[ic:vibrate s]]<span>Moyen, à l'atterrissage</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell st fl">
+<div class="fli">
+<div class="ticket" style="--cut: 62px; display: flex; flex-direction: column">
+<div style="padding: 12px 16px 10px; display: flex; flex-direction: column; gap: 4px"><span class="tag">Mon profil</span><span class="mono" style="color: var(--ink)">meeshy.me/@aissa</span></div>
+<div class="cut"></div>
+<div style="padding: 10px 16px; display: flex; align-items: baseline; gap: 8px"><b class="d" style="font-size: 24px">1 719</b><span class="kcap">visites ce mois</span></div>
+</div>
+<div class="ticket bk" style="--cut: 62px; display: flex; align-items: center; justify-content: center; gap: 14px">
+<span style="display: inline-flex; padding: 9px; border-radius: 14px; background: #EEF2FF; color: #0B0B12">[[ic:qr-code xl]]</span>
+<span class="mono" style="color: var(--ink)">meeshy.me/@aissa</span>
+</div>
+</div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="tn">motion.flip</span><span class="nat">ressort</span></div>
+<p class="kcap">Un retournement en 3D sur l'axe vertical : le billet montre son QR.</p>
+<div style="display: flex; align-items: center; gap: 14px">
+<svg class="cv" viewBox="0 0 240 96" width="130" height="52" aria-hidden="true"><line class="ax" x1="10" y1="24" x2="230" y2="24"></line><path class="ln" d="M10 76 L21 73.9 L32 68.8 L43 62.5 L54 55.9 L65 49.7 L76 44.1 L87 39.3 L98 35.4 L109 32.2 L120 29.8 L131 27.9 L142 26.5 L153 25.5 L164 24.8 L175 24.4 L186 24.1 L197 23.9 L208 23.8 L219 23.7 L230 23.7"></path><circle class="pt" cx="76" cy="44" r="6"></circle></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 22px">500 ms</b><span class="kcap">amorti 0,86</span></div>
+</div>
+<span class="hp">[[ic:vibrate s]]<span>Rigide, à mi-course</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell st">
+<div class="cb"><div class="orb" style="width: 90px; height: 90px; right: 30px; top: -10px; background: #D8B4FE; opacity: .5"></div></div>
+<div class="cc"><i></i><i></i><i></i><i></i><i></i></div>
+<div class="cg glass"></div>
+<span class="av ca">AN</span>
+<b class="d cn">Aïssa Ndiaye</b>
+<span class="ct"><i></i></span>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="tn">motion.collapse</span><span class="nat">piloté</span></div>
+<p class="kcap">Le défilement conduit : l'en-tête se replie en barre de verre, sans durée propre.</p>
+<div style="display: flex; align-items: center; gap: 14px">
+<svg class="cv" viewBox="0 0 240 96" width="130" height="52" aria-hidden="true"><line class="ax" x1="10" y1="24" x2="230" y2="24"></line><path class="ln" d="M10 76 L186 24 L230 24"></path><circle class="pt" cx="186" cy="24" r="6"></circle></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 22px">0–220 px</b><span class="kcap">linéaire, suit le doigt</span></div>
+</div>
+<span class="hp">[[ic:vibrate s]]<span>Léger, au verrouillage de la barre</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell st">
+<div class="rs">
+<div><span>Mes cercles</span><span class="mono">+ 0 ms</span></div>
+<div style="animation-delay: .08s"><span>Mon activité</span><span class="mono">+ 80 ms</span></div>
+<div style="animation-delay: .16s"><span>Ma Légende</span><span class="mono">+ 160 ms</span></div>
+<div style="animation-delay: .24s"><span>Ma voix</span><span class="mono">+ 240 ms</span></div>
+</div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="tn">motion.rise</span><span class="nat">cascade</span></div>
+<p class="kcap">Les blocs entrent l'un après l'autre, dans l'ordre de lecture. Quatre rangs au plus.</p>
+<div style="display: flex; align-items: center; gap: 14px">
+<svg class="cv" viewBox="0 0 240 96" width="130" height="52" aria-hidden="true"><line class="ax" x1="10" y1="24" x2="230" y2="24"></line><path class="ln" d="M10 76 L18 72 L28 62 L40 49 L54 38 L70 30 L90 25.5 L110 24 L134 24"></path><path class="ln" style="opacity: .6" d="M42 76 L50 72 L60 62 L72 49 L86 38 L102 30 L122 25.5 L142 24 L166 24"></path><path class="ln" style="opacity: .38" d="M74 76 L82 72 L92 62 L104 49 L118 38 L134 30 L154 25.5 L174 24 L198 24"></path><path class="ln" style="opacity: .22" d="M106 76 L114 72 L124 62 L136 49 L150 38 L166 30 L186 25.5 L206 24 L230 24"></path></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 22px">360 ms</b><span class="kcap">+ 80 ms par rang</span></div>
+</div>
+<span class="hp" style="color: var(--ink3)">[[ic:prohibit s]]<span>Aucun retour</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell st" style="background: linear-gradient(165deg, #6D28D9 0%, #3B1A78 55%, #09090B 100%)">
+<div class="orb" style="width: 130px; height: 130px; left: 14px; top: -24px; background: #D8B4FE; opacity: .6"></div>
+<div class="orb" style="width: 120px; height: 120px; right: 10px; top: 84px; background: #6366F1; opacity: .8; animation-delay: -4s"></div>
+<span class="ring" style="position: relative"><span class="av" style="width: 72px; height: 72px; font-size: 26px">AN</span></span>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="tn">motion.float</span><span class="nat">boucle</span></div>
+<p class="kcap">La vie au repos : les orbes d'une bannière flottent, l'anneau de story tourne.</p>
+<div style="display: flex; align-items: center; gap: 14px">
+<svg class="cv" viewBox="0 0 240 96" width="130" height="52" aria-hidden="true"><path class="ln" d="M10 76 L21 71 L32 58 L43 42 L54 29 L65 24 L76 29 L87 42 L98 58 L109 71 L120 76 L131 71 L142 58 L153 42 L164 29 L175 24 L186 29 L197 42 L208 58 L219 71 L230 76"></path></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 22px">8–9 s</b><span class="kcap">va-et-vient doux</span></div>
+</div>
+<span class="hp" style="color: var(--ink3)">[[ic:prohibit s]]<span>Aucun retour</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell st" style="--accent: #4ECDC4; --accent-ink: #7FE3DC; gap: 34px">
+<span style="position: relative; display: inline-flex"><span class="av" style="width: 68px; height: 68px; font-size: 24px">LM</span><span class="dot on" style="position: absolute; right: 0; bottom: 0; width: 18px; height: 18px"></span></span>
+<span style="position: relative; width: 112px; height: 112px; border-radius: 50%; overflow: hidden; border: 1px solid var(--line)">[[map]]<span class="pin" style="left: 50%; top: 50%"><span class="av" style="width: 36px; height: 36px; font-size: 13px; box-shadow: 0 0 0 3px var(--ground)">LM</span></span></span>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="tn">motion.pulse</span><span class="nat">boucle</span></div>
+<p class="kcap">Un signal qui dure tant que l'état est vrai : présence en ligne, onde d'une épingle.</p>
+<div style="display: flex; align-items: center; gap: 14px">
+<svg class="cv" viewBox="0 0 240 96" width="130" height="52" aria-hidden="true"><path class="ln" d="M10 76 L21 60.4 L32 47.7 L43 38 L54 30.9 L65 26.5 L81.5 24 L83 76 L98 55.8 L109 44.2 L120 35.3 L131 29.2 L142 25.5 L155 24 L156.5 76 L169.5 58.1 L180.5 45.9 L191.5 36.6 L202.5 30 L213.5 26 L230 24"></path></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 22px">2,2 s</b><span class="kcap">sortie douce, reprise</span></div>
+</div>
+<span class="hp" style="color: var(--ink3)">[[ic:prohibit s]]<span>Aucun retour</span></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell st" style="border-style: dashed">
+<div class="rd">
+<div class="mp glass a"><i></i><span>Vitrine</span><span>Liens</span><span>Actions</span></div>
+<div class="mp glass b"><i style="transform: translateX(100%)"></i><span>Vitrine</span><span>Liens</span><span>Actions</span></div>
+</div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span class="tn" style="color: var(--ink)">reduce: true</span><span class="nat">état</span></div>
+<p class="kcap">Mouvement réduit : les cinq premiers jetons deviennent ce fondu. Les deux boucles s'arrêtent.</p>
+<div style="display: flex; align-items: center; gap: 14px">
+<svg class="cv" viewBox="0 0 240 96" width="130" height="52" aria-hidden="true"><line class="ax" x1="10" y1="24" x2="230" y2="24"></line><path class="ln" style="stroke: var(--ink2)" d="M10 76 L30 62 L52 44 L74 32 L94 24 L230 24"></path></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><b class="d" style="font-size: 22px">160 ms</b><span class="kcap">fondu, sortie douce</span></div>
+</div>
+<span class="hp">[[ic:vibrate s]]<span>L'haptique du jeton reste</span></span>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">Trois recettes nommées, deux jetons réglables. Elles composent les sept jetons, elles n'en ajoutent aucun</h3></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: center; gap: 12px; width: 100%"><div style="flex: 1; display: flex; flex-direction: column; gap: 8px"><i class="sk" style="display: block; height: 12px; width: 86%"></i><i class="sk" style="display: block; height: 12px; width: 58%"></i></div><span style="display: inline-flex; color: var(--ink3)">[[ic:arrow-right s]]</span><div style="flex: 1; display: flex; flex-direction: column; gap: 3px"><b style="font-size: 14px">Léo Marchetti</b><span class="kcap">en ligne</span></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>motion.reveal</code></b> Le squelette cède au contenu, zone par zone : fondu croisé, aucun saut de mise en page. Réduit : échange sec.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: center; gap: 12px; width: 100%"><i class="sk" style="display: block; width: 44px; height: 44px; border-radius: 50%; flex: none"></i><div style="flex: 1; display: flex; flex-direction: column; gap: 8px"><i class="sk" style="display: block; height: 12px; width: 78%; animation-delay: -.2s"></i><i class="sk" style="display: block; height: 22px; width: 46%; border-radius: 999px; animation-delay: -.4s"></i></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>motion.shimmer</code></b> Le reflet du squelette de <b>K38</b> (<code>MeeshySkeleton</code>), en cascade d'une forme à la suivante. Réduit : aplat fixe.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="position: relative; width: 120px; height: 110px; display: flex; align-items: center; justify-content: center"><span style="position: absolute; width: 7px; height: 7px; border-radius: 50%; left: 8px; top: 18px; background: var(--warn)"></span><span style="position: absolute; width: 7px; height: 7px; border-radius: 50%; right: 10px; top: 8px; background: var(--ok)"></span><span style="position: absolute; width: 7px; height: 7px; border-radius: 50%; left: 22px; bottom: 6px; background: var(--info)"></span><span style="position: absolute; width: 7px; height: 7px; border-radius: 50%; right: 4px; bottom: 26px; background: var(--accent)"></span><span style="position: absolute; width: 7px; height: 7px; border-radius: 50%; left: 56px; top: 0; background: var(--err)"></span><span style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: #0B0B12">[[ic:confetti l]]</span></div></div><span class="kcap"><b style="color: var(--ink)"><code>motion.celebrate</code></b> Une réussite : particules et rebond, une fois. Réduit : repli fixe, sans particule.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: center; justify-content: space-around; width: 100%"><span style="position: relative; display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: var(--ok)"><span style="position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--ok); animation: mxPing 2.2s ease-out infinite"></span><span style="position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--ok); animation: mxPing 2.2s ease-out infinite; animation-delay: -1.1s"></span></span><span style="display: block; width: 62px; height: 56px; background: var(--accent); animation: mxMorph 6s ease-in-out infinite"></span></div></div><span class="kcap"><b style="color: var(--ink)"><code>pulse</code> et <code>morph</code>, réglés</b> <code>rings</code> (1 à 3 anneaux) et <code>cadence</code> pour <code>motion.pulse</code> ; <code>shape</code> (goutte de fusion, contour organique) pour <code>motion.morph</code>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Un jeton joué, image par image</h2><p>À gauche, <code>motion.morph</code> tourne avec son vrai ressort. Le trait jaune parcourt la courbe pendant que la pastille glisse ; la pilule s'allume à l'instant du retour haptique.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 32px; align-items: stretch">
+<div class="kcell" style="background: var(--ground); overflow: hidden; flex-direction: column; gap: 30px; padding: 40px 28px; border-color: var(--accent); box-shadow: 0 0 0 5px color-mix(in oklab, var(--accent) 16%, transparent)">
+<div class="orb" style="width: 220px; height: 220px; left: 30px; top: -50px; background: var(--accent); opacity: .5"></div>
+<div class="orb" style="width: 180px; height: 180px; right: 20px; top: 60px; background: var(--brand); opacity: .5; animation-delay: -4s"></div>
+<div class="mp md sp glass"><i></i><span>Vitrine</span><span>Liens</span><span>Actions</span></div>
+<div style="position: relative; width: 420px; height: 168px">
+<svg class="cv" viewBox="0 0 240 96" width="420" height="168" aria-hidden="true"><line class="ax" x1="10" y1="24" x2="230" y2="24"></line><line class="ax" x1="10" y1="76" x2="230" y2="76"></line><path class="ln" style="stroke-width: 2" d="M10 76 L21 73.8 L32 68.4 L43 61.4 L54 54 L65 46.8 L76 40.4 L87 34.9 L98 30.6 L109 27.2 L120 24.8 L131 23.2 L142 22.2 L153 21.7 L164 21.6 L175 21.7 L186 22 L197 22.3 L208 22.6 L219 23 L230 23.2"></path></svg>
+<span class="cur" style="left: 17px"></span>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 12px">
+<span class="tic">[[ic:vibrate s]]<span>Retour léger</span></span>
+<span class="chip">[[ic:arrows-clockwise s]]<span>En boucle</span></span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="kcell" style="background: var(--ground); overflow: hidden; padding: 0; height: 190px">
+<div class="orb" style="width: 130px; height: 130px; left: 0; top: -20px; background: var(--accent); opacity: .5; animation: none"></div>
+<div class="mp glass" style="width: 204px"><i></i><span>Vitrine</span><span>Liens</span><span>Actions</span></div>
+</div>
+<p class="kcap"><b style="color: var(--ink)">0 ms.</b> Le doigt touche Liens. Tic léger, la pastille part aussitôt.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="kcell" style="background: var(--ground); overflow: hidden; padding: 0; height: 190px">
+<div class="orb" style="width: 130px; height: 130px; left: 60px; top: -20px; background: var(--accent); opacity: .5; animation: none"></div>
+<div class="mp glass" style="width: 204px"><i style="transform: translateX(106%) scaleX(.94) scaleY(1.04)"></i><span>Vitrine</span><span>Liens</span><span>Actions</span></div>
+</div>
+<p class="kcap"><b style="color: var(--ink)">290 ms.</b> Elle dépasse sa place de 4,6 %. C'est le ressort qu'on sent.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="kcell" style="background: var(--ground); overflow: hidden; padding: 0; height: 190px">
+<div class="orb" style="width: 130px; height: 130px; right: 0; top: -20px; background: var(--accent); opacity: .5; animation: none"></div>
+<div class="mp glass" style="width: 204px"><i style="transform: translateX(100%)"></i><span>Vitrine</span><span>Liens</span><span>Actions</span></div>
+</div>
+<p class="kcap"><b style="color: var(--ink)">420 ms.</b> Posée. Le contenu de la face a glissé dans le même sens.</p>
+</div>
+</div>
+<div class="spec">durée 420 ms · courbe ressort (réponse 0,42 · amorti 0,7) · déclencheur toucher ou glisser · haptique léger au toucher · mouvement réduit fondu 160 ms</div>
+<div class="card" style="padding: 22px 24px; display: flex; flex-direction: column; gap: 10px">
+<span class="tag">Comment un composant cite la table</span>
+<p style="font-size: 14.5px; line-height: 1.5; color: var(--ink2)">La fiche d'un composant n'écrit jamais « 0,42 s » : elle écrit <code>motion.morph</code>. K03 cite <code>morph</code>, K28 <code>collapse</code>, K29 <code>travel</code>, K30 <code>flip</code>, K27 <code>float</code>, K36 <code>pulse</code>, et toute face qui s'ouvre <code>rise</code>. Changer une valeur ici la change partout, en une seule PR.</p>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 bis · Haptique</span><h2 class="d">Chaque jeton a son retour, et un seul</h2><p>Quatre retours : léger, moyen, rigide, aucun. Le retour part avec le mouvement, pas avant ni après. Une boucle ne vibre jamais.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: stretch">
+<div class="kapi" style="grid-template-columns: 1fr .7fr 1.15fr 1.5fr 1.3fr">
+<span class="h">Jeton</span><span class="h">Retour</span><span class="h">Instant</span><span class="h">iOS · Android</span><span class="h">Web</span>
+<span><code>motion.morph</code></span><span><b>Léger</b></span><span>au toucher</span><span><code>.impact(weight: .light)</code> · <code>TextHandleMove</code></span><span><code>impact('light')</code></span>
+<span><code>motion.travel</code></span><span><b>Moyen</b></span><span>à l'atterrissage</span><span><code>.impact(weight: .medium)</code> · <code>Confirm</code></span><span><code>impact('medium')</code></span>
+<span><code>motion.flip</code></span><span><b>Rigide</b></span><span>à mi-course, 90°</span><span><code>.impact(flexibility: .rigid)</code> · <code>ContextClick</code></span><span><code>impact('rigid')</code>, à ajouter</span>
+<span><code>motion.collapse</code></span><span><b>Léger</b></span><span>une fois, quand la barre se verrouille (220 px)</span><span><code>.impact(weight: .light)</code> · <code>TextHandleMove</code></span><span><code>impact('light')</code></span>
+<span><code>motion.rise</code></span><span style="color: var(--ink3)">Aucun</span><span style="color: var(--ink3)">une entrée n'est pas un geste</span><span style="color: var(--ink3)">rien</span><span style="color: var(--ink3)">rien</span>
+<span style="border-bottom: 0"><code>motion.float</code> · <code>motion.pulse</code></span><span style="border-bottom: 0; color: var(--ink3)">Aucun</span><span style="border-bottom: 0; color: var(--ink3)">une boucle ne vibre jamais</span><span style="border-bottom: 0; color: var(--ink3)">rien</span><span style="border-bottom: 0; color: var(--ink3)">rien</span>
+</div>
+<div class="kcell" style="background: var(--ground); overflow: hidden; flex-direction: column; gap: 18px; padding: 24px">
+<div class="orb" style="width: 150px; height: 150px; left: 70px; top: 0; background: var(--accent); opacity: .55"></div>
+<button class="ib g lg bnc" aria-label="Retourner le billet" style="position: relative">[[ic:qr-code l]]</button>
+<p class="kcap" style="position: relative; text-align: center"><b style="color: var(--ink)">Le micro-rebond.</b> Safari sur iPhone n'a pas <code>navigator.vibrate</code> : le web rend le retour à l'œil, 0,92 → 1,06 → 1 en 180 ms.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Mêmes noms sur les trois plateformes</h2></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyMotion.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-motion.ts</span>
+<span>Table</span><span><code>enum MeeshyMotion</code></span><span><code>object MeeshyMotion</code></span><span><code>meeshyMotion</code> + variables <code>--motion-*</code></span>
+<span>Jetons (<code>enum</code>)</span><span><code>MeeshyMotionToken { morph, travel, flip, collapse, rise, float, pulse }</code></span><span><code>enum class MeeshyMotionToken</code>, mêmes sept</span><span><code>'morph' | 'travel' | 'flip' | 'collapse' | 'rise' | 'float' | 'pulse'</code></span>
+<span>Retour (<code>enum</code>)</span><span><code>MeeshyMotionHaptic { light, medium, rigid, none }</code></span><span><code>enum class MeeshyMotionHaptic</code></span><span><code>'light' | 'medium' | 'rigid' | 'none'</code></span>
+<span>Recette en valeurs</span><span><code>MeeshyMotionRecipe.resolve(token:reduce:)</code></span><span><code>MeeshyMotionRecipe.resolve(token, reduce)</code></span><span><code>meeshyMotionRecipe(token, reduce)</code></span>
+<span>Appliquer</span><span><code>.meeshyMotion(_ token:, value:)</code> et <code>MeeshyMotion.animation(token, reduce:)</code></span><span><code>MeeshyMotion.spec&lt;T&gt;(token, reduce)</code></span><span><code>meeshyMotion(token)</code> rend <code>duration</code> et <code>easing</code></span>
+<span>Élément partagé (<code>slot</code>)</span><span><code>.meeshyTravel(id:in:)</code></span><span><code>Modifier.meeshyTravel(id)</code></span><span><code>meeshyTravel(id)</code> pose <code>view-transition-name</code></span>
+<span>Avancement piloté</span><span><code>MeeshyMotion.progress(offset:range:)</code></span><span><code>MeeshyMotion.progress(offset, range)</code></span><span><code>meeshyMotionProgress(offset, range)</code></span>
+<span>Décalage de cascade</span><span><code>MeeshyMotion.delay(index:)</code></span><span><code>MeeshyMotion.delayMillis(index)</code></span><span><code>meeshyMotionDelay(index)</code> ou <code>--i</code></span>
+<span>Recettes nommées</span><span><code>MeeshyMotionRecipe.named(.reveal | .shimmer | .celebrate, reduce:)</code></span><span><code>MeeshyMotionRecipe.named(name, reduce)</code></span><span><code>meeshyMotionNamed('reveal' | 'shimmer' | 'celebrate', reduce)</code></span>
+<span style="border-bottom: 0">Jouer le retour</span><span style="border-bottom: 0"><code>MeeshyMotion.play(_ haptic:)</code></span><span style="border-bottom: 0"><code>MeeshyMotion.play(haptic)</code></span><span style="border-bottom: 0"><code>meeshyMotionPlay(haptic)</code></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 26px 28px; display: flex; flex-direction: column; gap: 12px">
+<span class="tag">Paramètres, tous opaques, mêmes défauts partout</span>
+<p class="li">[[ic:caret-right s]]<span><code>token</code>, obligatoire. Un des sept ; aucun jeton libre, aucune durée passée en clair.</span></p>
+<p class="li">[[ic:caret-right s]]<span><code>reduce: Bool = false</code>. L'hôte le lit du système ; la recette ne lit aucun réglage elle-même.</span></p>
+<p class="li">[[ic:caret-right s]]<span><code>index: Int = 0</code>. Rang dans la cascade ; borné à 3, un rang négatif vaut 0.</span></p>
+<p class="li">[[ic:caret-right s]]<span><code>offset</code> et <code>range = 0...220</code>. Rend un avancement de 0 à 1, borné aux deux bouts.</span></p>
+<p class="li">[[ic:caret-right s]]<span><code>id</code>. Une clé opaque (texte ou valeur hachable) ; la même des deux côtés du voyage.</span></p>
+<p class="li">[[ic:caret-right s]]<span><code>haptic: MeeshyMotionHaptic? = nil</code>. Par défaut celui du jeton ; <code>none</code> laisse l'hôte jouer le sien.</span></p>
+<p class="li">[[ic:caret-right s]]<span><code>rings: Int = 1</code> et <code>cadence</code> pour <code>pulse</code> · <code>shape: MeeshyMotionShape = .plain</code> (<code>drop</code>, <code>organic</code>) pour <code>morph</code>.</span></p>
+</div>
+<div class="card" style="padding: 26px 28px; display: flex; flex-direction: column; gap: 12px">
+<span class="tag">Ce que rend la recette</span>
+<div class="spec">nature: spring | timed | driven | loop<br>duration: 420            // ms, posé à 1 %<br>response: 0.42 · damping: 0.7<br>delayStep: 0             // 80 pour rise<br>haptic: light · hapticAt: start<br>reduced: fade(160)       // ou stop pour une boucle</div>
+<p style="font-size: 13.5px; line-height: 1.5; color: var(--ink2)">Des valeurs seules : pas de vue, pas d'horloge, pas de singleton. Les vecteurs <code>K26-MeeshyMotion.vectors.json</code> portent ces sept lignes et les trois plateformes les relisent.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">La même table, dans l'unité de chacun</h2><p>La raideur Android se déduit de la réponse iOS : <code>(2π / réponse)²</code>. Le ressort du web est le même, échantillonné en <code>linear()</code>.</p></header>
+<div class="kapi" style="grid-template-columns: .8fr 1.35fr 1.35fr 1.35fr">
+<span class="h">Jeton</span><span class="h">iOS · SwiftUI</span><span class="h">Android · Compose</span><span class="h">Web · CSS</span>
+<span><code>motion.morph</code><br>420 ms</span><span><code>.spring(response: 0.42, dampingFraction: 0.7)</code><br>avec <code>glassEffectID</code> ou <code>matchedGeometryEffect</code></span><span><code>spring(dampingRatio = 0.7f, stiffness = 224f)</code><br>forme : <code>Morph</code> de <code>androidx.graphics.shapes</code></span><span><code>420ms linear(0, .107, .327, .561, .757, .897, .984, 1.029, 1.045, 1.044, 1.035, 1.024, 1)</code></span>
+<span><code>motion.travel</code><br>560 ms</span><span><code>.spring(response: 0.56, dampingFraction: 0.82)</code><br>avec <code>matchedGeometryEffect</code></span><span><code>spring(0.82f, 126f)</code><br>dans <code>SharedTransitionLayout</code>, <code>sharedElement</code></span><span>View Transitions, <code>560ms linear(0, .103, .308, .519, .695, .825, .911, .964, .992, 1.006, 1.011, 1.011, 1)</code></span>
+<span><code>motion.flip</code><br>500 ms</span><span><code>.spring(response: 0.5, dampingFraction: 0.86)</code><br>sur <code>rotation3DEffect</code></span><span><code>spring(0.86f, 158f)</code><br>sur <code>graphicsLayer { rotationY }</code></span><span><code>500ms cubic-bezier(.2, 0, 0, 1)</code><br>sur <code>rotateY</code>, faces en <code>backface-visibility: hidden</code></span>
+<span><code>motion.collapse</code><br>0–220 px</span><span><code>scrollTransition</code> et <code>onScrollGeometryChange</code> ; aucune <code>Animation</code></span><span><code>nestedScroll</code>, avancement lu dans <code>graphicsLayer</code></span><span><code>animation-timeline: scroll()</code><br><code>animation-range: 0 220px</code>, <code>linear</code></span>
+<span><code>motion.rise</code><br>360 ms + 80</span><span><code>.spring(response: 0.36, dampingFraction: 0.86)</code><br><code>.delay(0.08 × index)</code></span><span><code>spring(0.86f, 305f)</code><br>après <code>delayMillis(index)</code></span><span><code>360ms cubic-bezier(.2, .9, .25, 1)</code><br><code>animation-delay: calc(var(--i) * 80ms)</code></span>
+<span><code>motion.float</code><br>8–9 s</span><span><code>.easeInOut(duration: 9)</code><br><code>.repeatForever(autoreverses: true)</code></span><span><code>infiniteRepeatable(tween(9000), RepeatMode.Reverse)</code></span><span><code>9s ease-in-out infinite alternate</code></span>
+<span style="border-bottom: 0"><code>motion.pulse</code><br>2,2 s</span><span style="border-bottom: 0"><code>.easeOut(duration: 2.2)</code><br><code>.repeatForever(autoreverses: false)</code></span><span style="border-bottom: 0"><code>infiniteRepeatable(tween(2200), RepeatMode.Restart)</code></span><span style="border-bottom: 0"><code>2.2s ease-out infinite</code></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+<div class="card pf">
+<h3 class="d">[[ic:apple-logo l]]<span>iOS</span></h3>
+<div class="it"><span style="color: var(--ink)"><code>Animation.spring(response:dampingFraction:)</code></span><span>La forme de référence : les deux nombres de la table sont les siens.</span></div>
+<div class="it"><span style="color: var(--ink)"><code>glassEffectID</code> · <code>matchedGeometryEffect</code></span><span>Morph et voyage. Sur iOS 26, le verre se déforme tout seul entre deux identités.</span></div>
+<div class="it"><span style="color: var(--ink)"><code>scrollTransition</code></span><span>Le repli lit la position du défilement, sans état ni minuterie.</span></div>
+<div class="it"><span style="color: var(--ink)"><code>sensoryFeedback</code></span><span>Le retour se déclare à côté du mouvement, sur la même valeur.</span></div>
+<div class="rp"><b style="color: var(--ink)">Repli</b><span>Avant iOS 26 : <code>matchedGeometryEffect</code> sur verre dessiné (K01). Avant iOS 17 : le retour passe par <code>HapticFeedback</code>, le repli par une clé de préférence.</span></div>
+</div>
+<div class="card pf">
+<h3 class="d">[[ic:android-logo l]]<span>Android</span></h3>
+<div class="it"><span style="color: var(--ink)"><code>spring(dampingRatio, stiffness)</code></span><span>Raideur calculée depuis la réponse ; jamais un littéral dans un écran.</span></div>
+<div class="it"><span style="color: var(--ink)"><code>SharedTransitionLayout</code></span><span>Le voyage : <code>sharedElement</code> porte la même clé des deux côtés.</span></div>
+<div class="it"><span style="color: var(--ink)"><code>Morph</code> de <code>androidx.graphics.shapes</code></span><span>La forme elle-même change (rond, « cookie », carré arrondi) sur <code>motion.morph</code>.</span></div>
+<div class="it"><span style="color: var(--ink)"><code>HapticFeedbackType</code></span><span>Joué par <code>MeeshyHaptics</code>, seul site d'haptique du module.</span></div>
+<div class="rp"><b style="color: var(--ink)">Repli</b><span>Sans <code>SharedTransitionLayout</code> : fondu enchaîné de 160 ms. Animations coupées dans le système : <code>reduce</code> vaut vrai, la recette rend le fondu.</span></div>
+</div>
+<div class="card pf">
+<h3 class="d">[[ic:browser l]]<span>Web</span></h3>
+<div class="it"><span style="color: var(--ink)"><code>linear()</code> · <code>cubic-bezier()</code></span><span>Le ressort est échantillonné en treize points ; la courbe de Bézier sert de repli.</span></div>
+<div class="it"><span style="color: var(--ink)">View Transitions</span><span><code>view-transition-name</code> posé par <code>meeshyTravel(id)</code>, retiré à la fin.</span></div>
+<div class="it"><span style="color: var(--ink)"><code>animation-timeline: scroll()</code></span><span>Le repli tourne hors du fil principal, sans écouteur.</span></div>
+<div class="it"><span style="color: var(--ink)"><code>navigator.vibrate</code></span><span>Présent sur Android, absent sur iOS : le micro-rebond prend le relais.</span></div>
+<div class="rp"><b style="color: var(--ink)">Repli</b><span>Sans <code>linear()</code> : <code>cubic-bezier(.3, 1.5, .5, 1)</code> sous <code>@supports</code>. Sans View Transitions : fondu croisé. Sans <code>scroll()</code> : un écouteur passif écrit <code>--p</code> une fois par image.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 bis · Lois</span><h2 class="d">Quatre lois, sans exception</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: stretch">
+<div class="card law"><b>1</b><h3 class="d">Mouvement réduit, donc fondu</h3><p>Sous « Réduire les animations », un jeton rend un fondu de 160 ms. Les boucles s'arrêtent sur leur image de repos. Rien ne glisse, rien ne tourne.</p></div>
+<div class="card law"><b>2</b><h3 class="d">Rien au-delà de 600 ms</h3><p>Le plus long, <code>travel</code>, dure 560 ms. Une cascade entière est posée à 600 ms. Seules les deux boucles d'ambiance durent, et elles n'attendent personne.</p></div>
+<div class="card law"><b>3</b><h3 class="d">Seulement <span class="mono" style="font-size: 17px">transform</span> et <span class="mono" style="font-size: 17px">opacity</span></h3><p>Aucun jeton n'anime une taille, une marge, une ombre ou un flou. Un mouvement ne recalcule pas la mise en page et ne repeint pas ses voisins.</p></div>
+<div class="card law"><b>4</b><h3 class="d">Un mouvement explique d'où vient la chose</h3><p>La pastille vient de la face quittée, l'épingle vient de l'avatar, le QR est le dos du billet. Un mouvement qui n'explique rien se retire.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">La table existe déjà sur iOS et Android, pas sur le web</h2><p>Relevé dans le dépôt le 16 novembre 2026. On extrait avant de créer : le nom <code>MeeshyMotion</code> est déjà pris sur iOS et sur Android, et c'est tant mieux.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start">
+<div class="card" style="padding: 26px 28px; display: flex; flex-direction: column; gap: 4px">
+<h3 class="d" style="font-size: 22px; display: flex; align-items: center; gap: 10px; padding-bottom: 14px">[[ic:apple-logo]]<span>iOS</span></h3>
+<div class="tw"><span class="mono">MeeshyUI/Theme/DesignTokens.swift</span><span><span class="knum" style="height: 22px; font-size: 11px; padding: 0 8px">DEVIENT le composant</span></span><span><code>MeeshyAnimation</code> : <code>springFast</code> 0,25 / 0,7 · <code>springDefault</code> 0,4 / 0,75 · <code>springBouncy</code> 0,5 / 0,6 · <code>staggerDelay</code>. Ses ressorts deviennent les sept jetons.</span></div>
+<div class="tw"><span class="mono">MeeshyUI/Theme/Accessibility.swift</span><span><code>MeeshyMotion</code> : la porte du mouvement réduit (<code>shouldReduce</code>, <code>reducedFade</code>). Elle garde son nom et reçoit la table.</span></div>
+<div class="tw"><span class="mono">MeeshyUI/Theme/MeeshyMotion+BannerPull.swift</span><span>Des jetons qui portent déjà leur variante réduite : la forme à généraliser.</span></div>
+<div class="tw"><span class="mono">MeeshyUI/Utilities/HapticFeedback.swift</span><span><code>light</code>, <code>medium</code>, <code>rigid</code> : le site unique d'haptique, que <code>play</code> appelle.</span></div>
+</div>
+<div class="card" style="padding: 26px 28px; display: flex; flex-direction: column; gap: 4px">
+<h3 class="d" style="font-size: 22px; display: flex; align-items: center; gap: 10px; padding-bottom: 14px">[[ic:android-logo]]<span>Android</span></h3>
+<div class="tw"><span class="mono">sdk-ui/…/ui/theme/MeeshyMotion.kt</span><span><span class="knum" style="height: 22px; font-size: 11px; padding: 0 8px">DEVIENT le composant</span></span><span><code>object MeeshyMotion</code> : la conversion <code>stiffnessForResponse</code>, <code>springFor(response, dampingFraction)</code> et <code>STAGGER_STEP_MILLIS</code> y sont déjà. Il reçoit les sept jetons.</span></div>
+<div class="tw"><span class="mono">sdk-ui/…/ui/haptics/MeeshyHaptics.kt</span><span><code>light()</code>, <code>medium()</code>, <code>rigid()</code> : le retour passe par lui.</span></div>
+</div>
+<div class="card" style="padding: 26px 28px; display: flex; flex-direction: column; gap: 4px">
+<h3 class="d" style="font-size: 22px; display: flex; align-items: center; gap: 10px; padding-bottom: 14px">[[ic:browser]]<span>Web</span></h3>
+<p style="font-size: 13.5px; line-height: 1.45; color: var(--ink); padding-bottom: 14px"><b>Aucune table : à créer.</b> Les durées vivent dans les feuilles de style, une par règle.</p>
+<div class="tw"><span class="mono">apps/web/src/styles/game.css</span><span><span class="knum re" style="height: 22px; font-size: 11px; padding: 0 8px">donne la forme</span></span><span><code>--game-spring</code> : le seul ressort écrit en <code>linear()</code>, avec son repli sous <code>@supports</code>. Les variables <code>--motion-*</code> prennent cette forme.</span></div>
+<div class="tw"><span class="mono">apps/web/src/styles/call-motion.css</span><span>Des durées et des <code>cubic-bezier</code> écrites à la main, répétées d'une règle à l'autre.</span></div>
+<div class="tw"><span class="mono">apps/web/src/styles/app.css</span><span>Même constat (<code>signupSpringIn</code>, <code>composerSlotIn</code>) : des littéraux à remplacer par un jeton.</span></div>
+<div class="tw"><span class="mono">apps/web/src/lib/view/haptics.ts</span><span><code>impact('light' | 'medium')</code> : le vocabulaire d'haptique. Il lui manque <code>rigid</code>.</span></div>
+<div class="tw"><span class="mono">apps/web/src/lib/view/reduced-motion.ts</span><span><code>prefersReducedMotion()</code> : la lecture que l'hôte remet à la recette.</span></div>
+</div>
+</div>
+<div class="rp" style="flex-direction: row; gap: 16px; align-items: flex-start; padding: 18px 22px">
+<span style="color: var(--warn); display: inline-flex">[[ic:flag]]</span>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+<b style="color: var(--ink)">À trancher, consigné pour plus tard</b>
+<span>La cascade vaut 40 ms par rang dans le code (<code>staggerDelay</code>, <code>STAGGER_STEP_MILLIS</code>) et 80 ms sur cette planche.</span>
+<span>La table reste-t-elle dans <code>Theme/</code> et <code>ui/theme</code>, où vit déjà son nom, ou déménage-t-elle dans <code>Kit/</code> avec les autres fiches ?</span>
+<span>Les ressorts déjà nommés (<code>springFast</code>, <code>previewMorph</code>, <code>bannerPullReturn</code>…) deviennent-ils des alias des sept jetons, ou restent-ils à côté ?</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Hors du profil, les mêmes sept mots</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="kcell st" style="flex-direction: column; align-items: stretch; justify-content: center; gap: 8px; padding: 0 22px">
+<div class="bub" style="align-self: flex-start; background: var(--field); border: 1px solid var(--line)">Tu passes au studio ?</div>
+<div class="bub" style="align-self: flex-end; background: var(--brand-fill); color: #fff; animation-delay: .08s">J'arrive dans dix minutes</div>
+</div>
+<p class="kcap"><b style="color: var(--ink)">Conversation.</b> Le dernier message arrivé monte à sa place : <code>motion.rise</code>.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="kcell st" style="padding: 0 6px">
+<div class="row" style="width: 100%"><span style="color: var(--ink2); display: inline-flex">[[ic:ghost]]</span><span style="flex: 1; font-weight: 600">Mode fantôme</span><span class="sw swa" role="img" aria-label="Interrupteur qui bascule"></span></div>
+</div>
+<p class="kcap"><b style="color: var(--ink)">Réglages.</b> Le bouton d'un interrupteur glisse et rebondit : <code>motion.morph</code>.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="kcell st" style="--accent: #FF6B6B; --accent-ink: #FFA8A8; flex-direction: column; gap: 22px">
+<span style="position: relative; width: 64px; height: 64px"><span class="pin" style="left: 50%; top: 50%"><span class="av" style="width: 64px; height: 64px; font-size: 23px">MO</span></span></span>
+<div style="display: flex; gap: 28px">
+<button class="ib" aria-label="Refuser l'appel" style="background: var(--err); color: #0B0B12">[[ic:phone-x]]</button>
+<button class="ib" aria-label="Répondre" style="background: var(--ok); color: #0B0B12">[[ic:phone-fill]]</button>
+</div>
+</div>
+<p class="kcap"><b style="color: var(--ink)">Appels.</b> L'avatar de Mina émet une onde tant que ça sonne : <code>motion.pulse</code>.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="kcell st fl">
+<div class="fli" style="width: 150px; height: 150px; animation-delay: -1.2s">
+<div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--warn)">[[ic:trophy xl]]<b class="d" style="font-size: 20px; color: var(--ink)">Niveau 24</b></div>
+<div class="card bk" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--warn)">[[ic:crown-fill xl]]<b class="d" style="font-size: 20px; color: var(--ink)">Or III</b></div>
+</div>
+</div>
+<p class="kcap"><b style="color: var(--ink)">Jeu.</b> La carte de niveau se retourne sur le rang : <code>motion.flip</code>.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<p class="wit">[[ic:check-circle]]<span>Les sept lignes de <code>K26-MeeshyMotion.vectors.json</code> rendent la même recette sur les trois plateformes, au millième près.</span></p>
+<p class="wit">[[ic:check-circle]]<span><code>reduce = true</code> : cinq jetons rendent le fondu de 160 ms, <code>float</code> et <code>pulse</code> rendent l'arrêt.</span></p>
+<p class="wit">[[ic:check-circle]]<span>Aucune durée hors boucle ne dépasse 600 ms ; une cascade de dix blocs est posée à 600 ms.</span></p>
+<p class="wit">[[ic:check-circle]]<span>Raideur Android = <code>(2π / réponse)²</code> pour chaque ressort ; le <code>linear()</code> du web s'écarte de moins de 1 % du ressort.</span></p>
+<p class="wit">[[ic:check-circle]]<span>Chaque jeton joue son retour une fois, au bon instant ; <code>none</code> et un hôte désactivé ne jouent rien.</span></p>
+<p class="wit">[[ic:check-circle]]<span>Garde de source : aucun <code>spring(</code>, <code>cubic-bezier(</code> ni durée en clair hors de la table, dans le kit et les écrans qui l'adoptent.</span></p>
+<p class="wit" style="grid-column: span 3">[[ic:check-circle]]<span><code>progress</code> est borné à 0 et 1, et se reflète en lecture de droite à gauche pour les déplacements horizontaux.</span></p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<p style="font-size: 14.5px; line-height: 1.55; color: var(--ink2)"><b style="color: var(--ink)">Accessibilité.</b> Un mouvement ne porte jamais seul une information : l'état final se lit sans lui. Le mouvement réduit est lu du système et du réglage de l'app ; l'haptique reste, elle ne dépend pas de l'œil.</p>
+<p style="font-size: 14.5px; line-height: 1.55; color: var(--ink2)"><b style="color: var(--ink)">Performance.</b> Seuls <code>transform</code> et <code>opacity</code> bougent : aucune mise en page, aucune re-peinture des voisins, 120 images par seconde tenues. Une boucle hors écran s'arrête.</p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8339}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

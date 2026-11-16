@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K36 MeeshyMapPin</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:860px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:16px;padding:14px 14px 20px}
+.cp{display:flex;flex-direction:column;gap:4px;padding:0 8px}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.mp{position:relative;overflow:hidden;border-radius:18px;border:1px solid var(--line);flex:none}
+.leo{--accent:#4ECDC4;--accent-ink:#7FE3DC}
+.mina{--accent:#FF6B6B;--accent-ink:#FFA3A3}
+.tom{--accent:#F8B500;--accent-ink:#FFD35C}
+.me{--accent:#A855F7;--accent-ink:#D8B4FE}
+
+.blur{position:absolute;border-radius:50%;transform:translate(-50%,-50%);background:color-mix(in oklab,var(--accent) 18%,transparent);border:1.5px solid var(--accent);animation:k36Halo 5s ease-in-out infinite}
+.blur.sel{background:color-mix(in oklab,var(--accent) 28%,transparent)}
+.blur.old{background:rgba(141,146,203,.10);border:1.5px dashed var(--ink3);animation:none}
+.spot{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center}
+.spot .av{position:relative;width:48px;height:48px;font-size:17px;border:3px solid var(--ground);box-shadow:0 10px 24px rgba(0,0,0,.55)}
+.spot.sel .av{width:56px;height:56px;font-size:20px;border-color:#fff;box-shadow:0 0 0 3px var(--accent),0 14px 30px rgba(0,0,0,.6)}
+.spot.old .av{filter:grayscale(1) brightness(.72)}
+.spot.own .av{width:38px;height:38px;font-size:13px;border:2.5px solid #fff;box-shadow:0 6px 16px rgba(0,0,0,.5)}
+.spot.fc .av{outline:2.5px solid var(--ink);outline-offset:3px}
+.spot.prs .av{transform:scale(.94);filter:brightness(1.15)}
+.spot>.dot,.in>.dot{position:absolute;right:-2px;bottom:-2px}
+.tail{position:absolute;left:50%;bottom:-9px;width:14px;height:14px;margin-left:-7px;background:var(--ground);transform:rotate(45deg);border-radius:3px}
+.sel>.tail{background:#fff;bottom:-8px}
+.cap{position:absolute;transform:translate(-50%,0);display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:rgba(19,17,28,.72);border:1px solid var(--glass-line);font-size:11px;font-weight:700;color:var(--ink);white-space:nowrap}
+.cap.on{background:var(--ink);color:var(--ground);border-color:transparent}
+.clu{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;padding:3px;border-radius:999px;background:var(--ground);box-shadow:0 10px 24px rgba(0,0,0,.55)}
+.clu>.av{width:36px;height:36px;font-size:12.5px;border:2.5px solid var(--ground);margin-left:-8px}
+.clu>.av:first-child{margin-left:0}
+.clu>b{position:absolute;top:-9px;right:-9px;display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 6px;border-radius:999px;background:var(--ink);color:var(--ground);border:2.5px solid var(--ground);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:13px}
+.clu.n{padding:0;width:var(--d,44px);height:var(--d,44px);justify-content:center;background:color-mix(in oklab,var(--accent) 82%,#0B0B12);border:3px solid var(--ground);color:#0B0B12;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:14px}
+.rd{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.rd path{fill:none;stroke:var(--accent);stroke-width:3.5;stroke-linecap:round;stroke-dasharray:1 10;animation:k36Ants .9s linear infinite}
+.dist{position:absolute;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;background:rgba(19,17,28,.86);border:1px solid var(--accent);color:var(--ink);white-space:nowrap}
+.spot.ghost .av{background:rgba(19,17,28,.72);border:2px dashed var(--accent);color:var(--accent-ink);box-shadow:none}
+.pv .veil{position:absolute;left:0;right:0;bottom:0;height:62%;background:linear-gradient(to top,rgba(11,11,18,.92),rgba(11,11,18,0))}
+.cap>.ic{width:13px;height:13px}
+.trip{position:absolute;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px 0 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;color:var(--ink);background:rgba(19,17,28,.66)}
+
+.leg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 28px;align-items:start}
+.leg>div{display:grid;grid-template-columns:22px minmax(0,1fr);gap:3px 12px;align-items:start}
+.leg .kan{position:static;margin-top:1px;grid-row:span 2}
+.leg b{font-size:14.5px;font-weight:700}
+.leg p{grid-column:2;font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line);margin-top:auto}
+.twin{display:grid;grid-template-columns:110px minmax(0,1.05fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;vertical-align:1px;margin-inline-end:4px}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.rule{display:flex;align-items:flex-start;gap:16px;padding:22px 26px;border-radius:26px;background:linear-gradient(120deg,color-mix(in oklab,var(--ok) 14%,var(--raised)),var(--raised) 60%);border:1px solid color-mix(in oklab,var(--ok) 35%,var(--line))}
+.todo{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:16px;border:1.5px dashed var(--line);font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.todo>.ic{color:var(--warn);margin-top:1px}
+.bub{border-radius:22px 22px 22px 8px;background:var(--field);border:1px solid var(--line);padding:6px 6px 10px;display:flex;flex-direction:column;gap:8px}
+
+.in{position:relative;display:flex}
+.sa .who{animation:k36Show 6s infinite}
+.sa .in{animation:k36Drop 6s infinite}
+.sa .in>.av{animation:k36Sel 6s infinite}
+.sa .blur{animation:k36Bloom 6s infinite}
+.sa .cap{animation:k36Cap 6s infinite}
+.sa .rd{animation:k36Route 6s infinite}
+.sa .dist{animation:k36Dist 6s infinite}
+.sa .tap{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(255,255,255,.3);border:2px solid rgba(255,255,255,.8);opacity:0;animation:k36Tap 6s infinite}
+.phs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.phs>span{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:12px;background:var(--field);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink);opacity:.38;animation:6s steps(1) infinite}
+.phs>span:nth-child(1){animation-name:k36P1}.phs>span:nth-child(2){animation-name:k36P2}.phs>span:nth-child(3){animation-name:k36P3}.phs>span:nth-child(4){animation-name:k36P4}
+.hap{width:10px;height:10px;border-radius:50%;background:var(--warn);margin-left:auto;flex:none}
+.sb .pz{position:absolute;inset:0;animation:k36Zoom 5s cubic-bezier(.4,0,.2,1) infinite}
+.sb .m{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy)));animation:k36Merge 5s cubic-bezier(.4,0,.2,1) infinite}
+.sb .clu{animation:k36Clu 5s infinite}
+@keyframes k36Halo{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.05)}}
+@keyframes k36Ants{to{stroke-dashoffset:-11}}
+@keyframes k36Show{0%,4%{opacity:0}8%,94%{opacity:1}100%{opacity:0}}
+@keyframes k36Drop{0%,4%{transform:translateY(-38px) scale(.6)}12%{transform:translateY(0) scale(1.1)}17%,41%{transform:scale(1)}47%{transform:scale(1.24)}52%,76%{transform:scale(1.17)}82%,100%{transform:scale(1)}}
+@keyframes k36Sel{0%,41%{border-color:var(--ground);box-shadow:0 10px 24px rgba(0,0,0,.55)}47%,76%{border-color:#fff;box-shadow:0 0 0 3px var(--accent),0 14px 30px rgba(0,0,0,.6)}82%,100%{border-color:var(--ground);box-shadow:0 10px 24px rgba(0,0,0,.55)}}
+@keyframes k36Bloom{0%,15%{transform:translate(-50%,-50%) scale(0);opacity:0}27%{transform:translate(-50%,-50%) scale(1.08);opacity:1}33%,94%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+@keyframes k36Cap{0%,27%{opacity:0;transform:translate(-50%,-8px)}33%,94%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,0)}}
+@keyframes k36Tap{0%,39%{opacity:0;transform:scale(.6)}42%{opacity:1;transform:scale(1)}48%,100%{opacity:0;transform:scale(1.5)}}
+@keyframes k36Route{0%,48%{clip-path:inset(0 100% 0 0);opacity:1}62%,76%{clip-path:inset(0 0 0 0);opacity:1}82%,100%{clip-path:inset(0 0 0 0);opacity:0}}
+@keyframes k36Dist{0%,58%{opacity:0;transform:translate(-50%,-50%) scale(.8)}64%,76%{opacity:1;transform:translate(-50%,-50%) scale(1)}82%,100%{opacity:0;transform:translate(-50%,-50%) scale(1)}}
+@keyframes k36P1{0%{opacity:1}15%,100%{opacity:.38}}
+@keyframes k36P2{0%{opacity:.38}15%{opacity:1}41%,100%{opacity:.38}}
+@keyframes k36P3{0%{opacity:.38}41%{opacity:1}52%,100%{opacity:.38}}
+@keyframes k36P4{0%{opacity:.38}52%{opacity:1}82%,100%{opacity:.38}}
+@keyframes k36Zoom{0%,16%{transform:scale(1.28)}36%,68%{transform:scale(1)}88%,100%{transform:scale(1.28)}}
+@keyframes k36Merge{0%,16%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1);opacity:1}34%,70%{transform:translate(-50%,-50%) scale(.72);opacity:0}88%,100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1);opacity:1}}
+@keyframes k36Clu{0%,27%{transform:translate(-50%,-50%) scale(.5);opacity:0}37%{transform:translate(-50%,-50%) scale(1.1);opacity:1}43%,68%{transform:translate(-50%,-50%) scale(1);opacity:1}77%,100%{transform:translate(-50%,-50%) scale(.5);opacity:0}}
+</style>
+</helmet>
+<div class="mx leo" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 32px">
+<div class="orb" style="width: 300px; height: 300px; right: 120px; top: -60px; background: var(--accent); opacity: .16"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .22; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 960px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K36 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyMapPin</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Une personne sur une carte est son avatar, son disque de flou et son onde</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 820px">L'avatar dit qui. Le disque dit avec quelle précision. L'onde dit que c'est maintenant. Quand plusieurs se touchent, ils se rangent en grappe. La même épingle sur toutes les cartes de l'app.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il dessine quelqu'un à un endroit, il ne sait pas où</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>un contenu rond</b> (l'emplacement <code>content</code> : un avatar, une vignette, un glyphe) sous un liseré qui le détache de n'importe quel fond de carte.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dessine la <b>précision</b> : rien pour <code>exact</code>, un disque de flou de rayon donné pour <code>area</code> et <code>wide</code>, centré sous l'épingle.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Émet une <b>onde</b> tant que <code>isLive</code> est vrai, grandit quand <code>isSelected</code> l'est, se grise quand <code>isStale</code> l'est.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Fournit ses deux parties à l'hôte : <code>MeeshyBlurDisc</code> et <code>MeeshyPinCluster</code> (la grappe et son compte). Offre deux places d'étiquette, <code>above</code> et <code>below</code>, où l'hôte pose un <b>K41</b>.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La carte, les tuiles, les coordonnées, la conversion des mètres en points : <b>l'hôte</b>. L'épingle reçoit un rayon déjà mesuré à l'écran.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Décider qui se regroupe et à quel zoom, calculer une distance ou un trajet : <b>l'hôte</b>. La grappe affiche le <code>count</code> qu'on lui donne.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>L'avatar et le point de présence : <b>l'hôte</b> les passe par <code>content</code> et <code>badge</code>. Le voyage de l'avatar depuis la fiche : <b>K29</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La feuille qui s'ouvre au toucher : <b>K15</b>. Les commandes de verre posées sur la carte : <b>K01</b> et <b>K02</b>. Les ressorts et les durées : <b>K26</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le trait entre deux épingles, l'itinéraire, le chemin parcouru : <b>K54</b> <code>MeeshyMapTrace</code>. Les bulles de densité chiffrées : <b>K50</b> <code>MeeshyChart</code> en <code>bubbles</code>. Les étiquettes elles-mêmes : <b>K41</b> <code>MeeshyBadge</code>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une épingle, trois parties autour, douze repères</h2><p>Les quatre pièces à deux fois leur taille, sur le fond de carte commun : une épingle au quartier, une épingle exacte sélectionnée et son trait, la mienne, une grappe.</p></header>
+<div class="kcell" style="padding: 0; overflow: hidden; height: 520px">
+<div style="position: absolute; inset: 0">[[map]]</div>
+<div style="position: absolute; left: 0; top: 0; width: 648px; height: 260px; zoom: 2">
+<svg class="rd mina" aria-hidden="true"><path d="M330 200 Q 380 130 455 95"></path></svg>
+<div class="blur" style="left: 140px; top: 118px; width: 106px; height: 106px"></div>
+<div class="pin spot" style="left: 140px; top: 118px"><span class="av">LM</span><span class="dot on"></span></div>
+<span class="cap" style="left: 140px; top: 178px">quartier</span>
+<span aria-hidden="true" style="position: absolute; left: 308px; top: 178px; width: 44px; height: 44px; border-radius: 50%; border: 1px dashed #FBBF24"></span>
+<div class="pin spot own me" style="left: 330px; top: 200px"><span class="av">AN</span></div>
+<span class="dist mono mina" style="left: 402px; top: 156px; font-size: 11.5px">2,4 km</span>
+<div class="spot sel mina" style="left: 455px; top: 95px"><span class="tail"></span><span class="av">MO</span><span class="dot on"></span></div>
+<div class="clu" style="left: 572px; top: 150px"><span class="av leo">LM</span><span class="av mina">MO</span><span class="av tom">TR</span><b>3</b></div>
+</div>
+<span class="kan" style="left: 269px; top: 174px">1</span>
+<span class="kan" style="left: 214px; top: 225px">2</span>
+<span class="kan" style="left: 352px; top: 168px">3</span>
+<span class="kan" style="left: 190px; top: 296px">4</span>
+<span class="kan" style="left: 344px; top: 367px">5</span>
+<span class="kan" style="left: 338px; top: 268px">6</span>
+<span class="kan" style="left: 940px; top: 250px">7</span>
+<span class="kan" style="left: 980px; top: 130px">8</span>
+<span class="kan" style="left: 622px; top: 352px">9</span>
+<span class="kan" style="left: 870px; top: 301px">10</span>
+<span class="kan" style="left: 698px; top: 420px">11</span>
+<span class="kan" style="left: 1022px; top: 289px">12</span>
+<span class="glass trip" style="left: 24px; bottom: 24px"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+</div>
+<div class="card leg" style="padding: 28px">
+<div><span class="kan">1</span><b>Contenu <code>content</code></b><p>Rond, 48. L'hôte y met ce qu'il veut : un avatar à initiales, une photo, un glyphe. L'épingle ne le lit pas.</p></div>
+<div><span class="kan">2</span><b>Liseré</b><p>3, couleur <code>--ground</code>, et ombre portée y 10, flou 24, noir 55 %. C'est lui qui détache l'épingle de la carte, claire ou sombre.</p></div>
+<div><span class="kan">3</span><b>Onde</b><p>Anneau de 2 à la teinte, parti à 6 du bord. Il grandit de 0,7 à 2,3 et s'efface en 2,4 s. Présent si <code>isLive</code>. <code>motion.pulse</code>.</p></div>
+<div><span class="kan">4</span><b>Disque de flou</b><p><code>MeeshyBlurDisc</code>. Teinte à 18 %, bord 1,5 à la teinte pleine. Diamètre = 2 × le rayon reçu. Il respire de 5 % en 5 s.</p></div>
+<div><span class="kan">5</span><b>Étiquette <code>caption</code></b><p>Pilule de 22, texte 11 gras, à 12 sous l'épingle. Un mot opaque : « quartier », « ville », « il y a 12 min ». Absente par défaut.</p></div>
+<div><span class="kan">6</span><b>Pastille <code>badge</code></b><p>Emplacement au coin bas de fin, débord de 2. L'hôte y pose le point de présence de 14. Vide par défaut.</p></div>
+<div><span class="kan">7</span><b>Pointe</b><p>Carré de 14 tourné, rayon 3, sous l'épingle. Seulement en <code>exact</code> : elle touche le lieu. Blanche quand l'épingle est sélectionnée.</p></div>
+<div><span class="kan">8</span><b>Anneau de sélection</b><p>Le contenu passe à 56, le liseré devient blanc, un anneau de 3 à la teinte l'entoure. Le disque passe à 28 %.</p></div>
+<div><span class="kan">9</span><b>La mienne</b><p><code>kind: own</code>. 38, liseré blanc de 2,5, onde permanente, jamais de disque ni de pointe. Elle se lit comme un repère, pas comme une personne.</p></div>
+<div><span class="kan">10</span><b>Trait et distance</b><p>Pas ici : <b>K54</b> <code>MeeshyMapTrace</code> en <code>link</code>, posé par l'hôte entre deux épingles. Points de 3,5 tous les 11, à la teinte, qui avancent vers l'arrivée. Pilule de 26 en chasse fixe au milieu.</p></div>
+<div><span class="kan">11</span><b>Zone de toucher</b><p>44 au moins autour du contenu (le cercle en pointillé), même pour une épingle de 38. Le disque ne se touche pas : la carte dessous reste à l'hôte.</p></div>
+<div><span class="kan">12</span><b>Grappe et compte</b><p><code>MeeshyPinCluster</code>. Trois contenus de 36 au plus, recouverts de 8, dans une gélule <code>--ground</code>. Compte de 26 au coin haut de fin.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Sept épingles, une seule forme</h2><p>Tout est à taille réelle. La précision change ce qu'il y a autour de l'épingle, jamais l'épingle elle-même. La teinte est celle que l'hôte passe : ici, l'accent de chaque personne.</p></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell kc">
+<div class="mp mina" style="height: 210px">[[map]]
+<button class="pin spot" aria-label="Mina Okafor, point exact" style="left: 50%; top: 48%"><span class="tail"></span><span class="av">MO</span><span class="dot on"></span></button>
+</div>
+<div class="cp"><b>Exacte</b><span class="kcap"><code>precision: exact</code>. Pas de disque. La pointe touche le lieu. Onde : la position arrive en continu.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<div class="blur" style="left: 50%; top: 46%; width: 106px; height: 106px"></div>
+<button class="pin spot" aria-label="Léo Marchetti, quartier" style="left: 50%; top: 46%"><span class="av">LM</span><span class="dot on"></span></button>
+<span class="cap" style="left: 50%; top: calc(46% + 60px)">quartier</span>
+</div>
+<div class="cp"><b>Quartier</b><span class="kcap"><code>precision: area(53)</code>. Disque de 106. La personne est quelque part dedans, pas au centre.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp tom" style="height: 210px">[[map]]
+<div class="blur" style="left: 50%; top: 48%; width: 172px; height: 172px"></div>
+<button class="spot" aria-label="Tomás Ribeiro, ville" style="left: 50%; top: 48%"><span class="av">TR</span></button>
+<span class="cap" style="left: 50%; top: calc(48% + 60px)">ville</span>
+</div>
+<div class="cp"><b>Ville</b><span class="kcap"><code>precision: wide(86)</code>. Disque de 172. Même dessin que le quartier : seul le rayon change. Ici sans onde.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<div class="blur sel" style="left: 50%; top: 46%; width: 106px; height: 106px"></div>
+<button class="pin spot sel" aria-label="Léo Marchetti, quartier, sélectionné" aria-pressed="true" style="left: 50%; top: 46%"><span class="av">LM</span><span class="dot on"></span></button>
+<span class="cap on" style="left: 50%; top: calc(46% + 64px)">quartier</span>
+</div>
+<div class="cp"><b>Sélectionnée</b><span class="kcap"><code>isSelected</code>. 56, liseré blanc, anneau à la teinte, disque à 28 %, étiquette en plein. Elle passe devant les autres.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp tom" style="height: 210px">[[map]]
+<div class="blur old" style="left: 50%; top: 46%; width: 106px; height: 106px"></div>
+<button class="spot old" aria-label="Tomás Ribeiro, position d'il y a 12 minutes" style="left: 50%; top: 46%"><span class="av">TR</span></button>
+<span class="cap" style="left: 50%; top: calc(46% + 60px); color: var(--ink2)">il y a 12 min</span>
+</div>
+<div class="cp"><b>Périmée</b><span class="kcap"><code>isStale</code>. Contenu grisé, disque en pointillé gris, aucune onde. L'étiquette dit l'âge, en mots.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<button class="clu" aria-label="3 personnes ici" style="left: 50%; top: 48%"><span class="av leo">LM</span><span class="av mina">MO</span><span class="av tom">TR</span><b>3</b></button>
+</div>
+<div class="cp"><b>Grappe « 3 »</b><span class="kcap"><code>MeeshyPinCluster(count: 3)</code>. Trois contenus recouverts et le compte. Un toucher : l'hôte zoome dessus.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp me" style="height: 210px">[[map]]
+<div class="pin spot own" role="img" aria-label="Ma position" style="left: 50%; top: 48%"><span class="av">AN</span></div>
+</div>
+<div class="cp"><b>Moi</b><span class="kcap"><code>kind: own</code>. Plus petite, liseré blanc, onde permanente. Ni disque ni pointe : je sais où je suis.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<div class="blur" style="left: 34%; top: 46%; width: 106px; height: 106px"></div>
+<button class="spot fc" aria-label="Léo Marchetti, quartier" style="left: 34%; top: 46%"><span class="av">LM</span></button>
+<button class="spot prs mina" aria-label="Mina Okafor, point exact" style="left: 76%; top: 46%"><span class="tail"></span><span class="av">MO</span></button>
+</div>
+<div class="cp"><b>Focus clavier · pressée</b><span class="kcap">Anneau de 2,5 à l'encre, décalé de 3, au clavier seulement. Doigt posé : échelle 0,94 et éclat, en moins d'une image.</span></div>
+</div>
+
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<div class="blur mina" style="left: 14%; top: 50%; width: 44px; height: 44px; opacity: .45; border-style: dashed"></div>
+<div class="blur" style="left: 36%; top: 50%; width: 64px; height: 64px"></div>
+<div class="blur tom" style="left: 72%; top: 50%; width: 172px; height: 172px"></div>
+<span class="cap" style="left: 14%; top: calc(50% + 38px)">22 · caché</span>
+<span class="cap" style="left: 36%; top: calc(50% + 38px)">32 · plancher</span>
+<span class="cap" style="left: 72%; top: 50%; transform: translate(-50%,-50%)">86</span>
+</div>
+<div class="cp"><b>MeeshyBlurDisc, seul</b><span class="kcap">Sous 32 de rayon, le disque ne dépasserait pas l'épingle : il n'est pas dessiné. Aucun plafond : l'hôte borne ce qu'il mesure.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<button class="clu" aria-label="2 personnes ici" style="left: 13%; top: 50%"><span class="av leo">LM</span><span class="av mina">MO</span><b>2</b></button>
+<button class="clu" aria-label="3 personnes ici" style="left: 39%; top: 50%"><span class="av leo">LM</span><span class="av mina">MO</span><span class="av tom">TR</span><b>3</b></button>
+<button class="clu" aria-label="12 personnes ici" style="left: 68%; top: 50%"><span class="av tom">TR</span><span class="av me">AN</span><span class="av leo">LM</span><b>12</b></button>
+<button class="clu n" aria-label="Plus de 99 ici" style="left: 91%; top: 50%; --d: 48px">99+</button>
+</div>
+<div class="cp"><b>MeeshyPinCluster, les comptes</b><span class="kcap">À partir de 2. Trois contenus au plus, le compte dit le total. Sans contenu : un disque plein à la teinte. Au-delà de 99 : « 99+ ».</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<svg class="rd" aria-hidden="true"><path d="M52 160 Q 150 40 330 70"></path></svg>
+<svg class="rd mina" aria-hidden="true"><path d="M52 160 Q 120 190 210 168"></path></svg>
+<div class="pin spot own me" style="left: 52px; top: 160px"><span class="av">AN</span></div>
+<div class="spot" style="left: 330px; top: 70px"><span class="av">LM</span></div>
+<div class="spot mina" style="left: 210px; top: 168px"><span class="tail"></span><span class="av">MO</span></div>
+<span class="dist mono" style="left: 168px; top: 62px; font-size: 11.5px">2,4 km</span>
+<span class="dist mono mina" style="left: 128px; top: 190px; font-size: 11.5px">300 m</span>
+</div>
+<div class="cp"><b>Le trait · K54, pas ici</b><span class="kcap"><code>MeeshyMapTrace</code> en <code>link</code>, de <b>K54</b> : deux points de l'écran, une teinte, une distance en <b>K41</b>. L'épingle ne le dessine pas ; l'hôte le pose entre deux épingles.</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="mp" style="height: 210px">[[map]]
+<div class="blur" style="left: 50%; top: 54%; width: 106px; height: 106px"></div>
+<span class="cap on" style="left: 50%; top: calc(54% - 72px)">[[ic:smiley s]]<span style="margin-left: 5px">En vadrouille</span></span>
+<button class="pin spot" aria-label="Léo Marchetti, quartier, en vadrouille, encore 42 min" style="left: 50%; top: 54%"><span class="av">LM</span><span class="dot on"></span></button>
+<span class="cap" style="left: 50%; top: calc(54% + 34px)">encore 42 min</span>
+<span class="glass trip" style="left: 12px; top: 12px"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+</div>
+<div class="cp"><b>Étiquettes · <code>above</code>, <code>below</code>, contexte</b><span class="kcap">Trois <b>K41</b> posés par l'hôte : la bulle au-dessus, la légende dessous, la pilule de contexte au coin de la carte. L'épingle donne la place, pas le dessin.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 210px; --accent: #9B59B6">[[map]]
+<div class="spot ghost" role="img" aria-label="Kwame Mensah, en mode fantôme, position masquée" style="left: 50%; top: 46%"><span class="av">[[ic:ghost]]</span></div>
+<span class="cap" style="left: 50%; top: calc(46% + 36px); color: var(--ink2)">fantôme</span>
+</div>
+<div class="cp"><b>Fantôme</b><span class="kcap"><code>kind: ghost</code>. Contour pointillé, contenu remplacé par un glyphe, ni disque ni onde ni pointe. Elle dit qu'il y a quelqu'un, pas où : l'hôte la pose où il veut.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp pv" role="img" aria-label="Léo Marchetti, Alfama, quartier" style="height: 210px">[[map]]
+<div class="blur" style="left: 50%; top: 40%; width: 96px; height: 96px"></div>
+<div class="spot" style="left: 50%; top: 40%"><span class="av">LM</span></div>
+<div class="veil"></div>
+<div style="position: absolute; left: 14px; right: 14px; bottom: 12px; display: flex; flex-direction: column; gap: 2px"><b style="font-size: 14px">Alfama, Lisbonne</b><span style="font-size: 12px; color: var(--ink2)">Quartier · encore 42 min</span></div>
+</div>
+<div class="cp"><b>Vignette d'aperçu</b><span class="kcap"><code>MeeshyMapPinPreview</code>. Fond recadré fourni par l'hôte, voile de lisibilité, légende, une seule cible. Rien ne s'y touche à part : pour une tuile ou une notification.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Elle se pose, s'ouvre, se choisit, se regroupe</h2><p>Deux boucles réelles. À gauche, la vie d'une épingle : pose, disque, sélection, trait. À droite, ce qui arrive quand la carte recule et que trois épingles se touchent.</p></header>
+<div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 24px">
+<div class="kcell kc" style="gap: 14px">
+<div class="mp sa" style="height: 340px">[[map]]
+<svg class="rd" aria-hidden="true"><path d="M170 262 Q 280 150 450 122"></path></svg>
+<div class="blur" style="left: 450px; top: 122px; width: 106px; height: 106px"></div>
+<div class="pin spot own me" style="left: 170px; top: 262px"><span class="av">AN</span></div>
+<div class="pin spot who" style="left: 450px; top: 122px"><span class="in"><span class="av">LM</span><span class="dot on"></span></span></div>
+<span class="tap" style="left: 450px; top: 122px"></span>
+<span class="cap" style="left: 450px; top: 186px">quartier</span>
+<span class="dist mono" style="left: 318px; top: 200px; font-size: 11.5px">2,4 km</span>
+<span class="glass trip" style="left: 14px; top: 14px"><span style="display: flex; color: #D8B4FE">[[ic:suitcase-rolling s]]</span><span>De passage à Lisbonne</span></span>
+</div>
+<div class="phs" aria-hidden="true">
+<span><span class="step">1</span>Pose</span>
+<span><span class="step">2</span>Disque</span>
+<span><span class="step">3</span>Toucher<i class="hap"></i></span>
+<span><span class="step">4</span>Trait</span>
+</div>
+<div class="cp"><b>La vie d'une épingle · boucle de 6 s</b><span class="kcap">Le point jaune est le tic haptique : un seul, au moment où la sélection prend.</span></div>
+</div>
+<div class="kcell kc" style="gap: 14px">
+<div class="mp sb" style="height: 340px">
+<div class="pz">[[map]]</div>
+<div class="spot m" style="left: 50%; top: 50%; --dx: -96px; --dy: 30px"><span class="av">LM</span></div>
+<div class="spot m mina" style="left: 50%; top: 50%; --dx: 8px; --dy: -62px"><span class="tail"></span><span class="av">MO</span></div>
+<div class="spot m tom" style="left: 50%; top: 50%; --dx: 104px; --dy: 44px"><span class="av">TR</span></div>
+<div class="clu" style="left: 50%; top: 50%"><span class="av leo">LM</span><span class="av mina">MO</span><span class="av tom">TR</span><b>3</b></div>
+</div>
+<div class="cp" style="margin-top: auto"><b>La grappe · boucle de 5 s</b><span class="kcap">La carte recule, les trois épingles convergent et s'effacent, la grappe naît au barycentre avec un léger rebond. L'inverse quand la carte avance. C'est l'hôte qui dit « ils se touchent ».</span></div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="mp" style="height: 170px">[[map]]
+<div class="spot" style="left: 50%; top: 30%; opacity: .35"><span class="av" style="transform: scale(.7)">LM</span></div>
+<div class="spot" style="left: 50%; top: 56%"><span class="av">LM</span></div>
+</div>
+<div class="cp"><b style="display: flex; align-items: center; gap: 10px"><span class="step">1</span>Pose</b><span class="kcap">Le contenu tombe de 38 et passe de 0,6 à 1 avec un rebond. Si l'avatar vient d'une fiche, c'est K29 qui l'amène : l'épingle ne rejoue pas la chute.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 170px">[[map]]
+<div class="blur" style="left: 50%; top: 50%; width: 60px; height: 60px; opacity: .5; animation: none"></div>
+<div class="blur" style="left: 50%; top: 50%; width: 106px; height: 106px; animation: none"></div>
+<div class="pin spot" style="left: 50%; top: 50%"><span class="av">LM</span><span class="dot on"></span></div>
+</div>
+<div class="cp"><b style="display: flex; align-items: center; gap: 10px"><span class="step">2</span>Le disque s'ouvre</b><span class="kcap">Du centre vers son rayon, dépassement de 8 %. Quand la précision change, le rayon glisse de l'ancien au nouveau, sans repartir de zéro.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 170px">[[map]]
+<svg class="rd" aria-hidden="true"><path d="M60 136 Q 140 60 262 72"></path></svg>
+<div class="blur sel" style="left: 262px; top: 72px; width: 106px; height: 106px; animation: none"></div>
+<div class="pin spot own me" style="left: 60px; top: 136px"><span class="av">AN</span></div>
+<div class="pin spot sel" style="left: 262px; top: 72px"><span class="av">LM</span><span class="dot on"></span></div>
+<span class="dist mono" style="left: 150px; top: 110px; font-size: 11.5px">2,4 km</span>
+</div>
+<div class="cp"><b style="display: flex; align-items: center; gap: 10px"><span class="step">3</span>Sélection et trait</b><span class="kcap">L'épingle grandit à 56, le trait se dessine du départ à l'arrivée, la distance apparaît à la fin. Désélection : tout revient, le trait s'efface.</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">Pose</b> · 480 ms · ressort <code>motion.rise</code> (rebond 1,10) · à l'apparition dans la carte · aucun haptique · réduit : fondu de 150 ms, sans chute</div>
+<div class="spec"><b style="color: var(--ink)">Disque</b> · 420 ms · ressort <code>motion.morph</code> · à l'apparition et au changement de <code>precision</code> · aucun haptique · réduit : rayon posé d'un coup</div>
+<div class="spec"><b style="color: var(--ink)">Onde</b> · 2,4 s en boucle · sortie douce <code>motion.pulse</code> · tant que <code>isLive</code> · aucun haptique · réduit : anneau fixe de 2, à 6 du bord</div>
+<div class="spec"><b style="color: var(--ink)">Sélection</b> · 320 ms · ressort <code>motion.morph</code> (48 vers 56, pic 1,24) · au changement de <code>isSelected</code> · un tic de sélection · réduit : taille et anneau posés, tic gardé</div>
+<div class="spec"><b style="color: var(--ink)">Trait</b> · tracé 600 ms puis points à 12 par seconde · <code>motion.travel</code> · à l'apparition du tracé de <b>K54</b>, rappelé ici · aucun haptique · réduit : trait entier, points immobiles</div>
+<div class="spec"><b style="color: var(--ink)">Grappe</b> · 380 ms · <code>motion.morph</code> (0,5 vers 1, pic 1,10) · quand l'hôte remplace des épingles par une grappe · aucun haptique · réduit : fondu enchaîné de 150 ms</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Que des valeurs opaques. Aucune personne, aucun cercle, aucune coordonnée, aucun partage de position dans une signature : l'épingle ne sait ni qui elle montre ni où elle est.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<div class="h">Élément</div><div class="h">iOS · MeeshyUI/Kit/MeeshyMapPin.swift</div><div class="h">Android · me.meeshy.ui.component.kit</div><div class="h">Web · components/kit/meeshy-map-pin.tsx</div>
+<div style="font-weight: 700">Épingle</div><div><code>MeeshyMapPin(label:tint:precision:isLive:isSelected:onPress:content:)</code></div><div><code>MeeshyMapPin(label, tint, precision, isLive, isSelected, onPress, modifier, content)</code></div><div><code>&lt;MeeshyMapPin label tint precision isLive isSelected onPress&gt;…&lt;/MeeshyMapPin&gt;</code></div>
+<div style="font-weight: 700">Disque seul</div><div><code>MeeshyBlurDisc(radius:tint:isSelected:isStale:)</code></div><div><code>MeeshyBlurDisc(radius, tint, isSelected, isStale)</code></div><div><code>&lt;MeeshyBlurDisc radius tint isSelected isStale /&gt;</code></div>
+<div style="font-weight: 700">Grappe</div><div><code>MeeshyPinCluster(label:count:tint:onPress:content:)</code></div><div><code>MeeshyPinCluster(label, count, tint, onPress, modifier, content)</code></div><div><code>&lt;MeeshyPinCluster label count tint onPress&gt;…&lt;/MeeshyPinCluster&gt;</code></div>
+<div style="font-weight: 700">Aperçu</div><div><code>MeeshyMapPinPreview(label:title:subtitle:tint:onPress:background:content:)</code></div><div><code>MeeshyMapPinPreview(label, title, subtitle, tint, onPress, modifier, background, content)</code></div><div><code>&lt;MeeshyMapPinPreview label title subtitle tint onPress background&gt;…&lt;/MeeshyMapPinPreview&gt;</code></div>
+<div style="font-weight: 700">Trait</div><div>Pas ici : <b>K54</b> <code>MeeshyMapTrace(kind: .link)</code></div><div>idem, <code>MeeshyMapTrace</code></div><div>idem, <code>&lt;MeeshyMapTrace kind="link" /&gt;</code></div>
+<div style="font-weight: 700">Précision <span style="font-weight: 400; color: var(--ink2)">(enum)</span></div><div><code>MeeshyMapPinPrecision { exact, area(radius: CGFloat), wide(radius: CGFloat) }</code></div><div><code>sealed interface</code> : <code>Exact</code>, <code>Area(radius: Dp)</code>, <code>Wide(radius: Dp)</code></div><div><code>'exact' | { area: number } | { wide: number }</code></div>
+<div style="font-weight: 700">Genre <span style="font-weight: 400; color: var(--ink2)">(enum)</span></div><div><code>MeeshyMapPinKind { other, own, ghost }</code></div><div><code>enum class</code> identique</div><div><code>'other' | 'own' | 'ghost'</code></div>
+<div style="font-weight: 700">Tailles</div><div>48 · 56 sélectionnée · 38 <code>own</code> · 36 en grappe : dans la recette, pas de diamètre libre</div><div>idem, en <code>dp</code></div><div>idem, en <code>px</code></div>
+<div style="font-weight: 700">Emplacements <span style="font-weight: 400; color: var(--ink2)">(slot)</span></div><div><code>@ViewBuilder content</code>, <code>badge</code>, <code>above</code>, <code>below</code></div><div><code>content: @Composable () -> Unit</code>, <code>badge</code>, <code>above</code>, <code>below</code></div><div><code>children</code>, <code>badge</code>, <code>above</code>, <code>below: ComponentChildren</code></div>
+<div style="font-weight: 700">Recette en valeurs</div><div><code>MeeshyMapPinRecipe.resolve(kind:precision:isLive:isSelected:isStale:isPressed:tint:reduceMotion:)</code></div><div>idem</div><div><code>meeshyMapPinRecipe(…)</code> : classes et propriétés <code>--kit-pin-*</code></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>label: String</code><span>Obligatoire, non vide. Ce que le lecteur d'écran dit de l'épingle : « Léo Marchetti, quartier ». L'hôte le compose.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte de l'onde, du disque, de l'anneau et du trait. Nulle : la couleur de marque du thème.</span></div>
+<div class="par"><code>precision = exact</code><span>Le rayon est en points d'écran, déjà converti par l'hôte. <code>area</code> et <code>wide</code> se dessinent pareil : le nom sert au lecteur d'écran et aux tests.</span></div>
+<div class="par"><code>isLive: Bool = false</code><span>Vrai : l'onde tourne. Faux : aucune onde. L'épingle ne mesure aucun âge de position.</span></div>
+<div class="par"><code>isSelected: Bool = false</code><span>Taille 56, anneau, disque renforcé, étiquette en plein, premier plan. Dit « sélectionné ».</span></div>
+<div class="par"><code>isStale: Bool = false</code><span>Contenu grisé, disque en pointillé, onde coupée même si <code>isLive</code>. Reste touchable.</span></div>
+<div class="par"><code>caption: String? = nil</code><span>Le mot sous l'épingle. Nul : rien. Jamais plus d'une ligne ; coupé à 18 caractères.</span></div>
+<div class="par"><code>kind = other</code><span><code>own</code> : 38, liseré blanc, onde permanente. <code>precision</code>, <code>caption</code> et <code>isStale</code> sont ignorés. <code>ghost</code> : contour pointillé, glyphe à la place du contenu, ni disque ni onde.</span></div>
+<div class="par"><code>above</code>, <code>below</code><span>Emplacements d'étiquette, vides par défaut. L'hôte y pose un K41 ; <code>below</code> remplace <code>caption</code> quand il est donné.</span></div>
+<div class="par"><code>count: Int</code><span>Sur <code>MeeshyPinCluster</code> seulement. 2 au moins ; sous 2, rien n'est dessiné. Au-delà de 99 : « 99+ ».</span></div>
+<div class="par"><code>onPress: (() -> Void)? = nil</code><span>Nul : l'épingle est une image nommée, pas un bouton. L'action part une fois, au relâcher.</span></div>
+<div class="par"><code>hint: String? = nil</code><span>L'aide dite après le nom : « Ouvre sa fiche ». L'hôte la traduit.</span></div>
+<div class="par"><code>haptic = selection</code><span><code>selection</code> ou <code>none</code>. Un tic quand <code>isSelected</code> devient vrai par un toucher, jamais par l'hôte seul.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">La même épingle, posée par trois cartes différentes</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS</b></div>
+<ul>
+<li>Une vue SwiftUI que l'hôte pose dans <code>Annotation(coordinate:)</code> de MapKit, par l'emplacement <code>pin</code> d'<code>AdaptiveMap</code> qui existe déjà.</li>
+<li>Onde : <code>phaseAnimator</code> ; elle s'arrête quand la vue sort de l'écran.</li>
+<li>Sélection : <code>sensoryFeedback(.selection)</code> et ressort de K26. Arrivée depuis une fiche : <code>matchedGeometryEffect</code>, tenu par K29.</li>
+<li>Le disque est dessiné par le composant, en points. Il remplace le <code>MKCircle</code> en mètres : un seul dessin sur les trois plateformes.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : <code>MapAnnotation</code> et onde par <code>withAnimation(.repeatForever)</code>. Dans un <code>MKMapView</code> UIKit : la vue est hébergée dans un <code>MKAnnotationView</code>, la grappe reste celle de <code>MKClusterAnnotation</code> habillée par <code>MeeshyPinCluster</code>.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android</b></div>
+<ul>
+<li>Un composable que l'hôte passe à l'emplacement <code>marker</code> de <code>TileMapView</code>, la carte à tuiles du dépôt.</li>
+<li>Disque et onde en phase de dessin (<code>drawBehind</code>) : aucune recomposition par image.</li>
+<li>Onde : <code>rememberInfiniteTransition</code>. Sélection : <code>animateFloatAsState</code> et <code>HapticFeedbackType.TextHandleMove</code> par le site unique.</li>
+<li>Arrivée depuis une fiche : <code>SharedTransitionLayout</code>, tenu par K29. Pas de verre : le liseré est une surface pleine.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Animations coupées dans le système : <code>LocalReduceMotion</code> donne l'état final, anneau fixe. Cible de 48 dp : le débord autour d'un contenu de 38 est invisible et ne change pas l'encombrement.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web</b></div>
+<ul>
+<li>Un élément en position absolue, posé par l'hôte au point que <code>lib/map/slippy.ts</code> lui rend. <code>button</code> si <code>onPress</code>, <code>role="img"</code> sinon.</li>
+<li>Onde : un pseudo-élément et une <code>@keyframes</code> ; aucun état, aucun minuteur.</li>
+<li>Trait : un <code>path</code> SVG, <code>stroke-dasharray</code> et <code>stroke-dashoffset</code> animé.</li>
+<li>Appui et focus en <code>:active</code> et <code>:focus-visible</code>. Arrivée depuis une fiche : <code>View Transitions</code>, tenu par K29.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>color-mix</code> : la recette rend les teintes déjà calculées en <code>rgba</code>. Sans <code>View Transitions</code> : la pose se joue seule. Sous <code>prefers-reduced-motion</code> : aucune boucle.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Trois cartes dessinent déjà une épingle, chacune la sienne</h2><p>Relevé dans le dépôt le 16 novembre 2026. Aujourd'hui : 40 px et couleur de marque sur le web, 32 dp et couleur de présence sur Android, ballon du système sur iOS.</p></header>
+<div class="rule">
+<span style="display: inline-flex; color: var(--ok)">[[ic:seal-check l]]</span>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<b class="d" style="font-size: 20px">Le <code style="font-size: 18px">Pin</code> du web devient le composant</b>
+<p style="font-size: 14.5px; line-height: 1.5; color: var(--ink2)">C'est le plus complet : un avatar avec sa présence, un disque mesuré à l'écran, un seuil sous lequel le disque disparaît, un nom dit au lecteur d'écran. La grappe vient d'Android (<code>PinGroup</code>), la pose animée de <code>MapCenterPin</code>. iOS n'a aucune épingle dessinée : elle est à créer.</p>
+</div>
+</div>
+<div class="card" style="overflow: hidden">
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/shared-locations-map-view.tsx</span><p><span class="be">Devient le composant</span><code>Pin</code> : avatar de 40, disque à la couleur de marque, <code>MIN_VISIBLE_BLUR</code> de 16. Il garde sa conversion en points, qui reste à l'hôte.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/lib/map/slippy.ts</span><p><code>metersToPixels</code>. N'entre pas dans le kit : c'est l'hôte qui mesure le rayon avant de le passer.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/contacts/src/main/kotlin/me/meeshy/app/contacts/circles/SharedLocationsMapSection.kt</span><p><code>Pin</code> et <code>PinGroup</code> : initiales de 32 dp, disque en <code>drawBehind</code>, épingles d'un même point empilées de 6 dp. <code>PinGroup</code> devient <code>MeeshyPinCluster</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/location/TileMapView.kt</span><p>L'emplacement <code>marker</code> reçoit le composant tel quel. <code>MapCenterPin</code> donne son ressort de pose à la recette.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/location/LiveLocationBadge.kt</span><p>Le point qui pulse d'une position en direct. Sa boucle rejoint <code>motion.pulse</code> ; le badge reste où il est.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Contacts/SharedLocationsMapSection.swift</span><p><code>MKMarkerAnnotationView</code> aux initiales et <code>MKCircle</code> à 14 %. Aucun jumeau dessiné : l'épingle est à créer, cet écran l'adopte en premier.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveMap.swift</span><p>L'emplacement <code>pin</code> existe déjà, sur iOS 16 comme sur 17 et plus. C'est par lui que le composant entre sur une carte SwiftUI.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/FeedPostsMapView.swift</span><p>Grappes de <code>MKClusterAnnotation</code>, zoom au toucher. Le regroupement reste au système ; son dessin passe à <code>MeeshyPinCluster</code>. Même chose pour <code>NearbyDensityOverlay.swift</code>.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Partout où quelque chose a un lieu</h2><p>Le contenu change, l'épingle non. C'est l'emplacement <code>content</code> qui la rend réutilisable.</p></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="bub">
+<div class="mp mina" style="height: 150px; border-radius: 18px 18px 14px 14px">[[map]]
+<div class="pin spot" style="left: 50%; top: 46%"><span class="tail"></span><span class="av">MO</span></div>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 13.5px; font-weight: 600"><span style="display: flex; color: var(--ink2)">[[ic:map-pin s]]</span><span>Baixa, Lisbonne</span></div>
+</div>
+<div class="cp" style="margin-top: auto"><b>Conversation</b><span class="kcap">Le lieu d'un message de position : épingle exacte à l'avatar de celui qui l'envoie.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 196px">[[map]]
+<button class="spot" aria-label="Publication, Alfama" style="left: 26%; top: 34%"><span class="av ph" style="padding: 0; align-items: center; justify-content: center; font-size: 9px">photo</span></button>
+<button class="spot" aria-label="Réel, Graça" style="left: 76%; top: 30%"><span class="av ph" style="padding: 0; align-items: center; justify-content: center; font-size: 9px">réel</span></button>
+<button class="clu n" aria-label="12 publications ici" style="left: 52%; top: 70%; --accent: #818CF8">12</button>
+</div>
+<div class="cp" style="margin-top: auto"><b>Publications à proximité</b><span class="kcap">Le contenu est une vignette. La grappe sans contenu compte les publications.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp me" style="height: 196px">[[map]]
+<div class="blur" style="left: 50%; top: 44%; width: 106px; height: 106px"></div>
+<div class="spot" role="img" aria-label="Lieu de la story : Alfama" style="left: 50%; top: 44%"><span class="av">[[ic:map-pin]]</span></div>
+<span class="cap" style="left: 50%; top: calc(44% + 60px)">Alfama</span>
+</div>
+<div class="cp" style="margin-top: auto"><b>Stories</b><span class="kcap">Le lieu d'une story : un glyphe pour contenu, un disque au quartier, pas d'onde.</span></div>
+</div>
+<div class="kcell kc">
+<div class="mp" style="height: 196px; --accent: #6366F1">[[map]]
+<div class="blur" style="left: 30%; top: 40%; width: 120px; height: 120px"></div>
+<div class="blur" style="left: 74%; top: 58%; width: 84px; height: 84px"></div>
+<div class="blur" style="left: 62%; top: 20%; width: 64px; height: 64px"></div>
+<div class="clu n" role="img" aria-label="214 clics depuis Dakar" style="left: 30%; top: 40%; --d: 52px; --accent: #A5B4FC">214</div>
+<div class="clu n" role="img" aria-label="86 clics depuis Lisbonne" style="left: 74%; top: 58%; --accent: #A5B4FC">86</div>
+<div class="clu n" role="img" aria-label="31 clics depuis Lyon" style="left: 62%; top: 20%; --d: 38px; font-size: 12.5px; --accent: #A5B4FC">31</div>
+</div>
+<div class="cp" style="margin-top: auto"><b>Visiteurs d'un lien</b><span class="kcap">Bulles de densité : un compte dans un disque dont le rayon suit le nombre de clics. Ce n'est plus une épingle : c'est <b>K50</b> en <code>bubbles</code>, sur la même carte.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque genre × précision × <code>isLive</code> × <code>isSelected</code> × <code>isStale</code> rend le diamètre, le liseré, la présence de l'onde, du disque et de la pointe du tableau. Vecteurs <code>K36-MeeshyMapPin.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Disque.</b> Diamètre égal à deux fois le rayon reçu, centré sous le contenu. Sous 32 de rayon : aucun disque. <code>exact</code> et <code>own</code> : jamais de disque. <code>area(53)</code> et <code>wide(53)</code> : même dessin.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Onde.</b> Présente si et seulement si <code>isLive</code> et non <code>isStale</code>, ou <code>own</code>. Elle ne tourne pas hors écran. Sous « réduire les animations » : un anneau fixe, aucune boucle.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Grappe.</b> <code>count</code> de 0 ou 1 : rien. De 2 à 99 : le nombre. Au-delà : « 99+ ». Trois contenus au plus, quel que soit le compte. Le nom dit le total.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Avec <code>onPress</code> : bouton, nom <code>label</code>, « sélectionné » quand <code>isSelected</code>. Sans : image nommée. Disque, onde, pointe et trait sont muets. La périmée est dite par l'étiquette, en mots.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> 44 pt, 48 dp, 44 px autour du contenu, même en 38. Bord du disque et onde à 3:1 sur le fond de carte commun ; étiquette et distance à 4,5:1. L'état ne tient jamais à la teinte seule.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>RTL.</b> La pastille <code>badge</code> et le compte passent au coin de début. L'épingle, le disque et le trait ne se reflètent pas : une carte n'a pas de sens de lecture.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Voisins et source.</b> Sélectionner une épingle parmi cinquante n'en redessine qu'une ; une onde ne repeint ni la carte ni ses voisines. Garde de source : aucun type du domaine, aucune coordonnée, aucun singleton dans les fichiers de K36.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> La carte n'est jamais le seul chemin : l'hôte tient une liste qui dit la même chose que les épingles. Le lecteur d'écran lit les épingles dans l'ordre que l'hôte donne, la sélectionnée d'abord. L'étiquette ne grandit pas au-delà de 150 %.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Seules la transformation et l'opacité s'animent ; jamais le flou ni l'ombre. Cinquante épingles pendant un déplacement de carte : aucune image perdue. Les ondes hors écran sont à l'arrêt. Rien de retenu une fois la carte quittée.</span></p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · la teinte.</b> Le web teinte à la couleur de marque, Android et iOS à la couleur de présence, le canevas à l'accent de la personne. Une seule règle doit entrer dans les écrans.</span></div>
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · les mesures.</b> 40 px, 32 dp et 48 sur le canevas. Seuil du disque : 16 de diamètre sur le web, 64 ici. Android plafonne le rayon, pas les autres.</span></div>
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · le numéro.</b> K36 est proposé. Il se confirme à l'ouverture du lot, avec son issue et son milestone.</span></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8374}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

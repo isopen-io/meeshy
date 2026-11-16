@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Léo — Actions — Android</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.tb{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:16px;flex:none;background:var(--field);color:var(--ink);transition:border-radius .3s cubic-bezier(.3,1.6,.5,1)}
+.mx .tb:active{border-radius:24px}
+.ac{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:12px;background:var(--field);border:1px solid var(--line);font-family:Inter,system-ui,sans-serif;font-size:13px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.tl{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;width:76px;height:76px;border-radius:24px;background:color-mix(in oklab,var(--accent) 17%,var(--field));color:var(--accent-ink);transition:border-radius .3s cubic-bezier(.3,1.6,.5,1)}
+.mx .tl:active{border-radius:38px}
+.tl>span{font-family:Inter,system-ui,sans-serif;font-size:12px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.mx .tl.hold{border-radius:38px;background:var(--accent);color:#0B0B12;box-shadow:0 0 0 6px color-mix(in oklab,var(--accent) 24%,transparent)}
+.mx .tl.hold>span{color:#0B0B12}
+.m3{background:var(--raised);border-radius:28px}
+.ls{display:flex;flex-direction:column;gap:2px}
+.li{display:flex;align-items:center;gap:16px;width:100%;min-height:64px;padding:10px 18px 10px 14px;background:var(--raised);border-radius:8px;font-family:Inter,system-ui,sans-serif;font-size:15px;font-weight:600;color:var(--ink)}
+.ls>.li:first-child{border-top-left-radius:28px;border-top-right-radius:28px}
+.ls>.li:last-child{border-bottom-left-radius:28px;border-bottom-right-radius:28px}
+.li>.lead{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;border-radius:14px;background:color-mix(in oklab,var(--accent) 17%,var(--field));color:var(--accent-ink)}
+.li>.tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;line-height:1.3}
+.li>.end{display:inline-flex;align-items:center;gap:6px;color:var(--ink3)}
+.msw{display:inline-flex;align-items:center;width:56px;height:32px;padding:4px;border-radius:999px;flex:none;background:var(--field);border:2px solid var(--ink3)}
+.msw>i{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:2px;border-radius:50%;background:var(--ink3);color:transparent}
+.msw>i>.ic{width:14px;height:14px}
+.mx .msw.on{background:var(--accent);border-color:var(--accent);padding:2px}
+.mx .msw.on>i{width:24px;height:24px;margin-left:24px;background:#0B0B12;color:var(--accent)}
+.cookie{position:relative;display:flex;align-items:center;justify-content:center;width:56px;height:56px;flex:none;isolation:isolate}
+.cookie::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--ck,var(--field));clip-path:polygon(100.0% 50.0%,98.4% 54.2%,94.3% 57.8%,90.1% 60.7%,87.6% 63.7%,87.6% 67.5%,89.0% 72.5%,89.8% 77.8%,88.3% 82.1%,84.3% 84.3%,78.9% 84.5%,73.8% 84.0%,70.0% 84.6%,67.5% 87.6%,65.4% 92.3%,62.6% 96.9%,58.7% 99.2%,54.2% 98.4%,50.0% 95.0%,46.4% 91.3%,43.1% 89.4%,39.3% 90.1%,34.6% 92.3%,29.5% 94.0%,25.0% 93.3%,22.2% 89.8%,21.1% 84.5%,20.7% 79.3%,19.4% 75.7%,16.0% 73.8%,11.0% 72.5%,6.0% 70.5%,3.0% 67.1%,3.1% 62.6%,5.7% 57.8%,8.7% 53.6%,10.0% 50.0%,8.7% 46.4%,5.7% 42.2%,3.1% 37.4%,3.0% 32.9%,6.0% 29.5%,11.0% 27.5%,16.0% 26.2%,19.4% 24.3%,20.7% 20.7%,21.1% 15.5%,22.2% 10.2%,25.0% 6.7%,29.5% 6.0%,34.6% 7.7%,39.3% 9.9%,43.1% 10.6%,46.4% 8.7%,50.0% 5.0%,54.2% 1.6%,58.7% 0.8%,62.6% 3.1%,65.4% 7.7%,67.5% 12.4%,70.0% 15.4%,73.8% 16.0%,78.9% 15.5%,84.3% 15.7%,88.3% 17.9%,89.8% 22.2%,89.0% 27.5%,87.6% 32.5%,87.6% 36.3%,90.1% 39.3%,94.3% 42.2%,98.4% 45.8%);animation:mxSpin 22s linear infinite}
+.ptt{display:flex;align-items:center;justify-content:center;width:104px;height:104px;flex:none;background:var(--accent);color:#0B0B12;animation:mxMorph 5s ease-in-out infinite;box-shadow:0 12px 30px rgba(78,205,196,.35)}
+.menu{position:absolute;z-index:6;display:flex;flex-direction:column;padding:8px;border-radius:22px;background:#262147;border:1px solid var(--line);box-shadow:0 18px 44px rgba(0,0,0,.62),0 2px 6px rgba(0,0,0,.4);transform-origin:20% 0;animation:axMenu .32s cubic-bezier(.3,1.4,.5,1) both}
+.menu>button{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 12px;border-radius:14px;font-family:Inter,system-ui,sans-serif;font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap}
+.menu>button>.ic{color:var(--accent-ink)}
+.fbar{display:inline-flex;align-items:center;gap:2px;padding:6px;border-radius:32px;background:var(--field);border:1px solid var(--line);box-shadow:0 10px 26px rgba(0,0,0,.5)}
+.fbar>button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:52px;padding:0 16px;border-radius:26px;font-family:Inter,system-ui,sans-serif;font-weight:700;font-size:13.5px;color:var(--ink2)}
+.mx .fbar>.on{position:relative;isolation:isolate;padding:0 18px 0 8px;color:var(--ink)}
+.mx .fbar>.on::before{content:"";position:absolute;inset:0;z-index:-1;background:color-mix(in oklab,var(--accent) 22%,var(--field));animation:axPill 5s cubic-bezier(.4,0,.2,1) infinite}
+.mx .fbar>.on>.cookie{width:40px;height:40px;color:#0B0B12;--ck:var(--accent)}
+@keyframes axPill{0%,100%{border-radius:26px}25%{border-radius:26px 12px 26px 12px}50%{border-radius:16px}75%{border-radius:12px 26px 12px 26px}}
+@keyframes axMenu{from{opacity:0;transform:scale(.86)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div class="mx" style="width: 412px; min-height: 915px; display: flex; flex-direction: column; font-family: Nunito, system-ui, sans-serif; --accent:#4ECDC4; --accent-ink:#7FE3DC">
+
+<header style="position: relative; overflow: hidden; background: linear-gradient(165deg, #0F766E 0%, #134E4A 46%, #09090B 100%)">
+<div class="orb" style="width: 200px; height: 200px; left: -60px; top: -30px; background: #4ECDC4; opacity: .55"></div>
+<div class="orb" style="width: 170px; height: 170px; right: -40px; top: 40px; background: #6366F1; opacity: .55; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 40px 16px 0">
+<button class="tb" aria-label="Fermer la fiche">[[ic:x]]</button>
+<button class="tb" aria-label="Plus d'options">[[ic:dots-three]]</button>
+</div>
+
+<div style="position: relative; padding: 34px 20px 6px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+<h1 class="d" style="font-size: 40px; font-weight: 900">Actions</h1>
+<button class="btn a sm" aria-label="Notre lien : Proche. Changer de cercle" style="min-height: 40px; margin-bottom: 4px; padding: 0 14px 0 12px; gap: 7px">[[ic:fire-fill s]]<span>Proche</span></button>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="position: relative; display: inline-flex">
+<span class="av" style="width: 40px; height: 40px; font-size: 14px">LM</span>
+<span class="dot on" style="position: absolute; right: -3px; bottom: -3px"></span>
+</span>
+<span style="display: flex; flex-direction: column; min-width: 0; line-height: 1.25">
+<span style="font-size: 16px; font-weight: 800">Léo Marchetti</span>
+<span style="font-family: Inter, system-ui, sans-serif; font-size: 13px; color: var(--ink2)">En ligne · à Lisbonne</span>
+</span>
+</div>
+</div>
+</header>
+
+<section class="rise" style="position: relative; z-index: 3; padding: 26px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 24px">Parler</h2>
+<div style="position: relative">
+<div style="display: grid; grid-template-columns: repeat(4, 76px); justify-content: space-between">
+<button class="tl">[[ic:chat-circle l]]<span>Écrire</span></button>
+<button class="tl hold" aria-haspopup="menu" aria-expanded="true">[[ic:phone-fill l]]<span>Appeler</span></button>
+<button class="tl">[[ic:video-camera l]]<span>Vidéo</span></button>
+<button class="tl">[[ic:radio l]]<span>Talkie</span></button>
+</div>
+<div class="menu" role="menu" aria-label="Appeler Léo" style="top: 84px; right: -8px; width: 248px">
+<button role="menuitem">[[ic:phone]]<span>Appel vocal</span></button>
+<button role="menuitem">[[ic:video-camera]]<span>Appel vidéo</span></button>
+<button role="menuitem">[[ic:microphone]]<span>Laisser un vocal</span></button>
+<div style="height: 1px; margin: 4px 12px; background: var(--line)"></div>
+<button role="menuitem">[[ic:house]]<span>Ajouter à l'écran d'accueil</span></button>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .06s; margin: 22px 20px 0; padding: 22px 22px 24px; border-radius: 28px; background: color-mix(in oklab, var(--accent) 9%, var(--raised)); display: flex; flex-direction: column; gap: 6px">
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px; font-family: Inter, system-ui, sans-serif; color: var(--accent-ink)">[[ic:radio s]]<span>Talkie</span></span>
+<div style="display: flex; align-items: center; gap: 18px; margin: 8px 0 36px -8px">
+<span class="cookie" style="width: 124px; height: 124px; --ck: color-mix(in oklab, var(--accent) 24%, var(--field))">
+<button class="ptt" aria-label="Maintenir pour parler à Léo">[[ic:microphone xl]]</button>
+</span>
+<div class="wave" aria-hidden="true" style="flex: 1; height: 54px; justify-content: space-between; opacity: .8">
+<i style="height: 30%"></i><i style="height: 65%"></i><i style="height: 100%"></i><i style="height: 50%"></i><i style="height: 80%"></i><i style="height: 40%"></i><i style="height: 90%"></i><i style="height: 55%"></i><i style="height: 35%"></i><i style="height: 75%"></i><i style="height: 45%"></i><i style="height: 60%"></i><i style="height: 25%"></i>
+</div>
+</div>
+<span class="d" style="font-size: 24px">Maintenir pour parler</span>
+<span style="font-family: Inter, system-ui, sans-serif; font-size: 14px; color: var(--ink2)">Ta voix part en direct chez Léo.</span>
+</section>
+
+<section class="rise" style="animation-delay: .12s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+<h2 class="d" style="font-size: 24px">Ensemble</h2>
+<span class="ac"><span style="color: var(--accent-ink); display: inline-flex">[[ic:hand-waving s]]</span><span>Bring · 2 / 3 aujourd'hui</span></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, 76px); justify-content: space-between">
+<button class="tl" aria-label="Regarder ensemble">[[ic:monitor-play l]]<span>Regarder</span></button>
+<button class="tl" aria-label="Écouter ensemble">[[ic:headphones l]]<span>Écouter</span></button>
+<button class="tl" aria-label="Bring : il t'en reste 2 sur 3 aujourd'hui">[[ic:hand-waving l]]<span>Bring</span></button>
+<button class="tl" aria-label="Lui envoyer un contenu">[[ic:share-fat l]]<span>Envoyer</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .18s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 24px">Où il est</h2>
+<div class="ls">
+<div class="m3" style="overflow: hidden; border-radius: 28px 28px 8px 8px">
+<div style="position: relative; overflow: hidden; height: 156px">
+[[map]]
+<div style="position: absolute; left: 58%; top: 54%; width: 108px; height: 108px; margin: -54px 0 0 -54px; border-radius: 50%; background: rgba(78,205,196,.18); border: 1.5px solid var(--accent)"></div>
+<div class="pin" style="left: 58%; top: 54%"><span class="av" style="width: 42px; height: 42px; font-size: 14px; border: 2.5px solid var(--ground)">LM</span></div>
+<span class="ac" style="position: absolute; left: 12px; top: 12px; min-height: 32px; color: var(--ink)"><span style="color: var(--accent-ink); display: inline-flex">[[ic:timer s]]</span><span>Encore 42 min</span></span>
+</div>
+<div style="padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span class="d" style="font-size: 22px">Alfama, Lisbonne</span>
+<span style="font-family: Inter, system-ui, sans-serif; font-size: 13.5px; color: var(--ink2)">Précision quartier · partagée avec toi</span>
+</div>
+<div style="display: flex; gap: 8px">
+<button class="btn a sm" style="flex: 1; min-height: 48px">[[ic:map-trifold s]]<span>Voir sur la carte</span></button>
+<button class="btn q sm" style="min-height: 48px; color: var(--accent-ink); border-color: color-mix(in oklab, var(--accent) 45%, transparent)">[[ic:navigation-arrow s]]<span>Itinéraire</span></button>
+</div>
+</div>
+</div>
+<button class="li">
+<span class="lead">[[ic:map-pin]]</span>
+<span class="tx"><span>Partager ma position avec Léo</span><span style="font-size: 13px; font-weight: 500; color: var(--ink2)">Non partagée · 1 h ou 8 h, à toi de choisir</span></span>
+<span class="end">[[ic:caret-right s]]</span>
+</button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .24s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 24px">Son téléphone</h2>
+<div class="ls">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px">
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px; background: var(--raised); border-radius: 28px 8px 8px 8px">
+<span style="display: inline-flex; align-items: center; gap: 6px; font-family: Inter, system-ui, sans-serif; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span style="color: var(--ok); display: inline-flex">[[ic:battery-medium s]]</span>Batterie</span>
+<span class="d" style="font-size: 30px">64 %</span>
+<span class="bar" style="display: block" role="img" aria-label="Batterie à 64 %"><i style="width: 64%; background: var(--ok)"></i></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px; background: var(--raised); border-radius: 8px 28px 8px 8px">
+<span style="display: inline-flex; align-items: center; gap: 6px; font-family: Inter, system-ui, sans-serif; font-size: 12.5px; font-weight: 600; color: var(--ink2)"><span style="color: var(--ok); display: inline-flex">[[ic:cell-signal-high s]]</span>Réseau</span>
+<span class="d" style="font-size: 30px">Joignable</span>
+<span style="font-family: Inter, system-ui, sans-serif; font-size: 12.5px; color: var(--ink3); line-height: 8px">Vu à l'instant</span>
+</div>
+</div>
+<div class="li">
+<span class="lead">[[ic:bell-ringing]]</span>
+<span class="tx" id="lbl-inj"><span>Me prévenir s'il devient injoignable</span></span>
+<button class="msw on" role="switch" aria-checked="true" aria-labelledby="lbl-inj"><i>[[ic:check s]]</i></button>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .3s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 24px">Sa fiche</h2>
+<div class="ls">
+<button class="li">
+<span class="lead">[[ic:paper-plane-tilt]]</span>
+<span class="tx"><span>Envoyer son profil</span></span>
+<span class="end">[[ic:caret-right s]]</span>
+</button>
+<button class="li">
+<span class="lead">[[ic:copy]]</span>
+<span class="tx"><span>Copier son lien</span><span class="mono" style="color: var(--ink2)">meeshy.me/@leo.m</span></span>
+</button>
+<button class="li">
+<span class="lead">[[ic:qr-code]]</span>
+<span class="tx"><span>Son QR</span></span>
+<span class="end">[[ic:caret-right s]]</span>
+</button>
+<div class="li">
+<span class="lead">[[ic:bell]]</span>
+<span class="tx" id="lbl-nouv"><span>Notifications de ses nouveautés</span></span>
+<button class="msw" role="switch" aria-checked="false" aria-labelledby="lbl-nouv"><i>[[ic:check s]]</i></button>
+</div>
+<button class="li">
+<span class="lead">[[ic:circles-three]]</span>
+<span class="tx"><span>Notre cercle</span></span>
+<span class="end"><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 700; color: var(--accent-ink)">[[ic:fire s]]<span>Proche</span></span>[[ic:caret-right s]]</span>
+</button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .36s; padding: 30px 20px 0">
+<div class="ls">
+<button class="li" style="background: rgba(248,113,113,.11); color: var(--err); font-weight: 700">
+<span class="lead" style="background: rgba(248,113,113,.16); color: var(--err)">[[ic:prohibit]]</span>
+<span class="tx"><span>Bloquer Léo</span></span>
+</button>
+<button class="li" style="background: rgba(248,113,113,.11); color: var(--err); font-weight: 700">
+<span class="lead" style="background: rgba(248,113,113,.16); color: var(--err)">[[ic:flag]]</span>
+<span class="tx"><span>Signaler</span></span>
+<span class="end" style="color: var(--err)">[[ic:caret-right s]]</span>
+</button>
+</div>
+</section>
+
+<nav aria-label="Faces du profil" style="position: sticky; bottom: 0; z-index: 8; margin-top: 28px; padding: 28px 12px 24px; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.94) 46%)">
+<div class="fbar">
+<button>[[ic:user-focus]]<span>Vitrine</span></button>
+<button>[[ic:link]]<span>Liens</span></button>
+<button class="on" aria-current="page"><span class="cookie">[[ic:lightning-fill]]</span><span>Actions</span></button>
+</div>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":412,"height":2260}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
