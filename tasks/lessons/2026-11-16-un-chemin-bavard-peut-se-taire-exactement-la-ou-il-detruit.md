@@ -1,4 +1,4 @@
-# Un chemin bavard peut se taire exactement là où il DÉTRUIT
+## Un chemin bavard peut se taire exactement là où il DÉTRUIT
 
 *2026-11-16, #18733 (cycle 172). `RedisDeliveryQueue`, chemin d'enfilage de la
 file de remise hors ligne.*
