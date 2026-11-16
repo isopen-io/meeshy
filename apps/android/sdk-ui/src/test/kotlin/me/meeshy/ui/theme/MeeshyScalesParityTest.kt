@@ -148,6 +148,9 @@ class MeeshyScalesParityTest {
             "springBouncy" to MeeshyMotion.springBouncy<Float>(),
             "bannerPullReturn" to MeeshyMotion.bannerPullReturn<Float>(),
             "bannerPullMorph" to MeeshyMotion.bannerPullMorph<Float>(),
+            "previewMorph" to MeeshyMotion.previewMorph<Float>(),
+            "previewMorphReturn" to MeeshyMotion.previewMorphReturn<Float>(),
+            "peekDetachReturn" to MeeshyMotion.peekDetachReturn<Float>(),
         )
         assertThat(kotlin.keys).containsExactlyElementsIn(swiftSprings.keys)
         kotlin.forEach { (name, spec) ->

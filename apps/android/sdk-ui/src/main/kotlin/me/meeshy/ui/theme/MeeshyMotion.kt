@@ -45,6 +45,18 @@ public object MeeshyMotion {
     public fun <T> bannerPullMorph(): SpringSpec<T> =
         spring(dampingRatio = 0.92f, stiffness = stiffnessForResponse(0.42f))
 
+    /** iOS `previewMorph` — response 0.42, damping 0.82: the long-press preview grows out of its row and settles (#18722). */
+    public fun <T> previewMorph(): SpringSpec<T> =
+        spring(dampingRatio = 0.82f, stiffness = stiffnessForResponse(0.42f))
+
+    /** iOS `previewMorphReturn` — response 0.3, damping 0.8: the preview shrinks back into its row, faster than it grew. */
+    public fun <T> previewMorphReturn(): SpringSpec<T> =
+        spring(dampingRatio = 0.8f, stiffness = stiffnessForResponse(0.3f))
+
+    /** iOS `peekDetachReturn` — response 0.32, damping 0.72: the pulled preview released before detaching springs back. */
+    public fun <T> peekDetachReturn(): SpringSpec<T> =
+        spring(dampingRatio = 0.72f, stiffness = stiffnessForResponse(0.32f))
+
     /**
      * A spring from an iOS `(response, dampingFraction)` pair, for a component whose law owns its pair (the kit's anchored
      * sheet, K15: 0.32 / 0.88) — the same conversion as the three springs above, never a local `spring(...)` literal.
