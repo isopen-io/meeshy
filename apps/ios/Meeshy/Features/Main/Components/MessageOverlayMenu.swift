@@ -478,7 +478,8 @@ struct MessageOverlayMenu: View {
     private func settledPreviewViewport(
         touch: MessageOverlayPreviewTouch, containerSize: CGSize, previewSize: CGSize, fit: MessageOverlayPreviewFit.Result
     ) -> some View {
-        previewViewport(touch: touch, containerSize: containerSize, previewSize: previewSize, fit: fit)
+        let settled = isVisible || reduceMotion
+        return previewViewport(touch: touch, containerSize: containerSize, previewSize: previewSize, fit: fit)
             .scaleEffect(settled ? 1 : PreviewSettleSpring.messageStartScale)
             .animation(reduceMotion ? nil : MeeshyAnimation.messagePreviewPop, value: settled)
     }
