@@ -112,6 +112,7 @@ export function createAfterReadDepartureTracker(wiring: AfterReadDepartureWiring
   return new AfterReadDepartureTracker({
     normalizeConversationId: normalize,
     isAuthenticated: (socketId) => socketToUser.has(socketId),
+    userOf: (socketId) => socketToUser.get(socketId),
     resolveReader: async (socketId, rawConversationId) => {
       const userIdOrToken = socketToUser.get(socketId);
       if (!userIdOrToken) return null;

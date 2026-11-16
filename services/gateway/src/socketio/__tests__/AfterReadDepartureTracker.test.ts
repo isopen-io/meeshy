@@ -16,7 +16,9 @@ import {
   AFTER_READ_MAX_HOLD_MS,
   AFTER_READ_MAX_TOUCHED,
   AFTER_READ_VIEW_STARTS_PER_MINUTE,
+  AFTER_READ_VIEW_STARTS_PER_USER_PER_MINUTE,
   type AfterReadDeparture,
+  type AfterReadPeriod,
   type AfterReadReader,
 } from '../AfterReadDepartureTracker';
 
@@ -37,6 +39,8 @@ type Options = {
   viewStopGraceMs?: number;
   /** L'horloge suit les faux minuteurs (`jest.useFakeTimers({ now: T0 })`) : le plafond de retenue se mesure. */
   followTimers?: boolean;
+  userOf?: (socketId: string) => string | undefined;
+  overflowLimits?: { perKey?: number; perReader?: number; total?: number };
 };
 
 function buildTracker(options: Options = {}) {
@@ -57,6 +61,8 @@ function buildTracker(options: Options = {}) {
     markViewing: (socketId, marked, viewing) => marks.push({ socketId, conversationId: marked.conversationId, viewing }),
     graceMs: GRACE_MS,
     now: () => (options.followTimers ? new Date(Date.now()) : clock.now),
+    userOf: options.userOf,
+    overflowLimits: options.overflowLimits,
   });
   return { tracker, departures, marks, clock };
 }
@@ -1241,6 +1247,87 @@ describe('AfterReadDepartureTracker — le débordement des regards reste borné
 
     const internals = tracker as unknown as { viewStarts: ReadonlyMap<string, unknown> };
     expect(internals.viewStarts.size).toBe(0);
+  });
+
+  it('ÉQUITÉ — un lecteur A qui sature le budget global ne fait pas fusionner la clé d’un lecteur B', async () => {
+    jest.useFakeTimers();
+    const base = { down: true };
+    const departures: AfterReadDeparture[] = [];
+    const clock = { now: T0 };
+    const tracker = new AfterReadDepartureTracker({
+      resolveReader: async (socketId, conversationId) => ({
+        conversationId,
+        participantId: `p-${socketId}`,
+        readerKey: socketId === 's-b' ? 'u-b' : 'u-a',
+      }),
+      onDeparture: async (departure) => {
+        if (base.down) throw new Error('mongo down');
+        departures.push(departure);
+      },
+      graceMs: GRACE_MS,
+      now: () => clock.now,
+      overflowLimits: { perKey: 4, perReader: 6, total: 8 },
+    });
+    const watch = async (socketId: string, conversationId: string, count: number, offset: number) => {
+      for (let i = 0; i < count; i += 1) {
+        clock.now = at((offset + i) * 2);
+        await tracker.viewStart(socketId, conversationId);
+        clock.now = at((offset + i) * 2 + 1);
+        await tracker.viewStop(socketId, conversationId);
+        await settle();
+      }
+    };
+
+    await watch('s-a', 'conv-a1', AFTER_READ_MAX_PERIODS + 6, 0);
+    await watch('s-a', 'conv-a2', AFTER_READ_MAX_PERIODS + 6, 100);
+    await watch('s-b', 'conv-b', AFTER_READ_MAX_PERIODS + 3, 200);
+    base.down = false;
+    for (let i = 0; i < 12; i += 1) {
+      jest.advanceTimersByTime(AFTER_READ_MAX_RETRY_DELAY_MS);
+      await settle();
+    }
+
+    const burnedForB = departures.filter((departure) => departure.readerKey === 'u-b').flatMap((d) => d.periods);
+    expect(burnedForB.length).toBeGreaterThan(0);
+    expect(burnedForB.every((period) => period.to.getTime() - period.from.getTime() <= 60_000)).toBe(true);
+  });
+
+  it('au-delà de AFTER_READ_VIEW_STARTS_PER_USER_PER_MINUTE par UTILISATEUR, plusieurs sockets n’ouvrent plus de regard', async () => {
+    const { tracker, marks } = buildTracker({ userOf: () => 'u-1' });
+
+    for (const socketId of ['s-1', 's-2', 's-3']) {
+      for (let i = 0; i < AFTER_READ_VIEW_STARTS_PER_MINUTE; i += 1) {
+        await tracker.viewStart(socketId, 'conv-1');
+        await tracker.viewStop(socketId, 'conv-1');
+      }
+    }
+
+    expect(marks.filter((mark) => mark.viewing)).toHaveLength(AFTER_READ_VIEW_STARTS_PER_USER_PER_MINUTE);
+  });
+
+  it('ÉQUITÉ — à égalité de charge, c’est la file la plus RÉCENTE qui se resserre, jamais le lecteur arrivé avant', async () => {
+    jest.useFakeTimers({ now: T0 });
+    const tracker = new AfterReadDepartureTracker({
+      resolveReader: async () => null,
+      onDeparture: async () => {
+        throw new Error('mongo down');
+      },
+      overflowLimits: { perKey: 4, perReader: 4, total: 8 },
+    });
+    const internals = tracker as unknown as {
+      burnOverflow: (reader: AfterReadReader, periods: readonly AfterReadPeriod[]) => void;
+      overflows: ReadonlyMap<string, { periods: readonly AfterReadPeriod[] }>;
+    };
+    const fourLooks = () =>
+      Array.from({ length: 4 }, (_unused, i) => ({ from: at(i), to: new Date(at(i).getTime() + 1_000) }));
+
+    internals.burnOverflow({ conversationId: 'c-b', participantId: 'p-b', readerKey: 'u-b' }, fourLooks());
+    await settle();
+    internals.burnOverflow({ conversationId: 'c-a1', participantId: 'p-a1', readerKey: 'u-a1' }, fourLooks());
+    internals.burnOverflow({ conversationId: 'c-a2', participantId: 'p-a2', readerKey: 'u-a2' }, fourLooks());
+    await settle();
+
+    expect(internals.overflows.get('u-b\u0000c-b')?.periods).toHaveLength(4);
   });
 });
 
