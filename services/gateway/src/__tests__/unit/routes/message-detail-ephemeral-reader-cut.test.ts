@@ -252,6 +252,22 @@ describe('GET /messages/:messageId — la coupure de service par lecteur (#16581
     expect(new Date(data.expiresAt).toISOString()).toBe(IN_GRACE_DEADLINE.toISOString());
   });
 
+  it("dans la GRÂCE, la porte ne sert plus que la BULLE : le second appareil apprend qu'il a brûlé, plus ce qu'il disait (#18556)", async () => {
+    const { status, data } = await fetchMessage(IN_GRACE);
+
+    expect(status).toBe(200);
+    expect(data.content).toBe('');
+    expect(data.translations).toEqual([]);
+    expect(data.attachments).toEqual([]);
+    expect(JSON.stringify(data)).not.toContain('Le code du coffre');
+  });
+
+  it("un éphémère VIVANT sort avec son contenu : la pierre tombale ne devance personne (#18556)", async () => {
+    const { data } = await fetchMessage(LIVE);
+
+    expect(data.content).toBe('Le code du coffre est 4719');
+  });
+
   it("un éphémère VIVANT porte l'échéance DU LECTEUR, jamais la colonne interne de destruction", async () => {
     const { status, data } = await fetchMessage(LIVE);
 

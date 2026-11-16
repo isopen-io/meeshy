@@ -153,7 +153,7 @@ describe('consumeAfterReadMessages', () => {
 
     const result = await consume(prisma, [PLAIN_EPHEMERAL, FOREIGN_FLAME, OWN_FLAME]);
 
-    expect(result).toEqual({ consumed: [], entries: [], fullyConsumed: [] });
+    expect(result).toEqual({ consumed: [], entries: [], seenByAll: [] });
     expect(entries).toEqual([]);
   });
 
@@ -178,6 +178,56 @@ describe('consumeAfterReadMessages', () => {
     await consume(prisma, [FLAME]);
 
     expect(messages[0]?.expiresAt).toEqual(RETENTION);
+  });
+
+  it("tant qu'un destinataire ne l'a pas vu, rien n'est « vu de tous »", async () => {
+    const { prisma } = buildPrisma({ messages: [message({})], participants: activeParticipants });
+
+    expect((await consume(prisma, [FLAME])).seenByAll).toEqual([]);
+  });
+
+  it('le DERNIER destinataire à voir rend le message « vu de tous », daté du plus tardif des départs (#18556)', async () => {
+    const { prisma } = buildPrisma({
+      messages: [message({})],
+      entries: [{ id: 'e-peer', messageId: FLAME, conversationId: CONV, participantId: PEER, ephemeralExpiresAt: new Date(NOW.getTime() - 5_000) }],
+      participants: activeParticipants,
+    });
+
+    expect((await consume(prisma, [FLAME])).seenByAll).toEqual([{ id: FLAME, senderId: SENDER, at: NOW }]);
+  });
+
+  it('un REJEU rend encore « vu de tous » : une annonce manquée au premier appel se rattrape (#18556)', async () => {
+    const { prisma } = buildPrisma({
+      messages: [message({})],
+      entries: [{ id: 'e-peer', messageId: FLAME, conversationId: CONV, participantId: PEER, ephemeralExpiresAt: new Date(NOW.getTime() - 5_000) }],
+      participants: activeParticipants,
+    });
+
+    await consume(prisma, [FLAME]);
+    const replay = await consumeAfterReadMessages(prisma, {
+      conversationId: CONV,
+      participantId: READER,
+      messageIds: [FLAME],
+      now: new Date(NOW.getTime() + 20_000),
+    });
+
+    expect(replay.seenByAll).toEqual([{ id: FLAME, senderId: SENDER, at: NOW }]);
+  });
+
+  it('la ligne que l’AUTEUR porte sur son propre message ne compte ni comme destinataire ni dans le plus tardif des départs', async () => {
+    const { prisma, messages } = buildPrisma({
+      messages: [message({})],
+      entries: [
+        { id: 'e-peer', messageId: FLAME, conversationId: CONV, participantId: PEER, ephemeralExpiresAt: new Date(NOW.getTime() - 5_000) },
+        { id: 'e-author', messageId: FLAME, conversationId: CONV, participantId: SENDER, ephemeralExpiresAt: new Date(NOW.getTime() + 3_600_000) },
+      ],
+      participants: activeParticipants,
+    });
+
+    const result = await consume(prisma, [FLAME]);
+
+    expect(result.seenByAll).toEqual([{ id: FLAME, senderId: SENDER, at: NOW }]);
+    expect(messages[0]?.expiresAt).toEqual(new Date(NOW.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS));
   });
 
   it('rapproche la destruction du contenu quand le DERNIER destinataire l\'a vu', async () => {

@@ -187,6 +187,77 @@ describe('POST /conversations/:id/messages/after-read/consume', () => {
     }
   });
 
+  it('le feu annoncé est GRAVÉ sur la ligne de l’expéditeur, à l’instant du dernier départ, et lui est annoncé dans sa room (#18556)', async () => {
+    const db = buildDb({ othersConsumedAt: new Date(Date.now() - 60_000) });
+    const { app, emitted } = await buildApp(db);
+    try {
+      await consume(app, [FLAME]);
+
+      const author = db.entries.find((e) => e.participantId === SENDER);
+      const reader = db.entries.find((e) => e.id === 'e-reader');
+      expect(author?.ephemeralExpiresAt).toEqual(reader?.ephemeralExpiresAt);
+      expect(author?.ephemeralExpiredAt).toBeInstanceOf(Date);
+      expect(emitted).toContainEqual({
+        room: 'user:sender-user',
+        event: 'message:expired',
+        data: { messageId: FLAME, conversationId: CONV },
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('un rejeu après le feu n’annonce rien de plus : la gravure est write-once (#18556)', async () => {
+    const db = buildDb({ othersConsumedAt: new Date(Date.now() - 60_000) });
+    const { app, emitted, enqueue } = await buildApp(db);
+    try {
+      await consume(app, [FLAME]);
+      const announced = emitted.length;
+      await consume(app, [FLAME]);
+
+      expect(emitted).toHaveLength(announced);
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      expect(db.entries.filter((e) => e.participantId === SENDER)).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('un feu retenu au premier appel s’annonce au rejeu, une fois la retenue levée (#18556)', async () => {
+    mockStoredPrivacy.set('peer-user', { showReadReceipts: false });
+    const db = buildDb({ othersConsumedAt: new Date(Date.now() - 60_000) });
+    const { app, emitted, enqueue } = await buildApp(db);
+    try {
+      await consume(app, [FLAME]);
+      expect(db.entries.some((e) => e.participantId === SENDER)).toBe(false);
+
+      mockStoredPrivacy.clear();
+      await consume(app, [FLAME]);
+
+      expect(db.entries.find((e) => e.participantId === SENDER)?.ephemeralExpiresAt).toBeInstanceOf(Date);
+      expect(emitted.map((e) => e.room)).toContainEqual('user:sender-user');
+      expect(enqueue).toHaveBeenCalledTimes(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('copie bornée dont un décompte COURT ENCORE : rien ne brûle chez les autres avant leur heure (#18556)', async () => {
+    const db = buildDb({ othersConsumedAt: new Date(Date.now() + 600_000) });
+    const { app, emitted, enqueue } = await buildApp(db);
+    try {
+      await consume(app, [FLAME]);
+
+      expect(emitted.map((e) => e.room)).toEqual([`user:${READER_USER}`]);
+      expect(enqueue).not.toHaveBeenCalled();
+      const author = db.entries.find((e) => e.participantId === SENDER);
+      expect(author?.ephemeralExpiresAt?.getTime()).toBeGreaterThan(Date.now());
+      expect(author?.ephemeralExpiredAt).toBeUndefined();
+    } finally {
+      await app.close();
+    }
+  });
+
   it('un destinataire qui a coupé ses accusés de lecture retient le feu anticipé : l’expéditeur garde la bulle (#18556)', async () => {
     mockStoredPrivacy.set('peer-user', { showReadReceipts: false });
     const db = buildDb({ othersConsumedAt: new Date(Date.now() - 60_000) });

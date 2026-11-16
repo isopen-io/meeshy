@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   hasPerReaderEphemeralDeadline,
+  isAfterReadEphemeral,
   isEphemeralServable,
   servedEphemeralExpiresAt,
 } from '@meeshy/shared/utils/ephemeral-countdown';
@@ -13,10 +14,11 @@ const logger = enhancedLogger.child({ module: 'ephemeralReaderDeadlines' });
 /**
  * Plafond de la lecture d'échéances pour UNE page (#4165 : aucun `findMany` nu).
  *
- * Au-delà, les échéances manquantes sortent nulles — donc SANS décompte servi,
- * jamais le décompte d'un autre lecteur. La porte échoue en montrant moins.
+ * Au-delà, `max D(u)` peut manquer à l'expéditeur — donc SANS décompte servi,
+ * jamais le décompte d'un autre lecteur. La ligne du LECTEUR, elle, est alors
+ * relue de façon ciblée : elle décide ce qui lui est encore servi (#18556).
  */
-const EPHEMERAL_DEADLINE_SCAN_CAP = 2000;
+export const EPHEMERAL_DEADLINE_SCAN_CAP = 2000;
 
 /**
  * Les échéances d'éphémère d'UNE page de messages, résolues POUR LE LECTEUR
@@ -46,7 +48,11 @@ const EPHEMERAL_DEADLINE_SCAN_CAP = 2000;
 export interface EphemeralReaderResolution {
   /** Le lecteur est-il l'AUTEUR du message ? Il ne décompte pas comme les autres. */
   readonly isSender: boolean;
-  /** `D(lecteur)` — nulle tant que ce lecteur n'a rien reçu. */
+  /**
+   * L'échéance gravée sur la ligne de CE lecteur — `D(lecteur)`, nulle tant
+   * qu'il n'a rien reçu ; pour l'auteur d'une flamme-œil, le feu qui lui a été
+   * annoncé (#18556), nulle tant qu'il ne l'est pas.
+   */
   readonly readerDeadline: Date | null;
   /** `max D(u)` sur les destinataires connus — ce que l'expéditeur affiche. */
   readonly latestRecipientDeadline: Date | null;
@@ -112,6 +118,27 @@ export async function loadEphemeralReaderDeadlines(
     return resolutions;
   }
 
+  // #18556 — une tranche PLEINE a pu écarter la ligne du lecteur, et « absente »
+  // s'y lirait « rien n'est échu pour lui » : son contenu repartirait entier.
+  // Sa ligne est alors relue par son couple, sans plafond qui puisse l'écarter.
+  if (readerParticipantId && entries.length >= EPHEMERAL_DEADLINE_SCAN_CAP) {
+    try {
+      const own = (await prisma.messageStatusEntry.findMany({
+        where: {
+          messageId: { in: ephemeralIds },
+          participantId: readerParticipantId,
+          AND: [{ ephemeralExpiresAt: { isSet: true } }, { ephemeralExpiresAt: { not: null } }],
+        },
+        select: { messageId: true, participantId: true, ephemeralExpiresAt: true },
+      })) as typeof entries;
+      entries = [...entries.filter((entry) => entry.participantId !== readerParticipantId), ...own];
+    } catch (err) {
+      logger.warn('ephemeral reader own deadlines query failed', { err });
+      for (const id of ephemeralIds) resolutions.set(id, NO_DEADLINE);
+      return resolutions;
+    }
+  }
+
   const senderOf = new Map(messages.map((message) => [message.id, message.senderId ?? null]));
   const byMessage = new Map<string, { reader: Date | null; latest: Date | null }>();
   for (const id of ephemeralIds) byMessage.set(id, { reader: null, latest: null });
@@ -152,8 +179,11 @@ export async function loadEphemeralReaderDeadlines(
  * Deux lectures, jamais un balayage :
  *  - un DESTINATAIRE : sa propre ligne, par le couple unique
  *    `(messageId, participantId)` ;
- *  - l'AUTEUR : la plus tardive des échéances de ses destinataires, par une
- *    lecture ORDONNÉE d'une ligne — le maximum réel, où qu'il soit.
+ *  - l'AUTEUR d'un éphémère à durée : la plus tardive des échéances de ses
+ *    destinataires, par une lecture ORDONNÉE d'une ligne — le maximum réel, où
+ *    qu'il soit ;
+ *  - l'AUTEUR d'une flamme-œil : sa propre ligne aussi — le feu qui lui a été
+ *    annoncé (#18556), la seule échéance que la loi lui serve.
  *
  * Elle rend la MÊME forme que le balayage (`EphemeralReaderResolution`) : les
  * lois qui la consomment (`servedEphemeralExpiresAt`,
@@ -173,7 +203,8 @@ export async function readEphemeralReaderResolution(
   if (!hasPerReaderEphemeralDeadline(message)) return { ...NO_DEADLINE, isSender };
 
   const started = [{ ephemeralExpiresAt: { isSet: true } }, { ephemeralExpiresAt: { not: null } }];
-  const entry = isSender
+  const readsOwnLine = !isSender || isAfterReadEphemeral(message.effectFlags);
+  const entry = !readsOwnLine
     ? await prisma.messageStatusEntry.findFirst({
         where: { messageId: message.id, AND: started },
         orderBy: { ephemeralExpiresAt: 'desc' },
@@ -185,9 +216,9 @@ export async function readEphemeralReaderResolution(
       });
 
   const deadline = entry?.ephemeralExpiresAt instanceof Date ? entry.ephemeralExpiresAt : null;
-  return isSender
-    ? { isSender, readerDeadline: null, latestRecipientDeadline: deadline }
-    : { isSender, readerDeadline: deadline, latestRecipientDeadline: null };
+  return readsOwnLine
+    ? { isSender, readerDeadline: deadline, latestRecipientDeadline: null }
+    : { isSender, readerDeadline: null, latestRecipientDeadline: deadline };
 }
 
 /**

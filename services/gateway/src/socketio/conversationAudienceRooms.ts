@@ -4,9 +4,17 @@ import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-cont
 import { participantUserRooms, type ParticipantRoomTarget } from './emitToConversationParticipants';
 
 /**
+ * Au-delà, l'audience ne se nomme plus room par room : l'appelant replie sur la
+ * room de conversation seule, comme avant #18556. Une lecture sans plafond
+ * faisait payer chaque expiration d'un grand groupe à tous ses membres.
+ */
+export const LIVE_AUDIENCE_SCAN_CAP = 2000;
+
+/**
  * Les participants VIVANTS d'une conversation, réduits aux deux identités qui
- * nomment une room. Une lecture qui lève rend `[]` : l'appelant replie alors sur
- * la seule room de conversation, jamais sur rien.
+ * nomment une room. Une lecture qui lève, ou une audience plus large que
+ * {@link LIVE_AUDIENCE_SCAN_CAP}, rend `[]` : l'appelant replie alors sur la
+ * seule room de conversation, jamais sur rien.
  */
 export async function loadLiveParticipantTargets(
   prisma: Pick<PrismaClient, 'participant'>,
@@ -17,7 +25,9 @@ export async function loadLiveParticipantTargets(
     const rows = await prisma.participant.findMany({
       where: { conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true },
+      take: LIVE_AUDIENCE_SCAN_CAP + 1,
     });
+    if ((rows?.length ?? 0) > LIVE_AUDIENCE_SCAN_CAP) return [];
     return (rows ?? []) as ParticipantRoomTarget[];
   } catch (error) {
     onError?.(error);

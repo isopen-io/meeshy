@@ -12,6 +12,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastViewOnceFact } from '../broadcastViewOnceFact';
+import { LIVE_AUDIENCE_SCAN_CAP } from '../conversationAudienceRooms';
 import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
 
 type Emitted = { rooms: string | string[]; event: string; payload: unknown };
@@ -65,7 +66,7 @@ const consumedPayload = {
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 describe('les faits de vue unique atteignent chaque participant actif (#18556)', () => {
-  it('message:consumed part en UNE diffusion vers la room de conversation et les rooms personnelles', async () => {
+  it('message:consumed dit QUI a ouvert à l’ouvreur seul ; les autres reçoivent le compteur, sans personne', async () => {
     const sink: Emitted[] = [];
     const { manager } = managerInto(sink);
 
@@ -78,16 +79,56 @@ describe('les faits de vue unique atteignent chaque participant actif (#18556)',
       payload: consumedPayload,
     });
 
+    const { participantId: _participantId, ...counts } = consumedPayload;
     expect(sink).toEqual([
       {
-        rooms: [`conversation:${CONV}`, 'user:u-sender', 'user:u-reader'],
+        rooms: [`conversation:${CONV}`, 'user:u-sender'],
         event: SERVER_EVENTS.MESSAGE_CONSUMED,
-        payload: consumedPayload,
+        payload: { ...counts, userId: '' },
       },
+      { rooms: 'user:u-reader', event: SERVER_EVENTS.MESSAGE_CONSUMED, payload: consumedPayload },
     ]);
   });
 
-  it('enfile l’ouverture pour tous les absents, ouvreur compris, une entrée par ouvreur', async () => {
+  it('ATTAQUE — l’identité de l’ouvreur n’entre ni dans les rooms des autres ni dans la file qui persiste 48 h', async () => {
+    const sink: Emitted[] = [];
+    const { manager, enqueue } = managerInto(sink);
+
+    await broadcastViewOnceFact({
+      prisma: prismaOf(participants()) as never,
+      manager: manager as never,
+      conversationId: CONV,
+      messageId: 'm-1',
+      eventType: 'consumed',
+      payload: consumedPayload,
+    });
+    await flush();
+
+    const beyondOpener = [...sink.filter((e) => e.rooms !== 'user:u-reader'), ...enqueue.mock.calls.map(([call]) => call)];
+    expect(beyondOpener.length).toBeGreaterThan(1);
+    expect(JSON.stringify(beyondOpener)).not.toContain('u-reader');
+    expect(JSON.stringify(beyondOpener)).not.toContain('p-reader');
+  });
+
+  it('un invité de lien qui ouvre est servi par sa room de participant', async () => {
+    const sink: Emitted[] = [];
+    const { manager } = managerInto(sink);
+    const guest = { ...consumedPayload, userId: 'p-guest', participantId: 'p-guest' };
+
+    await broadcastViewOnceFact({
+      prisma: prismaOf([...participants(), { id: 'p-guest', userId: null, conversationId: CONV, isActive: true }]) as never,
+      manager: manager as never,
+      conversationId: CONV,
+      messageId: 'm-1',
+      eventType: 'consumed',
+      payload: guest,
+    });
+
+    expect(sink.map((e) => e.rooms)).toEqual([[`conversation:${CONV}`, 'user:u-sender', 'user:u-reader'], 'user:p-guest']);
+    expect(sink[1].payload).toEqual(guest);
+  });
+
+  it('enfile l’ouverture pour tous les absents, une entrée par ouverture, sans nommer l’ouvreur', async () => {
     const sink: Emitted[] = [];
     const { manager, enqueue } = managerInto(sink);
 
@@ -106,7 +147,8 @@ describe('les faits de vue unique atteignent chaque participant actif (#18556)',
         eventType: 'consumed',
         actorUserId: null,
         messageId: 'm-1',
-        dedupKey: 'consumed:m-1:p-reader',
+        dedupKey: 'consumed:m-1:1',
+        payload: expect.objectContaining({ userId: '', viewOnceCount: 1, isFullyConsumed: true }),
       }),
     );
   });
@@ -156,5 +198,31 @@ describe('les faits de vue unique atteignent chaque participant actif (#18556)',
 
     expect(sink.map((e) => e.rooms)).toEqual([`conversation:${CONV}`]);
     expect(onError).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('l’audience nommée est bornée (#18556)', () => {
+  it('au-delà du plafond, la diffusion replie sur la room de conversation seule', async () => {
+    const sink: Emitted[] = [];
+    const { manager } = managerInto(sink);
+    const crowd = Array.from({ length: LIVE_AUDIENCE_SCAN_CAP + 1 }, (_, index) => ({
+      id: `p-${index}`,
+      userId: `u-${index}`,
+      conversationId: CONV,
+      isActive: true,
+    }));
+    const prisma = prismaOf(crowd);
+
+    await broadcastViewOnceFact({
+      prisma: prisma as never,
+      manager: manager as never,
+      conversationId: CONV,
+      messageId: 'm-1',
+      eventType: 'view-once-purged',
+      payload: { messageId: 'm-1', conversationId: CONV },
+    });
+
+    expect(sink.map((e) => e.rooms)).toEqual([`conversation:${CONV}`]);
+    expect(prisma.participant.findMany.mock.calls[0][0]).toMatchObject({ take: LIVE_AUDIENCE_SCAN_CAP + 1 });
   });
 });

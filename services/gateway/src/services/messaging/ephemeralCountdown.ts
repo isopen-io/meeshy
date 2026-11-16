@@ -240,8 +240,10 @@ async function recomputeDestruction(
 ): Promise<Date | null> {
   let deadlines: Array<Date | null>;
   try {
+    // Les décomptes des DESTINATAIRES : la ligne de l'auteur (feu annoncé,
+    // #18556) n'en est pas un et ne repousse jamais la destruction.
     const entries = await prisma.messageStatusEntry.findMany({
-      where: { messageId: row.id },
+      where: { messageId: row.id, participantId: { not: row.senderId } },
       select: { ephemeralExpiresAt: true },
     });
     deadlines = entries.map((entry) => entry.ephemeralExpiresAt ?? null);

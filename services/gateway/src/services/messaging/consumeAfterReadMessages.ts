@@ -21,10 +21,11 @@ const logger = enhancedLogger.child({ module: 'consumeAfterReadMessages' });
  *    (`EphemeralRecipientExpiryService`) la reconnaît telle quelle ; la route
  *    l'expire sans l'attendre (`expireNow`).
  * 2. `Message.expiresAt` RAPPROCHÉ à `max D(u) + 1 h` quand le DERNIER
- *    destinataire actif a consommé — l'expéditeur garde la bulle jusque-là,
- *    puis la destruction du contenu la retire pour toute la room. Tant qu'un
- *    destinataire manque, la colonne garde le plafond de rétention posé à
- *    l'envoi (`ephemeralSendFields`).
+ *    destinataire actif a consommé : la destruction du contenu suit alors.
+ *    Tant qu'un destinataire manque, la colonne garde le plafond de rétention
+ *    posé à l'envoi (`ephemeralSendFields`). L'expéditeur, lui, perd la bulle
+ *    à `max D(u)` quand le feu lui est annoncé (`afterReadConsumption`), ou à
+ *    la destruction quand il ne l'est pas.
  *
  * ─── FERMÉ PAR DÉFAUT ───────────────────────────────────────────────────────
  *
@@ -36,7 +37,8 @@ const logger = enhancedLogger.child({ module: 'consumeAfterReadMessages' });
  *
  * Une échéance déjà passée n'est jamais repoussée ; un second appel rend la
  * même ligne, et c'est la revendication write-once de `expireNow` qui refuse
- * de rejouer l'annonce.
+ * de rejouer l'annonce. `seenByAll` est RECALCULÉ à chaque appel, y compris un
+ * rejeu : un rapprochement ou une annonce qui a échoué se rattrape au suivant.
  */
 
 export type AfterReadConsumePrisma = Pick<PrismaClient, 'message' | 'messageStatusEntry' | 'participant'>;
@@ -55,10 +57,10 @@ export interface ConsumedAfterRead {
   /** Ses lignes, à remettre à `EphemeralRecipientExpiryService.expireNow`. */
   readonly entries: EphemeralExpiryEntry[];
   /**
-   * #18556 — les messages dont CET appel a fait le dernier destinataire actif à
-   * consommer : ils brûlent maintenant chez tous ceux qui les ont à l'écran.
+   * #18556 — les messages consommés que TOUS les destinataires actifs ont
+   * désormais vus, avec `max D(u)` : l'instant où le dernier a vu puis quitté.
    */
-  readonly fullyConsumed: Array<{ readonly id: string; readonly senderId: string }>;
+  readonly seenByAll: Array<{ readonly id: string; readonly senderId: string; readonly at: Date }>;
 }
 
 /**
@@ -97,27 +99,27 @@ export async function consumeAfterReadMessages(
 
   const consumed: string[] = [];
   const entries: EphemeralExpiryEntry[] = [];
-  const fullyConsumed: Array<{ id: string; senderId: string }> = [];
+  const seenByAll: Array<{ id: string; senderId: string; at: Date }> = [];
   for (const row of flames) {
-    const claim = await claimReaderDeadline(prisma, params, row.id);
-    if (!claim) continue;
+    const entry = await claimReaderDeadline(prisma, params, row.id);
+    if (!entry) continue;
     consumed.push(row.id);
-    entries.push(claim.entry);
-    const allSeen = await scheduleDestructionWhenAllSeen(prisma, params, row).catch((err) => {
+    entries.push(entry);
+    const at = await scheduleDestructionWhenAllSeen(prisma, params, row).catch((err) => {
       logger.warn('after-read destruction scheduling failed', { messageId: row.id, err });
-      return false;
+      return null;
     });
-    if (allSeen && claim.fresh) fullyConsumed.push({ id: row.id, senderId: row.senderId });
+    if (at) seenByAll.push({ id: row.id, senderId: row.senderId, at });
   }
 
-  return { consumed, entries, fullyConsumed };
+  return { consumed, entries, seenByAll };
 }
 
 async function claimReaderDeadline(
   prisma: AfterReadConsumePrisma,
   params: ConsumeAfterReadParams,
   messageId: string,
-): Promise<{ entry: EphemeralExpiryEntry; fresh: boolean } | null> {
+): Promise<EphemeralExpiryEntry | null> {
   const { participantId, conversationId, now } = params;
   const written = await prisma.messageStatusEntry.updateMany({
     where: {
@@ -128,8 +130,7 @@ async function claimReaderDeadline(
     data: { ephemeralExpiresAt: now },
   });
 
-  let fresh = (written?.count ?? 0) > 0;
-  if (!fresh) {
+  if ((written?.count ?? 0) === 0) {
     // Vu avant l'accusé de réception : la ligne n'existe pas encore. Même
     // patron que la vue unique (`recordViewOnceConsumption`) — une création
     // concurrente perd sur l'index unique et relit la ligne gagnante.
@@ -142,7 +143,6 @@ async function claimReaderDeadline(
         await prisma.messageStatusEntry.create({
           data: { messageId, conversationId, participantId, ephemeralExpiresAt: now },
         });
-        fresh = true;
       } catch (err) {
         if ((err as { code?: string } | null)?.code !== 'P2002') throw err;
       }
@@ -154,23 +154,24 @@ async function claimReaderDeadline(
     select: { id: true, messageId: true, conversationId: true, participantId: true, ephemeralExpiresAt: true },
   })) as EphemeralExpiryEntry | null;
 
-  return entry?.ephemeralExpiresAt instanceof Date ? { entry, fresh } : null;
+  return entry?.ephemeralExpiresAt instanceof Date ? entry : null;
 }
 
+/** @returns `max D(u)` quand tous les destinataires actifs ont une échéance, sinon `null`. */
 async function scheduleDestructionWhenAllSeen(
   prisma: AfterReadConsumePrisma,
   params: ConsumeAfterReadParams,
   row: FlameRow,
-): Promise<boolean> {
+): Promise<Date | null> {
   const participants = (await prisma.participant.findMany({
     where: { conversationId: params.conversationId, isActive: true },
     select: { id: true },
     take: RECIPIENT_SCAN_CAP,
   })) as Array<{ id: string }>;
-  if (participants.length >= RECIPIENT_SCAN_CAP) return false;
+  if (participants.length >= RECIPIENT_SCAN_CAP) return null;
 
   const recipients = participants.map((p) => p.id).filter((id) => id !== row.senderId);
-  if (recipients.length === 0) return false;
+  if (recipients.length === 0) return null;
 
   const seen = (await prisma.messageStatusEntry.findMany({
     where: { messageId: row.id, participantId: { in: recipients }, AND: DEADLINE_SET },
@@ -181,7 +182,7 @@ async function scheduleDestructionWhenAllSeen(
     .map((entry) => entry.ephemeralExpiresAt)
     .filter((deadline): deadline is Date => deadline instanceof Date);
   const seenBy = new Set(seen.filter((entry) => entry.ephemeralExpiresAt instanceof Date).map((e) => e.participantId));
-  if (!recipients.every((id) => seenBy.has(id))) return false;
+  if (!recipients.every((id) => seenBy.has(id))) return null;
 
   const latest = Math.max(...deadlines.map((deadline) => deadline.getTime()));
   const destruction = new Date(latest + EPHEMERAL_UNAVAILABILITY_GRACE_MS);
@@ -195,5 +196,5 @@ async function scheduleDestructionWhenAllSeen(
     },
     data: { expiresAt: destruction },
   });
-  return true;
+  return new Date(latest);
 }

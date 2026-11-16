@@ -2,6 +2,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { loadPrivacyPreferencesCached } from '../preferences/privacy-cache';
 
+/** Au-delà, « aucun destinataire n'a coupé ses accusés » ne se prouve pas en une lecture bornée : le feu est retenu. */
+export const EARLY_BURN_GATE_SCAN_CAP = 500;
+
 /**
  * Le feu anticipé d'une flamme-œil dit à l'expéditeur QUAND le dernier lecteur
  * a lu puis quitté : c'est un accusé de lecture. Il n'a lieu que si aucun
@@ -19,7 +22,9 @@ export async function earlyBurnMayReachSender(params: {
     const rows = await params.prisma.participant.findMany({
       where: { conversationId: params.conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true },
+      take: EARLY_BURN_GATE_SCAN_CAP + 1,
     });
+    if (rows.length > EARLY_BURN_GATE_SCAN_CAP) return false;
     const userIds = [
       ...new Set(
         rows

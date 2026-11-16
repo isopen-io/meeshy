@@ -89,7 +89,7 @@ import {
   withQuotedMessages,
 } from './ephemeralReaderDeadlines';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
-import { projectEphemeralTombstone, type TombstoneRow } from './ephemeralTombstone';
+import { isLapsedForReader, projectEphemeralTombstone, type TombstoneRow } from './ephemeralTombstone';
 import {
   isServableThroughQuotes,
   loadInheritedEphemeralDeadlines,
@@ -648,12 +648,15 @@ export function registerMessagesListRoute(
       );
       if (ephemeralDeadlines.size > 0) {
         const servedAt = new Date();
+        // #18556 — une recherche trouve par le CONTENU : un éphémère échu pour
+        // ce lecteur n'y ressort pas, même en bulle vide.
         const served = messages.filter((message: { id: string }) =>
           isEphemeralServableToReader(
             message as Parameters<typeof isEphemeralServableToReader>[0],
             ephemeralDeadlines.get(message.id),
             servedAt
           )
+          && !(searchMode && isLapsedForReader(message as TombstoneRow, ephemeralDeadlines.get(message.id), null, servedAt))
         );
         if (served.length !== messages.length) {
           messages.length = 0;
@@ -777,14 +780,24 @@ export function registerMessagesListRoute(
         });
       }
 
-      // #18556 — un éphémère échu pour ce lecteur, encore dans sa grâce, ne
-      // sert plus que sa bulle.
-      if (ephemeralDeadlines.size > 0) {
+      // #18556 — un message mort pour ce lecteur (son échéance d'éphémère, ou
+      // celle de ce qu'il cite), encore dans sa grâce, ne sert plus que sa
+      // bulle. APRÈS tous les enrichissements : ce qu'ils rattachent à la bulle
+      // (source d'un transfert, story citée) repartirait sinon avec elle.
+      if (ephemeralDeadlines.size > 0 || inheritedDeadlines.size > 0) {
         const tombstoneAt = new Date();
         const rows = new Map(messages.map((row: { id: string } & TombstoneRow) => [row.id, row]));
         mappedMessages.forEach((m, index) => {
           const row = rows.get(m.id);
-          if (row) mappedMessages[index] = projectEphemeralTombstone(m, row, ephemeralDeadlines.get(m.id), tombstoneAt);
+          if (row) {
+            mappedMessages[index] = projectEphemeralTombstone(
+              m,
+              row,
+              ephemeralDeadlines.get(m.id),
+              tombstoneAt,
+              inheritedDeadlines.get(m.id),
+            );
+          }
         });
       }
 

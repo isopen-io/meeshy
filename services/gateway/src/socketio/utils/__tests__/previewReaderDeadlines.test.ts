@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
-import { loadPreviewReaderDeadlines } from '../previewReaderDeadlines';
+import { loadPreviewReaderDeadlines, PREVIEW_DEADLINE_SCAN_CAP } from '../previewReaderDeadlines';
 import { matchesMongoWhere, type MongoDocument } from '../../../__tests__/helpers/mongo-where';
 
 const D_READER = new Date('2026-11-14T11:50:00.000Z');
@@ -48,6 +48,40 @@ describe('loadPreviewReaderDeadlines (#18556)', () => {
     expect(deadlines.get('p-sender')).toEqual(D_PEER);
     expect(deadlines.get('p-late')).toBeUndefined();
     expect(prisma.messageStatusEntry.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('l’AUTEUR d’une flamme-œil reçoit le feu qui lui a été annoncé — sa propre ligne — et rien tant qu’il ne l’est pas (#18556)', async () => {
+    const flame = { ...duration, id: 'm-flame', ephemeralDuration: null, effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ };
+    const BURNT = new Date('2026-11-14T11:57:00.000Z');
+    const pending = prismaOf([{ messageId: 'm-flame', participantId: 'p-reader', ephemeralExpiresAt: D_READER }]);
+    const announced = prismaOf([
+      { messageId: 'm-flame', participantId: 'p-reader', ephemeralExpiresAt: D_READER },
+      { messageId: 'm-flame', participantId: 'p-sender', ephemeralExpiresAt: BURNT },
+    ]);
+    const readers = [
+      { participantId: 'p-reader', message: flame },
+      { participantId: 'p-sender', message: flame },
+    ];
+
+    expect((await loadPreviewReaderDeadlines(pending as never, readers)).get('p-sender')).toBeUndefined();
+    const deadlines = await loadPreviewReaderDeadlines(announced as never, readers);
+    expect(deadlines.get('p-sender')).toEqual(BURNT);
+    expect(deadlines.get('p-reader')).toEqual(D_READER);
+  });
+
+  it('une tranche PLEINE ne coûte pas sa ligne à un lecteur servi : elle est relue par son couple (#18556)', async () => {
+    const strangers = Array.from({ length: PREVIEW_DEADLINE_SCAN_CAP }, (_, index) => ({
+      messageId: 'm-1',
+      participantId: `p-stranger-${index}`,
+      ephemeralExpiresAt: D_PEER,
+    }));
+    const prisma = prismaOf([...strangers, { messageId: 'm-1', participantId: 'p-reader', ephemeralExpiresAt: D_READER }]);
+    prisma.messageStatusEntry.findMany.mockImplementationOnce(async () => strangers);
+
+    const deadlines = await loadPreviewReaderDeadlines(prisma as never, [{ participantId: 'p-reader', message: duration }]);
+
+    expect(deadlines.get('p-reader')).toEqual(D_READER);
+    expect(prisma.messageStatusEntry.findMany).toHaveBeenCalledTimes(2);
   });
 
   it('ne lit rien quand aucun aperçu n’est un éphémère', async () => {

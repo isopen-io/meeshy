@@ -506,7 +506,10 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
-      emitViewingSnapshots: (socket) => this.conversationViewingHandler.afterAuthentication(socket),
+      emitViewingSnapshots: (socket) =>
+        this.conversationViewingHandler
+          .afterAuthentication(socket)
+          .finally(() => this.afterReadDepartures.afterAuthentication(socket.id)),
       // CALL-RESILIENCE (Vague 44) — lets AuthHandler's anonymous-guest
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".
@@ -581,6 +584,7 @@ export class MeeshySocketIOManager {
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
       manager: () => this,
+      io: () => this.io,
       onError: (error) => logger.warn('after-read departure failed', { error }),
     });
 
