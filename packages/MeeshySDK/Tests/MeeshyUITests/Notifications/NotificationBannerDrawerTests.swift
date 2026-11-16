@@ -122,4 +122,34 @@ final class NotificationBannerDrawerTests: XCTestCase {
         XCTAssertEqual(NotificationBannerMorph.scrimOpacity(progress: 1), NotificationBannerMorph.sheetDim, accuracy: 0.0001)
         XCTAssertEqual(NotificationBannerMorph.scrimOpacity(progress: 2), NotificationBannerMorph.sheetDim, accuracy: 0.0001)
     }
+    // MARK: - Le relais de l'enveloppe à la feuille
+
+    /// Mesuré au simulateur : l'enveloppe s'effaçait 120 ms après la demande
+    /// de feuille, laquelle paraissait 0,4 s plus tard puis montrait son
+    /// squelette 0,5 s — un écran vide d'une seconde. L'enveloppe ne part
+    /// plus qu'une fois la feuille PEINTE.
+    func test_handoff_waitsForTheSheetToPaintItsMessages() {
+        XCTAssertFalse(NotificationBannerHandoff.releasesEnvelope(morphSettled: true, sheetPainted: false, waited: 0.5))
+        XCTAssertTrue(NotificationBannerHandoff.releasesEnvelope(morphSettled: true, sheetPainted: true, waited: 0.5))
+    }
+
+    func test_handoff_neverBeforeTheMorphHasSettled() {
+        XCTAssertFalse(NotificationBannerHandoff.releasesEnvelope(morphSettled: false, sheetPainted: true, waited: 0))
+    }
+
+    /// Une feuille qui ne peint jamais (réseau froid, verrou) ne retient pas
+    /// l'enveloppe indéfiniment : elle part au plafond.
+    func test_handoff_neverWaitsBeyondTheCeiling() {
+        XCTAssertFalse(NotificationBannerHandoff.releasesEnvelope(
+            morphSettled: true, sheetPainted: false, waited: NotificationBannerHandoff.ceiling - 0.01))
+        XCTAssertTrue(NotificationBannerHandoff.releasesEnvelope(
+            morphSettled: true, sheetPainted: false, waited: NotificationBannerHandoff.ceiling))
+    }
+
+    /// La feuille réelle pose son propre voile : celui de l'enveloppe s'efface
+    /// à cet instant, sinon l'écran s'assombrit deux fois.
+    func test_envelopeScrim_yieldsToTheSheetsOwnDim() {
+        XCTAssertEqual(NotificationBannerMorph.scrimOpacity(progress: 1, sheetShown: false), NotificationBannerMorph.sheetDim, accuracy: 0.0001)
+        XCTAssertEqual(NotificationBannerMorph.scrimOpacity(progress: 1, sheetShown: true), 0)
+    }
 }
