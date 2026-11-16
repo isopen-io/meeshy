@@ -765,7 +765,7 @@ describe('AfterReadDepartureTracker — le regard borne ce qui a été vu (#1855
     expect(departures).toHaveLength(1);
   });
 
-  it('borne le nombre de périodes retenues : les plus anciennes sont oubliées', async () => {
+  it('au-delà du nombre de périodes retenues, les plus anciennes BRÛLENT, elles ne sont pas jetées', async () => {
     const { tracker, departures, clock } = buildTracker();
 
     for (let i = 0; i < AFTER_READ_MAX_PERIODS + 3; i += 1) {
@@ -777,8 +777,36 @@ describe('AfterReadDepartureTracker — le regard borne ce qui a été vu (#1855
     await tracker.close('s-1', 'conv-1');
     await settle();
 
-    expect(departures[0].periods).toHaveLength(AFTER_READ_MAX_PERIODS);
-    expect(departures[0].periods[0].from).toEqual(at(6));
+    const burned = departures.flatMap((departure) => departure.periods.map((period) => period.from.getTime()));
+    expect(burned).toHaveLength(AFTER_READ_MAX_PERIODS + 3);
+    expect(new Set(burned).size).toBe(AFTER_READ_MAX_PERIODS + 3);
+    expect(burned).toContain(at(0).getTime());
+    expect(departures.every((departure) => departure.periods.length <= AFTER_READ_MAX_PERIODS)).toBe(true);
+  });
+
+  it('des regards évincés dont la brûlure échoue se redemandent, jamais jetés', async () => {
+    jest.useFakeTimers();
+    const base = { down: true };
+    const { tracker, departures, clock } = buildTracker({
+      onDeparture: async () => {
+        if (base.down) throw new Error('mongo down');
+      },
+    });
+
+    for (let i = 0; i < AFTER_READ_MAX_PERIODS + 1; i += 1) {
+      clock.now = at(i * 2);
+      await tracker.viewStart('s-1', 'conv-1');
+      clock.now = at(i * 2 + 1);
+      await tracker.viewStop('s-1', 'conv-1');
+    }
+    await tracker.viewStart('s-1', 'conv-1');
+    await settle();
+    base.down = false;
+    jest.advanceTimersByTime(AFTER_READ_MAX_RETRY_DELAY_MS);
+    await settle();
+
+    const burned = departures.flatMap((departure) => departure.periods.map((period) => period.from.getTime()));
+    expect(burned).toContain(at(0).getTime());
   });
 
   it('un départ qui échoue ne lève pas', async () => {
