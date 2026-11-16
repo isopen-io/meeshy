@@ -38,6 +38,8 @@ struct ConversationDependencies {
     var encryptedEra = ConversationEncryptedEra()
     /// Le clair que cet appareil a posé sur le fil, que la cellule repose (#12916).
     var endToEndClear = EndToEndThreadClear()
+    /// Lecture ou regard (#18721) : une conversation tirée depuis la bannière ne se marque lue qu'au premier acte.
+    var readGate = ConversationReadGate()
 
     @MainActor
     static var live: ConversationDependencies {
@@ -167,24 +169,12 @@ extension ConversationViewModel {
         watchVoiceConsent()
         guard !hasStarted else { return }
         hasStarted = true
-        ExplicitUnreadMarks.clear(conversationId) // rouvrir, c'est relire : la marque d'un « non lu » ne vaut plus
-        // Declare this conversation as currently visible so the sync engine
-        // forces its `unreadCount` to 0 on every server broadcast (the user
-        // IS reading it) and excludes it from the cross-conversation
-        // aggregator. Cleared in `deinit`.
-        //
-        // OUVRIR N'EST PAS LIRE (#7350, I-2). Ce zéro est TRANSITOIRE : il ne
-        // pose aucune frontière de lecture, et la fermeture redonne à la ligne
-        // ce qui reste réellement non lu (`notePartialRead(seen:)`, borné par
-        // `FirstUnreadBoundary`). Un `ConversationReadSignal.markReadLocally`
-        // vivait ici : il datait une frontière de l'ouverture, forcément
-        // postérieure au dernier message, et `reconcileUnread` ramenait ensuite
-        // à 0 tout instantané serveur — 99 non-lus, 5 vus, liste à 0 pendant
-        // que le serveur disait 94. La frontière n'est
-        // plus posée que par une lecture COMPLÈTE (`sendReadReceipt`, lot qui
-        // contient le message le plus récent) ou un geste explicite.
-        // Multi-fenêtre : une scène = une ouverture, équilibrée par la fermeture de `deinit`. Le moteur tient
-        // l'ENSEMBLE — deux fenêtres, deux conversations lues, aucune ne remplace l'autre.
+        // Rouvrir, c'est relire (la marque « non lu » tombe) — sauf en REGARD (#18721), qui ne lit rien avant le premier acte.
+        if startupDependencies.readGate.opensReading(conversationId) { ExplicitUnreadMarks.clear(conversationId) }
+        // OUVRIR N'EST PAS LIRE (#7350, I-2) : le moteur force à 0 la ligne OUVERTE et l'exclut de l'agrégat, mais ce
+        // zéro est TRANSITOIRE — `deinit` redonne à la ligne ce qui reste non lu (`notePartialRead(seen:)`, borné par
+        // `FirstUnreadBoundary`), tout son compte en regard. Seule une lecture COMPLÈTE (`sendReadReceipt`) ou un geste
+        // explicite date une frontière. Une scène = une ouverture (multi-fenêtre).
         syncEngine.openConversation(conversationId)
         // Open side-effects (socket room join + active-conversation publish to
         // the notification singletons). Lives here — NOT in the handler's init

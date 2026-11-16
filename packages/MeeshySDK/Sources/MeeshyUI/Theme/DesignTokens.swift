@@ -112,6 +112,10 @@ public enum MeeshyAnimation {
     public static let springDefault = Animation.spring(response: 0.4, dampingFraction: 0.75)
     public static let springBouncy = Animation.spring(response: 0.5, dampingFraction: 0.6)
     public static let staggerDelay: Double = 0.04
+    /// La bannière tirée puis relâchée revient à sa place : un ressort court, avec le dépassement qui fait sentir l'élastique (#18721).
+    public nonisolated static let bannerPullReturn = Animation.spring(response: 0.36, dampingFraction: 0.66)
+    /// La bannière qui devient la conversation : la carte grandit jusqu'à l'écran sans rebondir, le cadre ne doit pas trembler.
+    public nonisolated static let bannerPullMorph = Animation.spring(response: 0.42, dampingFraction: 0.92)
 }
 
 // MARK: - iPad Layout
