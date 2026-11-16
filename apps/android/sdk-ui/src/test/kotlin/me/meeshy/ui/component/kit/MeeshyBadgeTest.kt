@@ -38,20 +38,20 @@ class MeeshyBadgeTest {
     }
 
     @Test
-    fun `le quota s'ecrit 2 sur 3 en chiffres, borne par son total`() {
+    fun `le quota s'ecrit 2 sur 3 en chiffres borne par son total`() {
         assertThat(MeeshyBadgeCount.quota(2, of = 3)).isEqualTo("2 / 3")
         assertThat(MeeshyBadgeCount.quota(0, of = 3)).isEqualTo("0 / 3")
         assertThat(MeeshyBadgeCount.quota(-1, of = 3)).isEqualTo("0 / 3")
     }
 
     @Test
-    fun `quatre hauteurs 18 22 28 36 et le texte 10 11 12 12,5`() {
+    fun `quatre hauteurs 18 22 28 36 et le texte 10 11 12 125`() {
         assertThat(MeeshyBadgeSize.entries.map { resolve(size = it).heightDp }).containsExactly(18, 22, 28, 36).inOrder()
         assertThat(MeeshyBadgeSize.entries.map { resolve(size = it).textSp }).containsExactly(10f, 11f, 12f, 12.5f).inOrder()
     }
 
     @Test
-    fun `une pastille inerte n'a ni cible ni role ; touchable, elle a 44 qui debordent`() {
+    fun `une pastille inerte n'a ni cible ni role  et touchable elle a 44 qui debordent`() {
         assertThat(resolve().hitDp).isNull()
         assertThat(resolve(isInteractive = true, size = MeeshyBadgeSize.S22).hitDp).isEqualTo(44)
         assertThat(resolve(isInteractive = true, size = MeeshyBadgeSize.S36).hitDp).isEqualTo(44)
@@ -60,7 +60,7 @@ class MeeshyBadgeTest {
     }
 
     @Test
-    fun `presse - echelle 0,94 ; desactive - 40 pour cent`() {
+    fun `presse - echelle 094  et desactive - 40 pour cent`() {
         assertThat(resolve(isInteractive = true, isPressed = true).scale).isEqualTo(0.94f)
         assertThat(resolve(isInteractive = true, isEnabled = false).opacity).isEqualTo(0.4f)
     }
@@ -81,7 +81,7 @@ class MeeshyBadgeTest {
     }
 
     @Test
-    fun `la teinte tonale est a 16 pour cent, le contour a 1,5`() {
+    fun `la teinte tonale est a 16 pour cent le contour a 15`() {
         assertThat(resolve(surface = MeeshyBadgeSurface.Tonal).tonalAlpha).isEqualTo(0.16f)
         assertThat(resolve(surface = MeeshyBadgeSurface.Outline).outlineDp).isEqualTo(1.5f)
         assertThat(resolve(surface = MeeshyBadgeSurface.Tonal).outlineDp).isEqualTo(0f)
@@ -94,14 +94,14 @@ class MeeshyBadgeTest {
     }
 
     @Test
-    fun `une bulle a la queue au bord de debut, en bas - 16 16 16 4`() {
+    fun `une bulle a la queue au bord de debut en bas - 16 16 16 4`() {
         val bubble = resolve(shape = MeeshyBadgeShape.Bubble)
         assertThat(bubble.bubbleCornersDp).containsExactly(16, 16, 16, 4).inOrder()
         assertThat(resolve().bubbleCornersDp).isNull()
     }
 
     @Test
-    fun `un chiffre est un disque, un code a le rayon 7, le multi-ligne le rayon 14`() {
+    fun `un chiffre est un disque un code a le rayon 7 le multi-ligne le rayon 14`() {
         assertThat(resolve(content = MeeshyBadgeContentShape.Digit).isDisc).isTrue()
         assertThat(resolve(content = MeeshyBadgeContentShape.Glyph).isDisc).isTrue()
         assertThat(resolve(content = MeeshyBadgeContentShape.Code).cornerRadiusDp).isEqualTo(7)
@@ -111,14 +111,14 @@ class MeeshyBadgeTest {
     }
 
     @Test
-    fun `le detourage est de 3, decale d'un quart de la hauteur`() {
+    fun `le detourage est de 3 decale d'un quart de la hauteur`() {
         assertThat(MeeshyBadgeRecipe.CUTOUT_DP).isEqualTo(3)
         assertThat(MeeshyBadgeRecipe.anchorOffsetDp(MeeshyBadgeSize.S28)).isEqualTo(7f)
         assertThat(MeeshyBadgeRecipe.anchorOffsetDp(MeeshyBadgeSize.S18)).isEqualTo(4.5f)
     }
 
     @Test
-    fun `chiffres et heures en chasse fixe, mots et glyphes non`() {
+    fun `chiffres et heures en chasse fixe mots et glyphes non`() {
         assertThat(resolve(content = MeeshyBadgeContentShape.Digit).usesTabularFigures).isTrue()
         assertThat(resolve(content = MeeshyBadgeContentShape.Time).usesTabularFigures).isTrue()
         assertThat(resolve(content = MeeshyBadgeContentShape.Word).usesTabularFigures).isFalse()

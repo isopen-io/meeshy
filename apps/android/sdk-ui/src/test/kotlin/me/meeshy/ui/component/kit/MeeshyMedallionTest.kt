@@ -23,7 +23,7 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `fond doux a 18 pour cent, jamais de bord ni d'ombre`() {
+    fun `fond doux a 18 pour cent jamais de bord ni d'ombre`() {
         val soft = resolve()
         assertThat(soft.paint).isEqualTo(MeeshyMedallionPaint.Soft)
         assertThat(soft.softAlpha).isEqualTo(0.18f)
@@ -32,14 +32,14 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `le glyphe est a la moitie du diametre, 14 au moins ; la valeur a 44 pour cent`() {
+    fun `le glyphe est a la moitie du diametre 14 au moins  et la valeur a 44 pour cent`() {
         assertThat(resolve(size = MeeshyMedallionSize.S96).glyphDp).isEqualTo(48f)
         assertThat(resolve(size = MeeshyMedallionSize.S24).glyphDp).isEqualTo(14f)
         assertThat(resolve(size = MeeshyMedallionSize.S96, hasValue = true).valueDp).isWithin(0.01f).of(42.24f)
     }
 
     @Test
-    fun `carre arrondi a 34 pour cent du cote, festonnee a neuf lobes`() {
+    fun `carre arrondi a 34 pour cent du cote festonnee a neuf lobes`() {
         assertThat(MeeshyMedallionRecipe.SQUIRCLE_RADIUS_FRACTION).isEqualTo(0.34f)
         assertThat(MeeshyMedallionRecipe.SCALLOP_LOBES).isEqualTo(9)
     }
@@ -51,7 +51,7 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `courant impose l'aplat ; solid rend une encre sombre`() {
+    fun `courant impose l'aplat  et solid rend une encre sombre`() {
         assertThat(resolve(state = MeeshyMedallionState.Current).paint).isEqualTo(MeeshyMedallionPaint.Solid)
         assertThat(resolve(fill = MeeshyMedallionFill.Solid).paint).isEqualTo(MeeshyMedallionPaint.Solid)
         assertThat(resolve(fill = MeeshyMedallionFill.Solid).hasDarkInk).isTrue()
@@ -59,7 +59,7 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `verrouille ignore genre, fond et decor - contour et cadenas`() {
+    fun `verrouille ignore genre fond et decor - contour et cadenas`() {
         val locked = resolve(state = MeeshyMedallionState.Locked, fill = MeeshyMedallionFill.Solid, decor = MeeshyMedallionDecor.Halo)
         assertThat(locked.paint).isEqualTo(MeeshyMedallionPaint.Outline)
         assertThat(locked.decor).isEqualTo(MeeshyMedallionDecor.None)
@@ -68,7 +68,7 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `halo - anneau de 11 pour cent a 7 pour cent de teinte, hors de la boite`() {
+    fun `halo - anneau de 11 pour cent a 7 pour cent de teinte hors de la boite`() {
         val halo = resolve(decor = MeeshyMedallionDecor.Halo)
         assertThat(halo.haloFraction).isEqualTo(0.11f)
         assertThat(halo.haloAlpha).isEqualTo(0.07f)
@@ -76,7 +76,7 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `pointille - a 11 pour cent du bord, 20 avec un halo, un tour en 40 s`() {
+    fun `pointille - a 11 pour cent du bord 20 avec un halo un tour en 40 s`() {
         assertThat(resolve(decor = MeeshyMedallionDecor.Dashed).dashedInsetFraction).isEqualTo(0.11f)
         assertThat(MeeshyMedallionRecipe.DASHED_INSET_WITH_HALO).isEqualTo(0.20f)
         assertThat(MeeshyMedallionRecipe.DASHED_TURN_MILLIS).isEqualTo(40_000)
@@ -84,7 +84,7 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `barre - 3 de trait a moins 45 degres, 64 pour cent du diametre, detouree de 3`() {
+    fun `barre - 3 de trait a moins 45 degres 64 pour cent du diametre detouree de 3`() {
         val struck = resolve(decor = MeeshyMedallionDecor.Struck)
         assertThat(struck.struckStrokeDp).isEqualTo(3f)
         assertThat(struck.struckLengthFraction).isEqualTo(0.64f)
@@ -93,7 +93,7 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `ondes - de un a trois anneaux, un seul en mouvement reduit`() {
+    fun `ondes - de un a trois anneaux un seul en mouvement reduit`() {
         assertThat(resolve(decor = MeeshyMedallionDecor.Waves(5)).waveCount).isEqualTo(3)
         assertThat(resolve(decor = MeeshyMedallionDecor.Waves(0)).waveCount).isEqualTo(1)
         assertThat(resolve(decor = MeeshyMedallionDecor.Waves(3), reduceMotion = true).waveCount).isEqualTo(1)
@@ -108,20 +108,20 @@ class MeeshyMedallionTest {
     }
 
     @Test
-    fun `le gain passe de 0,6 a 1,14 puis retombe a 1`() {
+    fun `le gain passe de 06 a 114 puis retombe a 1`() {
         assertThat(MeeshyMedallionRecipe.earnFromScale).isEqualTo(0.6f)
         assertThat(MeeshyMedallionRecipe.earnPeakScale).isEqualTo(1.14f)
     }
 
     @Test
-    fun `il ne se touche pas - ni cible, ni etat presse, ni role de bouton`() {
+    fun `il ne se touche pas - ni cible ni etat presse ni role de bouton`() {
         val values = resolve()
         assertThat(values.hitDp).isNull()
         assertThat(values.isButton).isFalse()
     }
 
     @Test
-    fun `sans nom il est cache a la voix, avec un nom c'est une image nommee`() {
+    fun `sans nom il est cache a la voix avec un nom c'est une image nommee`() {
         assertThat(MeeshyMedallionRecipe.isHiddenFromVoice(label = null)).isTrue()
         assertThat(MeeshyMedallionRecipe.isHiddenFromVoice(label = "")).isTrue()
         assertThat(MeeshyMedallionRecipe.isHiddenFromVoice(label = "Or III")).isFalse()

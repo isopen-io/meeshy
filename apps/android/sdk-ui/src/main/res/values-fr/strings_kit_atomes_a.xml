@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atomes du kit K40 bouton, K45 médaillon, K55 touche de raccourci (lot #18883). -->
+    <string name="kit_button_busy">En cours</string>
+    <string name="kit_button_deferred">Sera envoyé au retour du réseau</string>
+    <string name="kit_medallion_locked">Verrouillé</string>
+    <string name="kit_key_spoken_prefix">raccourci</string>
+    <string name="kit_key_command">Commande</string>
+    <string name="kit_key_control">Contrôle</string>
+    <string name="kit_key_shift">Majuscule</string>
+    <string name="kit_key_option">Option</string>
+    <string name="kit_key_alt">Alt</string>
+    <string name="kit_key_enter">Entrée</string>
+    <string name="kit_key_escape">Échap</string>
+    <string name="kit_key_space">Espace</string>
+    <string name="kit_key_tab">Tabulation</string>
+    <string name="kit_key_delete">Supprimer</string>
+    <string name="kit_key_up">Flèche haut</string>
+    <string name="kit_key_down">Flèche bas</string>
+    <string name="kit_key_left">Flèche gauche</string>
+    <string name="kit_key_right">Flèche droite</string>
+</resources>

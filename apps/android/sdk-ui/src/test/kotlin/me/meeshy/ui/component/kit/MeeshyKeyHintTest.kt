@@ -15,7 +15,7 @@ class MeeshyKeyHintTest {
     }
 
     @Test
-    fun `une lettre s'ecrit en capitale, les noms courts restent des noms`() {
+    fun `une lettre s'ecrit en capitale les noms courts restent des noms`() {
         assertThat(MeeshyKeyHintRule.glyphs(listOf(MeeshyKey.Character("k")), MeeshyKeyPlatform.Other)).containsExactly("K")
         assertThat(MeeshyKeyHintRule.glyphs(listOf(MeeshyKey.Escape), MeeshyKeyPlatform.Other)).containsExactly("Esc")
         assertThat(MeeshyKeyHintRule.glyphs(listOf(MeeshyKey.Shift, MeeshyKey.Enter), MeeshyKeyPlatform.Apple)).containsExactly("⇧", "↩").inOrder()
@@ -28,7 +28,7 @@ class MeeshyKeyHintTest {
     }
 
     @Test
-    fun `la voix dit raccourci Commande M, et Control M ailleurs`() {
+    fun `la voix dit raccourci Commande M et Control M ailleurs`() {
         assertThat(MeeshyKeyHintRule.spoken(cmdM, MeeshyKeyPlatform.Apple, prefix = "raccourci")).isEqualTo("raccourci : Command M")
         assertThat(MeeshyKeyHintRule.spoken(cmdM, MeeshyKeyPlatform.Other, prefix = "raccourci")).isEqualTo("raccourci : Control M")
     }
@@ -41,7 +41,7 @@ class MeeshyKeyHintTest {
     }
 
     @Test
-    fun `vide ou sans clavier, rien n'est rendu et aucune place reservee`() {
+    fun `vide ou sans clavier rien n'est rendu et aucune place reservee`() {
         assertThat(MeeshyKeyHintRecipe.resolve(emptyList(), MeeshyKeyHintContext.Free, MeeshyKeyHintSize.Regular, hasKeyboard = true, isPressed = false, reduceMotion = false).isRendered).isFalse()
         assertThat(MeeshyKeyHintRecipe.resolve(cmdM, MeeshyKeyHintContext.Free, MeeshyKeyHintSize.Regular, hasKeyboard = false, isPressed = false, reduceMotion = false).isRendered).isFalse()
     }
@@ -53,7 +53,7 @@ class MeeshyKeyHintTest {
     }
 
     @Test
-    fun `touche de 26, rayon 8, marge 6, ecart 4 ; compacte 20 et 3`() {
+    fun `touche de 26 rayon 8 marge 6 ecart 4  et compacte 20 et 3`() {
         val regular = MeeshyKeyHintRecipe.resolve(cmdM, MeeshyKeyHintContext.Free, MeeshyKeyHintSize.Regular, hasKeyboard = true, isPressed = false, reduceMotion = false)
         assertThat(regular.sizeDp).isEqualTo(26)
         assertThat(regular.cornerRadiusDp).isEqualTo(8)
@@ -67,7 +67,7 @@ class MeeshyKeyHintTest {
     }
 
     @Test
-    fun `enfoncee - 1,5 plus bas et a l'accent ; en mouvement reduit elle change de teinte sans descendre`() {
+    fun `enfoncee - 15 plus bas et a l'accent  et en mouvement reduit elle change de teinte sans descendre`() {
         val pressed = MeeshyKeyHintRecipe.resolve(cmdM, MeeshyKeyHintContext.Free, MeeshyKeyHintSize.Regular, hasKeyboard = true, isPressed = true, reduceMotion = false)
         assertThat(pressed.pressedOffsetDp).isEqualTo(1.5f)
         assertThat(pressed.usesAccent).isTrue()
@@ -78,7 +78,7 @@ class MeeshyKeyHintTest {
     }
 
     @Test
-    fun `la legende - paire a 6, groupes a 10, barre de 44 et rayon 14`() {
+    fun `la legende - paire a 6 groupes a 10 barre de 44 et rayon 14`() {
         assertThat(MeeshyKeyLegendRule.PAIR_GAP_DP).isEqualTo(6)
         assertThat(MeeshyKeyLegendRule.GROUP_GAP_DP).isEqualTo(10)
         assertThat(MeeshyKeyLegendRule.BAR_HEIGHT_DP).isEqualTo(44)

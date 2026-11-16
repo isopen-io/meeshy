@@ -42,14 +42,14 @@ class MeeshyMeterTest {
     }
 
     @Test
-    fun `pleine, la jauge prend son genre de plein`() {
+    fun `pleine la jauge prend son genre de plein`() {
         assertThat(resolve(kind = MeeshyMeterKind.Accent, fullKind = MeeshyMeterKind.Err, fraction = 1f).kind).isEqualTo(MeeshyMeterKind.Err)
         assertThat(resolve(kind = MeeshyMeterKind.Accent, fullKind = MeeshyMeterKind.Err, fraction = 0.99f).kind).isEqualTo(MeeshyMeterKind.Accent)
         assertThat(resolve(kind = MeeshyMeterKind.Ok, fullKind = null, fraction = 1f).kind).isEqualTo(MeeshyMeterKind.Ok)
     }
 
     @Test
-    fun `perimee, elle est desaturee ; eteinte, a 45 pour cent`() {
+    fun `perimee elle est desaturee  et eteinte a 45 pour cent`() {
         assertThat(resolve(isStale = true).isDesaturated).isTrue()
         assertThat(resolve(isStale = true).opacity).isEqualTo(0.62f)
         assertThat(resolve(isEnabled = false).opacity).isEqualTo(0.45f)
@@ -57,7 +57,7 @@ class MeeshyMeterTest {
     }
 
     @Test
-    fun `segmentee - N capsules egales de 12, ecart 6, les crans pleins suivent la fraction`() {
+    fun `segmentee - N capsules egales de 12 ecart 6 les crans pleins suivent la fraction`() {
         val stepped = resolve(form = MeeshyMeterForm.Stepped(5), fraction = 0.46f)
         assertThat(stepped.segmentCount).isEqualTo(5)
         assertThat(stepped.trackDp).isEqualTo(12)
@@ -68,20 +68,20 @@ class MeeshyMeterTest {
     }
 
     @Test
-    fun `les reperes sont ignores en segmente, bornes et tries ailleurs`() {
+    fun `les reperes sont ignores en segmente bornes et tries ailleurs`() {
         assertThat(resolve(form = MeeshyMeterForm.Stepped(4), marks = listOf(0.5f)).markOffsets).isEmpty()
         assertThat(resolve(marks = listOf(1.4f, 0.25f, -1f)).markOffsets).containsExactly(0f, 0.25f, 1f).inOrder()
     }
 
     @Test
-    fun `le remplissage part du bord de debut, les reperes suivent le sens de lecture`() {
+    fun `le remplissage part du bord de debut les reperes suivent le sens de lecture`() {
         assertThat(resolve(isRtl = false).fillsFromEnd).isFalse()
         assertThat(resolve(isRtl = true).fillsFromEnd).isTrue()
         assertThat(resolve(isRtl = true, marks = listOf(0.25f)).markOffsets).containsExactly(0.75f)
     }
 
     @Test
-    fun `indeterminee - un passage de 1,8 s, sans fraction`() {
+    fun `indeterminee - un passage de 18 s sans fraction`() {
         val busy = resolve(form = MeeshyMeterForm.Indeterminate)
         assertThat(busy.isIndeterminate).isTrue()
         assertThat(MeeshyMeterRecipe.PASS_MILLIS).isEqualTo(1800)
@@ -89,7 +89,7 @@ class MeeshyMeterTest {
     }
 
     @Test
-    fun `l'entree ne se joue que pour une valeur jamais vue, et jamais en mouvement reduit`() {
+    fun `l'entree ne se joue que pour une valeur jamais vue et jamais en mouvement reduit`() {
         assertThat(MeeshyMeterRecipe.entersAnimated(seenValue = null, value = 0.4f, reduceMotion = false)).isTrue()
         assertThat(MeeshyMeterRecipe.entersAnimated(seenValue = 0.4f, value = 0.4f, reduceMotion = false)).isFalse()
         assertThat(MeeshyMeterRecipe.entersAnimated(seenValue = null, value = 0.4f, reduceMotion = true)).isFalse()
@@ -103,7 +103,7 @@ class MeeshyMeterTest {
     }
 
     @Test
-    fun `la voix dit la valeur vraie, a defaut le pourcentage`() {
+    fun `la voix dit la valeur vraie a defaut le pourcentage`() {
         assertThat(MeeshyMeterRecipe.spokenValue("23 sur 50", fraction = 0.46f)).isEqualTo("23 sur 50")
         assertThat(MeeshyMeterRecipe.spokenValue(null, fraction = 0.46f)).isEqualTo("46%")
     }

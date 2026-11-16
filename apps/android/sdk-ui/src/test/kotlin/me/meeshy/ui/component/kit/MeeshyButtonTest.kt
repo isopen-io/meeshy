@@ -27,14 +27,14 @@ class MeeshyButtonTest {
     }
 
     @Test
-    fun `libelle 16 15 13,5 12,5 en 700 et marges 26 22 16 12`() {
+    fun `libelle 16 15 135 125 en 700 et marges 26 22 16 12`() {
         assertThat(MeeshyButtonSize.entries.map { resolve(size = it).titleSp }).containsExactly(16f, 15f, 13.5f, 12.5f).inOrder()
         assertThat(MeeshyButtonSize.entries.map { resolve(size = it).horizontalPaddingDp }).containsExactly(26, 22, 16, 12).inOrder()
         assertThat(resolve().titleWeight).isEqualTo(700)
     }
 
     @Test
-    fun `glyphe de tete 22, et 16 dans les deux petites tailles`() {
+    fun `glyphe de tete 22 et 16 dans les deux petites tailles`() {
         assertThat(resolve(size = MeeshyButtonSize.S56).glyphDp).isEqualTo(22)
         assertThat(resolve(size = MeeshyButtonSize.S44).glyphDp).isEqualTo(16)
         assertThat(resolve(size = MeeshyButtonSize.S36).glyphDp).isEqualTo(16)
@@ -46,13 +46,13 @@ class MeeshyButtonTest {
     }
 
     @Test
-    fun `presse - echelle 0,94 ; au repos 1`() {
+    fun `presse - echelle 094  et au repos 1`() {
         assertThat(resolve(isPressed = true).scale).isEqualTo(0.94f)
         assertThat(resolve().scale).isEqualTo(1f)
     }
 
     @Test
-    fun `desactive - contenu a 45 pour cent, ni action ni tic, pas d'echelle`() {
+    fun `desactive - contenu a 45 pour cent ni action ni tic pas d'echelle`() {
         val off = resolve(isEnabled = false, isPressed = true)
         assertThat(off.contentOpacity).isEqualTo(0.45f)
         assertThat(off.firesAction).isFalse()
@@ -61,7 +61,7 @@ class MeeshyButtonTest {
     }
 
     @Test
-    fun `occupe - l'indicateur prend la place du glyphe, l'action est retenue, le bouton reste plein`() {
+    fun `occupe - l'indicateur prend la place du glyphe l'action est retenue le bouton reste plein`() {
         val busy = resolve(isPending = true)
         assertThat(busy.showsIndicator).isTrue()
         assertThat(busy.firesAction).isFalse()
@@ -77,7 +77,7 @@ class MeeshyButtonTest {
     }
 
     @Test
-    fun `la forme round est un disque de 56 a glyphe de 28, carre arrondi de rayon 18 sur Android`() {
+    fun `la forme round est un disque de 56 a glyphe de 28 carre arrondi de rayon 18 sur Android`() {
         val round = resolve(shape = MeeshyButtonShape.Round, size = MeeshyButtonSize.S36)
         assertThat(round.heightDp).isEqualTo(56)
         assertThat(round.widthDp).isEqualTo(56)
@@ -114,7 +114,7 @@ class MeeshyButtonTest {
     }
 
     @Test
-    fun `danger - fond rouge doux a 13 pour cent ; le texte destructif prend l'encre rouge sans fond`() {
+    fun `danger - fond rouge doux a 13 pour cent  et le texte destructif prend l'encre rouge sans fond`() {
         assertThat(resolve(kind = MeeshyButtonKind.Danger).softAlpha).isEqualTo(0.13f)
         assertThat(resolve(kind = MeeshyButtonKind.Danger).ink).isEqualTo(MeeshyButtonInk.Error)
         val text = resolve(kind = MeeshyButtonKind.Text, isDestructive = true)
@@ -125,7 +125,7 @@ class MeeshyButtonTest {
     }
 
     @Test
-    fun `la paire - parts 1,6 et 1, ecart 8, et elle s'empile quand la police grandit`() {
+    fun `la paire - parts 16 et 1 ecart 8 et elle s'empile quand la police grandit`() {
         assertThat(MeeshyButtonPairRule.PRIMARY_WEIGHT).isEqualTo(1.6f)
         assertThat(MeeshyButtonPairRule.SECONDARY_WEIGHT).isEqualTo(1f)
         assertThat(MeeshyButtonPairRule.GAP_DP).isEqualTo(8)
@@ -144,7 +144,7 @@ class MeeshyButtonTest {
     }
 
     @Test
-    fun `hold - les ondes ne partent que tant qu'il emet, un anneau plein les remplace en mouvement reduit`() {
+    fun `hold - les ondes ne partent que tant qu'il emet un anneau plein les remplace en mouvement reduit`() {
         assertThat(MeeshyButtonHoldRule.showsWaves(MeeshyButtonHoldState.Live, reduceMotion = false)).isTrue()
         assertThat(MeeshyButtonHoldRule.showsWaves(MeeshyButtonHoldState.Held, reduceMotion = false)).isFalse()
         assertThat(MeeshyButtonHoldRule.showsWaves(MeeshyButtonHoldState.Live, reduceMotion = true)).isFalse()
@@ -153,7 +153,7 @@ class MeeshyButtonTest {
     }
 
     @Test
-    fun `hold - le bouton rapporte un maintien, jamais un micro`() {
+    fun `hold - le bouton rapporte un maintien jamais un micro`() {
         assertThat(MeeshyButtonHoldRule.isHeld(MeeshyButtonHoldState.Held)).isTrue()
         assertThat(MeeshyButtonHoldRule.isHeld(MeeshyButtonHoldState.Live)).isTrue()
         assertThat(MeeshyButtonHoldRule.isHeld(MeeshyButtonHoldState.Idle)).isFalse()

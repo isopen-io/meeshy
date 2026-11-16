@@ -18,7 +18,7 @@ class MeeshyNoteTest {
     ) = MeeshyNoteRecipe.resolve(form, kind, lead, size, isStale, hasDetail, hasAction, reduceMotion)
 
     @Test
-    fun `texte 12,5 en ligne, 13 en bande, 14 en bandeau, interligne 1,4`() {
+    fun `texte 125 en ligne 13 en bande 14 en bandeau interligne 14`() {
         assertThat(resolve(form = MeeshyNoteForm.Line).textSp).isEqualTo(12.5f)
         assertThat(resolve(form = MeeshyNoteForm.Band).textSp).isEqualTo(13f)
         assertThat(resolve(form = MeeshyNoteForm.Banner).textSp).isEqualTo(14f)
@@ -26,14 +26,14 @@ class MeeshyNoteTest {
     }
 
     @Test
-    fun `glyphe de 16, de 22 en bandeau ; point de 9`() {
+    fun `glyphe de 16 de 22 en bandeau  et point de 9`() {
         assertThat(resolve(form = MeeshyNoteForm.Line).glyphDp).isEqualTo(16)
         assertThat(resolve(form = MeeshyNoteForm.Banner).glyphDp).isEqualTo(22)
         assertThat(MeeshyNoteRecipe.DOT_DP).isEqualTo(9)
     }
 
     @Test
-    fun `le bandeau - rayon 16, teinte a 10 pour cent, pleine largeur`() {
+    fun `le bandeau - rayon 16 teinte a 10 pour cent pleine largeur`() {
         val banner = resolve(form = MeeshyNoteForm.Banner)
         assertThat(banner.cornerRadiusDp).isEqualTo(16)
         assertThat(banner.tintAlpha).isEqualTo(0.10f)
@@ -42,7 +42,7 @@ class MeeshyNoteTest {
     }
 
     @Test
-    fun `la bande - pleine largeur, sans rayon, 48 au moins, filet bas et barre d'accent de 3`() {
+    fun `la bande - pleine largeur sans rayon 48 au moins filet bas et barre d'accent de 3`() {
         val band = resolve(form = MeeshyNoteForm.Band)
         assertThat(band.cornerRadiusDp).isEqualTo(0)
         assertThat(band.minHeightDp).isEqualTo(48)
@@ -52,7 +52,7 @@ class MeeshyNoteTest {
     }
 
     @Test
-    fun `la forme live prend un point pulse et la phrase teintee, demi-grasse`() {
+    fun `la forme live prend un point pulse et la phrase teintee demi-grasse`() {
         val live = resolve(form = MeeshyNoteForm.Live, lead = MeeshyNoteLeadShape.Pulse)
         assertThat(live.textSp).isEqualTo(13.5f)
         assertThat(live.textWeight).isEqualTo(600)
@@ -68,7 +68,7 @@ class MeeshyNoteTest {
     }
 
     @Test
-    fun `mouvement reduit - point fixe a halo pose, fondu de 150 ms, pas de hauteur animee`() {
+    fun `mouvement reduit - point fixe a halo pose fondu de 150 ms pas de hauteur animee`() {
         val reduced = resolve(form = MeeshyNoteForm.Live, lead = MeeshyNoteLeadShape.Pulse, reduceMotion = true)
         assertThat(reduced.pulses).isFalse()
         assertThat(reduced.showsHalo).isTrue()
@@ -92,7 +92,7 @@ class MeeshyNoteTest {
     }
 
     @Test
-    fun `seul warn s'annonce par defaut, et une fois`() {
+    fun `seul warn s'annonce par defaut et une fois`() {
         assertThat(MeeshyNoteRecipe.announces(MeeshyNoteKind.Warn, explicit = null)).isTrue()
         assertThat(MeeshyNoteRecipe.announces(MeeshyNoteKind.Security, explicit = null)).isFalse()
         assertThat(MeeshyNoteRecipe.announces(MeeshyNoteKind.Info, explicit = true)).isTrue()
@@ -100,7 +100,7 @@ class MeeshyNoteTest {
     }
 
     @Test
-    fun `la liste prend 13 en compact et 14,5 en regulier`() {
+    fun `la liste prend 13 en compact et 145 en regulier`() {
         assertThat(MeeshyNoteRecipe.listTextSp(MeeshyNoteSize.Compact)).isEqualTo(13f)
         assertThat(MeeshyNoteRecipe.listTextSp(MeeshyNoteSize.Regular)).isEqualTo(14.5f)
     }
@@ -120,7 +120,7 @@ class MeeshyNoteTest {
     }
 
     @Test
-    fun `la valeur en gras est decoupee ou qu'elle tombe, sans toucher a la phrase`() {
+    fun `la valeur en gras est decoupee ou qu'elle tombe sans toucher a la phrase`() {
         assertThat(MeeshyNoteRecipe.segments("Léo te verra dans un rayon de 5 km", emphasis = "5 km"))
             .containsExactly(MeeshyNoteSegment("Léo te verra dans un rayon de ", false), MeeshyNoteSegment("5 km", true)).inOrder()
         assertThat(MeeshyNoteRecipe.segments("abc", emphasis = "zzz")).containsExactly(MeeshyNoteSegment("abc", false))
