@@ -170,6 +170,22 @@ final class EmojiReactionPickerChromeTests: XCTestCase {
             .replacingOccurrences(of: "\t", with: "")
     }
 
+    // MARK: - Le « + » et la baguette entrent avec les premières tuiles (#18812)
+
+    /// Ils fermaient la vague : à huit emojis, le « + » attendait 0,36 s et la
+    /// baguette 0,405 s avant même leur ressort. Ils entrent désormais au rang 2
+    /// et 3 au plus, quel que soit le nombre d'emojis.
+    func test_trailingTiles_enterWithTheFirstTiles_whateverTheEmojiCount() {
+        XCTAssertEqual(ReactionStripWave.trailingRank(quickCount: 8), 2)
+        XCTAssertEqual(ReactionStripWave.trailingRank(quickCount: 1), 1)
+        XCTAssertLessThanOrEqual(ReactionStripWave.delay(rank: ReactionStripWave.trailingRank(quickCount: 12) + 1), 0.14)
+    }
+
+    func test_waveDelay_growsWithTheRank() {
+        XCTAssertEqual(ReactionStripWave.delay(rank: 0), 0)
+        XCTAssertLessThan(ReactionStripWave.delay(rank: 1), ReactionStripWave.delay(rank: 2))
+    }
+
     // MARK: - La tuile supplémentaire de l'hôte, à droite du « + » (#16162)
 
     /// Le composant reste agnostique : il rend un glyphe et appelle une action
@@ -183,7 +199,7 @@ final class EmojiReactionPickerChromeTests: XCTestCase {
         let extra = try XCTUnwrap(afterStrip.range(of: "extraTileButton"))
         XCTAssertTrue(expand.lowerBound < extra.lowerBound, "la tuile vient APRÈS le « + »")
         XCTAssertTrue(code.contains("extraTile: ExtraTile? = nil"), "optionnelle : les hôtes existants ne passent rien")
-        XCTAssertTrue(code.contains("WaveTileModifier(index: quickEmojis.count + 1"), "un cran de vague après le « + »")
+        XCTAssertTrue(code.contains("WaveTileModifier(index: ReactionStripWave.trailingRank(quickCount: quickEmojis.count) + 1"), "un cran de vague après le « + »")
         XCTAssertTrue(code.contains(".buttonStyle(PressableButtonStyle())"), "elle répond à l'appui par le style du kit")
     }
 
