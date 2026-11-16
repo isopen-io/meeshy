@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 import UIKit
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// **L'atelier « Imagine » (#8692)** — l'ordre de ses onglets (« Frame » avant
@@ -408,19 +409,91 @@ final class ImagineWorkshopTests: XCTestCase {
                                radius: backdrop ? 0 : 28, isBackdrop: backdrop)
     }
 
-    func test_crop_isOfferedOnTheTouchedPhoto_neverOnAnotherPart() {
+    func test_crop_isOfferedAsSoonAsTheCardHasAFramablePicture_withoutTouchingIt() {
         let framed = [Self.framed("fond", backdrop: true), Self.framed("photo")]
-        let pictured: Set<String> = ["fond", "photo"]
-        XCTAssertEqual(MessageCardCropRule.targets(framed: framed, pictured: pictured, focus: .media).map(\.mediaID), ["photo"])
-        XCTAssertEqual(MessageCardCropRule.targets(framed: framed, pictured: pictured, focus: .background).map(\.mediaID), ["fond"])
-        XCTAssertTrue(MessageCardCropRule.targets(framed: framed, pictured: pictured, focus: .reply).isEmpty)
-        XCTAssertTrue(MessageCardCropRule.targets(framed: framed, pictured: pictured, focus: nil).isEmpty)
+        XCTAssertTrue(MessageCardCropRule.offers(framed: framed, pictured: ["fond", "photo"]))
+        XCTAssertTrue(MessageCardCropRule.offers(framed: [Self.framed("fond", backdrop: true)], pictured: ["fond"]),
+                      "le fond choisi d'un son se recadre sans qu'on ait à le toucher")
+        XCTAssertFalse(MessageCardCropRule.offers(framed: [], pictured: ["photo"]), "une carte sans photo n'offre rien")
     }
 
     func test_crop_needsThePixelsOfThePhoto() {
         let framed = [Self.framed("photo"), Self.framed("loading")]
-        XCTAssertEqual(MessageCardCropRule.targets(framed: framed, pictured: ["photo"], focus: .media).map(\.mediaID), ["photo"])
+        XCTAssertEqual(MessageCardCropRule.usable(framed, pictured: ["photo"]).map(\.mediaID), ["photo"])
         XCTAssertTrue(MessageCardCropRule.usable(framed, pictured: []).isEmpty)
+        XCTAssertFalse(MessageCardCropRule.offers(framed: framed, pictured: []))
+    }
+
+    // MARK: - Recadrer depuis toutes les entrées d'Imager (#18810)
+
+    private static let pixels: CGImage = {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 48), format: {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            return format
+        }())
+        return renderer.image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
+        }.cgImage!
+    }()
+
+    private static func entry(_ id: String, _ kind: MessageCardMediaKind, aspect: Double) -> MessageCardSubjectMedia {
+        MessageCardSubjectMedia(media: MessageCardMedia(id: id, kind: kind, aspect: aspect), fileURL: "https://staging.meeshy.me/\(id)")
+    }
+
+    /// Les sujets tels que chaque entrée les construit : un message (photo), un commentaire
+    /// qui répond (vidéo), un post (sa photo), une story (la scène rendue, en hero 9:16).
+    private static func entries() throws -> [(name: String, subject: MessageCardSubject, picture: String)] {
+        let when = Date(timeIntervalSince1970: 1_800_000_000)
+        let message = MessageCardSubject(quoted: nil, reply: MessageCardPart(author: "Awa", text: "Regarde !"), sentAt: when,
+                                         media: [entry("photo", .image, aspect: 1.5)])
+        let comment = MessageCardSubject(quoted: MessageCardPart(author: "Moussa", text: "Le match"),
+                                         reply: MessageCardPart(author: "Awa", text: "Le but !"), sentAt: when,
+                                         media: [entry("clip", .video, aspect: 16.0 / 9.0)])
+        let post = try XCTUnwrap(MessageCardSubject.of(
+            post: FeedPost(id: "post", author: "Awa", authorId: "awa", authorUsername: "awa", type: "POST",
+                           content: "Dakar", timestamp: when,
+                           media: [FeedMedia(id: "dakar", type: .image, url: "https://staging.meeshy.me/dakar.jpg", width: 1200, height: 800)]),
+            viewer: MessageCardSubject.Viewer(id: "me", displayName: "Moi"), preferredLanguages: ["fr"]))
+        let story = MessageCardSubject(quoted: nil, reply: MessageCardPart(author: "Awa", text: ""), sentAt: when,
+                                       media: [entry("story:1", .video, aspect: 9.0 / 16.0)], heroID: "story:1")
+        return [("message", message, "photo"), ("commentaire", comment, "clip"), ("post", post, "dakar"), ("story", story, "story:1")]
+    }
+
+    private static func render(_ subject: MessageCardSubject, format: MessageCardFormat, pictured: [String],
+                               backdrop: MessageCardBackdrop? = nil) -> [MessageCardFramedMedia] {
+        var input = MessageCardInput.of(subject: subject, format: format, handle: "awa", conversationTitle: nil,
+                                        anonymousLabel: "Anonyme", formatDate: { _ in "" })
+        input.backdrop = backdrop
+        let pictures = MessageCardPictures(Dictionary(uniqueKeysWithValues: pictured.map { ($0, pixels) }))
+        return MessageCardRenderer.render(input, pictures: pictures)?.framedMedia ?? []
+    }
+
+    func test_crop_everyEntryOffersItsPhotoOrVideo_underEveryModel() throws {
+        for (name, subject, picture) in try Self.entries() {
+            for model in MessageCardModels.builtIn {
+                let framed = Self.render(subject, format: model.applied(to: .initial), pictured: [picture])
+                XCTAssertTrue(MessageCardCropRule.offers(framed: framed, pictured: [picture]), "\(name) · maquette \(model.id)")
+                XCTAssertEqual(MessageCardCropRule.usable(framed, pictured: [picture]).map(\.mediaID), [picture], "\(name) · \(model.id)")
+            }
+        }
+    }
+
+    func test_crop_aSoundCardHasNoPictureOfItsOwn_itsChosenBackdropIsWhatCrops() {
+        let when = Date(timeIntervalSince1970: 1_800_000_000)
+        let voice = MessageCardSubject(quoted: nil, reply: MessageCardPart(author: "Awa", text: ""), sentAt: when,
+                                       media: [Self.entry("voix", .audio, aspect: 1)])
+        XCTAssertFalse(MessageCardCropRule.offers(framed: Self.render(voice, format: .initial, pictured: []), pictured: []))
+        let backdrop = MessageCardBackdrop(media: MessageCardMedia(id: MessageCardBackdrop.mediaID, kind: .image, aspect: 0.75), veil: 0.4)
+        let framed = Self.render(voice, format: .initial, pictured: [MessageCardBackdrop.mediaID], backdrop: backdrop)
+        XCTAssertEqual(MessageCardCropRule.usable(framed, pictured: [MessageCardBackdrop.mediaID]).map(\.isBackdrop), [true])
+    }
+
+    func test_crop_theBackdropPanelOpensTheCrop_onceABackdropIsChosen() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Export/MessageCardBackdropPicker.swift"))
+        XCTAssertTrue(source.contains("onCrop"), "le panneau du fond offre « Recadrer » sur le fond choisi")
+        XCTAssertTrue(source.contains("\"export.card.crop\""), "le bouton du panneau dit « Recadrer », le mot du recadrage")
     }
 
     func test_crop_voiceOverRevealsTheAskedSideOfThePhoto() {

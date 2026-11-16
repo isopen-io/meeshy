@@ -88,6 +88,8 @@ struct MessageCardBackdropPanel: View {
     @Binding var item: PhotosPickerItem?
     let onVeil: (Double) -> Void
     let onRemove: () -> Void
+    /// Recadrer le fond choisi (#18810) — `nil` tant que la carte ne le peint pas encore.
+    var onCrop: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
@@ -106,6 +108,17 @@ struct MessageCardBackdropPanel: View {
                         .foregroundStyle(.secondary)
                     Slider(value: Binding(get: { chosen.veil }, set: onVeil), in: MessageCardBackdrop.veilRange)
                         .accessibilityLabel(MessageCardExportText.text("export.card.backdrop.veil", "Voile"))
+                }
+                if let onCrop {
+                    Button(action: onCrop) {
+                        Image(systemName: "crop")
+                            .font(.title3)
+                            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                    .accessibilityLabel(MessageCardExportText.text("export.card.crop", "Recadrer"))
+                    .accessibilityIdentifier("export.card.backdrop.crop")
                 }
                 Button {
                     HapticFeedback.light()

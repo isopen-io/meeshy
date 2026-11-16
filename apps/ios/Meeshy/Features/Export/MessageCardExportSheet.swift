@@ -418,7 +418,8 @@ struct MessageCardExportSheet: View {
     }
 
     var backdropPanel: MessageCardBackdropPanel {
-        MessageCardBackdropPanel(
+        let crop: (() -> Void)? = backdropCrops ? { beginCrop() } : nil
+        return MessageCardBackdropPanel(
             chosen: chosenBackdrop,
             loading: backdropLoading,
             item: $backdropItem,
@@ -427,8 +428,16 @@ struct MessageCardExportSheet: View {
                 chosenBackdrop?.discard()
                 chosenBackdrop = nil
                 backdropItem = nil
-            }
+            },
+            onCrop: crop
         )
+    }
+
+    /// Le fond choisi est peint et se recadre : le panneau du fond l'offre aussi (#18810).
+    private var backdropCrops: Bool {
+        guard let rendered else { return false }
+        let backdrops = rendered.framedMedia.filter(\.isBackdrop)
+        return chosenBackdrop != nil && MessageCardCropRule.offers(framed: backdrops, pictured: Set(paintedPictures.images.keys))
     }
 
     /// Toucher une partie de la carte ouvre l'onglet qui la règle.
