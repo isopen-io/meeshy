@@ -6,6 +6,29 @@ import { AfterReadDepartureTracker, type AfterReadReader } from './AfterReadDepa
 import type { MessageMutationManager } from './broadcastMessageMutation';
 import { resolveParticipant } from './utils/participant-resolver';
 import { normalizeConversationId, type SocketUser } from './utils/socket-helpers';
+import { unsetOrNull } from '../utils/prisma-unset';
+
+/** Les états d'un appel qui retient encore son participant (`CallStatus`, hors `ended`/`missed`/`rejected`). */
+const LIVE_CALL_STATUSES = ['initiated', 'ringing', 'connecting', 'active', 'reconnecting'] as const;
+
+/**
+ * Le lecteur prend-il part à un appel VIVANT de cette conversation ? L'écran d'appel couvre la
+ * conversation (`viewing:stop`) sans qu'il l'ait quittée : ses flammes attendent la fin de l'appel (#18556).
+ */
+export async function isInLiveCall(
+  prisma: Pick<PrismaClient, 'callParticipant'>,
+  reader: Pick<AfterReadReader, 'participantId' | 'conversationId'>,
+): Promise<boolean> {
+  const row = await prisma.callParticipant.findFirst({
+    where: {
+      participantId: reader.participantId,
+      ...unsetOrNull('leftAt'),
+      callSession: { conversationId: reader.conversationId, status: { in: [...LIVE_CALL_STATUSES] } },
+    },
+    select: { id: true },
+  });
+  return row !== null;
+}
 
 /** Ce que le marquage du regard demande au serveur Socket.IO — satisfait par le `Server` de production. */
 export interface AfterReadViewIO {
@@ -91,6 +114,7 @@ export function createAfterReadDepartureTracker(wiring: AfterReadDepartureWiring
     },
     markViewing: (socketId, reader, viewing) => markAfterReadViewing(wiring.io(), socketId, reader, viewing, onError),
     viewedElsewhere: (reader) => isAfterReadViewedAnywhere(wiring.io(), reader),
+    holdsDeparture: (reader) => isInLiveCall(prisma, reader),
     onDeparture: async ({ periods, ...reader }) => {
       const at = now();
       const messageIds = await readAfterReadIdsAtDeparture(prisma, {
@@ -103,6 +127,7 @@ export function createAfterReadDepartureTracker(wiring: AfterReadDepartureWiring
         await consumeAfterReadAndAnnounce({ prisma, manager: wiring.manager(), ...reader, messageIds: batch, now: at, onError });
       }
     },
+    now,
     onError,
   });
 }
