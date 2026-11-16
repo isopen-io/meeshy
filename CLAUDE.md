@@ -93,6 +93,15 @@ Corollaires :
 
 Cette doctrine réduit la FENÊTRE de collision (le seul facteur à forte dynamique — sessions actives et surface de travail ne baissent pas) ; elle ne prétend pas supprimer la collision. Les collisions d'**espace de noms partagé** (numéros de leçon, cliquets mesurés, registres générés) relèvent d'une règle différente : un identifiant qui ne s'alloue pas ne collisionne pas (#5102).
 
+### Avant de proposer une PR : fusionner `dev` dans sa branche, en gardant les corrections de `dev` (directive porteur 2026-11-15, #18654)
+
+**Une PR ne se propose que sur une branche qui CONTIENT la tête de `dev`.** Le 2026-11-15, quarante-cinq PR ouvertes sur des bases anciennes ont été fusionnées d'un coup : `dev` a mis une soirée à repasser au vert (fonction déclarée par deux PR, gardes de source ignorées, références de cliquets périmées, projet Xcode non régénéré, tests écrits pour la langue du poste).
+
+1. **Avant d'ouvrir la PR, et de nouveau avant de la fusionner** : `git fetch origin dev` puis fusionner `origin/dev` DANS la branche (jamais un rebase qui réécrit, jamais un `--ours` global). Là où les deux côtés ont touché le même endroit, **la correction déjà sur `dev` se garde** et le lot s'y adapte ; un fichier de `dev` ne se remplace jamais par la version entière de la branche.
+2. **Rejouer sur l'arbre FUSIONNÉ**, pas sur l'arbre d'avant : compilation, suites touchées, et les gardes de texte — sur iOS `check_house_rules.sh`, `check_cohesion_budget.sh`, `check_test_registration.sh`, `node scripts/check-accent-color-hardcoding.mjs` et le projet Xcode régénéré (`xcodegen generate`) ; sur le web la suite complète depuis `apps/web`, le build et les cliquets ; sur Android `assembleDebug` et les tests des modules touchés. Une référence de cliquet se remesure sur un export de l'arbre fusionné (`git archive`), jamais sur un arbre qui porte du travail non poussé.
+3. **Un test ne dépend ni de la langue ni du système du poste** : il lit son attendu dans le catalogue de la langue courante ou épingle la langue, et il passe sous le compilateur de la CI (Xcode 26) comme sous celui du poste.
+4. **L'issue du lot le dit** : son critère de fin porte « `dev` fusionnée dans la branche, ses corrections gardées, gardes rejouées sur l'arbre fusionné », et son commentaire de livraison donne le SHA de `dev` contenu. Une PR dont la branche ne contient pas la tête de `dev` ne se fusionne pas : on la met à jour d'abord.
+
 ## Roadmap — un produit très optimisé, hyper fluide, mûr sur treize dimensions (directive 2026-08-26)
 
 La roadmap (milestones + champ `Horizon` du projet ; analyse dans `docs/product/roadmap-produit-2026-08.md`) ne suit pas une liste de features : elle suit la réalisation d'un produit **TRÈS optimisé — sans aucune lenteur —, HYPER fluide, aéré, agréable visuellement ET fonctionnellement**. Chaque feature, existante ou à venir, est portée à MATURITÉ sur les treize dimensions ci-dessous. Une feature « qui marche » mais qui rame, à qui il manque un état, qu'on ne trouve pas ou qu'on n'ose pas modifier n'est pas livrée.

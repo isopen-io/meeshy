@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 
 import { AppBadge } from './app-badge';
+import { BatteryMount } from './battery-mount';
 import { BringRingMount } from './bring-ring-mount';
 import { GamePhotoAlertMount } from './game-photo-alert-mount';
 import { ListeningMount } from './listening-mount';
@@ -18,7 +19,8 @@ import { TogetherMount } from './together-mount';
  * (`publication-image-host.tsx`, #16393), et l'écran de sonnerie du Bring (`bring-ring-mount.tsx`, #13936), et la voix d'un Proche qui parle
  * (`talkie-mount.tsx`, #16638), et ce qu'écoutent mes Proches et mes Sangs (`listening-mount.tsx`, #16729), et la séance « ensemble »
  * (`together-mount.tsx`, #17055), et mon partage de position qui reprend au chargement (`shared-location-sharing-mount.tsx`, #18345),
- * et le guet qui rappelle le bandeau du joueur quand un acte, l'Offrande ou la Flamme change (`use-banner-recall.ts`, #17366).
+ * et le guet qui rappelle le bandeau du joueur quand un acte, l'Offrande ou la Flamme change (`use-banner-recall.ts`, #17366),
+ * et la batterie de mes Proches et de mes Sangs (`battery-mount.tsx`, #14147).
  * L'entrée n'en connaît qu'un nom.
  */
 /** Le guet du rappel emporte les lois du Jeu : son chunk se charge à part, et la coquille ne porte même pas son nom. */
@@ -36,6 +38,7 @@ export function DeferredChrome({ routeKey, signedIn }: { readonly routeKey: stri
       <ListeningMount signedIn={signedIn} />
       <TogetherMount signedIn={signedIn} />
       <SharedLocationSharingMount signedIn={signedIn} />
+      <BatteryMount signedIn={signedIn} />
       <Suspense fallback={null}>
         <BannerRecallMount signedIn={signedIn} />
       </Suspense>

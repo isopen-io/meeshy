@@ -195,6 +195,9 @@ model User {
   /// Non nul = le compte est en FANTÔME GLOBAL pour la position du Sang depuis cette date (#13937) :
   /// rien n'est enregistré ni servi, et rien ne le distingue d'un compte sans historique.
   locationGhostAt           DateTime?
+  /// Non nul = le compte a coupé le partage de sa BATTERIE pour tous depuis cette date (#14147) :
+  /// aucun Proche ni Sang ne la reçoit, quels que soient les accords par personne. Optionnel, sans migration.
+  batterySharingDisabledAt  DateTime?
   /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
   /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
   /// Signal continu (contrairement a registrationCountry, capture une seule
@@ -2235,6 +2238,17 @@ model RelationFeatureSetting {
   locationWithdrawnAt        DateTime?
   locationHistoryWithdrawnAt DateTime?
   proximityWithdrawnAt       DateTime?
+  /// Partage de la BATTERIE de `ownerId` à `otherId` (#14147), TRI-ÉTAT : absent ou nul = le
+  /// défaut du niveau effectif (accordé entre Sangs et dans l'équipe, refusé entre Proches),
+  /// `true` = accordé (le consentement donné une fois à un Proche), `false` = refusé (même à
+  /// un Sang). Résolu par `resolveEmitterConsent` ; optionnel, sans migration.
+  batteryShared              Boolean?
+  /// Quand le partage de batterie a été RETIRÉ (trace, comme les retraits ci-dessus).
+  batteryWithdrawnAt         DateTime?
+  /// Ce que `ownerId` veut RECEVOIR de la batterie de `otherId` (#14147) : `all` (défaut, absent ou
+  /// nul), `critical` (push du critique seulement), `pill` (la SyncPill, jamais de push) ou `none`
+  /// (rien). Une valeur inconnue vaut le défaut. Optionnel, sans migration.
+  batteryReceive             String?
   /// Non nul = `ownerId` est en FANTÔME CIBLÉ pour `otherId` depuis cette date (#13937) : l'autre ne
   /// reçoit ni historique ni alerte de proximité, et rien ne lui dit pourquoi. Ce n'est pas un
   /// consentement : une ligne née d'un fantôme laisse ses quatre partages faux.

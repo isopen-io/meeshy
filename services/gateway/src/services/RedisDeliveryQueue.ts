@@ -8,6 +8,7 @@ import {
   DELIVERY_QUEUE_TTL_SECONDS,
 } from '@meeshy/shared/types/delivery-queue';
 import { carriesMessageText } from '../socketio/queuedEventContract';
+import { destroyedAtBound, readBoundedPushReply } from './deliveryQueueBound';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { DeliveryQueueSealer } from './deliveryQueueSealing';
 import { ServerAtRestUnreadableError } from './messaging/serverAtRest';
@@ -82,8 +83,20 @@ return entries
 // redevient introuvable. Deux commandes sur un chemin rare achètent la seule
 // propriété qui compte — l'index ne meurt pas avant ce qu'il désigne.
 //
-// Returns 1 when pushed as a new entry, 0 when an identical 'new' was deduped,
-// 2 when a mutable entry was superseded.
+// Returns a PAIR — `{code, lengthAfterPush}`. The code is what it always was:
+// 1 when pushed as a new entry, 0 when an identical 'new' was deduped, 2 when a
+// mutable entry was superseded. The second element is the length `RPUSH` just
+// returned, and it exists so the eviction at the bound above stops being
+// INVISIBLE (#18733): everything else on this path logs — dedup, supersede,
+// memory fallback, map full, malformed entry — while the LTRIM that DESTROYS
+// replay for a recipient said nothing, with the value already in hand. It costs
+// no extra command: RPUSH returns the length anyway.
+//
+// It is a second element rather than a fourth code VALUE so that `1` keeps
+// meaning « pushed » whatever the bound did. It is 0 on the two branches that
+// run no LTRIM — dedup pushes nothing, supersede removes one and pushes one, so
+// neither destroys anything — and TypeScript reads 0 as « not measured », never
+// as « the queue is empty » (see `readBoundedPushReply`).
 // KEYS[1] = queue key, KEYS[2] = message index key,
 // ARGV[1] = serialized entry, ARGV[2] = dedup id,
 // ARGV[3] = TTL, ARGV[4] = normalized eventType, ARGV[5] = max entries per user,
@@ -105,22 +118,22 @@ for i, entry in ipairs(entries) do
       if decodedEventType == ARGV[4] then
         if ARGV[4] == 'new' then
           indexHolder()
-          return 0
+          return {0, 0}
         end
         redis.call('LREM', KEYS[1], 1, entry)
         redis.call('RPUSH', KEYS[1], ARGV[1])
         redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
         indexHolder()
-        return 2
+        return {2, 0}
       end
     end
   end
 end
-redis.call('RPUSH', KEYS[1], ARGV[1])
+local len = redis.call('RPUSH', KEYS[1], ARGV[1])
 redis.call('LTRIM', KEYS[1], -tonumber(ARGV[5]), -1)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
 indexHolder()
-return 1
+return {1, len}
 `.trim();
 
 // Atomically remove specific expired entries by exact value in a single
@@ -149,6 +162,14 @@ return removed
 // LPUSH dans l'ordre inverse : la tête garde l'ordre chronologique (le drain
 // retrie de toute façon par `enqueuedAt`), et le LTRIM borne par la queue,
 // comme à l'enfilage.
+//
+// Et il ÉVINCE comme à l'enfilage, donc il le DIT comme à l'enfilage (#18733) :
+// ce `LTRIM` détruit des entrées scellées qu'un drain n'a pas pu rouvrir — du
+// rejeu perdu, exactement comme au plafond de l'enfilage, et dans le même
+// silence. Le script rend donc `{restored, len}`, où `len` est la longueur que
+// le DERNIER `LPUSH` a rendue : aucune commande de plus, sur un chemin qui en
+// fait déjà une par entrée remise. `len` reste 0 quand rien n'a été remis,
+// c'est-à-dire quand aucun `LTRIM` n'a tourné.
 // KEYS[1] = queue key, ARGV[1] = TTL, ARGV[2] = max entries per user,
 // ARGV[3..] = serialized entries, oldest first
 const RESTORE_LUA = `
@@ -161,10 +182,11 @@ for i, entry in ipairs(entries) do
   end
 end
 local restored = 0
+local len = 0
 for i = #ARGV, 3, -1 do
   local ok, decoded = pcall(cjson.decode, ARGV[i])
   if ok and decoded and not present[(decoded.dedupKey or decoded.messageId) .. '\n' .. (decoded.eventType or 'new')] then
-    redis.call('LPUSH', KEYS[1], ARGV[i])
+    len = redis.call('LPUSH', KEYS[1], ARGV[i])
     restored = restored + 1
   end
 end
@@ -172,7 +194,7 @@ if restored > 0 then
   redis.call('LTRIM', KEYS[1], -tonumber(ARGV[2]), -1)
   redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
 end
-return restored
+return {restored, len}
 `.trim();
 
 function queueKey(userId: string): string {
@@ -455,10 +477,14 @@ export class RedisDeliveryQueue {
     const redis = this.getRedis();
     if (redis) {
       try {
-        await redis.eval(
+        const reply = readBoundedPushReply(await redis.eval(
           RESTORE_LUA, 1, queueKey(userId),
           String(DELIVERY_QUEUE_TTL_SECONDS), String(DELIVERY_QUEUE_MAX_PER_USER),
           ...live.map((entry) => JSON.stringify(entry)),
+        ));
+        this.noteBoundEviction(
+          'restore', 'redis', userId,
+          destroyedAtBound(reply.lengthAfterPush, DELIVERY_QUEUE_MAX_PER_USER), DELIVERY_QUEUE_MAX_PER_USER,
         );
         return;
       } catch (error) {
@@ -468,7 +494,42 @@ export class RedisDeliveryQueue {
     const existing = this.memoryQueue.get(userId) ?? [];
     const present = new Set(existing.map(dedupIdentity));
     const restored = live.filter((entry) => !present.has(dedupIdentity(entry)));
-    if (restored.length > 0) this.memoryQueue.set(userId, [...restored, ...existing].slice(-MEMORY_QUEUE_MAX_PER_USER));
+    if (restored.length === 0) return;
+    const withRestored = [...restored, ...existing];
+    // `slice(-N)` garde les N DERNIÈRES, donc ce que le plafond détruit ici est
+    // pris en TÊTE — les entrées qu'on vient de remettre. Le dire est d'autant
+    // plus nécessaire : une remise peut détruire exactement ce qu'elle remet.
+    this.noteBoundEviction(
+      'restore', 'memory', userId,
+      destroyedAtBound(withRestored.length, MEMORY_QUEUE_MAX_PER_USER), MEMORY_QUEUE_MAX_PER_USER,
+    );
+    this.memoryQueue.set(userId, withRestored.slice(-MEMORY_QUEUE_MAX_PER_USER));
+  }
+
+  /**
+   * L'UNIQUE site qui nomme une éviction au plafond (#18733).
+   *
+   * Les QUATRE chemins qui en détruisent y passent — enfilage Redis, enfilage
+   * mémoire, remise Redis, remise mémoire — et `destroyed <= 0 ⇒ silence` est
+   * donc tenu une fois : le chemin nominal est le plus chaud du produit, et une
+   * trace par enfilage serait pire que le silence qu'on vient de retirer.
+   *
+   * Le niveau est `warn`, comme la map mémoire pleine quinze lignes plus bas.
+   * L'asymétrie était le constat de l'issue : celle-là, qui n'affecte que le
+   * repli, avertissait ; celui-ci, qui vit sur le chemin de PRODUCTION et
+   * détruit du rejeu, se taisait.
+   */
+  private noteBoundEviction(
+    scope: 'enqueue' | 'restore',
+    slice: 'redis' | 'memory',
+    userId: string,
+    destroyed: number,
+    cap: number,
+  ): void {
+    if (destroyed <= 0) return;
+    logger.warn('Delivery queue bound destroyed queued entries: they will never be replayed', {
+      scope, slice, userId, destroyed, cap,
+    });
   }
 
   async enqueue(userId: string, incoming: QueuedMessagePayload, options: DeliveryQueueEnqueueOptions = {}): Promise<void> {
@@ -486,14 +547,18 @@ export class RedisDeliveryQueue {
         // être revérifié avant d'être REMIS est exactement ce qui doit pouvoir
         // être retrouvé pour être PURGÉ. Un second prédicat aurait divergé.
         const indexed = carriesMessageText(entry.eventType);
-        const pushed = await redis.eval(
+        const reply = readBoundedPushReply(await redis.eval(
           ENQUEUE_DEDUP_LUA, 2, key, messageIndexKey(entry.messageId),
           serialized, dedupId, String(DELIVERY_QUEUE_TTL_SECONDS), normalizedEventType(entry),
           String(DELIVERY_QUEUE_MAX_PER_USER), indexed ? '1' : '0', userId
+        ));
+        this.noteBoundEviction(
+          'enqueue', 'redis', userId,
+          destroyedAtBound(reply.lengthAfterPush, DELIVERY_QUEUE_MAX_PER_USER), DELIVERY_QUEUE_MAX_PER_USER,
         );
-        if (pushed === 0) {
+        if (reply.outcome === 0) {
           logger.debug('Delivery queue dedup: dedup id already queued', { userId, dedupId, messageId: entry.messageId });
-        } else if (pushed === 2) {
+        } else if (reply.outcome === 2) {
           logger.debug('Delivery queue supersede: mutable event re-pushed at tail', { userId, dedupId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
         }
         return;
@@ -557,6 +622,7 @@ export class RedisDeliveryQueue {
         .slice(0, evictCount)
         .map(({ index }) => index),
     );
+    this.noteBoundEviction('enqueue', 'memory', userId, evictCount, MEMORY_QUEUE_MAX_PER_USER);
     this.memoryQueue.set(userId, withNew.filter((_, index) => !evictIndices.has(index)));
   }
 

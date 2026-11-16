@@ -375,6 +375,19 @@ final class ComposerViewfinderColumnTests: XCTestCase {
         }
     }
 
+    /// **« Son » porte le MÊME glyphe au viseur et en retouche** (#18711) : celui de la retouche,
+    /// déclaré une fois, que la colonne du viseur lit.
+    func test_soundEntry_wearsTheRetouchGlyph_onBothColumns() {
+        XCTAssertEqual(ComposerViewfinderEntry.sound.symbol, ComposerCaptureCopy.editToolSymbol(.sound),
+                       "le viseur lit le glyphe de la retouche")
+        let retouche = ComposerRetouchRail.items(composesScene: true, tools: [.crop])
+        XCTAssertTrue(retouche.contains(.scene(.sound)), "sans son de prise, « Son » de la retouche est l'entrée du viseur")
+        XCTAssertTrue(ComposerRetouchRail.items(composesScene: true, tools: [.sound]).contains(.tool(.sound)),
+                      "avec un son de prise, c'est l'outil — même glyphe, `editToolSymbol(.sound)`")
+        XCTAssertNotEqual(ComposerViewfinderEntry.sound.symbol, ComposerRailDoor.sound.symbolName,
+                          "le glyphe du rail de la scène n'est plus celui de la colonne")
+    }
+
     func test_bottomRow_mountsTheSceneEntries_beforeTheLookFamilies() throws {
         let rangee = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         let colonne = try XCTUnwrap(rangee.range(of: "ComposerViewfinderColumnView("))

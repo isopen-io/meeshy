@@ -814,6 +814,25 @@ export type {
   NowPlayingClearedEventData,
   NowPlayingSnapshot,
 } from './now-playing.js';
+// La batterie des Proches (#14147) : mêmes raisons, les schémas restent hors du baril.
+export * from './battery-constants.js';
+export type {
+  BatteryReport,
+  BatteryReportAck,
+  BatteryPullPayload,
+  BatteryPullAck,
+  BatteryPullRequestedEventData,
+  BatteryAnnouncement,
+  BatteryServedPhase,
+  BatteryReaderState,
+  BatteryChangedEventData,
+  BatteryClearedEventData,
+  BatterySnapshot,
+  BatteryEmitterSettings,
+  BatteryEmitterSettingsUpdate,
+  BatteryPersonSettings,
+  BatteryPersonSettingsUpdate,
+} from './battery.js';
 export * from './shared-location-constants.js';
 export * from './blood-location.js';
 export type {

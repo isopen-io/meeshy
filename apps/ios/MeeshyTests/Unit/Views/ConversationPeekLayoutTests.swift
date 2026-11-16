@@ -146,9 +146,17 @@ final class ConversationPeekLayoutTests: XCTestCase {
         XCTAssertEqual(ConversationPeekCardRoute.resolve(startDetent: .compact, translation: 12), .chipMorph)
     }
 
-    func test_cardRoute_pullingUp_orFromExpanded_drivesTheDetent() {
+    /// Tirer la CARTE vers le bas la comprime en ligne quel que soit le cran :
+    /// relâchée sous le seuil, elle revient, et le menu reste tel qu'il était
+    /// (cran, panneau « Déplacer vers… » et ses rangées). Le cran se règle par
+    /// la poignée et le menu, jamais par la carte tirée vers le bas.
+    func test_cardRoute_pullingDownFromExpanded_alsoMorphsTheCard_leavingTheMenuAsItWas() {
+        XCTAssertEqual(ConversationPeekCardRoute.resolve(startDetent: .expanded, translation: 12), .chipMorph)
+    }
+
+    func test_cardRoute_pullingUp_drivesTheDetent() {
         XCTAssertEqual(ConversationPeekCardRoute.resolve(startDetent: .compact, translation: -12), .detent)
-        XCTAssertEqual(ConversationPeekCardRoute.resolve(startDetent: .expanded, translation: 12), .detent)
+        XCTAssertEqual(ConversationPeekCardRoute.resolve(startDetent: .expanded, translation: -12), .detent)
     }
 
     // MARK: - Quel menu l'appui long ouvre

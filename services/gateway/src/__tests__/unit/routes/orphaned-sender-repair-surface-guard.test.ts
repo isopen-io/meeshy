@@ -110,6 +110,14 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'conversations/messages-search.ts': { kind: 'applies', reads: 3, applications: 1 },
   'conversations/threads.ts': { kind: 'applies', reads: 2, applications: 2 },
   'links/utils/prisma-queries.ts': { kind: 'applies', reads: 2, applications: 2 },
+  // #18617 — la relecture du RENVOI (`writeLinkMessageIdempotently`) charge
+  // `sender` avec sa `language`, donc elle est exposée comme toute autre
+  // lecture : un expéditeur disparu ferait rejeter la relecture entière, et le
+  // renvoi retomberait en 500 pour une raison étrangère au renvoi. La
+  // projection est LOCALE (la partagée ne porte pas `sender.language`), donc la
+  // réparation que `findExistingMessage` apporte gratuitement est branchée ici
+  // à la main.
+  'links/messageIdempotency.ts': { kind: 'applies', reads: 1, applications: 1 },
   // Les 2 autres lectures (`/translations`, `/status-details`) vérifient
   // l'existence du message sans jamais charger `sender`.
   'messages-reads.ts': { kind: 'applies', reads: 3, applications: 1 },
@@ -206,6 +214,7 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
 
 /** `services/` — même règle, troisième racine. */
 const SERVICE_SURFACES: Record<string, Classification> = {
+  'battery/batteryContext.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 2 },
   // #17076 — DEUX lectures, UNE réparation, et l'écart est une DÉCISION.
   // `recompute()` est le chemin AUTORITATIF : il répare. `foldFlooredWindow`

@@ -30,6 +30,8 @@ import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
+from utils.voice_cache_guard import VoiceCacheIdRejected
+
 logger = logging.getLogger(__name__)
 
 # Répertoire de cache WAV
@@ -242,11 +244,15 @@ async def process_multi_speaker_audio(
             continue
 
         temp_user_id = f"temp_speaker_{speaker_id}"
-        voice_model = await voice_clone_service.get_or_create_voice_model(
-            user_id=temp_user_id,
-            current_audio_path=data['audio_path'],
-            current_audio_duration_ms=data['total_duration_ms']
-        )
+        try:
+            voice_model = await voice_clone_service.get_or_create_voice_model(
+                user_id=temp_user_id,
+                current_audio_path=data['audio_path'],
+                current_audio_duration_ms=data['total_duration_ms']
+            )
+        except VoiceCacheIdRejected as rejected:
+            logger.error(f"[MULTI_SPEAKER] Identifiant de locuteur refusé ({rejected.reason})")
+            return {}
 
         if not voice_model:
             logger.error(f"[MULTI_SPEAKER] Échec voice model pour {speaker_id}")

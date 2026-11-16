@@ -38,10 +38,17 @@ struct ProfileCircleSection: View {
                     if showsSharedLocation {
                         ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
                     }
+                    if viewModel.offersBattery {
+                        ProfileBatteryRow(
+                            userId: viewModel.userId, displayName: displayName,
+                            canPull: viewModel.offersBatteryPull, asksConsent: viewModel.batteryAsksConsent
+                        )
+                    }
                     promoteButton
                     loweringButton(from: level)
                 }
-            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether || showsSharedLocation {
+            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether || showsSharedLocation
+                        || viewModel.offersBattery {
                 VStack(spacing: MeeshySpacing.smPlus) {
                     if viewModel.offersTalkie {
                         ProfileTalkieRow(userId: viewModel.userId, displayName: displayName)
@@ -54,6 +61,12 @@ struct ProfileCircleSection: View {
                     }
                     if showsSharedLocation {
                         ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
+                    }
+                    if viewModel.offersBattery {
+                        ProfileBatteryRow(
+                            userId: viewModel.userId, displayName: displayName,
+                            canPull: viewModel.offersBatteryPull, asksConsent: viewModel.batteryAsksConsent
+                        )
                     }
                 }
             } else {

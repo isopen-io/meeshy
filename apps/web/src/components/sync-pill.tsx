@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { Glyph } from './glyph';
+import { PillAnnouncementBody, useShownPillAnnouncement } from './sync-pill-announcement';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { useOnline } from '@/lib/net/online';
 import { useRoute } from '@/lib/router';
@@ -88,6 +89,19 @@ export function SyncPill() {
     const t = setTimeout(() => setNow(Date.now()), delai);
     return () => clearTimeout(t);
   }, [echeance]);
+
+  /* LES ANNONCES (#14147) — la batterie d'un Proche qui faiblit, d'un Sang qui s'éteint : elles défilent quand
+     la pastille n'a rien de PLUS URGENT à dire (un envoi échoué, la coupure qu'elle annonce), et passent devant
+     l'envoi en cours, qui reste visible dans le fil. La file vide, la pastille disparaît. */
+  const urgent = state.kind === 'failed' || (state.kind === 'offline' && pillAnnouncesOffline(routeKey));
+  const annonce = useShownPillAnnouncement({ suppressed: urgent });
+  if (annonce !== null) {
+    return (
+      <div className="sync-pill pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4" style={{ top: belowScreenTop(top) }} role="status" aria-live="polite">
+        <PillAnnouncementBody announcement={annonce} />
+      </div>
+    );
+  }
 
   if (state.kind === 'hidden') return null;
   /* UNE SEULE VOIX POUR L'ÉTAT RÉSEAU (revue #7083, D-11) — sur les routes qui

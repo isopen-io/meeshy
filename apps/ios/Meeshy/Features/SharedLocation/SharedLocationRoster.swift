@@ -114,6 +114,29 @@ struct SharedLocationRoster: Equatable, Codable {
         )
     }
 
+    /// La liste que la passerelle SERT au compte (#18389, #18578, iso `rosterOps.withServed` du web) : elle fait foi pour
+    /// chacun des appareils du compte. Ses personnes et leurs échéances remplacent les miennes ; un retrait en attente
+    /// d'ici GAGNE (la personne reste hors de la liste, son retrait se rejoue) tant que la passerelle la sert encore, et
+    /// s'éteint dès qu'elle ne la sert plus. Une personne servie dont l'échéance est passée ou l'identifiant illisible
+    /// n'entre pas.
+    func withServed(_ served: SharedLocationOwnSnapshot, now: Date) -> SharedLocationRoster {
+        let readable = served.recipients.compactMap { recipient -> (String, SharedLocationOwnRecipient)? in
+            let id = recipient.userId.lowercased()
+            return Self.isObjectId(id) ? (id, recipient) : nil
+        }
+        let servedIds = Set(readable.map(\.0))
+        let next = readable.reduce(into: [String: Entry]()) { kept, pair in
+            let (id, recipient) = pair
+            guard recipient.expiresAt > now, withdrawals[id] == nil else { return }
+            kept[id] = Entry(precision: recipient.precision, until: recipient.expiresAt)
+        }
+        return SharedLocationRoster(entries: next, withdrawals: withdrawals.filter { servedIds.contains($0.key) })
+    }
+
+    private static func isObjectId(_ id: String) -> Bool {
+        id.count == 24 && id.allSatisfy { $0.isHexDigit }
+    }
+
     /// Sans ceux dont l'échéance est passée, ni les retraits que plus aucun partage serveur ne peut servir.
     func pruned(now: Date) -> SharedLocationRoster {
         SharedLocationRoster(entries: entries.filter { $0.value.until > now }, withdrawals: withdrawals.filter { $0.value > now })

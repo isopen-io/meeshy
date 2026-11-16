@@ -265,7 +265,7 @@ extension MeeshyComposerHost {
         .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
             guard !items.isEmpty else { return }
             pickedPhotoLibraryItems = []
-            closeOpeningLibraryForPick()
+            closeOpeningLibraryForPick(count: items.count)
             startPhotoLibraryIntake(items)
         }
         .fileImporter(

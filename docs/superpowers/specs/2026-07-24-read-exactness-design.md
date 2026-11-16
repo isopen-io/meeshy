@@ -52,6 +52,18 @@ un accusé est émis, pas **quels messages** il couvre.
 récupéré par le client a bien été livré. Seul le chemin `readAt` change. Cette
 distinction borne le lot — `markMessagesAsReceived` n'est pas touché.
 
+> **AMENDEMENT du 2026-11-15 (#18701) — la seconde phrase n'est plus vraie.**
+> Elle tenait parce que le gel était SUR-INCLUSIF : toute la fenêtre recevait
+> une entrée, livrée ou non. #18614 a rétréci le gel aux messages réellement
+> livrés, si bien qu'un message refusé par le drain (émission qui lève, plafond
+> de 500 de la file) n'a plus d'entrée — et retombait sur le repli curseur, qui
+> est une horloge MURALE et répond « remis ». Depuis #18701, **la livraison
+> suit la même bascule que la lecture** : passé `EXACT_READ_TRACKING_SINCE`,
+> l'absence de gel vaut absence de livraison ; le repli reste consenti aux
+> messages antérieurs à la bascule. Les deux mentions « hors périmètre » et
+> « non-régression » plus bas se lisent à leur date.
+> Détail : `services/gateway/decisions/2026-11-15-le-statut-servi-de-la-livraison-suit-la-bascule-18701.md`.
+
 ## 1. Contrat client → serveur
 
 `POST /conversations/:id/mark-read` reçoit un body optionnel :

@@ -13,6 +13,7 @@
  * - AttachmentStatusEntry est conservé pour le suivi granulaire des médias (audio écouté, vidéo vue).
  */
 
+import { createHash } from 'crypto';
 import { PrismaClient } from "@meeshy/shared/prisma/client";
 import { MessageMediaConsumptionService, type MediaConsumptionServed } from './MessageMediaConsumptionService';
 // `withRetry` a suivi ses cinq appelants dans le module de consommation média
@@ -22,7 +23,7 @@ import { MessageMediaConsumptionService, type MediaConsumptionServed } from './M
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { unsetOrNull } from '../utils/prisma-unset';
-import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
+import { computeContiguousReadPrefix, computeRecipientCount, resolveCursorDeliveredAt, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
 import {
@@ -138,6 +139,37 @@ export function buildCursorFreshnessGuard(params: {
       { [createdAtField]: { lt: messageCreatedAt } },
     ],
   };
+}
+
+/**
+ * Ce qu'un appelant de `markMessagesAsReceived` peut SAVOIR en plus du curseur
+ * (#18614).
+ *
+ * `messageIds` nomme les messages RÉELLEMENT remis, quand l'appelant en a la
+ * liste exacte. Le rejeu hors ligne est le seul dans ce cas : il refuse des
+ * entrées (émission qui lève, plancher d'historique, message mort) et la file
+ * en évince d'autres à son plafond, si bien que ce qui est parti est un
+ * sous-ensemble STRICT de la fenêtre du curseur.
+ *
+ * Omettre la clé garde la FENÊTRE, qui est la sémantique juste des appelants
+ * en ligne (`receipts.ts`, `messages-list.ts`,
+ * `autoDeliverToOnlineRecipients`) : chez eux, tout ce qui précède EST arrivé.
+ */
+export type MarkReceivedScope = {
+  readonly messageIds?: readonly string[];
+};
+
+/**
+ * Le discriminant de PÉRIMÈTRE dans la clé de déduplication.
+ *
+ * `'window'` quand l'appelant ne nomme rien — le comportement d'origine, et
+ * celui des quatre appelants en ligne. Sinon le digest de la liste NOMMÉE :
+ * deux rejeux qui livrent des ensembles différents sous le même message le
+ * plus récent sont deux travaux distincts, et aucun ne doit avaler l'autre.
+ */
+function markReceivedScopeKey(options?: MarkReceivedScope): string {
+  if (!options?.messageIds) return 'window';
+  return `ids:${createHash('sha1').update([...options.messageIds].sort().join(',')).digest('hex').slice(0, 12)}`;
 }
 
 export class MessageReadStatusService {
@@ -492,7 +524,8 @@ export class MessageReadStatusService {
   async markMessagesAsReceived(
     participantId: string,
     conversationId: string,
-    latestMessageId?: string
+    latestMessageId?: string,
+    options?: MarkReceivedScope
   ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
     // fails — a poisoned key would otherwise swallow every retry within the
@@ -520,7 +553,23 @@ export class MessageReadStatusService {
       // Keyed by the RESOLVED messageId so a genuinely newer message always
       // produces a distinct key and is never swallowed by the TTL gate — only
       // identical repeats (same message within the TTL) are deduped.
-      dedupKey = `${participantId}:${conversationId}:received:${messageId}`;
+      // #18614 (audit) — la clé porte aussi le PÉRIMÈTRE, et c'est le lot qui
+      // l'a rendu nécessaire. Avant lui, deux appels de même `messageId`
+      // faisaient le MÊME travail (toujours la fenêtre) : les confondre était
+      // sans conséquence. Depuis, le rejeu fige une LISTE et les quatre autres
+      // appelants figent une FENÊTRE — deux travaux DIFFÉRENTS sous la même
+      // clé.
+      //
+      // Et la séquence qui les met côte à côte est le chemin NOMINAL de
+      // reconnexion : le drain, puis `GET /conversations/:id/messages`, dont le
+      // fire-and-forget appelle cette méthode SANS id (`messages-list.ts`). Le
+      // service résout alors le même message le plus récent, donc la même clé,
+      // à quelques dizaines de millisecondes — et la fenêtre, plus LARGE, était
+      // avalée par la liste, plus ÉTROITE, qui l'avait précédée.
+      //
+      // Un digest, pas la liste : une clé de cache ne porte pas un identifiant
+      // par message livré.
+      dedupKey = `${participantId}:${conversationId}:received:${messageId}:${markReceivedScopeKey(options)}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -582,12 +631,31 @@ export class MessageReadStatusService {
       // RENVOYÉ par `freezeMessageStatus` — pas seulement attendu — est ce que
       // cette méthode rend à son tour : c'est la seule vraie mesure de ce qui a
       // été figé, là où `getUnreadCount` mesurait autre chose.
+      //
+      // #18614 — le PÉRIMÈTRE du gel. Sans `messageIds`, `freezeMessageStatus`
+      // résout une PLAGE (`createdAt > since`), c'est-à-dire TOUT message non
+      // supprimé de la conversation créé depuis le curseur précédent. C'est la
+      // sémantique juste des quatre appelants qui disent « tout ce qui précède
+      // est arrivé » — un lecteur EN LIGNE, dans le fil.
+      //
+      // Le REJEU hors ligne est le seul à savoir qu'il a livré un sous-ensemble
+      // STRICT de cette fenêtre : une émission qui lève en sort une entrée, et
+      // le plafond de 500 de la file en évince d'autres AVANT même le drain,
+      // sans aucune panne. Sous la plage, ces messages recevaient `deliveredAt`
+      // — en écriture WRITE-ONCE, donc sans retour — et la coche de leur auteur
+      // passait à « remis » pour un message jamais reçu.
+      //
+      // `undefined` vaut « je n'ai pas calculé » et garde la fenêtre ; une
+      // liste VIDE vaut « j'ai livré, et rien ». La distinction est celle de
+      // `bridgeComputed` / `bridgeNotComputed`, un étage plus bas : ne jamais
+      // laisser une IGNORANCE et une AFFIRMATION s'écrire pareil.
       const frozenCount = await this.freezeMessageStatus({
         participantId,
         conversationId,
         since: prevDeliveredAt,
         at: now,
         field: "deliveredAt",
+        ...(options?.messageIds ? { messageIds: options.messageIds } : {}),
       });
 
       logger.info(
@@ -1323,10 +1391,11 @@ export class MessageReadStatusService {
         const avatarURL = resolveParticipantAvatar(participant);
 
         const cursor = cursorByParticipant.get(participantId);
-        const cursorDelivered =
-          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
-            ? cursor.lastDeliveredAt
-            : null;
+        const cursorDelivered = resolveCursorDeliveredAt({
+          cursorLastDeliveredAt: cursor?.lastDeliveredAt ?? null,
+          messageCreatedAt: message.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
         const frozen = frozenByParticipant.get(participantId);
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,
@@ -1655,10 +1724,11 @@ export class MessageReadStatusService {
 
         for (const participantId of evaluatedParticipantIds) {
           const cursor = cursorByParticipant.get(participantId);
-          const cursorDelivered =
-            cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt
-              ? cursor.lastDeliveredAt
-              : null;
+          const cursorDelivered = resolveCursorDeliveredAt({
+            cursorLastDeliveredAt: cursor?.lastDeliveredAt ?? null,
+            messageCreatedAt: msg.createdAt,
+            cutover: getExactReadTrackingCutover(),
+          });
           const frozen = frozenForMsg?.get(participantId);
           const readAt = resolveReadAt({
             frozenReadAt: frozen?.readAt ?? null,
@@ -1858,11 +1928,17 @@ export class MessageReadStatusService {
         if (!participant) continue; // orphan or inactive
 
         const cursor = cursorByParticipant.get(participantId);
-        const cursorDelivered =
-          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
-            ? cursor.lastDeliveredAt
-            : null;
+        const cursorDelivered = resolveCursorDeliveredAt({
+          cursorLastDeliveredAt: cursor?.lastDeliveredAt ?? null,
+          messageCreatedAt: message.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
         const frozen = frozenByParticipant.get(participantId);
+        // `deliveredAt` est SERVI tel quel, et gouverne le filtre « delivered »
+        // douze lignes plus bas : il voyage À CÔTÉ de `receivedAt` et porte le
+        // même repli, donc la même borne. Le corriger seul aurait laissé le
+        // panneau « Qui a vu » annoncer une date de remise que le compteur
+        // venait de retirer.
         const deliveredAt = frozen?.deliveredAt ?? cursorDelivered;
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,
@@ -2322,10 +2398,11 @@ export class MessageReadStatusService {
       let readCount = 0;
       for (const participantId of evaluatedParticipantIds) {
         const cursor = cursorByParticipant.get(participantId);
-        const cursorDelivered =
-          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= latestMessage.createdAt
-            ? cursor.lastDeliveredAt
-            : null;
+        const cursorDelivered = resolveCursorDeliveredAt({
+          cursorLastDeliveredAt: cursor?.lastDeliveredAt ?? null,
+          messageCreatedAt: latestMessage.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
         const frozen = frozenByParticipant.get(participantId);
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,

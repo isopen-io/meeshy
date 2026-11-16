@@ -94,6 +94,13 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // de suivi porte (`attachmentUrl` / `audioUrl`, #17165), téléchargée telle
   // quelle par la NSE iOS et le lecteur ; jamais composée depuis le catalogue.
   'talkie.byTalkieIdAudio',
+  // `POST /api/v1/me/device/battery` — le relevé de batterie ne part que d'un TÉLÉPHONE (#14147) : le SDK iOS
+  // (`MeEndpoint.deviceBattery`) et Android l'envoient ; le web REÇOIT et n'émet aucun relevé (un navigateur n'a pas
+  // de batterie fiable, le serveur ne suit que le téléphone).
+  'me.deviceBattery',
+  // `GET /api/v1/relations/:userId/battery` — l'état d'UN Proche, lu par la fiche iOS (`RelationsEndpoint.byUserIdBattery`,
+  // #14147) ; le web tient l'état de tous par l'instantané (`relations.battery`) et la socket, sans relecture unitaire.
+  'relations.byUserIdBattery',
 ]);
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';

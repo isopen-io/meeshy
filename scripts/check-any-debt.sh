@@ -386,7 +386,14 @@ readonly SHARED_BASELINE=0
 # commentaire qui AFFIRMAIT le seul canal émis. L'affirmation mesurée vraie,
 # `broadcastFn` DÉCLARE `typeof SERVER_EVENTS.TYPING_STOP` et `TypingEvent` :
 # le cast n'a plus d'objet, et la dette descend d'une ligne.
-readonly GATEWAY_BASELINE=488
+# 487 depuis #18616 (cycle 171) : `jobs/index.ts` construisait une file de
+# remise DÉGÉNÉRÉE en repli d'un paramètre optionnel —
+# `new RedisDeliveryQueue({ getNativeClient: () => null } as any)` — et c'est le
+# `as any` qui rendait l'objet nul crédible. `DeliveryQueueCleanupJob` accepte
+# désormais `undefined` et ne fait rien : un objet nul se dit en ne faisant
+# rien, pas en construisant la chose dont on n'a pas besoin, et la dette descend
+# avec la seconde instance.
+readonly GATEWAY_BASELINE=487
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

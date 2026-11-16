@@ -107,8 +107,8 @@ extension StoryComposerViewModel {
     /// Le fond plein est ce qui la fait LIRE comme une étiquette et non comme du
     /// texte libre — c'est la seule chose qui la distingue à l'œil.
     ///
-    /// Décalage en cascade comme les lieux et les stickers : deux mentions
-    /// successives ne doivent pas se superposer exactement.
+    /// La mention garde sa place DESSINÉE, sous le centre, décalée d'un cran
+    /// par mention : deux mentions successives ne se superposent pas.
     @discardableResult
     private func poseBadge(for reference: ComposerReference) -> StoryTextObject? {
         let handle = reference.username.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -78,10 +78,31 @@ export async function withdrawRitualSharesOfUser(
   prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
   params: { readonly userId: string },
 ): Promise<void> {
-  await prisma.relationFeatureSetting.updateMany({
-    where: { OR: [{ ownerId: params.userId }, { otherId: params.userId }] },
-    data: SHARES_OFF_DATA,
-  });
+  const pairs = { OR: [{ ownerId: params.userId }, { otherId: params.userId }] };
+  await prisma.relationFeatureSetting.updateMany({ where: pairs, data: SHARES_OFF_DATA });
+  await prisma.relationFeatureSetting.updateMany({ where: { ...pairs, batteryShared: true }, data: { batteryShared: null } });
+}
+
+/**
+ * L'accord de BATTERIE donné à un Proche (#14147) s'éteint quand le lien tombe sous Proche :
+ * la colonne tri-état revient au DÉFAUT du niveau (`null`), si bien qu'une remontée au Proche
+ * ne la rouvre pas sans un nouvel accord — et qu'un Sang retrouve le défaut que le porteur a
+ * voulu. Un refus (`false`) n'est pas touché. Daté chez l'acteur, sans date chez l'autre (RG-07).
+ */
+export async function withdrawBatteryConsentBetween(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly actorId: string; readonly otherId: string; readonly at: Date },
+): Promise<void> {
+  await Promise.all([
+    prisma.relationFeatureSetting.updateMany({
+      where: { ownerId: params.actorId, otherId: params.otherId, batteryShared: true },
+      data: { batteryShared: null, batteryWithdrawnAt: params.at },
+    }),
+    prisma.relationFeatureSetting.updateMany({
+      where: { ownerId: params.otherId, otherId: params.actorId, batteryShared: true },
+      data: { batteryShared: null },
+    }),
+  ]);
 }
 
 /**
@@ -110,7 +131,7 @@ export async function withdrawListeningCategoryBetween(
  * Le lien vient de tomber, par le geste de `actorId`, au niveau effectif `level` — baisse
  * (`POST /relations/:userId/level`) ou rupture d'une demande acceptée : site UNIQUE de ce qui
  * ne tient plus. Sous le Sang, les partages du rituel s'éteignent ; sous Proche, la catégorie
- * d'écoute aussi. Rejouable sans condition : un retrait échoué se solde au rejeu.
+ * d'écoute et l'accord de batterie aussi. Rejouable sans condition : un retrait échoué se solde au rejeu.
  */
 export async function withdrawSharesAfterDrop(
   prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
@@ -121,6 +142,7 @@ export async function withdrawSharesAfterDrop(
   await withdrawRitualSharesBetween(prisma, pair);
   if (params.level === 'CLOSE') return;
   await withdrawListeningCategoryBetween(prisma, pair);
+  await withdrawBatteryConsentBetween(prisma, pair);
 }
 
 /** Un sens dont l'accord d'écoute vient de s'éteindre : ce que le lecteur voyait avant, pour l'effacer chez lui. */
@@ -132,21 +154,30 @@ const SHARE_ROW_SELECT = {
   ownerId: true,
   otherId: true,
   listeningCategoryShared: true,
+  batteryShared: true,
   ...Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, true])),
 } as const;
 
-type ShareRow = { readonly ownerId: string; readonly otherId: string; readonly listeningCategoryShared: boolean | null } & Partial<RitualSharesRow>;
+type ShareRow = {
+  readonly ownerId: string;
+  readonly otherId: string;
+  readonly listeningCategoryShared: boolean | null;
+  readonly batteryShared?: boolean | null;
+} & Partial<RitualSharesRow>;
 
-const revocationOf = (row: ShareRow, level: RelationLevel, now: Date): Record<string, boolean | Date> => ({
+const revocationOf = (row: ShareRow, level: RelationLevel, now: Date): Record<string, boolean | Date | null> => ({
   ...(level === 'BLOOD' ? {} : ritualShareWithdrawalOf(row, RELATION_RITUAL_SHARES, now)),
   ...(relationLevelIfAtLeast(level, 'CLOSE') === null && row.listeningCategoryShared === true
     ? { listeningCategoryShared: false, listeningCategoryWithdrawnAt: now }
+    : {}),
+  ...(relationLevelIfAtLeast(level, 'CLOSE') === null && row.batteryShared === true
+    ? { batteryShared: null, batteryWithdrawnAt: now }
     : {}),
 });
 
 /**
  * Les partages de `userId`, dans les DEUX sens, que le LIEN réel n'ouvre pas (#16814) :
- * ceux du rituel hors Sang, la catégorie d'écoute sous Proche. Ils s'éteignent datés chez
+ * ceux du rituel hors Sang, la catégorie d'écoute et l'accord de batterie sous Proche. Ils s'éteignent datés chez
  * chaque émetteur — c'est la fin d'un accord donné hors rituel entre collègues de l'équipe,
  * que seul l'appelant (`revokeTeamSharesOf`) sait reconnaître. Aucune ligne n'est créée. Rend
  * les sens dont l'écoute s'est éteinte, pour que l'appelant l'efface chez le lecteur.

@@ -62,9 +62,28 @@ const walk = (dir: string): readonly string[] =>
  */
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g;
 
+/**
+ * Le dépôt écrit ses imports relatifs sous DEUX formes — `'./x'` et `'./x.js'`,
+ * la seconde étant la convention TS/ESM, et 175 fichiers de `routes/` la
+ * portent. Le résolveur ne connaissait que la première : une arête en `.js`
+ * était INVISIBLE au graphe.
+ *
+ * Elle n'a jamais rougi jusqu'à #18617 parce que toutes les arêtes en `.js` du
+ * dépôt pointaient HORS de `routes/` (vers `validation/`, `utils/`,
+ * `services/`), et ce cliquet ne juge que l'atteignabilité des fichiers de
+ * `routes/`. Le premier frère importé en `.js` à l'intérieur de `routes/` s'est
+ * déclaré orphelin alors qu'il est servi.
+ *
+ * **Le sens de l'erreur valait d'être mesuré avant de corriger** : une arête
+ * manquante ne peut que RÉTRÉCIR le graphe, donc ce défaut ne pouvait produire
+ * que des faux POSITIFS (un fichier vivant déclaré mort), jamais l'inverse. Le
+ * cliquet n'a donc jamais menti sur un orphelin réel — il pouvait seulement
+ * accuser à tort.
+ */
 const resolveRelative = (importer: string, specifier: string): string | null => {
   if (!specifier.startsWith('.')) return null;
-  const base = normalize(join(dirname(importer), specifier));
+  const withoutJsExtension = specifier.replace(/\.js$/, '');
+  const base = normalize(join(dirname(importer), withoutJsExtension));
   for (const candidate of [`${base}.ts`, join(base, 'index.ts')]) {
     if (existsSync(candidate)) return candidate;
   }

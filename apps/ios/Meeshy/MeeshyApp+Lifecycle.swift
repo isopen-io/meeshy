@@ -177,6 +177,7 @@ extension MeeshyApp {
             Task { await ConversationSyncEngine.shared.stopSocketRelay() }
         case .cancelBackgroundTasks:
             BackgroundTaskManager.shared.cancelAllScheduled()
+            BatteryBackgroundRefresh.cancel()
         }
     }
 

@@ -93,7 +93,7 @@ const EPHEMERAL_ONLY_TYPES = [
 /** JUMEAU de `MOOD_TYPES` (#10813) : la nouvelle humeur d'un contact a sa page. */
 const MOOD_TYPES = ['friend_new_mood'];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
-const PROFILE_TYPES = ['contact_joined', 'contact_recently_active'];
+const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery'];
 /** JUMEAU de `MISSED_CALL_TYPES` (#9177) : repli d'un appel manqué sans `conversationId`. */
 const MISSED_CALL_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
 const PROGRESSION_TYPES = [

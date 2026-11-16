@@ -54,6 +54,10 @@ class SyncPillViewModelTest {
             override val openConversationId: Flow<String?> = open
         }
         val store = ConnectionStatusStore(online, socket, MutableStateFlow(0))
+        val batteryItems = MutableSharedFlow<SyncPillBatteryItem>(extraBufferCapacity = 8)
+        val battery = object : SyncPillBatterySource {
+            override val announcements: Flow<SyncPillBatteryItem> = batteryItems
+        }
     }
 
     @Before
@@ -64,7 +68,7 @@ class SyncPillViewModelTest {
 
     private fun TestScope.viewModel(f: Fakes): SyncPillViewModel {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val vm = SyncPillViewModel(f.store, f.queue, f.typing) { testScheduler.currentTime }
+        val vm = SyncPillViewModel(f.store, f.queue, f.typing, f.battery) { testScheduler.currentTime }
         backgroundScope.launch { vm.uiState.collect { } }
         runCurrent()
         return vm
@@ -72,6 +76,24 @@ class SyncPillViewModelTest {
 
     private fun message(id: String, status: OutboxUiStatus = OutboxUiStatus.PENDING, createdAt: Long = 0) =
         OutboxUiItem(id, OutboxUiKind.MESSAGE, null, OutboxUiIcon.TEXT, 0, OutboxNavigationSource.Conversation("c1", id), status, createdAt)
+
+    @Test
+    fun `une annonce de batterie defile puis quitte la pastille et ne revient pas`() = runTest {
+        val f = Fakes()
+        val vm = viewModel(f)
+        val item = SyncPillBatteryItem("battery:u2:critical:1", "u2", "Alice · 5 %")
+        f.batteryItems.emit(item)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly("Alice · 5 %")
+
+        advanceTimeBy(6_001)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
+
+        f.batteryItems.emit(item)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
+    }
 
     @Test
     fun `connecte et file vide, rien n'est montre`() = runTest {

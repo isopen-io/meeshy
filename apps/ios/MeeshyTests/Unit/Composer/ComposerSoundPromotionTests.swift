@@ -82,59 +82,15 @@ final class ComposerSoundPromotionTests: XCTestCase {
                        "l'objet promu quitte sa place : elle n'est pas occupée")
     }
 
-    func test_landing_stepsAsideWhenAnotherObjectHoldsTheCentre() {
+    /// Décision porteur du 2026-11-15 (#18719) : un objet neuf se pose au
+    /// centre même quand le centre est pris.
+    func test_landing_whenAnotherObjectHoldsTheCentre_staysAtTheCentre() {
         let s = slide { e in
             e.textObjects = [StoryTextObject(id: "t1", text: "occupe le centre")]
             e.audioPlayerObjects = [audio("a1", background: true)]
         }
-        let place = ComposerSoundPromotion.landing(on: s, promoting: "a1")
-        XCTAssertNotEqual(place, StoryObjectPlacement.center,
-                          "une place prise fait avancer la cascade")
-    }
-
-    // MARK: - L'inventaire des positions
-
-    func test_positions_ignoreBackgrounds_whichHaveNoPlaceOnTheScene() {
-        let s = slide { e in
-            e.audioPlayerObjects = [audio("fond", background: true)]
-            e.mediaObjects = {
-                var m = StoryMediaObject(id: "m1", aspectRatio: 1)
-                m.isBackground = true
-                return [m]
-            }()
-        }
-        XCTAssertTrue(ComposerScenePosedObjects.positions(on: s).isEmpty,
-                      "un fond occupe toute la scène : il n'a pas de position à éviter")
-    }
-
-    func test_positions_coverTheFiveFamilies() {
-        let s = slide { e in
-            e.textObjects = [StoryTextObject(id: "t1", text: "salut")]
-            e.mediaObjects = [StoryMediaObject(id: "m1", aspectRatio: 1)]
-            e.stickerObjects = [StorySticker(id: "k1", emoji: "🎈")]
-            e.locationObjects = [StoryLocationObject(id: "l1",
-                                                place: SharedPlace(latitude: 48.8, longitude: 2.3, name: "Paris"))]
-            e.audioPlayerObjects = [audio("a1", background: false)]
-        }
-        XCTAssertEqual(ComposerScenePosedObjects.positions(on: s).count, 5,
-                       "les cinq familles de `MeeshySceneObject` ont une position")
-    }
-
-    /// **Les deux énumérations des cinq familles ne doivent pas diverger.**
-    ///
-    /// `ComposerSceneObjectCount.posed` compte, `ComposerScenePosedObjects.positions`
-    /// situe. Elles ne se dérivent pas l'une de l'autre — deux objets au même
-    /// point restent deux objets — mais elles partagent leur INVENTAIRE, et rien
-    /// dans le type ne l'impose. Une sixième famille ajoutée à l'une seule
-    /// passerait en silence : le compte dirait six, la cascade éviterait cinq
-    /// places.
-    func test_bothEnumerationsListTheSameFiveCollections() throws {
-        let code = try source("ComposerSceneObjectCount.swift")
-        for famille in ["textObjects", "mediaObjects", "stickerObjects",
-                        "locationObjects", "audioPlayerObjects"] {
-            XCTAssertEqual(code.components(separatedBy: famille).count - 1, 2,
-                           "\(famille) doit être énumérée par le compte ET par les positions")
-        }
+        XCTAssertEqual(ComposerSoundPromotion.landing(on: s, promoting: "a1"),
+                       StoryObjectPlacement.center)
     }
 
     /// **La chaîne complète, de l'hôte au doigt** (#5018).

@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// **L'aperçu du viseur — un seul montage de `CameraPreviewLayer` pour les deux
 /// présentations** (#9134). La carte en scène et le plein écran le posent à la
@@ -198,6 +199,9 @@ struct ComposerCaptureChrome: View {
     @State private var holdEndedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ComposerCaptureGrid.storageKey) private var gridEnabled = false
+    @Environment(\.composerViewfinderClosesLibrary) private var closesLibrary
+    /// Le glisser d'un objet posé : ses cibles, la copie en haut, la poubelle en bas (#18712).
+    @StateObject private var sceneDrag = ComposerSceneDragDrop()
 
     /// Le pas d'un balayage VoiceOver sur le média : un quart de plus, ou de moins.
     private static let accessibleZoomStep: CGFloat = 1.25
@@ -274,6 +278,7 @@ struct ComposerCaptureChrome: View {
             cropPresets
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
             if !typing { ComposerCaptureGestureHint(session: session) }
+            libraryTouchCatcher
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
@@ -285,6 +290,7 @@ struct ComposerCaptureChrome: View {
                 bottomRow
             }
             .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
+            sceneDragTargets
             if session.isRenderingLook { renderingSpinner }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
@@ -334,13 +340,41 @@ struct ComposerCaptureChrome: View {
         }
     }
 
+    /// **La galerie ouverte par-dessus, un toucher sur le viseur la referme** (#18709) : posé
+    /// au-dessus des objets et sous le chrome, le voile ne laisse partir ni photo, ni vidéo, ni zoom.
+    @ViewBuilder
+    private var libraryTouchCatcher: some View {
+        if let refermer = closesLibrary,
+           ComposerViewfinderScene.route(onChrome: false, onSceneObject: false, objectsTakeTouches: false, libraryOpen: true) == .closeLibrary {
+            Color.clear
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0).onEnded { _ in refermer() })
+                .accessibilityElement()
+                .accessibilityLabel(ComposerCameraCopy.closeLibrary)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { refermer() }
+        }
+    }
+
+    /// **Les cibles du glisser d'un objet posé** (#18712) : au-dessus de tout, sans prendre aucun
+    /// toucher ; elles ne paraissent que pendant le glisser.
+    @ViewBuilder
+    private var sceneDragTargets: some View {
+        if let actions = sceneObjects?.dropActions {
+            MeeshyDragTargets(state: sceneDrag.targets, labels: ComposerCameraCopy.dragTargets,
+                              onDuplicate: { sceneDrag.drop(.duplicate, actions: actions) },
+                              onRemove: { sceneDrag.drop(.remove, actions: actions) })
+        }
+    }
+
     /// **La scène sur le viseur** (#17432) : ses objets, sans son fond, à la place de la carte —
     /// au-dessus de la nappe, sous le chrome. Un toucher sur un objet le prend, une zone vide
     /// traverse vers la capture.
     @ViewBuilder
     private var sceneObjectsLayer: some View {
         if let sceneObjects, let cadre = sceneObjectsFrame, !session.editFramesScene {
-            ComposerViewfinderObjectsLayer(canvas: sceneObjects, frame: cadre)
+            ComposerViewfinderObjectsLayer(canvas: sceneObjects.feeding(sceneDrag), frame: cadre)
                 .transition(.opacity)
         }
     }

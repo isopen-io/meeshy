@@ -33,9 +33,7 @@ public struct CommunityUpdatedEvent: Decodable, Sendable, Equatable {
 
     /// L'instant de l'écriture, `nil` si la chaîne est illisible.
     public var writtenAt: Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractional.date(from: updatedAt) ?? ISO8601DateFormatter().date(from: updatedAt)
+        WireDate.date(from: updatedAt)
     }
 }
 

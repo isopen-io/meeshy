@@ -88,7 +88,7 @@ export class BackgroundJobsManager {
     // (single source of truth — no duplicate token model/service).
     const magicLinkService = new MagicLinkService(prisma, getCacheStore(), emailService, new GeoIPService());
     this.notificationDigestJob = new NotificationDigestJob(prisma, emailService, magicLinkService);
-    this.deliveryQueueCleanupJob = new DeliveryQueueCleanupJob(deliveryQueue ?? new RedisDeliveryQueue({ getNativeClient: () => null } as any));
+    this.deliveryQueueCleanupJob = new DeliveryQueueCleanupJob(deliveryQueue);
     this.mutationLogCleanupJob = new MutationLogCleanupJob(prisma);
     // Le balayage ne réactive jamais que via `updateStatus` — aucun besoin de
     // `revokeSessions` (seule la désactivation en dépend, cf. `userAdminRoutes`).
