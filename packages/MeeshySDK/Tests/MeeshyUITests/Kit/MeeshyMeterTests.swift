@@ -18,7 +18,8 @@ struct MeeshyMeterTests {
             let total = try #require(row["total"] as? Double)
             let result = MeeshyMeterFraction.resolve(value: value, total: total)
             if let expected = row["fraction"] as? Double {
-                #expect(abs(try #require(result) - expected) < 0.0001, "\(row)")
+                let resolved = try #require(result)
+                #expect(abs(resolved - expected) < 0.0001, "\(row)")
             } else {
                 #expect(result == nil, "\(row)")
             }

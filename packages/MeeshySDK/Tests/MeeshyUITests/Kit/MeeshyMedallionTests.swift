@@ -18,7 +18,8 @@ struct MeeshyMedallionTests {
             let recipe = Self.recipe(size: size)
             #expect(recipe.diameter == Double(raw), "\(row)")
             #expect(recipe.glyphSize == row["glyphe"] as? Double, "\(row)")
-            #expect(abs(recipe.valueSize - (try #require(row["valeur"] as? Double))) < 0.0001, "\(row)")
+            let expectedValue = try #require(row["valeur"] as? Double)
+            #expect(abs(recipe.valueSize - expectedValue) < 0.0001, "\(row)")
         }
     }
 

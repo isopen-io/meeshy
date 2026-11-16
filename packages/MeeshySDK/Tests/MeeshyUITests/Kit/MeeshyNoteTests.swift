@@ -15,7 +15,7 @@ struct MeeshyNoteTests {
     @Test("phrase, tête, conteneur, filet et hauteur minimale de chaque forme")
     func recipe_forms_followTheVectors() throws {
         for row in try KitAtomVectors.rows(Self.file, "formes") {
-            let form = try #require(MeeshyNoteForm(rawValue: try #require(row["forme"] as? String)))
+            let form = try #require(MeeshyNoteForm(rawValue: try kitRequired(row["forme"] as? String)))
             let recipe = Self.recipe(form: form)
             #expect(recipe.phraseSize == row["phrase"] as? Double, "\(row)")
             #expect(recipe.leadSize == row["tete"] as? Double, "\(row)")
@@ -86,7 +86,7 @@ struct MeeshyNoteTests {
     @Test("seul warn est annoncé, une fois, sauf avis contraire")
     func announcement() throws {
         for row in try KitAtomVectors.rows(Self.file, "annonce") {
-            let kind = try #require(MeeshyNoteKind(rawValue: try #require(row["sens"] as? String)))
+            let kind = try #require(MeeshyNoteKind(rawValue: try kitRequired(row["sens"] as? String)))
             #expect(MeeshyNoteRecipe.announces(kind: kind, override: nil) == row["annonce"] as? Bool, "\(row)")
         }
         #expect(MeeshyNoteRecipe.announces(kind: .ok, override: true))

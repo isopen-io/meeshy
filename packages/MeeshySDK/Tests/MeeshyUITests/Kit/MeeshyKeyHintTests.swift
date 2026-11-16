@@ -15,7 +15,7 @@ struct MeeshyKeyHintTests {
     func glyphs_followTheVectors() throws {
         for row in try KitAtomVectors.rows(Self.file, "glyphes") {
             let keys = try (row["touches"] as? [String] ?? []).map(Self.key)
-            let platform = try #require(MeeshyKeyPlatform(rawValue: try #require(row["plateforme"] as? String)))
+            let platform = try #require(MeeshyKeyPlatform(rawValue: try kitRequired(row["plateforme"] as? String)))
             let rtl = row["rtl"] as? Bool ?? false
             let glyphs = MeeshyKeyHintRule.glyphs(keys: keys, platform: platform, isRightToLeft: rtl)
             #expect(glyphs == row["glyphes"] as? [String], "\(row)")
@@ -29,7 +29,7 @@ struct MeeshyKeyHintTests {
         let locale = Locale(identifier: "fr")
         for row in try KitAtomVectors.rows(Self.file, "glyphes") {
             let keys = try (row["touches"] as? [String] ?? []).map(Self.key)
-            let platform = try #require(MeeshyKeyPlatform(rawValue: try #require(row["plateforme"] as? String)))
+            let platform = try #require(MeeshyKeyPlatform(rawValue: try kitRequired(row["plateforme"] as? String)))
             let rtl = row["rtl"] as? Bool ?? false
             let spoken = MeeshyKeyHintRule.spoken(keys: keys, platform: platform, isRightToLeft: rtl,
                                                   bundle: fr, locale: locale)

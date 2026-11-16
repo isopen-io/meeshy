@@ -16,7 +16,7 @@ struct MeeshyMotionTableTests {
         let rows = try KitAtomVectors.rows(Self.file, "jetons")
         #expect(rows.count == MeeshyMotionToken.allCases.count)
         for row in rows {
-            let token = try #require(MeeshyMotionToken(rawValue: try #require(row["jeton"] as? String)))
+            let token = try #require(MeeshyMotionToken(rawValue: try kitRequired(row["jeton"] as? String)))
             let recipe = MeeshyMotionRecipe.resolve(token: token)
             #expect(recipe.nature.rawValue == row["nature"] as? String, "\(row)")
             #expect(recipe.durationMilliseconds == row["duree"] as? Int, "\(row)")
@@ -32,7 +32,7 @@ struct MeeshyMotionTableTests {
     func recipe_reduced_isAFadeOrAStop() throws {
         let fade = try KitAtomVectors.load(Self.file)["fonduReduitMs"] as? Int
         for row in try KitAtomVectors.rows(Self.file, "jetons") {
-            let token = try #require(MeeshyMotionToken(rawValue: try #require(row["jeton"] as? String)))
+            let token = try #require(MeeshyMotionToken(rawValue: try kitRequired(row["jeton"] as? String)))
             let recipe = MeeshyMotionRecipe.resolve(token: token, reduce: true)
             let expectedHaptic = try #require(row["haptique"] as? String)
             #expect(recipe.isReduced, "\(row)")
@@ -66,7 +66,7 @@ struct MeeshyMotionTableTests {
     @Test("raideur Android = (2π / réponse)² pour chaque ressort")
     func recipe_androidStiffness_followsTheResponse() throws {
         for row in try KitAtomVectors.rows(Self.file, "jetons") {
-            let token = try #require(MeeshyMotionToken(rawValue: try #require(row["jeton"] as? String)))
+            let token = try #require(MeeshyMotionToken(rawValue: try kitRequired(row["jeton"] as? String)))
             let recipe = MeeshyMotionRecipe.resolve(token: token)
             guard let expected = row["raideurAndroid"] as? Double else {
                 #expect(recipe.androidStiffness == nil, "\(row)")

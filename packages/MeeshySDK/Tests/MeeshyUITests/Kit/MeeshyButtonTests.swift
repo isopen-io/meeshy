@@ -29,7 +29,7 @@ struct MeeshyButtonTests {
     @Test("round vaut 56 et hold 96, quelle que soit la taille passée ; ils n'acceptent que primary, accent et tinted")
     func recipe_shapes_followTheVectors() throws {
         for row in try KitAtomVectors.rows(Self.file, "formes") {
-            let shape = try #require(MeeshyButtonShape(rawValue: try #require(row["forme"] as? String)))
+            let shape = try #require(MeeshyButtonShape(rawValue: try kitRequired(row["forme"] as? String)))
             let recipe = Self.recipe(size: .s36, shape: shape)
             #expect(recipe.height == row["diametre"] as? Double, "\(row)")
             #expect(recipe.diameter == row["diametre"] as? Double, "\(row)")
