@@ -253,13 +253,12 @@ describe('GET /mentions/me — la coupure de service par lecteur (#16583)', () =
     expect(JSON.stringify(rows)).not.toContain('rue des Lilas');
   });
 
-  it('#18556 — un éphémère échu dans la GRÂCE sort en pierre tombale : la mention reste, son texte non', async () => {
-    const { status, rows } = await servedMentions([GRACE_IN_A]);
-    const grace = rows.find((r) => r.messageId === MSG_GRACE_A);
+  it('#18556 — une flamme consommée (échue pour ce lecteur, dans la GRÂCE) n’apparaît plus : ni existence, ni expéditeur, ni date', async () => {
+    const { status, rows } = await servedMentions([GRACE_IN_A, ORDINARY]);
 
     expect(status).toBe(200);
-    expect(grace).toBeDefined();
-    expect(grace.message.content).toBe('');
+    expect(rows.map((r) => r.messageId)).toEqual([MSG_PLAIN]);
+    expect(JSON.stringify(rows)).not.toContain(MSG_GRACE_A);
     expect(JSON.stringify(rows)).not.toContain('tournesol');
   });
 

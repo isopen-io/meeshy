@@ -24,6 +24,11 @@ export interface AfterReadDepartureTrackerDependencies {
   normalizeConversationId?: (rawConversationId: string) => Promise<string>;
   /** « Vu puis quitté » constaté par le serveur. Une levée est absorbée. */
   onDeparture: (departure: AfterReadDeparture) => Promise<void>;
+  /**
+   * Le lecteur est-il retenu dans la conversation sans la regarder (un appel en cours) ? Un `viewing:stop`
+   * n'y arme alors aucun départ ; la déconnexion et l'arrière-plan, si. Une levée vaut oui.
+   */
+  holdsDeparture?: (reader: AfterReadReader) => Promise<boolean>;
   /** Un appareil du lecteur regarde-t-il encore la conversation depuis un AUTRE nœud ? Une levée vaut oui. */
   viewedElsewhere?: (reader: AfterReadReader) => Promise<boolean>;
   /** Publie le regard d'un socket aux autres nœuds (une room dédiée). */
@@ -32,11 +37,25 @@ export interface AfterReadDepartureTrackerDependencies {
   isAuthenticated?: (socketId: string) => boolean;
   /** Le délai laissé à une déconnexion ou à un arrière-plan pour se reprendre. */
   graceMs?: number;
+  /** Le délai laissé à un `viewing:stop` sur une socket vivante (fiche poussée, appel) pour revenir. */
+  viewStopGraceMs?: number;
   now?: () => Date;
   onError?: (error: unknown) => void;
 }
 
 export const AFTER_READ_DEPARTURE_GRACE_MS = 30_000;
+/**
+ * Un lecteur qui reste connecté et quitte la conversation (`viewing:stop`) : au-delà, ses flammes lues
+ * brûlent. Assez long pour une fiche poussée puis refermée, assez court pour que la sortie se voie.
+ */
+export const AFTER_READ_VIEW_STOP_GRACE_MS = 10_000;
+/**
+ * Un départ refusé (un autre appareil du lecteur regarde, la vérification ne conclut pas) ou qui échoue
+ * se REDEMANDE, à intervalle doublé depuis la grâce jusqu'à ce plafond…
+ */
+export const AFTER_READ_MAX_RETRY_DELAY_MS = 10 * 60_000;
+/** …et au plus ce nombre de fois (≈ 48 h) : au-delà, la rétention des flammes a déjà fait son œuvre. */
+export const AFTER_READ_MAX_DEPARTURE_RETRIES = 300;
 /** Au-delà, les regards les plus ANCIENS sont oubliés : ce qu'ils ont montré attend la sortie déclarée par le client. */
 export const AFTER_READ_MAX_PERIODS = 32;
 /** Conversations dont un socket garde des regards non consommés ; au-delà, les plus anciennes sont oubliées. */
@@ -50,6 +69,8 @@ type SocketState = {
 };
 
 type Regard = { readonly closed: readonly AfterReadPeriod[]; readonly openedAt: Date | null };
+
+type PendingDeparture = { readonly timer: ReturnType<typeof setTimeout>; readonly dueAt: number };
 
 const EMPTY: SocketState = { views: new Map(), touched: new Map() };
 const NO_REGARD: Regard = { closed: [], openedAt: null };
@@ -77,13 +98,19 @@ const withoutMember = (set: ReadonlySet<string> | undefined, member: string) =>
  *   afficher, et la room d'une conversation est tenue toute la vie de la
  *   socket sur iOS — ni l'une ni l'autre ne prouve qu'une flamme a été vue ;
  * - le DÉPART — l'appareil qui a regardé S'EN VA : déconnexion ou
- *   arrière-plan, après la grâce ; `conversation:leave`, aussitôt. Un
- *   `viewing:stop` sur une socket vivante (fiche poussée, appel) clôt le
- *   regard sans rien déclarer : ce client-là consommera lui-même en sortant.
+ *   arrière-plan, après la grâce ; `conversation:leave`, aussitôt ; un
+ *   `viewing:stop` sur une socket VIVANTE, après une grâce courte
+ *   (`AFTER_READ_VIEW_STOP_GRACE_MS`) qu'un `viewing:start` sur la même
+ *   conversation annule. Le serveur ne compte pas sur le client pour
+ *   consommer en sortant : « si le lecteur quitte, tout ce qu'il a lu brûle ».
+ *   Un appel VIVANT de la conversation (`holdsDeparture`) couvre l'écran sans
+ *   la quitter : son `viewing:stop` n'arme rien. Une échéance armée n'est
+ *   jamais RACCOURCIE : une déconnexion garde sa grâce entière.
  *
  * Un départ n'a lieu que si AUCUN appareil du lecteur ne regarde plus la
  * conversation — sur ce nœud (registre) comme sur les autres
- * (`viewedElsewhere`). Il emporte les périodes, qui sont alors OUBLIÉES : une
+ * (`viewedElsewhere`). Refusé — ou s'il échoue —, il GARDE ses périodes et se
+ * redemande, à intervalle doublé jusqu'à `AFTER_READ_MAX_RETRY_DELAY_MS`. Accompli, il emporte les périodes, qui sont alors OUBLIÉES : une
  * lecture posée après lui n'appartient à aucun regard.
  *
  * Tout vit en mémoire ; un redémarrage perd les périodes en cours, et ce
@@ -95,9 +122,11 @@ export class AfterReadDepartureTracker {
   private readonly normalize: (rawConversationId: string) => Promise<string>;
   private readonly onDeparture: AfterReadDepartureTrackerDependencies['onDeparture'];
   private readonly viewedElsewhere: (reader: AfterReadReader) => Promise<boolean>;
+  private readonly holdsDeparture: (reader: AfterReadReader) => Promise<boolean>;
   private readonly markViewing: (socketId: string, reader: AfterReadReader, viewing: boolean) => void;
   private readonly isAuthenticated: (socketId: string) => boolean;
   private readonly graceMs: number;
+  private readonly viewStopGraceMs: number;
   private readonly now: () => Date;
   private readonly onError: (error: unknown) => void;
   private readonly sockets = new Map<string, SocketState>();
@@ -105,7 +134,8 @@ export class AfterReadDepartureTracker {
   private readonly contributors = new Map<string, ReadonlySet<string>>();
   private readonly regards = new Map<string, Regard>();
   private readonly pendingOpenings = new Map<string, ReadonlySet<string>>();
-  private readonly pendingDepartures = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly pendingDepartures = new Map<string, PendingDeparture>();
+  private readonly departureRetries = new Map<string, number>();
   private readonly queueBySocket = new Map<string, Promise<void>>();
 
   constructor(deps: AfterReadDepartureTrackerDependencies) {
@@ -113,9 +143,11 @@ export class AfterReadDepartureTracker {
     this.normalize = deps.normalizeConversationId ?? (async (rawConversationId) => rawConversationId);
     this.onDeparture = deps.onDeparture;
     this.viewedElsewhere = deps.viewedElsewhere ?? (async () => false);
+    this.holdsDeparture = deps.holdsDeparture ?? (async () => false);
     this.markViewing = deps.markViewing ?? (() => undefined);
     this.isAuthenticated = deps.isAuthenticated ?? (() => true);
     this.graceMs = deps.graceMs ?? AFTER_READ_DEPARTURE_GRACE_MS;
+    this.viewStopGraceMs = deps.viewStopGraceMs ?? AFTER_READ_VIEW_STOP_GRACE_MS;
     this.now = deps.now ?? (() => new Date());
     this.onError = deps.onError ?? (() => undefined);
   }
@@ -140,12 +172,15 @@ export class AfterReadDepartureTracker {
     return this.inOrder(socketId, () => this.look(socketId, rawConversationId));
   }
 
-  /** `viewing:stop` — une fiche poussée, un appel : le regard se clôt, la socket vit, rien ne part. */
+  /** `viewing:stop` — le lecteur quitte la conversation, la socket vit : le départ part après la grâce courte, sauf appel. */
   viewStop(socketId: string, rawConversationId: string): Promise<void> {
     return this.inOrder(socketId, async () => {
       this.forgetPendingOpening(socketId, rawConversationId);
       const reader = await this.heldBy(socketId, rawConversationId, 'views');
-      if (reader) this.lookAway(socketId, reader);
+      if (!reader) return;
+      this.lookAway(socketId, reader);
+      if (await this.isHeld(reader)) return;
+      this.departAfterGrace(reader, this.viewStopGraceMs);
     });
   }
 
@@ -214,6 +249,7 @@ export class AfterReadDepartureTracker {
     const regard = this.regards.get(key) ?? NO_REGARD;
     if (!regard.openedAt) this.regards.set(key, { ...regard, openedAt: this.now() });
     this.cancelPending(key);
+    this.departureRetries.delete(key);
     this.mark(socketId, reader, true);
   }
 
@@ -258,13 +294,16 @@ export class AfterReadDepartureTracker {
     return held.get(rawConversationId) ?? held.get(await this.normalize(rawConversationId)) ?? null;
   }
 
-  private departAfterGrace(reader: AfterReadReader): void {
+  /** Une échéance déjà armée plus TARD n'est jamais raccourcie : une déconnexion garde sa grâce entière. */
+  private departAfterGrace(reader: AfterReadReader, afterMs: number = this.graceMs): void {
     const key = keyOf(reader);
     if (!this.regards.has(key)) return;
+    const dueAt = Date.now() + afterMs;
+    if ((this.pendingDepartures.get(key)?.dueAt ?? -Infinity) > dueAt) return;
     this.cancelPending(key);
     const timer = guardedTimeout({
       name: 'after-read-departure',
-      afterMs: this.graceMs,
+      afterMs,
       logger: { error: (_message, error) => this.onError(error) },
       run: () => {
         this.pendingDepartures.delete(key);
@@ -272,15 +311,14 @@ export class AfterReadDepartureTracker {
       },
     });
     timer.unref?.();
-    this.pendingDepartures.set(key, timer);
+    this.pendingDepartures.set(key, { timer, dueAt });
   }
 
   private async depart(reader: AfterReadReader): Promise<void> {
     const key = keyOf(reader);
-    if ((this.viewers.get(key)?.size ?? 0) > 0) return;
-    const periods = this.regards.get(key)?.closed ?? [];
+    if (this.isViewedHere(key)) return;
+    const periods = this.takePeriods(key);
     if (periods.length === 0) return;
-    this.forget(key);
 
     let elsewhere = true;
     try {
@@ -288,17 +326,73 @@ export class AfterReadDepartureTracker {
     } catch (error) {
       this.onError(error);
     }
-    if (elsewhere) return;
+    if (elsewhere || this.isViewedHere(key)) {
+      this.restorePeriods(key, periods);
+      if (!this.isViewedHere(key)) this.retryLater(reader);
+      return;
+    }
 
     try {
       await this.onDeparture({ ...reader, periods });
     } catch (error) {
       this.onError(error);
+      this.restorePeriods(key, periods);
+      this.retryLater(reader);
+      return;
     }
+    this.departureRetries.delete(key);
+    this.settle(key);
+  }
+
+  private async isHeld(reader: AfterReadReader): Promise<boolean> {
+    try {
+      return await this.holdsDeparture(reader);
+    } catch (error) {
+      this.onError(error);
+      return true;
+    }
+  }
+
+  private isViewedHere(key: string): boolean {
+    return (this.viewers.get(key)?.size ?? 0) > 0;
+  }
+
+  /** Les regards clos sont retirés AVANT l'attente : deux départs concurrents ne déclarent pas deux fois. */
+  private takePeriods(key: string): readonly AfterReadPeriod[] {
+    const regard = this.regards.get(key);
+    if (!regard || regard.closed.length === 0) return [];
+    this.regards.set(key, { closed: [], openedAt: regard.openedAt });
+    return regard.closed;
+  }
+
+  /** Un départ refusé rend ses regards, devant ceux qui se sont clos pendant l'attente. */
+  private restorePeriods(key: string, periods: readonly AfterReadPeriod[]): void {
+    const regard = this.regards.get(key) ?? NO_REGARD;
+    const closed = [...periods, ...regard.closed].slice(-AFTER_READ_MAX_PERIODS);
+    this.regards.set(key, { closed, openedAt: regard.openedAt });
+  }
+
+  private retryLater(reader: AfterReadReader): void {
+    const key = keyOf(reader);
+    const attempts = (this.departureRetries.get(key) ?? 0) + 1;
+    if (attempts > AFTER_READ_MAX_DEPARTURE_RETRIES) {
+      this.forget(key);
+      return;
+    }
+    this.departureRetries.set(key, attempts);
+    const delay = Math.min(this.graceMs * 2 ** Math.min(attempts - 1, 20), AFTER_READ_MAX_RETRY_DELAY_MS);
+    this.departAfterGrace(reader, delay);
+  }
+
+  /** Un regard vide (rien de clos, rien d'ouvert) libère ses contributeurs. */
+  private settle(key: string): void {
+    const regard = this.regards.get(key);
+    if (regard && !regard.openedAt && regard.closed.length === 0) this.forget(key);
   }
 
   /** Les regards CLOS d'une clé sont oubliés ; un regard encore ouvert garde son début. */
   private forget(key: string): void {
+    this.departureRetries.delete(key);
     const regard = this.regards.get(key);
     if (regard?.openedAt) {
       this.regards.set(key, { closed: [], openedAt: regard.openedAt });
@@ -330,9 +424,9 @@ export class AfterReadDepartureTracker {
   }
 
   private cancelPending(key: string): void {
-    const timer = this.pendingDepartures.get(key);
-    if (!timer) return;
-    clearTimeout(timer);
+    const pending = this.pendingDepartures.get(key);
+    if (!pending) return;
+    clearTimeout(pending.timer);
     this.pendingDepartures.delete(key);
   }
 
