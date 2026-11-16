@@ -209,6 +209,7 @@ extension ConversationViewModel {
     func send(_ outgoing: OutgoingMessage) async -> Result<SentMessageReceipt, SendFailure> {
         Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .public) attachmentIds=\((outgoing.attachments.ids ?? []).count, privacy: .public) existingTempId=\(outgoing.reusedClientMessageId?.rawValue ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
         if let failure = validate(outgoing) { return .failure(failure) }
+        noteUserActed((outgoing.attachments.ids ?? []).isEmpty ? .sendMessage : .sendAttachment)
 
         sendActivity = sendActivity.began()
         Logger.messages.info("SendFlow LOCK inFlight=\(self.sendActivity.inFlight, privacy: .public) convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .public)")
@@ -506,6 +507,7 @@ extension ConversationViewModel {
         sticker: MessageSticker? = nil,
         protection: MessageProtectionIntent
     ) {
+        noteUserActed(.sendAttachment)
         collaborators.stager.stageMedia(
             OptimisticMediaDraft(
                 conversationId: conversationId,
