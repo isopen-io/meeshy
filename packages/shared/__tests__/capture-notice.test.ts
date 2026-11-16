@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   CONTENT_CAPTURE_MAX_MESSAGES,
   contentCaptureReportSchema,
+  contentCaptureRequestJsonSchema,
 } from '../types/content-capture.js';
 import {
   CAPTURE_NOTICE_KIND,
   CAPTURE_NOTICE_LANGUAGES,
   captureNoticeFallbackText,
   captureNoticeMetadata,
+  captureNoticeQuotedText,
   captureNoticeText,
   parseCaptureNotice,
   sanitizeNoticeName,
@@ -232,5 +234,92 @@ describe('captureNoticeFallbackText — le repli lisible des clients antérieurs
     expect(captureNoticeFallbackText(notice({ nature: 'view-once', outcome: 'blocked' }))).toBe(
       'Alice a tenté de capturer un message à vue unique — impossible',
     );
+  });
+});
+
+describe('combien de captures, combien de temps d’enregistrement (#18830)', () => {
+  it('accepte une durée d’enregistrement entière et bornée, et refuse le reste', () => {
+    expect(contentCaptureReportSchema.safeParse(report({ kind: 'recording', recordingSeconds: 65 })).success).toBe(true);
+    expect(contentCaptureReportSchema.safeParse(report({ kind: 'recording', recordingSeconds: 0 })).success).toBe(true);
+    expect(contentCaptureReportSchema.safeParse(report({ kind: 'recording', recordingSeconds: -1 })).success).toBe(false);
+    expect(contentCaptureReportSchema.safeParse(report({ kind: 'recording', recordingSeconds: 1.5 })).success).toBe(false);
+    expect(contentCaptureReportSchema.safeParse(report({ kind: 'recording', recordingSeconds: 86_401 })).success).toBe(false);
+  });
+
+  it('déclare la durée dans le schéma JSON de la route, sans rouvrir les clés libres', () => {
+    expect(contentCaptureRequestJsonSchema.properties).toHaveProperty('recordingSeconds');
+    expect(contentCaptureRequestJsonSchema.additionalProperties).toBe(false);
+  });
+
+  it('porte le nombre et la durée dans la métadonnée, et le parseur les relit', () => {
+    const written = captureNoticeMetadata({
+      actor: { participantId: 'p-actor', displayName: 'Alice', isAnonymous: false },
+      capturedMessageId: OTHER_ID,
+      nature: 'timed-flame',
+      captureKind: 'recording',
+      sentAt: new Date('2026-10-07T12:05:00.000Z'),
+      count: 2,
+      recordedSeconds: 125,
+    });
+    expect(written).toMatchObject({ count: 2, recordedSeconds: 125 });
+    expect(parseCaptureNotice(written)).toEqual(written);
+  });
+
+  it('n’écrit ni nombre ni durée quand il n’y a qu’une capture sans durée — la forme d’avant', () => {
+    expect(captureNoticeMetadata({
+      actor: { participantId: 'p-actor', displayName: 'Alice', isAnonymous: false },
+      capturedMessageId: OTHER_ID,
+      nature: 'timed-flame',
+      captureKind: 'screenshot',
+      sentAt: new Date('2026-10-07T12:05:00.000Z'),
+      count: 1,
+      recordedSeconds: 0,
+    })).toEqual(notice());
+  });
+
+  it('ignore un nombre ou une durée illisible sans rejeter l’avis', () => {
+    expect(parseCaptureNotice({ ...notice(), count: 'trois', recordedSeconds: -4 })).toEqual(notice());
+    expect(parseCaptureNotice({ ...notice(), count: 2.5 })).toEqual(notice());
+  });
+
+  it('dit le nombre de captures', () => {
+    expect(captureNoticeText(notice({ count: 3 }), { language: 'fr', timeZone: 'UTC' })).toBe(
+      'Alice a capturé l’éphémère du 07/10/2026 à 12:05 · 3 captures',
+    );
+    expect(captureNoticeText(notice({ count: 3 }), { language: 'en', timeZone: 'UTC' })).toContain('· 3 screenshots');
+  });
+
+  it('dit la durée de l’enregistrement, et le nombre d’enregistrements', () => {
+    expect(captureNoticeText(notice({ captureKind: 'recording', recordedSeconds: 65 }), { language: 'fr', timeZone: 'UTC' })).toBe(
+      'Alice a enregistré l’écran pendant l’éphémère du 07/10/2026 à 12:05 · durée 1 min 05 s',
+    );
+    expect(
+      captureNoticeText(notice({ captureKind: 'recording', count: 2, recordedSeconds: 3_725 }), { language: 'fr', timeZone: 'UTC' }),
+    ).toBe('Alice a enregistré l’écran pendant l’éphémère du 07/10/2026 à 12:05 · 2 enregistrements · durée 1 h 02 min 05 s');
+    expect(captureNoticeText(notice({ captureKind: 'recording', recordedSeconds: 42 }), { language: 'de', timeZone: 'UTC' })).toContain('· Dauer 42 s');
+  });
+
+  it('a un suffixe non vide dans chaque langue', () => {
+    for (const language of CAPTURE_NOTICE_LANGUAGES) {
+      const plain = captureNoticeText(notice({ captureKind: 'recording' }), { language, timeZone: 'UTC' });
+      const counted = captureNoticeText(notice({ captureKind: 'recording', count: 4, recordedSeconds: 9 }), { language, timeZone: 'UTC' });
+      expect(counted.startsWith(plain)).toBe(true);
+      expect(counted.length).toBeGreaterThan(plain.length + 6);
+      expect(counted).toContain('4');
+    }
+  });
+
+  it('garde le nombre et la durée dans le repli, après le fuseau', () => {
+    expect(captureNoticeFallbackText(notice({ count: 2 }))).toBe('Alice a capturé l’éphémère du 07/10/2026 à 12:05 (UTC) · 2 captures');
+  });
+});
+
+describe('la citation d’un avis de capture ne dit ni qui, ni quoi (#18830)', () => {
+  it('est une phrase neutre dans la langue du lecteur', () => {
+    expect(captureNoticeQuotedText({ language: 'fr' })).toBe('Avis de capture d’écran');
+    expect(captureNoticeQuotedText({ language: 'en-GB' })).toBe('Screenshot notice');
+    for (const language of CAPTURE_NOTICE_LANGUAGES) {
+      expect(captureNoticeQuotedText({ language }).length).toBeGreaterThan(0);
+    }
   });
 });

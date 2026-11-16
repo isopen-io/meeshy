@@ -11,6 +11,7 @@ import {
 import type { AttachmentReplyTo } from './attachmentReplySnapshot';
 import { quotableNoticeKind } from '@meeshy/shared/utils/quotable-notice';
 import { withoutCallSummaryParticipants } from '@meeshy/shared/utils/call-summary';
+import { CAPTURE_NOTICE_KIND, captureNoticeQuotedText } from '@meeshy/shared/utils/capture-notice';
 
 /**
  * Ce qu'une CITATION a le droit de transporter — site UNIQUE des trois
@@ -183,6 +184,7 @@ export function servedQuotedMessage(
   if (quoted.deletedAt) return servedDeletedQuote(quoted.deletedAt);
   const ephemeral = quotedEphemeralVerdict(quoted, options?.ephemeralReader);
   if (ephemeral?.sealedAt) return sealedQuotedMessage(ephemeral.sealedAt);
+  if (isCaptureNotice(quoted)) return redactedCaptureNoticeQuote(options?.languages);
   const isProtected = quotedMessageIsProtected(quoted);
   const served: Record<string, unknown> = {};
   // Toujours POSÉE pour un éphémère, même absente : elle écrase la colonne
@@ -264,6 +266,28 @@ export function servedQuotedMessage(
   if (withoutCallSummaryParticipants(quoted.metadata) !== quoted.metadata) served['metadata'] = withoutCallSummaryParticipants(quoted.metadata);
 
   return served;
+}
+
+const isCaptureNotice = (quoted: QuotedMessageRow): boolean =>
+  quoted.messageType === 'system'
+  && typeof quoted.metadata === 'object'
+  && quoted.metadata !== null
+  && (quoted.metadata as { kind?: unknown }).kind === CAPTURE_NOTICE_KIND;
+
+/**
+ * #18830 — la citation d'un AVIS DE CAPTURE. L'avis n'est remis qu'à son
+ * audience (`captureNoticeAudience`) ; la réponse qui le cite part à toute la
+ * conversation. Elle ne transporte donc qu'une phrase NEUTRE dans la langue du
+ * lecteur — ni l'acteur, ni le message capturé, ni son heure, ni le nombre —
+ * et chaque clé qui pourrait en porter un morceau est POSÉE pour écraser la
+ * ligne brute que le site d'appel a répandue.
+ */
+function redactedCaptureNoticeQuote(languages: readonly string[] | undefined): Record<string, unknown> {
+  return {
+    ...servedDeletedQuote(new Date(0)),
+    deletedAt: undefined,
+    content: captureNoticeQuotedText({ language: languages?.[0] }),
+  };
 }
 
 /**

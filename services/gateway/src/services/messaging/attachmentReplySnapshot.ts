@@ -36,7 +36,6 @@
  * le motif éprouvé du même rangement.
  */
 
-import { refusesContentGesture } from './captureNoticeVisibility';
 
 /** La NATURE du média cité — le seul fait, avec l'ancre, qui a le droit d'être figé. */
 export type AttachmentReplyKind = 'image' | 'video' | 'audio' | 'location' | 'file';
@@ -201,11 +200,9 @@ export async function admitAttachmentReply(
     if (cited.conversationId !== params.conversationId) {
       return { ok: false, reason: 'Le message cité n’appartient pas à cette conversation' };
     }
-    // #9629 — un avis de capture ne se cite pas : la citation le recopierait
-    // dans la réponse, servie à des lecteurs hors de son audience.
-    if (refusesContentGesture(cited)) {
-      return { ok: false, reason: 'Un avis de capture ne se cite pas' };
-    }
+    // #18830 — un avis de capture se cite (directive porteur du 2026-11-16) :
+    // la citation servie est EXPURGÉE (`servedQuotedMessage`), elle ne
+    // recopie ni l'acteur, ni le message capturé, ni son heure.
   }
 
   const declared = params.attachmentReplyTo;
