@@ -120,6 +120,11 @@ public enum MeeshyAnimation {
     public nonisolated static let previewMorph = Animation.spring(response: 0.42, dampingFraction: 0.82)
     /// Le retrait de l'aperçu : la carte redevient la ligne plus vite qu'elle n'en est née, et la rejoint avant que l'overlay ne se retire.
     public nonisolated static let previewMorphReturn = Animation.spring(response: 0.3, dampingFraction: 0.8)
+    /// La carte d'aperçu qui recule quand le menu s'étend et revient quand il se réduit (#18723) : le maillon qui suit le menu dans la chaîne élastique franche du menu flottant (deux rangs de retard, même amorti), pour qu'elle arrive après lui et dépasse sa place.
+    public nonisolated static let menuSpring = Animation.spring(
+        response: FloatingMenuLadderFollow.firstRungResponse + 2 * FloatingMenuLadderFollow.responseStepPerRung,
+        dampingFraction: FloatingMenuLadderFollow.dampingFraction
+    )
 }
 
 // MARK: - iPad Layout
