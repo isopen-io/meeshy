@@ -191,7 +191,7 @@ public struct NotificationToastView: View {
     private var drawerHandle: some View {
         VStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "chevron.compact.down")
-                .font(.system(size: MeeshyIconSize.md, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 .foregroundStyle(drawer.isArmed ? accentColor : theme.textMuted)
                 .scaleEffect(drawer.isArmed ? 1.2 : 1)
                 .opacity(Double(min(1, drawer.opening / 40)))
