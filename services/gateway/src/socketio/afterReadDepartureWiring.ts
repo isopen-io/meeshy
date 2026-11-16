@@ -6,28 +6,32 @@ import { AfterReadDepartureTracker, type AfterReadReader } from './AfterReadDepa
 import type { MessageMutationManager } from './broadcastMessageMutation';
 import { resolveParticipant } from './utils/participant-resolver';
 import { normalizeConversationId, type SocketUser } from './utils/socket-helpers';
-import { unsetOrNull } from '../utils/prisma-unset';
-
-/** Les états d'un appel qui retient encore son participant (`CallStatus`, hors `ended`/`missed`/`rejected`). */
-const LIVE_CALL_STATUSES = ['initiated', 'ringing', 'connecting', 'active', 'reconnecting'] as const;
+import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
+import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from '../services/calls/liveCallParticipations';
 
 /**
- * Le lecteur prend-il part à un appel VIVANT de cette conversation ? L'écran d'appel couvre la
- * conversation (`viewing:stop`) sans qu'il l'ait quittée : ses flammes attendent la fin de l'appel (#18556).
+ * Le lecteur prend-il part à un appel VIVANT, dans N'IMPORTE QUELLE conversation ? L'écran d'appel
+ * retire la conversation lue (`viewing:stop`, iOS `CallWindowPresenter`, web `conversation-viewing`)
+ * sans qu'il l'ait quittée : ses flammes attendent la fin de l'appel (#18556). Un inscrit est cherché
+ * par TOUTES ses participations (index `participantId`, jamais le filtre de relation, #10831) ; un
+ * invité n'en a qu'une, la sienne.
  */
 export async function isInLiveCall(
-  prisma: Pick<PrismaClient, 'callParticipant'>,
-  reader: Pick<AfterReadReader, 'participantId' | 'conversationId'>,
+  prisma: Pick<PrismaClient, 'callParticipant' | 'participant'>,
+  reader: Pick<AfterReadReader, 'participantId' | 'readerKey'>,
 ): Promise<boolean> {
-  const row = await prisma.callParticipant.findFirst({
-    where: {
-      participantId: reader.participantId,
-      ...unsetOrNull('leftAt'),
-      callSession: { conversationId: reader.conversationId, status: { in: [...LIVE_CALL_STATUSES] } },
-    },
-    select: { id: true },
-  });
-  return row !== null;
+  const participantIds =
+    reader.readerKey === reader.participantId
+      ? [reader.participantId]
+      : await accountParticipantIds(prisma, reader.readerKey);
+  if (participantIds.length === 0) return false;
+  const rows = (await prisma.callParticipant.findMany({
+    where: { ...LIVE_CALL_PARTICIPATION, participantId: { in: participantIds } },
+    select: { callSession: { select: { status: true } } },
+  })) as Array<{ callSession: { status: string } | null }>;
+  return rows.some(
+    (row) => row.callSession !== null && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(row.callSession.status),
+  );
 }
 
 /** Ce que le marquage du regard demande au serveur Socket.IO — satisfait par le `Server` de production. */

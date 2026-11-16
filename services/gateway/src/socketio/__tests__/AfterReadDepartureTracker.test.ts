@@ -12,6 +12,8 @@ import {
   AFTER_READ_MAX_PERIODS,
   AFTER_READ_VIEW_STOP_GRACE_MS,
   AFTER_READ_MAX_RETRY_DELAY_MS,
+  AFTER_READ_MAX_DEPARTURE_RETRIES,
+  AFTER_READ_RECHECK_MS,
   type AfterReadDeparture,
   type AfterReadReader,
 } from '../AfterReadDepartureTracker';
@@ -30,6 +32,7 @@ type Options = {
   isAuthenticated?: (socketId: string) => boolean;
   holdsDeparture?: (reader: AfterReadReader) => Promise<boolean>;
   onDeparture?: (departure: AfterReadDeparture) => Promise<void>;
+  viewStopGraceMs?: number;
 };
 
 function buildTracker(options: Options = {}) {
@@ -46,6 +49,7 @@ function buildTracker(options: Options = {}) {
     viewedElsewhere: options.viewedElsewhere,
     isAuthenticated: options.isAuthenticated,
     holdsDeparture: options.holdsDeparture,
+    viewStopGraceMs: options.viewStopGraceMs,
     markViewing: (socketId, marked, viewing) => marks.push({ socketId, conversationId: marked.conversationId, viewing }),
     graceMs: GRACE_MS,
     now: () => clock.now,
@@ -149,7 +153,7 @@ describe('AfterReadDepartureTracker — le regard borne ce qui a été vu (#1855
     expect(departures).toHaveLength(1);
   });
 
-  it('quitter la conversation en restant connecté (viewing:stop, socket vivante) consomme après la grâce courte', async () => {
+  it('quitter la conversation en restant connecté (viewing:stop, socket vivante) consomme après sa grâce', async () => {
     jest.useFakeTimers();
     const { tracker, departures, clock } = buildTracker();
 
@@ -167,19 +171,193 @@ describe('AfterReadDepartureTracker — le regard borne ce qui a été vu (#1855
     expect(periodsOf(departures[0])).toEqual([[T0.toISOString(), at(2).toISOString()]]);
   });
 
-  it('AUDIT B1 — un appel en cours dans la conversation retient le départ du viewing:stop', async () => {
+  it('AUDIT B1/D2 — un appel en cours retient le départ du viewing:stop, et la fin de l’appel le libère après une grâce entière', async () => {
     jest.useFakeTimers();
-    const { tracker, departures } = buildTracker({ holdsDeparture: async () => true });
+    const call = { live: true };
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => call.live });
 
     await tracker.viewStart('s-1', 'conv-1');
     await tracker.viewStop('s-1', 'conv-1');
-    jest.advanceTimersByTime(GRACE_MS * 10);
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS + AFTER_READ_RECHECK_MS * 20);
     await settle();
     expect(departures).toEqual([]);
 
-    await tracker.disconnecting('s-1');
+    call.live = false;
+    jest.advanceTimersByTime(AFTER_READ_RECHECK_MS);
+    await settle();
+    expect(departures).toEqual([]);
+
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS);
+    await settle();
+    expect(departures).toHaveLength(1);
+  });
+
+  it('AUDIT A2 — la fin d’un appel rouvre une grâce entière : l’écran de conversation a le temps de revenir', async () => {
+    jest.useFakeTimers();
+    const call = { live: true };
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => call.live });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStop('s-1', 'conv-1');
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS + AFTER_READ_RECHECK_MS * 3);
+    await settle();
+    call.live = false;
+    jest.advanceTimersByTime(AFTER_READ_RECHECK_MS);
+    await settle();
+    expect(departures).toEqual([]);
+
+    await tracker.viewStart('s-1', 'conv-1');
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS * 3);
+    await settle();
+    expect(departures).toEqual([]);
+  });
+
+  it('AUDIT A2 — un viewing:stop arrivé pendant le réexamen d’un appel garde sa grâce entière', async () => {
+    jest.useFakeTimers();
+    let release: (held: boolean) => void = () => undefined;
+    const call = { pending: false, live: true };
+    const { tracker, departures } = buildTracker({
+      holdsDeparture: () =>
+        call.pending ? new Promise<boolean>((resolve) => { release = resolve; }) : Promise.resolve(call.live),
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStop('s-1', 'conv-1');
+    call.pending = true;
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS);
+    await settle();
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStop('s-1', 'conv-1');
+    release(true);
+    call.pending = false;
+    call.live = false;
+    await settle();
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS - 1);
+    await settle();
+
+    expect(departures).toEqual([]);
+  });
+
+  it('AUDIT C1 — un regard rouvert puis quitté PENDANT la vérification d’appel garde sa grâce de viewing:stop', async () => {
+    jest.useFakeTimers();
+    let release: (held: boolean) => void = () => undefined;
+    const check = { first: true };
+    const { tracker, departures, clock } = buildTracker({
+      holdsDeparture: () => {
+        if (!check.first) return Promise.resolve(false);
+        check.first = false;
+        return new Promise<boolean>((resolve) => { release = resolve; });
+      },
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    clock.now = new Date(T0.getTime() + 60_000);
+    await tracker.background('s-1');
     jest.advanceTimersByTime(GRACE_MS);
     await settle();
+    clock.now = new Date(T0.getTime() + 91_000);
+    await tracker.viewStart('s-1', 'conv-1');
+    clock.now = new Date(T0.getTime() + 95_000);
+    await tracker.viewStop('s-1', 'conv-1');
+    release(false);
+    await settle();
+    expect(departures).toEqual([]);
+
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS);
+    await settle();
+    expect(departures).toHaveLength(1);
+    expect(departures[0].periods).toHaveLength(2);
+  });
+
+  it('AUDIT A1 — la déconnexion d’un AUTRE appareil ne raccourcit pas la grâce d’un viewing:stop', async () => {
+    jest.useFakeTimers();
+    const { tracker, departures } = buildTracker();
+
+    await tracker.viewStart('s-phone', 'conv-1');
+    await tracker.viewStart('s-desk', 'conv-1');
+    await tracker.viewStop('s-phone', 'conv-1');
+    await tracker.disconnecting('s-desk');
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS - 1);
+    await settle();
+    expect(departures).toEqual([]);
+
+    jest.advanceTimersByTime(1);
+    await settle();
+    expect(departures).toHaveLength(1);
+  });
+
+  it('l’arrière-plan du MÊME appareil ramène la grâce d’un viewing:stop à la sienne', async () => {
+    jest.useFakeTimers();
+    const { tracker, departures } = buildTracker();
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStop('s-1', 'conv-1');
+    await tracker.background('s-1');
+    jest.advanceTimersByTime(GRACE_MS);
+    await settle();
+
+    expect(departures).toHaveLength(1);
+  });
+
+  it('AUDIT D5 — l’arrière-plan pendant un appel est retenu de même, puis libéré une grâce après la fin de l’appel', async () => {
+    jest.useFakeTimers();
+    const call = { live: true };
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => call.live });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.background('s-1');
+    jest.advanceTimersByTime(GRACE_MS + AFTER_READ_RECHECK_MS * 20);
+    await settle();
+    expect(departures).toEqual([]);
+
+    call.live = false;
+    jest.advanceTimersByTime(AFTER_READ_RECHECK_MS);
+    await settle();
+    expect(departures).toEqual([]);
+
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS);
+    await settle();
+    expect(departures).toHaveLength(1);
+  });
+
+  it('conversation:leave brûle aussitôt, même pendant un appel', async () => {
+    const { tracker, departures } = buildTracker({ holdsDeparture: async () => true });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    await settle();
+
+    expect(departures).toHaveLength(1);
+  });
+
+  it('AUDIT D3 — un écran poussé 45 s (fiche, infos) puis le retour ne brûle rien', async () => {
+    jest.useFakeTimers();
+    const { tracker, departures } = buildTracker();
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStop('s-1', 'conv-1');
+    jest.advanceTimersByTime(45_000);
+    await settle();
+    await tracker.viewStart('s-1', 'conv-1');
+    jest.advanceTimersByTime(GRACE_MS * 10);
+    await settle();
+
+    expect(departures).toEqual([]);
+  });
+
+  it('AUDIT D6 — l’échéance se lit sur l’horloge INJECTÉE, jamais sur Date.now', async () => {
+    jest.useFakeTimers();
+    const { tracker, departures, clock } = buildTracker();
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStart('s-2', 'conv-1');
+    await tracker.background('s-1');
+    jest.advanceTimersByTime(25_000);
+    clock.now = new Date(T0.getTime() - 10_000);
+    await tracker.disconnecting('s-2');
+    jest.advanceTimersByTime(GRACE_MS - 25_000);
+    await settle();
+
     expect(departures).toHaveLength(1);
   });
 
@@ -199,15 +377,38 @@ describe('AfterReadDepartureTracker — le regard borne ce qui a été vu (#1855
     expect(departures).toEqual([]);
   });
 
+  it('AUDIT B1 — une vérification d’appel qui lève puis répond « pas d’appel » libère le départ', async () => {
+    jest.useFakeTimers();
+    const check = { fails: true };
+    const { tracker, departures } = buildTracker({
+      holdsDeparture: async () => {
+        if (check.fails) throw new Error('mongo down');
+        return false;
+      },
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.viewStop('s-1', 'conv-1');
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS + AFTER_READ_RECHECK_MS * 5);
+    await settle();
+    check.fails = false;
+    jest.advanceTimersByTime(AFTER_READ_RECHECK_MS);
+    await settle();
+    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS);
+    await settle();
+
+    expect(departures).toHaveLength(1);
+  });
+
   it('AUDIT C1 — un viewing:stop ne raccourcit pas la grâce d’une déconnexion déjà armée', async () => {
     jest.useFakeTimers();
-    const { tracker, departures } = buildTracker();
+    const { tracker, departures } = buildTracker({ viewStopGraceMs: 10_000 });
 
     await tracker.viewStart('s-phone', 'conv-1');
     await tracker.viewStart('s-web', 'conv-1');
     await tracker.disconnecting('s-phone');
     await tracker.viewStop('s-web', 'conv-1');
-    jest.advanceTimersByTime(AFTER_READ_VIEW_STOP_GRACE_MS + 5_000);
+    jest.advanceTimersByTime(15_000);
     await tracker.viewStart('s-phone-2', 'conv-1');
     jest.advanceTimersByTime(GRACE_MS * 10);
     await settle();
@@ -237,6 +438,102 @@ describe('AfterReadDepartureTracker — le regard borne ce qui a été vu (#1855
     await settle();
     expect(departures).toHaveLength(1);
     expect(periodsOf(departures[0])).toEqual([[T0.toISOString(), at(2).toISOString()]]);
+  });
+
+  it('AUDIT D4 — un départ refusé parce qu’un autre appareil regarde se redemande à intervalle court et fixe', async () => {
+    jest.useFakeTimers();
+    const elsewhere = { viewing: true };
+    const { tracker, departures } = buildTracker({ viewedElsewhere: async () => elsewhere.viewing });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    for (let i = 0; i < 5; i += 1) {
+      jest.advanceTimersByTime(AFTER_READ_RECHECK_MS);
+      await settle();
+    }
+    elsewhere.viewing = false;
+    jest.advanceTimersByTime(AFTER_READ_RECHECK_MS);
+    await settle();
+
+    expect(departures).toHaveLength(1);
+  });
+
+  it('AUDIT C3 — une consommation en échec se redemande à intervalle DOUBLÉ', async () => {
+    jest.useFakeTimers();
+    const attempts: number[] = [];
+    const { tracker } = buildTracker({
+      onDeparture: async () => {
+        attempts.push(attempts.length);
+        throw new Error('mongo down');
+      },
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    await settle();
+    expect(attempts).toHaveLength(1);
+    jest.advanceTimersByTime(GRACE_MS);
+    await settle();
+    expect(attempts).toHaveLength(2);
+    jest.advanceTimersByTime(GRACE_MS * 2 - 1);
+    await settle();
+    expect(attempts).toHaveLength(2);
+    jest.advanceTimersByTime(1);
+    await settle();
+    expect(attempts).toHaveLength(3);
+  });
+
+  it('AUDIT C3 — après le dernier essai, le départ en échec cesse de se redemander', async () => {
+    jest.useFakeTimers();
+    let attempts = 0;
+    const { tracker } = buildTracker({
+      onDeparture: async () => {
+        attempts += 1;
+        throw new Error('mongo down');
+      },
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    for (let i = 0; i < AFTER_READ_MAX_DEPARTURE_RETRIES + 20; i += 1) {
+      jest.advanceTimersByTime(AFTER_READ_MAX_RETRY_DELAY_MS);
+      await settle();
+    }
+
+    expect(attempts).toBe(1 + AFTER_READ_MAX_DEPARTURE_RETRIES);
+  });
+
+  it('AUDIT C4 — un départ réussi remet le compteur d’essais à zéro', async () => {
+    jest.useFakeTimers();
+    const failures = { left: 3 };
+    const attempts: number[] = [];
+    const { tracker, departures } = buildTracker({
+      onDeparture: async () => {
+        attempts.push(1);
+        if (failures.left > 0) {
+          failures.left -= 1;
+          throw new Error('mongo down');
+        }
+      },
+    });
+
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    jest.advanceTimersByTime(GRACE_MS * 7);
+    await settle();
+    for (let i = 0; i < 4; i += 1) {
+      jest.advanceTimersByTime(GRACE_MS * 4);
+      await settle();
+    }
+    expect(departures).toHaveLength(1);
+
+    failures.left = 1;
+    await tracker.viewStart('s-1', 'conv-1');
+    await tracker.close('s-1', 'conv-1');
+    await settle();
+    jest.advanceTimersByTime(GRACE_MS);
+    await settle();
+    expect(departures).toHaveLength(2);
   });
 
   it('AUDIT C3 — un autre appareil qui regarde plus d’une heure n’efface pas les regards', async () => {
