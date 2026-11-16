@@ -76,6 +76,8 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
             VStack(spacing: ConversationPeekLayout.spacing) {
                 card(ConversationPeekCardHeights(rest: layout.cardHeight(progress: 0), current: layout.cardHeight(progress: progress)))
                     .frame(width: layout.cardWidth, height: layout.cardHeight(progress: progress), alignment: .top)
+                    .modifier(PreviewMenuSpringEffect(pose: springPose(in: layout), reduceMotion: reduceMotion,
+                                                      isTracking: gestureStart != nil, isMorphing: morphProgress < 1))
                     .simultaneousGesture(drag(onCard: true, layout: layout))
                     .accessibilityAction(named: Text(Self.closeLabel)) { onDismiss() }
                 menuContainer(layout: layout)
@@ -106,6 +108,18 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
             compactMenuHeight: compact,
             naturalMenuHeight: max(compact, Self.handleHeight + contentHeight)
         )
+    }
+
+    /// La pose de la carte se lit dans la hauteur que le menu prend À CET
+    /// INSTANT (#18723) : elle recule quand il s'étend, revient quand il se
+    /// réduit, suit le doigt quand on le tire, et se lève quand la carte
+    /// redevient la ligne.
+    private func springPose(in layout: ConversationPeekLayout) -> PreviewMenuSpring.Pose {
+        PreviewMenuSpring.pose(forMenuHeight: layout.menuHeight(progress: progress),
+                               compact: layout.compactMenuHeight,
+                               natural: layout.widestMenuHeight,
+                               reduceMotion: reduceMotion)
+            .onRow(morphProgress: morphProgress)
     }
 
     // MARK: - Menu
@@ -209,6 +223,48 @@ struct ConversationLongPressPeek<Card: View, Menu: View>: View {
         cardRoute = nil
         detent = openingDetent
         progress = openingDetent.progress
+    }
+}
+
+// MARK: - Le ressort entre le menu et l'aperçu (#18723)
+
+/// Porte la carte vers sa pose. Le mouvement ne vise QUE l'échelle, le
+/// décalage et l'opacité : la hauteur de la carte et son contenu gardent la
+/// transaction du cran, pour que la carte et le menu restent jointifs pendant
+/// que le recul, lui, dépasse et revient ; pendant le morphisme avec la ligne,
+/// la pose garde la transaction de la ligne. iOS 16 n'a pas de transaction
+/// limitée à des modificateurs : la pose y suit celle du cran, sans dépassement.
+struct PreviewMenuSpringEffect: ViewModifier {
+    let pose: PreviewMenuSpring.Pose
+    let reduceMotion: Bool
+    let isTracking: Bool
+    let isMorphing: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.transaction(retime) { posed in
+                Self.posed(posed, at: pose)
+            }
+        } else {
+            Self.posed(content, at: pose)
+        }
+    }
+
+    private var retime: (inout Transaction) -> Void {
+        let reduceMotion = reduceMotion, isTracking = isTracking, isMorphing = isMorphing
+        return { transaction in
+            guard !transaction.disablesAnimations else { return }
+            transaction.animation = PreviewMenuSpring.animation(reduceMotion: reduceMotion, isTracking: isTracking,
+                                                                isMorphing: isMorphing, inherited: transaction.animation)
+        }
+    }
+
+    private static func posed(_ view: some View, at pose: PreviewMenuSpring.Pose) -> some View {
+        view
+            .scaleEffect(pose.scale)
+            .offset(y: pose.offset)
+            .opacity(pose.opacity)
     }
 }
 
