@@ -15,7 +15,7 @@ final class ComposerKeyboardOrOptionsTests: XCTestCase {
     }
 
     func test_tapped_anotherFamily_switchesTheOptions() {
-        XCTAssertEqual(ComposerKeyboardOrOptions.tapped(.surface, in: .options(.color)), .options(.surface))
+        XCTAssertEqual(ComposerKeyboardOrOptions.tapped(.frameStyle, in: .options(.color)), .options(.frameStyle))
     }
 
     func test_tapped_theOpenFamily_givesTheKeyboardBack() {
@@ -172,8 +172,11 @@ final class ComposerKeyboardDockTests: XCTestCase {
     func test_outcome_tap_cyclesTheFirstToolOfTheFamily_andKeepsTheKeyboard() {
         XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .typography, in: .keyboard), .cycle(.style))
         XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .color, in: .keyboard), .cycle(.color))
-        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .alignment, in: .keyboard), .cycle(.align))
-        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .surface, in: .options(.color)), .cycle(.background),
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .effect, in: .keyboard), .cycle(.effect))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .language, in: .keyboard), .cycle(.language))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .outline, in: .keyboard), .cycle(.border))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .frame, in: .keyboard), .cycle(.frame))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .frameStyle, in: .options(.color)), .cycle(.background),
                        "une autre famille ouverte n'empêche pas le changement rapide")
     }
 
@@ -191,10 +194,10 @@ final class ComposerKeyboardDockTests: XCTestCase {
     }
 
     func test_panel_servingABakedText_dropsTheLanguage() {
-        let cuit = ComposerKeyboardStyleFamily.typography.panel(serving: StoryTextEditProfile.bakedIntoMedia.tools)
-        XCTAssertFalse(cuit.contains(.tool(.language, omitting: [])))
-        XCTAssertEqual(ComposerKeyboardStyleFamily.typography.panel(serving: StoryTextEditProfile.composer.tools),
-                       ComposerKeyboardStyleFamily.typography.panel)
+        let cuit = ComposerKeyboardStyleFamily.language.panel(serving: StoryTextEditProfile.bakedIntoMedia.tools)
+        XCTAssertTrue(cuit.isEmpty)
+        XCTAssertEqual(ComposerKeyboardStyleFamily.language.panel(serving: StoryTextEditProfile.composer.tools),
+                       ComposerKeyboardStyleFamily.language.panel)
     }
 
     @MainActor
@@ -223,7 +226,7 @@ final class ComposerKeyboardDockTests: XCTestCase {
     func test_begin_afterOptions_startsAgainOnTheKeyboard() {
         let (dock, _, _) = makeDock()
         dock.begin()
-        dock.touch(.surface, .longPress)
+        dock.touch(.frameStyle, .longPress)
         dock.begin()
         XCTAssertEqual(dock.input, .keyboard)
         XCTAssertNil(dock.link.inputView)

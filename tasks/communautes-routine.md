@@ -24,6 +24,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-14 | Le détail Android d'une communauté dit « N en ligne », comme iOS et le web | voir réveil 40 | #18026 | voir réveil 40 |
 | 2026-11-14 | Sur Android, la notification « ajouté à la communauté » ouvre la communauté | voir réveil 43 | #18061 | voir réveil 43 |
 | 2026-11-15 | Sur Android, toucher la bannière in-app « ajouté à la communauté » ouvre la communauté | voir réveil du 2026-11-15 17:38 | #18670 | voir réveil du 2026-11-15 17:38 |
+| 2026-11-15 | Rejoindre, quitter ou changer de rôle dans une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-15 23:38 | #18766 | voir réveil du 2026-11-15 23:38 |
 
 ## 2026-11-07 — lot 1
 
@@ -438,3 +439,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Début du run : #18718 (#18439, volet Android) ouverte, dernière poussée à 20:11, donc inactive : run consacré à la mener à la fusion.
 - État : fusionnable sans conflit avec `dev`, mais `dev` est verrouillé (`lock_branch` actif) : fusion impossible. Le second `android.yml` lancé à la main sur `472a2325b` (21:08) a été annulé à la main à 21:28 pendant les tests unitaires, après un `assembleDebug` vert, comme celui de 19:46. Pas de nouveau lancement : la preuve Android manque toujours.
 - Prochain lot recommandé : fusionner #18718 dès que `dev` est déverrouillé et qu'un `android.yml` va au bout ; ensuite le reste de #16857 (membres, suppression).
+
+## 2026-11-15 — réveil 23:38 UTC
+
+- Début du run : #18718 (#18439, volet Android) fusionnée ; aucune PR de la routine ouverte ; `dev` verrouillé (`lock_branch`).
+- Lot : #18766, seconde tranche de #16857 (l'effectif). Contrat : `community:member-joined` (`role`, `via: self|invited`), `community:member-left` (`reason: left|removed`), `community:member-role-updated`, chacun avec `memberCount` actif après l'écriture et `at` ISO ; la personne n'est nommée que par son identifiant. Passerelle : `services/community-member-broadcast.ts` (audience = membres actifs ∪ créateur ∪ personne concernée, communauté désactivée ⇒ rien, envoi qui lève isolé, après la réponse), branché sur les six gestes (`join`, `leave`, `invite`, `POST …/members` hors ligne déjà active, `PATCH …/role` avec le rôle ÉCRIT, `DELETE …/members/:userId`). Web : `community-member-live.ts`, monté par `bindCommunityLive` avec `viewerId` — `memberCount` recopié au détail et aux listes, rôle du lecteur suivi, liste des membres relue, lecteur sorti ⇒ détail et listes relus.
+- Témoins : passerelle `community-member-broadcast.test.ts` (6) et `communities-member-broadcast-wiring.test.ts` (11, dont 5 refus muets) ; web `community-member-live.test.ts` (7) + `community-live-binding.test.ts` adapté (quatre écoutes).
+- Gates locaux : gateway `tsc` 0 erreur, `src/__tests__/unit/routes` + services communauté + sweeps 892 suites vertes (le cliquet `tsc-never-loaded` vert seul, la passe groupée ayant été tuée par manque de mémoire) ; shared `__tests__/ci/` 24 fichiers / 204 tests ; web `tsc` 0, `bun test` 33 088 / 33 089 (le rouge `act-leak-guard` est étranger : rouge aussi sans le lot), `vite build` + `measure-weight` verts ; `check-communities.mjs` ne lance pas Chromium en conteneur (version Playwright).
+- Cliquet de parité : famille « effectif d'une communauté » ajoutée à `ASYMETRIES` (absents iOS #18767, Android #18768).
+- Hors lot : les entrées INDIRECTES (créer ou rejoindre un salon d'une communauté via `applyCommunityAdmission`, désactivation des appartenances d'un compte supprimé) n'émettent pas encore — suivi à ouvrir ; la suppression d'une communauté reste muette (reste de #16857).
+- Prochain lot recommandé : #18767 (iOS lit l'effectif), puis #18768 (Android), puis la suppression d'une communauté (#16857).

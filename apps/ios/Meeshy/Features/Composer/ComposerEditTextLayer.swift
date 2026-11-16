@@ -6,7 +6,7 @@ import MeeshyUI
 
 /// **La couche de texte de la retouche** (#12591, #18640) : le canvas du composer, transparent,
 /// posé sur la scène comme les crochets du recadrage, et LA barre de texte du composer collée au
-/// clavier (`ComposerKeyboardDock` : Aa · ● · ≡ · ▣ · OK — toucher change vite, l'appui long ouvre
+/// clavier (`ComposerKeyboardDock` : Aa · Effet · Langue · ● · ◯ · Cadre · Style du cadre · OK — toucher change vite, l'appui long ouvre
 /// toutes les options). Aucun second éditeur ni seconde barre : `StoryComposerCanvasView` saisit,
 /// déplace, pince et tourne ; le profil d'un texte cuit retire « Langue ». Le fond « Verre » floute
 /// la prise sous sa boîte : c'est le peintre de la retouche qui la floute (#12602).

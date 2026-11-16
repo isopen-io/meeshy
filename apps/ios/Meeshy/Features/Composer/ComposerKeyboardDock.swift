@@ -87,7 +87,7 @@ final class ComposerKeyboardDock: ObservableObject {
         guard let session = state.session, let id = session.viewModel.textEditingMode.activeTextId,
               let texte = session.viewModel.textObjectBinding(for: id) else { return }
         var suivant = texte.wrappedValue
-        StoryTextAttributeCycle.advance(tool, on: &suivant, backgrounds: session.profile.backgrounds)
+        ComposerKeyboardStyleFamily.quickAdvance(tool, on: &suivant, backgrounds: session.profile.backgrounds)
         texte.wrappedValue = suivant
     }
 
@@ -185,10 +185,38 @@ struct ComposerKeyboardDockBar: View {
                                              mentionBox: boite,
                                              onSelect: { state.onMention?($0) })
             }
-            ComposerKeyboardStyleBarView(openFamily: state.input.family,
-                                         onFamily: { state.onFamily?($0, $1) },
-                                         onDone: { state.session?.onDone() })
+            if let session = state.session {
+                ComposerKeyboardDockStyleBar(viewModel: session.viewModel, profile: session.profile,
+                                             openFamily: state.input.family,
+                                             onFamily: { state.onFamily?($0, $1) },
+                                             onDone: { state.session?.onDone() })
+            } else {
+                ComposerKeyboardStyleBarView(openFamily: state.input.family,
+                                             onFamily: { state.onFamily?($0, $1) },
+                                             onDone: { state.session?.onDone() })
+            }
         }
+    }
+}
+
+/// La barre qui lit le texte en cours : ses cercles en suivent les couleurs, et
+/// une commande que l'hôte ne sert pas (la langue d'un texte cuit) n'y paraît pas.
+struct ComposerKeyboardDockStyleBar: View {
+    @ObservedObject var viewModel: StoryComposerViewModel
+    let profile: StoryTextEditProfile
+    let openFamily: ComposerKeyboardStyleFamily?
+    let onFamily: (ComposerKeyboardStyleFamily, ComposerKeyboardOrOptions.Gesture) -> Void
+    let onDone: () -> Void
+
+    var body: some View {
+        let texte = viewModel.textEditingMode.activeTextId.flatMap { id in
+            viewModel.currentEffects.textObjects.first(where: { $0.id == id })
+        }
+        ComposerKeyboardStyleBarView(families: ComposerKeyboardStyleFamily.served(by: profile.tools),
+                                     text: texte,
+                                     openFamily: openFamily,
+                                     onFamily: onFamily,
+                                     onDone: onDone)
     }
 }
 

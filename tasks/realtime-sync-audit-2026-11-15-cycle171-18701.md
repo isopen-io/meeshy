@@ -1,7 +1,15 @@
 # Cycle 171 — ce qui est GRAVÉ était juste, ce qui est SERVI mentait encore
 
 *2026-11-15. Branche `claude/exciting-planck-x33cmv`. Livré : #18701 — le repli
-du statut de livraison cesse d'être une horloge murale.*
+du statut de livraison cesse d'être une horloge murale. Fusionné dans `dev` par
+la PR #18732 (`ec7b34059`).*
+
+> **Le numéro 171 a été pris DEUX FOIS le même jour**, par ce lot et par celui de
+> #18616 (`…-cycle171-18616.md`). Les deux fichiers coexistent parce que l'autre
+> session a suffixé le sien de son numéro d'issue — la parade que la leçon du
+> cycle 170 prescrit après la FUSION silencieuse de deux `…-cycle163.md`. Ce
+> fichier porte donc le sien aussi. **Un numéro de cycle n'identifie plus un
+> lot** : l'issue, elle, l'identifie toujours.
 
 ---
 

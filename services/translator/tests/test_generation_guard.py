@@ -45,6 +45,11 @@ class TestBudget:
     def test_a_tiny_source_keeps_room_for_a_few_words(self):
         assert generation_budget(2) == 16
 
+    def test_a_stricter_profile_tightens_the_budget_per_source_token(self):
+        assert generation_budget(12, tokens_per_source=1.25) == 25
+        assert generation_budget(12, tokens_per_source=1.25) < generation_budget(12)
+        assert greedy_generation_kwargs(12, tokens_per_source=1.25)["max_new_tokens"] == 25
+
     def test_greedy_kwargs_bound_by_new_tokens_and_stop_on_loops(self):
         kwargs = greedy_generation_kwargs(30)
 
@@ -203,6 +208,16 @@ class TestSeq2SeqTranslator:
         assert produced <= generation_budget(12)
         _, outcome = settle_generation(captured[0][0].tolist(), generation_budget(12), 1)
         assert outcome.looped or outcome.hit_budget
+
+    def test_a_budget_factor_tightens_the_budget_and_never_reaches_generate(self):
+        translator, model = _translator([12], [[2, 256000, 50, 2]])
+
+        translator("a", num_beams=4, budget_factor=1.25, no_repeat_ngram_size=3)
+
+        call = model.calls[0]
+        assert call["max_new_tokens"] == generation_budget(12, tokens_per_source=1.25)
+        assert (call["num_beams"], call["no_repeat_ngram_size"]) == (4, 3)
+        assert "budget_factor" not in call
 
     def test_an_explicit_generation_argument_still_wins(self):
         translator, model = _translator([12], [[2, 256000, 50, 2]])

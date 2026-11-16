@@ -17,8 +17,8 @@ extension MeeshyComposerHost {
         selectedSceneItemId = id
         selectedSceneItemKind = .text
         viewModel.enterTextEditingMode(textId: id)
-        // **Les réglages du texte collés au clavier** (#13839, L4) : Aa · ● · ≡
-        // · ▣ · OK, et un panneau de la hauteur du clavier à sa place. La
+        // **Les réglages du texte collés au clavier** (#13839, L4) : Aa · Effet
+        // · Langue · ● · ◯ · Cadre · Style du cadre · OK (#18781), et un panneau de la hauteur du clavier à sa place. La
         // colonne de droite se tait pendant la frappe (`Focus.typing`).
         keyboardDock.begin(session: .init(viewModel: viewModel,
                                           mentionBox: sceneMentionBox,

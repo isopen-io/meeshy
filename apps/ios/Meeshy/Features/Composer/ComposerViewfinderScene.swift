@@ -103,4 +103,21 @@ nonisolated enum ComposerViewfinderScene {
     static func objectsTakeTouches(stage: ComposerSceneCameraStage, holding: Bool) -> Bool {
         stage == .armed && !holding
     }
+
+    /// Ce que fait un toucher sur un objet du viseur (#18786).
+    enum TapOutcome: Equatable, Sendable {
+        case select
+        case editText
+    }
+
+    /// **Toucher un texte ouvre sa saisie** et sa barre de réglages ; le glisser le déplace
+    /// toujours. Les autres objets se sélectionnent.
+    static func tapOutcome(kind: StoryCanvasUIView.CanvasItemKind?) -> TapOutcome {
+        kind == .text ? .editText : .select
+    }
+
+    /// **Pendant le glisser d'un objet, seuls l'objet et ses cibles restent** (#18787).
+    static func showsChrome(dragging: Bool) -> Bool {
+        !dragging
+    }
 }

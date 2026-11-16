@@ -8,7 +8,11 @@ import type { SocketClient } from '@/lib/net/socket';
  * ouvert. Le module qui applique l'événement est chargé EN `import()` : le chunk
  * `realtime` est au plafond de `budgets.json` (motif `bindAppearanceLiveLazily`).
  */
-export function bindCommunityLiveLazily(params: { readonly socket: SocketClient; readonly queryClient: QueryClient }): () => void {
+export function bindCommunityLiveLazily(params: {
+  readonly socket: SocketClient;
+  readonly queryClient: QueryClient;
+  readonly viewerId?: () => string;
+}): () => void {
   let live = true;
   let stop: (() => void) | null = null;
   void import('./community-live').then(
