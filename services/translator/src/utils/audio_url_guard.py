@@ -14,7 +14,9 @@ Une URL n'est téléchargée que si :
   `TRANSLATOR_AUDIO_URL_ALLOWED_HOSTS` (noms séparés par des virgules). VIDE PAR
   DÉFAUT : toute URL est alors refusée, fail-closed — la passerelle n'en envoie
   aucune aujourd'hui ;
-- un hôte IP littéral est de plus global ;
+- un hôte IP littéral est de plus global, et un hôte qu'aiohttp prendrait pour
+  une adresse sans qu'`ipaddress` le lise comme telle (`2852039166`, `127.1`,
+  `0177.0.0.1`) est refusé : aiohttp ne passerait pas par le résolveur vérifié ;
 - TOUTES les adresses que l'hôte résout sont globales.
 
 La résolution et sa vérification vivent dans `VerifiedAudioHostResolver`, posé
@@ -86,6 +88,10 @@ def _ip_literal(host: str) -> Optional[str]:
         return None
 
 
+def _client_takes_for_an_address(host: str) -> bool:
+    return ":" in host or host.replace(".", "").isdigit()
+
+
 def _is_malformed(raw: object) -> bool:
     return not isinstance(raw, str) or not raw or any(c.isspace() or ord(c) < 0x20 or ord(c) == 0x7F for c in raw)
 
@@ -109,6 +115,8 @@ def admit_audio_url(raw: object, allowed_hosts: Optional[FrozenSet[str]] = None)
     if port not in ALLOWED_PORTS:
         raise AudioUrlRejected("port")
     literal = _ip_literal(host)
+    if literal is None and _client_takes_for_an_address(host):
+        raise AudioUrlRejected("malformed")
     if literal is not None and not is_public_address(literal):
         raise AudioUrlRejected("private_address")
     allowed = allowed_hosts if allowed_hosts is not None else allowed_audio_url_hosts()
