@@ -800,3 +800,70 @@ struct ConversationPreviewStateReader<Content: View>: View {
         content(loader.state(for: conversationId))
     }
 }
+
+// MARK: - La face de rangée de l'aperçu (#18722)
+
+/// La face de départ de la carte : la MÊME rangée que la liste montre — même
+/// aiguillage Lentille, mêmes signaux (frappe, brouillon, présence, verrou) —,
+/// à la largeur de la ligne pressée. Inerte et muette pour VoiceOver : l'aperçu
+/// porte les actions.
+struct ConversationPeekRowFace: View {
+    let conversation: Conversation
+    let community: MeeshyCommunity?
+    let width: CGFloat
+    let presenceState: PresenceState
+    let isPeerHere: ConversationHere
+    let isDark: Bool
+    let storyRingState: StoryRingState
+    let moodStatus: StatusEntry?
+    let typingUsername: String?
+    let draftSummary: DraftSummary?
+    let preferredContentLanguages: [String]
+    let deviceText: ConversationPreviewDeviceText?
+
+    var body: some View {
+        row
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var row: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            LentilleConversationRow(
+                conversation: conversation,
+                community: community,
+                availableWidth: width,
+                presenceState: presenceState,
+                isPeerHere: isPeerHere,
+                isDark: isDark,
+                storyRingState: storyRingState,
+                moodStatus: moodStatus,
+                typingUsername: typingUsername,
+                draftSummary: draftSummary,
+                isContentLocked: ConversationLockManager.shared.hidesContent(of: conversation.id),
+                avatarRoute: ConversationOpenRoute.avatarRoute(for: conversation),
+                preferredContentLanguages: preferredContentLanguages,
+                deviceText: deviceText
+            )
+        } else {
+            ThemedConversationRow(
+                conversation: conversation,
+                community: community,
+                availableWidth: width,
+                presenceState: presenceState,
+                isPeerHere: isPeerHere,
+                isDark: isDark,
+                storyRingState: storyRingState,
+                moodStatus: moodStatus,
+                typingUsername: typingUsername,
+                draftSummary: draftSummary,
+                isContentLocked: ConversationLockManager.shared.hidesContent(of: conversation.id),
+                avatarRoute: ConversationOpenRoute.avatarRoute(for: conversation),
+                preferredContentLanguages: preferredContentLanguages,
+                deviceText: deviceText
+            )
+            .equatable()
+        }
+    }
+}

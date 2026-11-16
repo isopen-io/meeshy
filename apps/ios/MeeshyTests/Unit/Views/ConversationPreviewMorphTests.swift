@@ -100,8 +100,10 @@ final class ConversationPreviewMorphTests: XCTestCase {
     func test_rowFace_mirrorsTheListRowMux() throws {
         let overlays = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
         XCTAssertTrue(overlays.contains("ConversationPeekRowFace("), "la face de départ est une vue à part")
-        XCTAssertTrue(overlays.contains("LentilleFeatureFlag.isLentilleListEnabled"), "elle rend la MÊME rangée que la liste, Lentille comprise")
-        XCTAssertTrue(overlays.contains("LentilleConversationRow("))
+        let rows = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView+Rows.swift"))
+        XCTAssertTrue(rows.contains("struct ConversationPeekRowFace"),
+                      "la face vit avec l'aiguillage de la liste : la construction de LentilleConversationRow ne quitte jamais +Rows (I-067)")
+        XCTAssertTrue(rows.contains("LentilleFeatureFlag.isLentilleListEnabled"), "elle rend la MÊME rangée que la liste, Lentille comprise")
         XCTAssertTrue(overlays.contains("typingUsername: conversationViewModel.typingUsernames[conversation.id]"), "frappe et brouillon y figurent comme sur la ligne")
         XCTAssertTrue(overlays.contains("draftSummary: conversationViewModel.draftSummaries[conversation.id]"))
     }
