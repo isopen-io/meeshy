@@ -57,30 +57,9 @@ describe('#17441 — la garde d’envoi admet la citation d’un avis affiché',
     expect(verdict).toEqual({ ok: true, snapshot: null });
   });
 
-  it('un avis de capture se cite aussi (#18830, levait #9629)', async () => {
+  it('un avis de capture reste refusé (#9629)', async () => {
     const verdict = await admitAttachmentReply(prismaWith(systemRow(CAPTURE)), { conversationId: CONVERSATION, replyToId: CITE });
-    expect(verdict).toEqual({ ok: true, snapshot: null });
-  });
-
-  it('la citation d’un avis de capture est EXPURGÉE : ni acteur, ni message capturé, ni heure (#18830)', () => {
-    const notice = {
-      kind: 'content-capture',
-      actor: { participantId: 'p1', displayName: 'Zoé', isAnonymous: false, username: 'zoe' },
-      capturedMessageId: '507f1f77bcf86cd799439001',
-      nature: 'timed-flame',
-      outcome: 'announced',
-      captureKind: 'screenshot',
-      sentAt: '2026-11-10T10:00:00.000Z',
-      count: 3,
-    };
-    const served = servedQuotedMessage(
-      { ...systemRow(notice), content: 'Zoé (@zoe) a capturé l’éphémère du 10/11/2026 à 10:00 (UTC) · 3 captures', translations: { en: { text: 'Zoé took' } } },
-      { languages: ['en'] },
-    );
-    expect(served['content']).toBe('Screenshot notice');
-    expect('metadata' in served && served['metadata'] === undefined).toBe(true);
-    expect(served['translations']).toBeUndefined();
-    expect(JSON.stringify(served)).not.toMatch(/Zoé|zoe|439001|2026/);
+    expect(verdict.ok).toBe(false);
   });
 });
 
