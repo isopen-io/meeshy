@@ -51,7 +51,7 @@ struct MeeshyNoteTests {
         }
         #expect(Set(MeeshyNoteKind.allCases.map(MeeshyNoteRecipe.defaultGlyph(for:))).count == MeeshyNoteKind.allCases.count)
         #expect(Self.recipe(form: .live).lead == .dot(pulsing: true))
-        #expect(Self.recipe(form: .line, lead: .none).lead == .none)
+        #expect(Self.recipe(form: .line, lead: MeeshyNoteLead.none).lead == MeeshyNoteResolvedLead.none)
         #expect(Self.recipe(form: .line, lead: .systemImage("lock.fill")).lead == .glyph("lock.fill"))
         #expect(Self.recipe(form: .line, lead: .dot).lead == .dot(pulsing: false))
     }

@@ -107,7 +107,7 @@ struct MeeshyButtonTests {
         #expect(MeeshyButtonPairLaw.secondaryShare == pair["partSecondaire"] as? Double)
         #expect(MeeshyButtonPairLaw.spacing == pair["ecart"] as? Double)
         let widths = MeeshyButtonPairLaw.widths(total: 268)
-        #expect(widths.primary + widths.secondary + MeeshyButtonPairLaw.spacing == 268)
+        #expect(abs(widths.primary + widths.secondary + MeeshyButtonPairLaw.spacing - 268) < 0.0001)
         #expect(abs(widths.primary / widths.secondary - 1.6) < 0.0001)
         #expect(MeeshyButtonPairLaw.stacks(isAccessibilitySize: true))
         #expect(!MeeshyButtonPairLaw.stacks(isAccessibilitySize: false))

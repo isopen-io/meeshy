@@ -101,15 +101,17 @@ struct MeeshyMeterTests {
         #expect(MeeshyMeterRecipe.entryAnimation(reduce: false, animatesOnAppear: false) == nil)
     }
 
-    @Test("garde de source : aucun ProgressView(value:), aucune ombre, aucun flou, aucun type du domaine")
+    @Test("garde de source : aucune ombre, aucun flou, aucun type du domaine, aucune barre déterminée écrite à la main")
     func source_isAnAgnosticAtom() throws {
         for file in ["MeeshyMeter.swift", "MeeshyMeterRecipe.swift"] {
             let source = try KitAtomVectors.code(file)
-            for forbidden in ["ProgressView(value", ".shadow(", ".blur(", "Color(hex:", ".shared",
-                              "MeeshyUser", "MeeshyConversation", "ThemeManager"] {
+            for forbidden in [".shadow(", ".blur(", "Color(hex:", ".shared", "MeeshyUser", "MeeshyConversation",
+                              "ThemeManager", "LinearProgressIndicator"] {
                 #expect(!source.contains(forbidden), "\(file) contient \(forbidden)")
             }
         }
+        let recipeSource = try KitAtomVectors.code("MeeshyMeterRecipe.swift")
+        #expect(!recipeSource.contains("ProgressView"), "la recette ne dessine rien")
     }
 
     private static func recipe(form: MeeshyMeterForm = .continuous,
