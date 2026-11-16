@@ -16,7 +16,7 @@ public nonisolated enum StoryTextAttributeCycle {
     /// COURANT et non un pictogramme figé : c'est ce qui rend le tap-pour-
     /// tourner utilisable — sans lui, parcourir quatorze couleurs se ferait à
     /// l'aveugle.
-    enum Indicator: Equatable, Sendable {
+    public enum Indicator: Equatable, Sendable {
         /// Symbole SF reflétant la valeur courante. `emphasis` (0…4) rend une
         /// intensité — seul le contour s'en sert, pour montrer son épaisseur.
         /// `tint` porte la couleur que l'outil applique (contour du texte,
@@ -154,7 +154,7 @@ public nonisolated enum StoryTextAttributeCycle {
 
     // MARK: - État affiché
 
-    static func indicator(_ tool: TextEditTool, of text: StoryTextObject) -> Indicator {
+    public static func indicator(_ tool: TextEditTool, of text: StoryTextObject) -> Indicator {
         switch tool {
         case .style:
             return .styledGlyph("Aa", style: text.parsedTextStyle)

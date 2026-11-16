@@ -87,7 +87,7 @@ final class ComposerKeyboardDock: ObservableObject {
         guard let session = state.session, let id = session.viewModel.textEditingMode.activeTextId,
               let texte = session.viewModel.textObjectBinding(for: id) else { return }
         var suivant = texte.wrappedValue
-        StoryTextAttributeCycle.advance(tool, on: &suivant, backgrounds: session.profile.backgrounds)
+        ComposerKeyboardStyleFamily.quickAdvance(tool, on: &suivant, backgrounds: session.profile.backgrounds)
         texte.wrappedValue = suivant
     }
 

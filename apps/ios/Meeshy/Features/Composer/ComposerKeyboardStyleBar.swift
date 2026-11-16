@@ -56,11 +56,10 @@ nonisolated enum ComposerKeyboardStyleFamily: String, CaseIterable, Equatable, S
         case .outline:
             return [.tool(.border, omitting: [.borderPalette]), .palette([.border])]
         case .frame:
-            return [.tool(.frame, omitting: [.frameBorderWidth, .frameBorderPalette])]
+            return [.tool(.frame, omitting: [.frameBorderWidth, .frameBorderPalette]), .palette([.frame])]
         case .frameStyle:
             return [.tool(.background, omitting: []),
-                    .tool(.frame, omitting: [.frameShapes, .framePadding, .frameBorderPalette]),
-                    .palette([.frame])]
+                    .tool(.frame, omitting: [.frameShapes, .framePadding, .frameBorderPalette])]
         }
     }
 
@@ -82,18 +81,45 @@ nonisolated enum ComposerKeyboardStyleFamily: String, CaseIterable, Equatable, S
         allCases.filter { tools.contains($0.quickTool) && !$0.panel(serving: tools).isEmpty }
     }
 
-    /// **La couleur que la commande montre** : le cercle plein porte celle du
-    /// texte, le cercle creux celle du contour — et rien tant qu'il n'y a pas
-    /// de contour. Les autres commandes restent neutres.
-    func tint(of text: StoryTextObject) -> String? {
+    /// **Ce que la commande montre : la restitution de ce qu'elle règle** — Aa
+    /// dans la police, Aa avec l'effet, le code de la langue, le cercle plein de
+    /// la couleur du texte, le cercle creux de la couleur du contour, la forme du
+    /// cadre teintée de son liseré, le fond. La table est celle du SDK
+    /// (`StoryTextAttributeCycle.indicator`) ; seul le contour se dessine en
+    /// cercle, à côté du cercle plein.
+    func indicator(of text: StoryTextObject) -> StoryTextAttributeCycle.Indicator {
         switch self {
-        case .color:
-            return text.textColor ?? "FFFFFF"
         case .outline:
-            guard (text.borderWidth ?? 0) > 0 else { return nil }
-            return text.borderColor ?? "FFFFFF"
-        case .typography, .effect, .language, .frame, .frameStyle:
-            return nil
+            let teinte = (text.borderWidth ?? 0) > 0 ? (text.borderColor ?? "FFFFFF") : nil
+            return .symbol(name: "circle", emphasis: 0, tint: teinte)
+        case .typography, .effect, .language, .color, .frame, .frameStyle:
+            return StoryTextAttributeCycle.indicator(quickTool, of: text)
+        }
+    }
+
+    /// **Le toucher d'une commande** (#18640). Le contour fait exception : le
+    /// toucher pose 1 pt et parcourt les couleurs, puis retire le contour après
+    /// la dernière ; sa taille se règle à l'appui long.
+    static func quickAdvance(_ tool: TextEditTool, on text: inout StoryTextObject,
+                             backgrounds: [StoryTextBackgroundStyle]) {
+        guard tool == .border else {
+            StoryTextAttributeCycle.advance(tool, on: &text, backgrounds: backgrounds)
+            return
+        }
+        let couleurs = TextEditPalette.colors
+        guard (text.borderWidth ?? 0) > 0 else {
+            text.borderWidth = 1
+            text.borderColor = couleurs.first
+            return
+        }
+        let courante = text.borderColor ?? ""
+        switch couleurs.firstIndex(where: { $0.caseInsensitiveCompare(courante) == .orderedSame }) {
+        case nil:
+            text.borderColor = couleurs.first
+        case let index? where index + 1 < couleurs.count:
+            text.borderColor = couleurs[index + 1]
+        default:
+            text.borderWidth = 0
         }
     }
 
@@ -291,26 +317,72 @@ struct ComposerKeyboardStyleBarView: View {
             .accessibilityAction(named: Text(ComposerKeyboardStyleCopy.allOptions)) { onFamily(famille, .longPress) }
     }
 
-    /// Le cercle plein se peint de la couleur du texte, le cercle creux de
-    /// celle du contour ; les autres commandes gardent leur glyphe.
     @ViewBuilder
     private func glyph(_ famille: ComposerKeyboardStyleFamily) -> some View {
-        let teinte = text.flatMap { famille.tint(of: $0) }.flatMap(HexColor.init(hex:)).map { Color(uiColor: $0.uiColor) }
-        switch famille {
-        case .color:
-            Circle()
-                .fill(teinte ?? .white)
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
-                .frame(width: 20, height: 20)
-        case .outline:
-            Circle()
-                .strokeBorder(teinte ?? Color.white.opacity(0.55), lineWidth: 3.5)
-                .frame(width: 20, height: 20)
-        case .typography, .effect, .language, .frame, .frameStyle:
+        if let text {
+            ComposerKeyboardFamilyGlyph(indicator: famille.indicator(of: text))
+        } else {
             Image(systemName: famille.symbol)
                 .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                 .foregroundStyle(.white)
         }
+    }
+}
+
+/// **Le glyphe d'une commande, peint depuis l'indicateur du SDK** : il montre
+/// la valeur courante, jamais un pictogramme figé.
+struct ComposerKeyboardFamilyGlyph: View {
+    let indicator: StoryTextAttributeCycle.Indicator
+
+    private static let glyphSize: CGFloat = 17
+
+    var body: some View {
+        switch indicator {
+        case .styledGlyph(let lettres, let style):
+            Text(lettres)
+                .font(storyFont(for: style, size: Self.glyphSize))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .foregroundStyle(.white)
+        case .effectGlyph(let lettres, let effet):
+            Text(lettres)
+                .font(MeeshyFont.relative(Self.glyphSize, weight: .bold))
+                .foregroundStyle(.white)
+                .storyTextEffect(effet, fontSize: Self.glyphSize, textColor: .white)
+        case .code(let code):
+            Text(code)
+                .font(MeeshyFont.relative(13, weight: .heavy))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .frame(minWidth: 26, minHeight: 20)
+                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.white.opacity(0.8), lineWidth: 1.2))
+        case .colorDot(let hex):
+            Circle()
+                .fill(Self.color(hex) ?? .white)
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
+                .frame(width: 20, height: 20)
+        case .symbol("circle", _, let teinte):
+            Circle()
+                .strokeBorder(teinte.flatMap(Self.color) ?? Color.white.opacity(0.55), lineWidth: 3.5)
+                .frame(width: 20, height: 20)
+        case .symbol(let nom, _, let teinte):
+            Image(systemName: nom)
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+                .foregroundStyle(teinte.flatMap(Self.color) ?? .white)
+        case .backgroundSwatch(let hex, let verre):
+            RoundedRectangle(cornerRadius: 5)
+                .fill(hex.flatMap(Self.color) ?? Color.white.opacity(verre ? 0.35 : 0))
+                .overlay(RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.2, dash: hex == nil && !verre ? [3, 2] : [])))
+                .overlay(Text("A").font(MeeshyFont.relative(12, weight: .bold)).foregroundStyle(.white))
+                .frame(width: 22, height: 20)
+        }
+    }
+
+    private static func color(_ hex: String) -> Color? {
+        HexColor(hex: hex).map { Color(uiColor: $0.uiColor) }
     }
 }
 

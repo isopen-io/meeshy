@@ -54,7 +54,12 @@ struct ComposerViewfinderSceneCanvas: View {
         return ComposerViewfinderSceneCanvas(viewModel: host.viewModel,
                                              selectedItemId: saisie == nil ? host.selectedSceneItemId : nil,
                                              takesTouches: prendLeDoigt,
-                                             onItemTapped: { id, kind in relais.selectSceneItem(id, kind: kind) },
+                                             onItemTapped: { id, kind in
+                                                 switch ComposerViewfinderScene.tapOutcome(kind: kind) {
+                                                 case .editText: ComposerViewfinderTyping.begin(host, textId: id)
+                                                 case .select: relais.selectSceneItem(id, kind: kind)
+                                                 }
+                                             },
                                              typing: saisie,
                                              dropActions: ComposerSceneDragDrop.Actions(
                                                 remove: { id in
@@ -148,6 +153,13 @@ enum ComposerViewfinderTyping {
                 entry: entry, captureFoundsBackground: captureFoundsBackground(host)))
     }
 
+    /// **Toucher un texte du viseur ouvre sa saisie** (#18786) — la même que l'entrée Texte, sur
+    /// le texte touché : la caméra reste armée, le texte se saisit sur l'aperçu.
+    static func begin(_ host: MeeshyComposerHost, textId id: String) {
+        host.beginSceneTextEditing(id)
+        host.viewfinderYieldsToScene = yieldsToScene(host, after: .text)
+    }
+
     /// Le texte que le canvas du VISEUR saisit ; `nil` : la scène saisit elle-même.
     static func textId(_ host: MeeshyComposerHost) -> String? {
         let prise = host.sceneCapture
@@ -224,6 +236,8 @@ final class ComposerSceneDragDrop: ObservableObject {
 
     let targets = MeeshyDragTargetsState()
     private(set) var dragged: Dragged?
+    /// Un objet est sous le doigt : le chrome du viseur se retire (#18787).
+    @Published private(set) var isDragging = false
 
     nonisolated deinit {}
 
@@ -231,6 +245,7 @@ final class ComposerSceneDragDrop: ObservableObject {
         switch drag {
         case .began(let id, let finger, let start):
             dragged = Dragged(id: id, start: start)
+            isDragging = true
             targets.begin()
             targets.move(to: finger)
         case .moved(let finger):
@@ -239,9 +254,11 @@ final class ComposerSceneDragDrop: ObservableObject {
             targets.move(to: finger)
             targets.end()
             dragged = nil
+            isDragging = false
         case .cancelled:
             targets.cancel()
             dragged = nil
+            isDragging = false
         }
     }
 
@@ -261,5 +278,21 @@ final class ComposerSceneDragDrop: ObservableObject {
             actions.move(dragged.id, dragged.start)
             actions.duplicate(dragged.id)
         }
+    }
+}
+
+/// **Les cibles du glisser, hors de la scène** (#18787) : la copie dans la bande au-dessus de la
+/// scène 9:16, la poubelle dans celle du dessous, pour que l'objet se pose PARTOUT sur la scène.
+/// Une bande trop étroite rapproche la cible du bord de l'écran, jamais au-delà.
+nonisolated struct ComposerSceneDragTargetSlots: Equatable, Sendable {
+    let top: CGRect
+    let bottom: CGRect
+
+    init(scene: CGRect, container: CGSize) {
+        let diametre = CGFloat(MeeshyDragTargetsRecipe.diameter)
+        let ecart = MeeshySpacing.sm
+        top = CGRect(x: scene.minX, y: max(0, scene.minY - ecart - diametre), width: scene.width, height: diametre)
+        bottom = CGRect(x: scene.minX, y: min(scene.maxY + ecart, container.height - diametre),
+                        width: scene.width, height: diametre)
     }
 }
