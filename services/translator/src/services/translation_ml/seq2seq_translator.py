@@ -7,7 +7,12 @@ import logging
 from typing import List, Union, Dict, Optional
 from enum import Enum
 
-from utils.generation_guard import GenerationOutcome, greedy_generation_kwargs, settle_generation
+from utils.generation_guard import (
+    TOKENS_PER_SOURCE_TOKEN,
+    GenerationOutcome,
+    greedy_generation_kwargs,
+    settle_generation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -242,9 +247,11 @@ class Seq2SeqTranslator:
 
         # Budget proportionnel à la source la plus longue + arrêt sur boucle (#9309) :
         # `max_length` n'est plus qu'un plafond, jamais la longueur visée.
+        # Un profil d'escalade (#18716) resserre le budget par jeton source.
         source_tokens = max(sum(row) for row in inputs['attention_mask'].tolist())
+        tokens_per_source = kwargs.pop('budget_factor', TOKENS_PER_SOURCE_TOKEN)
         generate_kwargs = {
-            **greedy_generation_kwargs(source_tokens, ceiling=max_length),
+            **greedy_generation_kwargs(source_tokens, ceiling=max_length, tokens_per_source=tokens_per_source),
             'num_beams': num_beams,
             'do_sample': do_sample,
             **kwargs

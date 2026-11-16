@@ -63,6 +63,8 @@ src/
 
 **Un chemin de fichier reçu par ZMQ (`audioPath`, `audioPath_1/_2`) n'est lu que via `utils/audio_path_guard.py`** (#18628) : le PULL n'est pas authentifié, donc un chemin hors des racines `TRANSLATOR_AUDIO_PATH_ROOTS` (défaut : la seule racine d'uploads `UPLOAD_PATH`/`/app/uploads`, jamais `/tmp`, où vit l'audio en cours d'autrui ; entrées relatives ou `/` ignorées) est refusé en `AUDIO_PATH_REJECTED`, sans jamais journaliser le chemin.
 
+**Une URL reçue par ZMQ (`audioUrl`) n'est téléchargée que via `utils/audio_url_guard.py`** (#18666) : `https` seul, sans identifiants, port absent ou 443, hôte en comparaison exacte dans `TRANSLATOR_AUDIO_URL_ALLOWED_HOSTS` (virgules ; VIDE par défaut ⇒ tout refusé, la passerelle n'en envoie aucune), et toutes les adresses résolues globales. La résolution vérifiée est celle du connecteur aiohttp (`VerifiedAudioHostResolver`, pas de DNS rebinding) et aucune redirection n'est suivie. Refus `AudioUrlRejected` (raison fixe) : `_download_from_url` rend `None` et ne journalise jamais l'URL, au plus l'hôte autorisé.
+
 **Un identifiant qui nomme le cache vocal (dossier `voice_cache_dir / id`, fichier, clé Redis `voice:profile:{id}`) passe par `utils/voice_cache_guard.py`** (#18695) : seule la forme `[A-Za-z0-9_-]{1,64}` est admise, et le dossier rendu doit être, liens résolus, un enfant direct de la racine. Refus `VoiceCacheIdRejected` (raison fixe, jamais l'identifiant) : le pipeline audio saute alors le clonage sans tomber, les API HTTP répondent 400 « Invalid user identifier ».
 
 ## Audio Pipeline (3 stages)
