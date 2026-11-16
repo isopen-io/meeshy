@@ -193,19 +193,12 @@ struct ConversationPreviewView: View {
             guard width > 0 else { return }
             cardWidth = width
         }
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
-        .overlay(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color(hex: accentColor).opacity(MeeshyOpacity.strong), Color(hex: secondaryColor).opacity(MeeshyOpacity.medium)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.medium), radius: 20, y: 10)
+        // Dans l'aperçu d'appui long, la carte qui naît de la rangée porte
+        // seule le contour, l'ombre et la découpe (`ConversationPreviewMorphFrame`) :
+        // les dessiner aussi ici ferait une carte dans la carte, de largeurs
+        // différentes pendant toute la naissance.
+        .modifier(ConversationPreviewCardChrome(isEnabled: peekHeights == nil,
+                                                accent: Color(hex: accentColor), secondary: Color(hex: secondaryColor)))
     }
 
     @ViewBuilder
@@ -689,3 +682,43 @@ struct TagChip: View {
     }
 }
 
+
+/// Le décor de la carte d'aperçu : découpe, contour en dégradé de l'accent et
+/// ombre portée. L'aperçu d'appui long le laisse au cadre qui le porte.
+struct ConversationPreviewCardChrome: ViewModifier {
+    let isEnabled: Bool
+    let accent: Color
+    let secondary: Color
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
+                .overlay(ConversationPreviewMorphEdge(cornerRadius: MeeshyRadius.xl, accent: accent, secondary: secondary))
+                .shadow(color: accent.opacity(MeeshyOpacity.medium), radius: 20, y: 10)
+        } else {
+            content
+        }
+    }
+}
+
+/// Le contour de la carte d'aperçu, le même pour la carte posée et pour celle
+/// qui naît de la rangée.
+struct ConversationPreviewMorphEdge: View {
+    let cornerRadius: CGFloat
+    let accent: Color
+    let secondary: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .stroke(
+                LinearGradient(
+                    colors: [accent.opacity(MeeshyOpacity.strong), secondary.opacity(MeeshyOpacity.medium)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1
+            )
+            .allowsHitTesting(false)
+    }
+}

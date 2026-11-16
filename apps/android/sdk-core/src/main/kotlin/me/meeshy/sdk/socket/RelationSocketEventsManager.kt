@@ -27,7 +27,7 @@ import org.json.JSONObject
 
 /**
  * Les quatre événements du LIEN entre deux personnes (#13933, #13938), l'arrêt d'un Bring (#13936), le talkie reçu
- * (#16675) et les positions qu'on me partage (#16985) — miroir de `MessageSocketManager+Relations.swift`,
+ * (#16675) les positions qu'on me partage (#16985) et l'annonce que MON partage a changé (#18578) — miroir de `MessageSocketManager+Relations.swift`,
  * `MessageSocketManager+Talkie.swift` et de `SharedLocationEvents` du SDK iOS.
  *
  * Tous serveur → client, tous sur la room `user:<id>` (`packages/shared/types/socketio-events/relation-event-names.ts`).
@@ -53,6 +53,7 @@ class RelationSocketEventsManager @Inject constructor(
     private val _talkie = SocketInboundRoute.subject<TalkieEvent>()
     private val _sharedLocationChanged = SocketInboundRoute.subject<SharedLocation>()
     private val _sharedLocationEnded = SocketInboundRoute.subject<SharedLocationEndedEvent>()
+    private val _sharedLocationOwnChanged = SocketInboundRoute.subject<Unit>()
 
     /** `relation:level-raised` — le niveau effectif de la paire a monté (aux DEUX). */
     val levelRaised: SharedFlow<RelationLevelRaisedEvent> = _levelRaised.exposed()
@@ -89,6 +90,12 @@ class RelationSocketEventsManager @Inject constructor(
     /** `location:share-ended` (#16985) — son partage ne m'est plus servi (arrêt, baisse sous Ami, blocage, retrait). */
     val sharedLocationEnded: SharedFlow<SharedLocationEndedEvent> = _sharedLocationEnded.exposed()
 
+    /**
+     * `location:share-own-changed` (#18389, #18578) — sans charge : MON partage a changé sur la passerelle, ici ou sur un
+     * autre appareil du compte. Le centre de partage relit `GET /relations/locations/mine` et s'y recale.
+     */
+    val sharedLocationOwnChanged: SharedFlow<Unit> = _sharedLocationOwnChanged.exposed()
+
     override fun attach() {
         if (installed.compareAndSet(false, true)) router.install(routes())
     }
@@ -116,6 +123,9 @@ class RelationSocketEventsManager @Inject constructor(
             wire.served()?.let { SocketInboundRoute.run { _sharedLocationChanged.emitOrLog(SocketEventNames.LOCATION_SHARE_CHANGED, it) } }
         },
         SocketInboundRoute.decoding(SocketEventNames.LOCATION_SHARE_ENDED, json, _sharedLocationEnded),
+        SocketInboundRoute.raw(SocketEventNames.LOCATION_SHARE_OWN_CHANGED) {
+            SocketInboundRoute.run { _sharedLocationOwnChanged.emitOrLog(SocketEventNames.LOCATION_SHARE_OWN_CHANGED, Unit) }
+        },
     )
 
     private fun publishTalkie(event: String, value: TalkieEvent) {

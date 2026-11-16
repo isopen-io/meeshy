@@ -293,13 +293,13 @@ extension ConversationListView {
     /// comprime en ligne, puis décroche et suit le doigt (`dragMorphProgress`).
     func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights, reduceMotion: Bool) -> some View {
         let isDark = theme.mode.isDark
-        let accentColor = conversation.displayPalette(isDark: isDark).primary
+        let colorPalette = conversation.displayPalette(isDark: isDark)
         return ConversationPreviewMorphCard(
             progress: previewMorphProgress,
             detach: dragMorphProgress,
             grab: chipGrabPoint,
             source: contextMenuSourceFrame,
-            accent: Color(hex: accentColor),
+            accent: Color(hex: colorPalette.primary), edge: Color(hex: colorPalette.secondary),
             surface: MeeshyColors.backgroundSecondary(isDark: isDark),
             rowFace: peekRowFace(for: conversation),
             preview: peekPreview(for: conversation, heights: heights)
@@ -570,6 +570,8 @@ struct ConversationPreviewMorphCard<RowFace: View, Preview: View>: View {
     /// Le cadre GLOBAL de la rangée pressée ; nil ⇒ la carte ne part que d'elle-même.
     let source: CGRect?
     let accent: Color
+    /// La seconde teinte du contour (`palette.secondary`) ; nil ⇒ l'accent.
+    var edge: Color? = nil
     let surface: Color
     let rowFace: RowFace
     let preview: Preview
@@ -590,9 +592,10 @@ struct ConversationPreviewMorphCard<RowFace: View, Preview: View>: View {
                 preview
                     .frame(width: rest.width, height: rest.height, alignment: .top)
                     .modifier(ConversationPreviewMorphFade(progress: progress, detach: detach, layer: .preview))
+                    .modifier(ConversationPreviewMorphCentering(progress: progress, detach: detach, from: from, to: rest, row: row))
             }
             .modifier(ConversationPreviewMorphFrame(progress: progress, detach: detach, from: from, to: rest, row: row,
-                                                    accent: accent, surface: surface))
+                                                    accent: accent, edge: edge ?? accent, surface: surface))
         }
     }
 }
@@ -673,6 +676,7 @@ struct ConversationPreviewMorphFrame: ViewModifier, Animatable {
     let to: CGRect
     let row: CGRect
     let accent: Color
+    let edge: Color
     let surface: Color
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
@@ -681,18 +685,20 @@ struct ConversationPreviewMorphFrame: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        let born = ConversationPreviewMorph.frame(progress: progress, from: from, to: to)
-        let frame = ConversationPeekPullDown.compressed(born, toward: row, detach: detach)
+        let frame = ConversationPeekPullDown.cardFrame(morph: progress, detach: detach, from: from, to: to, row: row)
         let faces = ConversationPeekPullDown.faceProgress(morph: progress, detach: detach)
-        // Coins du même style que ceux de `ConversationPreviewView` : au repos,
-        // les deux découpes se confondent.
-        let shape = RoundedRectangle(
-            cornerRadius: ConversationPreviewMorph.cornerRadius(progress: faces, from: MeeshyRadius.md, to: MeeshyRadius.xl),
-            style: .circular
-        )
+        let radius = ConversationPreviewMorph.cornerRadius(progress: faces, from: MeeshyRadius.md, to: MeeshyRadius.xl)
+        // La carte est UNE : l'aperçu qu'elle porte ne dessine ni découpe, ni
+        // contour, ni ombre (`ConversationPreviewCardChrome`) ; posée, elle a
+        // exactement les siens.
+        let shape = RoundedRectangle(cornerRadius: radius, style: .circular)
         content
             .frame(width: frame.width, height: frame.height, alignment: .topLeading)
             .clipShape(shape)
+            .overlay(
+                ConversationPreviewMorphEdge(cornerRadius: radius, accent: accent, secondary: edge)
+                    .opacity(ConversationPreviewMorph.opacity(of: .surface, progress: progress))
+            )
             // Le fond et l'ombre de la carte au repos (celle de
             // `ConversationPreviewView`, que le découpage retient) naissent
             // avec elle. L'ombre suit la FORME, jamais le contenu : aucun rendu
@@ -703,6 +709,27 @@ struct ConversationPreviewMorphFrame: ViewModifier, Animatable {
                     .opacity(ConversationPreviewMorph.opacity(of: .surface, progress: progress))
             )
             .position(x: frame.midX, y: frame.midY)
+    }
+}
+
+/// L'aperçu, mis en page UNE fois à sa largeur de repos, se centre dans le
+/// cadre du moment, interpolé image par image : la rangée est plus large que
+/// la carte, et un aperçu calé à gauche se lisait décentré toute la naissance.
+struct ConversationPreviewMorphCentering: ViewModifier, Animatable {
+    var progress: CGFloat
+    var detach: CGFloat
+    let from: CGRect
+    let to: CGRect
+    let row: CGRect
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(progress, detach) }
+        set { progress = newValue.first; detach = newValue.second }
+    }
+
+    func body(content: Content) -> some View {
+        let frame = ConversationPeekPullDown.cardFrame(morph: progress, detach: detach, from: from, to: to, row: row)
+        return content.offset(x: ConversationPeekPullDown.previewInset(frameWidth: frame.width, restWidth: to.width))
     }
 }
 
