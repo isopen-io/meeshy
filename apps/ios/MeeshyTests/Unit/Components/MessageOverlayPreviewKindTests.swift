@@ -458,4 +458,28 @@ final class MessageOverlayPreviewTouchTests: XCTestCase {
     func test_stopsOnClose_coordinatorIdle_doesNothing() {
         XCTAssertFalse(MessageOverlayPreviewTouch.stopsOnClose(previewPlayedAttachmentId: "a1", activeAttachmentId: nil))
     }
+
+    // MARK: - La bulle se SOULÈVE de sa cellule, elle ne surgit pas en fondu
+
+    func test_previewOpacity_fromItsCell_isOpaqueBeforeTheEntrance() {
+        XCTAssertEqual(MessageOverlayMenu.previewOpacity(isVisible: false, hasSourceFrame: true, reduceMotion: false), 1,
+                       "la cellule se cache dès l'ouverture : la bulle doit déjà être là, posée sur elle, sinon le message clignote")
+    }
+
+    func test_previewOpacity_fromItsCell_staysOpaqueWhileItReturns() {
+        XCTAssertEqual(MessageOverlayMenu.previewOpacity(isVisible: true, hasSourceFrame: true, reduceMotion: false), 1)
+    }
+
+    func test_previewOpacity_withoutACell_orUnderReduceMotion_fades() {
+        XCTAssertEqual(MessageOverlayMenu.previewOpacity(isVisible: false, hasSourceFrame: false, reduceMotion: false), 0)
+        XCTAssertEqual(MessageOverlayMenu.previewOpacity(isVisible: false, hasSourceFrame: true, reduceMotion: true), 0,
+                       "sous Réduire les animations, tout est à sa place : seule l'opacité s'anime")
+        XCTAssertEqual(MessageOverlayMenu.previewOpacity(isVisible: true, hasSourceFrame: false, reduceMotion: true), 1)
+    }
+
+    func test_overlay_paintsThePreviewWithTheLiftOpacity() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Components/MessageOverlayMenu.swift"))
+        XCTAssertTrue(source.contains(".opacity(Self.previewOpacity(isVisible: isVisible, hasSourceFrame: hasSourceFrame, reduceMotion: reduceMotion))"),
+                      "l'aperçu se peint par la loi du soulèvement, jamais par un fondu nu")
+    }
 }

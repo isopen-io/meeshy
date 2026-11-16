@@ -246,6 +246,42 @@ final class ConversationPreviewMorphTests: XCTestCase {
     }
 
     @MainActor
+    func test_renderedPreview_midway_staysCenteredInTheCardFrame() throws {
+        let slot = CGRect(x: 40, y: 100, width: 300, height: 420)
+        let source = CGRect(x: 8, y: 492, width: 386, height: 84)
+        let card = ConversationPreviewMorph.frame(progress: 0.5, from: source, to: slot)
+
+        let preview = try XCTUnwrap(renderedFrames(progress: 0.5, source: source, slot: slot)["preview"])
+
+        XCTAssertEqual(preview.width, slot.width, accuracy: 0.5, "l'aperçu garde sa mise en page de repos : rien ne se remet en page pendant le ressort")
+        XCTAssertEqual(preview.midX, card.midX, accuracy: 0.5,
+                       "la rangée est plus large que la carte : l'aperçu se centre dans le cadre qui passe de l'une à l'autre, jamais calé à gauche")
+    }
+
+    func test_previewInset_centersTheRestingPreviewInTheCurrentFrame() {
+        XCTAssertEqual(ConversationPeekPullDown.previewInset(frameWidth: 386, restWidth: 300), 43)
+        XCTAssertEqual(ConversationPeekPullDown.previewInset(frameWidth: 300, restWidth: 300), 0, "posée, l'aperçu est à sa place")
+        XCTAssertEqual(ConversationPeekPullDown.previewInset(frameWidth: 260, restWidth: 300), -20, "comprimée vers la ligne, l'aperçu se découpe au centre")
+    }
+
+    func test_cardFrame_isTheBirthFrameCompressedTowardTheRow() {
+        let from = CGRect(x: 0, y: 300, width: 386, height: 84)
+        let to = CGRect(x: 40, y: 0, width: 300, height: 420)
+        let row = CGRect(x: 0, y: 336, width: 386, height: 84)
+        XCTAssertEqual(ConversationPeekPullDown.cardFrame(morph: 1, detach: 0, from: from, to: to, row: row), to)
+        XCTAssertEqual(ConversationPeekPullDown.cardFrame(morph: 0, detach: 0, from: from, to: to, row: row), from)
+        XCTAssertEqual(ConversationPeekPullDown.cardFrame(morph: 1, detach: 1, from: from, to: to, row: row), row)
+    }
+
+    func test_peekCard_hasOneEdge_drawnByTheMorphFrame_neverByThePreviewInside() throws {
+        let overlays = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        let helpers = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListHelpers.swift"))
+        XCTAssertTrue(overlays.contains("ConversationPreviewMorphEdge"), "le cadre du morphisme porte le contour de la carte")
+        XCTAssertTrue(helpers.contains(".modifier(ConversationPreviewCardChrome(isEnabled: peekHeights == nil"),
+                      "dans l'aperçu d'appui long, l'aperçu ne dessine ni contour, ni ombre, ni découpe : une seule carte, pas deux bords")
+    }
+
+    @MainActor
     private func renderedFrames(progress: CGFloat, source: CGRect, slot: CGRect) -> [String: CGRect] {
         let probe = RenderedFrames()
         let card = ConversationPreviewMorphCard(

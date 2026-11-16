@@ -145,6 +145,19 @@ nonisolated enum ConversationPeekPullDown {
         ConversationPreviewMorph.frame(progress: 1 - ConversationPreviewMorph.clamped(detach), from: row, to: card)
     }
 
+    /// Le cadre rendu de la carte : celui de la naissance, comprimé par la
+    /// traction. Le cadre et l'aperçu qu'il porte le lisent tous deux.
+    static func cardFrame(morph: CGFloat, detach: CGFloat, from: CGRect, to: CGRect, row: CGRect) -> CGRect {
+        compressed(ConversationPreviewMorph.frame(progress: morph, from: from, to: to), toward: row, detach: detach)
+    }
+
+    /// Le décalage qui centre l'aperçu, mis en page à sa largeur de repos,
+    /// dans le cadre du moment : plus large pendant la naissance (la rangée
+    /// déborde la carte), plus étroit pendant la compression.
+    static func previewInset(frameWidth: CGFloat, restWidth: CGFloat) -> CGFloat {
+        (frameWidth - restWidth) / 2
+    }
+
     /// La progression qui choisit la face peinte : celle du morphisme de
     /// naissance, rabattue par la traction — la face de la rangée (avatar,
     /// titre) revient quand la carte redevient ligne.
