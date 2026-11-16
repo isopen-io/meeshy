@@ -114,6 +114,8 @@ async function buildApp(params: { member?: boolean; allowed?: boolean; closed?: 
       del: async (key) => {
         keys.delete(key);
       },
+      get: async () => null,
+      set: async () => undefined,
     },
     limiter: { checkLimit: async () => params.allowed ?? true },
     mayRead: async () => true,
