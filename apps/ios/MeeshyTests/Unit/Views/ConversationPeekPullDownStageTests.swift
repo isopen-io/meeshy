@@ -247,7 +247,8 @@ final class ConversationPeekPullDownStageTests: XCTestCase {
         XCTAssertFalse(source.contains("scaleEffect(1 - 0.45"), "plus de pastille par échelle : la carte devient une ligne")
         XCTAssertTrue(source.contains("ConversationPeekCardDrag("), "la carte suit le doigt avec résistance")
         XCTAssertTrue(source.contains("ConversationPeekPullDown.cardOffset(translation:"))
-        XCTAssertTrue(source.contains("ConversationPeekPullDown.compressed("), "le cadre se comprime vers la ligne")
+        XCTAssertTrue(source.contains("ConversationPeekPullDown.cardFrame("),
+                      "le cadre se comprime vers la ligne par la loi que le centrage de l'aperçu lit aussi (`cardFrame` → `compressed`)")
         XCTAssertTrue(source.contains("ConversationPeekPullDown.faceProgress("), "la face de la rangée revient")
     }
 
