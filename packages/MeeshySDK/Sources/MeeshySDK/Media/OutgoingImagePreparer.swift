@@ -150,7 +150,11 @@ public enum OutgoingImagePlan: Sendable, Equatable {
 
 public enum OutgoingImagePlanner {
     public static func plan(format: OutgoingImageFormat, pixelSize: CGSize, byteCount: Int,
-                            carriesLocation: Bool, policy: OutgoingImagePolicy) -> OutgoingImagePlan {
+                            carriesLocation: Bool, policy: OutgoingImagePolicy,
+                            isAnimated: Bool = false) -> OutgoingImagePlan {
+        if isAnimated, format == .png {
+            return carriesLocation && !policy.keepsLocation ? .stripLocation : .passthrough
+        }
         let budget = policy.pixelBudget
         let resize: CGFloat? = max(pixelSize.width, pixelSize.height) > budget ? budget : nil
         switch format {
@@ -206,7 +210,8 @@ public struct OutgoingImagePreparer: OutgoingImagePreparing {
                                      upright: OutgoingImageGeometry.upright(stored, properties: properties),
                                      carriesLocation: OutgoingImageLocation.isCarried(by: source))
         switch OutgoingImagePlanner.plan(format: format, pixelSize: original.upright, byteCount: data.count,
-                                         carriesLocation: original.carriesLocation, policy: policy) {
+                                         carriesLocation: original.carriesLocation, policy: policy,
+                                         isAnimated: CGImageSourceGetCount(source) > 1) {
         case .passthrough:
             return original.asIs
         case .stripLocation:

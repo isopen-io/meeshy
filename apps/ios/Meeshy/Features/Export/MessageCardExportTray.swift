@@ -179,7 +179,7 @@ struct MessageCardExportTray: View {
                 tile(MessageCardExportText.linkLabel(link), selected: link == format.template.link) {
                     format.template = format.template.with(link: link)
                 } content: {
-                    MessageCardLinkGlyph(link: link).frame(width: 46, height: 40)
+                    MessageCardLinkGlyph(link: link, palette: format.template.palette.palette)
                 }
             }
         }

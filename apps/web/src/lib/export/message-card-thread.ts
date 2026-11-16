@@ -9,7 +9,8 @@ import type { CardLinkId } from './message-card-templates';
  * Une réponse se lit RETIRÉE sous sa racine : chaque niveau décale le texte de
  * `THREAD_INDENT`, et une SÉPARATION précède chaque entrée de niveau ≥ 1. Cette
  * séparation est celle que le template configure déjà (sa liaison : orbite,
- * filet, guillemets, flèche, fil, bulles, silence) — pas de barre propre au fil.
+ * filet, guillemets, flèche, fil, bulles, silence, points, losange, astérisme,
+ * double filet) — pas de barre propre au fil.
  * Elle se dessine au retrait du niveau, sur `threadSeparatorWidth(level)`, et
  * donne aussi l'air entre deux entrées. Au-delà de `THREAD_MAX_LEVEL` niveaux on
  * ne creuse plus ; le texte d'un niveau garde `THREAD_MIN_WIDTH` au moins.
@@ -58,5 +59,12 @@ export function threadSeparatorOps(link: CardLinkId, at: { readonly x: number; r
     case 'bulles':
     case 'silence':
       return [];
+    case 'points':
+      return [6, 26, 46].map((dx) => ({ kind: 'dot', x: rtl ? x - dx : x + dx, y, radius: 4, color: accent }));
+    case 'double':
+      return [-4, 4].map((dy) => ({ kind: 'separator', x1, x2, y: y + dy, radius: 0, color: accent, dash: [], lineWidth: 2 }));
+    case 'losange':
+    case 'asterisme':
+      return [{ kind: 'text', text: link === 'losange' ? '◆' : '⁂', x, y: y + 8, font: `700 ${link === 'losange' ? 26 : 34}px sans-serif`, color: accent, align: rtl ? 'right' : 'left', direction: 'ltr' }];
   }
 }

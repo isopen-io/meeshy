@@ -171,6 +171,52 @@ struct MessageCardFramingTests {
         #expect(layout.framedMedia.contains { $0.mediaID == MessageCardBackdrop.mediaID && $0.isBackdrop })
     }
 
+    // MARK: - Toutes les entrées d'Imager (#18810)
+
+    @Test func aVideoIsFramedLikeAPhoto_itsPosterAndEveryFrameShareTheFraming() throws {
+        let video = MessageCardMedia(id: "v", kind: .video, aspect: 16.0 / 9.0)
+        let layout = Self.layout([video], framings: ["v": MessageCardFraming(zoom: 2)])
+        let framed = try #require(layout.framedMedia.first)
+        #expect(framed.mediaID == "v" && framed.kind == .video && !framed.isBackdrop)
+        #expect(try #require(Self.mediaOps(layout).first).framing == MessageCardFraming(zoom: 2))
+    }
+
+    @Test func theHeroOfAPostOrAStoryIsFramed() throws {
+        let story = MessageCardMedia(id: "story:1", kind: .video, aspect: 9.0 / 16.0)
+        var disposition = MessageCardDisposition.standard
+        disposition.heroMediaID = story.id
+        let layout = Self.layout([story], disposition: disposition)
+        let framed = try #require(layout.framedMedia.first { $0.mediaID == story.id })
+        #expect(framed.rotation == 0)
+        #expect(layout.regions.contains { $0.part == .media && $0.y == framed.frame.y && $0.height == framed.frame.height })
+    }
+
+    @Test func aTiltedCardStillNamesItsFramedMedia_withTheTiltAndItsPivot() throws {
+        let photo = MessageCardMedia(id: "p", kind: .image, aspect: 1.5)
+        var disposition = MessageCardDisposition.standard
+        disposition.tilt = .left
+        let layout = Self.layout([photo], disposition: disposition)
+        let framed = try #require(layout.framedMedia.first { $0.mediaID == "p" })
+        guard case let .group(group) = try #require(layout.ops.first { if case .group = $0 { return true } else { return false } }) else {
+            Issue.record("la carte inclinée peint son contenu dans un groupe")
+            return
+        }
+        #expect(framed.rotation == MessageCardTilt.left.radians)
+        #expect(framed.pivotX == group.cx && framed.pivotY == group.cy)
+        #expect(Self.layout([photo]).framedMedia.first?.rotation == 0)
+    }
+
+    @Test func aSoundHasNoPictureToFrame_onlyItsChosenBackdrop() throws {
+        let voice = MessageCardMedia(id: "a", kind: .audio, aspect: 1)
+        #expect(Self.layout([voice]).framedMedia.isEmpty)
+        var input = MessageCardInput(quoted: nil, reply: MessageCardPart(author: "Awa", text: ""), template: MessageCardTemplates.defaultID,
+                                     handle: "awa", media: [voice])
+        input.backdrop = MessageCardBackdrop(media: MessageCardMedia(id: MessageCardBackdrop.mediaID, kind: .image, aspect: 0.75), veil: 0.4)
+        let framed = MessageCardLayout.make(input, measure: Self.measure).framedMedia
+        #expect(framed.map(\.mediaID) == [MessageCardBackdrop.mediaID])
+        #expect(framed.allSatisfy { $0.isBackdrop })
+    }
+
     @Test func aFramedInputSurvivesAMomentAClipAndTheScroll() {
         var input = MessageCardInput(quoted: nil, reply: MessageCardPart(author: "Awa", text: "Voilà !"), template: MessageCardTemplates.defaultID, handle: "awa")
         input.framings = ["p": MessageCardFraming(zoom: 2)]

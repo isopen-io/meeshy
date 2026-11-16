@@ -62,7 +62,7 @@ struct ReelImageView: View {
                 }
             } else {
                 AdaptiveHorizontalPager(items: images, currentPageID: $currentImageId, fillVertical: true) { _, media in
-                    ReelImageCell(media: media)
+                    ReelImageCell(media: media, animates: media.id == currentImageId)
                 }
                 dots
                     .padding(.bottom, 150)
@@ -93,6 +93,8 @@ struct ReelImageView: View {
 /// pass). Mirrors `ConversationMediaGalleryView` / `ReelPoster`.
 private struct ReelImageCell: View {
     let media: FeedMedia
+    /// #4984 — la page visible joue son GIF, ses voisines restent figées.
+    var animates: Bool = true
 
     /// Explicit ratio from the media dimensions so `.fit` actually constrains the
     /// frame (ProgressiveCachedImage has no intrinsic ratio at first render — its
@@ -116,13 +118,18 @@ private struct ReelImageCell: View {
             ZStack {
                 ReelImageBackdrop(media: media).equatable()
 
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl ?? media.url,
-                    fullUrl: media.url ?? media.thumbnailUrl,
-                    autoLoad: true
-                ) {
-                    Color.clear
+                AnimatedAttachmentImage(mimeType: animates ? media.mimeType ?? "" : "",
+                                        fileUrl: media.url ?? "",
+                                        pointSize: max(fit.width, fit.height),
+                                        explicitOpen: true, contentMode: .fit) {
+                    ProgressiveCachedImage(
+                        thumbHash: media.thumbHash,
+                        thumbnailUrl: media.thumbnailUrl ?? media.url,
+                        fullUrl: media.url ?? media.thumbnailUrl,
+                        autoLoad: true
+                    ) {
+                        Color.clear
+                    }
                 }
                 .frame(width: fit.width, height: fit.height)
             }

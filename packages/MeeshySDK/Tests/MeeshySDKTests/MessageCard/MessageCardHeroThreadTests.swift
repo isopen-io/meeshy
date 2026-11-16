@@ -121,6 +121,26 @@ struct MessageCardHeroThreadTests {
         #expect(line.y > root.y && line.y < answer.y)
     }
 
+    @Test(arguments: [MessageCardLinkID.points, .losange, .asterisme, .double])
+    func layout_theNewLinksAlsoSeparateANestedReply(link: MessageCardLinkID) throws {
+        let entries = [MessageCardThreadLine(text: "Bob : Magnifique !", level: 0), MessageCardThreadLine(text: "Cleo : Tu étais où ?", level: 1)]
+        let reply = MessageCardPart(author: "Fil", text: entries.map(\.text).joined(separator: "\n"), thread: entries)
+        let template = MessageCardTemplates.defaultID.with(link: link)
+        let nested = MessageCardLayout.make(MessageCardInput(quoted: nil, reply: reply, template: template, handle: "bob"), measure: Self.measure)
+        let flat = MessageCardLayout.make(MessageCardInput(quoted: nil, reply: MessageCardPart(author: "Bob", text: "Magnifique !"), template: template, handle: "bob"), measure: Self.measure)
+        let root = try #require(Self.textOps(nested).first { $0.text.hasPrefix("Bob") })
+        let answer = try #require(Self.textOps(nested).first { $0.text.hasPrefix("Cleo") })
+        let painted = nested.ops.filter { op in
+            switch op {
+            case .separator, .dot: return true
+            case let .text(text): return text.y > root.y && text.y < answer.y && !text.text.isEmpty
+            default: return false
+            }
+        }
+        #expect(!painted.isEmpty, "\(link.rawValue) sépare la réponse de sa racine")
+        #expect(nested.ops.count > flat.ops.count)
+    }
+
     @Test(arguments: MessageCardAspect.allCases)
     func layout_aTruncatedThreadEndsOnText_neverOnASeparator(aspect: MessageCardAspect) throws {
         let entries = (1...60).map { MessageCardThreadLine(text: "U\($0) : réponse numéro \($0)", level: 1) }

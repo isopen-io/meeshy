@@ -60,7 +60,7 @@ export function templateWords(id: MessageCardTemplateId, vocabulary: TemplateVoc
 }
 
 /**
- * Les 784 templates dans l'ordre de la galerie : un brassage BIJECTIF — la
+ * Tous les templates dans l'ordre de la galerie : un brassage BIJECTIF — la
  * palette tourne à chaque pas, la typographie et la liaison aussi, décalées —
  * si bien que deux voisins diffèrent sur les trois dimensions.
  */

@@ -21,15 +21,11 @@ enum MessageCardCropRule {
     /// Ce qu'une action du lecteur d'écran zoome ou dézoome.
     static let zoomStep = 1.25
 
-    /// Les photos que « Recadrer » vise sur la partie touchée : les médias
-    /// recadrés de la carte quand on a touché les médias, le fond quand on a
-    /// touché le fond — et seulement ceux dont les pixels sont là.
-    static func targets(framed: [MessageCardFramedMedia], pictured: Set<String>, focus: MessageCardPartID?) -> [MessageCardFramedMedia] {
-        switch focus {
-        case .media: return usable(framed, pictured: pictured).filter { !$0.isBackdrop }
-        case .background: return usable(framed, pictured: pictured).filter(\.isBackdrop)
-        default: return []
-        }
+    /// « Recadrer » s'offre dès que la carte a une photo, une vidéo ou un fond
+    /// recadrable dont les pixels sont là — sans avoir à toucher la photo
+    /// d'abord (#18810), quelle que soit l'entrée qui a ouvert l'atelier.
+    static func offers(framed: [MessageCardFramedMedia], pictured: Set<String>) -> Bool {
+        !usable(framed, pictured: pictured).isEmpty
     }
 
     /// Les photos qu'on recadre, une fois le mode ouvert : toutes celles de la carte dont les pixels sont là.
@@ -125,12 +121,21 @@ struct MessageCardCropLayer: View {
         .contentShape(Rectangle())
         .gesture(cropGesture(target))
         .onTapGesture(count: 2) { recenter(target) }
+        .rotationEffect(.radians(media.rotation), anchor: Self.pivot(of: media))
         .offset(x: CGFloat(media.frame.x) * scale, y: CGFloat(media.frame.y) * scale)
         .modifier(MessageCardCropAccessibility(
             isBackdrop: media.isBackdrop,
             zoom: framing(of: id).zoom,
             act: { act($0, on: target) }
         ))
+    }
+
+    /// Le pivot de l'inclinaison d'une carte (#18810), relatif au cadre de la photo :
+    /// la zone tourne avec la photo peinte, autour du même point.
+    static func pivot(of media: MessageCardFramedMedia) -> UnitPoint {
+        guard media.rotation != 0, media.frame.width > 0, media.frame.height > 0 else { return .center }
+        return UnitPoint(x: (media.pivotX - media.frame.x) / media.frame.width,
+                         y: (media.pivotY - media.frame.y) / media.frame.height)
     }
 
     /// La photo telle que le cadrage la pose, en points de l'aperçu, relative au coin du cadre.
@@ -227,7 +232,6 @@ private struct MessageCardCropAccessibility: ViewModifier {
                 ? MessageCardExportText.text("export.card.crop.backdrop", "Fond à recadrer")
                 : MessageCardExportText.text("export.card.crop.photo", "Photo à recadrer"))
             .accessibilityValue(Text(zoom, format: .percent.precision(.fractionLength(0))))
-            .accessibilityHint(MessageCardExportText.text("export.card.crop.hint", "Glissez pour déplacer, pincez pour zoomer, touchez deux fois pour recentrer"))
             .accessibilityAction(named: Text(MessageCardExportText.text("export.card.crop.zoomIn", "Zoomer"))) { act(.zoomIn) }
             .accessibilityAction(named: Text(MessageCardExportText.text("export.card.crop.zoomOut", "Dézoomer"))) { act(.zoomOut) }
             .accessibilityAction(named: Text(MessageCardExportText.text("export.card.crop.recenter", "Recentrer"))) { act(.recenter) }
@@ -250,9 +254,9 @@ extension MessageCardExportSheet {
         }
     }
 
-    /// « Recadrer » s'offre sur une photo touchée qui déborde de son cadre — jamais ailleurs.
+    /// « Recadrer » s'offre dès que la carte a de quoi recadrer, sans toucher la photo d'abord (#18810).
     func offersCrop(_ rendered: Rendered) -> Bool {
-        !MessageCardCropRule.targets(framed: rendered.framedMedia, pictured: Set(paintedPictures.images.keys), focus: focus).isEmpty
+        MessageCardCropRule.offers(framed: rendered.framedMedia, pictured: Set(paintedPictures.images.keys))
     }
 
     func cropLayer(_ rendered: Rendered, scale: CGFloat) -> MessageCardCropLayer {
@@ -271,21 +275,23 @@ extension MessageCardExportSheet {
         withAnimation(MeeshyAnimation.springDefault) { cropping = false }
     }
 
-    /// Le bouton du mode : « Recadrer » sur une photo touchée, « OK » pendant le recadrage.
+    /// Le bouton du mode : « Recadrer » dès qu'une photo se recadre, « OK » pendant le recadrage.
     @ViewBuilder
     func cropControl(_ rendered: Rendered) -> some View {
         if cropping {
             cropButton(MessageCardExportText.text("export.card.crop.done", "OK"), systemImage: "checkmark", action: endCrop)
                 .accessibilityIdentifier("export.card.crop.done")
-        } else if offersCrop(rendered) {
-            cropButton(MessageCardExportText.text("export.card.crop", "Recadrer"), systemImage: "crop") {
-                HapticFeedback.light()
-                withAnimation(MeeshyAnimation.springDefault) {
-                    touched = true
-                    cropping = true
-                }
-            }
-            .accessibilityIdentifier("export.card.crop")
+        } else if offersCrop(rendered) && pinch == nil {
+            cropButton(MessageCardExportText.text("export.card.crop", "Recadrer"), systemImage: "crop", action: beginCrop)
+                .accessibilityIdentifier("export.card.crop")
+        }
+    }
+
+    func beginCrop() {
+        HapticFeedback.light()
+        withAnimation(MeeshyAnimation.springDefault) {
+            touched = true
+            cropping = true
         }
     }
 
@@ -299,20 +305,5 @@ extension MessageCardExportSheet {
         }
         .buttonStyle(MeeshyGlassPressStyle())
         .padding(MeeshySpacing.sm)
-    }
-
-    /// Pendant le recadrage, la phrase du geste remplace celle de l'aperçu.
-    var cropHint: some View {
-        Label(MessageCardExportText.text("export.card.crop.hint", "Glissez pour déplacer, pincez pour zoomer, touchez deux fois pour recentrer"),
-              systemImage: "hand.draw")
-            .font(.footnote.weight(.semibold))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.sm)
-            .meeshyGlass(in: Capsule(), tone: .theme)
-            .padding(.bottom, MeeshySpacing.smPlus)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .transition(.opacity)
     }
 }

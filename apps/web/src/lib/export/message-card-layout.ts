@@ -215,6 +215,10 @@ const LINK_GEOMETRY: Readonly<Record<CardLinkId, LinkGeometry>> = {
   bulles: { block: 44, quoteBar: false, bubbles: true },
   fil: { block: 120, quoteBar: true, bubbles: false },
   silence: { block: 88, quoteBar: false, bubbles: false },
+  points: { block: 96, quoteBar: false, bubbles: false },
+  losange: { block: 112, quoteBar: false, bubbles: false },
+  asterisme: { block: 130, quoteBar: false, bubbles: false },
+  double: { block: 104, quoteBar: false, bubbles: false },
 };
 
 type Sized = {
@@ -652,5 +656,30 @@ function linkOps(link: CardLinkId, at: { readonly y: number; readonly rtl: boole
     case 'bulles':
     case 'silence':
       return [];
+    case 'points':
+    case 'losange':
+    case 'asterisme':
+    case 'double':
+      return centredLinkOps(link, { middle: y + block / 2, accent, width });
+  }
+}
+
+/** Les liaisons centrées sur la carte : elles ne dépendent pas du sens de lecture. */
+function centredLinkOps(link: 'points' | 'losange' | 'asterisme' | 'double', at: { readonly middle: number; readonly accent: string; readonly width: number }): CardOp[] {
+  const { middle, accent, width } = at;
+  const centre = width / 2;
+  const mark = (text: string, size: number, lift: number): CardOp => ({
+    kind: 'text', text, x: centre, y: middle + lift, font: canvasFont({ family: null, weight: 700, style: 'normal' }, size), color: accent, align: 'center', direction: 'ltr',
+  });
+  const rule = (x1: number, x2: number, y: number): CardOp => ({ kind: 'separator', x1, x2, y, radius: 0, color: accent, dash: [], lineWidth: 3 });
+  switch (link) {
+    case 'points':
+      return [-36, 0, 36].map((dx) => ({ kind: 'dot', x: centre + dx, y: middle, radius: 7, color: accent }));
+    case 'losange':
+      return [rule(centre - 170, centre - 40, middle), mark('◆', 44, 15), rule(centre + 40, centre + 170, middle)];
+    case 'asterisme':
+      return [mark('⁂', 72, 26)];
+    case 'double':
+      return [rule(PAD_X, width - PAD_X, middle - 7), rule(PAD_X, width - PAD_X, middle + 7)];
   }
 }

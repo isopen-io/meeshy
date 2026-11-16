@@ -330,6 +330,11 @@ fileprivate struct BubbleGridCell: View {
         revealedAttachmentIds.contains(attachment.id)
     }
 
+    /// #4984 — une pièce encore voilée ne joue rien et ne dit pas qu'elle bouge.
+    private var animationMimeType: String {
+        attachmentIsProtected && !isRevealed ? "" : attachment.mimeType
+    }
+
     /// Une vidéo lisible a son corps à elle : un lecteur inline à trois
     /// contrôles (#8231). La tuile de débordement (« +N », dont le toucher
     /// ouvre le carrousel) et la pièce protégée gardent le corps commun, où la
@@ -490,10 +495,14 @@ fileprivate struct BubbleGridCell: View {
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
-            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth,
-                                contentMode: solo ? .fit : .fill,
-                                onFullImageLoaded: { displayedImageLanded = true })
-                .modifier(MediaDescriptionLabel(text: spokenDescription))
+            AnimatedAttachmentImage(mimeType: animationMimeType, fileUrl: attachment.fileUrl,
+                                    pointSize: cellPointWidth, inGrid: !solo || overflowCount > 0,
+                                    byteSize: attachment.fileSize, contentMode: solo ? .fit : .fill) {
+                BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth,
+                                    contentMode: solo ? .fit : .fill,
+                                    onFullImageLoaded: { displayedImageLanded = true })
+            }
+            .modifier(MediaDescriptionLabel(text: spokenDescription))
         case .video:
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: contactColor,

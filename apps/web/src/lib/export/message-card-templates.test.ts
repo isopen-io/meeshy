@@ -37,6 +37,11 @@ describe('les templates de carte — des centaines, composés', () => {
     expect(CARD_LINKS).toContain('bulles');
   });
 
+  test('onze liaisons, les quatre dernières ajoutées à la fin : aucun identifiant retenu ne bouge', () => {
+    expect([...CARD_LINKS]).toEqual(['orbite', 'filet', 'guillemets', 'fleche', 'bulles', 'fil', 'silence', 'points', 'losange', 'asterisme', 'double']);
+    expect(parseTemplateId('aurore.rond.losange')).toBe('aurore.rond.losange');
+  });
+
   test('un identifiant se relit en son template, et un identifiant inconnu en rien', () => {
     for (const id of [...FEATURED_TEMPLATE_IDS, DEFAULT_TEMPLATE_ID]) expect(parseTemplateId(id)).toBe(id);
     expect(templateOf('neige.systeme.bulles').link).toBe('bulles');

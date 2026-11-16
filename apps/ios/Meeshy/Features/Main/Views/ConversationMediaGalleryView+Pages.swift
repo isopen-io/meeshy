@@ -271,14 +271,19 @@ struct GalleryImagePage: View, Equatable {
             )
             if let mount {
                 let attempt = loadPhase.attempt
-                ProgressiveCachedImage(
-                    thumbHash: mount.backdropThumbHash,
-                    thumbnailUrl: mount.isResident ? nil : thumbnailURL,
-                    fullUrl: mount.fullURL,
-                    autoLoad: true,
-                    onFullImageFailure: { loadPhase.fail(attempt: attempt) }
-                ) {
-                    ProgressView().tint(.white)
+                AnimatedAttachmentImage(mimeType: isActive ? attachment.mimeType : "",
+                                        fileUrl: attachment.fileUrl,
+                                        pointSize: max(stage.media.width, stage.media.height),
+                                        explicitOpen: true, contentMode: .fit) {
+                    ProgressiveCachedImage(
+                        thumbHash: mount.backdropThumbHash,
+                        thumbnailUrl: mount.isResident ? nil : thumbnailURL,
+                        fullUrl: mount.fullURL,
+                        autoLoad: true,
+                        onFullImageFailure: { loadPhase.fail(attempt: attempt) }
+                    ) {
+                        ProgressView().tint(.white)
+                    }
                 }
                 .id(attempt)
             } else {

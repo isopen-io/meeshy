@@ -6,7 +6,7 @@ import Foundation
 /// Des centaines de cartes, composées de trois dimensions indépendantes :
 /// la PALETTE (le fond, ses encres, l'accent et le filigrane), la TYPOGRAPHIE
 /// (la police de la réponse et celle de la citation) et la LIAISON (la façon
-/// dont la question mène à la réponse). 14 × 8 × 7 = 784 templates, chacun
+/// dont la question mène à la réponse). 14 × 8 × 11 = 1 232 templates, chacun
 /// nommé par un identifiant STABLE `palette.typographie.liaison` — les MÊMES
 /// que sur le web : le compteur d'usage et le format par défaut les retiennent,
 /// on n'en renomme donc aucun. `MessageCardTemplateParityTests` tient chaque
@@ -141,6 +141,7 @@ public enum MessageCardTypefaceID: String, CaseIterable, Sendable {
 
 public enum MessageCardLinkID: String, CaseIterable, Sendable {
     case orbite, filet, guillemets, fleche, bulles, fil, silence
+    case points, losange, asterisme, double
 }
 
 /// `palette.typographie.liaison` — l'identifiant stable d'un template.

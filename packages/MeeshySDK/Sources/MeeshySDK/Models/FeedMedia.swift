@@ -49,6 +49,11 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     /// Décodage tolérant par élément (`LossyImageVariants`) : un blob de feed
     /// persisté dont une variante est partielle rend quand même le média.
     @LossyImageVariants public var imageVariants: [MeeshyImageVariant]?
+    /// Type servi par le fil (`PostMedia.mimeType`, #4984). Sans lui, le pont
+    /// vers `MeeshyMessageAttachment` inventait `image/jpeg` pour toute image,
+    /// et le plein écran ne pouvait pas savoir qu'un GIF s'anime. `nil` pour un
+    /// blob persisté avant le champ : le pont garde alors son repli par famille.
+    public var mimeType: String?
 
     /// Ratio largeur/hauteur dérivé de `width`/`height`. `nil` si l'un des
     /// deux est absent ou si l'un des deux vaut 0 (évite une division par
@@ -69,7 +74,8 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
                 captionTranslations: [String: String]? = nil,
                 transcription: MessageTranscription? = nil,
                 translatedAudios: [MessageTranslatedAudio] = [],
-                imageVariants: [MeeshyImageVariant]? = nil) {
+                imageVariants: [MeeshyImageVariant]? = nil,
+                mimeType: String? = nil) {
         self.id = id; self.type = type; self.url = url; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash; self.thumbnailColor = thumbnailColor
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
@@ -80,6 +86,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         self.transcription = transcription
         self.translatedAudios = translatedAudios
         self.imageVariants = imageVariants
+        self.mimeType = mimeType
     }
 
     /// La descente du Prisme sur LA LÉGENDE de ce média (#6280) — projection de
@@ -141,7 +148,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         case id, type, url, thumbnailUrl, thumbHash, thumbnailColor
         case width, height, duration, fileName, fileSize, pageCount
         case caption, alt, captionLanguage, captionTranslations
-        case transcription, translatedAudios, imageVariants
+        case transcription, translatedAudios, imageVariants, mimeType
     }
 
     public init(from decoder: Decoder) throws {
@@ -165,6 +172,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         transcription = try c.decodeIfPresent(MessageTranscription.self, forKey: .transcription)
         translatedAudios = try c.decodeIfPresent([MessageTranslatedAudio].self, forKey: .translatedAudios) ?? []
         _imageVariants = try c.decode(LossyImageVariants.self, forKey: .imageVariants)
+        mimeType = try c.decodeIfPresent(String.self, forKey: .mimeType)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -190,6 +198,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
             try c.encode(translatedAudios, forKey: .translatedAudios)
         }
         try c.encodeIfPresent(imageVariants, forKey: .imageVariants)
+        try c.encodeIfPresent(mimeType, forKey: .mimeType)
     }
 }
 
@@ -200,7 +209,7 @@ extension FeedMedia {
             id: id,
             fileName: fileName ?? "",
             originalName: fileName ?? "",
-            mimeType: mimeTypeFromFeedType,
+            mimeType: mimeType.flatMap { $0.isEmpty ? nil : $0 } ?? mimeTypeFromFeedType,
             fileSize: 0,
             fileUrl: url ?? "",
             alt: alt,

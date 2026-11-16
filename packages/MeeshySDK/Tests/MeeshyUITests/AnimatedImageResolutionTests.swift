@@ -56,6 +56,22 @@ final class AnimatedImageResolutionTests: XCTestCase {
         func note() { lock.lock(); count += 1; lock.unlock() }
     }
 
+    // MARK: - #4984 — la pièce qu'on vient d'envoyer
+
+    /// Avant l'accusé, la bulle porte une URL `file://`. Le cache ne télécharge
+    /// que de l'http(s) : sans lecture locale, un GIF juste envoyé restait figé
+    /// dans la bulle de son propre auteur.
+    func test_leChargeurDisque_litUnFichierLocal() async throws {
+        let gif = try makeAnimatedGIF()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("sent-\(UUID().uuidString).gif")
+        try gif.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let read = await DiskCacheImageLoader().data(for: url.absoluteString)
+
+        XCTAssertEqual(read, gif)
+    }
+
     // MARK: - Quand on ne tente RIEN
 
     /// Une surface qui déclare ne pas animer (une capture, un aperçu figé) ne
