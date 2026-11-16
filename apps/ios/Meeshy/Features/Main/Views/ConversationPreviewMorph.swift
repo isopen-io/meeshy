@@ -17,9 +17,13 @@ nonisolated enum ConversationPreviewMorph {
     /// l'attention à la ligne qui se transforme.
     static let menuThreshold: CGFloat = 0.8
 
-    /// La mi-course : la face de la rangée a fini de s'effacer, l'aperçu
-    /// commence à se fondre dedans. Les deux ne se superposent jamais en plein.
+    /// La mi-course : le fond de la carte est entièrement posé.
     static let handoff: CGFloat = 0.5
+
+    /// Le fondu enchaîné des deux faces : la rangée cède à l'aperçu sur cette
+    /// plage, et leurs opacités se complètent — la carte n'est jamais vide.
+    static let crossfadeStart: CGFloat = 0.25
+    static let crossfadeEnd: CGFloat = 0.75
 
     /// La course du menu qui monte depuis le bas de la carte, en points.
     static let menuRiseDistance: CGFloat = 40
@@ -65,17 +69,19 @@ nonisolated enum ConversationPreviewMorph {
         interpolate(from, to, clamped(progress))
     }
 
-    /// L'opacité d'un calque : la rangée s'efface sur la première moitié
-    /// pendant que le fond de la carte s'y pose, l'aperçu se fond sur la seconde.
+    /// L'opacité d'un calque : le fond de la carte se pose sur la première
+    /// moitié ; la rangée et l'aperçu s'échangent en fondu enchaîné au milieu
+    /// de la course, sans jamais laisser la carte vide.
     static func opacity(of layer: Layer, progress: CGFloat) -> Double {
         let t = clamped(progress)
+        let crossfade = clamped((t - crossfadeStart) / (crossfadeEnd - crossfadeStart))
         switch layer {
         case .rowFace:
-            return Double(1 - min(1, t / handoff))
+            return Double(1 - crossfade)
         case .surface:
             return Double(min(1, t / handoff))
         case .preview:
-            return Double(max(0, t - handoff) / (1 - handoff))
+            return Double(crossfade)
         }
     }
 
@@ -123,12 +129,23 @@ nonisolated enum ConversationPreviewMorph {
     }
 
     /// Le retrait : la carte redevient la ligne quand elle peut la rejoindre
-    /// sans aller-retour ; sinon elle fond sur place.
-    static func exit(hasSource: Bool, reduceMotion: Bool, chipLatched: Bool, pulledPastDismiss: Bool) -> Exit {
-        guard morphsFromRow(hasSource: hasSource, reduceMotion: reduceMotion),
-              !chipLatched, !pulledPastDismiss
-        else { return .fadeInPlace }
-        return .morphToRow
+    /// sans aller-retour ; sinon elle fond sur place. Une pastille relâchée
+    /// loin de tout en-tête de section regagne sa ligne en ressort.
+    static func exit(
+        hasSource: Bool, reduceMotion: Bool, chipLatched: Bool, pulledPastDismiss: Bool,
+        chipReturnsToSlot: Bool = false
+    ) -> Exit {
+        guard morphsFromRow(hasSource: hasSource, reduceMotion: reduceMotion) else { return .fadeInPlace }
+        if chipLatched { return chipReturnsToSlot ? .morphToRow : .fadeInPlace }
+        return pulledPastDismiss ? .fadeInPlace : .morphToRow
+    }
+
+    /// La carte regagne-t-elle sa place en se retirant ? Oui quand elle
+    /// redevient la ligne, ou quand une fermeture ordinaire la fait fondre ;
+    /// tirée au-delà de la fermeture ou décrochée, elle fond SOUS LE DOIGT —
+    /// la faire remonter pendant le fondu serait un aller-retour parasite.
+    static func returnsHome(after exit: Exit, chipLatched: Bool, pulledPastDismiss: Bool) -> Bool {
+        exit == .morphToRow || (!chipLatched && !pulledPastDismiss)
     }
 
     /// La rangée pressée se vide le temps de l'aperçu ; les autres restent.

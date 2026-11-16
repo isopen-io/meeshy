@@ -19,15 +19,16 @@ nonisolated enum ConversationPeekDetent: Equatable, Sendable {
     }
 }
 
-/// Ce qu'un glissement sur la CARTE pilote : le cran du menu, ou le morph de
-/// la carte en pastille qu'on dépose sur une section (glisser vers le bas
-/// depuis le cran compact — le geste historique du menu custom).
+/// Ce qu'un glissement sur la CARTE pilote : vers le HAUT, le cran du menu ;
+/// vers le BAS, le morph de la carte en pastille qu'on dépose sur une section,
+/// quel que soit le cran — le menu reste tel qu'il était, et revient intact
+/// si la carte est relâchée avant de décrocher.
 nonisolated enum ConversationPeekCardRoute: Equatable, Sendable {
     case detent
     case chipMorph
 
     static func resolve(startDetent: ConversationPeekDetent, translation: CGFloat) -> ConversationPeekCardRoute {
-        startDetent == .compact && translation > 0 ? .chipMorph : .detent
+        translation > 0 ? .chipMorph : .detent
     }
 }
 
