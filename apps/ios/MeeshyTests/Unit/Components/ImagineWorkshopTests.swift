@@ -451,7 +451,7 @@ final class ImagineWorkshopTests: XCTestCase {
 
     func test_catalog_theCropWordsSpeakTheSevenLanguages() throws {
         let strings = try Self.catalog()
-        let keys = ["export.card.crop", "export.card.crop.done", "export.card.crop.hint", "export.card.crop.photo",
+        let keys = ["export.card.crop", "export.card.crop.done", "export.card.crop.photo",
                     "export.card.crop.backdrop", "export.card.crop.zoomIn", "export.card.crop.zoomOut", "export.card.crop.recenter",
                     "export.card.crop.showTop", "export.card.crop.showBottom", "export.card.crop.showLeft", "export.card.crop.showRight"]
         for key in keys {

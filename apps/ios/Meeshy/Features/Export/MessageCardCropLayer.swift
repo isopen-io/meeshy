@@ -227,7 +227,6 @@ private struct MessageCardCropAccessibility: ViewModifier {
                 ? MessageCardExportText.text("export.card.crop.backdrop", "Fond à recadrer")
                 : MessageCardExportText.text("export.card.crop.photo", "Photo à recadrer"))
             .accessibilityValue(Text(zoom, format: .percent.precision(.fractionLength(0))))
-            .accessibilityHint(MessageCardExportText.text("export.card.crop.hint", "Glissez pour déplacer, pincez pour zoomer, touchez deux fois pour recentrer"))
             .accessibilityAction(named: Text(MessageCardExportText.text("export.card.crop.zoomIn", "Zoomer"))) { act(.zoomIn) }
             .accessibilityAction(named: Text(MessageCardExportText.text("export.card.crop.zoomOut", "Dézoomer"))) { act(.zoomOut) }
             .accessibilityAction(named: Text(MessageCardExportText.text("export.card.crop.recenter", "Recentrer"))) { act(.recenter) }
@@ -299,20 +298,5 @@ extension MessageCardExportSheet {
         }
         .buttonStyle(MeeshyGlassPressStyle())
         .padding(MeeshySpacing.sm)
-    }
-
-    /// Pendant le recadrage, la phrase du geste remplace celle de l'aperçu.
-    var cropHint: some View {
-        Label(MessageCardExportText.text("export.card.crop.hint", "Glissez pour déplacer, pincez pour zoomer, touchez deux fois pour recentrer"),
-              systemImage: "hand.draw")
-            .font(.footnote.weight(.semibold))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.sm)
-            .meeshyGlass(in: Capsule(), tone: .theme)
-            .padding(.bottom, MeeshySpacing.smPlus)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .transition(.opacity)
     }
 }

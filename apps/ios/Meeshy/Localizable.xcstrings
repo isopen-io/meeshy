@@ -339392,53 +339392,6 @@
         }
       }
     },
-    "export.card.crop.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اسحب للتحريك، وباعد إصبعيك للتكبير، وانقر مرتين لإعادة التوسيط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ziehen zum Verschieben, mit zwei Fingern zoomen, doppelt tippen zum Zentrieren"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drag to move, pinch to zoom, double-tap to recenter"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrastra para mover, pellizca para hacer zoom, toca dos veces para recentrar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glissez pour déplacer, pincez pour zoomer, touchez deux fois pour recentrer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trascina per spostare, pizzica per lo zoom, tocca due volte per ricentrare"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arraste para mover, faça pinça para dar zoom, toque duas vezes para recentralizar"
-          }
-        }
-      }
-    },
     "export.card.crop.photo": {
       "extractionState": "manual",
       "localizations": {
