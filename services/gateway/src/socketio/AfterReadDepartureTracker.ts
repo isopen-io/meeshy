@@ -66,7 +66,7 @@ export const AFTER_READ_MAX_HOLD_MS = 10 * 60_000;
  * plafond, sans jamais être oublié : une consommation qui échoue se redemande tant que la base refuse.
  */
 export const AFTER_READ_MAX_RETRY_DELAY_MS = 10 * 60_000;
-/** Au-delà, les regards les plus ANCIENS sont oubliés : ce qu'ils ont montré attend la sortie déclarée par le client. */
+/** Au-delà, les regards les plus ANCIENS brûlent aussitôt (`onDeparture`) : aucun n'est jamais jeté. */
 export const AFTER_READ_MAX_PERIODS = 32;
 /** Conversations dont un socket garde des regards non consommés ; au-delà, les plus anciennes sont oubliées. */
 export const AFTER_READ_MAX_TOUCHED = 64;
@@ -308,7 +308,7 @@ export class AfterReadDepartureTracker {
     this.holdSince.delete(key);
     const regard = this.regards.get(key);
     if (!regard?.openedAt) return;
-    const closed = [...regard.closed, { from: regard.openedAt, to: this.now() }].slice(-AFTER_READ_MAX_PERIODS);
+    const closed = this.retain(reader, [...regard.closed, { from: regard.openedAt, to: this.now() }]);
     this.regards.set(key, { closed, openedAt: null });
   }
 
@@ -392,7 +392,7 @@ export class AfterReadDepartureTracker {
       await this.onDeparture({ ...reader, periods });
     } catch (error) {
       this.onError(error);
-      this.restorePeriods(key, periods);
+      this.restorePeriods(reader, periods);
       this.retryLater(reader, { holdable });
       return;
     }
@@ -427,7 +427,7 @@ export class AfterReadDepartureTracker {
       elsewhere = 'unknown';
     }
     if (elsewhere === false && !this.isViewedHere(key)) return true;
-    this.restorePeriods(key, periods);
+    this.restorePeriods(reader, periods);
     if (this.isViewedHere(key)) return false;
     if (elsewhere === 'unknown') this.retryLater(reader);
     else this.waitAgain(reader);
@@ -471,10 +471,35 @@ export class AfterReadDepartureTracker {
   }
 
   /** Un départ refusé rend ses regards, devant ceux qui se sont clos pendant l'attente. */
-  private restorePeriods(key: string, periods: readonly AfterReadPeriod[]): void {
+  private restorePeriods(reader: AfterReadReader, periods: readonly AfterReadPeriod[]): void {
+    const key = keyOf(reader);
     const regard = this.regards.get(key) ?? NO_REGARD;
-    const closed = [...periods, ...regard.closed].slice(-AFTER_READ_MAX_PERIODS);
+    const closed = this.retain(reader, [...periods, ...regard.closed]);
     this.regards.set(key, { closed, openedAt: regard.openedAt });
+  }
+
+  /** Les regards au-delà de `AFTER_READ_MAX_PERIODS` partent aussitôt, les plus anciens d'abord. */
+  private retain(reader: AfterReadReader, closed: readonly AfterReadPeriod[]): readonly AfterReadPeriod[] {
+    const overflow = closed.length - AFTER_READ_MAX_PERIODS;
+    if (overflow <= 0) return closed;
+    this.burnOverflow(reader, closed.slice(0, overflow));
+    return closed.slice(overflow);
+  }
+
+  /** Une brûlure de débordement en échec se redemande sans fin : un regard évincé n'est jamais jeté. */
+  private burnOverflow(reader: AfterReadReader, periods: readonly AfterReadPeriod[]): void {
+    void Promise.resolve()
+      .then(() => this.onDeparture({ ...reader, periods }))
+      .catch((error: unknown) => {
+        this.onError(error);
+        const timer = guardedTimeout({
+          name: 'after-read-overflow',
+          afterMs: AFTER_READ_MAX_RETRY_DELAY_MS,
+          logger: { error: (_message, failure) => this.onError(failure) },
+          run: () => this.burnOverflow(reader, periods),
+        });
+        timer.unref?.();
+      });
   }
 
   /** Un départ en attente (appel, autre appareil) se réexamine à intervalle fixe et court, jusqu'au plafond dur. */
