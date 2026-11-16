@@ -77,8 +77,9 @@
 //
 // ─── Ce que la garde ne couvre PAS (dit à voix haute) ──────────────────────
 //
-// **Un quart des événements du contrat.** Mesuré le 2026-11-14 après #18123 : la
-// garde balaie **125 des 176** événements (126 depuis `community:updated`, #18439) de `ServerToClientEvents`, par CINQ
+// **Un quart des événements du contrat.** Mesuré le 2026-11-15 après `community:updated` (#18439)
+// et le lot Android de la batterie (#14147, trois `battery:*` de plus) : la garde balaie **129 des 181**
+// événements de `ServerToClientEvents`, par CINQ
 // idiomes de routage — les trois d'origine, plus le `decode<T>` réifié derrière
 // `socketManager.on(…)` (les quatre `viewing:*`) et la route qui appelle un
 // PARSEUR écrit à la main (les douze `call:*` sociaux, dont aucune classe

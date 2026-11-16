@@ -43,3 +43,13 @@ enum ReadReceiptOutbox {
         }
     }
 }
+
+/// Le premier acte qui compte (`PeekReadLaw`) met fin au REGARD (#18721) et
+/// marque la conversation lue à l'instant : localement (ligne, badge, widget)
+/// et au serveur, par son repli « tout ce qui précède ». Hors regard, rien.
+extension ConversationViewModel {
+    func noteUserActed(_ act: ConversationAct) {
+        guard startupDependencies.readGate.noteActed(act) else { return }
+        markAsRead()
+    }
+}

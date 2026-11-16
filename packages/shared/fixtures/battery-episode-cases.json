@@ -1,0 +1,1888 @@
+{
+  "$comment": "Cas communs de la batterie des Proches (#14147). ÉCRITS À LA MAIN depuis la spec docs/superpowers/specs/2026-11-15-batterie-proches-design.md (§ 4 paliers, § 5 canal, § 2 consentement) : un oracle indépendant, jamais généré en exécutant la fonction. Joués par packages/shared (vitest) puis par les miroirs Swift et Kotlin. `episodes` : chaque cas part d'un état nul et enchaîne `batteryEpisodeStep` ; `expect.phase` est la phase après le pas, `expect.announcements` les annonces rendues, dans l'ordre (at = measuredAt d'un relevé, now d'un tick). `channels` : batteryReaderChannel(kind, inConversation, receivedCritical). `consent` : resolveEmitterConsent (stored nul = défaut du niveau). `estimates` : batteryEstimatedMinutes(anchor, current), minutes arrondies ou null. `conversation` : batteryReaderInConversation (fenêtre de 15 min incluse). `config` : la configuration avec laquelle les cas sont écrits.",
+  "version": 1,
+  "config": {
+    "lowThreshold": 30,
+    "steps": [
+      25,
+      20,
+      15,
+      10
+    ],
+    "criticalThreshold": 5,
+    "closeAbove": 35,
+    "rechargedUnpluggedAbove": 80,
+    "fullLevel": 100,
+    "offAfterMinutes": 10,
+    "resumeWithinMinutes": 30,
+    "conversationWindowMinutes": 15,
+    "pullCooldownMinutes": 5,
+    "stateTtlSeconds": 86400
+  },
+  "episodes": [
+    {
+      "id": "oscillation-autour-de-30",
+      "description": "Le niveau danse autour du seuil : une seule alerte, l'hystérésis (35) tient l'épisode ouvert.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 40,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 30,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 30,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 31,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:02:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 30,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:03:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 29,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:04:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 31,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:05:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 28,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:06:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "paliers-une-seule-fois",
+      "description": "Chaque palier 25/20/15/10 n'est annoncé qu'une fois ; un saut en franchit plusieurs et n'en annonce qu'un, le plus bas.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 31,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 29,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 29,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 25,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:02:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "threshold",
+                "level": 25,
+                "threshold": 25,
+                "at": "2026-11-15T10:02:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 24,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:03:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 26,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:04:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 25,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:05:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 18,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:06:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "threshold",
+                "level": 18,
+                "threshold": 20,
+                "at": "2026-11-15T10:06:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 9,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:07:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "threshold",
+                "level": 9,
+                "threshold": 10,
+                "at": "2026-11-15T10:07:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 6,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:08:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "entree-directe-sous-le-seuil",
+      "description": "Premier relevé à 20 % : une seule alerte, et les paliers déjà franchis ne s'annoncent plus.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 50,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 20,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 20,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 15,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:02:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "threshold",
+                "level": 15,
+                "threshold": 15,
+                "at": "2026-11-15T10:02:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "charge-a-12",
+      "description": "Branché à 12 % sans phase critique : l'épisode se clôt ; débranché moins de 30 min après, il reprend sans répéter ses paliers.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 40,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 28,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 28,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 12,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:02:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "threshold",
+                "level": 12,
+                "threshold": 15,
+                "at": "2026-11-15T10:02:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 12,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:03:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "ended",
+                "level": 12,
+                "at": "2026-11-15T10:03:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 14,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:05:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 13,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:13:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 10,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:14:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "threshold",
+                "level": 10,
+                "threshold": 10,
+                "at": "2026-11-15T10:14:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "reprise-et-nouvel-episode",
+      "description": "Un épisode rouvert moins de 30 min après sa clôture reprend ; au-delà, c'est un nouvel épisode qui alerte de nouveau.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 28,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 28,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 36,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:05:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "ended",
+                "level": 36,
+                "at": "2026-11-15T10:05:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 29,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:20:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 40,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:25:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "ended",
+                "level": 40,
+                "at": "2026-11-15T10:25:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 29,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:00:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 29,
+                "at": "2026-11-15T11:00:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "critique-en-direct",
+      "description": "Sous 5 %, chaque point perdu est annoncé ; un point regagné puis reperdu ne l'est pas deux fois.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 6,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 6,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 5,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 5,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:02:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical-drop",
+                "level": 4,
+                "at": "2026-11-15T10:02:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:03:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 5,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:04:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:05:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 3,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:06:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical-drop",
+                "level": 3,
+                "at": "2026-11-15T10:06:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "extinction-et-rallumage",
+      "description": "En critique, 10 min sans relevé ni connexion : probablement éteint, une fois ; le premier relevé après est le retour ; puis la charge.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 5,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 5,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "alive",
+            "at": "2026-11-15T10:05:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "tick",
+            "now": "2026-11-15T10:14:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "tick",
+            "now": "2026-11-15T10:15:00.000Z"
+          },
+          "expect": {
+            "phase": "off",
+            "announcements": [
+              {
+                "kind": "probably-off",
+                "level": 5,
+                "at": "2026-11-15T10:15:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "tick",
+            "now": "2026-11-15T10:30:00.000Z"
+          },
+          "expect": {
+            "phase": "off",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "alive",
+            "at": "2026-11-15T10:40:00.000Z"
+          },
+          "expect": {
+            "phase": "off",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 3,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "back-on",
+                "level": 3,
+                "at": "2026-11-15T11:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 2,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:01:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical-drop",
+                "level": 2,
+                "at": "2026-11-15T11:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 2,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:02:00.000Z"
+          },
+          "expect": {
+            "phase": "charging",
+            "announcements": [
+              {
+                "kind": "charging",
+                "level": 2,
+                "at": "2026-11-15T11:02:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "rallume-en-charge",
+      "description": "Rallumé déjà branché : le retour puis la charge, dans cet ordre.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 4,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "tick",
+            "now": "2026-11-15T10:10:00.000Z"
+          },
+          "expect": {
+            "phase": "off",
+            "announcements": [
+              {
+                "kind": "probably-off",
+                "level": 4,
+                "at": "2026-11-15T10:10:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:30:00.000Z"
+          },
+          "expect": {
+            "phase": "charging",
+            "announcements": [
+              {
+                "kind": "back-on",
+                "level": 4,
+                "at": "2026-11-15T10:30:00.000Z"
+              },
+              {
+                "kind": "charging",
+                "level": 4,
+                "at": "2026-11-15T10:30:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "rallume-recharge-ailleurs",
+      "description": "Rallumé au-dessus de 80 % sans charge : il a été rechargé éteint.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 4,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "tick",
+            "now": "2026-11-15T10:10:00.000Z"
+          },
+          "expect": {
+            "phase": "off",
+            "announcements": [
+              {
+                "kind": "probably-off",
+                "level": 4,
+                "at": "2026-11-15T10:10:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 90,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:30:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "back-on",
+                "level": 90,
+                "at": "2026-11-15T11:30:00.000Z"
+              },
+              {
+                "kind": "recharged",
+                "level": 90,
+                "at": "2026-11-15T11:30:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "rallume-a-mi-charge",
+      "description": "Rallumé entre 35 et 80 % sans charge : le retour clôt l'épisode, sans « rechargé ».",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 4,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "tick",
+            "now": "2026-11-15T10:10:00.000Z"
+          },
+          "expect": {
+            "phase": "off",
+            "announcements": [
+              {
+                "kind": "probably-off",
+                "level": 4,
+                "at": "2026-11-15T10:10:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 50,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:30:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "back-on",
+                "level": 50,
+                "at": "2026-11-15T11:30:00.000Z"
+              },
+              {
+                "kind": "ended",
+                "level": 50,
+                "at": "2026-11-15T11:30:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recharge-a-100",
+      "description": "Branché après le critique : la veille de recharge annonce « rechargé » à 100 %.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 5,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 5,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 5,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "charging",
+            "announcements": [
+              {
+                "kind": "charging",
+                "level": 5,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 60,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:30:00.000Z"
+          },
+          "expect": {
+            "phase": "charging",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 100,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:00:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "recharged",
+                "level": 100,
+                "at": "2026-11-15T11:00:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "debranche-au-dessus-de-80",
+      "description": "Débranché au-dessus de 80 % après le critique : rechargé.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 5,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 5,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 6,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "charging",
+            "announcements": [
+              {
+                "kind": "charging",
+                "level": 6,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 85,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:50:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "recharged",
+                "level": 85,
+                "at": "2026-11-15T10:50:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "debranche-sous-80",
+      "description": "Débranché entre 30 et 80 % après le critique : l'épisode se clôt sans « rechargé ».",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 5,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 5,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 6,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "charging",
+            "announcements": [
+              {
+                "kind": "charging",
+                "level": 6,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 50,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:20:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "ended",
+                "level": 50,
+                "at": "2026-11-15T10:20:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "critique-remonte-sans-charge",
+      "description": "En critique, un relevé au-dessus de 35 % non branché clôt l'épisode ; au-dessus de 80 %, c'est « rechargé ».",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 5,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 5,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 20,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 40,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:02:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "ended",
+                "level": 40,
+                "at": "2026-11-15T10:02:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:30:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 4,
+                "at": "2026-11-15T11:30:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 95,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T11:31:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": [
+              {
+                "kind": "recharged",
+                "level": 95,
+                "at": "2026-11-15T11:31:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "releve-ancien-ignore",
+      "description": "Un relevé plus ancien que le dernier ne change rien.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 28,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:05:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 28,
+                "at": "2026-11-15T10:05:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 50,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 4,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:06:00.000Z"
+          },
+          "expect": {
+            "phase": "critical",
+            "announcements": [
+              {
+                "kind": "critical",
+                "level": 4,
+                "at": "2026-11-15T10:06:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "branche-hors-episode",
+      "description": "Branché sous le seuil, aucune alerte ; débranché, l'alerte part.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 20,
+            "charging": true,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "normal",
+            "announcements": []
+          }
+        },
+        {
+          "input": {
+            "kind": "reading",
+            "level": 20,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:01:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 20,
+                "at": "2026-11-15T10:01:00.000Z"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "tick-hors-critique",
+      "description": "L'extinction n'est présumée qu'en critique.",
+      "steps": [
+        {
+          "input": {
+            "kind": "reading",
+            "level": 20,
+            "charging": false,
+            "lowPower": false,
+            "measuredAt": "2026-11-15T10:00:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": [
+              {
+                "kind": "low",
+                "level": 20,
+                "at": "2026-11-15T10:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "input": {
+            "kind": "tick",
+            "now": "2026-11-15T11:00:00.000Z"
+          },
+          "expect": {
+            "phase": "low",
+            "announcements": []
+          }
+        }
+      ]
+    }
+  ],
+  "channels": [
+    {
+      "kind": "low",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "low",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "low",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "none"
+    },
+    {
+      "kind": "low",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "none"
+    },
+    {
+      "kind": "threshold",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "threshold",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "threshold",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "none"
+    },
+    {
+      "kind": "threshold",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "none"
+    },
+    {
+      "kind": "critical-drop",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "critical-drop",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "critical-drop",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "none"
+    },
+    {
+      "kind": "critical-drop",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "none"
+    },
+    {
+      "kind": "ended",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "ended",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "ended",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "none"
+    },
+    {
+      "kind": "ended",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "none"
+    },
+    {
+      "kind": "critical",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "critical",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "critical",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "push"
+    },
+    {
+      "kind": "critical",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "push"
+    },
+    {
+      "kind": "probably-off",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "probably-off",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "probably-off",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "push"
+    },
+    {
+      "kind": "probably-off",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "push"
+    },
+    {
+      "kind": "back-on",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "back-on",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "back-on",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "push"
+    },
+    {
+      "kind": "back-on",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "push"
+    },
+    {
+      "kind": "recharged",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "recharged",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "recharged",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "push"
+    },
+    {
+      "kind": "recharged",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "push"
+    },
+    {
+      "kind": "charging",
+      "inConversation": true,
+      "receivedCritical": false,
+      "expected": "socket"
+    },
+    {
+      "kind": "charging",
+      "inConversation": true,
+      "receivedCritical": true,
+      "expected": "socket"
+    },
+    {
+      "kind": "charging",
+      "inConversation": false,
+      "receivedCritical": false,
+      "expected": "none"
+    },
+    {
+      "kind": "charging",
+      "inConversation": false,
+      "receivedCritical": true,
+      "expected": "push"
+    }
+  ],
+  "consent": [
+    {
+      "feature": "device.battery",
+      "stored": null,
+      "effectiveLevel": "CLOSE",
+      "expected": "refused"
+    },
+    {
+      "feature": "device.battery",
+      "stored": true,
+      "effectiveLevel": "CLOSE",
+      "expected": "granted"
+    },
+    {
+      "feature": "device.battery",
+      "stored": false,
+      "effectiveLevel": "CLOSE",
+      "expected": "refused"
+    },
+    {
+      "feature": "device.battery",
+      "stored": null,
+      "effectiveLevel": "BLOOD",
+      "expected": "granted"
+    },
+    {
+      "feature": "device.battery",
+      "stored": false,
+      "effectiveLevel": "BLOOD",
+      "expected": "refused"
+    },
+    {
+      "feature": "device.battery",
+      "stored": true,
+      "effectiveLevel": "BLOOD",
+      "globallyDisabled": true,
+      "expected": "refused"
+    },
+    {
+      "feature": "device.battery",
+      "stored": null,
+      "effectiveLevel": "BLOOD",
+      "globallyDisabled": true,
+      "expected": "refused"
+    },
+    {
+      "feature": "device.battery.pull",
+      "stored": null,
+      "effectiveLevel": "BLOOD",
+      "expected": "granted"
+    },
+    {
+      "feature": "listening.title",
+      "stored": null,
+      "effectiveLevel": "BLOOD",
+      "expected": "refused"
+    },
+    {
+      "feature": "listening.title",
+      "stored": true,
+      "effectiveLevel": "BLOOD",
+      "expected": "granted"
+    }
+  ],
+  "estimates": [
+    {
+      "id": "pente-reguliere",
+      "anchor": {
+        "kind": "reading",
+        "level": 30,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:00:00.000Z"
+      },
+      "current": {
+        "kind": "reading",
+        "level": 20,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:30:00.000Z"
+      },
+      "expected": 60
+    },
+    {
+      "id": "arrondi",
+      "anchor": {
+        "kind": "reading",
+        "level": 29,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:00:00.000Z"
+      },
+      "current": {
+        "kind": "reading",
+        "level": 26,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:10:00.000Z"
+      },
+      "expected": 87
+    },
+    {
+      "id": "aucune-perte",
+      "anchor": {
+        "kind": "reading",
+        "level": 20,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:00:00.000Z"
+      },
+      "current": {
+        "kind": "reading",
+        "level": 20,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:30:00.000Z"
+      },
+      "expected": null
+    },
+    {
+      "id": "en-charge",
+      "anchor": {
+        "kind": "reading",
+        "level": 20,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:00:00.000Z"
+      },
+      "current": {
+        "kind": "reading",
+        "level": 25,
+        "charging": true,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:30:00.000Z"
+      },
+      "expected": null
+    },
+    {
+      "id": "ancre-branchee",
+      "anchor": {
+        "kind": "reading",
+        "level": 20,
+        "charging": true,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:00:00.000Z"
+      },
+      "current": {
+        "kind": "reading",
+        "level": 15,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:30:00.000Z"
+      },
+      "expected": null
+    },
+    {
+      "id": "ancre-posterieure",
+      "anchor": {
+        "kind": "reading",
+        "level": 30,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:30:00.000Z"
+      },
+      "current": {
+        "kind": "reading",
+        "level": 20,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:00:00.000Z"
+      },
+      "expected": null
+    },
+    {
+      "id": "sans-ancre",
+      "anchor": null,
+      "current": {
+        "kind": "reading",
+        "level": 20,
+        "charging": false,
+        "lowPower": false,
+        "measuredAt": "2026-11-15T10:30:00.000Z"
+      },
+      "expected": null
+    }
+  ],
+  "conversation": [
+    {
+      "id": "conversation-ouverte",
+      "now": "2026-11-15T11:00:00.000Z",
+      "roomOpen": true,
+      "lastExchangeAt": null,
+      "awaitingReply": false,
+      "expected": true
+    },
+    {
+      "id": "echange-recent",
+      "now": "2026-11-15T11:00:00.000Z",
+      "roomOpen": false,
+      "lastExchangeAt": "2026-11-15T10:46:00.000Z",
+      "awaitingReply": false,
+      "expected": true
+    },
+    {
+      "id": "echange-a-15-min-pile",
+      "now": "2026-11-15T11:00:00.000Z",
+      "roomOpen": false,
+      "lastExchangeAt": "2026-11-15T10:45:00.000Z",
+      "awaitingReply": false,
+      "expected": true
+    },
+    {
+      "id": "echange-ancien",
+      "now": "2026-11-15T11:00:00.000Z",
+      "roomOpen": false,
+      "lastExchangeAt": "2026-11-15T10:44:00.000Z",
+      "awaitingReply": false,
+      "expected": false
+    },
+    {
+      "id": "reponse-attendue",
+      "now": "2026-11-15T11:00:00.000Z",
+      "roomOpen": false,
+      "lastExchangeAt": "2026-11-15T10:00:00.000Z",
+      "awaitingReply": true,
+      "expected": true
+    },
+    {
+      "id": "rien",
+      "now": "2026-11-15T11:00:00.000Z",
+      "roomOpen": false,
+      "lastExchangeAt": null,
+      "awaitingReply": false,
+      "expected": false
+    }
+  ]
+}

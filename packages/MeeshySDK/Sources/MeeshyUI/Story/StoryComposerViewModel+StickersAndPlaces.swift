@@ -8,8 +8,8 @@ extension StoryComposerViewModel {
     /// Pose une pastille de lieu en BAS de slide, centrée (brief T20) — hors
     /// timeline : elle reste visible tant que la slide l'est. Écrit dans
     /// `currentEffects`, la seule source de vérité (et la seule unité persistée
-    /// / envoyée au serveur). Décalage en cascade comme les stickers pour que
-    /// deux lieux successifs ne se superposent pas exactement.
+    /// / envoyée au serveur). Le lieu garde sa place DESSINÉE, en bas de la scène, décalée d'un
+    /// cran par lieu pour que deux pastilles successives ne se superposent pas.
     /// - Parameter styleId: le gabarit qui DÉCORE la pastille (#4717). `nil`
     ///   rend la pastille d'origine, au pixel près — c'est le cas de la porte
     ///   canonique du lieu, qui n'a pas à choisir une décoration.
@@ -50,11 +50,9 @@ extension StoryComposerViewModel {
                            provider: String? = nil,
                            scale: Double? = nil) -> StorySticker? {
         guard canAddSticker else { refuse(.sticker); return nil }
-        let count = currentEffects.stickerObjects?.count ?? 0
-        let offset = Double(count % 5) * 0.04
         var sticker = StorySticker(emoji: emoji, provider: provider,
                                    sourceLanguage: declaredContentLanguage,
-                                   x: 0.5 + offset, y: 0.5 + offset)
+                                   x: StoryObjectPlacement.center.x, y: StoryObjectPlacement.center.y)
         if let scale { sticker.scale = scale }
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
@@ -72,7 +70,7 @@ extension StoryComposerViewModel {
     /// **Pose une DÉCORATION** — un gabarit et ses emplacements déjà figés
     /// (#4716).
     ///
-    /// Le placement, la cascade et le z-order sont ceux de `addSticker(emoji:)` :
+    /// Le placement (au centre, #18719) et le z-order sont ceux de `addSticker(emoji:)` :
     /// une décoration est un sticker, pas une sixième famille de scène.
     ///
     /// Deux choses lui sont propres :
@@ -87,13 +85,11 @@ extension StoryComposerViewModel {
     public func addSticker(template: StickerTemplate,
                            slots: [String: String]) -> StorySticker? {
         guard canAddSticker else { refuse(.sticker); return nil }
-        let count = currentEffects.stickerObjects?.count ?? 0
-        let offset = Double(count % 5) * 0.04
         var sticker = StorySticker(emoji: template.fallbackEmoji,
                                    templateId: template.id,
                                    slots: slots,
                                    sourceLanguage: declaredContentLanguage,
-                                   x: 0.5 + offset, y: 0.5 + offset)
+                                   x: StoryObjectPlacement.center.x, y: StoryObjectPlacement.center.y)
         sticker.scale = template.posedScale
         sticker.animation = template.animation
         var effects = currentEffects

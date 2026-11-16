@@ -67,6 +67,7 @@ final class BackgroundTaskManager {
     }
 
     func registerTasks() {
+        BatteryBackgroundRefresh.register()
         // `using: .main` is load-bearing: these launch-handler closures are
         // inferred @MainActor (class isolation + SWIFT_DEFAULT_ACTOR_ISOLATION),
         // so the Swift 6 runtime asserts the main queue when they run. With
@@ -100,6 +101,13 @@ final class BackgroundTaskManager {
         }
 
         logger.info("Background tasks registered")
+    }
+
+    /// Au passage en arrière-plan : la synchronisation, le préchargement et le relevé de batterie (#14147).
+    func scheduleBackgroundWork() {
+        scheduleConversationSync()
+        scheduleMessagePrefetch()
+        BatteryBackgroundRefresh.schedule()
     }
 
     func scheduleConversationSync(after delay: TimeInterval? = nil) {

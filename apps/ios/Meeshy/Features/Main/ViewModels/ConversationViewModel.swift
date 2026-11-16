@@ -715,6 +715,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
+        guard startupDependencies.readGate.marksReading else { return }
         #if DEBUG
         VitrineRendu.shared.conversationAffichee(self, visibles: visibleIds)
         #endif
@@ -740,6 +741,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// aucun `MessageStatusEntry.readAt` individuel n'est gelé pour un
     /// message que le lecteur n'a pas vu bulle par bulle.
     func markCaughtUpFromSummaryOrRiver() {
+        guard startupDependencies.readGate.marksReading else { return }
         afterReadVisit.noteAll(among: messages)
         // Marquée non lue à l'instant (iPad, depuis la liste) : la sortie ne rattrape pas — elle effacerait la pastille.
         guard !ExplicitUnreadMarks.consume(conversationId) else { return }

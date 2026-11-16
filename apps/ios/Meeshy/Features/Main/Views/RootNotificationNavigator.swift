@@ -121,7 +121,7 @@ struct RootNotificationNavigator {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .deviceBattery, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
                 router.presentProfileSheet(ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId))
             }

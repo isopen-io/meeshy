@@ -67,6 +67,8 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case locationTemporary = "location.temporary"
     case locationHistory = "location.history"
     case locationProximity = "location.proximity"
+    case deviceBattery = "device.battery"
+    case deviceBatteryPull = "device.battery.pull"
     case acquaintanceAuto = "acquaintance.auto"
 
     /// `isRelationFeature` : une feature qu'un serveur plus récent ajoute n'est
@@ -83,9 +85,9 @@ public enum RelationFeature: String, CaseIterable, Sendable {
         switch self {
         case .presenceOnline, .gameBasic, .bring, .locationTemporary: return .friend
         case .presenceDetailed, .gameSparksGlory, .notifyNewContent, .relayCommentersOnMyPosts,
-             .audienceClose, .listeningCategory, .talkie, .together: return .close
+             .audienceClose, .listeningCategory, .talkie, .together, .deviceBattery: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
-             .locationLive, .locationHistory, .locationProximity: return .blood
+             .locationLive, .locationHistory, .locationProximity, .deviceBatteryPull: return .blood
         case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
         case .acquaintanceAuto, .dmRequest, .callRing: return .public
         case .viewsIdentity: return .community
@@ -97,7 +99,8 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     public var requiresConsent: Bool {
         switch self {
         case .bring, .talkie, .listeningCategory, .listeningTitle,
-             .locationLive, .locationTemporary, .locationHistory, .locationProximity: return true
+             .locationLive, .locationTemporary, .locationHistory, .locationProximity,
+             .deviceBattery, .deviceBatteryPull: return true
         default: return false
         }
     }
@@ -106,8 +109,19 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// (`RELATION_DIRECTED_FEATURES`).
     public var isDirected: Bool {
         switch self {
-        case .bring, .talkie, .together, .acquaintanceAuto, .dmRequest, .callRing: return true
+        case .bring, .talkie, .together, .acquaintanceAuto, .dmRequest, .callRing, .deviceBatteryPull: return true
         default: return false
+        }
+    }
+
+    /// Le niveau à partir duquel le consentement de l'ÉMETTEUR est accordé PAR DÉFAUT
+    /// (`RELATION_EMITTER_CONSENT_DEFAULT_LEVEL`, #14147) : la batterie part entre Sangs sans
+    /// confirmation, retirable ; entre Proches elle attend un accord. `nil` = seul un accord
+    /// stocké ouvre. Le serveur résout ; le miroir sert à ne pas proposer ce qu'il refusera.
+    public var emitterConsentDefaultLevel: RelationLevel? {
+        switch self {
+        case .deviceBattery, .deviceBatteryPull: return .blood
+        default: return nil
         }
     }
 

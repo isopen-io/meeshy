@@ -44,6 +44,8 @@ export const RELATION_FEATURES = [
   'location.temporary',
   'location.history',
   'location.proximity',
+  'device.battery',
+  'device.battery.pull',
   'acquaintance.auto',
 ] as const;
 
@@ -81,6 +83,8 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
   'location.temporary': 'FRIEND',
   'location.history': 'BLOOD',
   'location.proximity': 'BLOOD',
+  'device.battery': 'CLOSE',
+  'device.battery.pull': 'BLOOD',
   'acquaintance.auto': 'PUBLIC',
 };
 
@@ -125,7 +129,7 @@ export const postCircleAudienceFloor = (visibility: unknown): RelationLevel | nu
  * pas `'granted'`), l'orchestrateur ne les RÉSOUT pas de même :
  *
  * 1. le CONSENTEMENT RGPD de l'ÉMETTEUR (art. 7) — ce que je partage de moi :
- *    catégorie et titre d'écoute, position, historique, proximité. Recueilli
+ *    catégorie et titre d'écoute, position, historique, proximité, batterie. Recueilli
  *    explicitement (écran à l'entrée en Proche, rituel du Sang), FAUX par défaut,
  *    retirable ; `consent: 'granted'` seulement sur un accord stocké ;
  * 2. la PRÉFÉRENCE DE RÉCEPTION du DESTINATAIRE — ce que j'accepte de recevoir :
@@ -149,7 +153,24 @@ export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = n
   'location.temporary',
   'location.history',
   'location.proximity',
+  'device.battery',
+  'device.battery.pull',
 ]);
+
+/**
+ * LE CONSENTEMENT DE L'ÉMETTEUR ACCORDÉ PAR DÉFAUT À PARTIR D'UN NIVEAU (#14147, décision
+ * porteur du 2026-11-14) — la batterie entre Sangs part sans confirmation, retirable par
+ * personne ou pour tous ; entre Proches, elle attend un accord donné une fois, jamais
+ * pré-coché. La colonne de la paire est TRI-ÉTAT : nulle = ce défaut, `true` = accordé,
+ * `false` = refusé. Une feature absente de cette table garde le sens historique : seul un
+ * accord stocké l'ouvre. Résolution : `resolveEmitterConsent` (`relation-emitter-consent.ts`).
+ *
+ * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette table dans ce fichier.
+ */
+export const RELATION_EMITTER_CONSENT_DEFAULT_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
+  'device.battery': 'BLOOD',
+  'device.battery.pull': 'BLOOD',
+};
 
 /**
  * Les features dont la loi exige `consent: 'granted'` — l'UNION des deux natures
@@ -165,6 +186,8 @@ export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<R
   'location.temporary',
   'location.history',
   'location.proximity',
+  'device.battery',
+  'device.battery.pull',
 ]);
 
 /** Actions adressées à UNE AUTRE personne : elles n'ont aucun sens envers soi-même. */
@@ -175,6 +198,7 @@ export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<
   'acquaintance.auto',
   'dm.request',
   'call.ring',
+  'device.battery.pull',
 ]);
 
 /**

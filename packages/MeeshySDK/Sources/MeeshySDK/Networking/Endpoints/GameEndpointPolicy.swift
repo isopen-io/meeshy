@@ -29,6 +29,9 @@ public extension MeEndpoint {
         switch self {
         case .birthDate:
             return .structured
+        case .deviceBattery:
+            // Le relevé de batterie (#14147) : `BATTERY_RATE_LIMITED` attend le prochain changement, il ne se rejoue pas.
+            return .structured
         case .gameChestClaim, .gameDuoByDuoIdAbandon, .gameDuoByDuoIdAccept, .gameDuoInvite,
              .gameFlameFreezes, .gameFlameRelight, .gameGuideSeen, .gameLeagueConsent,
              .gameLeagueFriends, .gameLeaguePseudonym, .gameLeagueWeek,

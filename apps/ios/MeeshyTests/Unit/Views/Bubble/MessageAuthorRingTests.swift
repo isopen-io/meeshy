@@ -133,7 +133,7 @@ final class MessageAuthorRingTests: XCTestCase {
         "Main/Views/VisitorContentView.swift": (1, "visiteur — le partageur du lien servi ne porte pas le contour (#10957)"),
         "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": (1, "invitation — le créateur du lien servi ne porte pas le contour (#10957)"),
         "MeeshyUI/Notifications/NotificationRowView.swift": (1, "notification — l'acteur est un instantané écrit sans contour (#10957)"),
-        "MeeshyUI/Notifications/NotificationToastView.swift": (1, "notification — l'acteur est un instantané écrit sans contour (#10957)"),
+        "MeeshyUI/Notifications/NotificationToastView.swift": (2, "notification — l'acteur est un instantané écrit sans contour (#10957) ; l'enveloppe de la bannière tirée repeint ce même instantané le temps du morphisme (#18721)"),
         "Auth/Views/LoginView.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
         "Auth/Views/AccountSwitcherSheet.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
         "Profile/Views/ProfileOwnAvatar.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),

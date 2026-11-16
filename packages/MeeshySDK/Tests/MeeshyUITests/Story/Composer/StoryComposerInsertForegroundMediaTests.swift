@@ -154,7 +154,7 @@ final class StoryComposerInsertForegroundMediaTests: XCTestCase {
         XCTAssertEqual(fond.scale, 1)
     }
 
-    func test_insertForegroundImage_overAnExistingBackground_stillCascadesAsAPosedObject() throws {
+    func test_insertForegroundImage_overAnExistingBackground_isPosedAtTheCentre() throws {
         let sut = makeSUT()
         _ = sut.insertForegroundImage(makeImage(), fileURL: nil, intoSlideId: sut.currentSlide.id, objectId: "bg")
         _ = sut.addText()
@@ -162,6 +162,6 @@ final class StoryComposerInsertForegroundMediaTests: XCTestCase {
             makeImage(), fileURL: nil, intoSlideId: sut.currentSlide.id, objectId: "pose"))
         let pose = try XCTUnwrap(sut.currentSlide.effects.mediaObjects?.first { $0.id == obj.id })
         XCTAssertFalse(pose.isBackground)
-        XCTAssertNotEqual(pose.x, 0.5, "un objet posé garde la cascade")
+        XCTAssertEqual(pose.x, 0.5, accuracy: 0.0001, "un objet posé arrive au centre, sans cascade (#18719)")
     }
 }

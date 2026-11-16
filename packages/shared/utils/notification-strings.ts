@@ -38,6 +38,8 @@ export const NOTIFICATION_STRING_KEYS = [
   'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',
   'contact.recentlyActiveAction', 'contact.recentlyActiveBody',
   'contact.acquaintanceAction', 'contact.acquaintanceBody',
+  'battery.criticalAction', 'battery.probablyOffAction', 'battery.backOnAction', 'battery.chargingAction', 'battery.rechargedAction',
+  'battery.levelBody', 'battery.offBody',
   'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
   'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',

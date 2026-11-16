@@ -77,6 +77,7 @@
     <string name="sessions_revoke_all_error">No se ha podido cerrar la sesión en los demás dispositivos.</string>
     <string name="settings_notif_type_contact_activity">Regreso de un contacto</string>
     <string name="settings_notif_type_contact_activity_subtitle">Un contacto vuelve a Meeshy, como máximo cada 3 horas.</string>
+    <string name="settings_notif_type_device_battery">Batería de mis Cercanos</string>
     <string name="settings_packs_orientation">Los Meeshes compran packs: fondos de conversación, anillos de avatar, banners.</string>
     <string name="settings_packs_title">Tienda</string>
     <string name="settings_privacy_analytics_info">Métricas de uso anónimas: pantallas abiertas, funciones utilizadas, fallos. Nunca el contenido de tus mensajes ni tus contactos.</string>

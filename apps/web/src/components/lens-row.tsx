@@ -43,6 +43,7 @@ import { avatarOf, initialsOf, isGroup, peerOf, presenceKeyOf, titleOf } from '@
 import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { usePresence } from '@/lib/view/use-presence';
 import { useListeningBand } from '@/lib/now-playing/listening-band';
+import { useBatteryBadge } from '@/lib/battery/use-battery';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
 import { navigate, useIsCurrentPath } from '@/lib/router';
 import { Link, href } from '@/routes/route-table';
@@ -434,6 +435,7 @@ function LensRowImpl({
   /* CE QU'ÉCOUTE LE PAIR, au détail que son cercle ouvre (#16733) — iso
      `ConversationRowAvatar` : le bandeau de l'en-tête, sur la rangée. */
   const peerListening = useListeningBand(group ? undefined : listeningKeyOf(peerOf(conversation, viewerId)), labelLanguage);
+  const peerBattery = useBatteryBadge(group ? undefined : listeningKeyOf(peerOf(conversation, viewerId)), labelLanguage);
   const peerSignals = group
     ? {}
     : {
@@ -448,6 +450,7 @@ function LensRowImpl({
           ? {}
           : { mood: peerMood, moodStill: true, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }),
         ...(peerListening === undefined ? {} : { listening: peerListening }),
+        ...(peerBattery === undefined ? {} : { battery: peerBattery }),
       };
   /* … ET ELLE SE TOUCHE, sur l'avatar qui porte déjà le profil du pair : la
      cible est le frère de ce lien-là (`Avatar.moodAuthorId`). */

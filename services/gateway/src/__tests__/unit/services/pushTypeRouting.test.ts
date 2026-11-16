@@ -181,3 +181,15 @@ describe('PushNotificationService.sendToUser — le chokepoint applique la loi',
     expect(await servedTokenIds([row('shell-old', shell('2.0.0')), row('iphone', iphone(null))], PHOTO)).toEqual([]);
   });
 });
+
+describe('battery_pull (#14147) — le réveil de relevé ne part vers aucun client qui ne sait pas relever', () => {
+  it('aucun client publié ne le reçoit, quelle que soit sa version', () => {
+    for (const token of [iphone('99.0.0'), nativeAndroid('99.0.0'), shell('99.0.0'), browser('99.0.0')]) {
+      expect(tokenRoutesPushType(token, 'battery_pull')).toBe(false);
+    }
+  });
+
+  it('la notification device_battery, elle, n\'a pas de plancher : sa bannière dit tout', () => {
+    expect(tokenRoutesPushType(iphone(null), 'device_battery')).toBe(true);
+  });
+});

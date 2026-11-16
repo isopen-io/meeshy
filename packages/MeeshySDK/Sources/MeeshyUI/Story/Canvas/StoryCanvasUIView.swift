@@ -188,12 +188,11 @@ public final class StoryCanvasUIView: UIView {
     /// que devient l'ancien. Non câblée, l'action n'est pas offerte.
     public var onItemMadeBackground: ((String, CanvasItemKind) -> Void)?
 
-    /// Called after the context-menu "Dupliquer" action creates a copy of an
-    /// element. Parent uses this to mirror viewModel-owned ephemeral state
-    /// (loadedImages / loadedVideoURLs) under the new UUID so the duplicate
-    /// inherits its thumbnail / preview immediately. Fires AFTER the slide
-    /// mutation has been propagated via `onItemModified`.
+    /// After "Dupliquer" copies an element, the parent mirrors its ephemeral state (loadedImages /
+    /// loadedVideoURLs) under the new UUID. Fires AFTER `onItemModified`.
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: CanvasItemKind) -> Void)?
+    /// Le glisser d'un objet de premier plan, pour les cibles de l'hôte (#18712).
+    public var onItemDragged: ((StoryCanvasItemDrag) -> Void)?
 
     /// Fired exactly once per slide rebuild when the background media has
     /// finished loading (image bytes decoded into `contents`, video transitioned
@@ -619,6 +618,8 @@ public final class StoryCanvasUIView: UIView {
     var inlineEditor: StoryInlineTextEditor?
     /// Id du texte en cours d'édition en place (nil hors édition).
     public internal(set) var inlineEditingTextId: String?
+    /// La saisie demandée avant sa calque : la reconstruction qui pose la calque l'ouvre (#18735).
+    var pendingInlineEditTextId: String?
     /// Voir `StoryCanvasUIView+InlineEditYield.swift`.
     public var inlineEditYieldsToManipulation = false
     public internal(set) var suspendedInlineEditId: String?

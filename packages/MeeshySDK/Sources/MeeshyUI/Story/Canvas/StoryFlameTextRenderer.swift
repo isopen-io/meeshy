@@ -63,6 +63,26 @@ public nonisolated enum StoryFlameTextRenderer {
         return (wrapped < 0 ? wrapped + duration : wrapped) / duration
     }
 
+    // MARK: - Le scintillement
+
+    /// Le battement d'opacité de la chaleur : la MÊME table pour l'animation
+    /// de l'écran et pour l'image posée par l'export, qui ne joue aucune
+    /// animation (`StoryFlameLayer.show(atElapsed:)`).
+    static let flickerValues: [Double] = [1, 0.86, 0.97, 0.9, 1]
+    static let flickerKeyTimes: [Double] = [0, 0.23, 0.5, 0.71, 1]
+    public static let flickerDuration: CFTimeInterval = 0.9
+
+    /// L'opacité de la chaleur à `elapsed` secondes : l'interpolation
+    /// linéaire que `CAKeyframeAnimation` applique à la même table.
+    public static func flickerOpacity(atElapsed elapsed: Double) -> Double {
+        let t = phase(atElapsed: elapsed, duration: flickerDuration)
+        let segment = zip(zip(flickerKeyTimes, flickerKeyTimes.dropFirst()),
+                          zip(flickerValues, flickerValues.dropFirst()))
+            .first { times, _ in t <= times.1 }
+        guard let ((start, end), (from, to)) = segment, end > start else { return flickerValues.last ?? 1 }
+        return from + (to - from) * (t - start) / (end - start)
+    }
+
     // MARK: - La silhouette
 
     /// **La flamme naît des lettres et ne descend jamais.** Chaque rangée
@@ -366,6 +386,10 @@ public final class StoryFlameLayer: CALayer {
     /// — ce que peint `layer.render(in:)`.
     var riseWindow: CGRect? { riseNappe?.contentsRect }
 
+    /// L'opacité de la chaleur sur la calque MODÈLE — le scintillement que
+    /// peint `layer.render(in:)`.
+    var heatOpacity: Float? { heat?.opacity }
+
     static let riseKey = "flame.rise"
     static let swayKey = "flame.sway"
     static let flickerKey = "flame.flicker"
@@ -421,6 +445,7 @@ public final class StoryFlameLayer: CALayer {
         CATransaction.setDisableActions(true)
         riseNappe?.contentsRect = Self.window(phase: rise)
         swayNappe?.contentsRect = Self.window(phase: sway)
+        heat?.opacity = Float(StoryFlameTextRenderer.flickerOpacity(atElapsed: elapsed))
         CATransaction.commit()
     }
 
@@ -502,9 +527,9 @@ public final class StoryFlameLayer: CALayer {
         swayNappe.add(Self.rise(duration: StoryFlameTextRenderer.cycleDuration * StoryFlameTextRenderer.swayRatio),
                       forKey: Self.swayKey)
         let flicker = CAKeyframeAnimation(keyPath: "opacity")
-        flicker.values = [1, 0.86, 0.97, 0.9, 1]
-        flicker.keyTimes = [0, 0.23, 0.5, 0.71, 1]
-        flicker.duration = 0.9
+        flicker.values = StoryFlameTextRenderer.flickerValues
+        flicker.keyTimes = StoryFlameTextRenderer.flickerKeyTimes.map { NSNumber(value: $0) }
+        flicker.duration = StoryFlameTextRenderer.flickerDuration
         flicker.repeatCount = .infinity
         flicker.beginTime = AVCoreAnimationBeginTimeAtZero
         flicker.isRemovedOnCompletion = false
