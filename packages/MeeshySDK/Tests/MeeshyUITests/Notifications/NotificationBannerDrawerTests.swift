@@ -139,6 +139,14 @@ final class NotificationBannerDrawerTests: XCTestCase {
 
     /// Une feuille qui ne peint jamais (réseau froid, verrou) ne retient pas
     /// l'enveloppe indéfiniment : elle part au plafond.
+    /// Au relais, la feuille peinte montre déjà son en-tête : l'identité de
+    /// l'enveloppe s'éteint d'un coup, pour qu'un seul nom soit visible
+    /// pendant que le reste de l'enveloppe s'efface.
+    func test_handoff_identityLeavesAtOnce_whenTheEnvelopeFades() {
+        XCTAssertEqual(NotificationBannerHandoff.identityOpacity(fading: false), 1)
+        XCTAssertEqual(NotificationBannerHandoff.identityOpacity(fading: true), 0)
+    }
+
     func test_handoff_neverWaitsBeyondTheCeiling() {
         XCTAssertFalse(NotificationBannerHandoff.releasesEnvelope(
             morphSettled: true, sheetPainted: false, waited: NotificationBannerHandoff.ceiling - 0.01))
