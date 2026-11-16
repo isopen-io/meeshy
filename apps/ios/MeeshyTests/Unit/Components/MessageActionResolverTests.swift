@@ -784,6 +784,26 @@ final class MessageExitOfferTests: XCTestCase {
         }
     }
 
+    /// Un message FLOUTÉ sort noir de toute capture (#18831) — par le message
+    /// ou par une pièce —, sans se déclarer : la passerelle n'annonce que les
+    /// flammes et la vue unique.
+    func test_capture_blurredIsBlackAndNotDeclared() {
+        let blurred = message(effects: MessageEffects(flags: .blurred))
+        let blurredPiece = message(attachments: [photo(isBlurred: true)])
+        XCTAssertTrue(blurred.exitOffer.capture.shieldsCapture(surfaceAnnounces: true))
+        XCTAssertTrue(blurredPiece.exitOffer.capture.shieldsCapture(surfaceAnnounces: true))
+        XCTAssertTrue(ContentCaptureVisibility.renderedVerdict(for: blurred).shieldsCapture(surfaceAnnounces: true))
+        XCTAssertEqual(ContentCaptureVisibility.candidates(for: blurred, serverId: "507f1f77bcf86cd799439011").map(\.capture), [.free],
+                       "le flou ne se déclare pas : rien à annoncer")
+    }
+
+    /// Une flamme sort noire même sur une surface qui annonce (#18831), et reste annoncée.
+    func test_capture_flameIsBlackAndStillDeclared() {
+        let flame = message(of: .timedFlame)
+        XCTAssertTrue(flame.exitOffer.capture.shieldsCapture(surfaceAnnounces: true))
+        XCTAssertTrue(flame.exitOffer.capture.isDeclared)
+    }
+
     // MARK: - Menu d'appui long et feuille « Plus »
 
     private func context(_ message: Message) -> MessageMenuContext {

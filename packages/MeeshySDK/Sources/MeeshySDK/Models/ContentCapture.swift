@@ -50,22 +50,33 @@ public struct ContentCaptureReport: Equatable, Sendable, Encodable {
     public let messageIds: [String]
     public let kind: ContentCaptureKind
     public let captureId: String
+    /// #18830 — durée de l'enregistrement, en secondes, posée à sa FIN seulement
+    /// (`recordingSeconds`, facultatif côté passerelle, borné à `maxRecordingSeconds`).
+    public let recordingSeconds: Int?
+
+    /// `CONTENT_CAPTURE_MAX_RECORDING_SECONDS` de `@meeshy/shared`.
+    public static let maxRecordingSeconds = 86_400
 
     /// Messages par déclaration : la passerelle accepte jusqu'à 50
     /// (`CONTENT_CAPTURE_MAX_MESSAGES`) mais n'annonce que 10 avis par
     /// déclaration — au-delà, un message ne s'annoncerait pas.
     public static let maxMessages = 10
 
-    public init(conversationId: String, messageIds: [String], kind: ContentCaptureKind, captureId: String) {
+    public init(
+        conversationId: String, messageIds: [String], kind: ContentCaptureKind, captureId: String,
+        recordingSeconds: Int? = nil
+    ) {
         self.conversationId = conversationId
         self.messageIds = messageIds
         self.kind = kind
         self.captureId = captureId
+        self.recordingSeconds = recordingSeconds.map { min(max(0, $0), Self.maxRecordingSeconds) }
     }
 
     /// La charge de l'événement socket.
     public var socketPayload: [String: Any] {
-        ["conversationId": conversationId, "messageIds": messageIds, "kind": kind.rawValue, "captureId": captureId]
+        let base: [String: Any] = ["conversationId": conversationId, "messageIds": messageIds, "kind": kind.rawValue, "captureId": captureId]
+        return recordingSeconds.map { base.merging(["recordingSeconds": $0]) { _, new in new } } ?? base
     }
 
     /// Le corps REST.
@@ -73,9 +84,10 @@ public struct ContentCaptureReport: Equatable, Sendable, Encodable {
         public let messageIds: [String]
         public let kind: ContentCaptureKind
         public let captureId: String
+        public let recordingSeconds: Int?
     }
 
-    public var body: Body { Body(messageIds: messageIds, kind: kind, captureId: captureId) }
+    public var body: Body { Body(messageIds: messageIds, kind: kind, captureId: captureId, recordingSeconds: recordingSeconds) }
 
     /// 8 à 64 caractères `[A-Za-z0-9_-]`. FACULTATIF côté passerelle, qui ne
     /// s'en sert plus que pour corréler : elle annonce au plus une fois par
@@ -103,7 +115,8 @@ public struct ContentCaptureReport: Equatable, Sendable, Encodable {
     public static func reports(
         for candidates: [ContentCaptureCandidate],
         kind: ContentCaptureKind,
-        captureId: String
+        captureId: String,
+        recordingSeconds: Int? = nil
     ) -> [ContentCaptureReport] {
         var seen = Set<String>()
         var order: [String] = []
@@ -115,7 +128,10 @@ public struct ContentCaptureReport: Equatable, Sendable, Encodable {
         }
         return order.flatMap { conversationId in
             chunks(idsByConversation[conversationId] ?? [], of: maxMessages).map {
-                ContentCaptureReport(conversationId: conversationId, messageIds: $0, kind: kind, captureId: captureId)
+                ContentCaptureReport(
+                    conversationId: conversationId, messageIds: $0, kind: kind, captureId: captureId,
+                    recordingSeconds: recordingSeconds
+                )
             }
         }
     }
@@ -142,7 +158,10 @@ public struct ContentCaptureTracker: Equatable, Sendable {
     public static let recordingFlushInterval: TimeInterval = 10
 
     public private(set) var recordingCaptureId: String?
+    private var recordingStartedAt: Date?
     private var declared: Set<String> = []
+    /// Ce que l'enregistrement a déclaré, dans l'ordre : sa fin le redit avec sa durée (#18830).
+    private var seen: [ContentCaptureCandidate] = []
     private var pending: [ContentCaptureCandidate] = []
     private var lastFlush: [String: Date] = [:]
 
@@ -160,7 +179,9 @@ public struct ContentCaptureTracker: Equatable, Sendable {
     public mutating func recordingStarted(visible: [ContentCaptureCandidate], captureId: String, at now: Date) -> [ContentCaptureReport] {
         guard recordingCaptureId == nil else { return note(visible: visible, at: now) }
         recordingCaptureId = captureId
+        recordingStartedAt = now
         declared = []
+        seen = []
         pending = []
         lastFlush = [:]
         return note(visible: visible, at: now, force: true)
@@ -183,15 +204,24 @@ public struct ContentCaptureTracker: Equatable, Sendable {
         let leaving = pending.filter { due.contains($0.conversationId) }
         pending.removeAll { due.contains($0.conversationId) }
         leaving.forEach { declared.insert(Self.key($0)) }
+        seen.append(contentsOf: leaving)
         due.forEach { lastFlush[$0] = now }
         return ContentCaptureReport.reports(for: leaving, kind: .recording, captureId: captureId)
     }
 
-    /// L'enregistrement s'arrête : ce qui attendait part, et la session s'oublie.
+    /// L'enregistrement s'arrête : tout ce qu'il a vu — l'attente comprise —
+    /// repart UNE fois, sous son identifiant, avec sa DURÉE (#18830) ; la
+    /// passerelle crée l'avis d'un message encore inconnu et met à jour les
+    /// autres. Puis la session s'oublie.
     public mutating func recordingEnded(visible: [ContentCaptureCandidate], at now: Date) -> [ContentCaptureReport] {
-        let last = note(visible: visible, at: now, force: true)
+        guard let captureId = recordingCaptureId else { return [] }
+        _ = note(visible: visible, at: now, force: true)
+        let seconds = recordingStartedAt.map { Int(max(0, now.timeIntervalSince($0))) }
+        let last = ContentCaptureReport.reports(for: seen, kind: .recording, captureId: captureId, recordingSeconds: seconds)
         recordingCaptureId = nil
+        recordingStartedAt = nil
         declared = []
+        seen = []
         pending = []
         lastFlush = [:]
         return last
@@ -220,6 +250,8 @@ public struct ReportContentCapturePayload: Codable, Sendable, Equatable {
     public let messageIds: [String]
     public let kind: ContentCaptureKind
     public let captureId: String
+    /// #18830 — absent des lignes écrites avant lui : décodé `nil`.
+    public let recordingSeconds: Int?
 
     public init(clientMutationId: String = ClientMutationId.generate(), report: ContentCaptureReport) {
         self.clientMutationId = clientMutationId
@@ -227,10 +259,14 @@ public struct ReportContentCapturePayload: Codable, Sendable, Equatable {
         self.messageIds = report.messageIds
         self.kind = report.kind
         self.captureId = report.captureId
+        self.recordingSeconds = report.recordingSeconds
     }
 
     public var report: ContentCaptureReport {
-        ContentCaptureReport(conversationId: conversationId, messageIds: messageIds, kind: kind, captureId: captureId)
+        ContentCaptureReport(
+            conversationId: conversationId, messageIds: messageIds, kind: kind, captureId: captureId,
+            recordingSeconds: recordingSeconds
+        )
     }
 }
 

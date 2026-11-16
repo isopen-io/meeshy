@@ -77,13 +77,23 @@ public struct CaptureNoticeMetadata: Codable, Sendable, Equatable {
     public let captureKind: ContentCaptureKind
     /// Heure d'ENVOI du message capturé.
     public let sentAt: Date
+    /// #18830 — captures DISTINCTES de cette sorte (`count` servi par la passerelle) ;
+    /// un avis qui ne le dit pas en compte une.
+    public let count: Int
+    /// #18830 — durée cumulée des enregistrements, en secondes (`recordedSeconds`) ; `nil` si inconnue.
+    public let recordedSeconds: Int?
 
     /// L'issue se DÉRIVE de la nature — jamais de l'appelant.
     public static func outcome(of nature: ContentExitLaw.Nature) -> Outcome {
         nature == .viewOnce ? .blocked : .announced
     }
 
-    public init(actor: Actor, capturedMessageId: String, nature: ContentExitLaw.Nature, captureKind: ContentCaptureKind, sentAt: Date) {
+    public init(
+        actor: Actor, capturedMessageId: String, nature: ContentExitLaw.Nature, captureKind: ContentCaptureKind,
+        sentAt: Date, count: Int = 1, recordedSeconds: Int? = nil
+    ) {
+        self.count = max(1, count)
+        self.recordedSeconds = recordedSeconds.flatMap { $0 > 0 ? $0 : nil }
         self.actor = actor
         self.capturedMessageId = capturedMessageId
         self.nature = nature
@@ -93,7 +103,7 @@ public struct CaptureNoticeMetadata: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case kind, actor, capturedMessageId, nature, outcome, captureKind, sentAt
+        case kind, actor, capturedMessageId, nature, outcome, captureKind, sentAt, count, recordedSeconds
     }
 
     /// VALIDE plutôt que caste, comme `parseCaptureNotice` : `metadata` est
@@ -117,6 +127,11 @@ public struct CaptureNoticeMetadata: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(forKey: .outcome, in: c, debugDescription: "avis de capture incohérent")
         }
         self.sentAt = sentAt
+        // Tolérés : une forme illisible ne refuse pas l'avis, elle vaut « une capture, durée inconnue ».
+        let rawCount = (try? c.decodeIfPresent(Int.self, forKey: .count)) ?? nil
+        count = max(1, rawCount ?? 1)
+        let rawSeconds = (try? c.decodeIfPresent(Int.self, forKey: .recordedSeconds)) ?? nil
+        recordedSeconds = rawSeconds.flatMap { $0 > 0 ? $0 : nil }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -128,6 +143,8 @@ public struct CaptureNoticeMetadata: Codable, Sendable, Equatable {
         try c.encode(outcome, forKey: .outcome)
         try c.encode(captureKind, forKey: .captureKind)
         try c.encode(WireDate.string(from: sentAt), forKey: .sentAt)
+        if count > 1 { try c.encode(count, forKey: .count) }
+        try c.encodeIfPresent(recordedSeconds, forKey: .recordedSeconds)
     }
 
     /// L'instant ISO 8601, secondes fractionnaires ou non — indépendant de la
