@@ -4653,6 +4653,7 @@
 		FBD14E3370FF2516BA2428FE /* CallFrameCallTexts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA393DBB6C30A569B1440FAF /* CallFrameCallTexts.swift */; };
 		FBE1961096AA7CB6D02BCFFD /* ConversationRowAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F61B3F658BA78EEE3EE826 /* ConversationRowAvatar.swift */; };
 		FBE26B28594B8B32983A6CA4 /* ComposerPostTextPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C2D1773053C9BCD0248826 /* ComposerPostTextPill.swift */; };
+		FBF3BD7C8BF9F561E1663A11 /* MessageCardCropLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 387257F491E83CE5EBD7F18A /* MessageCardCropLayer.swift */; };
 		FBF5A680AEA3BE390DEF74FE /* ComposerTrimRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB47C7DDF6B6B7C784B66AB6 /* ComposerTrimRule.swift */; };
 		FC1C8794D4E4F58D7003817D /* EphemeralBurnWindSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1C1FF326E55D9273316E0F /* EphemeralBurnWindSourceTests.swift */; };
 		FC1E89DF5667DE37F4580CF9 /* OnboardingAgeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44E971C6867174B0A0CE264 /* OnboardingAgeCard.swift */; };
@@ -5879,6 +5880,7 @@
 		38661A5831DBBB52DC58DD76 /* ComposerLanguageFlagTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLanguageFlagTests.swift; sourceTree = "<group>"; };
 		3868CC815566BC1DD510D549 /* ComposerToolIconsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerToolIconsTests.swift; sourceTree = "<group>"; };
 		386FD50AF115663916D468DB /* ConversationListHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListHelpers.swift; sourceTree = "<group>"; };
+		387257F491E83CE5EBD7F18A /* MessageCardCropLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCardCropLayer.swift; sourceTree = "<group>"; };
 		38765243897DBB40F7ECE77D /* ConversationSearchHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSearchHandler.swift; sourceTree = "<group>"; };
 		388102E55279E4DF9CE78353 /* ConversationMediaFilmstrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMediaFilmstrip.swift; sourceTree = "<group>"; };
 		388155F36EE8CE2C486EB5E9 /* iPadRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPadRootView.swift; sourceTree = "<group>"; };
@@ -14047,6 +14049,7 @@
 				973056FAC47A6DDE7837C632 /* ImagerMenuButton.swift */,
 				CE2AE6F111D03FD32FAFF718 /* ImagerWandButton.swift */,
 				73E0E366B946289534E30162 /* MessageCardBackdropPicker.swift */,
+				387257F491E83CE5EBD7F18A /* MessageCardCropLayer.swift */,
 				5E96FE88CE7862BD8D6D27A0 /* MessageCardDiscussion.swift */,
 				59EFF2347F6E0A92CCA6C00D /* MessageCardExcerptStrip.swift */,
 				C7F0BDD1183450DF79ED2B77 /* MessageCardExportGallery.swift */,
@@ -17755,6 +17758,7 @@
 				653026EFAFE3B69353D53330 /* MessageArrivalMotion.swift in Sources */,
 				BA6EB7913D5A47311E44AE48 /* MessageBurningMarks.swift in Sources */,
 				3B3161F41E85852BAB395B66 /* MessageCardBackdropPicker.swift in Sources */,
+				FBF3BD7C8BF9F561E1663A11 /* MessageCardCropLayer.swift in Sources */,
 				7428FC97BE5F434EA4E02CCF /* MessageCardDiscussion.swift in Sources */,
 				5D350B12EDACE42ABE6754EA /* MessageCardExcerptStrip.swift in Sources */,
 				55EF5F3B4D5A0723E027BA54 /* MessageCardExportGallery.swift in Sources */,

@@ -39,19 +39,24 @@ extension MessageCardExportSheet {
             .buttonStyle(.plain)
             .accessibilityLabel(MessageCardExportText.partLabel(.background))
             .accessibilityHint(MessageCardExportText.text("export.card.hint", "Touchez une partie de la carte pour la régler"))
-            ForEach(Array(rendered.regions.enumerated()), id: \.offset) { _, region in
-                zone(region, scale: scale)
-            }
-            if let pinch {
-                pinchPreview(pinch, rendered: rendered, scale: scale)
+            if cropping {
+                cropLayer(rendered, scale: scale)
+            } else {
+                ForEach(Array(rendered.regions.enumerated()), id: \.offset) { _, region in
+                    zone(region, scale: scale)
+                }
+                if let pinch {
+                    pinchPreview(pinch, rendered: rendered, scale: scale)
+                }
             }
         }
         .frame(width: width, height: height)
         .environment(\.layoutDirection, .leftToRight)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
         .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-        .opacity(ready || pinch != nil ? 1 : 0.7)
+        .opacity(ready || pinch != nil || cropping ? 1 : 0.7)
         .animation(.easeInOut(duration: 0.2), value: ready)
+        .overlay(alignment: .topTrailing) { cropControl(rendered) }
         .gesture(cardPinch)
     }
 
@@ -108,7 +113,7 @@ extension MessageCardExportSheet {
     private var cardPinch: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                guard pinch?.fromZone != true, let part = focus, MessageCardScales.parts.contains(part) else { return }
+                guard !cropping, pinch?.fromZone != true, let part = focus, MessageCardScales.parts.contains(part) else { return }
                 pinch = MessageCardPinch(part: part, factor: value, fromZone: false)
             }
             .onEnded { value in

@@ -400,4 +400,65 @@ final class ImagineWorkshopTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Recadrer une photo qui déborde de son cadre (#18805)
+
+    private static func framed(_ id: String, backdrop: Bool = false) -> MessageCardFramedMedia {
+        MessageCardFramedMedia(mediaID: id, kind: .image, frame: MessageCardFrame(x: 0, y: 0, width: 400, height: 400),
+                               radius: backdrop ? 0 : 28, isBackdrop: backdrop)
+    }
+
+    func test_crop_isOfferedOnTheTouchedPhoto_neverOnAnotherPart() {
+        let framed = [Self.framed("fond", backdrop: true), Self.framed("photo")]
+        let pictured: Set<String> = ["fond", "photo"]
+        XCTAssertEqual(MessageCardCropRule.targets(framed: framed, pictured: pictured, focus: .media).map(\.mediaID), ["photo"])
+        XCTAssertEqual(MessageCardCropRule.targets(framed: framed, pictured: pictured, focus: .background).map(\.mediaID), ["fond"])
+        XCTAssertTrue(MessageCardCropRule.targets(framed: framed, pictured: pictured, focus: .reply).isEmpty)
+        XCTAssertTrue(MessageCardCropRule.targets(framed: framed, pictured: pictured, focus: nil).isEmpty)
+    }
+
+    func test_crop_needsThePixelsOfThePhoto() {
+        let framed = [Self.framed("photo"), Self.framed("loading")]
+        XCTAssertEqual(MessageCardCropRule.targets(framed: framed, pictured: ["photo"], focus: .media).map(\.mediaID), ["photo"])
+        XCTAssertTrue(MessageCardCropRule.usable(framed, pictured: []).isEmpty)
+    }
+
+    func test_crop_voiceOverRevealsTheAskedSideOfThePhoto() {
+        let media = Self.framed("photo")
+        let tall = MessageCardCropRule.revealed(.top, from: .centered, media: media, pixelWidth: 800, pixelHeight: 1600)
+        XCTAssertLessThan(tall.framing.focusY, 0.5, "montrer le haut amène le haut de la photo dans le cadre")
+        let bottom = MessageCardCropRule.revealed(.bottom, from: .centered, media: media, pixelWidth: 800, pixelHeight: 1600)
+        XCTAssertGreaterThan(bottom.framing.focusY, 0.5)
+        let wide = MessageCardCropRule.revealed(.left, from: .centered, media: media, pixelWidth: 1600, pixelHeight: 800)
+        XCTAssertLessThan(wide.framing.focusX, 0.5)
+        let blocked = MessageCardCropRule.revealed(.right, from: .centered, media: media, pixelWidth: 800, pixelHeight: 1600)
+        XCTAssertEqual(blocked.framing, .centered)
+        XCTAssertTrue(blocked.hitEdge, "une photo qui ne déborde pas en largeur bute")
+    }
+
+    func test_crop_theRenderKeyChangesWithTheFraming_andIgnoresACenteredOne() {
+        XCTAssertEqual(MessageCardCropRule.key([:]), MessageCardCropRule.key(["photo": .centered]))
+        XCTAssertNotEqual(MessageCardCropRule.key([:]), MessageCardCropRule.key(["photo": MessageCardFraming(zoom: 2)]))
+        XCTAssertEqual(MessageCardCropRule.key(["a": MessageCardFraming(zoom: 2), "b": MessageCardFraming(zoom: 3)]),
+                       MessageCardCropRule.key(["b": MessageCardFraming(zoom: 3), "a": MessageCardFraming(zoom: 2)]))
+    }
+
+    func test_crop_theFramingTravelsWithTheCard_toThePreviewAndEveryExport() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Export/MessageCardExportSheet.swift"))
+        XCTAssertTrue(source.contains("card.framings = framings"), "input(for:) emporte le cadrage : aperçu, image, GIF et vidéo")
+        XCTAssertTrue(source.contains("MessageCardCropRule.key(framings)"), "changer de cadrage repeint la carte")
+    }
+
+    func test_catalog_theCropWordsSpeakTheSevenLanguages() throws {
+        let strings = try Self.catalog()
+        let keys = ["export.card.crop", "export.card.crop.done", "export.card.crop.hint", "export.card.crop.photo",
+                    "export.card.crop.backdrop", "export.card.crop.zoomIn", "export.card.crop.zoomOut", "export.card.crop.recenter",
+                    "export.card.crop.showTop", "export.card.crop.showBottom", "export.card.crop.showLeft", "export.card.crop.showRight"]
+        for key in keys {
+            for language in Self.languages {
+                XCTAssertFalse((Self.value(strings[key], language) ?? "").isEmpty, "\(key) [\(language)]")
+            }
+        }
+        XCTAssertEqual(Self.value(strings["export.card.crop"], "fr"), "Recadrer")
+    }
 }

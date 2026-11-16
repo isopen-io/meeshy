@@ -96,6 +96,10 @@ struct MessageCardExportSheet: View {
     @State var backdropLoading = false
     /// La vitesse de la vidéo qui fait défiler un message long (#18671).
     @State var scrollSpeed: MessageCardScrollSpeed = .standard
+    /// Le cadrage choisi de chaque photo recadrée (#18805) — gardé jusqu'à l'export, propre à cet export.
+    @State var framings: [String: MessageCardFraming] = [:]
+    /// Le mode « Recadrer » : glisser et pincer cadrent la photo au lieu de régler l'échelle de sa partie.
+    @State var cropping = false
 
     struct Rendered {
         let key: String
@@ -111,6 +115,8 @@ struct MessageCardExportSheet: View {
         /// La hauteur de la carte SANS PLAFOND et celle de son format (#18671).
         var scrollContent: Double = 0
         var viewport: Double = 0
+        /// Les photos recadrées et leur cadre (#18805).
+        var framedMedia: [MessageCardFramedMedia] = []
     }
 
     var accent: Color { Color(hex: request.accentColor) }
@@ -198,7 +204,7 @@ struct MessageCardExportSheet: View {
         return trimmed
     }
 
-    var renderKey: String { "\(format.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")" }
+    var renderKey: String { "\(format.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")|\(MessageCardCropRule.key(framings))" }
     var ready: Bool { rendered?.key == renderKey }
     private var isDefault: Bool { savedDefault == format }
 
@@ -243,6 +249,9 @@ struct MessageCardExportSheet: View {
         .adaptiveOnChange(of: textScrolls) { _, scrolls in
             output = MessageCardOutput.preferred(current: output, scrolls: scrolls, offered: offeredOutputs, userChose: outputChosen)
         }
+        // Une autre composition, un autre fond choisi : le cadrage repart du centre (#18805).
+        .adaptiveOnChange(of: compositionKey) { _, _ in framings = [:] }
+        .adaptiveOnChange(of: chosenBackdrop?.key) { _, _ in framings[MessageCardBackdrop.mediaID] = nil }
         .task(id: "\(loaded)|\(mediaAttempt)") { await settleLead() }
         .task(id: "\(loaded)|\(leadSettled)|\(lead?.fileURL ?? "")|\(mediaAttempt)|\(soundsKey)|\(compositionKey)") { await loadMedia() }
         .task(id: "\(loaded)|\(leadSettled)|\(renderKey)") { await render() }
@@ -348,7 +357,9 @@ struct MessageCardExportSheet: View {
 
     @ViewBuilder
     private var hint: some View {
-        if !touched && rendered != nil {
+        if cropping {
+            cropHint
+        } else if !touched && rendered != nil {
             Label(MessageCardExportText.text("export.card.hint.pinch", "Touchez pour régler, pincez pour redimensionner"), systemImage: "hand.tap")
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -453,7 +464,7 @@ struct MessageCardExportSheet: View {
     var thumbSource: MessageCardThumbSource {
         var neutral = format
         neutral.template = MessageCardTemplates.defaultID
-        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")"
+        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")|\(MessageCardCropRule.key(framings))"
         let format = format
         return MessageCardThumbSource(
             store: thumbnails,
@@ -475,7 +486,7 @@ struct MessageCardExportSheet: View {
     /// Les maquettes, chacune peinte sur le message (#18673).
     var stylesRow: MessageCardModelRow {
         let neutral = MessageCardModels.model(id: MessageCardModels.defaultID)?.applied(to: format) ?? format
-        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")"
+        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)|\(chosenBackdrop?.key ?? "")|\(MessageCardCropRule.key(framings))"
         let format = format
         return MessageCardModelRow(
             models: MessageCardModels.builtIn,
@@ -506,6 +517,7 @@ struct MessageCardExportSheet: View {
             media: currentMedia
         ).clipped(to: motionPlan?.clip)
         card.backdrop = chosenBackdrop?.backdrop
+        card.framings = framings
         return card
     }
 
@@ -632,7 +644,8 @@ struct MessageCardExportSheet: View {
             crowdedByMedia: card.crowdedByMedia,
             mediaScaleLimit: card.mediaScaleLimit,
             scrollContent: tall.height,
-            viewport: tall.viewportHeight ?? tall.height
+            viewport: tall.viewportHeight ?? tall.height,
+            framedMedia: card.framedMedia
         )
         // L'export rapide attend les pixels des médias : il ne part jamais
         // avec leurs couleurs d'attente.
