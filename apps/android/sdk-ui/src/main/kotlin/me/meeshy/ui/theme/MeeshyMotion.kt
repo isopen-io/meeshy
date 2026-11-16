@@ -45,9 +45,9 @@ public object MeeshyMotion {
     public fun <T> bannerPullMorph(): SpringSpec<T> =
         spring(dampingRatio = 0.92f, stiffness = stiffnessForResponse(0.42f))
 
-    /** iOS `previewMorph` — response 0.42, damping 0.82: the long-press preview grows out of its row and settles (#18722). */
+    /** iOS `previewMorph` — response 0.5, damping 0.86: the long-press preview grows out of its row and settles (#18722, #18723). */
     public fun <T> previewMorph(): SpringSpec<T> =
-        spring(dampingRatio = 0.82f, stiffness = stiffnessForResponse(0.42f))
+        spring(dampingRatio = 0.86f, stiffness = stiffnessForResponse(0.5f))
 
     /** iOS `previewMorphReturn` — response 0.3, damping 0.8: the preview shrinks back into its row, faster than it grew. */
     public fun <T> previewMorphReturn(): SpringSpec<T> =
