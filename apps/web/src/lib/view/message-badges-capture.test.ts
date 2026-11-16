@@ -76,6 +76,13 @@ describe('la rangée d’un avis de capture (#9617)', () => {
     expect(systemRowText(row, 'fr', 'Europe/Paris')).toBe('Alice a tenté de capturer un message à vue unique — impossible');
   });
 
+  test('l’avis dit combien de captures et combien de temps d’enregistrement (#18830)', () => {
+    expect(systemRowText(rowOf(captureMetadata({ count: 3 })), 'fr', 'Europe/Paris'))
+      .toBe('Alice a capturé l’éphémère du 07/10/2026 à 14:05 · 3 captures');
+    expect(systemRowText(rowOf(captureMetadata({ captureKind: 'recording', count: 2, recordedSeconds: 65 })), 'fr', 'Europe/Paris'))
+      .toBe('Alice a enregistré l’écran pendant l’éphémère du 07/10/2026 à 14:05 · 2 enregistrements · durée 1 min 05 s');
+  });
+
   test('un enregistrement d’écran a sa propre phrase', () => {
     const row = rowOf(captureMetadata({ captureKind: 'recording' }));
     expect(systemRowText(row, 'fr', 'UTC')).toBe('Alice a enregistré l’écran pendant l’éphémère du 07/10/2026 à 12:05');
