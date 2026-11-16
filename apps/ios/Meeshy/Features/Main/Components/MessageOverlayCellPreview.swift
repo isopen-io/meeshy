@@ -130,6 +130,7 @@ struct MessageOverlayCellPreview: View {
                 .padding(.horizontal, Self.flatRowMargin)
         } else {
             faceView
+                .environment(\.carouselPresentation, .preview)
         }
     }
 
