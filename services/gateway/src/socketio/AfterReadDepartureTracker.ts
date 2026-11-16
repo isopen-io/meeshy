@@ -41,6 +41,10 @@ export interface AfterReadDepartureTrackerDependencies {
   /** Le délai laissé à un `viewing:stop` sur une socket vivante (fiche poussée, appel) pour revenir. */
   viewStopGraceMs?: number;
   now?: () => Date;
+  /** L'utilisateur d'un socket inscrit (`socketToUser`) : la limite de `viewing:start` vaut aussi par utilisateur. */
+  userOf?: (socketId: string) => string | undefined;
+  /** Les bornes du débordement en panne ; les constantes `AFTER_READ_MAX_OVERFLOW_*` par défaut. */
+  overflowLimits?: Partial<OverflowLimits>;
   onError?: (error: unknown) => void;
 }
 
@@ -70,15 +74,22 @@ export const AFTER_READ_MAX_RETRY_DELAY_MS = 10 * 60_000;
 export const AFTER_READ_MAX_PERIODS = 32;
 /** `viewing:start` acceptés par socket et par minute : au-delà, aucun regard ne s'ouvre (le script, pas l'usage). */
 export const AFTER_READ_VIEW_STARTS_PER_MINUTE = 60;
+/** Par UTILISATEUR, tous appareils confondus : deux appareils actifs, jamais un essaim de sockets. */
+export const AFTER_READ_VIEW_STARTS_PER_USER_PER_MINUTE = 120;
 /**
  * Regards en débordement gardés EXACTS par clé pendant une panne (deux dates chacun) : en deçà, aucun trou
  * n'est jamais fusionné. Au-delà — dernier recours, choix du coordinateur sur #18556 — les voisins les plus
  * proches fusionnent en un intervalle couvrant, qui peut brûler un instant non regardé.
  */
 export const AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY = 1_024;
+/** Par LECTEUR, toutes ses conversations confondues : un lecteur ne prend jamais le budget des autres. */
+export const AFTER_READ_MAX_OVERFLOW_PERIODS_PER_READER = 4_096;
 /** Même borne, toutes clés confondues : au-delà, une clé ne garde qu'un seul intervalle couvrant. */
 export const AFTER_READ_MAX_OVERFLOW_PERIODS = 65_536;
+
+export type OverflowLimits = { readonly perKey: number; readonly perReader: number; readonly total: number };
 const VIEW_START_WINDOW_MS = 60_000;
+const MAX_TRACKED_USERS = 10_000;
 /** Conversations dont un socket garde des regards non consommés ; au-delà, les plus anciennes sont oubliées. */
 export const AFTER_READ_MAX_TOUCHED = 64;
 const MAX_PENDING_OPENINGS = 8;
@@ -98,6 +109,8 @@ type Overflow = {
   readonly busy: boolean;
   readonly attempts: number;
   readonly timer: ReturnType<typeof setTimeout> | null;
+  /** Ordre d'arrivée de la file : à charge égale, la plus RÉCENTE cède la première. */
+  readonly seq: number;
 };
 
 /**
@@ -126,6 +139,11 @@ const EMPTY: SocketState = { views: new Map(), touched: new Map() };
 const NO_REGARD: Regard = { closed: [], openedAt: null };
 
 const keyOf = (reader: AfterReadReader) => `${reader.readerKey}\u0000${reader.conversationId}`;
+
+const readerKeyOf = (key: string) => key.slice(0, key.indexOf('\u0000'));
+
+const recentWithin = (starts: readonly number[] | undefined, now: number) =>
+  (starts ?? []).filter((at) => now - at < VIEW_START_WINDOW_MS);
 
 const without = <V>(held: ReadonlyMap<string, V>, id: string) => new Map([...held].filter(([key]) => key !== id));
 
@@ -199,6 +217,11 @@ export class AfterReadDepartureTracker {
   private readonly queueBySocket = new Map<string, Promise<void>>();
   private readonly overflows = new Map<string, Overflow>();
   private readonly viewStarts = new Map<string, readonly number[]>();
+  private readonly userViewStarts = new Map<string, readonly number[]>();
+  private overflowSeq = 0;
+  private lastUserSweepAt = Number.NEGATIVE_INFINITY;
+  private readonly userOf: (socketId: string) => string | undefined;
+  private readonly overflowLimits: OverflowLimits;
 
   constructor(deps: AfterReadDepartureTrackerDependencies) {
     this.resolveReader = deps.resolveReader;
@@ -211,6 +234,13 @@ export class AfterReadDepartureTracker {
     this.graceMs = deps.graceMs ?? AFTER_READ_DEPARTURE_GRACE_MS;
     this.viewStopGraceMs = deps.viewStopGraceMs ?? AFTER_READ_VIEW_STOP_GRACE_MS;
     this.now = deps.now ?? (() => new Date());
+    this.userOf = deps.userOf ?? (() => undefined);
+    this.overflowLimits = {
+      perKey: AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY,
+      perReader: AFTER_READ_MAX_OVERFLOW_PERIODS_PER_READER,
+      total: AFTER_READ_MAX_OVERFLOW_PERIODS,
+      ...deps.overflowLimits,
+    };
     this.onError = deps.onError ?? (() => undefined);
   }
 
@@ -513,9 +543,17 @@ export class AfterReadDepartureTracker {
   /** Les regards évincés rejoignent la brûlure de leur clé : une seule en vol, les nouveaux s'y fusionnent. */
   private burnOverflow(reader: AfterReadReader, periods: readonly AfterReadPeriod[]): void {
     const key = keyOf(reader);
-    const entry = this.overflows.get(key) ?? { reader, periods: [], busy: false, attempts: 0, timer: null };
+    const entry = this.overflows.get(key) ?? {
+      reader,
+      periods: [],
+      busy: false,
+      attempts: 0,
+      timer: null,
+      seq: (this.overflowSeq += 1),
+    };
     const merged = this.boundOverflow(key, [...entry.periods, ...periods]);
     this.overflows.set(key, { ...entry, reader, periods: merged });
+    this.shedGlobalOverflow();
     if (entry.busy || entry.timer !== null) return;
     void this.flushOverflow(key).catch((error: unknown) => this.onError(error));
   }
@@ -566,31 +604,79 @@ export class AfterReadDepartureTracker {
     timer.unref?.();
     const periods = this.boundOverflow(key, [...unsent, ...current.periods]);
     this.overflows.set(key, { ...current, periods, busy: false, attempts, timer });
+    this.shedGlobalOverflow();
   }
 
-  /** Par clé, `AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY` au plus ; au-delà du budget total, un seul intervalle couvrant. */
+  /**
+   * Par clé `perKey`, par LECTEUR `perReader` (toutes ses conversations) : un lecteur ne consomme que son
+   * propre budget. Les autres lecteurs n'y entrent pas.
+   */
   private boundOverflow(key: string, periods: readonly AfterReadPeriod[]): readonly AfterReadPeriod[] {
-    const others = [...this.overflows].reduce(
-      (total, [other, entry]) => (other === key ? total : total + entry.periods.length),
+    const reader = readerKeyOf(key);
+    const ownOthers = [...this.overflows].reduce(
+      (total, [other, entry]) => (other !== key && readerKeyOf(other) === reader ? total + entry.periods.length : total),
       0,
     );
-    const budget =
-      others + AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY > AFTER_READ_MAX_OVERFLOW_PERIODS
-        ? 1
-        : AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY;
+    const budget = Math.min(this.overflowLimits.perKey, Math.max(1, this.overflowLimits.perReader - ownOthers));
     return coalesce(periods, budget);
+  }
+
+  /**
+   * Au-delà du budget global, la contre-pression ne frappe que le lecteur qui en détient le PLUS — à égalité,
+   * celui dont la file est la plus RÉCENTE — : sa plus grosse clé se resserre de l'excédent. Un lecteur qui n'a
+   * plus rien à resserrer passe la main au suivant ; jamais un lecteur moins chargé n'est touché avant.
+   */
+  private shedGlobalOverflow(): void {
+    const loads = new Map<string, { periods: number; seq: number }>();
+    let total = 0;
+    for (const [key, entry] of this.overflows) {
+      const reader = readerKeyOf(key);
+      const load = loads.get(reader) ?? { periods: 0, seq: 0 };
+      loads.set(reader, { periods: load.periods + entry.periods.length, seq: Math.max(load.seq, entry.seq) });
+      total += entry.periods.length;
+    }
+    const excess = total - this.overflowLimits.total;
+    if (excess <= 0) return;
+    const order = [...loads].sort(([, a], [, b]) => b.periods - a.periods || b.seq - a.seq).map(([reader]) => reader);
+    const byReader = new Map<string, Array<[string, Overflow]>>();
+    for (const [key, entry] of this.overflows) {
+      if (entry.periods.length <= 1) continue;
+      const reader = readerKeyOf(key);
+      byReader.set(reader, [...(byReader.get(reader) ?? []), [key, entry]]);
+    }
+    const heaviest = order.find((reader) => byReader.has(reader));
+    if (heaviest === undefined) return;
+    const shrinkable = [...(byReader.get(heaviest) ?? [])].sort(
+      ([, a], [, b]) => b.periods.length - a.periods.length || b.seq - a.seq,
+    )[0];
+    const [key, entry] = shrinkable;
+    this.overflows.set(key, { ...entry, periods: coalesce(entry.periods, Math.max(1, entry.periods.length - excess)) });
+    this.shedGlobalOverflow();
   }
 
   /** Au plus `AFTER_READ_VIEW_STARTS_PER_MINUTE` regards ouverts par socket et par minute. */
   private admitViewStart(socketId: string): boolean {
     const now = this.now().getTime();
-    const recent = (this.viewStarts.get(socketId) ?? []).filter((at) => now - at < VIEW_START_WINDOW_MS);
-    if (recent.length >= AFTER_READ_VIEW_STARTS_PER_MINUTE) {
-      this.viewStarts.set(socketId, recent);
-      return false;
+    const user = this.userOf(socketId);
+    const bySocket = recentWithin(this.viewStarts.get(socketId), now);
+    const byUser = user === undefined ? [] : recentWithin(this.userViewStarts.get(user), now);
+    const admitted =
+      bySocket.length < AFTER_READ_VIEW_STARTS_PER_MINUTE &&
+      (user === undefined || byUser.length < AFTER_READ_VIEW_STARTS_PER_USER_PER_MINUTE);
+    this.viewStarts.set(socketId, admitted ? [...bySocket, now] : bySocket);
+    if (user !== undefined) this.userViewStarts.set(user, admitted ? [...byUser, now] : byUser);
+    if (this.userViewStarts.size > MAX_TRACKED_USERS && now - this.lastUserSweepAt >= VIEW_START_WINDOW_MS / 12) {
+      this.lastUserSweepAt = now;
+      this.sweepUserViewStarts(now);
     }
-    this.viewStarts.set(socketId, [...recent, now]);
-    return true;
+    return admitted;
+  }
+
+  /** Les utilisateurs dont la fenêtre est vide sont oubliés : la carte ne grossit pas avec les visiteurs passés. */
+  private sweepUserViewStarts(now: number): void {
+    [...this.userViewStarts].forEach(([user, starts]) => {
+      if (recentWithin(starts, now).length === 0) this.userViewStarts.delete(user);
+    });
   }
 
   /** Un départ en attente (appel, autre appareil) se réexamine à intervalle fixe et court, jusqu'au plafond dur. */
