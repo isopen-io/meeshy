@@ -192,6 +192,9 @@ export function captureOnceKey(params: {
 /** #18830 — où l'avis écrit pour (acteur, message, sorte) se retrouve. */
 const noticeIdKey = (onceKey: string): string => `${onceKey}:notice`;
 
+/** #18830 — au-delà, l'avis dit « 99 captures » : un client ne gonfle pas le compte sans borne (audit, 3). */
+export const MAX_CAPTURE_COUNT = 99;
+
 /** #18830 — une capture (son `captureId`) ne se compte qu'une fois ; sa durée ne s'additionne qu'une fois. */
 const captureSeenKey = (onceKey: string, captureId: string, part: 'count' | 'seconds'): string =>
   `${onceKey}:${part}:${captureId}`;
@@ -318,7 +321,7 @@ async function judge(
   return seen ? nature : null;
 }
 
-type NoticeAttempt = 'written' | 'already-noticed' | 'budget-spent' | 'not-written';
+type NoticeAttempt = 'written' | 'tallied' | 'already-noticed' | 'budget-spent' | 'not-written';
 
 /**
  * Porte l'avis à son audience. Ne rejette jamais : l'avis est écrit, et une
@@ -392,23 +395,31 @@ async function tallyOnExistingNotice(
     readonly input: ContentCaptureInput;
     readonly now: Date;
   },
-): Promise<void> {
+): Promise<boolean> {
   const { onceKey, actor, message, input, now } = params;
   try {
     const noticeId = await deps.dedup.get(noticeIdKey(onceKey));
-    if (!noticeId || !input.report.captureId) return;
-    const isNewCapture = await deps.dedup.setnx(
-      captureSeenKey(onceKey, input.report.captureId, 'count'), '1', CAPTURE_ONCE_TTL_SECONDS,
-    );
-    const seconds = await claimedSeconds(deps, { onceKey, report: input.report });
-    if (!isNewCapture && seconds === 0) return;
-
+    if (!noticeId || !input.report.captureId) return false;
     const row = (await deps.prisma.message.findUnique({
       where: { id: noticeId },
       select: { id: true, conversationId: true, deletedAt: true, metadata: true },
     })) as { id: string; conversationId: string; deletedAt: Date | null; metadata: unknown } | null;
     const current = row && !row.deletedAt && row.conversationId === input.conversationId ? parseCaptureNotice(row.metadata) : null;
-    if (!current || current.capturedMessageId !== message.id || current.actor.participantId !== actor.notice.participantId) return;
+    if (!current || current.capturedMessageId !== message.id || current.actor.participantId !== actor.notice.participantId) return false;
+
+    const isNewCapture = (current.count ?? 1) < MAX_CAPTURE_COUNT && await deps.dedup.setnx(
+      captureSeenKey(onceKey, input.report.captureId, 'count'), '1', CAPTURE_ONCE_TTL_SECONDS,
+    );
+    const seconds = await claimedSeconds(deps, { onceKey, report: input.report });
+    if (!isNewCapture && seconds === 0) return false;
+    // La réécriture compte dans le budget horaire des avis : sans lui, des
+    // captureId neufs à chaque déclaration réécriraient et remettraient l'avis
+    // sans borne (audit #18830, 2).
+    const withinHourlyBudget = await deps.limiter.checkLimit(
+      captureRateLimitKey({ actorParticipantId: actor.notice.participantId, conversationId: input.conversationId }),
+      SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY,
+    );
+    if (!withinHourlyBudget) return false;
 
     const next = captureNoticeMetadata({
       actor: current.actor,
@@ -417,19 +428,27 @@ async function tallyOnExistingNotice(
       captureKind: current.captureKind,
       sentAt: new Date(current.sentAt),
       count: (current.count ?? 1) + (isNewCapture ? 1 : 0),
-      recordedSeconds: (current.recordedSeconds ?? 0) + seconds,
+      recordedSeconds: boundedSeconds((current.recordedSeconds ?? 0) + seconds, message, now),
     });
     const written = await deps.prisma.message.update({
       where: { id: noticeId },
       data: { content: captureNoticeFallbackText(next), metadata: next },
     } as never);
     await deliverNotice(deps, { written, actor, message, now });
+    return true;
   } catch (error) {
     logger.warn('capture notice not tallied', {
       messageId: message.id,
       error: error instanceof Error ? error.message : String(error),
     });
+    return false;
   }
+}
+
+/** #18830 — un enregistrement ne dure pas plus longtemps que le message n'existe (audit, 3). */
+function boundedSeconds(seconds: number, message: CapturedMessage, now: Date): number {
+  const alive = Math.max(0, Math.floor((now.getTime() - new Date(message.createdAt).getTime()) / 1000));
+  return Math.min(seconds, alive);
 }
 
 async function noticeOne(
@@ -445,8 +464,7 @@ async function noticeOne(
   const { actor, message, nature, input, now } = params;
   const onceKey = captureOnceKey({ actorParticipantId: actor.notice.participantId, messageId: message.id, kind: input.report.kind });
   if (!(await deps.dedup.setnx(onceKey, '1', CAPTURE_ONCE_TTL_SECONDS))) {
-    await tallyOnExistingNotice(deps, { onceKey, actor, message, input, now });
-    return 'already-noticed';
+    return (await tallyOnExistingNotice(deps, { onceKey, actor, message, input, now })) ? 'tallied' : 'already-noticed';
   }
 
   const withinHourlyBudget = await deps.limiter.checkLimit(
@@ -468,7 +486,7 @@ async function noticeOne(
     nature,
     captureKind: input.report.kind,
     sentAt: new Date(message.createdAt),
-    recordedSeconds: seconds,
+    recordedSeconds: boundedSeconds(seconds, message, now),
   });
   const written = await postSystemNotice(
     { prisma: deps.prisma },
@@ -526,8 +544,8 @@ export async function recordContentCapture(
     if (!nature) continue;
     const attempt = await noticeOne(deps, { actor, message, nature, input, now });
     if (attempt === 'budget-spent') break;
-    if (attempt === 'written') written += 1;
-    if (attempt === 'written' || attempt === 'already-noticed') noticed.push(message.id);
+    if (attempt === 'written' || attempt === 'tallied') written += 1;
+    if (attempt !== 'not-written') noticed.push(message.id);
   }
   return { kind: 'recorded', noticedMessageIds: noticed };
 }

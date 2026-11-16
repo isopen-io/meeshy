@@ -21,6 +21,7 @@ import { parseCaptureNotice } from '@meeshy/shared/utils/capture-notice';
 import {
   CAPTURE_AFTER_DISPLAY_MAX_MS,
   CAPTURE_REPORT_GRACE_MS,
+  MAX_CAPTURE_COUNT,
   MAX_NOTICES_PER_REPORT,
   VIEW_ONCE_CAPTURE_WINDOW_MS,
   captureRateLimitKey,
@@ -758,6 +759,35 @@ describe('recordContentCapture — combien de captures, combien de temps (#18830
     await h.capture([TIMED], { captureId: 'shot-0000002' });
     expect(h.created).toHaveLength(1);
     expect(h.updates).toHaveLength(0);
+  });
+
+  it('compte la réécriture dans le budget horaire des avis (audit #18830, 2)', async () => {
+    const h = flameWorld();
+    const max = SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY.maxRequests;
+    for (let i = 0; i < max + 5; i += 1) {
+      h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE);
+      // eslint-disable-next-line no-await-in-loop
+      await h.capture([TIMED], { captureId: `shot-${String(i).padStart(8, '0')}` });
+    }
+    expect(h.deliveries).toHaveLength(max);
+    expect(noticesOf(h.created)[0]?.count).toBe(max);
+  });
+
+  it(`plafonne le compte à ${MAX_CAPTURE_COUNT} (audit #18830, 3)`, async () => {
+    const h = flameWorld();
+    for (let i = 0; i < MAX_CAPTURE_COUNT + 3; i += 1) {
+      h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE);
+      h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY);
+      // eslint-disable-next-line no-await-in-loop
+      await h.capture([TIMED], { captureId: `shot-${String(i).padStart(8, '0')}` });
+    }
+    expect(noticesOf(h.created)[0]?.count).toBe(MAX_CAPTURE_COUNT);
+  });
+
+  it('ne compte pas plus de durée que le message n’a d’existence (audit #18830, 3)', async () => {
+    const h = flameWorld();
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001', recordingSeconds: 86_400 });
+    expect(noticesOf(h.created)[0]?.recordedSeconds).toBe((NOW.getTime() - SENT_AT.getTime()) / 1000);
   });
 
   it('n’emporte toujours aucun contenu du message capturé', async () => {
