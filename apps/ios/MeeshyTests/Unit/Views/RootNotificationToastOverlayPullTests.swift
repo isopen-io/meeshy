@@ -120,8 +120,19 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
     func test_morph_landsOnTheSheetFrame() throws {
         let begin = try body(of: "private func beginMorph(", in: try overlay())
 
-        XCTAssertTrue(begin.contains("NotificationBannerMorph.sheetFrame("))
-        XCTAssertTrue(begin.contains("NotificationSheetGeometry.topGap"))
+        XCTAssertTrue(begin.contains("BannerMorphWindow.sheetTarget(topGap: NotificationSheetGeometry.topGap)"))
+    }
+
+    /// Mesuré au simulateur : la racine mesurait son « écran » SOUS la zone
+    /// sûre (y = 62), puis y ajoutait la zone sûre — l'enveloppe se posait
+    /// 62 pt sous la feuille. La cible se lit sur la fenêtre principale, en
+    /// coordonnées d'écran, avec la zone sûre de la fenêtre.
+    func test_morph_targetsTheMainWindowInScreenCoordinates() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.path))
+        let target = try body(of: "static func sheetTarget(", in: source)
+
+        XCTAssertTrue(target.contains("NotificationBannerMorph.sheetFrame(container: main.bounds.size, top: main.safeAreaInsets.top + topGap)"))
+        XCTAssertFalse(try overlay().contains("safeAreaInsets.top"), "la zone sûre SwiftUI de la racine inclut ses bandeaux")
     }
 
     /// Mesuré au simulateur (iPhone 17 Pro, iOS 27) : la feuille au cran
@@ -162,6 +173,15 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
 
         XCTAssertTrue(source.contains("CallPassthroughWindow(windowScene:"))
         XCTAssertTrue(try overlay().contains("BannerMorphWindow.shared.show("))
+    }
+
+    /// La fenêtre de l'enveloppe mesure en coordonnées d'écran, comme la cible
+    /// qu'elle reçoit : son contrôleur n'a pas de zone sûre, son hôte l'ignore.
+    func test_envelopeWindow_measuresInScreenCoordinates() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.path))
+
+        XCTAssertTrue(source.contains("controller.safeAreaRegions = []"))
+        XCTAssertTrue(try host().contains(".ignoresSafeArea()"))
     }
 
     /// Le vide se remplit par le CACHE : l'enveloppe peint les derniers

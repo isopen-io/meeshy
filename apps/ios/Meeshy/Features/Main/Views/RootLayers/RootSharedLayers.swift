@@ -74,9 +74,6 @@ struct RootNotificationToastOverlay: View {
     @State private var pull: CGFloat = 0
     /// Le cadre GLOBAL de la carte, tiroir compris : le départ du morphisme.
     @State private var cardFrame: CGRect = .zero
-    /// L'écran entier et le haut de sa zone sûre : l'arrivée du morphisme.
-    @State private var screenFrame: CGRect = .zero
-    @State private var safeTop: CGFloat = 0
     /// La bannière qui devient la feuille : l'identité de la transformation en
     /// cours, peinte par `BannerMorphWindow`.
     @State private var morphId: UUID?
@@ -91,12 +88,6 @@ struct RootNotificationToastOverlay: View {
                     .padding(.top, MeeshySpacing.xxl)
             }
             Spacer()
-        }
-        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { safeTop = $0 }
-        .background {
-            Color.clear
-                .ignoresSafeArea()
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { screenFrame = $0 }
         }
         .animation(reduceMotion ? .easeOut(duration: 0.2) : MeeshyAnimation.springBouncy,
                    value: notificationManager.currentToast?.id)
@@ -212,9 +203,11 @@ struct RootNotificationToastOverlay: View {
             return
         }
         let released = cardFrame.insetBy(dx: drawer.sideInset ?? MeeshySpacing.sm, dy: 0)
-        let target = NotificationBannerMorph.sheetFrame(
-            container: screenFrame.size, top: safeTop + NotificationSheetGeometry.topGap
-        ).offsetBy(dx: screenFrame.minX, dy: screenFrame.minY)
+        guard let target = BannerMorphWindow.sheetTarget(topGap: NotificationSheetGeometry.topGap) else {
+            pull = 0
+            onPulledOpen(toast)
+            return
+        }
         let presentation = notificationManager.currentToastPresentation
         let morph = BannerMorph(event: toast, headline: presentation?.headline ?? toast.toastAvatarName,
                                 message: presentation?.body, origin: released, target: target)
@@ -332,6 +325,14 @@ final class BannerMorphWindow {
     let stage = BannerMorphStage()
     private var window: CallPassthroughWindow?
 
+    /// Le cadre, en coordonnées d'écran, où la feuille se pose : la fenêtre
+    /// principale et le haut de SA zone sûre — jamais la zone sûre SwiftUI de
+    /// la racine, que des bandeaux de l'app (barre du jeu) agrandissent.
+    static func sheetTarget(topGap: CGFloat) -> CGRect? {
+        guard let main = CallWindowScene.target()?.windows.first(where: { $0.isKeyWindow }) else { return nil }
+        return NotificationBannerMorph.sheetFrame(container: main.bounds.size, top: main.safeAreaInsets.top + topGap)
+    }
+
     nonisolated deinit {}
 
     func show(_ morph: BannerMorph, source: BannerEnvelopeSource) -> Bool {
@@ -343,6 +344,7 @@ final class BannerMorphWindow {
         let overlay = CallPassthroughWindow(windowScene: scene)
         let controller = UIHostingController(rootView: BannerMorphHost(stage: stage, source: source))
         controller.view.backgroundColor = .clear
+        if #available(iOS 16.4, *) { controller.safeAreaRegions = [] }
         overlay.windowLevel = Self.windowLevel
         overlay.overrideUserInterfaceStyle = DeviceLayout.measurementWindow?.overrideUserInterfaceStyle ?? .unspecified
         overlay.rootViewController = controller
@@ -377,7 +379,11 @@ struct BannerMorphHost: View {
     @State private var progress: CGFloat = 0
 
     var body: some View {
-        if let morph = stage.morph { envelope(morph) }
+        ZStack {
+            if let morph = stage.morph { envelope(morph) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
     }
 
     private func envelope(_ morph: BannerMorph) -> some View {
