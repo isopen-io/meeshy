@@ -1,8 +1,16 @@
-# Cycle 172 — ce qu'un chemin bavard ne dit pas, et les deux jumelles qu'on ne cherchait pas
+# Cycle 173 — ce qu'un chemin bavard ne dit pas, et les deux jumelles qu'on ne cherchait pas
 
 *2026-11-16. Branche `claude/exciting-planck-k2qr42`. Nom de fichier suffixé par
 son issue : `cycle171` a déjà été pris deux fois le même jour, et un nom de
 fichier partagé FUSIONNE en silence (leçon du 2026-11-15, #18632).*
+
+*Numéro 173 et non 172 : le numéro ne s'hérite pas d'un compte de fichiers.
+`ls tasks/` rendait `cycle171` comme dernier journal, donc 172 — mais #18760,
+ouverte à 23:08 la veille, déclare « cycle 172 » dans sa source. **Un numéro de
+cycle se relève sur TOUT ce que les sessions ont écrit, journaux ET issues**,
+pas sur le répertoire : une session qui bute sur la CI consomme son numéro sans
+jamais déposer de journal. Même famille que la leçon du #18632 — un identifiant
+d'espace de noms partagé qui ne s'alloue pas collisionne.*
 
 **Livré** : #18733 — l'éviction au plafond de la file de remise se nomme.
 
@@ -145,6 +153,36 @@ une excuse : c'est une mesure, faite parce qu'un échec non attribué se raconte
 toujours en faveur de celui qui le rapporte.
 
 ---
+
+## La preuve CI est BLOQUÉE, et c'est mesuré
+
+La CI des PR est gelée par réglage du dépôt (`vars.PR_CI_GEL`, la garde du job
+`changes`) : le run de PR #18771 a conclu `skipped` en une seconde. La preuve
+passe donc par `workflow_dispatch`, comme le veut la pratique du dépôt — et
+**les dispatches sont annulés**.
+
+| run | créé (UTC) | conclusion | âge |
+|---|---|---|---|
+| 43778687434 | 00:09:28 | `cancelled` | 2 min 52 |
+
+Trois jobs ont conclu avant l'annulation (`Zones touchées`, `Gardes du dépôt`,
+`Sécurité · Trivy` — tous VERTS) ; les dix-huit autres ont été tués, et
+`Verdict CI` a conclu `failure` **du fait des annulations**, non d'un test.
+
+**Et aucun run postérieur n'existe dans le groupe de concurrence** de cette
+branche (`ci-refs/heads/claude/exciting-planck-k2qr42`) : le seul dispatch de la
+branche est celui-ci, et le run de PR vit dans un autre groupe
+(`refs/pull/18771/merge`). `cancel-in-progress` ne peut donc pas en rendre
+compte. C'est **exactement** le § « Suivi distinct, NON expliqué par cette
+issue » de #18760, observé sur une seconde branche : trois dispatches annulés
+sans arrivant dans leur groupe y étaient déjà relevés sur
+`claude/exciting-planck-jgv7lx` (PR #18758). Ce journal y ajoute un quatrième
+point de mesure, sur une branche indépendante.
+
+Conséquence assumée pour ce lot : la preuve rendue est celle de l'arbre
+FUSIONNÉ en local (21 206 témoins, `tsc` EXIT=0), plus les trois jobs qui ont
+conclu verts avant l'annulation. Ce n'est pas la preuve que la directive
+demande, et le dire est la seule façon honnête de livrer ici.
 
 ## Suivis
 
