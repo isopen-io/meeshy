@@ -49,7 +49,7 @@ class BatteryRosterSnapshotTest {
     }
 
     @Test
-    fun `le cache restaure n'est touche par personne : le rattrapage le remplace en entier`() {
+    fun `le cache restaure n'est touche par personne, le rattrapage le remplace en entier`() {
         val restored = BatteryRosterSnapshot.of("me", BatteryRoster().receive(state("ada", now))).restore("me", now)
         val caught = restored.reconcile(emptyList(), since = restored.mark)
         assertThat(caught.byUser).isEmpty()
