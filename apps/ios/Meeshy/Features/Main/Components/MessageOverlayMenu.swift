@@ -533,6 +533,8 @@ struct MessageOverlayMenu: View {
                 previewTouchMask(zones: zones, playable: touch.touchZoneIds)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
+            // Le flou levé dans l'aperçu (#18856) ne sort pas par une capture.
+            .captureShield(message.holdsBlur)
         }
         // Le cadre défile, ou l'aperçu porte une zone de lecture (#11339) :
         // sinon, une image que les touchers traversent jusqu'au voile.
@@ -599,7 +601,7 @@ struct MessageOverlayMenu: View {
     private func flatRowKey(availableWidth: CGFloat) -> MessageOverlayFlatRowMemo.Key {
         MessageOverlayFlatRowMemo.Key(
             messageId: message.id, updatedAt: message.updatedAt, content: message.content,
-            effects: message.effects.flags, reactionCount: message.reactions.count,
+            effects: message.unveiledForPreview.effects.flags, reactionCount: message.reactions.count,
             translations: textTranslations, served: preferredTranslation, selection: threadLanguage.selection,
             transcription: transcription, translatedAudios: translatedAudios, readingMode: threadLanguage.readingMode,
             senderStoryRing: threadLanguage.senderStoryRing, senderMoodEmoji: threadLanguage.senderMoodEmoji,
@@ -612,7 +614,7 @@ struct MessageOverlayMenu: View {
     /// l'auteur.
     private func previewRow(availableWidth: CGFloat) -> FocalRowInput {
         FocalRowInput.preview(
-            message: message,
+            message: message.unveiledForPreview,
             translations: textTranslations,
             servedTranslation: preferredTranslation,
             accentHex: contactColor,
@@ -845,7 +847,7 @@ extension MessageOverlayMenu {
     /// suivent une bascule faite dans le fil, pas le seul Prisme (#9259).
     var previewBubble: ThemedMessageBubble {
         var bubble = ThemedMessageBubble(
-            message: message,
+            message: message.unveiledForPreview,
             contactColor: contactColor,
             isDirect: isDirect,
             isDark: isDark,

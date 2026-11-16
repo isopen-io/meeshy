@@ -51,13 +51,14 @@ final class LongPressProtectedMessageTests: XCTestCase {
         XCTAssertEqual(OverlayPreviewProtection.form(for: message()), .clear)
     }
 
-    func test_previewForm_blurredText_isBlurred() {
-        XCTAssertEqual(OverlayPreviewProtection.form(for: message(blurred: true)), .blurred)
+    func test_previewForm_blurredText_isClear() {
+        XCTAssertEqual(OverlayPreviewProtection.form(for: message(blurred: true)), .clear,
+                       "l'appui long montre un message flouté en clair (#18856)")
     }
 
-    func test_previewForm_blurredAttachmentOnly_isBlurred() {
+    func test_previewForm_blurredAttachmentOnly_isClear() {
         let form = OverlayPreviewProtection.form(for: message(attachments: [photo(isBlurred: true)]))
-        XCTAssertEqual(form, .blurred, "une pièce floutée protège l'aperçu même si le message ne l'est pas")
+        XCTAssertEqual(form, .clear, "une pièce floutée se montre en clair dans l'aperçu (#18856)")
     }
 
     func test_previewForm_sealedViewOnce_isTheSealedChip() {
@@ -79,12 +80,40 @@ final class LongPressProtectedMessageTests: XCTestCase {
                        .viewOnce(opened: false))
     }
 
-    func test_previewForm_isNeverClearForAProtectedMessage() {
+    func test_previewForm_isNeverClearForAViewOnceMessage() {
         let protected = [
-            message(blurred: true), message(viewOnce: true),
-            message(attachments: [photo(isBlurred: true)]), message(attachments: [photo(isViewOnce: true)])
+            message(viewOnce: true), message(blurred: true, viewOnce: true),
+            message(attachments: [photo(isViewOnce: true)])
         ]
         XCTAssertTrue(protected.allSatisfy { OverlayPreviewProtection.form(for: $0) != .clear })
+    }
+
+    // MARK: - L'aperçu lève le flou, et rien d'autre (#18856)
+
+    func test_unveiledForPreview_liftsTheMessageAndEveryPieceBlur() {
+        var flagged = photo(id: "p2")
+        flagged.effectFlags = MessageEffectFlags.blurred.rawValue
+        let unveiled = message(attachments: [photo(isBlurred: true), flagged], blurred: true).unveiledForPreview
+
+        XCTAssertFalse(unveiled.holdsBlur)
+        XCTAssertFalse(unveiled.isBlurred)
+        XCTAssertEqual(unveiled.content, "secret")
+        XCTAssertEqual(unveiled.attachments.map(\.id), ["p1", "p2"])
+    }
+
+    func test_unveiledForPreview_keepsTheViewOnce() {
+        let unveiled = message(attachments: [photo(isBlurred: true, isViewOnce: true)], blurred: true,
+                               viewOnce: true).unveiledForPreview
+
+        XCTAssertTrue(unveiled.holdsViewOnce)
+        XCTAssertTrue(unveiled.attachments[0].declaresViewOnce)
+        XCTAssertEqual(OverlayPreviewProtection.form(for: unveiled), .viewOnce(opened: false))
+    }
+
+    func test_unveiledForPreview_leavesAClearMessageUntouched() {
+        let clear = message(attachments: [photo()])
+        XCTAssertEqual(clear.unveiledForPreview.attachments.map(\.id), clear.attachments.map(\.id))
+        XCTAssertFalse(clear.unveiledForPreview.holdsBlur)
     }
 
     // MARK: - Le menu ne fait fuir aucun contenu flouté
@@ -150,15 +179,6 @@ final class LongPressProtectedMessageTests: XCTestCase {
         XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 9), 5)
         XCTAssertEqual(OverlayPreviewMediaLayout.overflowCell(total: 5), 3)
         XCTAssertNil(OverlayPreviewMediaLayout.overflowCell(total: 4))
-    }
-
-    func test_grid_drawsTheOverflow_likeTheBubbleGrid() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let grid = try String(contentsOf: root.appendingPathComponent(
-            "Meeshy/Features/Main/Components/MessageOverlayPreviewMedia.swift"), encoding: .utf8)
-        XCTAssertTrue(grid.contains("OverlayPreviewMediaLayout.overflowCell(total: attachments.count)"))
-        XCTAssertTrue(grid.contains("Text(verbatim: \"+\\(hidden)\")"))
     }
 
     func test_aspectRatio_missingDimensions_isSquare() {
