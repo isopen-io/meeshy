@@ -460,4 +460,48 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         XCTAssertTrue(law.contains("opacity(isShown ? 1 : 0)") && law.contains(".allowsHitTesting(isShown)"),
                       "Une couche qui s'efface cesse de prendre le doigt en même temps.")
     }
+
+    // MARK: - « Imager » à droite du « + » de la barre de réactions (#16162)
+
+    /// Le verdict de la tuile est CELUI de la liste : un message qui s'image par
+    /// « Plus… » s'image aussi d'un toucher sur la barre, et un message protégé,
+    /// vide ou sans sortie n'offre la tuile nulle part.
+    @MainActor func test_showsImagerTile_followsThePrimaryActionVerdict() {
+        let imageable = MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
+                                           hasText: true, hasMedia: false, hasTimebasedMedia: false,
+                                           isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
+        XCTAssertTrue(MessageOverlayMenu.showsImagerTile(for: imageable, hasExportHandler: true))
+        XCTAssertEqual(MessageOverlayMenu.showsImagerTile(for: imageable, hasExportHandler: true),
+                       MessageActionResolver.primaryActions(imageable).contains(.exportImage))
+
+        let empty = MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
+                                       hasText: false, hasMedia: false, hasTimebasedMedia: false,
+                                       isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
+        XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: empty, hasExportHandler: true),
+                       "rien à imager : pas de tuile")
+
+        var blurred = imageable
+        blurred.isBlurred = true
+        XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: blurred, hasExportHandler: true),
+                       "un message flouté ne s'image pas")
+    }
+
+    @MainActor func test_showsImagerTile_withoutExportHandler_isFalse() {
+        let imageable = MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
+                                           hasText: true, hasMedia: false, hasTimebasedMedia: false,
+                                           isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
+        XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: imageable, hasExportHandler: false),
+                       "un contrôle existe s'il a un effet : sans rappel d'export, pas de tuile")
+    }
+
+    /// La tuile est posée sur la barre d'emojis (le composant partagé la rend après
+    /// le « + ») et son action passe par le chemin UNIQUE de la liste.
+    func test_overlayMenu_passesTheImagerTileToTheReactionBar_throughThePrimaryActionPath() throws {
+        let code = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(code.contains("extraTile: imagerTile"), "la barre reçoit la tuile Imager")
+        XCTAssertTrue(code.contains("symbol: FullscreenChromeSymbol.imager"), "même glyphe que partout ailleurs")
+        XCTAssertTrue(code.contains("accessibilityLabel: MessageCardExportMenu.imageLabel"), "même nom que l'action")
+        XCTAssertTrue(code.contains("action: { handlePrimaryAction(.exportImage) }"),
+                      "un seul chemin : la garde « n'agit qu'une fois », le rappel, la fermeture")
+    }
 }

@@ -82,6 +82,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
     /// le `CanvasLayerIndicator` (chip row).
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+    /// Le glisser d'un objet de premier plan, pour les cibles de l'hôte (#18712).
+    public var onItemDragged: ((StoryCanvasItemDrag) -> Void)?
     /// Le canvas passe en veille, ou en sort (#3915) — la couche SwiftUI
     /// posée par-dessus doit suspendre ses propres animations, que la mise
     /// en veille d'`editDisplayLink` n'atteint pas.
@@ -200,8 +202,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 inlineEditYieldsToManipulation: Bool = false,
                 paintsSceneBackground: Bool = true,
                 passesThroughEmptyTouches: Bool = false,
-                inlineEditInputLink: StoryInlineEditInputLink? = nil) {
+                inlineEditInputLink: StoryInlineEditInputLink? = nil, onItemDragged: ((StoryCanvasItemDrag) -> Void)? = nil) {
         self.inlineEditInputLink = inlineEditInputLink
+        self.onItemDragged = onItemDragged
         self.passesThroughEmptyTouches = passesThroughEmptyTouches
         self.paintsSceneBackground = paintsSceneBackground
         self.localMediaAliases = localMediaAliases
@@ -325,6 +328,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onItemTrimRequested = onItemTrimRequested
         view.onItemMenuRequested = onItemMenuRequested
         view.onItemDuplicated = onItemDuplicated
+        view.onItemDragged = onItemDragged
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded
         view.inlineEditFloorGlobalY = inlineEditFloorGlobalY
@@ -372,15 +376,14 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onItemDoubleTapped = onItemDoubleTapped
         uiView.onItemTrimRequested = onItemTrimRequested
         uiView.onItemMenuRequested = onItemMenuRequested
-        // **Remis à jour à CHAQUE passe**, comme `onItemDoubleTapped` juste
-        // au-dessus : une closure posée au seul `makeUIView` capture l'état de
-        // la première composition. L'hôte qui présente le menu de fond lit le
-        // modèle courant — figée, elle agirait sur une slide périmée.
+        // **Remis à jour à CHAQUE passe** : une closure posée au seul `makeUIView` capture l'état
+        // de la première composition — figée, elle agirait sur une slide périmée.
         uiView.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
         uiView.onBackgroundLongPressChanged = onBackgroundLongPressChanged
         uiView.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         uiView.editableKinds = editableKinds
         uiView.onItemDuplicated = onItemDuplicated
+        uiView.onItemDragged = onItemDragged
         uiView.onManipulationLayerChanged = onManipulationLayerChanged
         uiView.onEditClockThrottleChanged = onEditClockThrottleChanged
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
@@ -459,6 +462,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         // Posé AVANT `beginInlineTextEdit` : la barre monte avec le clavier.
         uiView.inlineEditInputLink = inlineEditInputLink
+        if editingTextId == nil, uiView.pendingInlineEditTextId != nil {
+            uiView.endInlineTextEdit()
+        }
         if uiView.inlineEditingTextId != editingTextId {
             if let id = editingTextId {
                 // Une saisie SUSPENDUE par le doigt ne se rouvre pas d'elle-même :

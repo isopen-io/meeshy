@@ -213,25 +213,9 @@ extension StoryComposerViewModel {
     /// crée une coquille VIDE — c'est l'éditeur qui la remplit —, et une
     /// coquille restée vide est supprimée à la sortie de l'éditeur
     /// (`exitTextEditingMode`). Un texte annulé ne laisse donc rien.
-    /// **Où poser un objet NEUF** (#4939) — jamais sur le précédent.
-    ///
-    /// Les trois sites qui posent écrivaient chacun `CGPoint(x: 0.5, y: 0.5)`,
-    /// le centre exact et sans condition. Deux textes se superposaient au pixel
-    /// près et se lisaient comme un seul texte cassé, pendant que la flèche de
-    /// l'éditeur annonçait « 2 objets ».
-    ///
-    /// Les FONDS sont écartés : ils occupent toute la scène et n'ont pas de
-    /// position — les compter ferait cascader le premier objet posé sur une
-    /// slide qui a un fond, sans raison.
-    func nextObjectPosition(in effects: StoryEffects) -> CGPoint {
-        StoryObjectPlacement.next(avoiding: effects.sceneObjects
-            .filter { !$0.isBackground }
-            .map { CGPoint(x: $0.x, y: $0.y) })
-    }
-
     public func addText() -> StoryTextObject? {
         guard canAddText else { refuse(.text); return nil }
-        let center = nextObjectPosition(in: currentEffects)
+        let center = StoryObjectPlacement.center
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
         // sur iPhone 16 Pro (scaleFactor ≈ 0.38) — taille parfaitement
         // lisible. La valeur précédente de 24 produisait du 9 pt rendu

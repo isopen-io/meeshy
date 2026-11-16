@@ -226,6 +226,29 @@ struct MessageOverlayMenu: View {
         context.canReact
     }
 
+    /// **« Imager » à droite du « + » de la barre de réactions** (#16162) : l'appui
+    /// long montrait Modifier, Sélectionner, Composer… sans Imager, relégué dans
+    /// « Plus… », alors que c'est une feature majeure qui doit s'atteindre d'un geste. La tuile suit le MÊME verdict que l'action
+    /// de la liste (`MessageActionResolver.primaryActions` → `.exportImage`) : un seul
+    /// juge dit si ce message s'image (texte ou média peignable, non protégé, sortie
+    /// permise) ; la barre ne la montre que si l'hôte a câblé l'export.
+    static func showsImagerTile(for context: MessageMenuContext, hasExportHandler: Bool) -> Bool {
+        hasExportHandler && MessageActionResolver.primaryActions(context).contains(.exportImage)
+    }
+
+    /// La tuile elle-même : le glyphe d'Imager, son nom, et le chemin UNIQUE de l'action
+    /// (`handlePrimaryAction(.exportImage)` : garde « n'agit qu'une fois », rappel de
+    /// l'hôte, fermeture) — jamais un second chemin à côté de la liste.
+    private var imagerTile: EmojiReactionPicker.ExtraTile? {
+        guard Self.showsImagerTile(for: menuContext, hasExportHandler: onExportImage != nil) else { return nil }
+        return EmojiReactionPicker.ExtraTile(
+            symbol: FullscreenChromeSymbol.imager,
+            accessibilityLabel: MessageCardExportMenu.imageLabel,
+            accessibilityIdentifier: "message.overlay.imager",
+            action: { handlePrimaryAction(.exportImage) }
+        )
+    }
+
     private func handlePrimaryAction(_ action: PrimaryAction) {
         guard isVisible else { return }
         switch action {
@@ -633,7 +656,8 @@ struct MessageOverlayMenu: View {
                 HapticFeedback.light()
                 onExpandFullPicker?()
                 dismiss()
-            }
+            },
+            extraTile: imagerTile
         )
         .frame(maxWidth: width)
         .onAppear {

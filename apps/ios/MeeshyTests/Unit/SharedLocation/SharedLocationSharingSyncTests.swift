@@ -117,7 +117,7 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         _ = await sut.center.share(with: alice, precision: .exact, duration: .eightHours)
         _ = await sut.center.share(with: bob, precision: .city, duration: .eightHours)
         let startsBefore = sut.emitter.starts.count
-        sut.served.snapshot = snapshot([(bob, .city, 8 * 3600)])
+        sut.served.snapshot = snapshot([(bob, .city, TimeInterval(8 * 3600))])
 
         sut.sockets.send(())
         await settle(until: { sut.center.entry(for: alice) == nil })
@@ -133,7 +133,7 @@ final class SharedLocationSharingSyncTests: XCTestCase {
     func test_ownChanged_anAdditionMadeElsewhere_isKept_andTheNextShareDoesNotEraseIt() async {
         let sut = makeSUT()
         _ = await sut.center.share(with: alice, precision: .exact, duration: .eightHours)
-        sut.served.snapshot = snapshot([(alice, .exact, 8 * 3600), (bob, .neighborhood, 3600)])
+        sut.served.snapshot = snapshot([(alice, .exact, TimeInterval(8 * 3600)), (bob, .neighborhood, 3600)])
 
         sut.ownChanged.send(())
         await settle(until: { sut.center.entry(for: bob) != nil })
@@ -172,7 +172,7 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         sut.emitter.startVerdict = .refused(.offline)
         let problem = await sut.center.stopSharing(with: alice)
         XCTAssertEqual(problem, .withdrawalPending)
-        sut.served.snapshot = snapshot([(alice, .exact, 8 * 3600), (bob, .city, 8 * 3600)])
+        sut.served.snapshot = snapshot([(alice, .exact, TimeInterval(8 * 3600)), (bob, .city, TimeInterval(8 * 3600))])
         sut.emitter.startVerdict = .started(expiresAt: t0.addingTimeInterval(8 * 3600))
 
         sut.sockets.send(())

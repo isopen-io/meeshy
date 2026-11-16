@@ -2,14 +2,10 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// **Importer plusieurs médias, une scène par média** (directive porteur
-// 2026-09-28 : « lorsqu'on veut créer un post ou une story, voir réel, il faut
-// TOUT de suite permettre d'importer plusieurs images/vidéos […] on créera
-// autant de scènes que d'images/vidéos chargées »).
+// **Importer plusieurs médias, une scène par média** (directive porteur 2026-09-28).
 extension MeeshyComposerHost {
 
-    /// Ce que le composer contient déjà : un brouillon restauré, une graine, un
-    /// texte — autant de raisons de NE PAS ouvrir la photothèque d'office.
+    /// Un brouillon, une graine, un texte : autant de raisons de NE PAS ouvrir la photothèque d'office.
     var compositionIsEmpty: Bool {
         viewModel.slides.count == 1
             && viewModel.currentSlide.sceneObjects.isEmpty
@@ -30,21 +26,27 @@ extension MeeshyComposerHost {
                                                preferences: .stored())
         if plan.armsCamera, sceneCameraStage == .off { armSceneCamera() }
         guard let library = plan.library else { return }
-        openingPickFoundsScenes = true
+        (openingPickFoundsScenes, viewfinderLibrary) = (true, .closed)
         if library == .halfHeight { showsOpeningLibrary = true } else { showsPhotoPicker = true }
     }
 
-    /// Choisir dans la photothèque d'ouverture la ferme et rend la scène (#17269).
-    func closeOpeningLibraryForPick() {
+    /// Choisir ferme la photothèque et rend la scène (#17269), ou pose par-dessus (#18710).
+    func closeOpeningLibraryForPick(count: Int) {
         showsOpeningLibrary = false
-        guard ComposerOpeningPlan.disarmsCameraOnLibraryPick(openingPick: openingPickFoundsScenes, stage: sceneCameraStage,
-              pendingSegments: sceneCapture.segments.count, editing: sceneCapture.phase.isEditing) else { return }
-        disarmSceneCamera()
+        let choix = ComposerOpeningPlan.libraryPick(count: count, fromViewfinder: viewfinderLibrary != .closed,
+            openingPick: openingPickFoundsScenes, stage: sceneCameraStage,
+            pendingSegments: sceneCapture.segments.count, editing: sceneCapture.phase.isEditing)
+        viewfinderLibrary = choix == .overlay ? .overlays : .closed
+        if choix == .foundsScenes(disarms: true) { disarmSceneCamera() }
     }
 
-    /// Une SÉRIE fonde ses scènes ; un média seul choisi par une porte suit le
-    /// geste de cette porte (posé sur la scène par le rail).
+    /// Une SÉRIE fonde ses scènes ; un média seul suit le geste de sa porte ; la Galerie de la
+    /// caméra pose par-dessus (#18710).
     func routePickedMedia(_ medias: [ComposerDocumentMedia]) {
+        guard viewfinderLibrary != .overlays else {
+            (openingPickFoundsScenes, viewfinderLibrary) = (false, .closed)
+            return ComposerViewfinderOverlay.pose(medias, on: self)
+        }
         let serie = ComposerScenePicking.foundsScenes(count: medias.count,
                                                       openingPick: openingPickFoundsScenes)
         openingPickFoundsScenes = false
