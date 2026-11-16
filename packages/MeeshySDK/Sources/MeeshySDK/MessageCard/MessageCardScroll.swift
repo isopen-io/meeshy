@@ -40,20 +40,41 @@ public struct MessageCardScrollPlan: Equatable, Sendable {
     public static let fps: Double = 30
     /// La plus longue vidéo qu'on produit : au-delà, le défilement accélère pour tenir.
     public static let maxDuration: Double = 180
+    /// Un GIF qui défile (#18806) garde le grain du GIF animé (`MessageCardMotionPlan`) :
+    /// 10 images par seconde, à demi-résolution, et 30 s au plus — au-delà, le
+    /// défilement accélère pour tenir, sans quoi le fichier pèserait des dizaines de Mo.
+    public static let gifFPS: Double = 10
+    public static let gifScale: Double = 0.5
+    public static let gifMaxDuration: Double = 30
 
+    public let output: MessageCardOutput
     public let travel: Double
     public let scrollDuration: Double
     public let duration: Double
     public let frameCount: Int
 
-    /// `nil` quand la carte tient dans son format : il n'y a rien à faire défiler.
-    public static func of(contentHeight: Double, viewportHeight: Double, speed: MessageCardScrollSpeed) -> MessageCardScrollPlan? {
+    /// Les images par seconde de CE plan : 30 en vidéo, 10 en GIF.
+    public var framesPerSecond: Double { output == .gif ? Self.gifFPS : Self.fps }
+    /// L'échelle des pixels de CE plan : pleine en vidéo, demie en GIF.
+    public var pixelScale: Double { output == .gif ? Self.gifScale : 1 }
+
+    /// `nil` quand la carte tient dans son format : il n'y a rien à faire défiler,
+    /// ou quand la sortie est une image fixe, qui ne défile pas.
+    public static func of(
+        contentHeight: Double,
+        viewportHeight: Double,
+        speed: MessageCardScrollSpeed,
+        output: MessageCardOutput = .video
+    ) -> MessageCardScrollPlan? {
         let travel = contentHeight - viewportHeight
-        guard travel.isFinite, travel > 1, viewportHeight > 0 else { return nil }
-        let room = maxDuration - leadIn - leadOut
+        guard output != .image, travel.isFinite, travel > 1, viewportHeight > 0 else { return nil }
+        let longest = output == .gif ? gifMaxDuration : maxDuration
+        let room = longest - leadIn - leadOut
         let scrollDuration = min(room, travel / (pixelsPerSecond * speed.factor))
         let duration = leadIn + scrollDuration + leadOut
+        let fps = output == .gif ? gifFPS : fps
         return MessageCardScrollPlan(
+            output: output,
             travel: travel,
             scrollDuration: scrollDuration,
             duration: duration,
@@ -68,7 +89,7 @@ public struct MessageCardScrollPlan: Equatable, Sendable {
         return travel * progress
     }
 
-    public func time(ofFrame index: Int) -> Double { Double(index) / Self.fps }
+    public func time(ofFrame index: Int) -> Double { Double(index) / framesPerSecond }
 }
 
 /// **LE FOND CHOISI D'UNE CARTE** (#18672) — une photo ou une vidéo de la
@@ -94,12 +115,22 @@ public struct MessageCardBackdrop: Equatable, Sendable {
 public extension MessageCardOutput {
     /// L'offre, avec ce qui peut faire BOUGER une carte en plus de ses médias :
     /// une vidéo choisie en fond s'anime comme une vidéo jointe, et un texte qui
-    /// dépasse son format se lit en vidéo qui défile (#18671, #18672).
+    /// dépasse son format se lit en GIF ou en vidéo qui défile (#18671, #18672,
+    /// #18806) — sauf avec un son, qui n'a de sens qu'en vidéo avec sa piste.
     static func offered(for kinds: [MessageCardMediaKind], backdrop: MessageCardMediaKind?, scrolls: Bool) -> [MessageCardOutput] {
         let moving = kinds + (backdrop == .video ? [.video] : [])
         let offer = offered(for: moving)
-        guard scrolls, !offer.contains(.video) else { return offer }
-        return offer + [.video]
+        guard scrolls else { return offer }
+        guard !moving.contains(.audio) else { return offer }
+        return [.image, .gif, .video]
+    }
+
+    /// La sortie de départ : une carte dont le texte dépasse son format ne
+    /// s'ouvre pas sur une image qui le tronquerait — elle part en vidéo qui
+    /// défile (#18806). Un choix déjà fait par l'utilisateur n'est jamais repris.
+    static func preferred(current: MessageCardOutput, scrolls: Bool, offered: [MessageCardOutput], userChose: Bool) -> MessageCardOutput {
+        guard !userChose, scrolls, current == .image, offered.contains(.video) else { return current }
+        return .video
     }
 }
 

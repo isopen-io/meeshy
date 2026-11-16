@@ -70,6 +70,8 @@ struct MessageCardExportSheet: View {
     @State var mediaVersion = 0
     @State var mediaAttempt = 0
     @State var output: MessageCardOutput = .image
+    /// L'utilisateur a choisi sa sortie : le départ en vidéo d'un texte long ne la reprend plus (#18806).
+    @State var outputChosen = false
     @State var motionTask: Task<Void, Never>?
     @StateObject var motion = MessageCardMotionProgress()
     /// Où commence le passage exporté d'un son ou d'une vidéo, en secondes (#8979) — propre à ce message.
@@ -173,10 +175,12 @@ struct MessageCardExportSheet: View {
         return rendered.scrollContent > rendered.viewport + 1
     }
 
-    /// En vidéo, un message long DÉFILE — sauf un son, que sa propre animation montre.
+    /// En vidéo comme en GIF, un message long DÉFILE (#18671, #18806) — sauf un son,
+    /// que sa propre animation montre.
     var scrollPlan: MessageCardScrollPlan? {
-        guard output == .video, !paintedMedia.contains(where: { $0.kind == .audio }), let rendered else { return nil }
-        return MessageCardScrollPlan.of(contentHeight: rendered.scrollContent, viewportHeight: rendered.viewport, speed: scrollSpeed)
+        guard output != .image, !paintedMedia.contains(where: { $0.kind == .audio }), let rendered else { return nil }
+        return MessageCardScrollPlan.of(contentHeight: rendered.scrollContent, viewportHeight: rendered.viewport,
+                                        speed: scrollSpeed, output: output)
     }
 
     /// L'extrait que l'aperçu montre — celui que la vidéo emportera.
@@ -234,6 +238,10 @@ struct MessageCardExportSheet: View {
         // Une sortie que la carte n'offre plus (une seule photo choisie après « GIF ») retombe sur l'image (#9235).
         .adaptiveOnChange(of: offeredOutputs) { _, offered in
             if !offered.contains(output) { output = .image }
+        }
+        // Un texte qui dépasse son format part en vidéo qui défile plutôt qu'en image tronquée (#18806).
+        .adaptiveOnChange(of: textScrolls) { _, scrolls in
+            output = MessageCardOutput.preferred(current: output, scrolls: scrolls, offered: offeredOutputs, userChose: outputChosen)
         }
         .task(id: "\(loaded)|\(mediaAttempt)") { await settleLead() }
         .task(id: "\(loaded)|\(leadSettled)|\(lead?.fileURL ?? "")|\(mediaAttempt)|\(soundsKey)|\(compositionKey)") { await loadMedia() }

@@ -142,9 +142,44 @@ struct MessageCardScrollTests {
         #expect(MessageCardOutput.offered(for: [], backdrop: .image, scrolls: false) == [.image])
     }
 
-    @Test func aLongTextOffersTheVideo() {
-        #expect(MessageCardOutput.offered(for: [], backdrop: nil, scrolls: true) == [.image, .video])
-        #expect(MessageCardOutput.offered(for: [.audio], backdrop: nil, scrolls: true) == [.image, .video])
+    @Test func aLongTextOffersTheGIFAndTheVideo() {
+        #expect(MessageCardOutput.offered(for: [], backdrop: nil, scrolls: true) == [.image, .gif, .video])
+        #expect(MessageCardOutput.offered(for: [.image], backdrop: nil, scrolls: true) == [.image, .gif, .video])
+        #expect(MessageCardOutput.offered(for: [.audio], backdrop: nil, scrolls: true) == [.image, .video],
+                "un son n'a de sens qu'en vidéo avec sa piste")
+    }
+
+    // MARK: - GIF qui défile (#18806)
+
+    @Test func aGIFScrollsAtTheGrainOfTheAnimatedGIF() throws {
+        let plan = try #require(MessageCardScrollPlan.of(contentHeight: 1920 + 540, viewportHeight: 1920, speed: .x1, output: .gif))
+        #expect(plan.output == .gif)
+        #expect(plan.framesPerSecond == MessageCardScrollPlan.gifFPS)
+        #expect(plan.pixelScale == MessageCardScrollPlan.gifScale)
+        #expect(plan.frameCount == Int((plan.duration * MessageCardScrollPlan.gifFPS).rounded(.up)))
+        #expect(plan.time(ofFrame: 10) == 1)
+        let video = try #require(MessageCardScrollPlan.of(contentHeight: 1920 + 540, viewportHeight: 1920, speed: .x1))
+        #expect(video.duration == plan.duration, "même lecture, même durée : seul le grain change")
+        #expect(video.pixelScale == 1)
+    }
+
+    @Test func aVeryLongTextIsCappedAtTheLongestGIF() throws {
+        let plan = try #require(MessageCardScrollPlan.of(contentHeight: 400_000, viewportHeight: 1920, speed: .x1, output: .gif))
+        #expect(plan.duration == MessageCardScrollPlan.gifMaxDuration)
+        #expect(plan.offset(at: plan.duration) == plan.travel)
+    }
+
+    @Test func aStillImageNeverScrolls() {
+        #expect(MessageCardScrollPlan.of(contentHeight: 6000, viewportHeight: 1920, speed: .x1, output: .image) == nil)
+    }
+
+    @Test func aCardWhoseTextOverflowsOpensOnTheScrollingVideo() {
+        let offer: [MessageCardOutput] = [.image, .gif, .video]
+        #expect(MessageCardOutput.preferred(current: .image, scrolls: true, offered: offer, userChose: false) == .video)
+        #expect(MessageCardOutput.preferred(current: .image, scrolls: false, offered: [.image], userChose: false) == .image)
+        #expect(MessageCardOutput.preferred(current: .image, scrolls: true, offered: offer, userChose: true) == .image,
+                "un choix de l'utilisateur n'est jamais repris")
+        #expect(MessageCardOutput.preferred(current: .gif, scrolls: true, offered: offer, userChose: false) == .gif)
     }
 }
 
