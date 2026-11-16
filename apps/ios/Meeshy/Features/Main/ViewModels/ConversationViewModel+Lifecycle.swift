@@ -164,10 +164,9 @@ extension ConversationViewModel {
     /// `.task` (one run per `.id(conversationId)` identity); the `hasStarted`
     /// guard makes re-entry (background→foreground re-task) a no-op.
     func start() {
-        // #10830 — le `.task` qui ramène l'écran réarme son rattrapage.
-        ConversationCatchUpGate.shared.arrive(self)
+        ConversationCatchUpGate.shared.arrive(self) // #10830 — le `.task` qui ramène l'écran réarme son rattrapage.
         watchVoiceConsent()
-        guard !hasStarted else { return }
+        guard !hasStarted else { return reopenScreen() }
         hasStarted = true
         // Rouvrir, c'est relire (la marque « non lu » tombe) — sauf en REGARD (#18721), qui ne lit rien avant le premier acte.
         if startupDependencies.readGate.opensReading(conversationId) { ExplicitUnreadMarks.clear(conversationId) }

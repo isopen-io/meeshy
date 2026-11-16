@@ -41,13 +41,21 @@ public object MeeshyMotion {
     public fun <T> bannerPullReturn(): SpringSpec<T> =
         spring(dampingRatio = 0.66f, stiffness = stiffnessForResponse(0.36f))
 
-    /** iOS `bannerPullMorph` — response 0.42, damping 0.92: the banner grows into the conversation without trembling (#18721). */
+    /** iOS `bannerPullMorph` — response 0.44, damping 0.9: the banner grows into the conversation without trembling (#18721). */
     public fun <T> bannerPullMorph(): SpringSpec<T> =
-        spring(dampingRatio = 0.92f, stiffness = stiffnessForResponse(0.42f))
+        spring(dampingRatio = 0.9f, stiffness = stiffnessForResponse(0.44f))
 
-    /** iOS `previewMorph` — response 0.5, damping 0.86: the long-press preview grows out of its row and settles (#18722, #18723). */
+    /** iOS `previewMorph` — response 0.5, damping 0.72: the long-press preview grows out of its row and settles with a slight bounce (#18722, #18723). */
     public fun <T> previewMorph(): SpringSpec<T> =
-        spring(dampingRatio = 0.86f, stiffness = stiffnessForResponse(0.5f))
+        spring(dampingRatio = 0.72f, stiffness = stiffnessForResponse(0.5f))
+
+    /** iOS `messagePreviewSettle` — response 0.42, damping 0.72: a message's long-press preview takes its place with the same slight bounce. */
+    public fun <T> messagePreviewSettle(): SpringSpec<T> =
+        spring(dampingRatio = 0.72f, stiffness = stiffnessForResponse(0.42f))
+
+    /** iOS `messagePreviewPop` — response 0.42, damping 0.58: the previewed bubble grows past its size before settling. */
+    public fun <T> messagePreviewPop(): SpringSpec<T> =
+        spring(dampingRatio = 0.58f, stiffness = stiffnessForResponse(0.42f))
 
     /** iOS `previewMorphReturn` — response 0.3, damping 0.8: the preview shrinks back into its row, faster than it grew. */
     public fun <T> previewMorphReturn(): SpringSpec<T> =

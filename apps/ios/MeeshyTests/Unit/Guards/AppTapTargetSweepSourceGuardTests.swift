@@ -387,7 +387,10 @@ final class AppTapTargetSweepSourceGuardTests: XCTestCase {
         ("Features/Auth/Views/LoginView.swift", "focusedField = nil"),
         ("Features/Composer/ComposerSceneSurface+Stage.swift", "onBackgroundTapped"),
         ("Features/Composer/ComposerSceneFrise.swift", "choisir(piste"),
-        ("Features/Call/Views/CallView+Connected.swift", "if exposesTheTapToggle")
+        ("Features/Call/Views/CallView+Connected.swift", "if exposesTheTapToggle"),
+        // Le double toucher recentre ; VoiceOver a la même action, « Recentrer »,
+        // posée par MessageCardCropAccessibility hors de la fenêtre du scanner.
+        ("Features/Export/MessageCardCropLayer.swift", "recenter(target)")
     ]
 
     func test_aucuneActionDAccessibiliteHorsMainNePorteUneReferenceDeFonction() throws {

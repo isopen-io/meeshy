@@ -40,8 +40,18 @@ final class ConversationPreviewMorphTests: XCTestCase {
         }
     }
 
-    func test_frame_beyondTheEnds_staysBetweenTheTwoFrames() {
-        XCTAssertEqual(ConversationPreviewMorph.frame(progress: 1.25, from: row, to: card), card, "le dépassement du ressort ne déforme pas la carte")
+    /// Le léger rebond de fin (retour porteur du 2026-11-16) : le dépassement
+    /// du ressort SE VOIT — la carte va un peu au-delà de sa place avant de
+    /// s'y poser — mais reste borné, et le retour ne passe jamais sous la ligne.
+    func test_frame_justBeyondTheCard_letsTheSettleBounceShow() {
+        let bounce = ConversationPreviewMorph.frame(progress: 1.04, from: row, to: card)
+        XCTAssertGreaterThan(bounce.height, card.height, "la carte dépasse sa hauteur")
+        XCTAssertLessThan(bounce.minY, card.minY, "et sa place, d'un rien")
+    }
+
+    func test_frame_farBeyondTheEnds_isBounded() {
+        XCTAssertEqual(ConversationPreviewMorph.frame(progress: 3, from: row, to: card),
+                       ConversationPreviewMorph.frame(progress: PreviewSettleSpring.maximumProgress, from: row, to: card))
         XCTAssertEqual(ConversationPreviewMorph.frame(progress: -0.3, from: row, to: card), row, "le retour du ressort ne passe pas sous la ligne")
     }
 

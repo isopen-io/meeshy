@@ -21,6 +21,7 @@ import { parseCaptureNotice } from '@meeshy/shared/utils/capture-notice';
 import {
   CAPTURE_AFTER_DISPLAY_MAX_MS,
   CAPTURE_REPORT_GRACE_MS,
+  MAX_CAPTURE_COUNT,
   MAX_NOTICES_PER_REPORT,
   VIEW_ONCE_CAPTURE_WINDOW_MS,
   captureRateLimitKey,
@@ -204,6 +205,8 @@ function harness(world: World = {}) {
   const clock = { now: NOW };
   const control = { failWrites: world.failWrites ?? false };
   const store = new Map<string, number>();
+  const values = new Map<string, string>();
+  const updates: Record<string, unknown>[] = [];
   const limiter = new SocketRateLimiter();
   limiters.push(limiter);
 
@@ -239,6 +242,14 @@ function harness(world: World = {}) {
         created.push(row);
         return row;
       },
+      findUnique: async ({ where }: { where: { id: string } }) => created.find((row) => row.id === where.id) ?? null,
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const index = created.findIndex((row) => row.id === where.id);
+        if (index < 0) throw new Error('not found');
+        created[index] = { ...created[index], ...data };
+        updates.push(created[index]);
+        return created[index];
+      },
     },
     messageStatusEntry: {
       findFirst: async ({ where }: { where: { messageId: string; participantId: string } }) =>
@@ -267,6 +278,11 @@ function harness(world: World = {}) {
       },
       del: async (key) => {
         store.delete(key);
+        values.delete(key);
+      },
+      get: async (key) => values.get(key) ?? null,
+      set: async (key, value) => {
+        values.set(key, value);
       },
     },
     limiter: {
@@ -281,14 +297,22 @@ function harness(world: World = {}) {
     now: () => clock.now,
   };
 
-  const capture = (messageIds: string[], overrides: { kind?: 'screenshot' | 'recording'; captureId?: string; conversationId?: string } = {}) =>
+  const capture = (
+    messageIds: string[],
+    overrides: { kind?: 'screenshot' | 'recording'; captureId?: string | null; conversationId?: string; recordingSeconds?: number } = {},
+  ) =>
     recordContentCapture(deps, {
       conversationId: overrides.conversationId ?? CONV,
       actorParticipantId: ACTOR,
-      report: { messageIds, kind: overrides.kind ?? 'screenshot', captureId: overrides.captureId ?? 'capture-0001' },
+      report: {
+        messageIds,
+        kind: overrides.kind ?? 'screenshot',
+        ...(overrides.captureId === null ? {} : { captureId: overrides.captureId ?? 'capture-0001' }),
+        ...(overrides.recordingSeconds === undefined ? {} : { recordingSeconds: overrides.recordingSeconds }),
+      },
     });
 
-  return { capture, created, deliveries, clockAdvances, readCalls, clock, control, limiter };
+  return { capture, created, updates, deliveries, clockAdvances, readCalls, clock, control, limiter };
 }
 
 const noticesOf = (created: Record<string, unknown>[]) => created.map((row) => parseCaptureNotice(row.metadata));
@@ -530,6 +554,7 @@ describe('recordContentCapture — une annonce par (acteur, message, sorte), et 
     for (let i = 0; i < 40; i += 1) {
       h.clock.now = new Date(NOW.getTime() + i * 31_000);
       h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE);
+      h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY);
       // eslint-disable-next-line no-await-in-loop
       const outcome = await h.capture([TIMED], { captureId: `shot-${String(i).padStart(8, '0')}` });
       expect(outcome).toEqual({ kind: 'recorded', noticedMessageIds: [TIMED] });
@@ -672,5 +697,119 @@ describe('recordContentCapture — à qui l’avis est remis (#9629 b, #9630)', 
     const h = harness({ failDeliver: true });
     expect(await h.capture([TIMED])).toEqual({ kind: 'recorded', noticedMessageIds: [TIMED] });
     expect(h.created).toHaveLength(1);
+  });
+});
+
+describe('recordContentCapture — combien de captures, combien de temps (#18830)', () => {
+  const flameWorld = () => harness({ messages: [flame(TIMED)], entries: [entry(TIMED)] });
+
+  it('compte une capture DISTINCTE sur l’avis existant, le réécrit et le remet de nouveau', async () => {
+    const h = flameWorld();
+    await h.capture([TIMED], { captureId: 'shot-0000001' });
+    await h.capture([TIMED], { captureId: 'shot-0000002' });
+    await h.capture([TIMED], { captureId: 'shot-0000003' });
+
+    expect(h.created).toHaveLength(1);
+    expect(noticesOf(h.created)[0]).toMatchObject({ captureKind: 'screenshot', count: 3 });
+    expect(h.created[0].content).toBe('Alice (@alice) a capturé l’éphémère du 07/10/2026 à 11:58 (UTC) · 3 captures');
+    expect(h.deliveries).toHaveLength(3);
+    expect(h.deliveries.map((d) => (d.message as { id: string }).id)).toEqual(['sys-0', 'sys-0', 'sys-0']);
+  });
+
+  it('ne compte pas deux fois la même capture redéclarée, ni une capture sans identifiant', async () => {
+    const h = flameWorld();
+    await h.capture([TIMED], { captureId: 'shot-0000001' });
+    await h.capture([TIMED], { captureId: 'shot-0000001' });
+    await h.capture([TIMED], { captureId: null });
+    expect(noticesOf(h.created)[0]?.count).toBeUndefined();
+    expect(h.updates).toHaveLength(0);
+    expect(h.deliveries).toHaveLength(1);
+  });
+
+  it('additionne la durée déclarée à la fin de chaque enregistrement, une fois par enregistrement', async () => {
+    const h = flameWorld();
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001' });
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001', recordingSeconds: 65 });
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001', recordingSeconds: 65 });
+    expect(noticesOf(h.created)[0]).toMatchObject({ captureKind: 'recording', recordedSeconds: 65 });
+    expect(noticesOf(h.created)[0]?.count).toBeUndefined();
+
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000002', recordingSeconds: 30 });
+    expect(noticesOf(h.created)[0]).toMatchObject({ count: 2, recordedSeconds: 95 });
+    expect(h.created[0].content).toContain('· 2 enregistrements · durée 1 min 35 s');
+  });
+
+  it('écrit la durée d’un enregistrement déclaré seulement à sa fin', async () => {
+    const h = flameWorld();
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000009', recordingSeconds: 12 });
+    expect(noticesOf(h.created)[0]).toMatchObject({ recordedSeconds: 12 });
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000009', recordingSeconds: 12 });
+    expect(noticesOf(h.created)[0]).toMatchObject({ recordedSeconds: 12 });
+  });
+
+  it('n’ajoute pas de durée à une capture photo', async () => {
+    const h = flameWorld();
+    await h.capture([TIMED], { captureId: 'shot-0000001', recordingSeconds: 40 });
+    expect(noticesOf(h.created)[0]?.recordedSeconds).toBeUndefined();
+  });
+
+  it('ne touche pas un avis supprimé, et ne recrée rien', async () => {
+    const h = flameWorld();
+    await h.capture([TIMED], { captureId: 'shot-0000001' });
+    h.created[0] = { ...h.created[0], deletedAt: NOW };
+    await h.capture([TIMED], { captureId: 'shot-0000002' });
+    expect(h.created).toHaveLength(1);
+    expect(h.updates).toHaveLength(0);
+  });
+
+  it('compte la réécriture dans le budget horaire des avis (audit #18830, 2)', async () => {
+    const h = flameWorld();
+    const max = SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY.maxRequests;
+    for (let i = 0; i < max + 5; i += 1) {
+      h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE);
+      // eslint-disable-next-line no-await-in-loop
+      await h.capture([TIMED], { captureId: `shot-${String(i).padStart(8, '0')}` });
+    }
+    expect(h.deliveries).toHaveLength(max);
+    expect(noticesOf(h.created)[0]?.count).toBe(max);
+  });
+
+  it('un budget épuisé ne perd ni la capture ni sa durée : le réessai les compte (audit #18830, a)', async () => {
+    const h = flameWorld();
+    const key = captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV });
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001' });
+    for (let i = 0; i < SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY.maxRequests; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await h.limiter.checkLimit(key, SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY);
+    }
+    expect(await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001', recordingSeconds: 40 })).toEqual({ kind: 'recorded', noticedMessageIds: [] });
+    h.limiter.reset(key, SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY);
+    h.limiter.reset(key, SOCKET_RATE_LIMITS.MESSAGE_CAPTURE);
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001', recordingSeconds: 40 });
+    expect(noticesOf(h.created)[0]?.recordedSeconds).toBe(40);
+  });
+
+  it(`plafonne le compte à ${MAX_CAPTURE_COUNT} (audit #18830, 3)`, async () => {
+    const h = flameWorld();
+    for (let i = 0; i < MAX_CAPTURE_COUNT + 3; i += 1) {
+      h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE);
+      h.limiter.reset(captureRateLimitKey({ actorParticipantId: ACTOR, conversationId: CONV }), SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY);
+      // eslint-disable-next-line no-await-in-loop
+      await h.capture([TIMED], { captureId: `shot-${String(i).padStart(8, '0')}` });
+    }
+    expect(noticesOf(h.created)[0]?.count).toBe(MAX_CAPTURE_COUNT);
+  });
+
+  it('ne compte pas plus de durée que le message n’a d’existence (audit #18830, 3)', async () => {
+    const h = flameWorld();
+    await h.capture([TIMED], { kind: 'recording', captureId: 'rec-0000001', recordingSeconds: 86_400 });
+    expect(noticesOf(h.created)[0]?.recordedSeconds).toBe((NOW.getTime() - SENT_AT.getTime()) / 1000);
+  });
+
+  it('n’emporte toujours aucun contenu du message capturé', async () => {
+    const h = harness();
+    await h.capture([SECRET], { captureId: 'shot-0000001' });
+    await h.capture([SECRET], { captureId: 'shot-0000002' });
+    expect(JSON.stringify(h.created)).not.toContain('4242');
   });
 });

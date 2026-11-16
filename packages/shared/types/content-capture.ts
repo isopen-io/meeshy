@@ -33,6 +33,13 @@ const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
 /** Ni `:` ni espace : l'identifiant entre dans une clé de déduplication. */
 const CAPTURE_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
+/**
+ * #18830 — la durée d'un enregistrement d'écran, déclarée à sa FIN avec le
+ * `captureId` de son début. Bornée à une journée : au-delà, c'est une horloge
+ * folle, pas un enregistrement.
+ */
+export const CONTENT_CAPTURE_MAX_RECORDING_SECONDS = 86_400;
+
 const captureFields = {
   messageIds: z
     .array(z.string().regex(OBJECT_ID))
@@ -41,6 +48,7 @@ const captureFields = {
     .transform((ids) => [...new Set(ids)]),
   kind: z.enum(CONTENT_CAPTURE_KINDS),
   captureId: z.string().regex(CAPTURE_ID).optional(),
+  recordingSeconds: z.number().int().min(0).max(CONTENT_CAPTURE_MAX_RECORDING_SECONDS).optional(),
 };
 
 /** La charge du corps REST — la conversation est dans l'adresse. */
@@ -86,6 +94,7 @@ export const contentCaptureRequestJsonSchema = {
     },
     kind: { type: 'string', enum: [...CONTENT_CAPTURE_KINDS] },
     captureId: { type: 'string', pattern: '^[A-Za-z0-9_-]{8,64}$' },
+    recordingSeconds: { type: 'integer', minimum: 0, maximum: CONTENT_CAPTURE_MAX_RECORDING_SECONDS },
   },
 } as const;
 

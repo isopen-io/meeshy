@@ -131,9 +131,11 @@ struct MessagePieceOverlay: View {
         .ignoresSafeArea()
         .accessibilityAddTraits(.isModal)
         .dismissOnEscape { dismiss() }
-        .adaptiveOnChange(of: selection) { _, newValue in
+        .adaptiveOnChange(of: selection) { oldValue, newValue in
             focusedPieceId = newValue
+            releaseVideo(of: oldValue)
         }
+        .onDisappear { releaseVideo(of: selection) }
         .confirmationDialog(
             String(localized: "message-more.media.title", defaultValue: "Ce média", bundle: .main),
             isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }),
@@ -176,6 +178,7 @@ struct MessagePieceOverlay: View {
                 MessagePiecePage(
                     piece: piece,
                     isProtected: isProtected(piece),
+                    isShown: piece.id == selection,
                     accentHex: accentHex,
                     size: MessagePieceTarget.fittedSize(
                         ratio: OverlayPreviewMediaLayout.aspectRatio(of: piece), in: stage)
@@ -199,9 +202,17 @@ struct MessagePieceOverlay: View {
         }
     }
 
+    /// **La position : les points du carrousel, le point allongé à la pièce
+    /// visible** (#18824) ; au-delà de sept pièces, le compteur « 3/9 ».
     @ViewBuilder
     private var positionChip: some View {
-        if pieces.count > 1, let index = MessagePieceTarget.index(of: selection, in: message) {
+        if CarouselPageDots.showsDots(count: pieces.count), let index = MessagePieceTarget.index(of: selection, in: message) {
+            CarouselPageDotsView(count: pieces.count, current: index, accentHex: accentHex) { page in
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { selection = pieces[page].id }
+            }
+            .frame(minHeight: Self.positionChipHeight)
+            .accessibilityHidden(true)
+        } else if pieces.count > 1, let index = MessagePieceTarget.index(of: selection, in: message) {
             Text(verbatim: MessagePieceTarget.position(index: index, count: pieces.count))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.white)
@@ -261,6 +272,12 @@ struct MessagePieceOverlay: View {
         }
     }
 
+    /// La vidéo quittée (page tournée, aperçu fermé) libère son lecteur.
+    private func releaseVideo(of pieceId: String) {
+        guard let piece = pieces.first(where: { $0.id == pieceId }), piece.type == .video else { return }
+        SharedAVPlayerManager.shared.release(urlString: piece.fileUrl)
+    }
+
     private func spokenPosition(of piece: MessageAttachment) -> String {
         guard let index = MessagePieceTarget.index(of: piece.id, in: message) else { return "" }
         let format = piece.type == .video
@@ -278,6 +295,8 @@ struct MessagePieceOverlay: View {
 private struct MessagePiecePage: View {
     let piece: MessageAttachment
     let isProtected: Bool
+    /// La page visible lit sa vidéo ; les voisines gardent leur affiche.
+    let isShown: Bool
     let accentHex: String
     let size: CGSize
 
@@ -292,6 +311,19 @@ private struct MessagePiecePage: View {
     private var content: some View {
         if isProtected {
             MaskedMediaTile()
+        } else if piece.type == .video, isShown {
+            VideoAvailabilityResolver(attachment: piece) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: piece,
+                    style: .inline,
+                    controls: .inlineMinimal,
+                    accentColor: accentHex,
+                    frame: .bubble,
+                    availability: availability,
+                    surfaceTapExpands: false,
+                    onDownload: onDownload
+                )
+            }
         } else if piece.type == .video {
             ConversationVideoPoster(attachment: piece, accentHex: accentHex, playButtonDiameter: 64)
         } else {

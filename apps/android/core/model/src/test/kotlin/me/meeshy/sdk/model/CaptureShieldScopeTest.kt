@@ -32,7 +32,17 @@ class CaptureShieldScopeTest {
         assertThat(closed.shields("p2")).isTrue()
         assertThat(closed.shields("p3")).isTrue()
         val announcing = MessageExitOffer.captureShieldScope(messages, surfaceAnnounces = true)
-        assertThat(announcing.shields("p3")).isFalse()
+        assertThat(announcing.shields("p3")).isTrue() // #18831 : noire même sur une surface qui annonce
         assertThat(announcing.shields("p2")).isTrue()
+        assertThat(announcing.shields("p1")).isFalse()
+    }
+
+    @Test
+    fun `a blurred message leaves every capture black but declares nothing (#18831)`() {
+        val blurred = MessageExitOffer(ContentExitLaw.Ordinary, holdsBlur = true, isEncrypted = false)
+        assertThat(blurred.capture).isEqualTo(ContentExitLaw.CaptureVerdict.BLOCKED)
+        assertThat(blurred.capture.shieldsCapture(surfaceAnnounces = true)).isTrue()
+        assertThat(blurred.law.capture.isDeclared).isFalse()
+        assertThat(MessageExitOffer.captureShieldScope(listOf(blurred to listOf("p"))).shields("p")).isTrue()
     }
 }

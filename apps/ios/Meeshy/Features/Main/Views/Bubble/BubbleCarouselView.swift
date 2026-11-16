@@ -9,6 +9,18 @@ import MeeshyUI
 // MARK: - Bubble Carousel View (Native Paging + Elegant Transitions)
 
 struct BubbleCarouselView: View {
+    /// **Où le carrousel est montré** (#18824). Dans le fil, il s'ouvre depuis
+    /// la case « +N » : une croix le referme, un toucher ouvre le plein écran.
+    /// Dans l'aperçu d'appui long, il remplace la grille d'un message à
+    /// plusieurs visuels : il défile et lit, sans croix ni plein écran.
+    nonisolated enum Presentation: Equatable, Sendable {
+        case thread
+        case preview
+
+        var showsCloseButton: Bool { self == .thread }
+        var opensFullscreen: Bool { self == .thread }
+    }
+
     let items: [MessageAttachment]
 
     /// La page `index` bornée aux pages existantes ; `nil` quand le message n'a
@@ -40,6 +52,7 @@ struct BubbleCarouselView: View {
     var footer: BubbleFooterModel = .empty
     var isDark: Bool = false
     var containerWidth: CGFloat = 260
+    @Environment(\.carouselPresentation) private var presentation
 
     @State private var currentPageID: String?
     /// L'URL de la vidéo de la page montrée : c'est ELLE qu'on libère en la
@@ -63,27 +76,41 @@ struct BubbleCarouselView: View {
         return heights.max() ?? width * SceneShape.aspect
     }
 
-    var body: some View {
-        ZStack(alignment: .top) {
-            AdaptiveHorizontalPager(
-                items: items,
-                currentPageID: $currentPageID,
-                fillVertical: false,
-                carouselTransition: true
-            ) { _, attachment in
-                carouselPage(attachment)
-            }
-            .frame(height: carouselHeight(width: containerWidth))
+    /// La page visible : celle que le pager montre, sinon l'indice reçu.
+    private var shownPage: Int {
+        CarouselPageDots.page(of: currentPageID, in: items, fallback: carouselIndex)
+    }
 
-            carouselTopBar
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                AdaptiveHorizontalPager(
+                    items: items,
+                    currentPageID: $currentPageID,
+                    fillVertical: false,
+                    carouselTransition: true
+                ) { _, attachment in
+                    carouselPage(attachment)
+                }
+                .frame(height: carouselHeight(width: containerWidth))
+
+                carouselTopBar
+            }
+            // Timestamp + delivery state — overlay footer. Aucune vidéo ne joue
+            // dans le carrousel (#8231) : il n'a plus de raison de s'effacer.
+            .overlay(alignment: .bottomTrailing) {
+                BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
+                    .equatable()
+                    .padding(MeeshySpacing.sm)
+            }
+
+            if CarouselPageDots.showsDots(count: items.count) {
+                CarouselPageDotsView(count: items.count, current: shownPage, accentHex: contactColor) { page in
+                    withAnimation(.easeInOut(duration: 0.25)) { currentPageID = items[page].id }
+                }
+            }
         }
-        // Timestamp + delivery state — overlay footer. Aucune vidéo ne joue
-        // dans le carrousel (#8231) : il n'a plus de raison de s'effacer.
-        .overlay(alignment: .bottomTrailing) {
-            BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
-                .equatable()
-                .padding(MeeshySpacing.sm)
-        }
+        .modifier(OverlayPreviewTouchZone(declares: presentation == .preview))
         .onAppear {
             guard let start = Self.currentAttachment(at: carouselIndex, in: items) else { return }
             currentPageID = start.id
@@ -122,32 +149,14 @@ struct BubbleCarouselView: View {
 
     private var carouselTopBar: some View {
         HStack(spacing: 0) {
-            Button {
-                // BUG E fix : libère le player de la slide active (URL-gated).
-                if let current = Self.currentAttachment(at: carouselIndex, in: items),
-                   current.type == .video {
-                    SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showCarousel = false
-                }
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "xmark")
-                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(.ultraThinMaterial.opacity(MeeshyOpacity.intense)))
-                    .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
-                    .meeshyTapTarget()
+            if presentation.showsCloseButton {
+                closeButton
             }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
             Spacer()
 
-            if items.count > 1 {
-                pageIndicator
+            if items.count > 1, !CarouselPageDots.showsDots(count: items.count) {
+                pageCounter
             }
         }
         .padding(EdgeInsets(
@@ -158,28 +167,37 @@ struct BubbleCarouselView: View {
         ))
     }
 
-    // MARK: - Page Indicator
-
-    @ViewBuilder
-    private var pageIndicator: some View {
-        let accent = Color(hex: contactColor)
-
-        if items.count <= 7 {
-            HStack(spacing: MeeshySpacing.xs) {
-                ForEach(0..<items.count, id: \.self) { i in
-                    Circle()
-                        .fill(i == carouselIndex ? accent : Color.white.opacity(MeeshyOpacity.strong))
-                        .frame(
-                            width: i == carouselIndex ? 7 : 5,
-                            height: i == carouselIndex ? 7 : 5
-                        )
-                        .shadow(
-                            color: i == carouselIndex ? accent.opacity(0.6) : .clear,
-                            radius: 4
-                        )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
-                }
+    private var closeButton: some View {
+        Button {
+            // BUG E fix : libère le player de la slide active (URL-gated).
+            if let current = Self.currentAttachment(at: carouselIndex, in: items),
+               current.type == .video {
+                SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
             }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showCarousel = false
+            }
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: "xmark")
+                // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
+                .foregroundStyle(Color.white)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(.ultraThinMaterial.opacity(MeeshyOpacity.intense)))
+                .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .meeshyTapTarget()
+        }
+        .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+    }
+
+    // MARK: - Page Counter
+
+    /// Au-delà de sept pages, les points ne se lisent plus : un compteur.
+    private var pageCounter: some View {
+        Text("\(shownPage + 1) / \(items.count)")
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(
@@ -187,20 +205,9 @@ struct BubbleCarouselView: View {
                     .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
                     .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
             )
-        } else {
-            Text("\(carouselIndex + 1) / \(items.count)")
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
-                .foregroundStyle(Color.white)
-                .padding(.horizontal, MeeshySpacing.smPlus)
-                .padding(.vertical, MeeshySpacing.xs)
-                .background(
-                    Capsule()
-                        .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
-                        .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
-                )
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
-        }
+            .contentTransition(.numericText())
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: shownPage)
+            .accessibilityLabel(CarouselPageDots.pageLabel(page: shownPage, count: items.count))
     }
 
     // MARK: - Carousel Page
@@ -223,10 +230,11 @@ struct BubbleCarouselView: View {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
+            guard presentation.opensFullscreen else { return }
             fullscreenAttachment = attachment
             HapticFeedback.light()
         }
-        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { fullscreenAttachment = attachment }
+        .modifier(CarouselOpenAction(enabled: presentation.opensFullscreen) { fullscreenAttachment = attachment })
         .overlay(alignment: .bottom) {
             DownloadBadgeView(
                 attachment: attachment,
@@ -290,7 +298,10 @@ struct BubbleCarouselView: View {
                 availability: availability,
                 surfaceTapExpands: true,
                 onDownload: onDownload,
-                onExpand: { fullscreenAttachment = attachment }
+                onExpand: {
+                    guard presentation.opensFullscreen else { return }
+                    fullscreenAttachment = attachment
+                }
             )
         }
             .overlay(alignment: .bottom) {
@@ -344,5 +355,100 @@ struct BubbleCarouselView: View {
                 )
             }
         }
+    }
+}
+
+// MARK: - Les points du carrousel (#18824)
+
+/// **Les points du carrousel : UN seul allongé, à la page visible.** Les autres
+/// sont ronds ; le point allongé glisse d'une page à l'autre avec le
+/// défilement. Au-delà de sept pages, les points ne se lisent plus et le
+/// carrousel montre un compteur.
+nonisolated enum CarouselPageDots {
+    static let dotSide: CGFloat = 6
+    static let longDotWidth: CGFloat = 18
+    static let maxDots = 7
+
+    static func width(of position: Int, current: Int) -> CGFloat {
+        position == current ? longDotWidth : dotSide
+    }
+
+    static func showsDots(count: Int) -> Bool {
+        count > 1 && count <= maxDots
+    }
+
+    /// La page de la pièce montrée, sinon l'indice reçu ; toujours bornée.
+    static func page(of shownId: String?, in items: [MessageAttachment], fallback: Int) -> Int {
+        if let shownId, let index = items.firstIndex(where: { $0.id == shownId }) { return index }
+        return max(0, min(fallback, items.count - 1))
+    }
+
+    /// « Page 2 sur 4 », ce que VoiceOver annonce.
+    static func pageLabel(page: Int, count: Int) -> String {
+        String(format: String(localized: "bubble.carousel.a11y.page", defaultValue: "Page %1$lld sur %2$lld", bundle: .main),
+               page + 1, count)
+    }
+}
+
+/// Les points sous le carrousel. VoiceOver les lit « page 2 sur 4 » et les
+/// ajuste d'un balayage vertical, comme le doigt fait défiler.
+struct CarouselPageDotsView: View {
+    let count: Int
+    let current: Int
+    let accentHex: String
+    let onSelect: (Int) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let accent = Color(hex: accentHex)
+        HStack(spacing: MeeshySpacing.xs) {
+            ForEach(0..<count, id: \.self) { position in
+                Capsule()
+                    .fill(position == current ? accent : accent.opacity(MeeshyOpacity.medium))
+                    .frame(width: CarouselPageDots.width(of: position, current: current), height: CarouselPageDots.dotSide)
+            }
+        }
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: current)
+        .padding(.vertical, MeeshySpacing.sm)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(CarouselPageDots.pageLabel(page: current, count: count))
+        .accessibilityAdjustableAction { direction in
+            let next = direction == .increment ? current + 1 : current - 1
+            guard (0..<count).contains(next) else { return }
+            onSelect(next)
+        }
+    }
+}
+
+/// L'action VoiceOver « ouvrir » d'une page : seulement là où un toucher
+/// l'ouvre aussi (le fil, jamais l'aperçu).
+private struct CarouselOpenAction: ViewModifier {
+    let enabled: Bool
+    let open: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main)), open)
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - L'aperçu d'appui long montre ses visuels en carrousel
+
+private struct CarouselPresentationKey: EnvironmentKey {
+    static let defaultValue: BubbleCarouselView.Presentation = .thread
+}
+
+extension EnvironmentValues {
+    /// `.preview` : la cellule est rendue dans l'aperçu d'appui long, et un
+    /// message à plusieurs visuels s'y montre en carrousel (#18824).
+    var carouselPresentation: BubbleCarouselView.Presentation {
+        get { self[CarouselPresentationKey.self] }
+        set { self[CarouselPresentationKey.self] = newValue }
     }
 }

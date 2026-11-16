@@ -410,7 +410,7 @@ extension FocalRowInput {
             currentUserId: context.currentUserId,
             recipientCount: context.recipientCount
         )
-        return FocalRowInput(
+        var row = FocalRowInput(
             localId: message.id,
             serverId: message.id,
             content: content,
@@ -449,6 +449,10 @@ extension FocalRowInput {
             sentAt: message.createdAt,
             availableWidth: context.availableWidth
         )
+        // L'aperçu n'a pas la file audio du fil : son vocal est hébergé par le
+        // message lui-même, sans quoi le bloc audio ne rend rien (#18824).
+        row.audioHostMessage = message
+        return row
     }
 
     /// Les effets du message, moins ceux d'APPARITION : un aperçu ne rejoue pas

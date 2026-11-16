@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Meeshy
 
 /// #9043 — le menu d'appui long d'un message : la BANDE d'emojis s'allonge de
@@ -27,7 +28,7 @@ final class MessageOverlayRevealLawTests: XCTestCase {
 
     func test_estimatedSize_fiveActions_keepsTheSystemMenuHeight() {
         let size = MessageActionsMenu.estimatedSize(actionCount: 5)
-        XCTAssertEqual(size.height, 5 * 44 + 20, accuracy: 0.0001)
+        XCTAssertEqual(size.height, 5 * UIFontMetrics.default.scaledValue(for: 44) + 20, accuracy: 0.0001)
         XCTAssertEqual(size.width, MessageActionsMenu.menuWidth)
     }
 

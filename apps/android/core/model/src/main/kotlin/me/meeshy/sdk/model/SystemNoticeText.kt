@@ -32,6 +32,52 @@ object SystemNoticeText {
         val blockedRecording: String,
     )
 
+    /** #18830 — le suffixe « · 3 captures · durée 1 min 05 s », miroir de `tallySuffix` (shared). */
+    private data class Tally(
+        val screenshots: String,
+        val recordings: String,
+        val duration: String,
+        val hour: String,
+        val minute: String,
+        val second: String,
+    )
+
+    private val tallies: Map<String, Tally> = mapOf(
+        "fr" to Tally("{n} captures", "{n} enregistrements", "durée {d}", "h", "min", "s"),
+        "en" to Tally("{n} screenshots", "{n} recordings", "duration {d}", "h", "min", "s"),
+        "es" to Tally("{n} capturas", "{n} grabaciones", "duración {d}", "h", "min", "s"),
+        "pt" to Tally("{n} capturas", "{n} gravações", "duração {d}", "h", "min", "s"),
+        "de" to Tally("{n} Screenshots", "{n} Aufzeichnungen", "Dauer {d}", "h", "min", "s"),
+        "it" to Tally("{n} catture", "{n} registrazioni", "durata {d}", "h", "min", "s"),
+        "ar" to Tally("{n} لقطات", "{n} تسجيلات", "المدة {d}", "س", "د", "ث"),
+    )
+
+    /** « 42 s », « 1 min 05 s », « 1 h 02 min 05 s ». Pure. */
+    fun duration(seconds: Int, language: String?): String {
+        val table = tallies.getValue(normalizedLanguage(language))
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val s = seconds % 60
+        val pad = { value: Int -> value.toString().padStart(2, '0') }
+        return when {
+            h > 0 -> "$h ${table.hour} ${pad(m)} ${table.minute} ${pad(s)} ${table.second}"
+            m > 0 -> "$m ${table.minute} ${pad(s)} ${table.second}"
+            else -> "$s ${table.second}"
+        }
+    }
+
+    private fun tallySuffix(notice: CaptureNoticeMetadata, language: String): String {
+        val table = tallies.getValue(language)
+        val recording = notice.captureKind == CaptureNoticeMetadata.CaptureKind.RECORDING
+        val counted = if (notice.count > 1) {
+            (if (recording) table.recordings else table.screenshots).replace("{n}", notice.count.toString())
+        } else {
+            null
+        }
+        val timed = notice.recordedSeconds?.let { table.duration.replace("{d}", duration(it, language)) }
+        return listOfNotNull(counted, timed).joinToString("") { " · $it" }
+    }
+
     private data class Arrived(val one: String, val two: String, val three: String, val many: String)
 
     private val captureTemplates: Map<String, Capture> = mapOf(
@@ -180,6 +226,10 @@ object SystemNoticeText {
     /** La phrase de l'avis de capture pour ce lecteur. Pure. */
     fun capture(notice: CaptureNoticeMetadata, language: String?, timeZoneId: String?): String {
         val lang = normalizedLanguage(language)
+        return base(notice, lang, timeZoneId) + tallySuffix(notice, lang)
+    }
+
+    private fun base(notice: CaptureNoticeMetadata, lang: String, timeZoneId: String?): String {
         val zone = zoneOf(timeZoneId)
         val table = captureTemplates.getValue(lang)
         val blocked = notice.outcome == CaptureNoticeMetadata.Outcome.BLOCKED
@@ -199,8 +249,9 @@ object SystemNoticeText {
 
     /** Le repli stocké dans `Message.content` — français, UTC DIT comme tel. */
     fun captureFallback(notice: CaptureNoticeMetadata): String {
-        val text = capture(notice, "fr", "UTC")
-        return if (notice.outcome == CaptureNoticeMetadata.Outcome.BLOCKED) text else "$text (UTC)"
+        val text = base(notice, "fr", "UTC")
+        val stamped = if (notice.outcome == CaptureNoticeMetadata.Outcome.BLOCKED) text else "$text (UTC)"
+        return stamped + tallySuffix(notice, "fr")
     }
 
     /**

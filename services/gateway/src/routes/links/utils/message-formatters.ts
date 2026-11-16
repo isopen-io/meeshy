@@ -1,7 +1,7 @@
 import { transformTranslationsToArray } from '../../../utils/translation-transformer';
 import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { mapMessageProtectionFields } from '../../conversations/messages-list-query';
-import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
+import { quotesCaptureNotice, servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
 import { servedLinkMetadata } from '../../../services/messaging/linkTrackingAuthor';
 import { attachmentReplyToFromMetadata } from '../../../services/messaging/attachmentReplySnapshot';
 import type { EphemeralReaderResolution } from '../../conversations/ephemeralReaderDeadlines';
@@ -175,8 +175,8 @@ function formatReplyToMessage(replyTo: any, citingMetadata?: unknown, readers?: 
     content: guarded['content'] !== undefined ? guarded['content'] : replyTo.content,
     originalLanguage: replyTo.originalLanguage || 'fr',
     messageType: replyTo.messageType,
-    createdAt: replyTo.createdAt,
-    sender: extractSenderInfo(replyTo.sender),
+    createdAt: quotesCaptureNotice(replyTo) ? undefined : replyTo.createdAt,
+    sender: quotesCaptureNotice(replyTo) ? null : extractSenderInfo(replyTo.sender),
     isViewOnce: Boolean(replyTo.isViewOnce),
     isBlurred: Boolean(replyTo.isBlurred),
     isEncrypted: Boolean(replyTo.isEncrypted),

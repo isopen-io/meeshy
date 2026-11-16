@@ -430,7 +430,7 @@ struct MessageOverlayMenu: View {
                 // tient pas dans la fenêtre. Gate Equatable (H3) + mémoire de
                 // la rangée plate : le drag 60 fps ne reconstruit rien. Seule la
                 // zone de lecture d'un vocal ou d'une vidéo s'y touche (#11339).
-                previewViewport(
+                settledPreviewViewport(
                     touch: touch, containerSize: geometry.size, previewSize: CGSize(width: previewW, height: previewH),
                     fit: fit)
                 // #9043 — transformation de RENDU seule (aucune passe de
@@ -472,14 +472,27 @@ struct MessageOverlayMenu: View {
         .onDisappear { stopPreviewPlayback() }
     }
 
+    /// L'aperçu avec le léger rebond de fin (retour porteur, #18723) : la
+    /// bulle grandit jusqu'à sa taille et la dépasse d'un rien avant de s'y
+    /// poser. Sous « Réduire les animations », elle est déjà posée.
+    private func settledPreviewViewport(
+        touch: MessageOverlayPreviewTouch, containerSize: CGSize, previewSize: CGSize, fit: MessageOverlayPreviewFit.Result
+    ) -> some View {
+        let settled = isVisible || reduceMotion
+        return previewViewport(touch: touch, containerSize: containerSize, previewSize: previewSize, fit: fit)
+            .scaleEffect(settled ? 1 : PreviewSettleSpring.messageStartScale)
+            .animation(reduceMotion ? nil : MeeshyAnimation.messagePreviewPop, value: settled)
+    }
+
     /// **L'entrée de l'overlay** (#11208). Aucune haptique : le geste
     /// (`ConditionalBubbleLongPress`) a déjà vibré, et une seconde secousse
     /// dans la même demi-seconde se lisait comme deux événements. Le ressort
-    /// d'entrée (courbe de réponse iMessage) devient un fondu sous « Réduire
+    /// d'entrée (courbe de réponse iMessage, avec le léger rebond de fin de
+    /// `PreviewSettleSpring`) devient un fondu sous « Réduire
     /// les animations ». La cascade d'emojis est jouée par
     /// `EmojiReactionPicker` lui-même via `WaveTileModifier`.
     private func enter() {
-        meeshyWithAnimation(.spring(response: 0.42, dampingFraction: 0.74),
+        meeshyWithAnimation(MeeshyAnimation.messagePreviewSettle,
                             reduced: .easeOut(duration: Self.reducedMotionFadeDuration),
                             reduceMotion: reduceMotion) {
             isVisible = true
@@ -502,7 +515,7 @@ struct MessageOverlayMenu: View {
             visibleHeight: fit.visibleHeight,
             scrolls: fit.scrollsInternally,
             isTrailing: message.isMe,
-            interactive: touch.offersPlayback
+            interactive: touch.offersTouch
         ) {
             MessageOverlayCellPreview(
                 face: previewFace(kind: touch.kind, containerWidth: containerSize.width),
@@ -517,13 +530,15 @@ struct MessageOverlayMenu: View {
             .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
             .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)
             .overlayPreferenceValue(MediaPlayControlAnchorKey.self) { zones in
-                previewTouchMask(zones: zones, playable: touch.playableAttachmentIds)
+                previewTouchMask(zones: zones, playable: touch.touchZoneIds)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
+            // Le flou levé dans l'aperçu (#18856) ne sort pas par une capture.
+            .captureShield(message.holdsBlur)
         }
         // Le cadre défile, ou l'aperçu porte une zone de lecture (#11339) :
         // sinon, une image que les touchers traversent jusqu'au voile.
-        .allowsHitTesting(fit.scrollsInternally || touch.offersPlayback)
+        .allowsHitTesting(fit.scrollsInternally || touch.offersTouch)
     }
 
     /// **Le masque de l'aperçu** (#11339) : percé aux seuls BOUTONS de lecture
@@ -586,7 +601,7 @@ struct MessageOverlayMenu: View {
     private func flatRowKey(availableWidth: CGFloat) -> MessageOverlayFlatRowMemo.Key {
         MessageOverlayFlatRowMemo.Key(
             messageId: message.id, updatedAt: message.updatedAt, content: message.content,
-            effects: message.effects.flags, reactionCount: message.reactions.count,
+            effects: message.unveiledForPreview.effects.flags, reactionCount: message.reactions.count,
             translations: textTranslations, served: preferredTranslation, selection: threadLanguage.selection,
             transcription: transcription, translatedAudios: translatedAudios, readingMode: threadLanguage.readingMode,
             senderStoryRing: threadLanguage.senderStoryRing, senderMoodEmoji: threadLanguage.senderMoodEmoji,
@@ -599,7 +614,7 @@ struct MessageOverlayMenu: View {
     /// l'auteur.
     private func previewRow(availableWidth: CGFloat) -> FocalRowInput {
         FocalRowInput.preview(
-            message: message,
+            message: message.unveiledForPreview,
             translations: textTranslations,
             servedTranslation: preferredTranslation,
             accentHex: contactColor,
@@ -832,7 +847,7 @@ extension MessageOverlayMenu {
     /// suivent une bascule faite dans le fil, pas le seul Prisme (#9259).
     var previewBubble: ThemedMessageBubble {
         var bubble = ThemedMessageBubble(
-            message: message,
+            message: message.unveiledForPreview,
             contactColor: contactColor,
             isDirect: isDirect,
             isDark: isDark,

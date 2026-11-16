@@ -406,7 +406,9 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
     /// Le masque de l'aperçu ne se perce qu'aux BOUTONS de lecture que les
     /// lecteurs du SDK déclarent (`MediaPlayControlAnchorKey`), jamais au
     /// lecteur entier : citation, pied et drapeaux, forme d'onde et surface de
-    /// la vidéo restent sous le masque. Le vocal part par le ViewModel de l'hôte.
+    /// la vidéo restent sous le masque. Seule exception, voulue : le carrousel
+    /// d'un message à plusieurs visuels, qui défile au doigt (#18824). Le vocal
+    /// part par le ViewModel de l'hôte.
     func test_preview_playbackHoles_areThePlayButtonsOnly_andPlayThroughTheViewModel() throws {
         let router = try source("Features/Main/Views/Bubble/AudioBubbleRouter.swift")
         XCTAssertFalse(router.contains("PlaybackZone"), "Le lecteur entier n'est pas une zone de lecture.")
@@ -415,7 +417,9 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
 
         let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
         XCTAssertTrue(menu.contains(".overlayPreferenceValue(MediaPlayControlAnchorKey.self)"), "Le masque lit les boutons de lecture.")
-        XCTAssertTrue(menu.contains("interactive: touch.offersPlayback"), "Le contenu ne se touche que s'il porte un bouton lisible.")
+        XCTAssertTrue(menu.contains("interactive: touch.offersTouch"),
+                      "Le contenu ne se touche que s'il porte un bouton lisible ou un carrousel qui défile (#18824).")
+        XCTAssertTrue(menu.contains("playable: touch.touchZoneIds"), "Le masque se perce aux zones que la loi ouvre.")
         XCTAssertTrue(menu.contains("bubble.onPlayAudio = { playFromPreview($0) }"), "La bulle de l'aperçu lit le vocal.")
         XCTAssertTrue(menu.contains("onPlayAudio: { playFromPreview($0) }"), "La rangée plate de l'aperçu lit le vocal.")
         XCTAssertTrue(menu.contains(".onDisappear { stopPreviewPlayback() }"), "La fermeture arrête la lecture lancée.")

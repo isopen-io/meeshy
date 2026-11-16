@@ -15,8 +15,9 @@ class SystemNoticeTextTest {
         captureKind: String = "screenshot",
         actor: String = """{"participantId":"p1","displayName":"Alice","isAnonymous":false}""",
         sentAt: String = "2026-10-07T12:05:00.000Z",
+        tally: String = "",
     ) = """{"kind":"content-capture","actor":$actor,"capturedMessageId":"m1","nature":"$nature",
-        "outcome":"$outcome","captureKind":"$captureKind","sentAt":"$sentAt"}"""
+        "outcome":"$outcome","captureKind":"$captureKind","sentAt":"$sentAt"$tally}"""
 
     private fun capture(json: String = captureJson()) = CaptureNoticeMetadata.parse(obj(json))!!
 
@@ -26,6 +27,27 @@ class SystemNoticeTextTest {
             .isEqualTo("Alice a capturé l’éphémère du 07/10/2026 à 14:05")
         assertThat(SystemNoticeText.capture(capture(), "de", "Europe/Paris"))
             .isEqualTo("Alice hat einen Screenshot der verschwindenden Nachricht vom 07.10.2026 um 14:05 gemacht")
+    }
+
+    @Test
+    fun `the notice says how many captures and how long the recording lasted, like shared (#18830)`() {
+        assertThat(SystemNoticeText.capture(capture(captureJson(tally = ""","count":3""")), "fr", "Europe/Paris"))
+            .isEqualTo("Alice a capturé l’éphémère du 07/10/2026 à 14:05 · 3 captures")
+        val recorded = capture(captureJson(captureKind = "recording", tally = ""","count":2,"recordedSeconds":3725"""))
+        assertThat(SystemNoticeText.capture(recorded, "fr", "Europe/Paris"))
+            .isEqualTo("Alice a enregistré l’écran pendant l’éphémère du 07/10/2026 à 14:05 · 2 enregistrements · durée 1 h 02 min 05 s")
+        assertThat(SystemNoticeText.capture(capture(captureJson(tally = ""","recordedSeconds":65""")), "en", "UTC"))
+            .endsWith("· duration 1 min 05 s")
+        assertThat(SystemNoticeText.captureFallback(capture(captureJson(tally = ""","count":2"""))))
+            .isEqualTo("Alice a capturé l’éphémère du 07/10/2026 à 12:05 (UTC) · 2 captures")
+    }
+
+    @Test
+    fun `an unreadable count or duration reads as one capture of unknown length`() {
+        val odd = capture(captureJson(tally = ""","count":"trois","recordedSeconds":-4"""))
+        assertThat(odd.count).isEqualTo(1)
+        assertThat(odd.recordedSeconds).isNull()
+        assertThat(capture().count).isEqualTo(1)
     }
 
     @Test

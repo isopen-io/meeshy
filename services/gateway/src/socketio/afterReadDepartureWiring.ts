@@ -6,6 +6,41 @@ import { AfterReadDepartureTracker, type AfterReadReader } from './AfterReadDepa
 import type { MessageMutationManager } from './broadcastMessageMutation';
 import { resolveParticipant } from './utils/participant-resolver';
 import { normalizeConversationId, type SocketUser } from './utils/socket-helpers';
+import type { CallStatus } from '@meeshy/shared/types/video-call';
+import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from '../services/calls/liveCallParticipations';
+
+/** Un appel ÉTABLI : la communication passe (ou se rétablit). Ni `initiated`, ni `ringing`, ni `connecting`. */
+const ESTABLISHED_CALL_STATUSES: readonly CallStatus[] = ['active', 'reconnecting'];
+
+/**
+ * Le lecteur prend-il part à un appel ÉTABLI, dans N'IMPORTE QUELLE conversation, qu'il a lui-même
+ * DÉCROCHÉ (`CallParticipant.answeredAt`) ? Un appel qui sonne seulement ne retient rien : sinon,
+ * lancer un appel jamais décroché garderait les flammes lues. L'écran d'appel
+ * retire la conversation lue (`viewing:stop`, iOS `CallWindowPresenter`, web `conversation-viewing`)
+ * sans qu'il l'ait quittée : ses flammes attendent la fin de l'appel (#18556). Un inscrit est cherché
+ * par TOUTES ses participations (index `participantId`, jamais le filtre de relation, #10831) ; un
+ * invité n'en a qu'une, la sienne.
+ */
+export async function isInLiveCall(
+  prisma: Pick<PrismaClient, 'callParticipant' | 'participant'>,
+  reader: Pick<AfterReadReader, 'participantId' | 'readerKey'>,
+): Promise<boolean> {
+  const participantIds =
+    reader.readerKey === reader.participantId
+      ? [reader.participantId]
+      : await accountParticipantIds(prisma, reader.readerKey);
+  if (participantIds.length === 0) return false;
+  const rows = (await prisma.callParticipant.findMany({
+    where: { ...LIVE_CALL_PARTICIPATION, participantId: { in: participantIds } },
+    select: { answeredAt: true, callSession: { select: { status: true } } },
+  })) as Array<{ answeredAt?: Date | null; callSession: { status: string } | null }>;
+  return rows.some(
+    (row) =>
+      row.answeredAt instanceof Date &&
+      row.callSession !== null &&
+      (ESTABLISHED_CALL_STATUSES as readonly string[]).includes(row.callSession.status),
+  );
+}
 
 /** Ce que le marquage du regard demande au serveur Socket.IO — satisfait par le `Server` de production. */
 export interface AfterReadViewIO {
@@ -77,6 +112,7 @@ export function createAfterReadDepartureTracker(wiring: AfterReadDepartureWiring
   return new AfterReadDepartureTracker({
     normalizeConversationId: normalize,
     isAuthenticated: (socketId) => socketToUser.has(socketId),
+    userOf: (socketId) => socketToUser.get(socketId),
     resolveReader: async (socketId, rawConversationId) => {
       const userIdOrToken = socketToUser.get(socketId);
       if (!userIdOrToken) return null;
@@ -91,6 +127,7 @@ export function createAfterReadDepartureTracker(wiring: AfterReadDepartureWiring
     },
     markViewing: (socketId, reader, viewing) => markAfterReadViewing(wiring.io(), socketId, reader, viewing, onError),
     viewedElsewhere: (reader) => isAfterReadViewedAnywhere(wiring.io(), reader),
+    holdsDeparture: (reader) => isInLiveCall(prisma, reader),
     onDeparture: async ({ periods, ...reader }) => {
       const at = now();
       const messageIds = await readAfterReadIdsAtDeparture(prisma, {
@@ -103,6 +140,7 @@ export function createAfterReadDepartureTracker(wiring: AfterReadDepartureWiring
         await consumeAfterReadAndAnnounce({ prisma, manager: wiring.manager(), ...reader, messageIds: batch, now: at, onError });
       }
     },
+    now,
     onError,
   });
 }

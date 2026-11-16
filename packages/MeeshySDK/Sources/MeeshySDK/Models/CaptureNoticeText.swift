@@ -62,6 +62,46 @@ public enum CaptureNoticeText {
         ),
     ]
 
+    /// #18830 — le suffixe « · 3 captures · durée 1 min 05 s », miroir de
+    /// `tallySuffix` dans `packages/shared/utils/capture-notice.ts`.
+    private struct Tally {
+        let screenshots: String
+        let recordings: String
+        let duration: String
+        let hour: String
+        let minute: String
+        let second: String
+    }
+
+    private static let tallies: [String: Tally] = [
+        "fr": Tally(screenshots: "{n} captures", recordings: "{n} enregistrements", duration: "durée {d}", hour: "h", minute: "min", second: "s"),
+        "en": Tally(screenshots: "{n} screenshots", recordings: "{n} recordings", duration: "duration {d}", hour: "h", minute: "min", second: "s"),
+        "es": Tally(screenshots: "{n} capturas", recordings: "{n} grabaciones", duration: "duración {d}", hour: "h", minute: "min", second: "s"),
+        "pt": Tally(screenshots: "{n} capturas", recordings: "{n} gravações", duration: "duração {d}", hour: "h", minute: "min", second: "s"),
+        "de": Tally(screenshots: "{n} Screenshots", recordings: "{n} Aufzeichnungen", duration: "Dauer {d}", hour: "h", minute: "min", second: "s"),
+        "it": Tally(screenshots: "{n} catture", recordings: "{n} registrazioni", duration: "durata {d}", hour: "h", minute: "min", second: "s"),
+        "ar": Tally(screenshots: "{n} لقطات", recordings: "{n} تسجيلات", duration: "المدة {d}", hour: "س", minute: "د", second: "ث"),
+    ]
+
+    /// « 42 s », « 1 min 05 s », « 1 h 02 min 05 s ».
+    public static func duration(_ seconds: Int, language: String?) -> String {
+        let table = tallies[normalizedLanguage(language)] ?? tallies["fr"]!
+        let h = seconds / 3600, m = (seconds % 3600) / 60, s = seconds % 60
+        let pad = { (value: Int) in value < 10 ? "0\(value)" : "\(value)" }
+        if h > 0 { return "\(h) \(table.hour) \(pad(m)) \(table.minute) \(pad(s)) \(table.second)" }
+        if m > 0 { return "\(m) \(table.minute) \(pad(s)) \(table.second)" }
+        return "\(s) \(table.second)"
+    }
+
+    private static func tallySuffix(_ notice: CaptureNoticeMetadata, language: String) -> String {
+        let table = tallies[language] ?? tallies["fr"]!
+        let counted = notice.count > 1
+            ? (notice.captureKind == .recording ? table.recordings : table.screenshots).replacingOccurrences(of: "{n}", with: "\(notice.count)")
+            : nil
+        let timed = notice.recordedSeconds.map { table.duration.replacingOccurrences(of: "{d}", with: duration($0, language: language)) }
+        return [counted, timed].compactMap { $0 }.map { " · \($0)" }.joined()
+    }
+
     /// Le mot qui distingue un invité sans compte d'un homonyme inscrit (audit #9617, A8).
     private static let guestWords: [String: String] = [
         "fr": "invité", "en": "guest", "es": "invitado", "pt": "convidado",
@@ -111,6 +151,10 @@ public enum CaptureNoticeText {
 
     public static func compose(_ notice: CaptureNoticeMetadata, language: String?, timeZone: TimeZone?) -> String {
         let lang = normalizedLanguage(language)
+        return base(notice, language: lang, timeZone: timeZone) + tallySuffix(notice, language: lang)
+    }
+
+    private static func base(_ notice: CaptureNoticeMetadata, language lang: String, timeZone: TimeZone?) -> String {
         let zone = timeZone ?? TimeZone(identifier: "UTC")!
         let actor = actorLabel(notice.actor, language: lang)
         let table = templates[lang] ?? templates["fr"]!
@@ -129,8 +173,8 @@ public enum CaptureNoticeText {
 
     /// Le repli stocké dans `Message.content` — français, UTC DIT comme tel.
     public static func fallback(_ notice: CaptureNoticeMetadata) -> String {
-        let text = compose(notice, language: "fr", timeZone: TimeZone(identifier: "UTC"))
-        return notice.outcome == .blocked ? text : "\(text) (UTC)"
+        let text = base(notice, language: "fr", timeZone: TimeZone(identifier: "UTC"))
+        return (notice.outcome == .blocked ? text : "\(text) (UTC)") + tallySuffix(notice, language: "fr")
     }
 
     /// Le fuseau d'un identifiant IANA ; absent ou invalide ⇒ UTC.

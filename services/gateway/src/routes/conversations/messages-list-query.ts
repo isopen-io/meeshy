@@ -42,7 +42,7 @@ import {
 import { applyPresenceVisibilityAsOffline, type PresenceVisibility, type PresenceMissingEntryPolicy } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 import { normalizeLanguageForDedup, makeLanguageFilter } from '@meeshy/shared/utils/language-normalize';
-import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
+import { quotesCaptureNotice, servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
@@ -666,7 +666,7 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
               // #8562 — l'échéance du LECTEUR sur le message cité.
               ephemeralReader: { resolution: ephemeralDeadlines?.get(message.replyTo.id), now: new Date() },
             }),
-            sender: replySender ? {
+            sender: replySender && !quotesCaptureNotice(message.replyTo) ? {
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,
               displayName: resolveParticipantDisplayName(replySender),

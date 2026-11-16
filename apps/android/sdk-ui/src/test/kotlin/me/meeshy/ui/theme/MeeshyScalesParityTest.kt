@@ -14,6 +14,9 @@ import org.junit.Test
  * le porter ici fait rougir le test ; ne jamais « corriger » en recopiant une
  * valeur dérivée — porter le jeton.
  */
+private const val DESIGN_TOKENS = "packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift"
+private const val PREVIEW_SETTLE_SPRING = "packages/MeeshySDK/Sources/MeeshyUI/Theme/PreviewSettleSpring.swift"
+
 class MeeshyScalesParityTest {
 
     private val swift: Map<String, Map<String, Double>> by lazy { SwiftTokens.parse(designTokensSource()) }
@@ -21,18 +24,23 @@ class MeeshyScalesParityTest {
         SwiftTokens.parseShadows(designTokensSource())
     }
     private val swiftSprings: Map<String, Pair<Double, Double>> by lazy {
-        SwiftTokens.parseSprings(designTokensSource())
+        SwiftTokens.parseSprings(
+            designTokensSource(),
+            constants = SwiftTokens.parse(swiftSource(PREVIEW_SETTLE_SPRING))["PreviewSettleSpring"].orEmpty()
+                .mapKeys { (name, _) -> "PreviewSettleSpring.$name" },
+        )
     }
 
-    private fun designTokensSource(): String {
-        val relative = "packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift"
+    private fun designTokensSource(): String = swiftSource(DESIGN_TOKENS)
+
+    private fun swiftSource(relative: String): String {
         var dir: File? = File("").absoluteFile
         while (dir != null) {
             val candidate = File(dir, relative)
             if (candidate.isFile) return candidate.readText()
             dir = dir.parentFile
         }
-        error("DesignTokens.swift introuvable en remontant depuis ${File("").absolutePath} (cherché: $relative)")
+        error("$relative introuvable en remontant depuis ${File("").absolutePath} (cherché: $relative)")
     }
 
     private fun dp(vararg tokens: Pair<String, Dp>): Map<String, Double> =
@@ -149,6 +157,8 @@ class MeeshyScalesParityTest {
             "bannerPullReturn" to MeeshyMotion.bannerPullReturn<Float>(),
             "bannerPullMorph" to MeeshyMotion.bannerPullMorph<Float>(),
             "previewMorph" to MeeshyMotion.previewMorph<Float>(),
+            "messagePreviewSettle" to MeeshyMotion.messagePreviewSettle<Float>(),
+            "messagePreviewPop" to MeeshyMotion.messagePreviewPop<Float>(),
             "previewMorphReturn" to MeeshyMotion.previewMorphReturn<Float>(),
             "peekDetachReturn" to MeeshyMotion.peekDetachReturn<Float>(),
         )
@@ -190,7 +200,7 @@ private object SwiftTokens {
         """static let (\w+)\s*=\s*\(opacity:\s*([0-9.]+),\s*radius:\s*([0-9.]+),\s*y:\s*([0-9.]+)\)""",
     )
     private val spring = Regex(
-        """static let (\w+)\s*=\s*Animation\.spring\(response:\s*([0-9.]+),\s*dampingFraction:\s*([0-9.]+)\)""",
+        """static let (\w+)\s*=\s*Animation\.spring\(response:\s*([\w.]+),\s*dampingFraction:\s*([\w.]+)\)""",
     )
 
     fun parse(source: String): Map<String, Map<String, Double>> {
@@ -209,9 +219,12 @@ private object SwiftTokens {
             name to Triple(opacity.toDouble(), radius.toDouble(), y.toDouble())
         }
 
-    fun parseSprings(source: String): Map<String, Pair<Double, Double>> =
+    fun parseSprings(source: String, constants: Map<String, Double> = emptyMap()): Map<String, Pair<Double, Double>> =
         spring.findAll(source).associate {
             val (name, response, damping) = it.destructured
-            name to (response.toDouble() to damping.toDouble())
+            name to (value(response, constants) to value(damping, constants))
         }
+
+    private fun value(token: String, constants: Map<String, Double>): Double =
+        token.toDoubleOrNull() ?: constants[token] ?: error("Constante Swift inconnue : $token")
 }

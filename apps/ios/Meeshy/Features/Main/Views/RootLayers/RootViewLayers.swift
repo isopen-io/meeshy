@@ -20,6 +20,7 @@ struct RootEnvironmentLayer: ViewModifier {
     @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
     let storyZoomNamespace: Namespace.ID
     @Binding var notificationPreviewConversation: Conversation?
+    @Binding var notificationPreviewDetent: PresentationDetent
     let onOpenFullConversation: (Conversation) -> Void
 
     func body(content: Content) -> some View {
@@ -55,9 +56,10 @@ struct RootEnvironmentLayer: ViewModifier {
                     .environmentObject(statusViewModel)
                     .meeshyConversationList(conversationViewModel)
                     .environmentObject(storyViewerCoordinator)
-                    .presentationDetents([.large, .medium])
+                    .presentationDetents([.large, .medium], selection: $notificationPreviewDetent)
                     .presentationDragIndicator(.visible)
                     .closesForConversationOpening(.sheet)
+                    .onAppear { ConversationOpeningPaint.announce(.shown, for: conv.id) }
             }
             .modifier(PostDetailSheetHost(
                 router: router,

@@ -16,6 +16,8 @@ public struct NotificationToastView: View {
     public let event: SocketNotificationEvent
     public var onTap: (() -> Void)?
     public var onDismiss: (() -> Void)?
+    /// L'ouverture du tiroir pendant la traction (#18721) : fermé au repos.
+    public var drawer: NotificationToastDrawer
 
     // Transient leaf toast — do not observe the ThemeManager singleton.
     // `colorScheme` keeps theme-flip reactivity; `theme` is accessed
@@ -78,9 +80,11 @@ public struct NotificationToastView: View {
         event: SocketNotificationEvent,
         presentation: NotificationBannerPresentation? = nil,
         onTap: (() -> Void)? = nil,
-        onDismiss: (() -> Void)? = nil
+        onDismiss: (() -> Void)? = nil,
+        drawer: NotificationToastDrawer = .closed
     ) {
         self.event = event
+        self.drawer = drawer
         self.presentation = presentation ?? NotificationToastManager.shared.resolvedBannerPresentation(for: event)
         self.onTap = onTap
         self.onDismiss = onDismiss
@@ -149,8 +153,8 @@ public struct NotificationToastView: View {
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.top, MeeshySpacing.md)
-            .padding(.bottom, MeeshySpacing.lg)
-            .overlay(alignment: .bottom) { grabber }
+            .padding(.bottom, MeeshySpacing.lg + drawer.opening)
+            .overlay(alignment: .bottom) { drawerHandle }
             .background(cardShape.fill(Self.backgroundColor(isDark: isDark).opacity(Self.scrimOpacity(isDark: isDark))))
             .adaptiveGlass(in: cardShape, tint: accentColor.opacity(isDark ? 0.16 : 0.10))
             .overlay(cardShape.strokeBorder(rimGradient, lineWidth: 1))
@@ -159,7 +163,7 @@ public struct NotificationToastView: View {
             .contentShape(cardShape)
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.horizontal, drawer.sideInset ?? MeeshySpacing.sm)
         // La bannière est UN élément pour VoiceOver : trois fragments lus
         // séparément font trois arrêts là où l'information est une.
         .accessibilityElement(children: .ignore)
@@ -181,13 +185,22 @@ public struct NotificationToastView: View {
         )
     }
 
-    /// La poignée : dit sans mot que la carte se balaie.
-    private var grabber: some View {
-        Capsule()
-            .fill(theme.textMuted.opacity(MeeshyOpacity.strong))
-            .frame(width: 36, height: 4)
-            .padding(.bottom, MeeshySpacing.xs)
-            .accessibilityHidden(true)
+    /// La poignée : dit sans mot que la carte se balaie et se tire. Tiroir
+    /// ouvert, un chevron paraît au-dessus d'elle ; armé, il prend l'accent du
+    /// type et grossit : relâcher ouvrira la feuille.
+    private var drawerHandle: some View {
+        VStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "chevron.compact.down")
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                .foregroundStyle(drawer.isArmed ? accentColor : theme.textMuted)
+                .scaleEffect(drawer.isArmed ? 1.2 : 1)
+                .opacity(Double(min(1, drawer.opening / 40)))
+            Capsule()
+                .fill(drawer.isArmed ? accentColor : theme.textMuted.opacity(MeeshyOpacity.strong))
+                .frame(width: 36, height: 4)
+        }
+        .padding(.bottom, MeeshySpacing.xs)
+        .accessibilityHidden(true)
     }
 
     /// L'avatar de l'acteur et, en pastille, l'icône du TYPE dans sa couleur :
@@ -278,6 +291,39 @@ public struct NotificationToastView: View {
     }
 }
 
+// MARK: - Le tiroir (#18721)
+
+/// Ce que la traction fait de la carte : de combien son bord bas est
+/// descendu, sa marge latérale, et si relâcher ouvrira la feuille.
+public nonisolated struct NotificationToastDrawer: Equatable, Sendable {
+    public let opening: CGFloat
+    /// `nil` ⇒ la marge de repos de la carte.
+    public let sideInset: CGFloat?
+    public let isArmed: Bool
+
+    public init(opening: CGFloat, sideInset: CGFloat?, isArmed: Bool) {
+        self.opening = opening
+        self.sideInset = sideInset
+        self.isArmed = isArmed
+    }
+
+    public static let closed = NotificationToastDrawer(opening: 0, sideInset: nil, isArmed: false)
+
+    /// Le tiroir sous une traction donnée ; sous « Réduire les animations »,
+    /// la carte ne s'étire pas, mais l'armement se voit toujours.
+    public static func pulled(translation: CGFloat, restInset: CGFloat, reduceMotion: Bool) -> NotificationToastDrawer {
+        guard translation > 0 else { return .closed }
+        guard !reduceMotion else {
+            return NotificationToastDrawer(opening: 0, sideInset: nil, isArmed: NotificationBannerDrawer.isArmed(translation: translation))
+        }
+        return NotificationToastDrawer(
+            opening: NotificationBannerDrawer.opening(translation: translation),
+            sideInset: NotificationBannerDrawer.sideInset(progress: NotificationBannerPull.progress(translation: translation), rest: restInset),
+            isArmed: NotificationBannerDrawer.isArmed(translation: translation)
+        )
+    }
+}
+
 // MARK: - Le geste de la bannière (#8723)
 
 /// Ce que décide un geste relâché sur la bannière. Vers le HAUT (ou lancé
@@ -297,89 +343,160 @@ public nonisolated enum NotificationBannerSwipe: Equatable, Sendable {
     }
 }
 
-// MARK: - La bannière qui devient la conversation (#18721)
+// MARK: - La bannière qui devient la feuille de la conversation (#18721)
 
-/// L'enveloppe de transition que la racine peint pendant que la conversation
-/// se pose dessous : la carte de la bannière grandit jusqu'à l'écran, ses
-/// coins s'ouvrent, l'aperçu du message s'efface et la ligne « avatar · nom »
-/// glisse vers la place de l'en-tête qui va la reprendre.
+/// L'enveloppe peinte pendant le morphisme : la carte du tiroir relâché
+/// grandit jusqu'au cadre de la feuille de la conversation, ses coins passent
+/// au rayon de la feuille, le message s'efface, la poignée et les derniers
+/// messages servis (`messages`, fournis par l'app depuis son cache) se
+/// composent, et l'écran derrière s'assombrit jusqu'au voile de la feuille.
+/// L'identité (avatar, nom) ne se dédouble jamais : c'est la même rangée du
+/// début à la fin. L'enveloppe reste posée au-dessus de la feuille réelle
+/// jusqu'à ce que celle-ci ait peint (`NotificationBannerHandoff`).
 ///
-/// Une enveloppe et non `matchedGeometryEffect` : la conversation est poussée
-/// dans la pile de navigation, une autre hiérarchie que la couche des
-/// bannières, et son en-tête n'existe pas encore quand le doigt se lève. La
-/// racine peint donc la transformation, puis s'efface devant l'écran réel.
-/// Une seule valeur — `progress` — la pilote (`NotificationBannerMorph`).
-public struct BannerToConversationMorph: View {
+/// `Animatable` : SwiftUI interpole la SEULE `progress` image par image et
+/// chaque valeur peinte (cadre, rayon, faces, voile) en dérive
+/// (`NotificationBannerMorph`). Une animation posée sur un cadre calculé hors
+/// de la vue ne s'interpolait pas : la recette de #18721 montrait une
+/// enveloppe figée à sa taille de départ.
+public struct BannerToConversationMorph<Messages: View>: View, Animatable {
     let event: SocketNotificationEvent
     let headline: String
     let message: String?
-    let progress: CGFloat
-    /// Le cadre de la carte quand le doigt s'est levé, en coordonnées globales.
+    /// Le cadre GLOBAL du tiroir quand le doigt s'est levé.
     let origin: CGRect
+    /// Le cadre GLOBAL de la feuille que la carte devient.
+    let target: CGRect
+    /// Le rayon des coins de la feuille.
+    let targetCornerRadius: CGFloat
+    /// Le fond de la feuille.
+    let surface: Color
+    /// La feuille réelle est à l'écran : son voile remplace celui de l'enveloppe.
+    let sheetShown: Bool
+    /// L'enveloppe passe la main à la feuille peinte.
+    let fading: Bool
+    let messages: Messages
+    var progress: CGFloat
+
+    public var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
 
     @Environment(\.colorScheme) private var colorScheme
     /// La même présence servie que la bannière : l'enveloppe la repeint, elle ne la fabrique pas.
     @Environment(\.meeshyPresenceResolver) private var presenceResolver
     private var theme: ThemeManager { ThemeManager.shared }
 
-    public init(event: SocketNotificationEvent, headline: String, message: String?, progress: CGFloat, origin: CGRect) {
+    public init(
+        event: SocketNotificationEvent, headline: String, message: String?,
+        origin: CGRect, target: CGRect, targetCornerRadius: CGFloat, surface: Color,
+        sheetShown: Bool = false, fading: Bool = false, progress: CGFloat,
+        @ViewBuilder messages: () -> Messages
+    ) {
         self.event = event
         self.headline = headline
         self.message = message
-        self.progress = progress
         self.origin = origin
+        self.target = target
+        self.targetCornerRadius = targetCornerRadius
+        self.surface = surface
+        self.sheetShown = sheetShown
+        self.fading = fading
+        self.progress = progress
+        self.messages = messages()
     }
 
     public var body: some View {
         GeometryReader { proxy in
             let space = proxy.frame(in: .global)
             let start = origin.offsetBy(dx: -space.minX, dy: -space.minY)
-            let frame = NotificationBannerMorph.frame(progress: progress, from: start, to: CGRect(origin: .zero, size: proxy.size))
-            card(start: start)
-                .frame(width: frame.width, height: frame.height, alignment: .topLeading)
-                .background(shape.fill(MeeshyColors.backgroundPrimary(isDark: theme.mode.isDark)))
+            let end = target.offsetBy(dx: -space.minX, dy: -space.minY)
+            let frame = NotificationBannerMorph.frame(progress: progress, from: start, to: end)
+            let shape = RoundedRectangle(
+                cornerRadius: NotificationBannerMorph.cornerRadius(
+                    progress: progress, from: NotificationToastView.cornerRadius, to: targetCornerRadius),
+                style: .continuous
+            )
+            let composed = NotificationBannerMorph.conversationOpacity(progress: progress)
+            ZStack(alignment: .topLeading) {
+                Color.black.opacity(NotificationBannerMorph.scrimOpacity(progress: progress, sheetShown: sheetShown))
+                ZStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                        identity
+                            .opacity(NotificationBannerHandoff.identityOpacity(fading: fading))
+                            .transaction { $0.animation = nil }
+                        messages
+                            .frame(width: end.width, alignment: .topLeading)
+                            .opacity(composed)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    grabber.opacity(composed)
+                }
+                .frame(width: frame.width, height: frame.height, alignment: .top)
+                .background(shape.fill(surface))
                 .clipShape(shape)
+                .shadow(color: .black.opacity(0.18 * (1 - Double(min(1, max(0, progress))))), radius: 24, y: 14)
                 .position(x: frame.midX, y: frame.midY)
+            }
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
-    private var shape: RoundedRectangle {
-        RoundedRectangle(
-            cornerRadius: NotificationBannerMorph.cornerRadius(progress: progress, from: NotificationToastView.cornerRadius),
-            style: .continuous
+    private var avatar: some View {
+        MeeshyAvatar(
+            name: event.toastAvatarName,
+            context: .notification,
+            accentColor: DynamicColorGenerator.colorForName(event.toastAvatarColorSeed),
+            avatarURL: event.toastAvatarURL,
+            presenceState: NotificationToastView.actorPresence(for: event, resolver: presenceResolver)
         )
     }
 
-    /// L'identité descend de la marge de la carte jusqu'à la hauteur de
-    /// l'en-tête — juste sous la zone sûre, que la carte au repos révèle.
-    private func card(start: CGRect) -> some View {
-        let headerTop = max(MeeshySpacing.md, start.minY - MeeshySpacing.xxl + MeeshySpacing.sm)
-        return VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-            HStack(spacing: MeeshySpacing.md) {
-                MeeshyAvatar(
-                    name: event.toastAvatarName,
-                    context: .notification,
-                    accentColor: DynamicColorGenerator.colorForName(event.toastAvatarColorSeed),
-                    avatarURL: event.toastAvatarURL,
-                    presenceState: NotificationToastView.actorPresence(for: event, resolver: presenceResolver)
-                )
+    /// L'identité de la carte, UNE fois du début à la fin : elle descend sous
+    /// la poignée pendant que le message s'efface.
+    private var identity: some View {
+        HStack(alignment: .center, spacing: MeeshySpacing.md) {
+            avatar
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(headline)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
-            }
-            if let message {
-                Text(message)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundStyle(theme.textSecondary)
-                    .lineLimit(2)
-                    .opacity(NotificationBannerMorph.bodyOpacity(progress: progress))
+                if let message {
+                    Text(message)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                        .foregroundStyle(theme.textSecondary)
+                        .lineLimit(2)
+                        .opacity(NotificationBannerMorph.bodyOpacity(progress: progress))
+                }
             }
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.top, NotificationBannerMorph.headerInset(progress: progress, from: MeeshySpacing.md, to: headerTop))
+        .padding(.top, MeeshySpacing.md + MeeshySpacing.md * min(1, max(0, progress)))
+    }
+
+    /// La poignée de la feuille.
+    private var grabber: some View {
+        Capsule()
+            .fill(theme.textMuted.opacity(MeeshyOpacity.strong))
+            .frame(width: 36, height: 5)
+            .padding(.top, MeeshySpacing.xs)
+    }
+}
+
+public extension BannerToConversationMorph where Messages == EmptyView {
+    /// Sans messages en cache à montrer : la poignée et l'identité seules.
+    init(
+        event: SocketNotificationEvent, headline: String, message: String?,
+        origin: CGRect, target: CGRect, targetCornerRadius: CGFloat, surface: Color,
+        sheetShown: Bool = false, progress: CGFloat
+    ) {
+        self.init(
+            event: event, headline: headline, message: message, origin: origin, target: target,
+            targetCornerRadius: targetCornerRadius, surface: surface, sheetShown: sheetShown, progress: progress
+        ) { EmptyView() }
     }
 }
