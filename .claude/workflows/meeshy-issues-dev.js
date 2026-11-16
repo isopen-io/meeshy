@@ -323,9 +323,16 @@ const rendrePlace = () => {
 // ---------------------------------------------------------------------------
 // UN LOT, de bout en bout jusqu'à sa PR
 // ---------------------------------------------------------------------------
+const estBloquant = d => {
+  const b = typeof d.bloque === 'string' ? d.bloque.trim() : ''
+  if (!b || /^rien ne bloque/i.test(b)) return false
+  const livre = !!d.sha && Array.isArray(d.temoins) && d.temoins.length > 0
+  return !livre || /cédé|déjà (fait|livré)|limite de worktrees/i.test(b)
+}
+
 async function lot(l, depart) {
   const d = await developper(l, depart)
-  if (!d || d.bloque) return { cle: l.cle, lot: titre(l), etat: 'bloqué', raison: d ? d.bloque : 'agent perdu' }
+  if (!d || estBloquant(d)) return { cle: l.cle, lot: titre(l), etat: 'bloqué', raison: d ? d.bloque : 'agent perdu' }
   const r = await relire(l, d)
   if (!r) return { cle: l.cle, lot: titre(l), etat: 'bloqué', branche: d.branche, raison: 'revue perdue' }
   if (r.sensible) {
