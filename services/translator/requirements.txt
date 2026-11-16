@@ -240,7 +240,7 @@ scikit-learn==1.7.2  # Requis pour clustering et nettoyage (DiarizationCleaner)
 # librosa déjà inclus dans requirements.txt via chatterbox-tts
 
 # Logging et monitoring
-loguru==0.7.3
+loguru==0.8.0
 prometheus-client==0.26.0
 
 # Tests
