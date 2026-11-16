@@ -227,7 +227,7 @@ ${l.notes || '(aucune)'}
    Si une branche vivante d'une autre session écrit déjà ces chemins (git log origin --since=2.hours -- <chemins>),
    cède : bloque = « cédé à <branche> ».
 3. Ouvre le worktree du lot, ${WT(l)}, sur la branche « ${brancheDe(l)} » (git -C ${REPO} fetch origin d'abord) :
-   - s'il existe déjà (reprise) : réutilise-le, puis git merge origin/${BASE} ;
+   - s'il existe déjà (reprise) : réutilise-le, git pull --no-rebase origin ${brancheDe(l)} (si la branche distante existe), puis git merge origin/${BASE} ;
    - sinon, si origin/${brancheDe(l)} existe : git -C ${REPO} worktree add -B ${brancheDe(l)} ${WT(l)} origin/${brancheDe(l)},
      puis git merge origin/${BASE} ;
    - sinon : git -C ${REPO} worktree add -b ${brancheDe(l)} ${WT(l)} origin/${depart ? depart.branche : BASE}${depart
