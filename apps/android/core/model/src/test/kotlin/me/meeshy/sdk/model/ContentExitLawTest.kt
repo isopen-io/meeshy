@@ -87,7 +87,8 @@ class ContentExitLawTest {
     fun `capture shielding is announced or black - never silent`() {
         assertThat(CaptureVerdict.FREE.shieldsCapture()).isFalse()
         assertThat(CaptureVerdict.ANNOUNCED.shieldsCapture()).isTrue()
-        assertThat(CaptureVerdict.ANNOUNCED.shieldsCapture(surfaceAnnounces = true)).isFalse()
+        assertThat(CaptureVerdict.ANNOUNCED.shieldsCapture(surfaceAnnounces = true))
+            .isTrue() // #18831 : une flamme sort noire partout, annoncée en plus
         assertThat(CaptureVerdict.BLOCKED.shieldsCapture(surfaceAnnounces = true)).isTrue()
         assertThat(CaptureVerdict.FREE.isDeclared).isFalse()
         assertThat(CaptureVerdict.ANNOUNCED.isDeclared).isTrue()

@@ -105,4 +105,45 @@ final class PeekReadLawTests: XCTestCase {
         XCTAssertTrue(gate.opensReading("peek-law-read"))
         XCTAssertFalse(gate.noteActed(.sendMessage))
     }
+    // MARK: - La feuille ouverte dit quand elle est là, puis quand elle a peint
+
+    func test_openingPaint_nothingAnnounced_isNotReached() {
+        ConversationOpeningPaint.forget("paint-none")
+        XCTAssertFalse(ConversationOpeningPaint.reached(.shown, for: "paint-none"))
+        XCTAssertFalse(ConversationOpeningPaint.reached(.painted, for: "paint-none"))
+    }
+
+    func test_openingPaint_shown_isNotYetPainted() {
+        ConversationOpeningPaint.forget("paint-shown")
+        ConversationOpeningPaint.announce(.shown, for: "paint-shown")
+        XCTAssertTrue(ConversationOpeningPaint.reached(.shown, for: "paint-shown"))
+        XCTAssertFalse(ConversationOpeningPaint.reached(.painted, for: "paint-shown"))
+    }
+
+    /// Peinte, la feuille est forcément à l'écran.
+    func test_openingPaint_painted_impliesShown() {
+        ConversationOpeningPaint.forget("paint-done")
+        ConversationOpeningPaint.announce(.painted, for: "paint-done")
+        XCTAssertTrue(ConversationOpeningPaint.reached(.shown, for: "paint-done"))
+        XCTAssertTrue(ConversationOpeningPaint.reached(.painted, for: "paint-done"))
+    }
+
+    func test_openingPaint_anotherConversation_doesNotCount() {
+        ConversationOpeningPaint.forget("paint-a")
+        ConversationOpeningPaint.announce(.painted, for: "paint-b")
+        XCTAssertFalse(ConversationOpeningPaint.reached(.painted, for: "paint-a"))
+    }
+
+    /// Une nouvelle ouverture repart de zéro : la peinture d'une ouverture
+    /// passée ne libère pas l'enveloppe de la suivante.
+    func test_openingPaint_forget_startsANewOpening() {
+        ConversationOpeningPaint.announce(.painted, for: "paint-again")
+        ConversationOpeningPaint.forget("paint-again")
+        XCTAssertFalse(ConversationOpeningPaint.reached(.painted, for: "paint-again"))
+    }
+
+    func test_openingPaint_noConversation_isIgnored() {
+        ConversationOpeningPaint.announce(.painted, for: nil)
+        XCTAssertFalse(ConversationOpeningPaint.reached(.painted, for: ""))
+    }
 }

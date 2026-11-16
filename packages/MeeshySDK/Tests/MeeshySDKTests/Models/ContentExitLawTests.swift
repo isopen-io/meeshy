@@ -138,12 +138,12 @@ struct ContentExitLawTests {
         #expect(ContentExitLaw.of(Subject()).capture == .free)
     }
 
-    @Test("annoncé OU noir, jamais capturé en silence : une flamme n'est noire que là où la surface n'annonce pas")
-    func test_shieldsCapture_announcedOrBlack() {
+    @Test("noir ET annoncé : une flamme sort noire de toute capture, même sur une surface qui annonce (#18831)")
+    func test_shieldsCapture_announcedAndBlack() {
         #expect(!ContentExitLaw.CaptureVerdict.free.shieldsCapture())
         #expect(!ContentExitLaw.CaptureVerdict.free.shieldsCapture(surfaceAnnounces: true))
-        #expect(ContentExitLaw.CaptureVerdict.announced.shieldsCapture(), "fermé par défaut : une surface muette garde le bouclier")
-        #expect(!ContentExitLaw.CaptureVerdict.announced.shieldsCapture(surfaceAnnounces: true))
+        #expect(ContentExitLaw.CaptureVerdict.announced.shieldsCapture())
+        #expect(ContentExitLaw.CaptureVerdict.announced.shieldsCapture(surfaceAnnounces: true))
         #expect(ContentExitLaw.CaptureVerdict.blocked.shieldsCapture())
         #expect(ContentExitLaw.CaptureVerdict.blocked.shieldsCapture(surfaceAnnounces: true))
     }

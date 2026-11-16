@@ -24,6 +24,10 @@ data class CaptureNoticeMetadata(
     val captureKind: CaptureKind,
     /** Heure d'ENVOI du message capturé, en millisecondes epoch. */
     val sentAtEpochMillis: Long,
+    /** #18830 — captures DISTINCTES de cette sorte ; un avis qui ne le dit pas en compte une. */
+    val count: Int = 1,
+    /** #18830 — durée cumulée des enregistrements, en secondes ; `null` si inconnue. */
+    val recordedSeconds: Int? = null,
 ) {
     /** `blocked` : vue unique, l'image était noire — une TENTATIVE. `announced` : la capture a eu lieu. */
     enum class Outcome { ANNOUNCED, BLOCKED }
@@ -91,7 +95,17 @@ data class CaptureNoticeMetadata(
                 nature = nature,
                 captureKind = captureKind,
                 sentAtEpochMillis = sentAt,
+                count = metadata.positiveInteger("count")?.takeIf { it > 1 } ?: 1,
+                recordedSeconds = metadata.positiveInteger("recordedSeconds"),
             )
+        }
+
+        /** Un entier strictement positif écrit comme un NOMBRE ; tout le reste vaut absence (miroir de `tally`). */
+        private fun JsonObject?.positiveInteger(key: String): Int? {
+            val raw = this?.get(key) as? JsonPrimitive ?: return null
+            if (raw is JsonNull || raw.isString) return null
+            val value = raw.content.toDoubleOrNull() ?: return null
+            return value.takeIf { it > 0 && it == Math.floor(it) && it <= Int.MAX_VALUE }?.toInt()
         }
     }
 }
