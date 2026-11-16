@@ -36,7 +36,7 @@ private final class RecordingSender: BatteryReportSending, @unchecked Sendable {
 final class BatteryReporterTests: XCTestCase {
 
     private func makeSUT(
-        sleep: @escaping @Sendable (TimeInterval) async -> Bool = { _ in false }
+        sleep: @escaping @concurrent @Sendable (TimeInterval) async -> Bool = { _ in false }
     ) -> (BatteryReporter, FakeBatteryDevice, RecordingSender) {
         let device = FakeBatteryDevice()
         let sender = RecordingSender()

@@ -23,6 +23,7 @@ import {
 import { CommunityRole } from './types';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { isAddableUser } from './addable-user';
+import { scheduleCommunityMemberBroadcastFrom } from '../../services/community-member-broadcast';
 import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
@@ -262,6 +263,8 @@ export async function registerMembershipRoutes(
         .recordActivity(userId, 'social.community_joined', { targetId: id, targetOwnerId: community.createdBy })
         .catch((err: unknown) => logger.warn('engagement social.community_joined failed', { err }));
 
+      scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'joined', communityId: id, userId, role: 'member', via: 'self' });
+
       // Pas de gate ici : le membre rendu est l'APPELANT lui-même, et une
       // préférence de visibilité ne se cache pas à celui qui l'a posée.
       return sendSuccess(reply, member);
@@ -371,6 +374,8 @@ export async function registerMembershipRoutes(
           { communityId: community.id, userId, now: leftAt },
         );
       }
+
+      scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'left', communityId: id, userId, reason: 'left' });
 
       return sendSuccess(reply, { message: 'Successfully left community' });
     } catch (error) {
@@ -536,6 +541,7 @@ export async function registerMembershipRoutes(
           });
 
       scheduleCommunityAddedAnnouncement(fastify.prisma, { communityId: id, actorId: userId, recipientIds: [inviteeId] });
+      scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'joined', communityId: id, userId: inviteeId, role: 'member', via: 'invited' });
 
       // Le succès revient à l'INVITÉ, pas à celui qui invite : c'est lui qui
       // rejoint le cercle (#5759).

@@ -622,6 +622,10 @@ export const SERVER_EVENTS = {
 
   // --- Communautés (#16857) : l'identité d'une communauté, à jour chez ses membres ---
   COMMUNITY_UPDATED: 'community:updated',
+  // L'effectif d'une communauté (#18766) : qui entre, qui sort, qui change de rôle
+  COMMUNITY_MEMBER_JOINED: 'community:member-joined',
+  COMMUNITY_MEMBER_LEFT: 'community:member-left',
+  COMMUNITY_MEMBER_ROLE_UPDATED: 'community:member-role-updated',
 
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',

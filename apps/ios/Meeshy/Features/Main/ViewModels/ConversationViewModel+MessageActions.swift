@@ -69,6 +69,7 @@ extension ConversationViewModel {
         guard commands.consumeReactionToken() else { return }
         // Un message système n'est pas réactable (le gateway rejette aussi en 400).
         guard let idx = messageIndex(for: messageId), messages[idx].messageSource != .system else { return }
+        noteUserActed(.toggleReaction)
 
         // Mes réactions sont TOUJOURS clées par la sentinelle `currentUserId` : c'est ce que
         // `summarizeReactions` et `reconstructFromSummary` comparent pour le « j'ai réagi ».
@@ -127,6 +128,7 @@ extension ConversationViewModel {
 
     private func emitAttachmentReaction(_ outcome: AttachmentReactionToggle.Outcome, attachmentId: String,
                                         remoteMessageId: String, emoji: String) {
+        noteUserActed(.toggleReaction)
         if outcome.added {
             messageSocket.addAttachmentReaction(attachmentId: attachmentId, messageId: remoteMessageId, emoji: emoji)
         } else {

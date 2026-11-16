@@ -237,7 +237,7 @@ class AudioHandler:
                 raise ValueError(
                     f"Impossible d'acquérir l'audio: "
                     f"base64={'yes' if request_data.get('audioBase64') else 'no'}, "
-                    f"url={request_data.get('audioUrl') or 'none'}"
+                    f"url={'yes' if request_data.get('audioUrl') else 'none'}"
                 )
 
             logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}")
