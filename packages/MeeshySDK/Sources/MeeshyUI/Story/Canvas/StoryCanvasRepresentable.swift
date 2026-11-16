@@ -462,6 +462,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         // Posé AVANT `beginInlineTextEdit` : la barre monte avec le clavier.
         uiView.inlineEditInputLink = inlineEditInputLink
+        if editingTextId == nil, uiView.pendingInlineEditTextId != nil {
+            uiView.endInlineTextEdit()
+        }
         if uiView.inlineEditingTextId != editingTextId {
             if let id = editingTextId {
                 // Une saisie SUSPENDUE par le doigt ne se rouvre pas d'elle-même :
