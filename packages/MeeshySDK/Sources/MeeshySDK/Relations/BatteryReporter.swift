@@ -46,7 +46,7 @@ public final class BatteryReporter: BatteryReportingProviding {
     private let device: BatteryDeviceReading
     private let sender: BatteryReportSending
     private let now: () -> Date
-    private let sleep: @Sendable (TimeInterval) async -> Bool
+    private let sleep: @concurrent @Sendable (TimeInterval) async -> Bool
     private var lastSent: BatteryReading?
     private var changeSubscription: Set<AnyCancellable>?
     private var heartbeatTask: Task<Void, Never>?
@@ -58,7 +58,7 @@ public final class BatteryReporter: BatteryReportingProviding {
         device: BatteryDeviceReading,
         sender: BatteryReportSending,
         now: @escaping () -> Date = { Date() },
-        sleep: @escaping @Sendable (TimeInterval) async -> Bool = { seconds in
+        sleep: @escaping @concurrent @Sendable (TimeInterval) async -> Bool = { seconds in
             do {
                 try await Task.sleep(for: .seconds(seconds))
                 return true
