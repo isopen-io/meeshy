@@ -65,6 +65,8 @@ public struct MessageCardInput: Equatable, Sendable {
     public var unbounded = false
     /// Le fond CHOISI dans la photothèque (#18672) — il passe avant un média du message posé en fond.
     public var backdrop: MessageCardBackdrop?
+    /// Le cadrage choisi de chaque photo recadrée, par identifiant de média (#18805) — absente : centrée.
+    public var framings: [String: MessageCardFraming] = [:]
 
     public init(quoted: MessageCardPart?, reply: MessageCardPart, template: MessageCardTemplateID, handle: String?,
                 title: String? = nil, date: String? = nil, showAuthors: Bool = true,
@@ -112,6 +114,7 @@ public struct MessageCardInput: Equatable, Sendable {
         var copy = next
         copy.unbounded = unbounded
         copy.backdrop = backdrop
+        copy.framings = framings
         return copy
     }
 }
@@ -176,6 +179,8 @@ public struct MessageCardMediaOp: Equatable, Sendable {
     /// `cover` remplit le cadre (une photo) ; `contain` y inscrit l'image en
     /// entier, sans arrondi (un sticker, #10915).
     public var fit: MessageCardMediaFit = .cover
+    /// La partie de la photo montrée dans le cadre (#18805) — sans effet sur un `contain`.
+    public var framing: MessageCardFraming = .centered
 }
 
 public enum MessageCardGlyph: String, Sendable {

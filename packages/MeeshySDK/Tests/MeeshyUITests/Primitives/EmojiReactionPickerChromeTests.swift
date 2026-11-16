@@ -187,6 +187,19 @@ final class EmojiReactionPickerChromeTests: XCTestCase {
         XCTAssertTrue(code.contains(".buttonStyle(PressableButtonStyle())"), "elle répond à l'appui par le style du kit")
     }
 
+    /// La rangée DÉFILANTE (beaucoup d'emojis, écran étroit) fige le « + » hors du
+    /// défilement : la tuile de l'hôte s'y fige avec lui, sans quoi elle disparaît
+    /// justement sur la barre la plus chargée.
+    func test_extraTile_isAlsoPinnedNextToThePlus_inTheScrollableStrip() throws {
+        let code = try source()
+        let strip = try XCTUnwrap(code.range(of: "private var scrollableQuickEmojiStrip"))
+        let end = try XCTUnwrap(code.range(of: "private func reactToEmoji", range: strip.upperBound..<code.endIndex))
+        let body = String(code[strip.upperBound..<end.lowerBound])
+        let expand = try XCTUnwrap(body.range(of: "expandButton"))
+        let extra = try XCTUnwrap(body.range(of: "extraTileButton"), "la rangée défilante monte la tuile")
+        XCTAssertTrue(expand.lowerBound < extra.lowerBound, "la tuile vient APRÈS le « + »")
+    }
+
     func test_extraTile_carriesSymbolLabelAndAction() {
         var fired = 0
         let tile = EmojiReactionPicker.ExtraTile(symbol: "wand.and.stars", accessibilityLabel: "Imager") { fired += 1 }

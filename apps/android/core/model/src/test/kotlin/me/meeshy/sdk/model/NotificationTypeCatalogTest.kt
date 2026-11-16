@@ -121,6 +121,28 @@ class NotificationTypeCatalogTest {
     }
 
     @Test
+    fun sections_deviceUnreachableFollowsDeviceBatteryInGroups() {
+        val groups = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.GROUPS }
+            .items.map { it.type }
+
+        assertThat(groups.take(4)).containsExactly(
+            NotificationType.CONTACT_REQUEST,
+            NotificationType.CONTACT_ACTIVITY,
+            NotificationType.DEVICE_BATTERY,
+            NotificationType.DEVICE_UNREACHABLE,
+        ).inOrder()
+    }
+
+    @Test
+    fun toggle_deviceUnreachableLensReadsAndWritesItsOwnField() {
+        val off = NotificationTypeCatalog.toggle(UserNotificationPreferences(), NotificationType.DEVICE_UNREACHABLE, enabled = false)
+        assertThat(off.deviceUnreachableEnabled).isFalse()
+        assertThat(off.deviceBatteryEnabled).isTrue()
+        assertThat(UserNotificationPreferences().deviceUnreachableEnabled).isTrue()
+    }
+
+    @Test
     fun toggle_deviceBatteryLensReadsAndWritesItsOwnField() {
         val off = NotificationTypeCatalog.toggle(UserNotificationPreferences(), NotificationType.DEVICE_BATTERY, enabled = false)
         assertThat(off.deviceBatteryEnabled).isFalse()

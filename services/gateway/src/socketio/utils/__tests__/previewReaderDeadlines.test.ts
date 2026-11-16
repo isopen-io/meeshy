@@ -95,14 +95,14 @@ describe('loadPreviewReaderDeadlines (#18556)', () => {
     expect(prisma.messageStatusEntry.findMany).not.toHaveBeenCalled();
   });
 
-  it('une lecture qui échoue ne rend aucune échéance et le dit', async () => {
+  it('une lecture qui échoue rend l’IGNORANCE (null), jamais « aucune échéance », et le dit', async () => {
     const prisma = prismaOf([]);
     prisma.messageStatusEntry.findMany.mockRejectedValueOnce(new Error('mongo down'));
     const onError = jest.fn();
 
     const deadlines = await loadPreviewReaderDeadlines(prisma as never, [{ participantId: 'p-reader', message: duration }], onError);
 
-    expect(deadlines.size).toBe(0);
+    expect(deadlines).toBeNull();
     expect(onError).toHaveBeenCalledTimes(1);
   });
 });

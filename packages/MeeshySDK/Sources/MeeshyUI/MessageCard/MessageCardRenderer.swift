@@ -26,6 +26,8 @@ public nonisolated struct MessageCardImage: Sendable {
     public var crowdedByMedia: Bool = false
     /// L'échelle la plus grande que les médias peuvent prendre — le pincement s'y arrête.
     public var mediaScaleLimit: Double = MessageCardScales.range.upperBound
+    /// Les photos recadrées et leur cadre, en pixels de la carte — l'aperçu y pose le recadrage (#18805).
+    public var framedMedia: [MessageCardFramedMedia] = []
 }
 
 /// Les pixels des médias d'une carte, par identifiant de média — chargés par
@@ -62,7 +64,8 @@ public nonisolated enum MessageCardRenderer {
             truncated: layout.truncated,
             regions: layout.regions,
             crowdedByMedia: layout.crowdedByMedia,
-            mediaScaleLimit: layout.mediaScaleLimit
+            mediaScaleLimit: layout.mediaScaleLimit,
+            framedMedia: layout.framedMedia
         )
     }
 
@@ -295,7 +298,8 @@ public nonisolated enum MessageCardRenderer {
         cg.restoreGState()
     }
 
-    /// Une photo REMPLIT son cadre (recadrée au centre, coins arrondis) ; un
+    /// Une photo REMPLIT son cadre (recadrée selon son cadrage, #18805 — au centre
+    /// par défaut —, coins arrondis) ; un
     /// STICKER s'y INSCRIT en entier, sans arrondi ni rognage (`op.fit`, #10915).
     /// Sans pixels, la couleur d'attente.
     private static func paintMedia(_ op: MessageCardMediaOp, image: CGImage?, in cg: CGContext) {
@@ -307,10 +311,11 @@ public nonisolated enum MessageCardRenderer {
             cg.clip()
         }
         if let image, image.width > 0, image.height > 0 {
-            let drawn = op.fit.drawn(
-                pixelWidth: Double(image.width), pixelHeight: Double(image.height),
-                in: MessageCardFrame(x: op.x, y: op.y, width: op.width, height: op.height)
-            )
+            let pixels = (width: Double(image.width), height: Double(image.height))
+            let box = MessageCardFrame(x: op.x, y: op.y, width: op.width, height: op.height)
+            let drawn = op.fit == .cover
+                ? op.framing.drawn(pixelWidth: pixels.width, pixelHeight: pixels.height, in: box)
+                : op.fit.drawn(pixelWidth: pixels.width, pixelHeight: pixels.height, in: box)
             UIImage(cgImage: image).draw(in: CGRect(x: drawn.x, y: drawn.y, width: drawn.width, height: drawn.height))
         } else {
             cg.setFillColor(uiColor(op.placeholder).cgColor)

@@ -472,7 +472,7 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
                                            isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
         XCTAssertTrue(MessageOverlayMenu.showsImagerTile(for: imageable, hasExportHandler: true))
         XCTAssertEqual(MessageOverlayMenu.showsImagerTile(for: imageable, hasExportHandler: true),
-                       MessageActionResolver.primaryActions(imageable).contains(.exportImage))
+                       MessageActionResolver.offersImager(imageable))
 
         let empty = MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
                                        hasText: false, hasMedia: false, hasTimebasedMedia: false,
@@ -484,6 +484,26 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         blurred.isBlurred = true
         XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: blurred, hasExportHandler: true),
                        "un message flouté ne s'image pas")
+    }
+
+    /// La tuile ne suit PAS le plafond de six de la liste : quand la liste déborde,
+    /// Imager part dans « Plus… » et c'est précisément là que la tuile doit rester.
+    @MainActor func test_showsImagerTile_whenTheListOverflows_staysOnTheBar() {
+        var crowded = MessageMenuContext(isMine: true, canEdit: true, canDelete: true,
+                                         hasText: true, hasMedia: true, hasTimebasedMedia: false,
+                                         isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
+        crowded.saveableAttachmentCount = 1
+        crowded.hasPaintableMedia = true
+        crowded.hasDefaultExportFormat = true
+        XCTAssertFalse(MessageActionResolver.primaryActions(crowded).contains(.exportImage),
+                       "précondition : la liste déborde et rabat Imager dans « Plus… »")
+        XCTAssertTrue(MessageOverlayMenu.showsImagerTile(for: crowded, hasExportHandler: true),
+                      "la tuile reste sur la barre quand la liste rabat Imager")
+
+        var viewOnce = crowded
+        viewOnce.isViewOnce = true
+        XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: viewOnce, hasExportHandler: true),
+                       "une vue unique ne s'image pas")
     }
 
     @MainActor func test_showsImagerTile_withoutExportHandler_isFalse() {

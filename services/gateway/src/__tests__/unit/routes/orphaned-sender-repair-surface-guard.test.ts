@@ -327,6 +327,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // expéditeur disparu n'ouvre donc aucune trajectoire d'erreur : l'annonce
   // part vers la room du `Participant.id`, qui est exactement l'adresse que
   // `ROOMS.user()` attend d'un participant sans ligne `User`.
+  // #18556 — le départ du lecteur relit `{ select: { id, effectFlags, expiresAt } }`,
+  // jamais `sender`.
+  'messaging/afterReadDeparture.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #8302 — la flamme-œil consommée : `{ select: { id, senderId, effectFlags } }`,
   // jamais `sender`. `senderId` sert à refuser qu'un auteur consomme le sien.
   'messaging/consumeAfterReadMessages.ts': {

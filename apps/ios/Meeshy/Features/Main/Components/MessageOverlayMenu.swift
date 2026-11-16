@@ -240,12 +240,13 @@ struct MessageOverlayMenu: View {
 
     /// **« Imager » à droite du « + » de la barre de réactions** (#16162) : l'appui
     /// long montrait Modifier, Sélectionner, Composer… sans Imager, relégué dans
-    /// « Plus… », alors que c'est une feature majeure qui doit s'atteindre d'un geste. La tuile suit le MÊME verdict que l'action
-    /// de la liste (`MessageActionResolver.primaryActions` → `.exportImage`) : un seul
+    /// « Plus… », alors que c'est une feature majeure qui doit s'atteindre d'un geste. La tuile suit le MÊME juge que l'action
+    /// de la liste (`MessageActionResolver.offersImager`, lu AVANT le plafond de six :
+    /// quand la liste déborde, Imager part dans « Plus… » et la tuile reste) : un seul
     /// juge dit si ce message s'image (texte ou média peignable, non protégé, sortie
     /// permise) ; la barre ne la montre que si l'hôte a câblé l'export.
     static func showsImagerTile(for context: MessageMenuContext, hasExportHandler: Bool) -> Bool {
-        hasExportHandler && MessageActionResolver.primaryActions(context).contains(.exportImage)
+        hasExportHandler && MessageActionResolver.offersImager(context)
     }
 
     /// La tuile elle-même : le glyphe d'Imager, son nom, et le chemin UNIQUE de l'action

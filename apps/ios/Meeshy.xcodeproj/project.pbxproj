@@ -309,6 +309,16 @@
 		0EA5B0001D3F6FB063C40602 /* FocalPaletteContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90DBF8CF66BF8D1A0E2F67CD /* FocalPaletteContrastTests.swift */; };
 		0EA9FDFB0CF1F3588F9323F4 /* MeeshyComposerHost+MountedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64C1870B59B35832ECCEE210 /* MeeshyComposerHost+MountedView.swift */; };
 		0EB965429961BBAF43B8FF4E /* BatteryCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CCC1B1FD5E767A1624CA33E /* BatteryCenter.swift */; };
+		CBF8A28EFEE8FB331098F695 /* PhoneReachabilityAnnouncementFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B91BED8B81BC54BF092FD3B /* PhoneReachabilityAnnouncementFeed.swift */; };
+		BD9446220266AC8B959BE670 /* PhoneReachabilityCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6169081BD8AEFD2402CEFAE5 /* PhoneReachabilityCenter.swift */; };
+		5AAE204D1D4BC617073F0E7C /* PhoneReachabilityGlyph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85619F5F6AE92F1D93055475 /* PhoneReachabilityGlyph.swift */; };
+		7ADA799ED05A04605A6A45B0 /* PhoneReachabilitySharingSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7141302B0C24B2E3E875FAA /* PhoneReachabilitySharingSettingsSection.swift */; };
+		6D6244251ED7581F4855488F /* PhoneReachabilityWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71AC0D05AC60BA455BDEB98 /* PhoneReachabilityWording.swift */; };
+		B54B5DA40BDBB77DAC906B70 /* ProfilePhoneReachabilityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236DB5B40013FDF83BDBC793 /* ProfilePhoneReachabilityRow.swift */; };
+		3FD49E854F4754B02F29363F /* ProfilePhoneReachabilityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C35C2B150336A70F892E1B5 /* ProfilePhoneReachabilityViewModel.swift */; };
+		B83C5E02822C64F6429A4740 /* PhoneReachabilityCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D0209C81F3B8235D87D9B4 /* PhoneReachabilityCenterTests.swift */; };
+		F1CB70BDC3AF6525FF9C6FA0 /* ProfilePhoneReachabilityViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F238738A4932FB52B29C6C6B /* ProfilePhoneReachabilityViewModelTests.swift */; };
+		95E4247F5A42AAD3FCB7BC91 /* MockPhoneReachabilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E58C86C329CEF1DE751A6E7 /* MockPhoneReachabilityService.swift */; };
 		0EC73D860EC3732AFCC4FA88 /* DeletedAccountRetirementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 433839B4987FC07899C2E564 /* DeletedAccountRetirementTests.swift */; };
 		0ED37E55D6725618AE2C416E /* ComposerMediaRetractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0E5930B4E63465CD5928FC /* ComposerMediaRetractionTests.swift */; };
 		0ED65FA5D3644CED35A761C1 /* GameHeroModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1029D8DBFDDA3A24D0FC85F8 /* GameHeroModel.swift */; };
@@ -4643,6 +4653,7 @@
 		FBD14E3370FF2516BA2428FE /* CallFrameCallTexts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA393DBB6C30A569B1440FAF /* CallFrameCallTexts.swift */; };
 		FBE1961096AA7CB6D02BCFFD /* ConversationRowAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F61B3F658BA78EEE3EE826 /* ConversationRowAvatar.swift */; };
 		FBE26B28594B8B32983A6CA4 /* ComposerPostTextPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C2D1773053C9BCD0248826 /* ComposerPostTextPill.swift */; };
+		FBF3BD7C8BF9F561E1663A11 /* MessageCardCropLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 387257F491E83CE5EBD7F18A /* MessageCardCropLayer.swift */; };
 		FBF5A680AEA3BE390DEF74FE /* ComposerTrimRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB47C7DDF6B6B7C784B66AB6 /* ComposerTrimRule.swift */; };
 		FC1C8794D4E4F58D7003817D /* EphemeralBurnWindSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1C1FF326E55D9273316E0F /* EphemeralBurnWindSourceTests.swift */; };
 		FC1E89DF5667DE37F4580CF9 /* OnboardingAgeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44E971C6867174B0A0CE264 /* OnboardingAgeCard.swift */; };
@@ -5869,6 +5880,7 @@
 		38661A5831DBBB52DC58DD76 /* ComposerLanguageFlagTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLanguageFlagTests.swift; sourceTree = "<group>"; };
 		3868CC815566BC1DD510D549 /* ComposerToolIconsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerToolIconsTests.swift; sourceTree = "<group>"; };
 		386FD50AF115663916D468DB /* ConversationListHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListHelpers.swift; sourceTree = "<group>"; };
+		387257F491E83CE5EBD7F18A /* MessageCardCropLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCardCropLayer.swift; sourceTree = "<group>"; };
 		38765243897DBB40F7ECE77D /* ConversationSearchHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSearchHandler.swift; sourceTree = "<group>"; };
 		388102E55279E4DF9CE78353 /* ConversationMediaFilmstrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMediaFilmstrip.swift; sourceTree = "<group>"; };
 		388155F36EE8CE2C486EB5E9 /* iPadRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPadRootView.swift; sourceTree = "<group>"; };
@@ -6256,6 +6268,16 @@
 		4CBB433EE9CC95559F44AF42 /* PendingPublicationPillTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingPublicationPillTests.swift; sourceTree = "<group>"; };
 		4CC3E9673224B6992689DACA /* MockEndToEndOwnDeviceLinking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockEndToEndOwnDeviceLinking.swift; sourceTree = "<group>"; };
 		4CCC1B1FD5E767A1624CA33E /* BatteryCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryCenter.swift; sourceTree = "<group>"; };
+		9B91BED8B81BC54BF092FD3B /* PhoneReachabilityAnnouncementFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneReachabilityAnnouncementFeed.swift; sourceTree = "<group>"; };
+		6169081BD8AEFD2402CEFAE5 /* PhoneReachabilityCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneReachabilityCenter.swift; sourceTree = "<group>"; };
+		85619F5F6AE92F1D93055475 /* PhoneReachabilityGlyph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneReachabilityGlyph.swift; sourceTree = "<group>"; };
+		B7141302B0C24B2E3E875FAA /* PhoneReachabilitySharingSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneReachabilitySharingSettingsSection.swift; sourceTree = "<group>"; };
+		A71AC0D05AC60BA455BDEB98 /* PhoneReachabilityWording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneReachabilityWording.swift; sourceTree = "<group>"; };
+		236DB5B40013FDF83BDBC793 /* ProfilePhoneReachabilityRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneReachabilityRow.swift; sourceTree = "<group>"; };
+		9C35C2B150336A70F892E1B5 /* ProfilePhoneReachabilityViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneReachabilityViewModel.swift; sourceTree = "<group>"; };
+		E1D0209C81F3B8235D87D9B4 /* PhoneReachabilityCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneReachabilityCenterTests.swift; sourceTree = "<group>"; };
+		F238738A4932FB52B29C6C6B /* ProfilePhoneReachabilityViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneReachabilityViewModelTests.swift; sourceTree = "<group>"; };
+		6E58C86C329CEF1DE751A6E7 /* MockPhoneReachabilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPhoneReachabilityService.swift; sourceTree = "<group>"; };
 		4CCEF5A1F7429B0CDBD11567 /* WidgetDeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDeepLink.swift; sourceTree = "<group>"; };
 		4CDFD7DD6ACDB3DEB4A29AC0 /* MessageDraftMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDraftMediaStore.swift; sourceTree = "<group>"; };
 		4CE136F15BE6425ED2B46E3B /* GroupCallMeshContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupCallMeshContracts.swift; sourceTree = "<group>"; };
@@ -10949,6 +10971,15 @@
 			path = Onboarding;
 			sourceTree = "<group>";
 		};
+		B892955981C6FA07122E1CE3 /* PhoneReachability */ = {
+			isa = PBXGroup;
+			children = (
+				E1D0209C81F3B8235D87D9B4 /* PhoneReachabilityCenterTests.swift */,
+				F238738A4932FB52B29C6C6B /* ProfilePhoneReachabilityViewModelTests.swift */,
+			);
+			path = PhoneReachability;
+			sourceTree = "<group>";
+		};
 		337FE8DB95000950606FF949 /* Battery */ = {
 			isa = PBXGroup;
 			children = (
@@ -11098,6 +11129,7 @@
 				D650D48CA6476144A940F839 /* MockMessageSocket.swift */,
 				B61CC3CEDAB98139499365ED /* MockNotificationFeed.swift */,
 				A587E039D836AA3B3610FC95 /* MockOnboardingService.swift */,
+				6E58C86C329CEF1DE751A6E7 /* MockPhoneReachabilityService.swift */,
 				CE87654142A6243C964F8E3A /* MockPostService.swift */,
 				AF27ED03C1648E86B0B43593 /* MockPostServiceRequirementParityTests.swift */,
 				7C4FBE52812B6A28C59CB58D /* MockPreferenceService.swift */,
@@ -11203,6 +11235,7 @@
 				9AC063369BA9538D33BB4CA7 /* Navigation */,
 				5E38B9D17E678682CEE6AADF /* Packs */,
 				143C24725FE7000995B1AD86 /* Persistence */,
+				B892955981C6FA07122E1CE3 /* PhoneReachability */,
 				2C653A88DAB5C8FDC4D0DEA4 /* Profile */,
 				4C83CEAC9354B068009FB5D1 /* River */,
 				445AF6406EF9491E1A125D4A /* Services */,
@@ -14016,6 +14049,7 @@
 				973056FAC47A6DDE7837C632 /* ImagerMenuButton.swift */,
 				CE2AE6F111D03FD32FAFF718 /* ImagerWandButton.swift */,
 				73E0E366B946289534E30162 /* MessageCardBackdropPicker.swift */,
+				387257F491E83CE5EBD7F18A /* MessageCardCropLayer.swift */,
 				5E96FE88CE7862BD8D6D27A0 /* MessageCardDiscussion.swift */,
 				59EFF2347F6E0A92CCA6C00D /* MessageCardExcerptStrip.swift */,
 				C7F0BDD1183450DF79ED2B77 /* MessageCardExportGallery.swift */,
@@ -14498,6 +14532,20 @@
 				436A11C0781968474398CA9A /* CallTypeBadgeView.swift */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		944AA20DB2F257530C794EC6 /* PhoneReachability */ = {
+			isa = PBXGroup;
+			children = (
+				9B91BED8B81BC54BF092FD3B /* PhoneReachabilityAnnouncementFeed.swift */,
+				6169081BD8AEFD2402CEFAE5 /* PhoneReachabilityCenter.swift */,
+				85619F5F6AE92F1D93055475 /* PhoneReachabilityGlyph.swift */,
+				B7141302B0C24B2E3E875FAA /* PhoneReachabilitySharingSettingsSection.swift */,
+				A71AC0D05AC60BA455BDEB98 /* PhoneReachabilityWording.swift */,
+				236DB5B40013FDF83BDBC793 /* ProfilePhoneReachabilityRow.swift */,
+				9C35C2B150336A70F892E1B5 /* ProfilePhoneReachabilityViewModel.swift */,
+			);
+			path = PhoneReachability;
 			sourceTree = "<group>";
 		};
 		C26E42598D98665E81AD02D3 /* Battery */ = {
@@ -15169,6 +15217,7 @@
 				949AF9F4E6F9076A5E4FA110 /* Navigation */,
 				892804B253B797C4A6D62B45 /* Notifications */,
 				88295AFD367C11B4A792ADCB /* Onboarding */,
+				944AA20DB2F257530C794EC6 /* PhoneReachability */,
 				BEA1187ADB72D2EF448ADBC6 /* Profile */,
 				94A04AF22BCD0C125F728C9F /* River */,
 				B715838068556CDFFA475CC9 /* Settings */,
@@ -16217,6 +16266,13 @@
 				2B70E43E6576870F030DD0CA /* BatteryAnnouncementWording.swift in Sources */,
 				6D512B226D1AEB0566B2D4B7 /* BatteryBackgroundRefresh.swift in Sources */,
 				0EB965429961BBAF43B8FF4E /* BatteryCenter.swift in Sources */,
+				CBF8A28EFEE8FB331098F695 /* PhoneReachabilityAnnouncementFeed.swift in Sources */,
+				BD9446220266AC8B959BE670 /* PhoneReachabilityCenter.swift in Sources */,
+				5AAE204D1D4BC617073F0E7C /* PhoneReachabilityGlyph.swift in Sources */,
+				7ADA799ED05A04605A6A45B0 /* PhoneReachabilitySharingSettingsSection.swift in Sources */,
+				6D6244251ED7581F4855488F /* PhoneReachabilityWording.swift in Sources */,
+				B54B5DA40BDBB77DAC906B70 /* ProfilePhoneReachabilityRow.swift in Sources */,
+				3FD49E854F4754B02F29363F /* ProfilePhoneReachabilityViewModel.swift in Sources */,
 				008348F06ACBF961B87B2C6C /* BatteryDetailCard.swift in Sources */,
 				FA15681EEF6F56DBC34DE920 /* BatteryGlyph.swift in Sources */,
 				3BA83C3644484E4C10AB148C /* BatteryReceiveModeSection.swift in Sources */,
@@ -17702,6 +17758,7 @@
 				653026EFAFE3B69353D53330 /* MessageArrivalMotion.swift in Sources */,
 				BA6EB7913D5A47311E44AE48 /* MessageBurningMarks.swift in Sources */,
 				3B3161F41E85852BAB395B66 /* MessageCardBackdropPicker.swift in Sources */,
+				FBF3BD7C8BF9F561E1663A11 /* MessageCardCropLayer.swift in Sources */,
 				7428FC97BE5F434EA4E02CCF /* MessageCardDiscussion.swift in Sources */,
 				5D350B12EDACE42ABE6754EA /* MessageCardExcerptStrip.swift in Sources */,
 				55EF5F3B4D5A0723E027BA54 /* MessageCardExportGallery.swift in Sources */,
@@ -18718,6 +18775,8 @@
 				DFF1E288FA2997775EF2EDC7 /* BadgeCountTests.swift in Sources */,
 				4B995DB8CCA7C88E907E5B44 /* BareShapeTapTargetGuardTests.swift in Sources */,
 				81CB6915F69A0304872E951A /* BatteryCenterTests.swift in Sources */,
+				B83C5E02822C64F6429A4740 /* PhoneReachabilityCenterTests.swift in Sources */,
+				F1CB70BDC3AF6525FF9C6FA0 /* ProfilePhoneReachabilityViewModelTests.swift in Sources */,
 				002302C7274C171B5DD552DA /* BatteryReceiveModeViewModelTests.swift in Sources */,
 				81D570EB548C335D3F4A8990 /* BlockActionCoordinatorTests.swift in Sources */,
 				883BECB240EC6E20BA95EFA5 /* BlockedViewModelTests.swift in Sources */,
@@ -19902,6 +19961,7 @@
 				1488B9C4923792F73A60D75A /* MockAuthManager.swift in Sources */,
 				528E96613AD3C88D6954EC39 /* MockAuthServiceSDK.swift in Sources */,
 				566D380A249315F59F1E0780 /* MockBatteryService.swift in Sources */,
+				95E4247F5A42AAD3FCB7BC91 /* MockPhoneReachabilityService.swift in Sources */,
 				0A04222B7669D667C695AD69 /* MockBirthDateService.swift in Sources */,
 				7A46ACD0F06C1F445F95FFA9 /* MockBlockService.swift in Sources */,
 				52F86811B850914FE0DC072F /* MockBringAlarmScheduler.swift in Sources */,

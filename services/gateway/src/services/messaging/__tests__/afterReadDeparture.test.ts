@@ -54,13 +54,10 @@ const flame = (id: string, overrides: MongoDocument = {}): MongoDocument => ({
   ...overrides,
 });
 
-const read = (messageId: string, overrides: MongoDocument = {}): MongoDocument => ({
-  messageId,
-  conversationId: CONV,
-  participantId: READER,
-  readAt: at('11:59:00'),
-  ...overrides,
-});
+const read = (messageId: string, overrides: MongoDocument = {}): MongoDocument => {
+  const readAt = 'readAt' in overrides ? overrides.readAt : at('11:59:00');
+  return { messageId, conversationId: CONV, participantId: READER, readAt, exactReadAt: readAt, ...overrides };
+};
 
 const departure = (regards = REGARD) => ({ conversationId: CONV, participantId: READER, regards, now: NOW });
 
@@ -91,6 +88,15 @@ describe('readAfterReadIdsAtDeparture (#18556)', () => {
     );
 
     expect(await readAfterReadIdsAtDeparture(prisma as never, departure())).toEqual(['m-read']);
+  });
+
+  it('ATTAQUE — un readAt gravé par l’accusé HÉRITÉ (plage jusqu’à la frontière, jamais affichée) n’est pas consommé', async () => {
+    const prisma = prismaOf(
+      [flame('m-shown'), flame('m-skipped')],
+      [read('m-shown'), read('m-skipped', { exactReadAt: undefined })],
+    );
+
+    expect(await readAfterReadIdsAtDeparture(prisma as never, departure())).toEqual(['m-shown']);
   });
 
   it('ATTAQUE — un readAt posé HORS de tout regard (bannière, widget, autre conversation à l’écran) n’est pas consommé', async () => {

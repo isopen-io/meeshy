@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le téléphone injoignable (#18737) : android-only tant que les clés phone.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="phone_reachability_someone">un vicino</string>
+    <string name="phone_reachability_pill_unreachable">Il telefono di %1$s è irraggiungibile dalle %2$s</string>
+    <string name="phone_reachability_pill_reachable">Il telefono di %1$s risponde di nuovo</string>
+    <string name="phone_reachability_card_since">Telefono irraggiungibile dalle %1$s</string>
+    <string name="phone_reachability_cause_battery">Batteria scarica, probabilmente</string>
+    <string name="phone_reachability_cause_network">Senza rete o in modalità aereo, probabilmente</string>
+    <string name="phone_reachability_a11y">Il telefono di %1$s è irraggiungibile</string>
+    <string name="phone_reachability_share_global_title">Avvisare i miei Vicini se il mio telefono è irraggiungibile</string>
+    <string name="phone_reachability_share_global_scope">I tuoi Vicini sanno da quando non risponde, mai dove sei.</string>
+    <string name="phone_reachability_share_person">Avvisare %1$s se il mio telefono è irraggiungibile</string>
+    <string name="phone_reachability_share_person_scope">%1$s sa da quando il tuo telefono non risponde, e la causa probabile.</string>
+    <string name="phone_reachability_consent_title">Avvisare %1$s se il tuo telefono è irraggiungibile?</string>
+    <string name="phone_reachability_consent_body">Se smette di rispondere, %1$s saprà da quando. Modificabile nella scheda.</string>
+    <string name="phone_reachability_consent_checkbox">Avvisare %1$s se il mio telefono è irraggiungibile</string>
+    <string name="phone_reachability_consent_confirm">Conferma</string>
+    <string name="phone_reachability_consent_later">Non ora</string>
+</resources>

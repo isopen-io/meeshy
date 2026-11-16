@@ -25,6 +25,7 @@ extension MessageCardExportSheet {
                     Button {
                         HapticFeedback.light()
                         output = item
+                        outputChosen = true
                     } label: {
                         Label(MessageCardExportText.outputLabel(item), systemImage: MessageCardExportSymbols.output(item))
                             .font(.subheadline.weight(.semibold))
@@ -165,10 +166,10 @@ extension MessageCardExportSheet {
         }
     }
 
-    /// Un message long DÉFILE sous son format (#18671) — les vidéos du message
-    /// et le fond choisi bouclent dessous.
+    /// Un message long DÉFILE sous son format, en vidéo ou en GIF (#18671, #18806) —
+    /// les vidéos du message et le fond choisi bouclent dessous.
     private func scroll(to destination: Destination) {
-        guard canSave else { return }
+        guard canSave, let plan = scrollPlan else { return }
         busy = true
         notice = nil
         motion.value = 0
@@ -193,10 +194,11 @@ extension MessageCardExportSheet {
                 }
                 let ready = videos
                 let file = try await Task(priority: .userInitiated) { @concurrent in
-                    try await MessageCardScrollExporter.export(input: input, pictures: pictures, speed: speed, videos: ready, progress: progress)
+                    try await MessageCardScrollExporter.export(input: input, pictures: pictures, speed: speed,
+                                                               output: plan.output, videos: ready, progress: progress)
                 }.value
                 try Task.checkCancellation()
-                await deliver(file, output: .video, to: destination)
+                await deliver(file, output: plan.output, to: destination)
             } catch is CancellationError {
                 busy = false
                 motion.value = nil

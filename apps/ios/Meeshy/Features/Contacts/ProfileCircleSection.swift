@@ -38,17 +38,12 @@ struct ProfileCircleSection: View {
                     if showsSharedLocation {
                         ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
                     }
-                    if viewModel.offersBattery {
-                        ProfileBatteryRow(
-                            userId: viewModel.userId, displayName: displayName,
-                            canPull: viewModel.offersBatteryPull, asksConsent: viewModel.batteryAsksConsent
-                        )
-                    }
+                    deviceRows
                     promoteButton
                     loweringButton(from: level)
                 }
             } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether || showsSharedLocation
-                        || viewModel.offersBattery {
+                        || viewModel.offersBattery || viewModel.offersPhoneReachability {
                 VStack(spacing: MeeshySpacing.smPlus) {
                     if viewModel.offersTalkie {
                         ProfileTalkieRow(userId: viewModel.userId, displayName: displayName)
@@ -62,12 +57,7 @@ struct ProfileCircleSection: View {
                     if showsSharedLocation {
                         ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
                     }
-                    if viewModel.offersBattery {
-                        ProfileBatteryRow(
-                            userId: viewModel.userId, displayName: displayName,
-                            canPull: viewModel.offersBatteryPull, asksConsent: viewModel.batteryAsksConsent
-                        )
-                    }
+                    deviceRows
                 }
             } else {
                 Color.clear.frame(height: 0)
@@ -81,6 +71,23 @@ struct ProfileCircleSection: View {
             guard let new else { return }
             FeedbackToastManager.shared.showError(new)
             viewModel.notice = nil
+        }
+    }
+
+    /// L'état du téléphone de la personne et mon partage avec elle : la batterie (#14147), puis l'injoignabilité (#18737).
+    @ViewBuilder
+    private var deviceRows: some View {
+        if viewModel.offersBattery {
+            ProfileBatteryRow(
+                userId: viewModel.userId, displayName: displayName,
+                canPull: viewModel.offersBatteryPull, asksConsent: viewModel.batteryAsksConsent
+            )
+        }
+        if viewModel.offersPhoneReachability {
+            ProfilePhoneReachabilityRow(
+                userId: viewModel.userId, displayName: displayName,
+                asksConsent: viewModel.phoneReachabilityAsksConsent
+            )
         }
     }
 

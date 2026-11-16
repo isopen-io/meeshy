@@ -20,6 +20,7 @@ const es = {
   'battery.a11y.charging': 'batería al {level} %, cargando',
   'battery.a11y.off': 'teléfono probablemente apagado',
   'battery.detail.title': 'Batería',
+  'battery.me.title': 'Mi teléfono',
   'battery.phase.low': 'Batería baja',
   'battery.phase.critical': 'Batería crítica',
   'battery.phase.off': 'Teléfono probablemente apagado',

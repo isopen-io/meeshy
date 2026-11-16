@@ -46,6 +46,7 @@ export const RELATION_FEATURES = [
   'location.proximity',
   'device.battery',
   'device.battery.pull',
+  'device.unreachable',
   'acquaintance.auto',
 ] as const;
 
@@ -85,6 +86,7 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
   'location.proximity': 'BLOOD',
   'device.battery': 'CLOSE',
   'device.battery.pull': 'BLOOD',
+  'device.unreachable': 'CLOSE',
   'acquaintance.auto': 'PUBLIC',
 };
 
@@ -155,6 +157,7 @@ export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = n
   'location.proximity',
   'device.battery',
   'device.battery.pull',
+  'device.unreachable',
 ]);
 
 /**
@@ -170,6 +173,7 @@ export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = n
 export const RELATION_EMITTER_CONSENT_DEFAULT_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
   'device.battery': 'BLOOD',
   'device.battery.pull': 'BLOOD',
+  'device.unreachable': 'BLOOD',
 };
 
 /**
@@ -188,6 +192,7 @@ export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<R
   'location.proximity',
   'device.battery',
   'device.battery.pull',
+  'device.unreachable',
 ]);
 
 /** Actions adressées à UNE AUTRE personne : elles n'ont aucun sens envers soi-même. */

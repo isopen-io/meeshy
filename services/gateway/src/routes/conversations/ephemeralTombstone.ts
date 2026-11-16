@@ -129,6 +129,27 @@ export function projectEphemeralTombstone<T extends object>(
 }
 
 /**
+ * La pierre tombale appliquée à une PAGE servie : chaque bulle reprend sa ligne
+ * brute par son `id`, son échéance de lecteur et celle héritée de ce qu'elle
+ * cite. Une bulle sans ligne passe telle quelle.
+ */
+export function projectEphemeralTombstonePage<T extends { id: string }>(
+  served: readonly T[],
+  rows: ReadonlyArray<TombstoneRow & { id: string }>,
+  readerDeadlines: ReadonlyMap<string, EphemeralReaderResolution>,
+  inheritedDeadlines: ReadonlyMap<string, Date>,
+  now: Date,
+): T[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return served.map((message) => {
+    const row = byId.get(message.id);
+    return row
+      ? projectEphemeralTombstone(message, row, readerDeadlines.get(message.id), now, inheritedDeadlines.get(message.id))
+      : message;
+  });
+}
+
+/**
  * La même pierre tombale sur une ligne BRUTE, avant toute projection : la porte
  * qui la reçoit ne peut plus rien en dériver. Limitée aux colonnes que le
  * `select` a demandées ; `replyToId` reste, il nomme un fil sans rien dire.

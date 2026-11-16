@@ -205,7 +205,7 @@
       "firstScreen": 48
     },
     "me": {
-      "total": 100,
+      "total": 103,
       "firstScreen": 37
     },
     "me-bookmarks": {
@@ -628,15 +628,15 @@
     },
     "me": {
       "de": {
-        "total": 96,
-        "firstScreen": 37
-      },
-      "a": {
         "total": 100,
         "firstScreen": 37
       },
-      "motif": "La coupure globale du partage de batterie (« Batterie », « Partager ma batterie ») ; qui la voit et ce que le navigateur n'envoie pas restent derrière le (i)",
-      "issue": 14147
+      "a": {
+        "total": 103,
+        "firstScreen": 37
+      },
+      "motif": "La carte « Mon téléphone » (ex « Batterie ») accueille la coupure du téléphone injoignable (« Téléphone injoignable ») au lieu d'une section de plus ; qui est prévenu se lit sur la fiche de chaque personne",
+      "issue": 18737
     }
   }
 }

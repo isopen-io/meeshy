@@ -27,12 +27,15 @@ export type PreviewReaderMessage = {
  * alors relues par leurs couples, parce qu'une ligne absente se lirait « rien
  * n'est échu » et servirait le texte de l'aperçu. Seul `max D(u)` — le décompte
  * AFFICHÉ à l'auteur d'un éphémère à durée — reste borné par la tranche.
+ *
+ * Une lecture qui ÉCHOUE rend `null` — l'ignorance —, jamais une carte vide,
+ * qui se lirait « rien n'est échu » et servirait le texte d'une flamme échue.
  */
 export async function loadPreviewReaderDeadlines(
   prisma: Pick<PrismaClient, 'messageStatusEntry'>,
   readers: ReadonlyArray<PreviewReaderMessage>,
   onError?: (error: unknown) => void,
-): Promise<Map<string, Date>> {
+): Promise<Map<string, Date> | null> {
   const ephemeral = readers.filter(({ message }) => hasPerReaderEphemeralDeadline(message));
   const messageIds = [...new Set(ephemeral.map(({ message }) => message.id))];
   if (messageIds.length === 0) return new Map();
@@ -55,7 +58,7 @@ export async function loadPreviewReaderDeadlines(
     }
   } catch (error) {
     onError?.(error);
-    return new Map();
+    return null;
   }
 
   const started = entries.filter(

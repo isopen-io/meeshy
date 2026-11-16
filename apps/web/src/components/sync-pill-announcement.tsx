@@ -12,6 +12,7 @@ import {
 } from '@/lib/view/sync-pill-announcements';
 
 import { BatteryGlyph } from './battery-glyph';
+import { PhoneReachabilityGlyph } from './phone-reachability-glyph';
 
 /**
  * **CE QUE LA PASTILLE ANNONCE, UNE ANNONCE APRÈS L'AUTRE** (#14147) — le défilement de la file
@@ -67,8 +68,13 @@ export function PillAnnouncementBody({ announcement }: { readonly announcement: 
       className="flex max-w-full items-center gap-1.5 rounded-chip px-3 py-1.5 text-check font-semibold shadow-lg"
       style={{ backgroundColor: teinte.fond, color: teinte.encre }}
     >
-      <BatteryGlyph level={announcement.icon.level ?? 0} tone={announcement.icon.level === null ? 'off' : 'low'} charging={announcement.icon.charging} width={18} ink="currentColor" />
+      <PillAnnouncementIconOf icon={announcement.icon} />
       <span className="min-w-0 truncate">{announcement.text}</span>
     </span>
   );
+}
+
+function PillAnnouncementIconOf({ icon }: { readonly icon: PillAnnouncement['icon'] }) {
+  if (icon.kind === 'phone') return <PhoneReachabilityGlyph reachable={icon.reachable} size={16} />;
+  return <BatteryGlyph level={icon.level ?? 0} tone={icon.level === null ? 'off' : 'low'} charging={icon.charging} width={18} ink="currentColor" />;
 }

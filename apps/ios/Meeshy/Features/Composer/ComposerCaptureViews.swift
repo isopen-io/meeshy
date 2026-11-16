@@ -279,7 +279,7 @@ struct ComposerCaptureChrome: View {
             typingTouchCatcher
             sceneObjectsLayer
             cropBrackets
-            if !finishing, showsChrome, session.offersEditPlayback { editPlayback }
+            if !finishing, session.offersEditPlayback { editPlayback }
             if showsChrome { cropPresets }
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
             if !typing, showsChrome { ComposerCaptureGestureHint(session: session) }
@@ -287,9 +287,9 @@ struct ComposerCaptureChrome: View {
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
-                topRow.opacity(showsTopRow && showsChrome ? chromeRest : 0)
-                    .allowsHitTesting(showsTopRow && showsChrome)
-                    .accessibilityHidden(!showsTopRow || !showsChrome)
+                topRow.opacity(showsTopRow ? chromeRest : 0)
+                    .allowsHitTesting(showsTopRow)
+                    .accessibilityHidden(!showsTopRow)
                     .overlay(alignment: .topTrailing) { ComposerCropCancelButton(session: session) }
                 Spacer(minLength: 0)
                 if showsChrome { bottomRow }
@@ -444,9 +444,11 @@ struct ComposerCaptureChrome: View {
     }
 
     /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
-    /// 2026-10-20) : une famille ouverte ou un outil montré les cache.
+    /// 2026-10-20) : une famille ouverte ou un outil montré les cache. Pendant le
+    /// glisser d'un objet, ils se retirent avec tout le chrome (#18787).
     private var showsTopRow: Bool {
-        !session.phase.isEditing
+        guard showsChrome else { return false }
+        return !session.phase.isEditing
             || ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)
     }
 
@@ -492,6 +494,11 @@ struct ComposerCaptureChrome: View {
                 .frame(width: rangee.width, height: rangee.height)
                 .position(x: rangee.midX, y: rangee.midY)
         }
+        // Toujours montée pour une vidéo ; pendant le glisser d'un objet, elle
+        // s'efface avec le chrome sans quitter l'arbre (#18787).
+        .opacity(showsChrome ? 1 : 0)
+        .allowsHitTesting(showsChrome)
+        .accessibilityHidden(!showsChrome)
         .transition(.opacity)
     }
 

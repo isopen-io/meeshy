@@ -93,6 +93,7 @@ public enum class RelationFeature(
         isDirected = true,
         emitterConsentDefaultLevel = RelationLevel.BLOOD,
     ),
+    DEVICE_UNREACHABLE("device.unreachable", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
     ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true, isClosedToTeam = true),
     ;
 

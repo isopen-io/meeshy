@@ -277,14 +277,15 @@ extension MessageCardLayoutEngine {
         return ops
     }
 
-    /// Le média peint dans son cadre : une photo REMPLIT (coins arrondis) ; un
-    /// sticker s'INSCRIT en entier, sans arrondi ni rognage (#10915).
+    /// Le média peint dans son cadre : une photo REMPLIT (coins arrondis), sous
+    /// le cadrage choisi (#18805) ; un sticker s'INSCRIT en entier, sans arrondi ni rognage (#10915).
     func mediaOp(_ media: MessageCardMedia, x: Double, y: Double, width: Double, height: Double) -> MessageCardOp {
         .media(MessageCardMediaOp(
             mediaID: media.id, kind: media.kind,
             x: x, y: y, width: width, height: height,
             radius: media.isSticker ? 0 : MessageCardMetrics.mediaRadius, placeholder: palette.quotePanel,
-            fit: media.isSticker ? .contain : .cover
+            fit: media.isSticker ? .contain : .cover,
+            framing: media.isSticker ? .centered : input.framings[media.id] ?? .centered
         ))
     }
 
@@ -359,7 +360,8 @@ extension MessageCardLayoutEngine {
         let base = palette.background.first?.color ?? MessageCardColor.hex("#000000")
         let veil = MessageCardColor(red: base.red, green: base.green, blue: base.blue, alpha: veilAlpha ?? (palette.tone == .dark ? 0.6 : 0.72))
         return [
-            .media(MessageCardMediaOp(mediaID: media.id, kind: media.kind, x: 0, y: 0, width: width, height: height, radius: 0, placeholder: base)),
+            .media(MessageCardMediaOp(mediaID: media.id, kind: media.kind, x: 0, y: 0, width: width, height: height, radius: 0, placeholder: base,
+                                      framing: input.framings[media.id] ?? .centered)),
             .panel(MessageCardRectOp(x: 0, y: 0, width: width, height: height, radius: 0, color: veil)),
         ]
     }

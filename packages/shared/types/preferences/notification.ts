@@ -63,6 +63,9 @@ export const NotificationPreferenceSchema = z.object({
   // #14147 — « la batterie de mes Proches et de mes Sangs » (`device_battery`).
   // Absent d'un document existant ⇒ reçu.
   deviceBatteryEnabled: z.boolean().default(true),
+  // #18737 — « le téléphone de mes Proches et de mes Sangs est injoignable » (`device_unreachable`).
+  // Absent d'un document existant ⇒ reçu.
+  deviceUnreachableEnabled: z.boolean().default(true),
   // « Jeu » (#9490) — la RÉCEPTION des notifications du jeu (invitation et acceptation de duo,
   // résultat de la semaine de ligue, étape de saison). Absent d'un document existant ⇒ reçu.
   gameEnabled: z.boolean().default(true),
@@ -155,6 +158,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   friendContentEnabled: true,
   contactActivityEnabled: true,
   deviceBatteryEnabled: true,
+  deviceUnreachableEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   bringEnabled: true,

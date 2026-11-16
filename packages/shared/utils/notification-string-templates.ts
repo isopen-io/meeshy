@@ -8,6 +8,7 @@
 
 import type { NotificationLanguage, NotificationStringKey } from './notification-strings.js';
 import { BATTERY_TEMPLATES } from './notification-string-templates-battery.js';
+import { UNREACHABLE_TEMPLATES } from './notification-string-templates-unreachable.js';
 
 type Templates = Record<NotificationStringKey, string>;
 
@@ -75,7 +76,7 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'contact.recentlyActiveBody': 'C\'est le moment de lui écrire 👋',
     'contact.acquaintanceAction': 'est maintenant une Connaissance',
     'contact.acquaintanceBody': 'Vous échangez assez pour vous connaître : c\'est un début 👋',
-    ...BATTERY_TEMPLATES.fr,
+    ...BATTERY_TEMPLATES.fr, ...UNREACHABLE_TEMPLATES.fr,
     'game.duoInvitedAction': 'te propose une alliance pour la semaine',
     'game.duoInvitedBody': 'Si chacun réalise sa part, la récompense double 🤝',
     'game.duoAcceptedAction': 'a accepté ton alliance',
@@ -197,7 +198,7 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'contact.recentlyActiveBody': 'A good moment to say hi 👋',
     'contact.acquaintanceAction': 'is now an Acquaintance',
     'contact.acquaintanceBody': 'You talk enough to know each other: a good start 👋',
-    ...BATTERY_TEMPLATES.en,
+    ...BATTERY_TEMPLATES.en, ...UNREACHABLE_TEMPLATES.en,
     'game.duoInvitedAction': 'offers you an alliance for the week',
     'game.duoInvitedBody': 'If you each play your part, the reward doubles 🤝',
     'game.duoAcceptedAction': 'accepted your alliance',
@@ -319,7 +320,7 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'contact.recentlyActiveBody': '¡Buen momento para saludar! 👋',
     'contact.acquaintanceAction': 'ahora es un Conocido',
     'contact.acquaintanceBody': 'Habláis lo bastante como para conoceros: buen comienzo 👋',
-    ...BATTERY_TEMPLATES.es,
+    ...BATTERY_TEMPLATES.es, ...UNREACHABLE_TEMPLATES.es,
     'game.duoInvitedAction': 'te propone una alianza para la semana',
     'game.duoInvitedBody': 'Si cada uno cumple su parte, la recompensa se duplica 🤝',
     'game.duoAcceptedAction': 'aceptó tu alianza',
@@ -441,7 +442,7 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'contact.recentlyActiveBody': 'Bom momento para dizer oi 👋',
     'contact.acquaintanceAction': 'agora é um Conhecido',
     'contact.acquaintanceBody': 'Vocês conversam o bastante para se conhecer: um bom começo 👋',
-    ...BATTERY_TEMPLATES.pt,
+    ...BATTERY_TEMPLATES.pt, ...UNREACHABLE_TEMPLATES.pt,
     'game.duoInvitedAction': 'propõe a você uma aliança para a semana',
     'game.duoInvitedBody': 'Se cada um fizer a sua parte, a recompensa dobra 🤝',
     'game.duoAcceptedAction': 'aceitou a sua aliança',
@@ -563,7 +564,7 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'contact.recentlyActiveBody': 'Ein guter Moment, Hallo zu sagen 👋',
     'contact.acquaintanceAction': 'ist jetzt eine Bekanntschaft',
     'contact.acquaintanceBody': 'Ihr schreibt genug, um euch zu kennen: ein guter Anfang 👋',
-    ...BATTERY_TEMPLATES.de,
+    ...BATTERY_TEMPLATES.de, ...UNREACHABLE_TEMPLATES.de,
     'game.duoInvitedAction': 'bietet dir ein Bündnis für diese Woche an',
     'game.duoInvitedBody': 'Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung 🤝',
     'game.duoAcceptedAction': 'hat dein Bündnis angenommen',
@@ -685,7 +686,7 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'contact.recentlyActiveBody': 'Il momento giusto per salutare 👋',
     'contact.acquaintanceAction': 'è ora un Conoscente',
     'contact.acquaintanceBody': 'Vi scrivete abbastanza da conoscervi: un buon inizio 👋',
-    ...BATTERY_TEMPLATES.it,
+    ...BATTERY_TEMPLATES.it, ...UNREACHABLE_TEMPLATES.it,
     'game.duoInvitedAction': 'ti propone un’alleanza per la settimana',
     'game.duoInvitedBody': 'Se ognuno fa la sua parte, la ricompensa raddoppia 🤝',
     'game.duoAcceptedAction': 'ha accettato la tua alleanza',
@@ -807,7 +808,7 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'contact.recentlyActiveBody': 'إنها لحظة مناسبة لإلقاء التحية 👋',
     'contact.acquaintanceAction': 'أصبح الآن معرفة',
     'contact.acquaintanceBody': 'تتبادلان ما يكفي لتتعارفا: بداية جيدة 👋',
-    ...BATTERY_TEMPLATES.ar,
+    ...BATTERY_TEMPLATES.ar, ...UNREACHABLE_TEMPLATES.ar,
     'game.duoInvitedAction': 'يعرض عليك تحالفًا لهذا الأسبوع',
     'game.duoInvitedBody': 'إذا أدّى كلٌّ منكما دوره، تتضاعف المكافأة 🤝',
     'game.duoAcceptedAction': 'قبِل تحالفك',
@@ -929,7 +930,7 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'contact.recentlyActiveBody': '正是打个招呼的好时机 👋',
     'contact.acquaintanceAction': '现在是你的熟人了',
     'contact.acquaintanceBody': '你们交流得足够多，已经互相认识了：这是个好的开始 👋',
-    ...BATTERY_TEMPLATES['zh-Hans'],
+    ...BATTERY_TEMPLATES['zh-Hans'], ...UNREACHABLE_TEMPLATES['zh-Hans'],
     'game.duoInvitedAction': '邀请你本周结成同盟',
     'game.duoInvitedBody': '你们各自完成自己的部分，奖励翻倍 🤝',
     'game.duoAcceptedAction': '接受了你的同盟',

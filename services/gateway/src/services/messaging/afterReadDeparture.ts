@@ -6,7 +6,7 @@ export type AfterReadDeparturePrisma = Pick<PrismaClient, 'message' | 'messageSt
 
 export type AfterReadRegard = { readonly from: Date; readonly to: Date };
 
-/** Lectures relues par passe, sur l'index `(conversationId, participantId, readAt)`. */
+/** Lectures relues par passe, sur le préfixe `(conversationId, participantId)` de l'index des accusés. */
 export const DEPARTURE_READ_PAGE = 500;
 /** Au-delà, le reste attend la sortie déclarée par le client ou le plafond de rétention. */
 export const DEPARTURE_READ_MAX_PAGES = 20;
@@ -17,12 +17,14 @@ const within = (at: Date, regards: readonly AfterReadRegard[]) =>
 /**
  * Ce qu'un lecteur qui QUITTE a vu et doit voir disparaître (#18556) : les
  * flammes-œil d'un autre, encore servies dans la conversation, dont il porte un
- * `readAt` posé PENDANT un de ses regards (`regards`, la conversation à
+ * `exactReadAt` posé PENDANT un de ses regards (`regards`, la conversation à
  * l'écran) et que rien n'a encore consommées.
  *
- * Un `readAt` posé hors de tout regard vient d'un accusé qui n'affiche rien —
- * réponse depuis une bannière, widget, autre conversation à l'écran : il ne
- * prouve pas que la flamme a été vue, et la ligne ne dit pas d'où il vient.
+ * `exactReadAt`, jamais `readAt` : l'accusé HÉRITÉ grave `readAt` sur toute la
+ * plage jusqu'à la frontière rapportée, messages survolés compris — il ne
+ * prouve pas qu'une flamme a été vue. Seul l'accusé EXACT (la liste affichée)
+ * pose `exactReadAt`. Un accusé posé hors de tout regard (bannière, widget,
+ * autre conversation à l'écran) ne compte pas davantage.
  *
  * La lecture part des ACCUSÉS du lecteur dans ses regards, jamais des
  * messages de la conversation : son coût suit ce qui a été lu pendant la
@@ -48,20 +50,20 @@ export async function readAfterReadIdsAtDeparture(
         conversationId,
         participantId,
         AND: [
-          { OR: regards.map(({ from, to }) => ({ readAt: { gte: from, lte: to } })) },
+          { OR: regards.map(({ from, to }) => ({ exactReadAt: { gte: from, lte: to } })) },
           { OR: [...unsetOrNull('ephemeralExpiresAt').OR, { ephemeralExpiresAt: { gt: now } }] },
         ],
       },
-      select: { messageId: true, readAt: true },
-      orderBy: [{ readAt: 'asc' }, { id: 'asc' }],
+      select: { messageId: true, exactReadAt: true },
+      orderBy: [{ exactReadAt: 'asc' }, { id: 'asc' }],
       skip: page * DEPARTURE_READ_PAGE,
       take: DEPARTURE_READ_PAGE,
-    })) as Array<{ messageId: string; readAt: Date | null }>;
+    })) as Array<{ messageId: string; exactReadAt: Date | null }>;
 
     // Le prédicat de base BORNE, le filet en processus DÉCIDE : sur le
     // connecteur MongoDB, une comparaison peut laisser passer l'absent ou le nul.
     const seen = entries
-      .filter((entry) => entry.readAt instanceof Date && within(entry.readAt, regards))
+      .filter((entry) => entry.exactReadAt instanceof Date && within(entry.exactReadAt, regards))
       .map((entry) => entry.messageId);
 
     if (seen.length > 0) {

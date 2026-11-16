@@ -89,7 +89,7 @@ import {
   withQuotedMessages,
 } from './ephemeralReaderDeadlines';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
-import { isLapsedForReader, projectEphemeralTombstone, type TombstoneRow } from './ephemeralTombstone';
+import { isLapsedForReader, projectEphemeralTombstonePage, type TombstoneRow } from './ephemeralTombstone';
 import {
   isServableThroughQuotes,
   loadInheritedEphemeralDeadlines,
@@ -785,20 +785,8 @@ export function registerMessagesListRoute(
       // bulle. APRÈS tous les enrichissements : ce qu'ils rattachent à la bulle
       // (source d'un transfert, story citée) repartirait sinon avec elle.
       if (ephemeralDeadlines.size > 0 || inheritedDeadlines.size > 0) {
-        const tombstoneAt = new Date();
-        const rows = new Map(messages.map((row: { id: string } & TombstoneRow) => [row.id, row]));
-        mappedMessages.forEach((m, index) => {
-          const row = rows.get(m.id);
-          if (row) {
-            mappedMessages[index] = projectEphemeralTombstone(
-              m,
-              row,
-              ephemeralDeadlines.get(m.id),
-              tombstoneAt,
-              inheritedDeadlines.get(m.id),
-            );
-          }
-        });
+        const tombstoned = projectEphemeralTombstonePage(mappedMessages, messages, ephemeralDeadlines, inheritedDeadlines, new Date());
+        mappedMessages.splice(0, mappedMessages.length, ...tombstoned);
       }
 
       // #8630 — l'échéance servie d'une réponse est la plus proche de la

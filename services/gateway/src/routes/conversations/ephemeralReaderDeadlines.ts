@@ -130,6 +130,8 @@ export async function loadEphemeralReaderDeadlines(
           AND: [{ ephemeralExpiresAt: { isSet: true } }, { ephemeralExpiresAt: { not: null } }],
         },
         select: { messageId: true, participantId: true, ephemeralExpiresAt: true },
+        // Un lecteur porte au plus une ligne par message : la borne est exacte.
+        take: ephemeralIds.length,
       })) as typeof entries;
       entries = [...entries.filter((entry) => entry.participantId !== readerParticipantId), ...own];
     } catch (err) {

@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.app.battery.BatteryPushHandler
 import me.meeshy.app.bring.BringPushHandler
+import me.meeshy.app.phonereachability.PhoneReachabilityPushHandler
 import me.meeshy.app.talkie.TalkieWakeHandler
 import me.meeshy.sdk.call.CallFreshnessChecker
 import me.meeshy.sdk.model.call.CallFreshness
@@ -28,7 +29,9 @@ import javax.inject.Singleton
  *  5. a **talkie wake** (`talkie_incoming`, #17144) ([TalkieWakeHandler]) — a foreground service, never a banner ;
  *  6. a **battery** push (`battery_pull`, `device_battery` app open — #14147) ([BatteryPushHandler]) — a silent reading,
  *     or the SyncPill instead of the banner ;
- *  7. anything else : the message pipeline ([MessageNotificationPresenter]).
+ *  7. a **phone reachability** push (`device_probe`, `device_unreachable` app open — #18737)
+ *     ([PhoneReachabilityPushHandler]) — a silent `POST /me/device/alive`, or the SyncPill instead of the banner ;
+ *  8. anything else : the message pipeline ([MessageNotificationPresenter]).
  *
  * Each stage is isolated (the async EventEmitter rule) : a rendering failure never deprives
  * the observers, an observer failure never deprives the others.
@@ -43,6 +46,7 @@ class PushMessageDispatcher @Inject constructor(
     private val bringHandler: BringPushHandler,
     private val talkieHandler: TalkieWakeHandler,
     private val batteryHandler: BatteryPushHandler,
+    private val phoneReachabilityHandler: PhoneReachabilityPushHandler,
     private val messagePresenter: MessageNotificationPresenter,
     private val freshness: CallFreshnessChecker,
     observers: Set<@JvmSuppressWildcards PushObserver>,
@@ -100,6 +104,7 @@ class PushMessageDispatcher @Inject constructor(
                 bringHandler.handle(push.data, nowMillis) -> Unit
                 talkieHandler.handle(push.data) -> Unit
                 batteryHandler.handle(push) -> Unit
+                phoneReachabilityHandler.handle(push) -> Unit
                 else -> messagePresenter.present(push)
             }
         }

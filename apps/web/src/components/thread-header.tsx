@@ -15,6 +15,7 @@ import { ThreadShareButton } from './thread-share-button';
 import { UnreadBadge } from './unread-badge';
 import { useListeningBand } from '@/lib/now-playing/listening-band';
 import { useBatteryBadge } from '@/lib/battery/use-battery';
+import { usePhoneUnreachableBadge } from '@/lib/phone-reachability/use-phone-reachability';
 import type { ListConversation } from '@/lib/api/list-preview';
 import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
@@ -179,6 +180,7 @@ export function ThreadHeader({
   /* … et ce qu'il écoute ou regarde, au détail que son cercle ouvre (#16729). */
   const peerListening = useListeningBand(group ? undefined : peerKey, currentInterfaceLanguage());
   const peerBattery = useBatteryBadge(group ? undefined : peerKey, currentInterfaceLanguage());
+  const peerUnreachable = usePhoneUnreachableBadge(group ? undefined : peerKey, currentInterfaceLanguage());
   /* « N (M) 🔥 » (#8906) — ce que cette conversation a rapporté au lecteur ;
      dans la grappe d'actions repliée, sous le titre déplié. */
   const engagement = useConversationEngagement(conversation);
@@ -250,7 +252,7 @@ export function ThreadHeader({
   const bandToggles = avatarDoor.kind !== 'toggle' && !preview;
   const peerSignals = group
     ? {}
-    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, ...(peerContour === null ? {} : { ring: peerContour }), ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }), ...(peerListening === undefined ? {} : { listening: peerListening }), ...(peerBattery === undefined ? {} : { battery: peerBattery }) };
+    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, ...(peerContour === null ? {} : { ring: peerContour }), ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }), ...(peerListening === undefined ? {} : { listening: peerListening }), ...(peerBattery === undefined ? {} : { battery: peerBattery }), ...(peerUnreachable === undefined ? {} : { unreachable: peerUnreachable }) };
   const interfaceLanguage = currentInterfaceLanguage();
   const toggleLabel = translate(interfaceLanguage, expanded ? 'thread.header.collapse' : 'thread.header.expand');
   /* LA RECHERCHE DANS LA CONVERSATION — la loupe était un bouton SANS

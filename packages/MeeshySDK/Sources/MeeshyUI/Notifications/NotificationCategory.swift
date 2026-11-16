@@ -123,7 +123,7 @@ public enum NotificationCategory: String, CaseIterable, Sendable {
             return [
                 .friendRequest, .contactRequest, .legacyFriendRequest,
                 .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-                .contactJoined, .contactRecentlyActive, .deviceBattery, .legacyStatusUpdate
+                .contactJoined, .contactRecentlyActive, .deviceBattery, .deviceUnreachable, .legacyStatusUpdate
             ]
         case .groups:
             return [

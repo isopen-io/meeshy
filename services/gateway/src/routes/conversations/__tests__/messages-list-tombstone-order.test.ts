@@ -29,20 +29,20 @@ const PASSES_QUI_RATTACHENT = [
 
 describe('la pierre tombale de la liste vient en dernier (#18556)', () => {
   it('la route appelle la pierre tombale', () => {
-    expect(lastCallOf('projectEphemeralTombstone')).toBeGreaterThan(0);
+    expect(lastCallOf('projectEphemeralTombstonePage')).toBeGreaterThan(0);
   });
 
   it.each(PASSES_QUI_RATTACHENT)('%s passe AVANT la pierre tombale', (pass) => {
     const at = lastCallOf(pass);
 
     expect(at).toBeGreaterThan(0);
-    expect(at).toBeLessThan(lastCallOf('projectEphemeralTombstone'));
+    expect(at).toBeLessThan(lastCallOf('projectEphemeralTombstonePage'));
   });
 
   it('elle reçoit la mort héritée de ce que le message cite', () => {
-    const call = source.slice(lastCallOf('projectEphemeralTombstone'));
+    const call = source.slice(lastCallOf('projectEphemeralTombstonePage'));
 
-    expect(call.slice(0, call.indexOf(');'))).toContain('inheritedDeadlines.get(m.id)');
+    expect(call.slice(0, call.indexOf(');'))).toContain('inheritedDeadlines');
   });
 
   it('une recherche retire l’éphémère échu au lieu d’en servir la bulle', () => {

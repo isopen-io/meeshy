@@ -555,6 +555,7 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "jamais un contenu servi. Effacer son historique cache ce qu'on a reçu, sans défaire " +
       "qu'on se soit parlé.",
   },
+  'messaging/afterReadDeparture.ts': { kind: 'exempt', reads: 1, why: "Départ du lecteur (#18556) : relit l'ÉTAT de ce qu'il a lu pendant un regard pour le brûler chez lui ; aucun contenu rendu." },
   'messaging/consumeAfterReadMessages.ts': {
     kind: 'exempt',
     reads: 1,

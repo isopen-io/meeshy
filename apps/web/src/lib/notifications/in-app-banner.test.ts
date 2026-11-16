@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import { closeConversationPreview, conversationPreviewStore, openConversationPreview } from './conversation-preview';
 import { BATTERY_NOTIFICATION_TYPE } from '@meeshy/shared/types/battery-constants';
+import { PHONE_REACHABILITY_NOTIFICATION_TYPE } from '@meeshy/shared/types/phone-reachability-constants';
 
-import { handBatteryAnnouncer, IN_APP_BATTERY_TYPE, inAppBannerStore, offerInAppBanner, shouldShowBanner } from './in-app-banner';
+import { handBatteryAnnouncer, handPhoneReachabilityAnnouncer, IN_APP_BATTERY_TYPE, IN_APP_PHONE_REACHABILITY_TYPE, inAppBannerStore, offerInAppBanner, shouldShowBanner } from './in-app-banner';
 import { announceBatteryNotification } from '@/lib/battery/battery-pill';
+import { announcePhoneReachabilityNotification } from '@/lib/phone-reachability/phone-reachability-pill';
 import { bannerPresentation, bannerSwipeOutcome } from './in-app-banner-view';
 import type { NotificationRecord } from './record';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
@@ -165,6 +167,34 @@ describe('la batterie d’un Proche, onglet ouvert (#14147)', () => {
     inAppBannerStore.getState().dismiss();
     pillAnnouncementStore.setState({ queue: [] });
     offerInAppBanner(battery(), { pathname: '/c' });
+    expect(inAppBannerStore.getState().current).toBeNull();
+    expect(pillAnnouncementStore.getState().queue).toEqual([]);
+  });
+});
+
+describe('le téléphone injoignable d’un Proche, onglet ouvert (#18737)', () => {
+  test('le type écrit dans la première peinture est celui que la passerelle sert', () => {
+    expect(IN_APP_PHONE_REACHABILITY_TYPE).toBe(PHONE_REACHABILITY_NOTIFICATION_TYPE);
+  });
+
+  const unreachable = () =>
+    record({ type: 'device_unreachable', title: 'Téléphone injoignable', content: 'Ada a un téléphone injoignable depuis 14:10', context: {}, metadata: { reachabilityKind: 'unreachable' } });
+
+  test('ne descend jamais en bannière : la pastille le dit à sa place', () => {
+    inAppBannerStore.getState().dismiss();
+    pillAnnouncementStore.setState({ queue: [] });
+    const release = handPhoneReachabilityAnnouncer((notification) => void announcePhoneReachabilityNotification(notification));
+    offerInAppBanner(unreachable(), { pathname: '/c' });
+    release();
+    expect(inAppBannerStore.getState().current).toBeNull();
+    expect(pillAnnouncementStore.getState().queue.map((entry) => entry.text)).toEqual(['Téléphone injoignable · Ada a un téléphone injoignable depuis 14:10']);
+    pillAnnouncementStore.setState({ queue: [] });
+  });
+
+  test('avant que l’hôte ne confie son annonceur, la notification se tait sans bannière', () => {
+    inAppBannerStore.getState().dismiss();
+    pillAnnouncementStore.setState({ queue: [] });
+    offerInAppBanner(unreachable(), { pathname: '/c' });
     expect(inAppBannerStore.getState().current).toBeNull();
     expect(pillAnnouncementStore.getState().queue).toEqual([]);
   });

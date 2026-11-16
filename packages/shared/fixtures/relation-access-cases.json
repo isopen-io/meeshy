@@ -3715,6 +3715,99 @@
         "reason": "level",
         "requiresConsent": true
       }
+    },
+    {
+      "id": "unreachable-close-consented",
+      "matrix": "Téléphone injoignable (#18737)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.unreachable",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "unreachable-close-without-consent",
+      "matrix": "Téléphone injoignable (#18737)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.unreachable",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "unreachable-friend-gets-nothing",
+      "matrix": "Téléphone injoignable (#18737)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.unreachable",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-analyst-bigboss-device-unreachable",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "ANALYST",
+        "feature": "device.unreachable",
+        "targetRole": "BIGBOSS",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
     }
   ]
 }

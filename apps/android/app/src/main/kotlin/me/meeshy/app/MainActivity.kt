@@ -53,6 +53,9 @@ import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.battery.BatteryConsentLedger
 import me.meeshy.sdk.battery.BatterySettingsGateway
 import me.meeshy.sdk.battery.BatteryStore
+import me.meeshy.sdk.phonereachability.PhoneReachabilityConsentLedger
+import me.meeshy.sdk.phonereachability.PhoneReachabilitySettingsGateway
+import me.meeshy.sdk.phonereachability.PhoneReachabilityStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.SystemBarsAppearance
 import me.meeshy.sdk.model.call.CallLinkRequest
@@ -68,6 +71,9 @@ import me.meeshy.ui.component.LocalPresenceStore
 import me.meeshy.ui.component.battery.LocalBatteryConsentLedger
 import me.meeshy.ui.component.battery.LocalBatterySettings
 import me.meeshy.ui.component.battery.LocalBatteryStore
+import me.meeshy.ui.component.phonereachability.LocalPhoneReachabilityConsentLedger
+import me.meeshy.ui.component.phonereachability.LocalPhoneReachabilitySettings
+import me.meeshy.ui.component.phonereachability.LocalPhoneReachabilityStore
 import me.meeshy.ui.component.video.LocalVideoPictureInPicture
 import me.meeshy.ui.component.video.VideoPictureInPictureCoordinator
 import me.meeshy.ui.profile.LocalProfileGameSlot
@@ -115,6 +121,16 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var batteryConsent: BatteryConsentLedger
+
+    /** Le téléphone injoignable des Proches (#18737) : [LocalPhoneReachabilityStore] le fournit à l'en-tête, aux avatars, aux fiches. */
+    @Inject
+    lateinit var phoneReachabilityStore: PhoneReachabilityStore
+
+    @Inject
+    lateinit var phoneReachabilitySettings: PhoneReachabilitySettingsGateway
+
+    @Inject
+    lateinit var phoneReachabilityConsent: PhoneReachabilityConsentLedger
 
     /** Qui a l'écran de quelle conversation ouvert : [LocalConversationViewers] le fournit aux avatars. */
     @Inject
@@ -239,6 +255,9 @@ class MainActivity : ComponentActivity() {
                         LocalBatteryStore provides batteryStore,
                         LocalBatterySettings provides batterySettings,
                         LocalBatteryConsentLedger provides batteryConsent,
+                        LocalPhoneReachabilityStore provides phoneReachabilityStore,
+                        LocalPhoneReachabilitySettings provides phoneReachabilitySettings,
+                        LocalPhoneReachabilityConsentLedger provides phoneReachabilityConsent,
                         LocalConversationViewers provides conversationViewing.viewers,
                         // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
                         LocalProfileGameSlot provides gameSlot,

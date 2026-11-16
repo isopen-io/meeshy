@@ -314,6 +314,19 @@ describe('emitConversationPreviewUpdate', () => {
     ]);
   });
 
+  it('#18556 — échéances illisibles : un éphémère PAR LECTEUR ne part pas, plutôt que son texte', async () => {
+    const emitted: Emitted[] = [];
+    const flame = { ...latest, content: 'le code du coffre est 4271', ephemeralDuration: 30, effectFlags: 0, expiresAt: new Date('2099-07-09T11:00:00Z') };
+    const prisma = {
+      ...makePrisma([{ id: 'p-A', userId: 'user-A' }], flame as any),
+      messageStatusEntry: { findMany: jest.fn(async () => { throw new Error('mongo down'); }) },
+    };
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(JSON.stringify(emitted)).not.toContain('4271');
+  });
+
   it("un éphémère actif garde son échéance mais sa pièce ne sert aucun détail (#15701)", async () => {
     const emitted: Emitted[] = [];
     const ephemeral = {

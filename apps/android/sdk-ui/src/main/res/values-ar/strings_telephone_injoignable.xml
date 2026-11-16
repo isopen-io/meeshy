@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le téléphone injoignable (#18737) : android-only tant que les clés phone.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="phone_reachability_someone">أحد المقرّبين</string>
+    <string name="phone_reachability_pill_unreachable">هاتف %1$s لا يمكن الوصول إليه منذ %2$s</string>
+    <string name="phone_reachability_pill_reachable">هاتف %1$s يستجيب من جديد</string>
+    <string name="phone_reachability_card_since">الهاتف لا يمكن الوصول إليه منذ %1$s</string>
+    <string name="phone_reachability_cause_battery">البطارية فارغة على الأرجح</string>
+    <string name="phone_reachability_cause_network">لا شبكة أو وضع الطيران على الأرجح</string>
+    <string name="phone_reachability_a11y">هاتف %1$s لا يمكن الوصول إليه</string>
+    <string name="phone_reachability_share_global_title">إعلام مقرّبيّ إذا تعذّر الوصول إلى هاتفي</string>
+    <string name="phone_reachability_share_global_scope">يعرف مقرّبوك منذ متى توقف عن الاستجابة، ولا يعرفون مكانك أبدًا.</string>
+    <string name="phone_reachability_share_person">إعلام %1$s إذا تعذّر الوصول إلى هاتفي</string>
+    <string name="phone_reachability_share_person_scope">يعرف %1$s منذ متى توقف هاتفك عن الاستجابة، والسبب المحتمل.</string>
+    <string name="phone_reachability_consent_title">إعلام %1$s إذا تعذّر الوصول إلى هاتفك؟</string>
+    <string name="phone_reachability_consent_body">إذا توقف عن الاستجابة، سيعرف %1$s منذ متى. يمكن تغييره من صفحته.</string>
+    <string name="phone_reachability_consent_checkbox">إعلام %1$s إذا تعذّر الوصول إلى هاتفي</string>
+    <string name="phone_reachability_consent_confirm">تأكيد</string>
+    <string name="phone_reachability_consent_later">ليس الآن</string>
+</resources>

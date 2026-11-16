@@ -20,6 +20,7 @@ const de = {
   'battery.a11y.charging': 'Akku bei {level} %, lädt',
   'battery.a11y.off': 'Telefon vermutlich aus',
   'battery.detail.title': 'Akku',
+  'battery.me.title': 'Mein Telefon',
   'battery.phase.low': 'Akku schwach',
   'battery.phase.critical': 'Akku kritisch',
   'battery.phase.off': 'Telefon vermutlich aus',

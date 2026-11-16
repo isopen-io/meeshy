@@ -72,6 +72,7 @@ public object NotificationTypeToggle {
         ) { it.contactRequestEnabled },
         ToggleGroup(setOf("contact_recently_active")) { it.contactActivityEnabled },
         ToggleGroup(setOf("device_battery")) { it.deviceBatteryEnabled },
+        ToggleGroup(setOf("device_unreachable")) { it.deviceUnreachableEnabled },
         ToggleGroup(
             setOf("game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window"),
         ) { it.gameEnabled },

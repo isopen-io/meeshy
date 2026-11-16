@@ -34,6 +34,8 @@ import me.meeshy.sdk.model.conversationinfo.ConversationInfoHero
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.battery.BatteryPersonSection
 import me.meeshy.ui.component.battery.BatteryPersonSurface
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSection
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSurface
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
@@ -134,6 +136,13 @@ internal fun ConversationInfoSheet(
                         userId = peer,
                         name = title,
                         surface = BatteryPersonSurface.CONVERSATION_INFO,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                    )
+                    // Son téléphone injoignable (#18737) : depuis quand, et la cause probable.
+                    PhoneReachabilityPersonSection(
+                        userId = peer,
+                        name = title,
+                        surface = PhoneReachabilityPersonSurface.CONVERSATION_INFO,
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
                     )
                 }

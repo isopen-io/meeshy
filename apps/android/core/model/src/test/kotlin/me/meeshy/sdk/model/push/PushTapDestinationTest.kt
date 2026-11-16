@@ -100,6 +100,12 @@ class PushTapDestinationTest {
     }
 
     @Test
+    fun `le telephone injoignable d un proche ouvre le profil de l emetteur`() {
+        assertThat(resolve(PushPayload(type = "device_unreachable", senderId = "u4")))
+            .isEqualTo(PushTapDestination.Profile("u4"))
+    }
+
+    @Test
     fun `une demande d ami sans expediteur ouvre les notifications`() {
         assertThat(resolve(PushPayload(type = "friend_request"))).isEqualTo(PushTapDestination.Notifications)
     }

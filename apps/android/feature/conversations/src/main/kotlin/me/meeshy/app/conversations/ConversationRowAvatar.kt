@@ -33,6 +33,7 @@ import me.meeshy.ui.component.StoryRingState
 import me.meeshy.ui.component.avatar.AvatarContextMenuItem
 import me.meeshy.ui.component.avatar.AvatarGestures
 import me.meeshy.ui.component.battery.BatteryAvatarBadge
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityAvatarBadge
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.ui.R as UiR
@@ -114,6 +115,8 @@ internal fun ConversationRowAvatar(
             LastSeenTooltip(lastSeen.tip)
             // La batterie du pair (#14147) : rien hors épisode, lue au plus bas niveau.
             BatteryAvatarBadge(userId = peerUserId, name = name, modifier = Modifier.align(Alignment.BottomStart))
+            // Son téléphone injoignable (#18737) : rien quand il répond.
+            PhoneReachabilityAvatarBadge(userId = peerUserId, name = name, modifier = Modifier.align(Alignment.TopStart))
         }
     }
 }

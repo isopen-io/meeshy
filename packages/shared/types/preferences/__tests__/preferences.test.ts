@@ -212,6 +212,7 @@ describe('NotificationPreferenceSchema', () => {
       friendContentEnabled: false,
       contactActivityEnabled: false,
       deviceBatteryEnabled: false,
+      deviceUnreachableEnabled: false,
       gameEnabled: false,
       gamePhotoEnabled: false,
       bringEnabled: false,
@@ -226,6 +227,11 @@ describe('NotificationPreferenceSchema', () => {
   test('« Quand un contact revient sur Meeshy » est reçu par défaut (#8285)', () => {
     expect(NotificationPreferenceSchema.parse({}).contactActivityEnabled).toBe(true);
     expect(NOTIFICATION_PREFERENCE_DEFAULTS.contactActivityEnabled).toBe(true);
+  });
+
+  test('« Le téléphone de mes Proches est injoignable » est reçu par défaut (#18737)', () => {
+    expect(NotificationPreferenceSchema.parse({}).deviceUnreachableEnabled).toBe(true);
+    expect(NOTIFICATION_PREFERENCE_DEFAULTS.deviceUnreachableEnabled).toBe(true);
   });
 
   test('devrait valider le format des heures DND', () => {

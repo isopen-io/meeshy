@@ -57,6 +57,8 @@ const ConversationEncryptionSection = lazy(() => import('./conversation-encrypti
  * pendant un épisode, le relevé à la demande entre Sangs, et ce que je reçois de sa batterie.
  */
 const ConversationBatterySection = lazy(() => import('./battery-panel').then((m) => ({ default: m.ConversationBatterySection })));
+/** LE TÉLÉPHONE INJOIGNABLE DE L'AUTRE (#18737) — dans un direct, seulement pendant un état servi : l'heure et la cause probable. */
+const ConversationPhoneReachabilitySection = lazy(() => import('./phone-reachability-panel').then((m) => ({ default: m.ConversationPhoneReachabilitySection })));
 
 /**
  * **LES DÉTAILS D'UNE CONVERSATION** (#7829) — premier incrément de
@@ -289,6 +291,7 @@ export function ConversationDetailsSheet({
 
         {signedIn && batteryPeerId !== undefined ? (
           <Suspense fallback={null}>
+            <ConversationPhoneReachabilitySection userId={batteryPeerId} language={language} />
             <ConversationBatterySection userId={batteryPeerId} name={title} language={language} deps={deps} />
           </Suspense>
         ) : null}

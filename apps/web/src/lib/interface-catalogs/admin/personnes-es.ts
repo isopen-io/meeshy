@@ -151,6 +151,7 @@ const f = {
   'admin.people.pref.notification.friendContentEnabled': 'Publicaciones de mis amigos',
   'admin.people.pref.notification.contactActivityEnabled': 'Un contacto que vuelve a Meeshy',
   'admin.people.pref.notification.deviceBatteryEnabled': 'Batería baja de un allegado',
+  'admin.people.pref.notification.deviceUnreachableEnabled': 'Teléfono inaccesible de mis allegados',
   'admin.people.pref.notification.gameEnabled': 'Notificación del juego Meeshy',
   'admin.people.pref.notification.gamePhotoEnabled': 'Momentos para inmortalizar (push del juego)',
   'admin.people.pref.notification.bringEnabled': 'Recibir Brings (sonido forzado)',
