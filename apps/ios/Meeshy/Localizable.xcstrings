@@ -34212,6 +34212,54 @@
         }
       }
     },
+    "notifications.banner.peekAction": {
+      "comment": "Action VoiceOver de la bannière in-app d'un message : l'équivalent de la traction vers le bas, qui ouvre la conversation en regard (non lue tant qu'on n'y agit pas).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلقاء نظرة دون تعليمها كمقروءة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ansehen, ohne als gelesen zu markieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peek without marking as read"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirar sin marcar como leído"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regarder sans marquer lu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardare senza segnare come letto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espiar sem marcar como lida"
+          }
+        }
+      }
+    },
     "onboarding.continue": {
       "extractionState": "manual",
       "localizations": {
@@ -245435,53 +245483,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhum estilo tem esse nome. Experimente uma cor, uma fonte ou «escuro»."
-          }
-        }
-      }
-    },
-    "export.card.gallery.open": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عرض الكل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alle ansehen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "See all"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver todo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout voir"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vedi tutti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver tudo"
           }
         }
       }

@@ -227,7 +227,7 @@ struct ConversationRowItem: View {
                     // la propriété exclusive du ScrollView. Le geste « replier
                     // l'aperçu » vit dans l'overlay du menu (+Overlays), hors de tout
                     // contexte scrollable.
-                    .modifier(RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress))
+                    .modifier(RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress, conversationId: conversation.id))
                     .task {
                         guard enableAutoPreviewLoad else { return }
                         await onLoadPreview(.prefetch)
@@ -502,6 +502,9 @@ enum ConversationRowMetrics {
 private struct RowPressBounceModifier: ViewModifier {
     let onTap: () -> Void
     let onTrigger: (CGRect) -> Void
+    /// La rangée se vide le temps de l'aperçu qui naît d'elle (#18722) :
+    /// opacité seule, aucun relayout (`ConcealedWhilePreviewed`).
+    let conversationId: String
 
     @State private var isPressing = false
     /// true quand le long-press a ABOUTI (menu ouvert) : le retour de scale
@@ -524,11 +527,15 @@ private struct RowPressBounceModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .modifier(ConcealedWhilePreviewed(conversationId: conversationId, source: .shared))
+            .scaleEffect(isPressing ? pressedScale : 1.0)
             // Frame globale de la ligne, tenue à jour à chaque layout (scroll
             // compris) dans une boîte INERTE : écrire dans la classe ne
             // déclenche aucune invalidation SwiftUI — une @State CGRect
             // invaliderait la ligne à chaque tick de scroll. `onTrigger` la
-            // lit au déclenchement : point de départ de l'émergence.
+            // lit au déclenchement : le cadre d'où l'aperçu naît et où il
+            // revient. Mesurée HORS de l'échelle d'appui : la carte rejoint la
+            // ligne à sa vraie taille, et la rangée revient sans saut.
             .background(
                 GeometryReader { geo in
                     Color.clear
@@ -538,7 +545,6 @@ private struct RowPressBounceModifier: ViewModifier {
                         }
                 }
             )
-            .scaleEffect(isPressing ? pressedScale : 1.0)
             // Appui : réduction nette, atteinte vers ~0.2 s (léger delay pour
             // que les débuts de scroll/swipe ne fassent pas flasher la ligne).
             // Relâchement : rebond visible UNIQUEMENT si le menu s'est ouvert ;
@@ -596,6 +602,38 @@ private struct RowPressBounceModifier: ViewModifier {
                         )
                 }
             }
+    }
+}
+
+// MARK: - La rangée source se vide pendant l'aperçu (#18722)
+
+/// La rangée d'où l'aperçu d'appui long est né : écrite par la liste à
+/// l'entrée et au retrait de l'aperçu, lue par le modificateur de chaque
+/// rangée. Une boîte À PART : la vider ne ré-évalue ni la liste ni le corps
+/// des rangées (portillon `.equatable()`), seulement leur opacité.
+@MainActor
+final class ConversationPreviewSourceRow: ObservableObject {
+    static let shared = ConversationPreviewSourceRow()
+
+    @Published private(set) var concealedId: String?
+
+    nonisolated deinit {}
+
+    /// Vide la rangée `conversationId` ; nil les rend toutes.
+    func conceal(_ conversationId: String?) {
+        guard concealedId != conversationId else { return }
+        concealedId = conversationId
+    }
+}
+
+/// La rangée se vide pendant que l'aperçu qui naît d'elle est ouvert : l'œil ne
+/// voit qu'une ligne qui se transforme. Seul ce modificateur observe la boîte.
+struct ConcealedWhilePreviewed: ViewModifier {
+    let conversationId: String
+    @ObservedObject var source: ConversationPreviewSourceRow
+
+    func body(content: Content) -> some View {
+        content.opacity(ConversationPreviewMorph.sourceRowOpacity(conversationId: conversationId, concealedId: source.concealedId))
     }
 }
 

@@ -114,7 +114,8 @@ final class ComposerLayerActionsTests: XCTestCase {
         XCTAssertEqual(vm.currentEffects.stickerObjects?.count, 2)
         XCTAssertGreaterThan(vm.zIndex(for: b.id), vm.zIndex(for: a.id),
                              "each new sticker lands on top")
-        XCTAssertNotEqual(a.x, b.x, "cascade offset avoids exact stacking")
+        XCTAssertEqual(a.x, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(b.x, 0.5, accuracy: 0.0001, "un objet neuf se pose toujours au centre de la scène (#18719)")
     }
 
     // MARK: - deleteElement
