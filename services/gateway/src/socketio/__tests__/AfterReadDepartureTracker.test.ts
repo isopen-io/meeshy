@@ -15,6 +15,7 @@ import {
   AFTER_READ_RECHECK_MS,
   AFTER_READ_MAX_HOLD_MS,
   AFTER_READ_MAX_TOUCHED,
+  AFTER_READ_VIEW_STARTS_PER_MINUTE,
   type AfterReadDeparture,
   type AfterReadReader,
 } from '../AfterReadDepartureTracker';
@@ -1126,6 +1127,120 @@ describe('AfterReadDepartureTracker — aucune retenue n’est éternelle : au p
     await elapse(AFTER_READ_VIEW_STOP_GRACE_MS - 1_000, 1_000);
 
     expect(departures).toEqual([]);
+  });
+});
+
+describe('AfterReadDepartureTracker — le débordement des regards reste borné en mémoire (#18556, revue)', () => {
+  afterEach(() => jest.useRealTimers());
+
+  function failingBase() {
+    const base = { down: true };
+    const attempts: AfterReadDeparture[] = [];
+    const built = buildTracker({
+      onDeparture: async (departure) => {
+        attempts.push(departure);
+        if (base.down) throw new Error('mongo down');
+      },
+    });
+    return { ...built, base, attempts };
+  }
+
+  async function cycles(
+    tracker: AfterReadDepartureTracker,
+    clock: { now: Date },
+    count: number,
+  ): Promise<void> {
+    for (let i = 0; i < count; i += 1) {
+      clock.now = at(i * 2);
+      await tracker.viewStart('s-1', 'conv-1');
+      clock.now = at(i * 2 + 1);
+      await tracker.viewStop('s-1', 'conv-1');
+      await settle();
+    }
+  }
+
+  it('pendant une panne, au plus UNE brûlure de débordement est en vol par clé', async () => {
+    jest.useFakeTimers();
+    const { tracker, clock, attempts } = failingBase();
+
+    await cycles(tracker, clock, AFTER_READ_MAX_PERIODS * 4);
+
+    expect(attempts).toHaveLength(1);
+  });
+
+  it('les débordements fusionnés brûlent en un départ borné quand la base revient, sans rien perdre', async () => {
+    jest.useFakeTimers();
+    const { tracker, clock, base, departures } = failingBase();
+
+    await cycles(tracker, clock, AFTER_READ_MAX_PERIODS * 4);
+    await tracker.viewStart('s-1', 'conv-1');
+    base.down = false;
+    for (let i = 0; i < 12; i += 1) {
+      jest.advanceTimersByTime(AFTER_READ_MAX_RETRY_DELAY_MS);
+      await settle();
+    }
+
+    expect(departures.every((departure) => departure.periods.length <= AFTER_READ_MAX_PERIODS)).toBe(true);
+    const covered = (instant: Date) =>
+      departures.some((departure) =>
+        departure.periods.some((period) => period.from <= instant && instant <= period.to),
+      );
+    const overflowed = Array.from({ length: AFTER_READ_MAX_PERIODS * 3 }, (_unused, i) => at(i * 2));
+    expect(overflowed.every(covered)).toBe(true);
+  });
+
+  it('une brûlure de débordement en échec se redemande à intervalle DOUBLÉ', async () => {
+    jest.useFakeTimers();
+    const { tracker, clock, attempts } = failingBase();
+
+    await cycles(tracker, clock, AFTER_READ_MAX_PERIODS + 1);
+    await tracker.viewStart('s-1', 'conv-1');
+    jest.advanceTimersByTime(GRACE_MS);
+    await settle();
+    expect(attempts).toHaveLength(2);
+    jest.advanceTimersByTime(GRACE_MS * 2 - 1);
+    await settle();
+    expect(attempts).toHaveLength(2);
+    jest.advanceTimersByTime(1);
+    await settle();
+    expect(attempts).toHaveLength(3);
+  });
+
+  it('au-delà de AFTER_READ_VIEW_STARTS_PER_MINUTE par socket, un viewing:start n’ouvre plus de regard', async () => {
+    const { tracker, marks } = buildTracker();
+
+    for (let i = 0; i < AFTER_READ_VIEW_STARTS_PER_MINUTE + 5; i += 1) {
+      await tracker.viewStart('s-1', 'conv-1');
+      await tracker.viewStop('s-1', 'conv-1');
+    }
+
+    expect(marks.filter((mark) => mark.viewing)).toHaveLength(AFTER_READ_VIEW_STARTS_PER_MINUTE);
+  });
+
+  it('AUDIT K — tant que la borne n’est pas atteinte, une panne ne fusionne aucun trou : rien de non regardé ne brûle', async () => {
+    jest.useFakeTimers();
+    const { tracker, clock, base, departures } = failingBase();
+
+    await cycles(tracker, clock, AFTER_READ_MAX_PERIODS * 4);
+    await tracker.viewStart('s-1', 'conv-1');
+    base.down = false;
+    for (let i = 0; i < 12; i += 1) {
+      jest.advanceTimersByTime(AFTER_READ_MAX_RETRY_DELAY_MS);
+      await settle();
+    }
+
+    const periods = departures.flatMap((departure) => departure.periods);
+    expect(periods.every((period) => period.to.getTime() - period.from.getTime() <= 60_000)).toBe(true);
+  });
+
+  it('AUDIT L — une socket dont aucun regard ne s’est résolu ne laisse rien derrière sa déconnexion', async () => {
+    const { tracker } = buildTracker({ resolve: () => null });
+
+    await tracker.viewStart('s-ghost', 'conv-1');
+    await tracker.disconnecting('s-ghost');
+
+    const internals = tracker as unknown as { viewStarts: ReadonlyMap<string, unknown> };
+    expect(internals.viewStarts.size).toBe(0);
   });
 });
 

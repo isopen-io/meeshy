@@ -68,6 +68,17 @@ export const AFTER_READ_MAX_HOLD_MS = 10 * 60_000;
 export const AFTER_READ_MAX_RETRY_DELAY_MS = 10 * 60_000;
 /** Au-delà, les regards les plus ANCIENS brûlent aussitôt (`onDeparture`) : aucun n'est jamais jeté. */
 export const AFTER_READ_MAX_PERIODS = 32;
+/** `viewing:start` acceptés par socket et par minute : au-delà, aucun regard ne s'ouvre (le script, pas l'usage). */
+export const AFTER_READ_VIEW_STARTS_PER_MINUTE = 60;
+/**
+ * Regards en débordement gardés EXACTS par clé pendant une panne (deux dates chacun) : en deçà, aucun trou
+ * n'est jamais fusionné. Au-delà — dernier recours, choix du coordinateur sur #18556 — les voisins les plus
+ * proches fusionnent en un intervalle couvrant, qui peut brûler un instant non regardé.
+ */
+export const AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY = 1_024;
+/** Même borne, toutes clés confondues : au-delà, une clé ne garde qu'un seul intervalle couvrant. */
+export const AFTER_READ_MAX_OVERFLOW_PERIODS = 65_536;
+const VIEW_START_WINDOW_MS = 60_000;
 /** Conversations dont un socket garde des regards non consommés ; au-delà, les plus anciennes sont oubliées. */
 export const AFTER_READ_MAX_TOUCHED = 64;
 const MAX_PENDING_OPENINGS = 8;
@@ -79,6 +90,15 @@ type SocketState = {
 };
 
 type Regard = { readonly closed: readonly AfterReadPeriod[]; readonly openedAt: Date | null };
+
+/** Les regards évincés d'une clé, en attente de brûlure : UNE seule brûlure en vol, ou un seul minuteur. */
+type Overflow = {
+  readonly reader: AfterReadReader;
+  readonly periods: readonly AfterReadPeriod[];
+  readonly busy: boolean;
+  readonly attempts: number;
+  readonly timer: ReturnType<typeof setTimeout> | null;
+};
 
 /**
  * `yieldsTo` : l'échéance d'un `viewing:stop` cède à une plus PROCHE armée par la MÊME socket (son
@@ -177,6 +197,8 @@ export class AfterReadDepartureTracker {
   /** Les clés dont le départ a été retenu par un appel : à sa fin, une grâce entière se rouvre. */
   private readonly heldByCall = new Set<string>();
   private readonly queueBySocket = new Map<string, Promise<void>>();
+  private readonly overflows = new Map<string, Overflow>();
+  private readonly viewStarts = new Map<string, readonly number[]>();
 
   constructor(deps: AfterReadDepartureTrackerDependencies) {
     this.resolveReader = deps.resolveReader;
@@ -209,6 +231,7 @@ export class AfterReadDepartureTracker {
 
   /** `viewing:start` — la conversation est à l'écran, au premier plan. */
   viewStart(socketId: string, rawConversationId: string): Promise<void> {
+    if (!this.admitViewStart(socketId)) return Promise.resolve();
     return this.inOrder(socketId, () => this.look(socketId, rawConversationId));
   }
 
@@ -248,6 +271,7 @@ export class AfterReadDepartureTracker {
   disconnecting(socketId: string): Promise<void> {
     return this.inOrder(socketId, async () => {
       this.pendingOpenings.delete(socketId);
+      this.viewStarts.delete(socketId);
       const state = this.sockets.get(socketId);
       if (!state) return;
       [...state.views.values()].forEach((reader) => this.lookAway(socketId, reader));
@@ -486,20 +510,87 @@ export class AfterReadDepartureTracker {
     return closed.slice(overflow);
   }
 
-  /** Une brûlure de débordement en échec se redemande sans fin : un regard évincé n'est jamais jeté. */
+  /** Les regards évincés rejoignent la brûlure de leur clé : une seule en vol, les nouveaux s'y fusionnent. */
   private burnOverflow(reader: AfterReadReader, periods: readonly AfterReadPeriod[]): void {
-    void Promise.resolve()
-      .then(() => this.onDeparture({ ...reader, periods }))
-      .catch((error: unknown) => {
-        this.onError(error);
-        const timer = guardedTimeout({
-          name: 'after-read-overflow',
-          afterMs: AFTER_READ_MAX_RETRY_DELAY_MS,
-          logger: { error: (_message, failure) => this.onError(failure) },
-          run: () => this.burnOverflow(reader, periods),
-        });
-        timer.unref?.();
-      });
+    const key = keyOf(reader);
+    const entry = this.overflows.get(key) ?? { reader, periods: [], busy: false, attempts: 0, timer: null };
+    const merged = this.boundOverflow(key, [...entry.periods, ...periods]);
+    this.overflows.set(key, { ...entry, reader, periods: merged });
+    if (entry.busy || entry.timer !== null) return;
+    void this.flushOverflow(key).catch((error: unknown) => this.onError(error));
+  }
+
+  /**
+   * Brûle ce qui attend pour une clé. En échec, les regards restent (fusionnés, bornés) et se redemandent à
+   * intervalle doublé, comme `retryLater` — jamais oubliés.
+   */
+  private async flushOverflow(key: string): Promise<void> {
+    const entry = this.overflows.get(key);
+    if (!entry || entry.periods.length === 0) {
+      this.overflows.delete(key);
+      return;
+    }
+    const sending = entry.periods.slice(0, AFTER_READ_MAX_PERIODS);
+    this.overflows.set(key, { ...entry, periods: entry.periods.slice(AFTER_READ_MAX_PERIODS), busy: true, timer: null });
+    try {
+      await this.onDeparture({ ...entry.reader, periods: sending });
+    } catch (error) {
+      this.onError(error);
+      this.scheduleOverflowRetry(key, sending);
+      return;
+    }
+    const after = this.overflows.get(key);
+    if (!after || after.periods.length === 0) {
+      this.overflows.delete(key);
+      return;
+    }
+    this.overflows.set(key, { ...after, busy: false, attempts: 0 });
+    await this.flushOverflow(key);
+  }
+
+  private scheduleOverflowRetry(key: string, unsent: readonly AfterReadPeriod[]): void {
+    const current = this.overflows.get(key);
+    if (!current) return;
+    const attempts = current.attempts + 1;
+    const delay = Math.min(this.graceMs * 2 ** Math.min(attempts - 1, 20), AFTER_READ_MAX_RETRY_DELAY_MS);
+    const timer = guardedTimeout({
+      name: 'after-read-overflow',
+      afterMs: delay,
+      logger: { error: (_message, failure) => this.onError(failure) },
+      run: () => {
+        const waiting = this.overflows.get(key);
+        if (waiting) this.overflows.set(key, { ...waiting, timer: null });
+        void this.flushOverflow(key).catch((error: unknown) => this.onError(error));
+      },
+    });
+    timer.unref?.();
+    const periods = this.boundOverflow(key, [...unsent, ...current.periods]);
+    this.overflows.set(key, { ...current, periods, busy: false, attempts, timer });
+  }
+
+  /** Par clé, `AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY` au plus ; au-delà du budget total, un seul intervalle couvrant. */
+  private boundOverflow(key: string, periods: readonly AfterReadPeriod[]): readonly AfterReadPeriod[] {
+    const others = [...this.overflows].reduce(
+      (total, [other, entry]) => (other === key ? total : total + entry.periods.length),
+      0,
+    );
+    const budget =
+      others + AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY > AFTER_READ_MAX_OVERFLOW_PERIODS
+        ? 1
+        : AFTER_READ_MAX_OVERFLOW_PERIODS_PER_KEY;
+    return coalesce(periods, budget);
+  }
+
+  /** Au plus `AFTER_READ_VIEW_STARTS_PER_MINUTE` regards ouverts par socket et par minute. */
+  private admitViewStart(socketId: string): boolean {
+    const now = this.now().getTime();
+    const recent = (this.viewStarts.get(socketId) ?? []).filter((at) => now - at < VIEW_START_WINDOW_MS);
+    if (recent.length >= AFTER_READ_VIEW_STARTS_PER_MINUTE) {
+      this.viewStarts.set(socketId, recent);
+      return false;
+    }
+    this.viewStarts.set(socketId, [...recent, now]);
+    return true;
   }
 
   /** Un départ en attente (appel, autre appareil) se réexamine à intervalle fixe et court, jusqu'au plafond dur. */
@@ -586,6 +677,21 @@ export class AfterReadDepartureTracker {
     this.queueBySocket.set(socketId, settled);
     return run;
   }
+}
+
+/**
+ * Ramène des regards à `max` intervalles en fusionnant, tant qu'il le faut, les deux voisins les plus PROCHES
+ * en un intervalle qui les couvre : rien n'est perdu, seul le trou le plus court est ajouté.
+ */
+function coalesce(periods: readonly AfterReadPeriod[], max: number): readonly AfterReadPeriod[] {
+  const sorted = [...periods].sort((a, b) => a.from.getTime() - b.from.getTime());
+  if (sorted.length <= max) return sorted;
+  const gaps = sorted.slice(1).map((next, i) => next.from.getTime() - sorted[i].to.getTime());
+  const closest = gaps.indexOf(Math.min(...gaps));
+  const left = sorted[closest];
+  const right = sorted[closest + 1];
+  const merged = { from: left.from, to: right.to > left.to ? right.to : left.to };
+  return coalesce([...sorted.slice(0, closest), merged, ...sorted.slice(closest + 2)], max);
 }
 
 function conversationIdOf(data: unknown): string | null {
