@@ -25,10 +25,15 @@ public struct NotificationToastView: View {
 
     /// La présence servie de l'ACTEUR (#10956) — seulement quand l'avatar le représente :
     /// retombé sur la photo du groupe (`toastAvatarURL`), il ne porte aucun point de personne.
-    private var actorPresence: PresenceState? {
+    private var actorPresence: PresenceState? { Self.actorPresence(for: event, resolver: presenceResolver) }
+
+    /// La présence SERVIE de l'acteur, ou rien : l'avatar d'un groupe n'en porte pas, et
+    /// le résolveur ne rend que ce que la passerelle a servi (jamais fabriquée). Partagée
+    /// avec l'enveloppe qui repeint la bannière tirée (`BannerToConversationMorph`).
+    static func actorPresence(for event: SocketNotificationEvent, resolver: ((String) -> PresenceState?)?) -> PresenceState? {
         let showsGroup = (event.senderAvatar?.isEmpty ?? true) && !event.isDirect && event.conversationAvatar?.isEmpty == false
         guard !showsGroup else { return nil }
-        return event.senderId.flatMap { presenceResolver?($0) }
+        return event.senderId.flatMap { resolver?($0) }
     }
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -313,6 +318,8 @@ public struct BannerToConversationMorph: View {
     let origin: CGRect
 
     @Environment(\.colorScheme) private var colorScheme
+    /// La même présence servie que la bannière : l'enveloppe la repeint, elle ne la fabrique pas.
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
     private var theme: ThemeManager { ThemeManager.shared }
 
     public init(event: SocketNotificationEvent, headline: String, message: String?, progress: CGFloat, origin: CGRect) {
@@ -356,7 +363,8 @@ public struct BannerToConversationMorph: View {
                     name: event.toastAvatarName,
                     context: .notification,
                     accentColor: DynamicColorGenerator.colorForName(event.toastAvatarColorSeed),
-                    avatarURL: event.toastAvatarURL
+                    avatarURL: event.toastAvatarURL,
+                    presenceState: NotificationToastView.actorPresence(for: event, resolver: presenceResolver)
                 )
                 Text(headline)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
