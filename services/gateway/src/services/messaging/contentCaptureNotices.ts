@@ -395,31 +395,31 @@ async function tallyOnExistingNotice(
     readonly input: ContentCaptureInput;
     readonly now: Date;
   },
-): Promise<boolean> {
+): Promise<'tallied' | 'already-noticed' | 'budget-spent'> {
   const { onceKey, actor, message, input, now } = params;
   try {
     const noticeId = await deps.dedup.get(noticeIdKey(onceKey));
-    if (!noticeId || !input.report.captureId) return false;
+    if (!noticeId || !input.report.captureId) return 'already-noticed';
     const row = (await deps.prisma.message.findUnique({
       where: { id: noticeId },
       select: { id: true, conversationId: true, deletedAt: true, metadata: true },
     })) as { id: string; conversationId: string; deletedAt: Date | null; metadata: unknown } | null;
     const current = row && !row.deletedAt && row.conversationId === input.conversationId ? parseCaptureNotice(row.metadata) : null;
-    if (!current || current.capturedMessageId !== message.id || current.actor.participantId !== actor.notice.participantId) return false;
+    if (!current || current.capturedMessageId !== message.id || current.actor.participantId !== actor.notice.participantId) return 'already-noticed';
 
-    const isNewCapture = (current.count ?? 1) < MAX_CAPTURE_COUNT && await deps.dedup.setnx(
-      captureSeenKey(onceKey, input.report.captureId, 'count'), '1', CAPTURE_ONCE_TTL_SECONDS,
-    );
-    const seconds = await claimedSeconds(deps, { onceKey, report: input.report });
-    if (!isNewCapture && seconds === 0) return false;
-    // La réécriture compte dans le budget horaire des avis : sans lui, des
-    // captureId neufs à chaque déclaration réécriraient et remettraient l'avis
-    // sans borne (audit #18830, 2).
+    // La réécriture compte dans le budget horaire des avis, AVANT de consommer
+    // les clés « déjà vu » : un refus ne perd ni la capture ni sa durée, et
+    // arrête la déclaration comme à la création (audit #18830, 2 et a/c).
     const withinHourlyBudget = await deps.limiter.checkLimit(
       captureRateLimitKey({ actorParticipantId: actor.notice.participantId, conversationId: input.conversationId }),
       SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY,
     );
-    if (!withinHourlyBudget) return false;
+    if (!withinHourlyBudget) return 'budget-spent';
+    const isNewCapture = (current.count ?? 1) < MAX_CAPTURE_COUNT && await deps.dedup.setnx(
+      captureSeenKey(onceKey, input.report.captureId, 'count'), '1', CAPTURE_ONCE_TTL_SECONDS,
+    );
+    const seconds = await claimedSeconds(deps, { onceKey, report: input.report });
+    if (!isNewCapture && seconds === 0) return 'already-noticed';
 
     const next = captureNoticeMetadata({
       actor: current.actor,
@@ -435,13 +435,13 @@ async function tallyOnExistingNotice(
       data: { content: captureNoticeFallbackText(next), metadata: next },
     } as never);
     await deliverNotice(deps, { written, actor, message, now });
-    return true;
+    return 'tallied';
   } catch (error) {
     logger.warn('capture notice not tallied', {
       messageId: message.id,
       error: error instanceof Error ? error.message : String(error),
     });
-    return false;
+    return 'already-noticed';
   }
 }
 
@@ -464,7 +464,7 @@ async function noticeOne(
   const { actor, message, nature, input, now } = params;
   const onceKey = captureOnceKey({ actorParticipantId: actor.notice.participantId, messageId: message.id, kind: input.report.kind });
   if (!(await deps.dedup.setnx(onceKey, '1', CAPTURE_ONCE_TTL_SECONDS))) {
-    return (await tallyOnExistingNotice(deps, { onceKey, actor, message, input, now })) ? 'tallied' : 'already-noticed';
+    return tallyOnExistingNotice(deps, { onceKey, actor, message, input, now });
   }
 
   const withinHourlyBudget = await deps.limiter.checkLimit(

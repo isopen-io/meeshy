@@ -376,7 +376,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #9617 — la capture déclarée relit les messages désignés par
   // `CAPTURED_MESSAGE_SELECT` : identité, horloge, auteur par son seul
   // `senderId` et colonnes de la loi de sortie — jamais la relation `sender`.
-  'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #18830 — la seconde lecture relit l'avis à compter (id, conversation, suppression, métadonnée).
+  'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #16557 — la troisième lecture est celle de `loadMessageReadableByReader` (la forme « demande »), même projection sans contenu.
