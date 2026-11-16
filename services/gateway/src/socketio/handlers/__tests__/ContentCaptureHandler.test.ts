@@ -94,6 +94,8 @@ function harness(overrides: { authenticated?: boolean; member?: boolean; allowed
       del: async (key) => {
         keys.delete(key);
       },
+      get: async () => null,
+      set: async () => undefined,
     },
     limiter: { checkLimit: async () => overrides.allowed ?? true },
     mayRead: async () => true,
@@ -118,6 +120,12 @@ describe('handleContentCapture', () => {
     expect(h.created).toHaveLength(1);
     expect(h.created[0]).toMatchObject({ conversationId: CONV, senderId: PARTICIPANT, messageType: 'system' });
     expect(h.broadcasts).toHaveLength(1);
+  });
+
+  it('relaie la durée d’un enregistrement déclarée par le socket (#18830)', async () => {
+    const h = harness();
+    await handleContentCapture('socket-1', payload({ kind: 'recording', recordingSeconds: 42 }), h.deps);
+    expect(h.created[0]).toMatchObject({ metadata: expect.objectContaining({ captureKind: 'recording', recordedSeconds: 42 }) });
   });
 
   it('refuse un socket non authentifié', async () => {

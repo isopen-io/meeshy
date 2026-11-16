@@ -74,6 +74,7 @@ import {
   captureNoticeFallbackText,
   captureNoticeMetadata,
   captureNoticeOutcomeOf,
+  parseCaptureNotice,
   type CaptureNoticeActor,
   type CapturedNature,
 } from '@meeshy/shared/utils/capture-notice';
@@ -104,6 +105,9 @@ export const MAX_NOTICES_PER_REPORT = 10;
 export type CaptureDedupStore = {
   setnx(key: string, value: string, ttlSeconds?: number): Promise<boolean>;
   del(key: string): Promise<void>;
+  /** #18830 — l'identifiant de l'avis déjà écrit, pour y compter les captures suivantes. */
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttlSeconds?: number): Promise<void>;
 };
 
 export type CaptureRateLimiter = {
@@ -184,6 +188,13 @@ export function captureOnceKey(params: {
 }): string {
   return `capture-notice:${params.actorParticipantId}:${params.messageId}:${params.kind}`;
 }
+
+/** #18830 — où l'avis écrit pour (acteur, message, sorte) se retrouve. */
+const noticeIdKey = (onceKey: string): string => `${onceKey}:notice`;
+
+/** #18830 — une capture (son `captureId`) ne se compte qu'une fois ; sa durée ne s'additionne qu'une fois. */
+const captureSeenKey = (onceKey: string, captureId: string, part: 'count' | 'seconds'): string =>
+  `${onceKey}:${part}:${captureId}`;
 
 export function captureRateLimitKey(params: { readonly actorParticipantId: string; readonly conversationId: string }): string {
   return `${params.actorParticipantId}:${params.conversationId}`;
@@ -340,6 +351,87 @@ async function deliverNotice(
   }
 }
 
+/**
+ * #18830 — la durée d'un enregistrement s'additionne UNE fois par `captureId` :
+ * la fin d'un enregistrement se déclare avec l'identifiant de son début, et un
+ * réessai ne double rien. Sans identifiant, aucune durée n'est comptée.
+ */
+async function claimedSeconds(
+  deps: ContentCaptureDeps,
+  params: { readonly onceKey: string; readonly report: ContentCaptureBody },
+): Promise<number> {
+  const { report, onceKey } = params;
+  if (report.kind !== 'recording' || !report.captureId || !report.recordingSeconds) return 0;
+  const first = await deps.dedup.setnx(captureSeenKey(onceKey, report.captureId, 'seconds'), '1', CAPTURE_ONCE_TTL_SECONDS);
+  return first ? report.recordingSeconds : 0;
+}
+
+async function rememberNoticeId(deps: ContentCaptureDeps, params: { readonly onceKey: string; readonly written: unknown }): Promise<void> {
+  const id = (params.written as { id?: unknown }).id;
+  if (typeof id !== 'string') return;
+  try {
+    await deps.dedup.set(noticeIdKey(params.onceKey), id, CAPTURE_ONCE_TTL_SECONDS);
+  } catch (error) {
+    logger.warn('capture notice id not remembered', { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+/**
+ * #18830 — une capture SUIVANTE de la même sorte ne crée pas d'avis : elle se
+ * compte sur celui qui existe (nombre de captures distinctes, durée cumulée
+ * des enregistrements), qui est réécrit puis remis de nouveau à son audience
+ * sous le MÊME identifiant. Un avis introuvable, supprimé ou qui ne nomme pas
+ * ce message n'est pas touché — rien n'est recréé. Ne rejette jamais.
+ */
+async function tallyOnExistingNotice(
+  deps: ContentCaptureDeps,
+  params: {
+    readonly onceKey: string;
+    readonly actor: Actor;
+    readonly message: CapturedMessage;
+    readonly input: ContentCaptureInput;
+    readonly now: Date;
+  },
+): Promise<void> {
+  const { onceKey, actor, message, input, now } = params;
+  try {
+    const noticeId = await deps.dedup.get(noticeIdKey(onceKey));
+    if (!noticeId || !input.report.captureId) return;
+    const isNewCapture = await deps.dedup.setnx(
+      captureSeenKey(onceKey, input.report.captureId, 'count'), '1', CAPTURE_ONCE_TTL_SECONDS,
+    );
+    const seconds = await claimedSeconds(deps, { onceKey, report: input.report });
+    if (!isNewCapture && seconds === 0) return;
+
+    const row = (await deps.prisma.message.findUnique({
+      where: { id: noticeId },
+      select: { id: true, conversationId: true, deletedAt: true, metadata: true },
+    })) as { id: string; conversationId: string; deletedAt: Date | null; metadata: unknown } | null;
+    const current = row && !row.deletedAt && row.conversationId === input.conversationId ? parseCaptureNotice(row.metadata) : null;
+    if (!current || current.capturedMessageId !== message.id || current.actor.participantId !== actor.notice.participantId) return;
+
+    const next = captureNoticeMetadata({
+      actor: current.actor,
+      capturedMessageId: current.capturedMessageId,
+      nature: current.nature,
+      captureKind: current.captureKind,
+      sentAt: new Date(current.sentAt),
+      count: (current.count ?? 1) + (isNewCapture ? 1 : 0),
+      recordedSeconds: (current.recordedSeconds ?? 0) + seconds,
+    });
+    const written = await deps.prisma.message.update({
+      where: { id: noticeId },
+      data: { content: captureNoticeFallbackText(next), metadata: next },
+    } as never);
+    await deliverNotice(deps, { written, actor, message, now });
+  } catch (error) {
+    logger.warn('capture notice not tallied', {
+      messageId: message.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function noticeOne(
   deps: ContentCaptureDeps,
   params: {
@@ -352,7 +444,10 @@ async function noticeOne(
 ): Promise<NoticeAttempt> {
   const { actor, message, nature, input, now } = params;
   const onceKey = captureOnceKey({ actorParticipantId: actor.notice.participantId, messageId: message.id, kind: input.report.kind });
-  if (!(await deps.dedup.setnx(onceKey, '1', CAPTURE_ONCE_TTL_SECONDS))) return 'already-noticed';
+  if (!(await deps.dedup.setnx(onceKey, '1', CAPTURE_ONCE_TTL_SECONDS))) {
+    await tallyOnExistingNotice(deps, { onceKey, actor, message, input, now });
+    return 'already-noticed';
+  }
 
   const withinHourlyBudget = await deps.limiter.checkLimit(
     captureRateLimitKey({ actorParticipantId: actor.notice.participantId, conversationId: input.conversationId }),
@@ -363,12 +458,17 @@ async function noticeOne(
     return 'budget-spent';
   }
 
+  const seconds = await claimedSeconds(deps, { onceKey, report: input.report });
+  if (input.report.captureId) {
+    await deps.dedup.setnx(captureSeenKey(onceKey, input.report.captureId, 'count'), '1', CAPTURE_ONCE_TTL_SECONDS);
+  }
   const metadata = captureNoticeMetadata({
     actor: actor.notice,
     capturedMessageId: message.id,
     nature,
     captureKind: input.report.kind,
     sentAt: new Date(message.createdAt),
+    recordedSeconds: seconds,
   });
   const written = await postSystemNotice(
     { prisma: deps.prisma },
@@ -385,6 +485,7 @@ async function noticeOne(
     },
   );
   if (written !== null) {
+    await rememberNoticeId(deps, { onceKey, written });
     await deliverNotice(deps, { written, actor, message, now });
     return 'written';
   }

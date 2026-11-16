@@ -1,5 +1,6 @@
 /**
- * Audit #9629 (1) — un avis de capture n'est pas un contenu. On ne le cite, ne
+ * Audit #9629 (1) — un avis de capture n'est pas un contenu. Depuis #18830 il se
+ * CITE (sa citation est expurgée : `servedQuotedMessage`) ; on ne le
  * le transfère, ne le met en favori ni ne l'épingle — pour personne : chacun de
  * ces gestes le ferait voyager hors de son audience. Réagir lui était déjà
  * refusé (`ReactionService` refuse tout message système).
@@ -64,9 +65,9 @@ const prismaWith = (row: typeof NOTICE) => ({
   messageStar: { create: jest.fn<any>().mockResolvedValue({ conversationId: CONV, createdAt: new Date() }) },
 });
 
-describe('un avis de capture ne se cite pas', () => {
-  it('refuse la réponse qui le cite, admet celle qui cite un message ordinaire', async () => {
-    expect((await admitAttachmentReply(prismaWith(NOTICE) as never, { conversationId: CONV, replyToId: 'notice' })).ok).toBe(false);
+describe('un avis de capture se cite, mais sa citation ne dit ni qui ni quoi (#18830)', () => {
+  it('admet la réponse qui le cite, comme celle qui cite un message ordinaire', async () => {
+    expect((await admitAttachmentReply(prismaWith(NOTICE) as never, { conversationId: CONV, replyToId: 'notice' })).ok).toBe(true);
     expect((await admitAttachmentReply(prismaWith(PLAIN) as never, { conversationId: CONV, replyToId: 'plain' })).ok).toBe(true);
   });
 });
