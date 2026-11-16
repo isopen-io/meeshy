@@ -156,6 +156,18 @@ struct MessageOverlayMenu: View {
         return windowFrame.offsetBy(dx: -containerOrigin.x, dy: -containerOrigin.y)
     }
 
+    /// **La bulle se SOULÈVE de sa cellule, elle ne surgit pas en fondu.** La
+    /// cellule du fil se cache dès l'ouverture (`isHiddenForOverlay`) : l'aperçu
+    /// doit donc déjà être là, opaque, posé exactement sur elle, puis monter à
+    /// sa place — et revenir de même à la fermeture. Partir de l'opacité 0
+    /// faisait clignoter le message : il disparaissait du fil, puis une copie
+    /// translucide glissait vers le menu. Sans cellule connue, ou sous Réduire
+    /// les animations (tout est déjà à sa place), seul le fondu reste.
+    nonisolated static func previewOpacity(isVisible: Bool, hasSourceFrame: Bool, reduceMotion: Bool) -> Double {
+        if hasSourceFrame && !reduceMotion { return 1 }
+        return isVisible ? 1 : 0
+    }
+
     // Expanded emoji set — far more than fits in the viewport, so the
     // quick reaction strip becomes horizontally scrollable. The first 6
     // are the iMessage-style "popular" defaults (still visible without
@@ -428,7 +440,7 @@ struct MessageOverlayMenu: View {
                     y: settled ? nlBubbleMidY : nlSourceMidY
                 )
                 .offset(y: clusterDragOffset)
-                .opacity(isVisible ? 1 : 0)
+                .opacity(Self.previewOpacity(isVisible: isVisible, hasSourceFrame: hasSourceFrame, reduceMotion: reduceMotion))
 
                 // Barre de réactions AU-DESSUS de l'aperçu (native-lean) — montée
                 // seulement si la loi ouvre la réaction (`canReact`).

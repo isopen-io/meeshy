@@ -118,8 +118,8 @@ public enum MeeshyAnimation {
     public nonisolated static let bannerPullMorph = Animation.spring(response: 0.42, dampingFraction: 0.92)
     /// L'enveloppe arrivée au plein écran s'efface devant la conversation posée dessous, sans disparaître d'une image.
     public nonisolated static let bannerMorphFade = Animation.easeOut(duration: 0.24)
-    /// L'aperçu d'appui long qui naît de la ligne (#18722) : le cadre de la rangée s'étend jusqu'à la carte, part vite et se pose sans trembler.
-    public nonisolated static let previewMorph = Animation.spring(response: 0.42, dampingFraction: 0.82)
+    /// L'aperçu d'appui long qui naît de la ligne (#18722) : le cadre de la rangée s'étend jusqu'à la carte en un zoom qu'on VOIT (mesuré au simulateur : à 0,42 la carte était posée en 250 ms), et se pose sans trembler.
+    public nonisolated static let previewMorph = Animation.spring(response: 0.5, dampingFraction: 0.86)
     /// Le retrait de l'aperçu : la carte redevient la ligne plus vite qu'elle n'en est née, et la rejoint avant que l'overlay ne se retire.
     public nonisolated static let previewMorphReturn = Animation.spring(response: 0.3, dampingFraction: 0.8)
     /// La carte d'aperçu qui recule quand le menu s'étend et revient quand il se réduit (#18723) : le maillon qui suit le menu dans la chaîne élastique franche du menu flottant (deux rangs de retard, même amorti), pour qu'elle arrive après lui et dépasse sa place.
