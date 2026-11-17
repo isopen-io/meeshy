@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { AMI, AUTRE, deferred, flush, HOUR, makeWorld, PARIS, STARTED, T0 } from '@/test-support/shared-location-sharing-world';
+import { AMI, AUTRE, deferred, flush, HOUR, makeAcrossTabs, makeWorld, PARIS, STARTED, T0 } from '@/test-support/shared-location-sharing-world';
 
 import type { SharedLocationFix, SharedLocationVerdict } from './shared-location-sending';
 import { SHARED_LOCATION_RETRY_MS } from './shared-location-sharing';
@@ -484,5 +484,27 @@ describe('un « Arrêter » hors ligne part au retour du réseau (#18388, iso #1
     expect(world.center.entry(AMI)?.precision).toBe('exact');
     expect(rosterOps.hasPendingWithdrawals(world.stored())).toBe(false);
     expect(world.source.following).toBe(1);
+  });
+
+  test('#18431 : un arrêt RÉUSSI dans un onglet n’est jamais défait par un démarrage en vol dans un autre', async () => {
+    const memory = new Map<string, string>();
+    const acrossTabs = makeAcrossTabs();
+    const tabB = makeWorld({ memory, acrossTabs });
+    await tabB.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    const tabA = makeWorld({ memory, acrossTabs });
+    const pending = deferred<SharedLocationVerdict>();
+    tabB.startQueue.push(() => pending.promise);
+    const sharing = tabB.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    await flush();
+    const stopping = tabA.center.stopSharing(AMI);
+    await flush();
+    pending.resolve(STARTED);
+    await sharing;
+    expect(await stopping).toBeNull();
+    expect(tabA.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city' }]);
+    tabB.center.refresh();
+    expect(tabB.center.entry(AMI)).toBeNull();
+    expect(rosterOps.entry(tabB.stored(), AMI)).toBeNull();
+    expect(tabB.center.entry(AUTRE)).not.toBeNull();
   });
 });
