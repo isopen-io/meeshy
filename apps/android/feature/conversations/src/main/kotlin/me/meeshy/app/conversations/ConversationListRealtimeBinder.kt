@@ -51,6 +51,13 @@ internal class ConversationListRealtimeBinder(
                 repository.applyRemoteConversationPreferences(event)
             }
         }
+        scope.launch {
+            // L'ordre d'une categorie, glisse sur un AUTRE appareil (#18915) : il trie la section, et ne voyage que la.
+            preferencesSocketManager.conversationsReordered.collectArrived { event ->
+                val updates = event.updatesFor(currentUserId())
+                if (updates.isNotEmpty()) runSilently { repository.applyRemoteReorder(updates) }
+            }
+        }
         scope.launch { for (patch in lane) runSilently(patch) }
         scope.launch { for (request in catchUpRequests) runSilently { repository.refresh() } }
         scope.launch { watchReconnections() }

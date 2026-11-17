@@ -30,8 +30,8 @@ import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
+import me.meeshy.sdk.model.ConversationReorderItem
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
-import me.meeshy.sdk.model.applyRemote
 import me.meeshy.sdk.model.withMemberCount
 import me.meeshy.sdk.model.conversationlist.RecentlyCreatedMerge
 import me.meeshy.sdk.model.conversationlist.UnreadReconciliation
@@ -82,6 +82,9 @@ class ConversationRepository @Inject constructor(
 
     /** Annonces `conversation:new` en cours de lecture : une même conversation n'est jamais lue deux fois à la fois. */
     private val learning: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** The preference broadcasts of the user's other devices, written onto the cached rows. */
+    private val remotePreferences = RemoteConversationPreferences(database, conversationDao, fence)
 
     private val cacheSource = ConversationCacheSource(
         database = database,
@@ -851,40 +854,21 @@ class ConversationRepository @Inject constructor(
     /**
      * Apply a conversation-scope `user:preferences-updated` broadcast to the cached
      * row — the read side of the per-USER preferences the user changed on ANOTHER
-     * device (issue #4127).
-     *
-     * The arbitration lives in the pure [applyRemote]; this method is only the I/O
-     * around it, so every drop rule is JVM-covered without a database. `false` means
-     * nothing was written: the conversation is not cached (the next list refresh
-     * catches up — the same silent drop iOS makes), or the event lost the version
-     * arbitration.
-     *
-     * The snapshot lands on [ApiConversation.preferences] rather than on
-     * `userPreferences[0]` for the same reason the optimistic path writes there: it
-     * is the override `resolvedPreferences` reads FIRST, so the list re-buckets on
-     * the Room emission without waiting for a refetch, and the next REST sync — the
-     * server's own truth — replaces the whole row payload and clears the override.
+     * device (issue #4127). `false` means nothing was written: the conversation is
+     * not cached, or the event lost the version arbitration. See
+     * [RemoteConversationPreferences].
      */
     suspend fun applyRemoteConversationPreferences(
         event: UserPreferencesConversationUpdatedSocketData,
-    ): Boolean {
-        val ticket = fence?.currentTicket()
-        return fence.commitOrWrite(ticket) {
-            database.withTransaction {
-                val row = conversationDao.find(event.conversationId) ?: return@withTransaction false
-                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-                val next = conversation.resolvedPreferences.applyRemote(event) ?: return@withTransaction false
-                conversationDao.upsertAll(
-                    listOf(
-                        row.copy(
-                            payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
-                        ),
-                    ),
-                )
-                true
-            }
-        } ?: false
-    }
+    ): Boolean = remotePreferences.applyUpdated(event)
+
+    /**
+     * #18915 (AND-04) — apply a `user:preferences-reordered` broadcast: the order a
+     * drag set on ANOTHER device lands on the cached rows, version untouched. Returns
+     * how many rows changed. See [RemoteConversationPreferences].
+     */
+    suspend fun applyRemoteReorder(updates: List<ConversationReorderItem>): Int =
+        remotePreferences.applyReordered(updates)
 
     /**
      * Optimistic per-conversation preference update (ARCHITECTURE.md §5): the

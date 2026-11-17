@@ -259,6 +259,7 @@ object SocketEventNames {
 
     // user
     const val USER_PREFERENCES_UPDATED = "user:preferences-updated"
+    const val USER_PREFERENCES_REORDERED = "user:preferences-reordered"
     const val USER_STATUS = "user:status"
     const val USER_UPDATED = "user:updated"
 
@@ -486,6 +487,7 @@ object SocketEventNames {
         TYPING_START,
         TYPING_STOP,
         USER_PREFERENCES_UPDATED,
+        USER_PREFERENCES_REORDERED,
         USER_STATUS,
         USER_UPDATED,
         VIEWING_ACTIVITY,
