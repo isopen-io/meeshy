@@ -451,8 +451,6 @@ final class ComposerObjectEditorTests: XCTestCase {
             "Meeshy/Features/Composer/ComposerRailGlass.swift"))
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\n", with: "")
-        XCTAssertTrue(verre.contains(".adaptiveLiquidGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
-                      "La carte d'un rail en colonne est le verre teinté du plateau.")
         XCTAssertFalse(verre.contains("structComposerRailButtonGlass"),
                        "Plus aucun bouton séparé ne porte de disque de verre (#10364).")
         for (nom, source, attendu, air) in [

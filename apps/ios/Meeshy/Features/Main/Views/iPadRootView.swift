@@ -18,7 +18,7 @@ import MeeshyUI
 // File split:
 //   iPadRootView.swift              — struct, properties, body, columns, background
 //   RootLayers/iPadRootViewLayers.swift — couches nominales (feuilles, covers, chrome) (#5837)
-//   iPadRootView+Panels.swift       — iPadPanelDestination, iPadLeftColumnHeader, iPadDivider
+//   iPadRootView+Panels.swift       — iPadPanelDestination, iPadDivider
 //   iPadRootView+Overlays.swift     — offline banner, toasts, notification toasts
 //   iPadRootView+Navigation.swift   — all navigation & notification handlers
 
