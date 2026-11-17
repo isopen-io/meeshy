@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.game.GameUpdatedEvent
 import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
 import me.meeshy.sdk.model.profile.ProfileDecorUpdatedEvent
+import me.meeshy.sdk.model.profile.ProfileUpdatedEvent
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.model.MessageTranslationSharedEvent
 import me.meeshy.sdk.model.TranslationEvent
@@ -112,6 +113,7 @@ class MessageSocketManager @Inject constructor(
     private val _notificationDeletedBulk = SocketInboundRoute.subject<NotificationDeletedBulkSocketEvent>()
     private val _notificationCounts = SocketInboundRoute.subject<NotificationCountsSocketEvent>()
     private val _profileDecorUpdated = SocketInboundRoute.subject<ProfileDecorUpdatedEvent>()
+    private val _profileUpdated = SocketInboundRoute.subject<ProfileUpdatedEvent>()
     private val _packInstallationUpdated = SocketInboundRoute.subject<PackInstallationUpdatedEvent>()
     private val _gameUpdated = SocketInboundRoute.subject<GameUpdatedEvent>()
 
@@ -199,6 +201,9 @@ class MessageSocketManager @Inject constructor(
     /** `profile:decor-updated` : le décor d'un compte a changé ; le filtrage par compte est celui du consommateur. */
     val profileDecorUpdated: SharedFlow<ProfileDecorUpdatedEvent> = _profileDecorUpdated.exposed()
 
+    /** #18924 — `profile:updated` : MON profil, changé sur un autre de mes appareils (`user:<moi>` seulement). */
+    val profileUpdated: SharedFlow<ProfileUpdatedEvent> = _profileUpdated.exposed()
+
     /** `pack:installation-updated` : un pack s'installe ou se retire sur mon compte (ici ou sur un autre appareil). */
     val packInstallationUpdated: SharedFlow<PackInstallationUpdatedEvent> = _packInstallationUpdated.exposed()
 
@@ -269,6 +274,7 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.NOTIFICATION_DELETED_BULK, _notificationDeletedBulk)
         route(SocketEventNames.NOTIFICATION_COUNTS, _notificationCounts)
         route(SocketEventNames.PROFILE_DECOR_UPDATED, _profileDecorUpdated)
+        route(SocketEventNames.PROFILE_UPDATED, _profileUpdated)
         route(SocketEventNames.PACK_INSTALLATION_UPDATED, _packInstallationUpdated)
         route(SocketEventNames.GAME_UPDATED, _gameUpdated)
     }

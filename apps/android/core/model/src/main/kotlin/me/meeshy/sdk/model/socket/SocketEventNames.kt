@@ -207,6 +207,9 @@ object SocketEventNames {
 
     // reaction
     const val PROFILE_DECOR_UPDATED = "profile:decor-updated"
+
+    /** #18924 — mon profil changé sur un autre de mes appareils, vers `user:<moi>` seulement. */
+    const val PROFILE_UPDATED = "profile:updated"
     const val REACTION_ADDED = "reaction:added"
     const val REACTION_REMOVED = "reaction:removed"
 
@@ -455,6 +458,7 @@ object SocketEventNames {
         PRESENCE_APP_STATE,
         PRESENCE_SNAPSHOT,
         PROFILE_DECOR_UPDATED,
+        PROFILE_UPDATED,
         REACTION_ADDED,
         REACTION_REMOVED,
         FRIEND_REQUEST_CANCELLED,
