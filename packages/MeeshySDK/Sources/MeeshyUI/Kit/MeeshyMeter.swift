@@ -30,7 +30,11 @@ public struct MeeshyMeter<Leading: View, Trailing: View>: View {
     private let trailing: Trailing
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @Environment(\.locale) private var locale
     @State private var hasAppeared = false
 
@@ -133,6 +137,8 @@ public struct MeeshyMeter<Leading: View, Trailing: View>: View {
         let trackColor = MeeshyMeterColors.track(isDark: isDark)
         let style = MeeshyMeterColors.fill(recipe.kind, tint: tint, tintEnd: tintEnd, isDark: isDark)
         let entry = MeeshyMeterRecipe.entryAnimation(reduce: reduceMotion, animatesOnAppear: animatesOnAppear)
+        let shown = MeeshyMeterRecipe.shownFraction(recipe.fillFraction, hasAppeared: hasAppeared,
+                                                    animatesOnAppear: animatesOnAppear, reduce: reduceMotion)
         Group {
             switch recipe.form {
             case .stepped:
@@ -140,21 +146,21 @@ public struct MeeshyMeter<Leading: View, Trailing: View>: View {
             case .indeterminate:
                 MeeshyMeterIndeterminate(height: CGFloat(recipe.height), trackColor: trackColor, style: style)
             case .continuous:
-                continuous(recipe: recipe, trackColor: trackColor, style: style)
+                continuous(recipe: recipe, shown: shown, trackColor: trackColor, style: style)
             }
         }
         .frame(height: CGFloat(recipe.height))
         .saturation(recipe.isDesaturated ? 0 : 1)
         .opacity(recipe.isDesaturated ? MeeshyOpacity.heavy : 1)
-        .animation(entry, value: recipe.fillFraction)
+        .animation(entry, value: shown)
         .onAppear {
             guard !hasAppeared else { return }
             hasAppeared = true
         }
     }
 
-    private func continuous(recipe: MeeshyMeterRecipe, trackColor: Color, style: AnyShapeStyle) -> some View {
-        let shown = (hasAppeared || !animatesOnAppear) ? (recipe.fillFraction ?? 0) : 0
+    private func continuous(recipe: MeeshyMeterRecipe, shown: Double, trackColor: Color,
+                            style: AnyShapeStyle) -> some View {
         let shownMarks = MeeshyMeterRecipe.visibleMarks(marks, form: recipe.form)
         return GeometryReader { proxy in
             ZStack(alignment: .leading) {
@@ -214,7 +220,11 @@ private struct MeeshyMeterIndeterminate: View {
     let trackColor: Color
     let style: AnyShapeStyle
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @State private var phase: CGFloat = 0
 
     var body: some View {
@@ -229,10 +239,13 @@ private struct MeeshyMeterIndeterminate: View {
             .clipShape(Capsule())
         }
         .frame(height: height)
-        .animation(MeeshyMotion.animation(.pulse, reduce: reduceMotion), value: phase)
-        .onAppear { phase = reduceMotion ? 0 : 1 }
+        .animation(MeeshyMotion.loopAnimation(.pulse, isRunning: phase == 1, reduce: reduceMotion), value: phase)
+        .onAppear { phase = shouldSlide ? 1 : 0 }
+        .adaptiveOnChange(of: shouldSlide) { _, slide in phase = slide ? 1 : 0 }
         .onDisappear { phase = 0 }
     }
+
+    private var shouldSlide: Bool { !reduceMotion }
 
     private static let segmentShare: CGFloat = 0.3
 }

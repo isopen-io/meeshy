@@ -192,6 +192,12 @@ public nonisolated struct MeeshyButtonHoldLaw: Sendable, Equatable {
     public mutating func cancel() -> Bool? {
         release()
     }
+
+    /// L'action du lecteur d'écran : relâche ce qui tient ; n'arme qu'un bouton allumé.
+    public mutating func toggle(isEnabled: Bool) -> Bool? {
+        if isHeld { return release() }
+        return isEnabled ? press() : nil
+    }
 }
 
 /// **La paire** : deux boutons sur une ligne, écart 8, le principal prend 1,6
@@ -232,9 +238,10 @@ public enum MeeshyButtonWords {
         return nil
     }
 
-    /// La raison d'un bouton éteint, lue après son nom ; absente si vide.
-    public static func hint(disabledReason: String?) -> String? {
-        guard let disabledReason, !disabledReason.isEmpty else { return nil }
+    /// La raison d'un bouton éteint, lue après son nom ; absente si vide ou si le
+    /// bouton est allumé.
+    public static func hint(disabledReason: String?, isEnabled: Bool = false) -> String? {
+        guard !isEnabled, let disabledReason, !disabledReason.isEmpty else { return nil }
         return disabledReason
     }
 }

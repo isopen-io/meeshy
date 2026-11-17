@@ -66,6 +66,11 @@ public nonisolated struct MeeshyBadgeRecipe: Sendable, Equatable {
     public static let multilineRadius: Double = 14
     public static let outlineWidth: Double = 1
     public static let currentBorderWidth: Double = 1.5
+    /// La bulle ancrée à un avatar : rayon 18, queue de 6 au coin du bas du bord de début.
+    public static let bubbleRadius: Double = 18
+    public static let bubbleTail: Double = 6
+    /// Le code court (pays) : un carré arrondi de 7, en chasse fixe.
+    public static let codeRadius: Double = 7
 
     public let kind: MeeshyBadgeKind
     public let surface: MeeshyBadgeSurface
@@ -85,6 +90,10 @@ public nonisolated struct MeeshyBadgeRecipe: Sendable, Equatable {
     public let fillsWidth: Bool
     public let isPressed: Bool
     public let hasTail: Bool
+    /// Le rayon du coin de la queue ; `nil` sans queue.
+    public let tailRadius: Double?
+    /// Pleinement arrondie quelle que soit sa hauteur (le Dynamic Type peut la grandir).
+    public let isCapsule: Bool
 
     /// Le sens d'un compte : à rattraper, il est rouge (`err`), jamais à l'accent
     /// de la conversation (#6080).
@@ -101,16 +110,18 @@ public nonisolated struct MeeshyBadgeRecipe: Sendable, Equatable {
                                isCurrent: Bool,
                                isStale: Bool,
                                isInteractive: Bool,
-                               isPressed: Bool) -> MeeshyBadgeRecipe {
+                               isPressed: Bool,
+                               isCode: Bool = false) -> MeeshyBadgeRecipe {
         let measures = measures(of: size)
         let height = Double(size.rawValue)
+        let hasTail = shape == .bubble
         return MeeshyBadgeRecipe(
             kind: kind,
             surface: surface,
             height: height,
             fontSize: measures.font,
             horizontalPadding: measures.padding,
-            cornerRadius: isMultiline ? multilineRadius : height / 2,
+            cornerRadius: cornerRadius(height: height, hasTail: hasTail, isMultiline: isMultiline, isCode: isCode),
             minimumWidth: height,
             fillOpacity: fillOpacity(of: surface),
             borderWidth: borderWidth(surface: surface, isCurrent: isCurrent),
@@ -122,8 +133,16 @@ public nonisolated struct MeeshyBadgeRecipe: Sendable, Equatable {
             tapHeight: isInteractive ? max(height, tapTarget) : height,
             fillsWidth: isMultiline,
             isPressed: isPressed,
-            hasTail: shape == .bubble
+            hasTail: hasTail,
+            tailRadius: hasTail ? bubbleTail : nil,
+            isCapsule: !hasTail && !isMultiline && !isCode
         )
+    }
+
+    private static func cornerRadius(height: Double, hasTail: Bool, isMultiline: Bool, isCode: Bool) -> Double {
+        if hasTail { return bubbleRadius }
+        if isMultiline { return multilineRadius }
+        return isCode ? codeRadius : height / 2
     }
 
     private static func measures(of size: MeeshyBadgeSize) -> (font: Double, padding: Double) {
@@ -146,5 +165,33 @@ public nonisolated struct MeeshyBadgeRecipe: Sendable, Equatable {
     private static func borderWidth(surface: MeeshyBadgeSurface, isCurrent: Bool) -> Double {
         let base = surface == .outline ? outlineWidth : 0
         return isCurrent ? max(base + 1, currentBorderWidth) : base
+    }
+}
+
+/// Les mots de K41 : le nom dit d'une pastille. Le texte vu est déjà traduit par
+/// l'hôte ; seul le quota se compose ici, dans la langue du lecteur.
+public enum MeeshyBadgeWords {
+
+    /// Le nom dit : le `label` de l'hôte d'abord ; un compte dit son vrai nombre
+    /// (« 2 sur 3 » pour un quota) ; un glyphe sans nom se tait (`nil`).
+    public static func spokenName(content: MeeshyBadgeContent,
+                                  total: Int? = nil,
+                                  label: String? = nil,
+                                  bundle: Bundle? = nil,
+                                  locale: Locale = .current) -> String? {
+        if let label, !label.isEmpty { return label }
+        switch content {
+        case .label(let text), .code(let text), .time(let text):
+            return text.isEmpty ? nil : text
+        case .ordinal(let rank):
+            return rank > 0 ? "#\(rank)" : nil
+        case .glyph:
+            return nil
+        case .count(let count):
+            guard let spoken = MeeshyBadgeCount.spoken(count) else { return nil }
+            guard let total else { return "\(spoken)" }
+            return String(localized: "kit.badge.count_of", defaultValue: "\(spoken) sur \(total)",
+                          bundle: bundle ?? .module, locale: locale)
+        }
     }
 }

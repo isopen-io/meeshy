@@ -26,7 +26,11 @@ public struct MeeshyButton<Trailing: View>: View {
     private let trailing: Trailing
 
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @State private var holdLaw = MeeshyButtonHoldLaw()
 
     public init(_ title: String,
@@ -64,7 +68,7 @@ public struct MeeshyButton<Trailing: View>: View {
     public var body: some View {
         VStack(spacing: MeeshySpacing.xs) {
             control
-            if let reason = MeeshyButtonWords.hint(disabledReason: disabledReason), !isEnabled {
+            if let reason = MeeshyButtonWords.hint(disabledReason: disabledReason, isEnabled: isEnabled) {
                 Text(verbatim: reason)
                     .meeshyScaledFont(MeeshyFont.smallSize)
                     .foregroundStyle(.secondary)
@@ -91,8 +95,10 @@ public struct MeeshyButton<Trailing: View>: View {
             .allowsHitTesting(isEnabled && !isPending)
             .accessibilityLabel(title)
             .accessibilityAddTraits(.isButton)
-            .modifier(MeeshyButtonSpokenState(isPending: isPending, isDeferred: isDeferred,
-                                              hint: MeeshyButtonWords.hint(disabledReason: disabledReason)))
+            .modifier(MeeshyButtonSpokenState(
+                isPending: isPending, isDeferred: isDeferred,
+                hint: MeeshyButtonWords.hint(disabledReason: disabledReason, isEnabled: isEnabled)
+            ))
         }
     }
 
@@ -130,7 +136,7 @@ public struct MeeshyButton<Trailing: View>: View {
             .accessibilityLabel(title)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction {
-                if let began = (holdLaw.isHeld ? holdLaw.release() : holdLaw.press()) {
+                if let began = holdLaw.toggle(isEnabled: isEnabled) {
                     onHoldChange?(began)
                 }
             }
@@ -261,7 +267,11 @@ private struct MeeshyButtonLabel<Trailing: View>: View {
     let trailing: Trailing
 
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     var body: some View {
         let recipe = MeeshyButtonRecipe.resolve(kind: kind, size: size, shape: shape, isPressed: false,

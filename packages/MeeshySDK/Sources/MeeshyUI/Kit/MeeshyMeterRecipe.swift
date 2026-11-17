@@ -102,6 +102,16 @@ public nonisolated struct MeeshyMeterRecipe: Sendable, Equatable {
         return MeeshyProgressRingRecipe.percentText(percent, locale: locale)
     }
 
+    /// La fraction montrée : zéro avant l'apparition quand l'entrée se joue, la
+    /// valeur posée d'emblée sous mouvement réduit ou sans entrée.
+    public static func shownFraction(_ fraction: Double?,
+                                     hasAppeared: Bool,
+                                     animatesOnAppear: Bool,
+                                     reduce: Bool) -> Double {
+        let posed = hasAppeared || !animatesOnAppear || reduce
+        return posed ? (fraction ?? 0) : 0
+    }
+
     /// L'entrée d'une valeur : jouée une fois, jamais sous mouvement réduit.
     public static func entryAnimation(reduce: Bool, animatesOnAppear: Bool) -> Animation? {
         guard animatesOnAppear, !reduce else { return nil }

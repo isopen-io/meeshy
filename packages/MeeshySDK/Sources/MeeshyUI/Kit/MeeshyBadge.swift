@@ -43,8 +43,15 @@ public struct MeeshyBadge: View {
     private let onPress: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @State private var isPulsing = false
+
+    private var shouldPulse: Bool { !reduceMotion }
 
     public init(_ content: MeeshyBadgeContent,
                 leading: MeeshyBadgeLeading = .none,
@@ -79,15 +86,19 @@ public struct MeeshyBadge: View {
     @ViewBuilder
     public var body: some View {
         if let text = displayedText {
+            let name = MeeshyBadgeWords.spokenName(content: content, total: total, label: label)
             if let onPress {
                 Button(action: onPress) { pill(text: text, isPressed: false) }
                     .buttonStyle(MeeshyBadgePressStyle { isPressed in pill(text: text, isPressed: isPressed) })
-                    .accessibilityLabel(spokenName(text: text))
+                    .accessibilityLabel(name ?? text)
                     .accessibilityAddTraits(.isButton)
-            } else {
+            } else if let name {
                 pill(text: text, isPressed: false)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(spokenName(text: text))
+                    .accessibilityLabel(name)
+            } else {
+                pill(text: text, isPressed: false)
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -104,18 +115,15 @@ public struct MeeshyBadge: View {
         }
     }
 
-    private func spokenName(text: String) -> String {
-        if let label, !label.isEmpty { return label }
-        if case .count(let count) = content, let spoken = MeeshyBadgeCount.spoken(count, cap: cap) {
-            return "\(spoken)"
-        }
-        return text
-    }
-
     private func resolvedRecipe(isPressed: Bool) -> MeeshyBadgeRecipe {
         MeeshyBadgeRecipe.resolve(surface: surface, kind: kind, hasTint: tint != nil, size: size, shape: shape,
                                   isMultiline: lineLimit != 1, isCurrent: isCurrent, isStale: isStale,
-                                  isInteractive: onPress != nil, isPressed: isPressed)
+                                  isInteractive: onPress != nil, isPressed: isPressed, isCode: isCode)
+    }
+
+    private var isCode: Bool {
+        if case .code = content { return true }
+        return false
     }
 
     private func pill(text: String, isPressed: Bool) -> some View {
@@ -127,7 +135,8 @@ public struct MeeshyBadge: View {
             leadingView(ink: ink)
             if !text.isEmpty {
                 Text(verbatim: text)
-                    .meeshyScaledFont(CGFloat(recipe.fontSize), weight: .semibold)
+                    .meeshyScaledFont(CGFloat(recipe.fontSize), weight: .semibold,
+                                      design: isCode ? .monospaced : .default)
                     .monospacedDigit()
                     .lineLimit(lineLimit)
                     .multilineTextAlignment(.leading)
@@ -137,7 +146,8 @@ public struct MeeshyBadge: View {
         .padding(.horizontal, CGFloat(text.isEmpty ? recipe.horizontalPadding / 2 : recipe.horizontalPadding))
         .frame(minWidth: CGFloat(recipe.minimumWidth), minHeight: CGFloat(recipe.height))
         .frame(maxWidth: recipe.fillsWidth ? .infinity : nil, alignment: .leading)
-        .modifier(MeeshyBadgeSurfaceModifier(recipe: recipe, tone: tone))
+        .modifier(MeeshyBadgeSurfaceModifier(recipe: recipe, tone: tone,
+                                             isRightToLeft: layoutDirection == .rightToLeft))
         .opacity(recipe.opacity)
         .saturation(recipe.isDesaturated ? 0.4 : 1)
         .contentShape(Rectangle().inset(by: CGFloat(-(recipe.tapHeight - recipe.height) / 2)))
@@ -161,8 +171,10 @@ public struct MeeshyBadge: View {
             Circle().fill(ink)
                 .frame(width: MeeshyBadgeLeadingMetrics.dot, height: MeeshyBadgeLeadingMetrics.dot)
                 .opacity(isPulsing ? MeeshyOpacity.strong : 1)
-                .animation(MeeshyMotion.animation(.pulse, reduce: reduceMotion), value: isPulsing)
-                .onAppear { isPulsing = !reduceMotion }
+                .animation(MeeshyMotion.loopAnimation(.pulse, isRunning: isPulsing, reduce: reduceMotion),
+                           value: isPulsing)
+                .onAppear { isPulsing = shouldPulse }
+                .adaptiveOnChange(of: shouldPulse) { _, pulse in isPulsing = pulse }
                 .onDisappear { isPulsing = false }
                 .accessibilityHidden(true)
         }
@@ -173,20 +185,72 @@ private enum MeeshyBadgeLeadingMetrics {
     static let dot: CGFloat = 6
 }
 
-/// Le fond de la pastille : le ton plein, le ton à 16 %, le filet, ou le verre de K01.
+/// Le fond de la pastille : le ton plein, le ton à 16 %, le filet, ou le verre de
+/// K01, tous dans le contour de la recette (capsule, coin de 14 ou de 7, bulle).
 private struct MeeshyBadgeSurfaceModifier: ViewModifier {
     let recipe: MeeshyBadgeRecipe
     let tone: Color
+    let isRightToLeft: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
+        let outline = MeeshyBadgeOutline(recipe: recipe, isRightToLeft: isRightToLeft)
         if recipe.usesGlass {
-            content.meeshyGlass(in: Capsule(), density: .dense, tint: tone)
+            content.meeshyGlass(in: outline, density: .dense, tint: tone)
         } else {
             content
-                .background(Capsule().fill(tone.opacity(recipe.fillOpacity)))
-                .overlay(Capsule().strokeBorder(tone, lineWidth: CGFloat(recipe.borderWidth)))
+                .background(outline.fill(tone.opacity(recipe.fillOpacity)))
+                .overlay(outline.strokeBorder(tone, lineWidth: CGFloat(recipe.borderWidth)))
         }
+    }
+}
+
+/// Le contour d'une pastille : chaque coin au rayon de la recette, borné à la
+/// demi-hauteur, et le coin du bas au bord de début au rayon de la queue
+/// (reflété en écriture de droite à gauche).
+nonisolated struct MeeshyBadgeOutline: InsettableShape {
+    let cornerRadius: CGFloat
+    let tailRadius: CGFloat?
+    let isRightToLeft: Bool
+    var insetAmount: CGFloat = 0
+
+    init(cornerRadius: CGFloat, tailRadius: CGFloat?, isRightToLeft: Bool, insetAmount: CGFloat = 0) {
+        self.cornerRadius = cornerRadius
+        self.tailRadius = tailRadius
+        self.isRightToLeft = isRightToLeft
+        self.insetAmount = insetAmount
+    }
+
+    init(recipe: MeeshyBadgeRecipe, isRightToLeft: Bool) {
+        self.init(cornerRadius: recipe.isCapsule ? .greatestFiniteMagnitude : CGFloat(recipe.cornerRadius),
+                  tailRadius: recipe.tailRadius.map { CGFloat($0) },
+                  isRightToLeft: isRightToLeft)
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let box = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        guard box.width > 0, box.height > 0 else { return Path() }
+        let round = max(min(cornerRadius - insetAmount, min(box.width, box.height) / 2), 0)
+        let tail = max(min((tailRadius ?? cornerRadius) - insetAmount, round), 0)
+        let bottomLeading = isRightToLeft ? round : tail
+        let bottomTrailing = isRightToLeft ? tail : round
+        var path = Path()
+        path.move(to: CGPoint(x: box.minX + round, y: box.minY))
+        path.addArc(tangent1End: CGPoint(x: box.maxX, y: box.minY),
+                    tangent2End: CGPoint(x: box.maxX, y: box.maxY), radius: round)
+        path.addArc(tangent1End: CGPoint(x: box.maxX, y: box.maxY),
+                    tangent2End: CGPoint(x: box.minX, y: box.maxY), radius: bottomTrailing)
+        path.addArc(tangent1End: CGPoint(x: box.minX, y: box.maxY),
+                    tangent2End: CGPoint(x: box.minX, y: box.minY), radius: bottomLeading)
+        path.addArc(tangent1End: CGPoint(x: box.minX, y: box.minY),
+                    tangent2End: CGPoint(x: box.maxX, y: box.minY), radius: round)
+        path.closeSubpath()
+        return path
+    }
+
+    func inset(by amount: CGFloat) -> MeeshyBadgeOutline {
+        MeeshyBadgeOutline(cornerRadius: cornerRadius, tailRadius: tailRadius, isRightToLeft: isRightToLeft,
+                           insetAmount: insetAmount + amount)
     }
 }
 

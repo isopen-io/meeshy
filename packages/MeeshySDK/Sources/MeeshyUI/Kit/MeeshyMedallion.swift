@@ -25,7 +25,11 @@ public struct MeeshyMedallion: View {
     private let supportsShape: Bool
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     public init(systemImage: String? = nil,
                 value: String? = nil,
@@ -77,6 +81,9 @@ public struct MeeshyMedallion: View {
         .frame(width: diameter, height: diameter)
         .background(alignment: .center) {
             MeeshyMedallionHalo(recipe: recipe, tone: tone)
+        }
+        .background(alignment: .center) {
+            MeeshyMedallionWaves(recipe: recipe, tone: tone)
         }
         .modifier(MeeshyMedallionAccessibility(
             label: MeeshyMedallionWords.spokenLabel(label: label, isLocked: recipe.isLocked)
@@ -220,6 +227,45 @@ private struct MeeshyMedallionHalo: View {
                        height: CGFloat(recipe.diameter + 2 * recipe.haloThickness))
                 .allowsHitTesting(false)
         }
+    }
+}
+
+/// Les ondes : un à trois anneaux qui partent du bord et s'éteignent, décalés
+/// d'une part égale ; sous mouvement réduit, un seul anneau posé au bord. Posées
+/// en arrière-plan : la boîte du médaillon ne change pas.
+private struct MeeshyMedallionWaves: View {
+    let recipe: MeeshyMedallionRecipe
+    let tone: Color
+
+    var body: some View {
+        let diameter = CGFloat(recipe.diameter)
+        ZStack {
+            if recipe.showsStillRing {
+                ring(diameter: diameter)
+                    .opacity(MeeshyMedallionRecipe.waveStartOpacity)
+            }
+            if recipe.waveCount > 0 {
+                TimelineView(.animation(paused: !recipe.animates)) { context in
+                    let elapsed = context.date.timeIntervalSinceReferenceDate
+                    ZStack {
+                        ForEach(0..<recipe.waveCount, id: \.self) { index in
+                            let wave = MeeshyMedallionRecipe.wave(index: index, count: recipe.waveCount,
+                                                                  elapsed: elapsed)
+                            ring(diameter: diameter)
+                                .scaleEffect(CGFloat(wave.scale))
+                                .opacity(wave.opacity)
+                        }
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func ring(diameter: CGFloat) -> some View {
+        Circle()
+            .strokeBorder(tone, lineWidth: CGFloat(MeeshyMedallionRecipe.waveStroke))
+            .frame(width: diameter, height: diameter)
     }
 }
 
