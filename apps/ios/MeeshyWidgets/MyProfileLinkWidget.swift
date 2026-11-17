@@ -138,6 +138,7 @@ struct MyProfileLinkWidgetView: View {
                 .resizable()
                 .aspectRatio(1, contentMode: .fit)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
     }
 
@@ -152,6 +153,7 @@ struct MyProfileLinkWidgetView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private func label(_ card: ProfileLinkCard) -> String {
