@@ -307,3 +307,19 @@ describe('GET /export — error handling', () => {
     await app.close();
   });
 });
+
+describe('GET /export — couleur d’accent de la vitrine (#19201)', () => {
+  it('lit et rend la couleur d’accent choisie dans la section profile', async () => {
+    const mocks = {
+      ...makeMocks(),
+      userFindUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, profileAccentColor: '#A855F7' }),
+    };
+    const { app } = await buildApp({ mocks });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    const [{ select }] = mocks.userFindUnique.mock.calls[0] as [{ select: Record<string, boolean> }];
+    expect(select).toMatchObject({ profileAccentColor: true });
+    expect(res.json().data.profile).toMatchObject({ profileAccentColor: '#A855F7' });
+    await app.close();
+  });
+});
