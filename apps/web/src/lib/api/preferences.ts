@@ -79,6 +79,12 @@ export function customNameOf(conversation: Conversation): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+/** La conversation portant `fields` dans son entrée UNIQUE de préférences
+ * (#18914) — les autres clés de l'entrée restent telles qu'elles étaient. */
+export function withPreferenceFields(conversation: Conversation, fields: Readonly<Record<string, unknown>>): Conversation {
+  return { ...conversation, userPreferences: [{ ...preferenceEntryOf(conversation), ...fields }] };
+}
+
 /** Le FAVORI du lecteur (#10593) — l'emoji qu'il a posé sur la conversation,
  * `reaction` au wire comme sur iOS (`userState.reaction`). */
 export function reactionOf(conversation: Conversation): string | undefined {

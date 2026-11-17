@@ -19,7 +19,7 @@ import { bindPostEngagement } from './publication-engagement';
 import { bindProfileDecorSync } from '../profile-decor/equip';
 import { bindStickerLibrarySync } from '../stickers/library-sync';
 import { bindGameStateSync } from './game-state-live';
-import { bindAppearanceLiveLazily } from './appearance-live';
+import { bindPreferencesLiveLazily } from './preferences-live';
 import { bindCommunityLiveLazily } from './community-live-binding';
 import { bindPresenceLive } from './presence-live';
 import { presenceStore } from './presence-store';
@@ -132,8 +132,9 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unstickers = bindStickerLibrarySync({ socket: next.socket, queryClient: appQueryClient });
   /* `game:updated` (#10900) : une frappe ou un gain faits ailleurs mettent le Jeu à jour, jamais avec un état plus ancien. */
   const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
-  /* `user:preferences-updated` (#10663) : le fond et l'accent changés ailleurs repeignent la liste sans fil ouvert. */
-  const unappearance = bindAppearanceLiveLazily({ socket: next.socket, queryClient: appQueryClient });
+  /* `user:preferences-updated` (#10663, #18914) : le fond, l'accent, l'épingle, la sourdine, l'archive, le nom personnel,
+     la catégorie, le favori, l'historique vidé et les réglages d'application changés ailleurs, sans fil ouvert. */
+  const unpreferences = bindPreferencesLiveLazily({ socket: next.socket, queryClient: appQueryClient, conversations: conversationStore });
   /* `community:updated` (#18435) et `community:member-*` (#18766) : un renommage, une entrée, un départ ou un rôle se voient chez chaque membre. */
   const uncommunity = bindCommunityLiveLazily({ socket: next.socket, queryClient: appQueryClient, viewerId: currentViewerId });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
@@ -149,7 +150,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     undecor();
     unstickers();
     ungame();
-    unappearance();
+    unpreferences();
     uncommunity();
     unpresence();
     unrevoke();

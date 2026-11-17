@@ -6,3 +6,7 @@
  * (`budgets.json › realtime`). `profile.ts` les réexporte.
  */
 export const MY_PROFILE_QUERY_KEY = ['me', 'profile'] as const;
+
+/** Les réglages d'application (`app-preferences.ts`) — périmés par
+ * `user:preferences-updated { userId, category }` sans tirer leur port (#18914). */
+export const APP_PREFERENCES_QUERY_KEY = ['me', 'app-preferences'] as const;

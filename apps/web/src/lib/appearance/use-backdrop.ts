@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import { useEffect, useState } from 'react';
 
-import { bindAppearanceLive } from '@/lib/api/conversation-appearance';
+import { bindPreferencesLive } from '@/lib/api/conversation-preferences-sync';
+import { conversationStore } from '@/lib/conversation-store';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { useColorScheme } from '@/lib/use-color-scheme';
@@ -117,7 +118,7 @@ export function useAppearanceLive(enabled: boolean): void {
     let stop: (() => void) | null = null;
     void import('@/lib/api/realtime').then(
       ({ watchLiveSocket }) => {
-        if (live) stop = watchLiveSocket((socket) => bindAppearanceLive({ socket, queryClient }));
+        if (live) stop = watchLiveSocket((socket) => bindPreferencesLive({ socket, queryClient, conversations: conversationStore }));
       },
       () => undefined,
     );

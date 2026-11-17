@@ -4,7 +4,9 @@ import { describe, expect, test } from 'bun:test';
 import { accentOf } from '@/lib/accent';
 import { APPEARANCE_GAMUT } from '@meeshy/shared/utils/appearance-gamut';
 
-import { bindAppearanceLiveLazily } from './appearance-live';
+import { bindPreferencesLiveLazily } from './preferences-live';
+import { createConversationStore } from '@/lib/conversation-store';
+
 import { CONVERSATIONS_QUERY_KEY, findCachedConversation } from './conversations';
 import type { Conversation } from './types';
 
@@ -24,7 +26,7 @@ const until = async (ready: () => boolean) => {
   expect(ready()).toBe(true);
 };
 
-describe('l’apparence vivante montée avec la connexion (sans fil ouvert)', () => {
+describe('les préférences vivantes montées avec la connexion (sans fil ouvert)', () => {
   test('un user:preferences-updated avec appearance repeint la ligne de liste du cache', async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
@@ -32,7 +34,7 @@ describe('l’apparence vivante montée avec la connexion (sans fil ouvert)', ()
       pageParams: [undefined],
     });
     const { socket, handlers } = fakeSocket();
-    const off = bindAppearanceLiveLazily({ socket: socket as never, queryClient });
+    const off = bindPreferencesLiveLazily({ socket: socket as never, queryClient, conversations: createConversationStore() });
     await until(() => handlers.size === 1);
     handlers.get('user:preferences-updated')?.({
       conversationId: 'c1',
@@ -48,7 +50,7 @@ describe('l’apparence vivante montée avec la connexion (sans fil ouvert)', ()
 
   test('un disposer appelé avant l’arrivée du module ne laisse aucun abonnement', async () => {
     const { socket, handlers } = fakeSocket();
-    bindAppearanceLiveLazily({ socket: socket as never, queryClient: new QueryClient() })();
+    bindPreferencesLiveLazily({ socket: socket as never, queryClient: new QueryClient(), conversations: createConversationStore() })();
     for (let i = 0; i < 20; i += 1) await settle();
     expect(handlers.size).toBe(0);
   });

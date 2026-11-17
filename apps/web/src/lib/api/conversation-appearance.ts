@@ -1,10 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import * as userPreferencesEndpoints from '@meeshy/shared/api/endpoints/user-preferences';
 import type { ConversationAppearance } from '@meeshy/shared/types/conversation-appearance';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { rawAppearanceOf, withAppearance, withRawAppearance } from '@/lib/appearance/read';
-import type { SocketClient } from '@/lib/net/socket';
 
 import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
 import type { Conversation } from './types';
@@ -66,44 +64,4 @@ export async function chooseAppearance(params: {
   const stillOurs = current !== undefined && sameRaw(rawAppearanceOf(current).value, appearance);
   if (stillOurs) patchBoth(queryClient, conversationId, (conversation) => withRawAppearance(conversation, previous));
   return { ok: false, code: result.code ?? null };
-}
-
-// ── Un autre appareil du lecteur ────────────────────────────────────────
-
-type Payload = Readonly<Record<string, unknown>>;
-
-const recordOf = (value: unknown): Payload | null => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Payload) : null);
-
-/**
- * `user:preferences-updated` (scope conversation) d'un AUTRE appareil : la
- * valeur servie remplace la nôtre. Arbitrage par `version` — un événement en
- * retard ne défait jamais un état plus frais. Une charge illisible, ou d'un
- * autre scope (`category`), n'est pas appliquée.
- */
-export function createAppearanceSync(queryClient: QueryClient) {
-  const versions = new Map<string, number>();
-  return (value: unknown): void => {
-    const payload = recordOf(value);
-    const conversationId = payload?.['conversationId'];
-    if (payload === null || typeof conversationId !== 'string' || conversationId === '') return;
-    const version = payload['version'];
-    if (typeof version === 'number') {
-      if (version <= (versions.get(conversationId) ?? 0)) return;
-      versions.set(conversationId, version);
-    }
-    if (payload['reset'] === true) {
-      patchBoth(queryClient, conversationId, (conversation) => withAppearance(conversation, null));
-      return;
-    }
-    const preferences = recordOf(payload['preferences']);
-    if (preferences === null || !('appearance' in preferences)) return;
-    const served = preferences['appearance'];
-    patchBoth(queryClient, conversationId, (conversation) => withAppearance(conversation, (served ?? null) as ConversationAppearance | null));
-  };
-}
-
-export function bindAppearanceLive(params: { readonly socket: SocketClient; readonly queryClient: QueryClient }): () => void {
-  const handler = createAppearanceSync(params.queryClient);
-  params.socket.on<unknown>(SERVER_EVENTS.USER_PREFERENCES_UPDATED, handler);
-  return () => params.socket.off<unknown>(SERVER_EVENTS.USER_PREFERENCES_UPDATED, handler);
 }
