@@ -44,7 +44,14 @@ public object MeeshyNoteRecipe {
     public const val CROSSFADE_MILLIS: Int = 150
     public const val WRAP_ACTION_BELOW_DP: Float = 320f
     private const val LINE_HEIGHT: Float = 1.4f
-    private const val BANNER_TINT: Float = 0.10f
+    private const val BAND_TINT: Float = 0.10f
+    private const val BAND_RADIUS_DP: Int = 16
+    private const val BAND_RULE_DP: Int = 3
+    private const val BANNER_MIN_HEIGHT_DP: Int = 48
+
+    /** Marges de la bande dans l'ordre CSS de la fiche (haut, fin, bas, début) : la plus large, 18, du côté de la barre d'accent. */
+    private val BAND_INSETS_DP: List<Int> = listOf(12, 14, 12, 18)
+    private val NO_INSETS_DP: List<Int> = listOf(0, 0, 0, 0)
 
     @Suppress("LongParameterList")
     public fun resolve(
@@ -65,17 +72,17 @@ public object MeeshyNoteRecipe {
             textWeight = if (live) 600 else 400,
             lineHeightFactor = LINE_HEIGHT,
             glyphDp = if (form == MeeshyNoteForm.Banner) 22 else 16,
-            cornerRadiusDp = if (form == MeeshyNoteForm.Banner) 16 else 0,
-            tintAlpha = if (form == MeeshyNoteForm.Banner) BANNER_TINT else 0f,
-            fillsWidth = form == MeeshyNoteForm.Banner || form == MeeshyNoteForm.Band,
-            insetsDp = if (form == MeeshyNoteForm.Banner) listOf(12, 14, 12, 18) else listOf(0, 0, 0, 0),
-            minHeightDp = if (form == MeeshyNoteForm.Band) 48 else 0,
-            hasBottomHairline = form == MeeshyNoteForm.Band,
-            accentBarDp = if (form == MeeshyNoteForm.Band) 3 else 0,
+            cornerRadiusDp = if (form == MeeshyNoteForm.Band) BAND_RADIUS_DP else 0,
+            tintAlpha = if (form == MeeshyNoteForm.Band) BAND_TINT else 0f,
+            fillsWidth = form == MeeshyNoteForm.Banner,
+            insetsDp = if (form == MeeshyNoteForm.Band) BAND_INSETS_DP else NO_INSETS_DP,
+            minHeightDp = if (form == MeeshyNoteForm.Banner) BANNER_MIN_HEIGHT_DP else 0,
+            hasBottomHairline = form == MeeshyNoteForm.Banner,
+            accentBarDp = if (form == MeeshyNoteForm.Band) BAND_RULE_DP else 0,
             tintsText = live,
             pulses = pulsing && !isStale && !reduceMotion,
             showsHalo = pulsing && reduceMotion && !isStale,
-            animatesHeight = !reduceMotion,
+            animatesHeight = form == MeeshyNoteForm.Banner && !reduceMotion,
             showsDetail = hasDetail && form != MeeshyNoteForm.Line && form != MeeshyNoteForm.Live,
             isDismissible = false,
             autoHides = false,

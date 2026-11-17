@@ -150,7 +150,7 @@ public fun MeeshyNote(
                     if (values.hasBottomHairline) drawRect(hairline, Offset(0f, this.size.height - 1.dp.toPx()), Size(this.size.width, 1.dp.toPx()))
                 }
                 .heightIn(min = values.minHeightDp.dp)
-                .padding(start = inset[1].dp, top = inset[0].dp, end = inset[3].dp, bottom = inset[2].dp)
+                .padding(start = inset[3].dp, top = inset[0].dp, end = inset[1].dp, bottom = inset[2].dp)
                 .semantics(mergeDescendants = true) {
                     label?.let { contentDescription = it }
                     live?.let { liveRegion = it }
