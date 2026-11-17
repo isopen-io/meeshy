@@ -14,14 +14,16 @@ tls:
 http:
   middlewares:
     # Security headers
+    # HSTS PRUDENT (revue de #19083) : ni includeSubDomains ni preload. Posés
+    # sur meeshy.me, ils engageraient tout *.meeshy.me pendant un an, sans retour
+    # rapide, et aucun inventaire du DNS ne prouve que chaque sous-domaine sert
+    # HTTPS. Leur ajout attend la décision qui fera cet inventaire.
     secure-headers:
       headers:
         frameDeny: true
         browserXssFilter: true
         contentTypeNosniff: true
         forceSTSHeader: true
-        stsIncludeSubdomains: true
-        stsPreload: true
         stsSeconds: 31536000
         customFrameOptionsValue: "SAMEORIGIN"
         referrerPolicy: "strict-origin-when-cross-origin"

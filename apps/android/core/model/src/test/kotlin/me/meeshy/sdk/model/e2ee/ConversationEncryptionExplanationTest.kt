@@ -41,7 +41,8 @@ class ConversationEncryptionExplanationTest {
         val e2ee = explain("e2ee")
 
         assertThat(e2ee.facts(Topic.WHO_READS)).containsExactly(Fact.ONLY_PARTICIPANTS_READ)
-        assertThat(e2ee.facts(Topic.AVAILABLE)).containsExactly(Fact.TRANSLATED_ON_DEVICE)
+        assertThat(e2ee.sections.map { it.topic }).doesNotContain(Topic.AVAILABLE)
+        assertThat(e2ee.sections.flatMap { it.facts }).doesNotContain(Fact.TRANSLATED_ON_DEVICE)
         assertThat(e2ee.facts(Topic.ABSENT)).containsExactly(
             Fact.NO_SERVER_TRANSCRIPTION, Fact.NO_NOTIFICATION_PREVIEW, Fact.NO_SEARCH,
             Fact.NO_EDIT, Fact.NO_FORWARD, Fact.NO_OFFLINE_SENDING,

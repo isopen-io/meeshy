@@ -27,6 +27,12 @@ export const devicesByDeviceIdKeys = (deviceId: string): string => `/api/v1/e2ee
 /** GET /api/v1/e2ee/devices/self/prekey-count */
 export const devicesSelfPrekeyCount = '/api/v1/e2ee/devices/self/prekey-count';
 
+/** GET · POST /api/v1/e2ee/devices/self/verifications */
+export const devicesSelfVerifications = '/api/v1/e2ee/devices/self/verifications';
+
+/** POST /api/v1/e2ee/devices/self/verifications/ack */
+export const devicesSelfVerificationsAck = '/api/v1/e2ee/devices/self/verifications/ack';
+
 /** GET /api/v1/e2ee/envelopes */
 export const envelopes = '/api/v1/e2ee/envelopes';
 

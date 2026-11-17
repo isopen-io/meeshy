@@ -111,6 +111,8 @@ data class ChatUiState(
     val directPeerUserId: String? = null,
     /** #14591 — cet appareil chiffre et lit le bout en bout (pile libsignal prête à servir le fil). */
     val endToEndAvailable: Boolean = false,
+    /** #18975 — combien d'envois chiffrés n'ont pas pu partir : chaque échec se dit, traduit, et son texte revient au composeur. */
+    val endToEndSendRefusals: Int = 0,
     /** Mirrors the same `networkConditionMonitor` reading already threaded into
      * `toBubbles` (the per-message hourglass) — feeds the scroll-to-bottom control's
      * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
@@ -170,10 +172,10 @@ data class ChatUiState(
         get() = isEndToEnd && !endToEndTextOpen
 
     /**
-     * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne
-     * sait ni chiffrer ni lire l'e2ee (#13015) : rien n'en part du fil — chaque porte
-     * d'envoi du composeur lit [composerAffordances] fermé, AVANT tout octet émis
-     * (texte, pièce, vocal, édition) —, et le composeur dit où elle s'écrit. Le
+     * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif chiffre et lit le TEXTE d'un
+     * tête-à-tête par libsignal (#14591) ; rien d'autre n'en part du fil — chaque porte d'envoi du composeur lit
+     * [composerAffordances] fermé pour une pièce, un vocal ou une édition, AVANT tout octet émis —, et le composeur dit
+     * quand il ne peut pas écrire (groupe chiffré). Le
      * transfert, le partage et les stories l'excluent par `mayCurrentUserWrite`.
      *
      * #12956 — le mode vient de la ligne Room, que `ConversationCacheSource` ne rétrograde

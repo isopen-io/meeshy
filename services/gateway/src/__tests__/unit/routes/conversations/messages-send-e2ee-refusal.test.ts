@@ -57,7 +57,11 @@ async function buildApp(handleMessage: jest.Mock): Promise<FastifyInstance> {
 import {
   E2EE_PLAINTEXT_REFUSAL_MESSAGE,
   E2EE_PLAINTEXT_REFUSED,
+  E2EE_PLAINTEXT_STICKER_REFUSAL_MESSAGE,
 } from '../../../../services/messaging/e2eePlaintextAdmission';
+
+const SOURCE_ID = '507f1f77bcf86cd7994390ff';
+const SOURCE_CONV_ID = '507f1f77bcf86cd7994390aa';
 
 describe('POST /conversations/:id/messages — clair refusé en e2ee (#11216)', () => {
   let app: FastifyInstance | undefined;
@@ -84,5 +88,33 @@ describe('POST /conversations/:id/messages — clair refusé en e2ee (#11216)', 
 
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({ success: false, code: E2EE_PLAINTEXT_REFUSED, error: E2EE_PLAINTEXT_REFUSAL_MESSAGE });
+  });
+
+  // #13113 — le refus des voisins en clair se pose dans `admitSendUnderRegime`,
+  // derrière `handleMessage` (prouvé par `e2eeSendNeighbors.test.ts`) : ce
+  // transport doit donc les lui REMETTRE, jamais les filtrer en chemin, et servir
+  // son refus en 400 comme celui d'un texte.
+  it('remet sticker et transfert à handleMessage, et sert leur refus en 400', async () => {
+    const sticker = { templateId: 'bubble', slots: { line1: 'sentinelle-secrete-42' } };
+    const handleMessage = jest.fn().mockResolvedValue({
+      success: false,
+      error: E2EE_PLAINTEXT_STICKER_REFUSAL_MESSAGE,
+      code: E2EE_PLAINTEXT_REFUSED,
+      data: null,
+    });
+    app = await buildApp(handleMessage);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONV_ID}/messages`,
+      payload: { sticker, forwardedFromId: SOURCE_ID, forwardedFromConversationId: SOURCE_CONV_ID },
+    });
+
+    expect(handleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ sticker, forwardedFromId: SOURCE_ID, forwardedFromConversationId: SOURCE_CONV_ID }),
+      PARTICIPANT_ID,
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, code: E2EE_PLAINTEXT_REFUSED, error: E2EE_PLAINTEXT_STICKER_REFUSAL_MESSAGE });
   });
 });

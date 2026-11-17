@@ -2,6 +2,7 @@ package me.meeshy.core.e2ee.wire
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import me.meeshy.core.e2ee.E2eeWire
 
 // Le contrat FIL du relais d'enveloppes libsignal (spec § 3.4 et § 4.3), miroir de `E2EERelayModels.swift`. Aucun type
@@ -56,6 +57,35 @@ public data class E2eeServedEnvelope(
     val createdAt: String,
 ) {
     public fun isAddressedTo(registrationId: Int): Boolean = recipientRegistrationId?.let { it == registrationId } ?: true
+
+    /**
+     * L'émetteur servi a-t-il la forme que la passerelle honnête lui donne (#18972, #18973) ? Un compte hors format (une
+     * autre casse de MON identifiant comprise) ou un appareil hors `1..127` ne s'ouvre pas : l'enveloppe est écartée, sans
+     * accusé, avant toute lecture du coffre et tout déchiffrement.
+     */
+    public fun isWellFormed(): Boolean = E2eeServedIds.isAccount(senderUserId) && E2eeServedIds.isDevice(senderDeviceId)
+
+    public companion object {
+        /** Une enveloppe servie, décodée SEULE : mal formée, elle est écartée (`null`) sans empêcher ses voisines (#18971). */
+        public fun decodeOrNull(element: JsonElement): E2eeServedEnvelope? = try {
+            E2eeJson.decodeFromJsonElement(serializer(), element).takeIf { it.isWellFormed() }
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    }
+}
+
+/**
+ * Les identifiants que la passerelle honnête sert (#18973) : un compte est un ObjectId en minuscules
+ * (`packages/shared/types/e2ee-directory.ts`), un appareil tient dans `1..127` (borne des adresses libsignal).
+ */
+public object E2eeServedIds {
+    private val ACCOUNT = Regex("[a-f0-9]{24}")
+    private val DEVICES = 1..127
+
+    public fun isAccount(id: String): Boolean = ACCOUNT.matches(id)
+
+    public fun isDevice(id: Int): Boolean = id in DEVICES
 }
 
 /**

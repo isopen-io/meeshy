@@ -1,6 +1,8 @@
 package me.meeshy.ui.component.bubble
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.EndToEndSeal
+import me.meeshy.ui.R
 import java.util.Locale
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
@@ -35,6 +37,33 @@ class BubbleEndToEndSealedTest {
         assertThat(content.text).isEmpty()
         assertThat(content.files).isEmpty()
         assertThat(content.images).isEmpty()
+    }
+
+    /** #18983 — la raison du scellement voyage jusqu'à la bulle ; sans raison, le message est en attente. */
+    @Test
+    fun `the seal reason travels into the bubble, pending by default`() {
+        val update = BubbleContentBuilder.build(
+            message("[Encrypted]", true, "e2ee").copy(endToEndSeal = EndToEndSeal.UPDATE_REQUIRED), currentUserId = "me", preferences = prefs,
+        )
+        val pending = BubbleContentBuilder.build(message("[Encrypted]", true, "e2ee"), currentUserId = "me", preferences = prefs)
+
+        assertThat(update.endToEndSeal).isEqualTo(EndToEndSeal.UPDATE_REQUIRED)
+        assertThat(pending.endToEndSeal).isEqualTo(EndToEndSeal.PENDING)
+        assertThat(BubbleEndToEndSeal.label(EndToEndSeal.UPDATE_REQUIRED)).isEqualTo(R.string.bubble_message_end_to_end_update)
+        assertThat(EndToEndSeal.entries.map(BubbleEndToEndSeal::label).distinct()).hasSize(EndToEndSeal.entries.size)
+    }
+
+    /** #18976 — la limite d'appareils chiffrés est un échec qui dit pourquoi, et dont le geste reste « renvoyer ». */
+    @Test
+    fun `an encrypted device limit is a failure that explains itself and still retries`() {
+        val content = BubbleContentBuilder.build(message("[Encrypted]", true, "e2ee"), currentUserId = "me", preferences = prefs)
+            .copy(isEndToEndDeviceLimit = true)
+
+        val failure = BubbleFailure.of(content)
+
+        assertThat(failure).isEqualTo(BubbleFailure.ENCRYPTED_DEVICE_LIMIT)
+        assertThat(failure.explains).isTrue()
+        assertThat(failure.removes).isFalse()
     }
 
     @Test

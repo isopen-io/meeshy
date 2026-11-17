@@ -3,6 +3,7 @@ package me.meeshy.app.chat.river
 import com.google.common.truth.Truth.assertThat
 import java.time.ZoneOffset
 import java.util.Locale
+import me.meeshy.sdk.model.EndToEndSeal
 import me.meeshy.sdk.model.reading.river.RiverGroupPosition
 import me.meeshy.ui.component.StoryRingState
 import org.junit.Test
@@ -83,6 +84,17 @@ class RiverRenderingTest {
         assertThat(rendering.contentByMessageId["e"]?.protection).isEqualTo(RiverProtection.END_TO_END_SEALED)
         assertThat(rendering.contentByMessageId["v"]?.protection).isEqualTo(RiverProtection.BURNED)
         assertThat(rendering.contentByMessageId["n"]?.protection).isEqualTo(RiverProtection.NONE)
+    }
+
+    /** #18983 — la Rivière dit, comme le fil, POURQUOI un message chiffré reste scellé sur cet appareil. */
+    @Test
+    fun `un message chiffre scelle dit pourquoi, comme dans le fil`() {
+        val rendering = render(
+            riverBubble("u", "alice", 0, endToEnd = true).copy(endToEndSeal = EndToEndSeal.UNREADABLE),
+            riverBubble("p", "bob", 1, endToEnd = true),
+        )
+        assertThat(rendering.contentByMessageId["u"]?.endToEndSeal).isEqualTo(EndToEndSeal.UNREADABLE)
+        assertThat(rendering.contentByMessageId["p"]?.endToEndSeal).isEqualTo(EndToEndSeal.PENDING)
     }
 
     @Test

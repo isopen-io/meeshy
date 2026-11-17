@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import androidx.work.WorkManager
+import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -65,6 +66,7 @@ class ChatComposerControllerTest {
         user: MeeshyUser? = me,
         drafts: Map<String, ConversationDraft> = emptyMap(),
         identifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+        endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
     ): Rig {
         val flow = MutableStateFlow(initial)
         val messages = MutableStateFlow(loaded)
@@ -102,6 +104,7 @@ class ChatComposerControllerTest {
             composerText = holder,
             recentEmojis = recents,
             languageIdentifier = identifier,
+            endToEnd = endToEnd,
         )
         return Rig(controller, flow, messages, repo, socket, workManager, draftStore, uploads, holder, recents)
     }
@@ -185,6 +188,29 @@ class ChatComposerControllerTest {
 
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
         assertThat(r.text.text).isEqualTo("too soon")
+    }
+
+    /** #18975 — un envoi chiffré qui n'a pas pu partir rend le texte et la réponse au composeur : rien de saisi n'est perdu. */
+    @Test
+    fun `an end to end send that fails gives the text and the reply back to the composer`() = runTest {
+        val e2ee = ChatUiState(
+            conversationId = "c1",
+            encryptionMode = "e2ee",
+            endToEndAvailable = true,
+            directPeerUserId = "64f0c0ffee0000000000bbbb",
+            replyingToMessageId = "m0",
+        )
+        val r = rig(initial = e2ee)
+        r.controller.onDraftChange("rendez-vous à 8 h")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(r.text.text).isEqualTo("rendez-vous à 8 h")
+        assertThat(r.state.replyingToMessageId).isEqualTo("m0")
+        assertThat(r.state.errorMessage).isNull()
+        assertThat(r.state.endToEndSendRefusals).isEqualTo(1)
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
     @Test

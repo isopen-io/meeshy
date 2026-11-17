@@ -36,13 +36,18 @@ wasm-bindgen --target web --out-name libsignal_wasm --out-dir "$STAGE" \
   "$HERE/target/wasm32-unknown-unknown/release/meeshy_libsignal_wasm.wasm"
 
 SHA="$(sha256sum "$STAGE/libsignal_wasm_bg.wasm" | awk '{print $1}')"
+# La COLLE aussi (#17292, constat WEB-11) : c'est elle qui fournit l'aléa au
+# binaire (`globalThis.crypto.getRandomValues`) ; une colle altérée pour rendre
+# un aléa constant ne serait vue par aucun témoin fonctionnel.
+GLUE="$(sha256sum "$STAGE/libsignal_wasm.js" | awk '{print $1}')"
 cat > "$STAGE/manifest.json" <<JSON
 {
   "_doc": "Écrit par packages/libsignal-wasm/build.sh — ne pas éditer à la main.",
   "libsignal": "$LIBSIGNAL",
   "rustToolchain": "$TOOLCHAIN",
   "wasmBindgen": "$BINDGEN",
-  "wasmSha256": "$SHA"
+  "wasmSha256": "$SHA",
+  "glueSha256": "$GLUE"
 }
 JSON
 

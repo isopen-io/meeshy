@@ -61,7 +61,7 @@ export type ParticipantRow = Awaited<ReturnType<PrismaClient['participant']['cre
 type ShareLinkRow = Awaited<ReturnType<PrismaClient['conversationShareLink']['findFirst']>>;
 /** Le lien AVEC sa conversation incluse — jamais `null` passé ce point. */
 export type ShareLinkWithConversation = NonNullable<ShareLinkRow> & {
-  conversation: { id: string; identifier?: string | null; title: string; type: string; isActive: boolean; closedAt: Date | null; communityId?: string | null };
+  conversation: { id: string; identifier?: string | null; title: string; type: string; encryptionMode: string | null; isActive: boolean; closedAt: Date | null; communityId?: string | null };
 };
 
 export type GuestRights = Record<ParticipantRightName, boolean>;
@@ -231,7 +231,7 @@ async function findShareLinkByKey(prisma: PrismaClient, key: string): Promise<Sh
     },
     include: {
       conversation: {
-        select: { id: true, identifier: true, title: true, type: true, isActive: true, closedAt: true, communityId: true },
+        select: { id: true, identifier: true, title: true, type: true, encryptionMode: true, isActive: true, closedAt: true, communityId: true },
       },
     },
   });
