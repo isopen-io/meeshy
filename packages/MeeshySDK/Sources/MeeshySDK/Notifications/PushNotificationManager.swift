@@ -102,6 +102,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
     private let registrar: any PushTokenRegistrationProviding
     private let isAuthenticated: @MainActor () -> Bool
+    private let registrationsInFlight: PushRegistrationsInFlight
 
     override private convenience init() {
         self.init(userDefaults: .standard, keychainStore: KeychainManager.shared)
@@ -120,12 +121,14 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         userDefaults: UserDefaults,
         keychainStore: any KeychainStoring,
         registrar: any PushTokenRegistrationProviding,
-        isAuthenticated: @escaping @MainActor () -> Bool
+        isAuthenticated: @escaping @MainActor () -> Bool,
+        registrationsInFlight: PushRegistrationsInFlight = .shared
     ) {
         self.userDefaults = userDefaults
         self.keychainStore = keychainStore
         self.registrar = registrar
         self.isAuthenticated = isAuthenticated
+        self.registrationsInFlight = registrationsInFlight
         super.init()
         migrateDeviceTokenFromUserDefaultsIfNeeded()
     }
@@ -322,7 +325,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
     // MARK: - Private
 
-    private func sendTokenToBackend(token: String, replayingAfterStaleResponse: Bool = false) async {
+    private func sendTokenToBackend(token: String, bypassingDedup: Bool = false) async {
         guard isAuthenticated() else {
             logger.info("Skipping token registration: user not authenticated")
             return
@@ -333,8 +336,9 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // (persisted token from previous session) with `registerDeviceToken`
         // (native callback firing right after) — both posted the same token
         // back-to-back, generating duplicate 10s+ POSTs in the slow-request log.
-        // Un rejeu après réponse périmée ne s'y soumet pas : la passerelle garde
-        // le DERNIER POST reçu, et celui qu'on rejoue doit partir après.
+        // Un rejeu après réponse périmée, ou une restauration après un retrait
+        // tardif, ne s'y soumet pas : la passerelle garde le DERNIER POST reçu, et
+        // celui qu'on rejoue doit partir après.
         let now = Date()
         let generation = sessionGeneration
         let lastToken = await keychainLoadOffMain(Self.lastRegisteredTokenKey)
@@ -343,7 +347,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
             return
         }
         let lastAt = userDefaults.object(forKey: Self.lastRegisteredAtKey) as? Date
-        if !replayingAfterStaleResponse,
+        if !bypassingDedup,
            lastToken == token,
            let lastAt,
            now.timeIntervalSince(lastAt) < Self.registrationCooldown {
@@ -354,7 +358,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // Réservation in-flight : empêche les appelants concurrents (callback
         // APNs + reRegisterTokenIfNeeded au login) de poster le MÊME token en
         // parallèle avant que le premier POST n'ait persisté son timestamp.
-        guard replayingAfterStaleResponse || inFlightTokenRegistration != token else {
+        guard bypassingDedup || inFlightTokenRegistration != token else {
             logger.debug("Skipping token registration: same token already in flight")
             return
         }
@@ -370,7 +374,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         )
 
         do {
-            try await registrar.register(request)
+            try await registrationsInFlight.track { try await registrar.register(request) }
             guard generation == sessionGeneration else {
                 await replayRegistrationUnderCurrentSession()
                 return
@@ -393,7 +397,17 @@ public final class PushNotificationManager: NSObject, ObservableObject {
             return
         }
         logger.info("Stale token registration response: re-registering under the current session")
-        await sendTokenToBackend(token: current, replayingAfterStaleResponse: true)
+        await sendTokenToBackend(token: current, bypassingDedup: true)
+    }
+
+    /// Reposte le jeton APNs connu sous la session ouverte, sans cooldown ni
+    /// réservation (#18911) : le retrait différé d'une session précédente du MÊME
+    /// compte a pu effacer la ligne que la passerelle tenait, alors que le
+    /// cooldown que la session courante vient d'armer la croit enregistrée.
+    public func restoreRegistration() async {
+        guard isAuthenticated(), let token = await deviceTokenReadOffMain() else { return }
+        logger.info("Restoring the device token registration under the current session")
+        await sendTokenToBackend(token: token, bypassingDedup: true)
     }
 }
 

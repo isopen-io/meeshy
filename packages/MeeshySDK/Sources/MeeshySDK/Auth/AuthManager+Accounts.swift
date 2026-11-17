@@ -223,7 +223,7 @@ extension AuthManager {
         if endingIt {
             await SessionEndingHooks.shared.runAll()
             if let outgoingToken {
-                Task { await AuthServerLogout.endSession(token: outgoingToken, using: self.authService, keychain: self.keychain) }
+                Task { await AuthServerLogout.endSession(of: self, leavingUserId: userId, token: outgoingToken) }
             } else {
                 Logger.auth.warning("logout(): no authToken snapshot available — skipping server-side logout call")
             }

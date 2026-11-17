@@ -29,7 +29,14 @@ final class VoIPPushManager: NSObject, ObservableObject {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    static let shared = VoIPPushManager()
+    /// Le partagé offre sa restauration à la sortie de session (#18911) : un
+    /// retrait différé sous le jeton d'une session précédente du même compte a pu
+    /// effacer la ligne VoIP de la session ouverte.
+    static let shared: VoIPPushManager = {
+        let manager = VoIPPushManager()
+        PushRegistrationRestorers.shared.add { [weak manager] in await manager?.restoreRegistration() }
+        return manager
+    }()
 
     private var voipRegistry: PKPushRegistry?
     @Published private(set) var voipToken: String?
@@ -80,6 +87,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
     private let tokenRegistrar: VoIPTokenRegistering
     private let authTokenAvailable: @MainActor () -> Bool
     private let deviceIdentity: @MainActor () -> PushDeviceIdentity
+    private let registrationsInFlight: PushRegistrationsInFlight
 
     /// Cached snapshot of the last registered record so the cooldown check
     /// stays synchronous — the keychain read is performed asynchronously in
@@ -94,12 +102,14 @@ final class VoIPPushManager: NSObject, ObservableObject {
         tokenStore: VoIPTokenStoring,
         registrar: VoIPTokenRegistering = APIVoIPTokenRegistrar(),
         authTokenAvailable: @escaping @MainActor () -> Bool = { APIClient.shared.authToken != nil },
-        deviceIdentity: @escaping @MainActor () -> PushDeviceIdentity = { PushDeviceIdentity.current() }
+        deviceIdentity: @escaping @MainActor () -> PushDeviceIdentity = { PushDeviceIdentity.current() },
+        registrationsInFlight: PushRegistrationsInFlight = .shared
     ) {
         self.tokenStore = tokenStore
         self.tokenRegistrar = registrar
         self.authTokenAvailable = authTokenAvailable
         self.deviceIdentity = deviceIdentity
+        self.registrationsInFlight = registrationsInFlight
         super.init()
         // Audit P2-CC-1 — observe AuthManager.isAuthenticated transitions
         // false→true so a VoIP token that arrived pre-login can be retried.
@@ -238,6 +248,16 @@ final class VoIPPushManager: NSObject, ObservableObject {
         }
         logger.info("Stale VoIP token registration response: re-registering under the current session")
         await registerTokenWithBackend(current, bypassingCooldown: true)
+    }
+
+    /// Reposte le jeton PushKit connu sous la session ouverte, sans cooldown
+    /// (#18911) : le retrait différé d'une session précédente du MÊME compte a pu
+    /// effacer la ligne VoIP que la passerelle tenait. Sans jeton connu, PushKit le
+    /// livrera, et son POST partira alors.
+    func restoreRegistration() async {
+        guard let token = voipToken else { return }
+        logger.info("Restoring the VoIP token registration under the current session")
+        await registerTokenWithBackend(token, bypassingCooldown: true)
     }
 
     /// G4c — retries the backend registration of a token whose POST failed
@@ -523,7 +543,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
 
         let generation = sessionGeneration
         do {
-            try await tokenRegistrar.register(body)
+            try await registrationsInFlight.track { try await tokenRegistrar.register(body) }
             guard generation == sessionGeneration else {
                 await replayRegistrationUnderCurrentSession()
                 return
