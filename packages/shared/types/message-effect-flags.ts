@@ -23,8 +23,6 @@ export const MESSAGE_EFFECT_FLAGS = {
     SPARKLE:   1 << 19,  // 524288
 } as const;
 
-export type MessageEffectFlagKey = keyof typeof MESSAGE_EFFECT_FLAGS;
-
 export function hasEffect(flags: number, effect: number): boolean {
     return (flags & effect) !== 0;
 }

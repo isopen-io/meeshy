@@ -41,12 +41,6 @@ export type VerifyEmailData = {
   readonly maskedEmail?: string;
 };
 
-export type VerifiedSession = VerifyEmailData & { readonly token: string; readonly sessionToken: string; readonly user: SessionUser };
-
-export function verificationOpensSession(data: VerifyEmailData): data is VerifiedSession {
-  return typeof data.token === 'string' && typeof data.sessionToken === 'string' && data.user !== undefined;
-}
-
 export function verifyEmailBody(request: VerifyEmailRequest, linkDeviceSecret: string | null = null): Record<string, string | boolean> {
   if ('token' in request) {
     return {

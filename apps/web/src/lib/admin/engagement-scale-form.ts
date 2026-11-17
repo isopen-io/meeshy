@@ -59,8 +59,6 @@ export const ABUSE_FIELDS: readonly AbuseField[] = ['heavyPoints', 'unverifiedMa
 export type LevelCapDraft = { readonly minLevel: string; readonly maxFactor: string };
 /** Un palier de série ou de fidélité (#10395) : jours, points (sans plafond à 1000), libellé facultatif. */
 export type TierDraft = { readonly days: string; readonly points: string; readonly label: string };
-/** @deprecated nom d'avant #10395 — un palier de la série globale. */
-export type StreakBonusDraft = TierDraft;
 
 /** Une liste de paliers du brouillon : la série globale, celle d'un acte, ou la fidélité. */
 export type TierListKey = { readonly kind: 'global' } | { readonly kind: 'act'; readonly act: EngagementStreakAct } | { readonly kind: 'loyalty' };
@@ -245,18 +243,4 @@ export function withAddedLevelCap(draft: ScaleDraft): ScaleDraft {
 
 export function withoutLevelCap(draft: ScaleDraft, index: number): ScaleDraft {
   return { ...draft, levelCaps: draft.levelCaps.filter((_, i) => i !== index) };
-}
-
-export function withStreakBonus(draft: ScaleDraft, index: number, patch: Partial<StreakBonusDraft>): ScaleDraft {
-  return { ...draft, streakBonuses: draft.streakBonuses.map((bonus, i) => (i === index ? { ...bonus, ...patch } : bonus)) };
-}
-
-/** Un palier de plus, au double du dernier. */
-export function withAddedStreakBonus(draft: ScaleDraft): ScaleDraft {
-  const last = draft.streakBonuses.reduce((max, bonus) => Math.max(max, Number.isFinite(numberOf(bonus.days)) ? numberOf(bonus.days) : 0), 0);
-  return { ...draft, streakBonuses: [...draft.streakBonuses, { days: String(Math.max(1, last * 2)), points: '0', label: '' }] };
-}
-
-export function withoutStreakBonus(draft: ScaleDraft, index: number): ScaleDraft {
-  return { ...draft, streakBonuses: draft.streakBonuses.filter((_, i) => i !== index) };
 }
