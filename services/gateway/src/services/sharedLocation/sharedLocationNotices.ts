@@ -11,7 +11,7 @@
  * dans les deux sens (`blocked-actor-content.ts`), comptes vivants, sourdine.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { SharedLocationRequestKind } from '@meeshy/shared/types/shared-location';
+import { SHARED_LOCATION_REQUEST_WINDOW_MINUTES, type SharedLocationRequestKind } from '@meeshy/shared/types/shared-location';
 import type { LocationShareRequestedNotificationMetadata, LocationShareStartedNotificationMetadata } from '@meeshy/shared/types/notification';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -31,6 +31,16 @@ export type SharedLocationRequestNotice = {
 
 /** Une demande reste lisible un jour : au-delà, elle ne dit plus rien d'actuel. */
 const REQUEST_NOTICE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Un avis « X partage sa position avec toi » par paire et par fenêtre — celle des demandes : le
+ * démarrage est limité, l'arrêt ne l'est pas, et arrêter puis relancer ne doit pas faire sonner
+ * le même destinataire à chaque relance.
+ */
+const STARTED_NOTICE_WINDOW_SECONDS = SHARED_LOCATION_REQUEST_WINDOW_MINUTES * 60;
+
+export const sharedLocationStartedNoticeKey = (emitterId: string, readerId: string): string =>
+  `shared-location-started:{${emitterId.toLowerCase()}}:${readerId.toLowerCase()}`;
 
 const ACTOR_SELECT = { id: true, username: true, displayName: true, avatar: true } as const;
 
@@ -73,6 +83,8 @@ const quietly = async (send: () => Promise<unknown>): Promise<boolean> => {
 export function sharedLocationNoticesOf(params: {
   readonly prisma: SharedLocationNoticesDb;
   readonly notifications: SharedLocationNotifier | null;
+  /** Prend la clé pour `ttlSeconds` si elle est libre (atomique) ; rend `false` si elle est déjà prise. */
+  readonly claim: (key: string, ttlSeconds: number) => Promise<boolean>;
   readonly now?: () => number;
 }) {
   const now = params.now ?? Date.now;
@@ -84,6 +96,7 @@ export function sharedLocationNoticesOf(params: {
       notices.map(async (notice) => {
         const [emitter, lang] = await Promise.all([actorOfId(params.prisma, notice.emitterId), framingLanguageOf(params.prisma, notice.readerId)]);
         if (!emitter || lang === null) return false;
+        if (!(await params.claim(sharedLocationStartedNoticeKey(notice.emitterId, notice.readerId), STARTED_NOTICE_WINDOW_SECONDS).catch(() => false))) return false;
         const metadata: LocationShareStartedNotificationMetadata = { action: 'view_profile', userId: emitter.id, durationMinutes: notice.durationMinutes };
         return quietly(() =>
           notifications.createNotification({

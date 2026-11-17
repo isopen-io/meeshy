@@ -31,7 +31,11 @@ const logger = enhancedLogger.child({ module: 'SharedLocationDeps' });
 const reportBattery = (error: unknown): void => logger.warn('[shared-location] battery not refreshed', { error: error instanceof Error ? error.message : 'unknown' });
 
 /** Le service de notification est résolu à l'usage : le registre peut se remplir après le câblage des sockets. */
-export const noticesParams = (prisma: PrismaClient) => ({ prisma, notifications: getSharedNotificationService() ?? null });
+export const noticesParams = (prisma: PrismaClient) => ({
+  prisma,
+  notifications: getSharedNotificationService() ?? null,
+  claim: (key: string, ttlSeconds: number) => getCacheStore().setnx(key, '1', ttlSeconds),
+});
 
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {
   return {
