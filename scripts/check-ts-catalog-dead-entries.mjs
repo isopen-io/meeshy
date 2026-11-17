@@ -580,6 +580,9 @@ const PENDING_CLIENT_ENTRIES = {
   // adresses personnelles avant la face Liens web (#18880), qui les appellera.
   'users.meAddressesById': { issue: 18880, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens web' },
   'users.meAddressesOrder': { issue: 18880, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens web' },
+  // « En commun » (#19200, chantier #18857) : la passerelle sert nos amis, nos communautés et nos médias en commun
+  // avant le bloc web de la fiche d'un autre qui les lira.
+  'users.byIdInCommon': { issue: 18857, reason: 'GET /users/:id/in-common — ce que deux personnes ont en commun, lu par la fiche d’un autre côté web' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et
