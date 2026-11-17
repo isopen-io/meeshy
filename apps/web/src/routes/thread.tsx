@@ -707,7 +707,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
       className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...personalBubbleVars(conversation), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
-      <ConversationBackdrop conversation={conversation} accent={accent} live={preview === undefined} />
+      <ConversationBackdrop conversation={conversation} accent={accent} />
       <ThreadHeader
         title={title}
         accent={accent}

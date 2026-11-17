@@ -1,3 +1,5 @@
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
+
 import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
 import { setCallEngineWake } from '@/lib/calls/call-transport';
 import { callsAvailable } from '@/lib/calls/calls-availability';
@@ -19,8 +21,10 @@ import { bindPostEngagement } from './publication-engagement';
 import { bindProfileDecorSync } from '../profile-decor/equip';
 import { bindStickerLibrarySync } from '../stickers/library-sync';
 import { bindGameStateSync } from './game-state-live';
-import { bindAppearanceLiveLazily } from './appearance-live';
+import { bindPreferencesLiveLazily } from './preferences-live';
+import { appRowGestures, replayAppRowGestures } from './app-row-gestures';
 import { bindCommunityLiveLazily } from './community-live-binding';
+import { bindOwnProfileLiveLazily } from './own-profile-live-binding';
 import { bindPresenceLive } from './presence-live';
 import { presenceStore } from './presence-store';
 import { apiDeps } from './deps';
@@ -34,6 +38,8 @@ import { setTypingEmitter } from './typing-emit';
 import { keepRealtimeConnection } from './realtime-identity';
 import { leaveThreadOfGoneConversation } from './realtime-conversation-gone';
 import { relaunchConversationList } from './realtime-thread-catch-up';
+import { appProfileActionDeps } from './profile-action-deps';
+import { followServedProfile } from './served-profile-session';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
@@ -111,7 +117,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unbridgeCalls = null;
     return;
   }
-  const unbridge = callsAvailable() ? bridgeCallEvents(next.socket) : () => undefined;
+  const unbridge = callsAvailable() ? bridgeCallEvents(next.socket, { queryClient: appQueryClient }) : () => undefined;
   /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible.
      Un onglet réveillé d'un long sommeil rouvre sa connexion et relit la liste (#10573). */
   const unwatch =
@@ -130,8 +136,14 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unstickers = bindStickerLibrarySync({ socket: next.socket, queryClient: appQueryClient });
   /* `game:updated` (#10900) : une frappe ou un gain faits ailleurs mettent le Jeu à jour, jamais avec un état plus ancien. */
   const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
-  /* `user:preferences-updated` (#10663) : le fond et l'accent changés ailleurs repeignent la liste sans fil ouvert. */
-  const unappearance = bindAppearanceLiveLazily({ socket: next.socket, queryClient: appQueryClient });
+  /* `user:preferences-updated` (#10663, #18914) : le fond, l'accent, l'épingle, la sourdine, l'archive, le nom personnel,
+     la catégorie, le favori, l'historique vidé et les réglages d'application changés ailleurs, sans fil ouvert. */
+  const unpreferences = bindPreferencesLiveLazily({ socket: next.socket, queryClient: appQueryClient, conversations: conversationStore, gestures: appRowGestures });
+  /* Les gestes de rangée faits sans réseau (#18917) : leurs overrides se revoient dès l'ouverture, ils partent à chaque (ré)authentification. */
+  appRowGestures();
+  next.socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, replayAppRowGestures);
+  /* `profile:updated` (#18924) : mes langues, mon nom, ma photo et ma bannière changés sur un autre appareil, sans relire `GET /me`. */
+  const unprofile = bindOwnProfileLiveLazily({ socket: next.socket, queryClient: appQueryClient });
   /* `community:updated` (#18435) et `community:member-*` (#18766) : un renommage, une entrée, un départ ou un rôle se voient chez chaque membre. */
   const uncommunity = bindCommunityLiveLazily({ socket: next.socket, queryClient: appQueryClient, viewerId: currentViewerId });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
@@ -147,7 +159,9 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     undecor();
     unstickers();
     ungame();
-    unappearance();
+    unpreferences();
+    next.socket.off<unknown>(SERVER_EVENTS.AUTHENTICATED, replayAppRowGestures);
+    unprofile();
     uncommunity();
     unpresence();
     unrevoke();
@@ -230,6 +244,11 @@ function syncConnection(): void {
 /* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
    frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
 watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore, endToEndRegime: endToEndRegimeLedger });
+/* LA SESSION SUIT LE PROFIL SERVI (#18914) — une langue, un nom ou une photo
+   changés sur un autre appareil arrivent par `GET /me`, relu à chaque
+   (re)connexion (`CATCH_UP_PERSONAL_FAMILIES`), avec le même assemblage que
+   les gestes du profil. */
+followServedProfile(appProfileActionDeps());
 /* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié
    pour le flux de connexion (`auth.ts`) ; la socket le relit elle-même. */
 void import('@/lib/net/client-session').then(({ publishClientDeclaration }) => publishClientDeclaration()).catch(() => undefined);

@@ -1,10 +1,11 @@
-import { InfiniteQueryObserver, QueryClient } from '@tanstack/react-query';
+import { InfiniteQueryObserver, type QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events/conversation';
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 
 import { createOutboxStore } from '@/lib/send/outbox-store';
+import { liveQueryClient } from '@/test-support/live-query-client';
 import { localMessage } from '@/test-support/thread-cache';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
@@ -94,8 +95,9 @@ const lastIdOf = (client: QueryClient): string | undefined =>
     ?.pages.flatMap((p) => p.conversations)
     .find((c) => c.id === 'c-a')?.lastMessage?.id;
 
+/** Le client de l'application : le journal des écritures vives posé (#18914). */
 const seeded = (): QueryClient => {
-  const client = new QueryClient();
+  const client = liveQueryClient();
   client.setQueryData(CONVERSATIONS_QUERY_KEY, { pages: [pageOf([rowWith(older)])], pageParams: [undefined] });
   return client;
 };

@@ -35,7 +35,6 @@ export type AccountCacheShelf = {
   /** Reprend le cache d'un compte qui redevient actif, et l'en retire. */
   take(userId: string): string | null;
   forget(userId: string): void;
-  forgetAll(): void;
   /** Du plus récemment quitté au plus ancien. */
   list(): readonly string[];
 };
@@ -112,10 +111,6 @@ export function createAccountCacheShelf(storage: SafeStorage): AccountCacheShelf
       return raw;
     },
     forget: drop,
-    forgetAll: () => {
-      readIndex(storage).forEach((id) => remove(storage, shelfKeyOf(id)));
-      writeIndex(storage, []);
-    },
     list: () => readIndex(storage),
   };
 }

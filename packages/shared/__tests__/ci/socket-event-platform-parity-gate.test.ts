@@ -67,15 +67,12 @@ const ASYMETRIES: readonly {
       'audio:translation-ready',
       'audio:translations-completed',
       'audio:translations-progressive',
-      'comment:media-updated',
       'comment:reaction-added',
       'comment:reaction-removed',
-      'conversation:deleted',
       'conversation:join-error',
       'conversation:joined',
       'conversation:left',
       'conversation:participant-unbanned',
-      'conversation:restored',
       'conversation:stats',
       'e2ee:envelope',
       'heartbeat:ack',
@@ -84,8 +81,6 @@ const ASYMETRIES: readonly {
       'location:live-updated',
       'mention:created',
       'participant:rights-updated',
-      'status:created',
-      'status:deleted',
       'status:reacted',
       'status:unreacted',
       'story:translation-updated',
@@ -137,13 +132,6 @@ const ASYMETRIES: readonly {
       "le Jeu Meeshy est né sur iOS : ses missions sont un écran iOS, et le web comme Android n'en ont "
       + 'pas encore la surface. La parité suivra le portage du Jeu, qui a ses propres issues.',
     events: ['game:missions-updated'],
-  },
-  {
-    absents: ['web'],
-    raison:
-      "mon profil synchronisé entre mes appareils (#18924) : la passerelle l'émet sur `user:<moi>`, Android et iOS "
-      + "le lisent ; le lot web de #18924 le lira à son tour, et `GET /me` reste sa relecture sans la socket.",
-    events: ['profile:updated'],
   },
 ];
 

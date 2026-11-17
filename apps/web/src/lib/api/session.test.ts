@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createSessionStore, type SessionStorage } from './session';
+import { createSessionStore, type SessionStorage, type SessionUser } from './session';
 
 /**
  * LE MAGASIN DE SESSION (#5605, T3) — `zustand/vanilla`, motif
@@ -534,3 +534,135 @@ describe('createSessionStore — la langue choisie par l’invité (#9710)', () 
   });
 });
 
+/**
+ * DEUX ONGLETS, DEUX COMPTES, UN SEUL STOCKAGE (#18914, audit C3) — aucun
+ * onglet ne suit l'autre. La session tenue par l'onglet d'Ada ne réécrit
+ * jamais l'entrée persistée d'un AUTRE compte : l'onglet de Bob, rechargé, se
+ * réveillait en Ada dès qu'Ada éditait son profil, ou que `GET /me` le
+ * projetait en fond.
+ */
+describe('createSessionStore — une session tenue n’écrase pas l’entrée persistée d’un autre compte', () => {
+  const ADA: SessionUser = { id: 'u-ada', username: 'ada', displayName: 'Ada', systemLanguage: 'fr' };
+  const BOB: SessionUser = { id: 'u-bob', username: 'bob', displayName: 'Bob', systemLanguage: 'es' };
+
+  const adaTabThenBobTab = (storage: SessionStorage, ada: SessionUser = ADA) => {
+    const adaTab = createSessionStore({ storage, now: () => FIXED_NOW });
+    adaTab.getState().establish({ user: ada, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    createSessionStore({ storage, now: () => FIXED_NOW }).getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3600 });
+    return adaTab;
+  };
+
+  const reloadedUser = (storage: SessionStorage): SessionUser | undefined => {
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+    store.getState().restoreSession();
+    const session = store.getState().session;
+    return session.status === 'authenticated' ? session.user : undefined;
+  };
+
+  test('l’onglet d’Ada édite son profil : sa session tenue suit, l’onglet de Bob rechargé reste Bob', () => {
+    const storage = fakeStorage();
+    const adaTab = adaTabThenBobTab(storage);
+
+    adaTab.getState().updateUser({ systemLanguage: 'en' });
+
+    const held = adaTab.getState().session;
+    expect(held.status === 'authenticated' ? held.user.systemLanguage : undefined).toBe('en');
+    expect(reloadedUser(storage)?.id).toBe('u-bob');
+    expect(reloadedUser(storage)?.systemLanguage).toBe('es');
+  });
+
+  test('l’adresse d’Ada prouvée dans son onglet ne réécrit pas non plus l’entrée de Bob', () => {
+    const storage = fakeStorage();
+    const adaTab = adaTabThenBobTab(storage, { ...ADA, emailUnproven: true });
+
+    adaTab.getState().noteEmailProven();
+
+    expect(reloadedUser(storage)?.id).toBe('u-bob');
+  });
+
+  test('un seul compte : l’édition se persiste et survit au rechargement, comme avant', () => {
+    const storage = fakeStorage();
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+    store.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+
+    store.getState().updateUser({ systemLanguage: 'en' });
+
+    expect(reloadedUser(storage)?.systemLanguage).toBe('en');
+  });
+});
+
+/**
+ * DEUX ONGLETS, UN MÊME COMPTE, DEUX SESSIONS (#19132, réserve R2 de #19081).
+ * Ada se reconnecte dans un onglet : l'entrée persistée porte désormais son
+ * jeton RÉCENT. L'autre onglet tient encore l'ancienne session ; une édition
+ * de profil — ou la projection de `GET /me` en fond — y réécrivait l'entrée
+ * avec l'ANCIEN jeton, que le prochain rechargement reprenait : révoqué ou
+ * échu, il déconnectait Ada sans raison. Comparer le seul compte ne suffit
+ * pas : deux sessions du même compte ne sont pas la même session.
+ */
+describe('createSessionStore — une session tenue ne remplace jamais le jeton plus récent d’une autre session du même compte', () => {
+  const ADA: SessionUser = { id: 'u-ada', username: 'ada', displayName: 'Ada', systemLanguage: 'fr' };
+
+  const staleTabThenFreshLogin = (storage: SessionStorage, ada: SessionUser = ADA) => {
+    const staleTab = createSessionStore({ storage, now: () => FIXED_NOW });
+    staleTab.getState().establish({ user: ada, token: 'jwt-ancien', sessionToken: 'sess-ancienne', expiresIn: 3600 });
+    createSessionStore({ storage, now: () => FIXED_NOW }).getState().establish({ user: ada, token: 'jwt-recent', sessionToken: 'sess-recente', expiresIn: 7200 });
+    return staleTab;
+  };
+
+  const reloaded = (storage: SessionStorage) => {
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+    store.getState().restoreSession();
+    return store.getState().session;
+  };
+
+  test('l’onglet au jeton ancien édite le profil : l’entrée persistée garde le jeton récent', () => {
+    const storage = fakeStorage();
+    const staleTab = staleTabThenFreshLogin(storage);
+
+    staleTab.getState().updateUser({ systemLanguage: 'en' });
+
+    const held = staleTab.getState().session;
+    expect(held.status === 'authenticated' ? held.user.systemLanguage : undefined).toBe('en');
+    const after = reloaded(storage);
+    expect(after.status === 'authenticated' ? after.token : undefined).toBe('jwt-recent');
+    expect(after.status === 'authenticated' ? after.sessionToken : undefined).toBe('sess-recente');
+    expect(after.status === 'authenticated' ? after.expiresAt : undefined).toBe(FIXED_NOW + 7200 * 1000);
+  });
+
+  test('l’adresse prouvée dans l’onglet au jeton ancien ne remplace pas non plus le jeton récent', () => {
+    const storage = fakeStorage();
+    const staleTab = staleTabThenFreshLogin(storage, { ...ADA, emailUnproven: true });
+
+    staleTab.getState().noteEmailProven();
+
+    const after = reloaded(storage);
+    expect(after.status === 'authenticated' ? after.token : undefined).toBe('jwt-recent');
+  });
+
+  test('le même identifiant de session sous un autre jeton reste une autre session : rien n’est réécrit', () => {
+    const storage = fakeStorage();
+    const staleTab = createSessionStore({ storage, now: () => FIXED_NOW });
+    staleTab.getState().establish({ user: ADA, token: 'jwt-ancien', sessionToken: 'sess-ada', expiresIn: 3600 });
+    createSessionStore({ storage, now: () => FIXED_NOW }).getState().establish({ user: ADA, token: 'jwt-renouvele', sessionToken: 'sess-ada', expiresIn: 7200 });
+
+    staleTab.getState().updateUser({ displayName: 'Ada L.' });
+
+    const after = reloaded(storage);
+    expect(after.status === 'authenticated' ? after.token : undefined).toBe('jwt-renouvele');
+    expect(after.status === 'authenticated' ? after.user.displayName : undefined).toBe('Ada');
+  });
+
+  test('la session qui a écrit l’entrée y persiste toujours son édition', () => {
+    const storage = fakeStorage();
+    staleTabThenFreshLogin(storage);
+    const freshTab = createSessionStore({ storage, now: () => FIXED_NOW });
+    freshTab.getState().restoreSession();
+
+    freshTab.getState().updateUser({ systemLanguage: 'en' });
+
+    const after = reloaded(storage);
+    expect(after.status === 'authenticated' ? after.user.systemLanguage : undefined).toBe('en');
+    expect(after.status === 'authenticated' ? after.token : undefined).toBe('jwt-recent');
+  });
+});

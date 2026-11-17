@@ -1050,3 +1050,53 @@ export function applyCommentTranslation(queryClient: QueryClient, payload: unkno
     ),
   );
 }
+
+/* ----------------------------------------------------------------- #18921 --
+ * **`comment:media-updated` : LE VOCAL D'UN COMMENTAIRE REÇOIT SA
+ * TRANSCRIPTION EN DIRECT.** La passerelle le diffuse quand le pipeline audio
+ * d'un média de commentaire a transcrit et traduit
+ * (`SocialEventsHandler.broadcastCommentMediaUpdated`) ; il n'était écouté
+ * nulle part, et la transcription attendait la relecture du fil. La charge
+ * porte le commentaire RELU : seuls la transcription et les pistes de chaque
+ * média s'en posent sur la rangée en cache — le reste (texte, cœur du lecteur,
+ * compteurs) garde ce que les événements voisins y ont écrit. Le Prisme ne se
+ * résout pas ici : la rangée redescend à chaque peinture (`commentPrism`), sur
+ * la transcription posée comme sur une traduction de rang inférieur.
+ * -------------------------------------------------------------------------- */
+
+type ServedMediaAudio = Pick<FeedMedia, 'transcription' | 'translations'>;
+
+const servedMediaAudioOf = (payload: unknown): { readonly postId: string; readonly commentId: string; readonly media: ReadonlyMap<string, ServedMediaAudio> } | null => {
+  const p = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
+  const comment = typeof p.comment === 'object' && p.comment !== null ? (p.comment as Record<string, unknown>) : {};
+  if (!nonEmpty(p.postId) || !nonEmpty(p.commentId) || comment.id !== p.commentId || !Array.isArray(comment.media)) return null;
+  const media = (comment.media as readonly unknown[]).flatMap((item) => {
+    const m = typeof item === 'object' && item !== null ? (item as FeedMedia) : undefined;
+    return m === undefined || !nonEmpty(m.id) || (m.transcription == null && m.translations == null) ? [] : [[m.id, { transcription: m.transcription ?? null, translations: m.translations ?? null }] as const];
+  });
+  return media.length === 0 ? null : { postId: p.postId, commentId: p.commentId, media: new Map(media) };
+};
+
+const sameAudio = (held: FeedMedia, served: ServedMediaAudio): boolean =>
+  JSON.stringify([held.transcription ?? null, held.translations ?? null]) === JSON.stringify([served.transcription, served.translations]);
+
+export function applyCommentMediaUpdated(queryClient: QueryClient, payload: unknown): void {
+  const served = servedMediaAudioOf(payload);
+  if (served === null) return;
+  const enriched = (media: readonly FeedMedia[]): readonly FeedMedia[] => {
+    const next = media.map((item) => {
+      const audio = served.media.get(item.id);
+      return audio === undefined || sameAudio(item, audio) ? item : { ...item, ...audio };
+    });
+    return next.every((item, i) => item === media[i]) ? media : next;
+  };
+  commentCacheKeys(queryClient, served.postId).forEach((key) =>
+    writeCardCache<CommentInfiniteData>(queryClient, key, (data) =>
+      mapAllPages(data, (comments) => {
+        const held = comments.find((c) => c.id === served.commentId);
+        const media = held?.media == null ? undefined : enriched(held.media);
+        return held === undefined || media === undefined || media === held.media ? comments : comments.map((c) => (c === held ? { ...c, media } : c));
+      }),
+    ),
+  );
+}
