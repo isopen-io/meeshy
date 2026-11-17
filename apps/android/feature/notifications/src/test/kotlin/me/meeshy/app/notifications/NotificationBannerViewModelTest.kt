@@ -3,9 +3,11 @@ package me.meeshy.app.notifications
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -151,6 +153,46 @@ class NotificationBannerViewModelTest {
 
         deleted.emit(NotificationDeletedSocketEvent("n2"))
         advanceTimeBy(1_000)
+        runCurrent()
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun aNotificationRetractedWhileItsBannerIsBeingPreparedNeverReachesTheScreen() = runTest(dispatcher.scheduler) {
+        val lookup = CompletableDeferred<Unit>()
+        every { conversationRepository.conversationStream("c2") } returns flow {
+            lookup.await()
+            emit(null)
+        }
+        val vm = viewModel()
+        runCurrent()
+        received.emit(notification(id = "n1", conversationId = "c2"))
+        runCurrent()
+
+        deleted.emit(NotificationDeletedSocketEvent("n1"))
+        runCurrent()
+        lookup.complete(Unit)
+        runCurrent()
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun aRetractionDuringThePreparationOfAnotherBannerDoesNotHoldItBack() = runTest(dispatcher.scheduler) {
+        val lookup = CompletableDeferred<Unit>()
+        every { conversationRepository.conversationStream("c2") } returns flow {
+            lookup.await()
+            emit(null)
+        }
+        val vm = viewModel()
+        runCurrent()
+        received.emit(notification(id = "n1", conversationId = "c2"))
+        runCurrent()
+
+        deleted.emit(NotificationDeletedSocketEvent("n2"))
+        runCurrent()
+        lookup.complete(Unit)
         runCurrent()
 
         assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
