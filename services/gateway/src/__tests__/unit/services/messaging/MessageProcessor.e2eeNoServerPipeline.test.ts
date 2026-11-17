@@ -128,6 +128,8 @@ function harness(regime: typeof E2EE | typeof CLEAR, sourceAttachments: unknown[
     trackingLink: { updateMany: jest.fn<any>().mockResolvedValue({}) },
     user: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    // GW-05 (#18906) — la ligne et ses enveloppes s'écrivent dans UNE transaction.
+    $transaction: async (run: (tx: unknown) => Promise<unknown>) => run(prisma),
   };
   const processAudioAttachment = jest.fn<any>().mockResolvedValue(undefined);
   const processor = new MessageProcessor(prisma as unknown as PrismaClient, undefined, { processAudioAttachment } as never);

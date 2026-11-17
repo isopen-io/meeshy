@@ -21,7 +21,8 @@ export type Harness = ReturnType<typeof createSendHarness>;
 
 export function createSendHarness(options: {
   readonly encryptionMode: string;
-  readonly envelopeCreateMany?: (args: unknown) => Promise<unknown>;
+  /** Remplace l'écriture des enveloppes ; `write` est la vraie, sur le magasin factice. */
+  readonly envelopeCreateMany?: (args: unknown, write: (args: unknown) => Promise<unknown>) => Promise<unknown>;
   readonly messageDelete?: (args: unknown) => Promise<unknown>;
 }) {
   resetParticipantLookupCache();
@@ -49,6 +50,7 @@ export function createSendHarness(options: {
     new Proxy(known, { get: (target, op) => (op in target ? target[op as string] : recordedOperation(delegate, String(op))) });
 
   const envelopeDelegate = store.prisma.messageEnvelope;
+  const envelopeCreateMany = options.envelopeCreateMany;
   const base: Record<string, Record<string, unknown>> = {
     conversation: {
       findUnique: async () => ({ id: CONVERSATION, type: 'direct', encryptionMode: options.encryptionMode, encryptionEnabledAt: new Date('2026-01-01'), encryptionEpoch: 0 }),
@@ -63,7 +65,9 @@ export function createSendHarness(options: {
     e2EEDevice: store.prisma.e2EEDevice,
     messageEnvelope: {
       ...envelopeDelegate,
-      createMany: options.envelopeCreateMany ?? envelopeDelegate.createMany,
+      createMany: envelopeCreateMany
+        ? (args: unknown) => envelopeCreateMany(args, envelopeDelegate.createMany as (args: unknown) => Promise<unknown>)
+        : envelopeDelegate.createMany,
     },
     friendRequest: { findFirst: async () => null },
     postMention: { findUnique: async () => null },
@@ -96,8 +100,23 @@ export function createSendHarness(options: {
     messageAttachment: { findMany: async () => [] },
     user: { findUnique: async () => null, findMany: async () => [] },
   };
-  const prisma = new Proxy(base, {
+  // Une transaction du jeu de réplicas : ce que le rappel a écrit (messages,
+  // enveloppes) est DÉFAIT quand il lève, comme MongoDB l'abandonne.
+  const transaction = async (run: (tx: unknown) => Promise<unknown>): Promise<unknown> => {
+    const envelopeRows = store.collections.MessageEnvelope.rows;
+    const messagesBefore = [...messages];
+    const envelopesBefore = [...envelopeRows];
+    try {
+      return await run(prisma);
+    } catch (error) {
+      messages.splice(0, messages.length, ...messagesBefore);
+      envelopeRows.splice(0, envelopeRows.length, ...envelopesBefore);
+      throw error;
+    }
+  };
+  const prisma: Record<string, unknown> = new Proxy(base, {
     get: (target, key) => {
+      if (key === '$transaction') return transaction;
       if (key === '$runCommandRaw') return recordedOperation('$runCommandRaw', 'command');
       if (typeof key !== 'string' || key.startsWith('$') || key === 'then') return target[key as string];
       return recording(key, target[key] ?? {});
