@@ -3,7 +3,7 @@
   "version": "2.28.0",
   "private": true,
   "type": "module",
-  "description": "La v3.1 web — une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
+  "description": "L'application web de Meeshy — une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

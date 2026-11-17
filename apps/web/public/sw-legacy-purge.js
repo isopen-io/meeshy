@@ -3,7 +3,7 @@
  * (bascule de meeshy.me, #6702).
  *
  * LE PROBLÈME. Le Cache Storage vit à l'échelle de l'ORIGINE, pas du worker.
- * Le service worker du legacy (`apps/web/public/sw.js`) y a rangé, sous le
+ * Le service worker du legacy (`legacy-web-final:apps/web/public/sw.js`) y a rangé, sous le
  * préfixe `meeshy-cache-`, sa coquille ET des réponses d'API privées de ses
  * lecteurs. La v2 le remplace dans la MÊME inscription (`/sw.js`) : le worker
  * qui savait purger ces caches ne s'exécutera plus jamais, et ils resteraient
@@ -12,7 +12,7 @@
  *
  * CE QUE CE FICHIER FAIT. À l'activation, il supprime les caches dont le nom
  * COMMENCE par `meeshy-cache-` — le préfixe que le legacy déclarait lui-même
- * comme sa frontière de propriété (`CACHE_NAMESPACE`, `apps/web/public/sw.js`),
+ * comme sa frontière de propriété (`CACHE_NAMESPACE`, `legacy-web-final:apps/web/public/sw.js`),
  * et eux seuls : le précache de Workbox, `api` et `medias` appartiennent à la
  * v2 et restent intacts.
  *

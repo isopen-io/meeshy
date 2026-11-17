@@ -310,7 +310,7 @@ const dropWebOnlyAssets = (): Plugin => ({
 });
 
 /**
- * LES SIX FABRIQUES DE FIXTURES — nommées ICI, lues par la règle d'élagage
+ * LES FABRIQUES DE FIXTURES (`src/lib/api/fixtures*.ts`) — nommées ICI, lues par la règle d'élagage
  * (§ `build.rollupOptions.treeshake`, revue #5815).
  */
 const FIXTURE_MODULE = /\/src\/lib\/api\/fixtures[\w-]*\.ts$/;
@@ -542,7 +542,7 @@ export default defineConfig({
     reportCompressedSize: true,
     rollupOptions: {
       /**
-       * LES SIX FABRIQUES DE FIXTURES N'ONT AUCUN EFFET DE BORD (revue #5815).
+       * LES FABRIQUES DE FIXTURES N'ONT AUCUN EFFET DE BORD (revue #5815).
        *
        * `__FIXTURES__` (§ `define`) rend leurs exports NON RÉFÉRENCÉS sous
        * `VITE_DATA_SOURCE=gateway` — mesuré : `CONVERSATIONS` (« Voyage

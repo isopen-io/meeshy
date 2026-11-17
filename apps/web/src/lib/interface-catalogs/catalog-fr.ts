@@ -891,7 +891,7 @@ const fr = {
 
   /* LA BANNIÈRE DE MISE À JOUR (#6936) — les libellés du legacy
      (`updateAvailable`, `updateNow`, `wait`, dans les catalogues
-     `apps/web/locales`), plus l'état du clic et le nom de la région annoncée,
+     `legacy-web-final:apps/web/locales`), plus l'état du clic et le nom de la région annoncée,
      que le legacy n'avait pas. */
   'appUpdate.available': 'Une nouvelle version de Meeshy est disponible !',
   'appUpdate.hint': 'Rechargez pour avoir les dernières nouveautés.',

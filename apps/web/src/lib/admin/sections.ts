@@ -20,7 +20,7 @@ export type { AdminRoute };
  * ## Ce que ce module reprend
  *
  * La liste part de la barre latérale du legacy
- * (`apps/web/components/admin/AdminLayout.tsx`, onze entrées), rangée depuis
+ * (`legacy-web-final:apps/web/components/admin/AdminLayout.tsx`, onze entrées), rangée depuis
  * #8876 en sept groupes et dix-neuf sections (`docs/superpowers/specs/
  * 2026-09-30-admin-vue-de-dieu-design.md`, § 1) ; huit groupes et vingt sections
  * depuis le Système et ses Opérations (#10391).
