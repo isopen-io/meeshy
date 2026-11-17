@@ -52,4 +52,3 @@ export const INK3 = 'var(--color-ios-ink-3)';
 export const SURFACE = 'var(--color-ios-surface)';
 export const EDGE = 'var(--color-edge)';
 export const BRAND = 'var(--color-ios-brand)';
-export const HOVER = 'color-mix(in srgb, var(--color-ios-ink-3) 6%, transparent)';

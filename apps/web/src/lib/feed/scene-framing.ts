@@ -76,11 +76,6 @@ export function backgroundMedia(scene: CanvasScene): CanvasObject | undefined {
   return scene.objects.find((o) => isBackground(o) && carriesPicture(o)) ?? scene.objects.find(isBackground);
 }
 
-export function backgroundAspect(scene: CanvasScene): number | undefined {
-  const fond = backgroundMedia(scene);
-  return fond === undefined ? undefined : declaredAspect(fond);
-}
-
 /** Cette scène montre-t-elle quelque chose ? Un fond de couleur nu n'est pas
  * « quelque chose » — il remplit le cadre sans rien y placer. */
 export function showsSomething(scene: CanvasScene): boolean {

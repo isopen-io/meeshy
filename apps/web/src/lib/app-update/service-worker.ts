@@ -12,7 +12,7 @@ import { SW_UPDATE_AVAILABLE_EVENT } from './event';
  * l'application en cours (en préservant la session) ».
  *
  * CE QUE LE LEGACY FAIT, et que ce module rejoue
- * (`apps/web/utils/service-worker.ts`, `apps/web/public/sw.js:233-238`) :
+ * (`legacy-web-final:apps/web/utils/service-worker.ts`, `legacy-web-final:apps/web/public/sw.js:233-238`) :
  *
  *  1. inscription de `/sw.js` à la racine, `updateViaCache: 'none'` — le script
  *     qui porte la révision de tout le reste ne se lit jamais dans le cache HTTP ;

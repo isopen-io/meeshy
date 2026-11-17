@@ -259,8 +259,6 @@ const pt = {
   'feed.like.error': 'Erro ao curtir a publicação',
   'post.bookmark.error': 'Não foi possível salvar',
   'feed.gesture.pending': 'Ação não confirmada — offline',
-  'feed.share.error': 'Erro ao compartilhar a publicação',
-  'feed.share.copied': 'Link copiado — é só colar.',
 
   'root.menu.feed': 'Feed',
   'root.menu.game': 'Minha Lenda',

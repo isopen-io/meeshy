@@ -455,5 +455,3 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
   );
   return typeof document === 'undefined' ? scene : createPortal(scene, document.body);
 }
-
-export default MintCeremony;

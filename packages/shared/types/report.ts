@@ -2,8 +2,6 @@
  * Types pour le systeme de signalement (Report)
  */
 
-import type { PaginationMeta } from './api-responses.js';
-
 /**
  * Type de contenu signale
  */
@@ -121,31 +119,6 @@ export interface ReportFilters {
 }
 
 /**
- * Pagination pour les signalements
- */
-export interface ReportPaginationParams {
-  offset: number;
-  limit: number;
-}
-
-/**
- * @deprecated Use PaginationMeta from api-responses.ts instead
- * Kept for backwards compatibility
- */
-export interface ReportPaginationMeta extends PaginationMeta {
-  /** @deprecated Use 'total' instead */
-  totalReports?: number;
-}
-
-/**
- * Reponse paginee avec signalements
- */
-export interface PaginatedReportsResponse {
-  reports: Report[];
-  pagination: PaginationMeta;
-}
-
-/**
  * Statistiques sur les signalements
  */
 export interface ReportStats {
@@ -158,28 +131,4 @@ export interface ReportStats {
   reportsByType: Record<string, number>;
   reportsByReportedType: Record<string, number>;
   averageResolutionTimeHours: number;
-}
-
-/**
- * Signalement avec details de l'entite signalee
- */
-export interface ReportWithDetails extends Report {
-  reportedEntity?: {
-    id: string;
-    type: string;
-    content?: string;
-    title?: string;
-    username?: string;
-    [key: string]: string | number | boolean | null | undefined;
-  };
-  reporter?: {
-    id: string;
-    username: string;
-    displayName?: string;
-  };
-  moderator?: {
-    id: string;
-    username: string;
-    displayName?: string;
-  };
 }
