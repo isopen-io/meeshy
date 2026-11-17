@@ -102,6 +102,20 @@ function creditProfileMilestones(
 }
 
 /**
+ * La réponse du PATCH est lue par son PROPRIÉTAIRE : elle lui rend sa ville et son réglage
+ * (#18862), champs ajoutés qu'un ancien client ignore. `userSchema` reste sans eux, car d'autres
+ * routes le servent.
+ */
+const ownProfileWithCitySchema = {
+  ...userSchema,
+  properties: {
+    ...userSchema.properties,
+    city: { type: 'string', nullable: true, description: 'Declared city (owner only)' },
+    cityCircle: { type: 'string', nullable: true, description: 'Circle from which the city is readable (null = only the owner)' },
+  },
+} as const;
+
+/**
  * Update authenticated user profile
  */
 export async function updateUserProfile(fastify: FastifyInstance) {
@@ -120,7 +134,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                user: userSchema,
+                user: ownProfileWithCitySchema,
                 message: { type: 'string', example: 'Profile updated successfully' }
               }
             }
@@ -365,7 +379,11 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
 
       return sendSuccess(reply, {
-        user: formatUserResponse({ ...updatedUser, autoTranslateEnabled }, permissions),
+        user: {
+          ...formatUserResponse({ ...updatedUser, autoTranslateEnabled }, permissions),
+          city: updatedUser.city ?? null,
+          cityCircle: updatedUser.cityCircle ?? null,
+        },
         message: 'Profile updated successfully'
       });
 

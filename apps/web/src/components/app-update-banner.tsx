@@ -12,7 +12,7 @@ import { Glyph } from './glyph';
 
 /**
  * LA BANNIÈRE DE MISE À JOUR (#6936) — le comportement du legacy
- * (`apps/web/components/common/SystemStatusBanner.tsx`), la matière de la v2.
+ * (`legacy-web-final:apps/web/components/common/SystemStatusBanner.tsx`), la matière de la v2.
  *
  * CE QU'ELLE REPREND DU LEGACY : le texte (« Une nouvelle version de Meeshy est
  * disponible ! »), les deux contrôles (« Mettre à jour », une croix

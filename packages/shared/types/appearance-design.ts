@@ -51,7 +51,6 @@ export const APPEARANCE_STYLES = ['pattern', 'illustration', 'gradient'] as cons
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
 export const SCENE_ANCHORS = ['bottom', 'center', 'bottom-end'] as const;
-export type SceneAnchor = (typeof SCENE_ANCHORS)[number];
 
 export const hexSchema = z.string().check(z.regex(HEX_PATTERN));
 export const slugSchema = z.string().check(z.regex(PACK_SLUG_PATTERN), z.maxLength(APPEARANCE_LIMITS.maxKeyLength));

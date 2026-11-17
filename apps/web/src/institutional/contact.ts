@@ -1,7 +1,7 @@
 import type { ContentPage } from './type';
 
 /**
- * « Contact » — le contenu de `apps/web/locales/fr/contact.json`, mot pour mot.
+ * « Contact » — le contenu de `legacy-web-final:apps/web/locales/fr/contact.json`, mot pour mot.
  *
  * DEUX ÉCARTS AVEC LE LEGACY, tous deux assumés :
  *

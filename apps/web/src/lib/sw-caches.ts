@@ -7,7 +7,7 @@ import { SW_RECENT_MEDIA_CACHE } from './media/recent-media-cache-name';
  * rend AUSSI ce qu'un autre script y a écrit. Toute purge de l'application doit
  * donc nommer ce qu'elle POSSÈDE, et rien d'autre — c'est la frontière de
  * propriété que le legacy documentait déjà (`LEGACY_CACHE_NAMESPACE`,
- * `apps/web/utils/service-worker.ts`).
+ * `legacy-web-final:apps/web/utils/service-worker.ts`).
  *
  * Trois lecteurs partagent ce module, plutôt que trois copies du littéral :
  *  - `vite.config.ts` (§ VitePWA `runtimeCaching`), qui CRÉE ces seaux ;

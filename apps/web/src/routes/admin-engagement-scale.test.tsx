@@ -11,7 +11,7 @@ import {
   draftOf,
   scaleOfDraft,
   withAddedLevelCap,
-  withAddedStreakBonus,
+  withAddedTier,
   withOperation,
   withVariant,
 } from '@/lib/admin/engagement-scale-form';
@@ -115,7 +115,7 @@ describe('le brouillon — la loi partagée en aller-retour', () => {
   });
 
   test('un palier de constance ajouté double le dernier et reste valide', () => {
-    const scale = scaleOfDraft(withAddedStreakBonus(draftOf(DEFAULT_ENGAGEMENT_SCALE)));
+    const scale = scaleOfDraft(withAddedTier(draftOf(DEFAULT_ENGAGEMENT_SCALE), { kind: 'global' }));
     expect(scale?.streakBonuses.at(-1)).toEqual({ days: 200, points: 0 });
   });
 });
