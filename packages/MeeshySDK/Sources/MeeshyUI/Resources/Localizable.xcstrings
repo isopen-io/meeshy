@@ -2526,7 +2526,7 @@
         }
       }
     },
-    "profile.relation.request.unsent.detail": {
+    "profile.relation.request.unsent.consequence": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

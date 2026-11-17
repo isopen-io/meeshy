@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - La feuille « Signaler » (planche `Signaler`, #18873)
 //
@@ -10,6 +11,7 @@ struct ProfileReportSheet: View {
     let name: String
     var avatarURL: String?
     var accentColor = ""
+    var ring: ServedProfileDecorItem?
     let isAlreadyBlocked: Bool
     let onSend: (ProfileReportDraft) async -> ProfileReportOutcome
 
@@ -73,7 +75,7 @@ struct ProfileReportSheet: View {
     /// En tête, qui l'on signale : son avatar, « Signaler Rui », l'anonymat du signalement, et ✕ pour fermer.
     private var header: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: name, context: .userListItem, accentColor: accentColor, avatarURL: avatarURL)
+            MeeshyAvatar(name: name, context: .userListItem, accentColor: accentColor, avatarURL: avatarURL, ring: ring)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(verbatim: ProfileReportCopy.title(name))

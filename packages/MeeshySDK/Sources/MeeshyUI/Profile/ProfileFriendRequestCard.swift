@@ -52,7 +52,7 @@ struct ProfileFriendRequestCard: View {
     private var unsentNotice: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Label {
-                Text(String(localized: "profile.relation.request.unsent.detail",
+                Text(String(localized: "profile.relation.request.unsent.consequence",
                             defaultValue: "Rien n'a été envoyé. Le bouton est revenu comme avant.", bundle: .module))
                     .meeshyScaledFont(MeeshyFont.labelSize)
             } icon: {
