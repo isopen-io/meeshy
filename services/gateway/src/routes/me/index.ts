@@ -19,6 +19,7 @@ import bloodLocationMeRoutes from './blood-location';
 import locationSettingsReadMeRoutes from './location-settings-read';
 import deviceBatteryMeRoutes from './device-battery';
 import deviceReachabilityMeRoutes from './device-reachability';
+import liveActivityTokensMeRoutes from './live-activity-tokens';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { handleGetMe, meRouteSharedOptions } from './get-me';
 
@@ -38,6 +39,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
   await fastify.register(deviceBatteryMeRoutes);
   // #18737 : le signe de vie du téléphone sondé et la coupure globale de son injoignabilité.
   await fastify.register(deviceReachabilityMeRoutes);
+  // #19463 : le jeton d'Activité en direct d'un partage de position, clos par la passerelle à sa fin.
+  await fastify.register(liveActivityTokensMeRoutes);
 
   // Future routes can be added here:
   // await fastify.register(profileRoutes);

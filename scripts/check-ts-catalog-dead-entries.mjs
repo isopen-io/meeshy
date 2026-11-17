@@ -534,6 +534,11 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Le jeton d'Activité en direct d'un partage de position (#19463, chantier #18857) : l'iPhone qui affiche
+  // « Léo partage sa position » le confie à la passerelle, qui clôt l'Activité si le partage finit avant son terme.
+  'me.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct close par la passerelle à la fin du partage' },
+  // La relecture de mon fantôme de position (#19452, chantier #18857) : les réglages de position des clients la liront.
+  'me.locationGhost': { issue: 19452, reason: 'GET /me/location/ghost — mon fantôme de position relu depuis chaque appareil' },
   // Les entrées d'un lien de communauté (#19429, besoin #19290, chantier #18857) : iOS les lira d'abord
   // (fiche `Lien-Communaute`) ; le web et Android avec leur fiche de lien.
   'communities.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },

@@ -80,6 +80,11 @@ jest.mock('../../../../routes/me/device-reachability', () => ({
   default: jest.fn(async () => {}),
 }));
 
+jest.mock('../../../../routes/me/live-activity-tokens', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+
 jest.mock('../../../../routes/me/profile-decor', () => ({
   __esModule: true,
   default: jest.fn(async () => {}),

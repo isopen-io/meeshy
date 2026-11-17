@@ -846,6 +846,8 @@ export type {
   SharedLocationEndedEventData,
   SharedLocationSnapshot,
 } from './shared-location.js';
+// La fin d'un partage de position portée à l'appareil suspendu (#19463)
+export * from './shared-location-live-activity.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';
