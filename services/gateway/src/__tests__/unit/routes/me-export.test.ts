@@ -200,6 +200,7 @@ function makePrisma(opts: PrismaOpts = {}) {
     trackingLink: { findMany: jest.fn().mockResolvedValue([]) },
     // Les visites du lien de profil (#19206) : aucune.
     profileLinkVisitDay: { findMany: jest.fn().mockResolvedValue([]) },
+    emailInvitation: { findMany: jest.fn().mockResolvedValue([]) },
     // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement.
     ...Object.fromEntries(
       ['userRelation', 'pairInteractionDay', 'relationFeatureSetting', 'bloodLocationPoint', 'bloodLocationConsultation'].map(

@@ -65,6 +65,7 @@ async function buildApp(opts: {
   auth?: 'authenticated' | 'unauthenticated';
   mocks?: ReturnType<typeof makeMocks>;
   profileLinkVisits?: jest.Mock;
+  emailInvitations?: jest.Mock;
 } = {}): Promise<{ app: FastifyInstance; mocks: ReturnType<typeof makeMocks> }> {
   const { auth = 'authenticated', mocks = makeMocks() } = opts;
 
@@ -77,6 +78,8 @@ async function buildApp(opts: {
     trackingLink: { findMany: jest.fn().mockResolvedValue([]) },
     // Les visites du lien de profil (#19206) : aucune, sauf mention contraire.
     profileLinkVisitDay: { findMany: opts.profileLinkVisits ?? jest.fn().mockResolvedValue([]) },
+    // Les invitations par e-mail (#19207) : aucune, sauf mention contraire.
+    emailInvitation: { findMany: opts.emailInvitations ?? jest.fn().mockResolvedValue([]) },
     // #3633 — le défaut "toutes les types" en couvre désormais dix, pas trois ;
     // ce fichier ne teste que profile/messages/contacts, ces doubles évitent
     // seulement qu'un modèle non simulé fasse lever le chemin par défaut.
@@ -335,6 +338,25 @@ describe('GET /export — visites de mon lien de profil (#19206)', () => {
     expect(res.statusCode).toBe(200);
     expect(profileLinkVisits).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: USER_ID } }));
     expect(res.json().data.profile.profileLinkVisits).toEqual([{ day: '2026-11-17', visits: 57 }]);
+    await app.close();
+  });
+});
+
+describe('GET /export — mes invitations par e-mail (#19207)', () => {
+  it('rend, dans la section profile, chaque invitation avec son adresse masquée et ses relances', async () => {
+    const emailInvitations = jest.fn<any>().mockResolvedValue([
+      { email: 'marie.dupont@gmail.com', sentAt: new Date('2026-11-13T12:00:00.000Z'), resendCount: 1, lastResentAt: new Date('2026-11-16T12:00:00.000Z') },
+      { email: 'jo@x.io', sentAt: new Date('2026-11-01T08:00:00.000Z'), resendCount: null, lastResentAt: null },
+    ]);
+    const { app } = await buildApp({ emailInvitations });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    expect(emailInvitations).toHaveBeenCalledWith(expect.objectContaining({ where: { senderId: USER_ID }, take: expect.any(Number) }));
+    expect(res.body).not.toContain('marie.dupont');
+    expect(res.json().data.profile.emailInvitations).toEqual([
+      { maskedEmail: 'ma•••••@gmail.com', sentAt: '2026-11-13T12:00:00.000Z', resendCount: 1, lastResentAt: '2026-11-16T12:00:00.000Z' },
+      { maskedEmail: 'j•••••@x.io', sentAt: '2026-11-01T08:00:00.000Z', resendCount: 0, lastResentAt: null },
+    ]);
     await app.close();
   });
 });
