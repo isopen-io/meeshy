@@ -3,6 +3,7 @@ Tests d'intégration complets pour les services Voice API
 Couvre: VoiceAnalyzerService, TranslationPipelineService, AnalyticsService, Voice API Router
 """
 
+import re
 import pytest
 import asyncio
 import tempfile
@@ -378,7 +379,7 @@ class TestTranslationPipelineService:
         job_id = service._generate_job_id()
 
         assert job_id.startswith("mshy_")
-        assert "user" not in job_id
+        assert re.fullmatch(r"mshy_[0-9a-f]{32}", job_id)
 
     @pytest.mark.asyncio
     async def test_generate_output_filename(self, temp_data_dir):

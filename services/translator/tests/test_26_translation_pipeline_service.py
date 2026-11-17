@@ -15,6 +15,7 @@ Tests cover:
 - Statistics and cleanup
 """
 
+import re
 import sys
 import os
 import logging
@@ -1160,7 +1161,7 @@ class TestTranslationPipelineServiceJobId:
         job_id = pipeline_service._generate_job_id()
 
         assert job_id.startswith("mshy_")
-        assert "user" not in job_id
+        assert re.fullmatch(r"mshy_[0-9a-f]{32}", job_id)
         assert len(job_id) >= len("mshy_") + 32
         logger.info("generate_job_id OK")
 
