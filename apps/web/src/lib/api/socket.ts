@@ -20,7 +20,7 @@ import { decodeRealtimeNotification } from '@/lib/notifications/record';
 import { deletedAccountOf, deletedAccountOfRevocation, ownDeletedAccount } from './account-deleted';
 import { attachmentStatusDetailsQueryKey } from './attachments';
 import { guestAccessEndOfSocketError, type GuestAccessEnd } from './guest-access-end';
-import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './conversations';
+import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY, requestFullConversationRead } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentDeleted, decodeAttachmentDeletedEvent } from './realtime-attachment-deleted';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
@@ -32,9 +32,9 @@ import {
   isMessageDeletedEvent,
   isMessageEditedEvent,
 } from './realtime-message-mutations';
-import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
+import { applyMessageHiddenForMe, applyMessageRestoredForMe, isMessageHiddenForMeEvent, isMessageRestoredForMeEvent } from './realtime-message-hidden';
 import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
-import { applyConversationGone, conversationGoneOf } from './realtime-conversation-gone';
+import { applyConversationGone, conversationGoneOf, viewerConversationOf } from './realtime-conversation-gone';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 /* LES DEUX CLÉS DU REJEU SOCIAL (#18641) — `feed-realtime.ts` (branché par
@@ -86,7 +86,7 @@ import {
   isMessageExpiredEvent,
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
-import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp } from './realtime-thread-catch-up';
+import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp, relaunchConversationList } from './realtime-thread-catch-up';
 import { viewerRoleUpdatedListener } from './realtime-viewer-role';
 import { bindSocialRealtime } from './realtime-social';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
@@ -556,6 +556,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     applyConversationGone(deps.queryClient, id);
   };
 
+  /** `conversation:deleted` (#18914) — supprimée POUR MOI sur un autre appareil : ligne, fiche et fil partent, le fil ouvert se referme. */
+  const onConversationDeletedForMe = (payload: unknown): void => {
+    const id = viewerConversationOf(payload, deps.viewerId());
+    if (id === null) return;
+    deps.onConversationGone?.(id);
+    applyConversationGone(deps.queryClient, id);
+  };
+
+  /** `conversation:restored` (#18914) — restaurée pour moi : la liste se relit EN ENTIER, `updatedAt` n'ayant pas bougé. */
+  const onConversationRestoredForMe = (payload: unknown): void => {
+    if (viewerConversationOf(payload, deps.viewerId()) === null) return;
+    requestFullConversationRead(deps.queryClient);
+    relaunchConversationList(deps.queryClient);
+  };
+
+  /** `message:restored-for-me` (#18914) — le fil de chaque conversation nommée se relit. Règle : `realtime-message-hidden.ts`. */
+  const onMessageRestoredForMe = (payload: unknown): void => {
+    if (isMessageRestoredForMeEvent(payload)) applyMessageRestoredForMe(deps.queryClient, payload, deps.viewerId());
+  };
+
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
   const onCitedPostWithdrawn = (payload: unknown): void => {
     if (!isCitedPostWithdrawnEvent(payload)) return;
@@ -885,6 +905,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_RESTORED, onConversationRestoredForMe);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME, onMessageRestoredForMe);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -963,6 +986,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_RESTORED, onConversationRestoredForMe);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME, onMessageRestoredForMe);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);

@@ -286,6 +286,16 @@ export function patchConversationDetail(
 }
 
 /**
+ * LA PROCHAINE RELECTURE DE LA LISTE SERA COMPLÈTE (#18914) — pas le delta :
+ * ce qui a changé ne bouge pas `Conversation.updatedAt` (une conversation
+ * restaurée pour soi, `conversation:restored`), donc `updatedSince` ne le
+ * ramènerait pas. Consommé par la relecture qui suit, une fois.
+ */
+export function requestFullConversationRead(queryClient: QueryClient): void {
+  fullReadRequested.add(queryClient);
+}
+
+/**
  * `refreshConversations` — le TIRER : UNE requête, page 1 seule, curseur
  * remis à zéro. `pages: 1` fait REBÂTIR `InfiniteData` depuis `{ pages: [],
  * pageParams: [] }` (`infiniteQueryBehavior.ts:23-25,94-107` — la boucle
@@ -297,7 +307,7 @@ export function patchConversationDetail(
  * `completing failed`.
  */
 export function refreshConversations(queryClient: QueryClient, deps: ConversationsDeps): Promise<void> {
-  fullReadRequested.add(queryClient);
+  requestFullConversationRead(queryClient);
   return queryClient
     .fetchInfiniteQuery({ ...conversationsInfiniteOptions(deps), pages: 1, staleTime: 0 })
     .then(() => undefined);

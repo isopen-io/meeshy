@@ -20,6 +20,18 @@ export function conversationGoneOf(payload: unknown): string | null {
   return typeof id === 'string' && id !== '' ? id : null;
 }
 
+/**
+ * `conversation:deleted` / `conversation:restored` (#18914, WEB-07) — la
+ * suppression ou la restauration « pour moi », diffusées vers la salle
+ * personnelle : la conversation NOMMÉE, si la charge nomme le LECTEUR.
+ * FAIL-CLOSED : un autre compte, ou une charge sans compte, ne touche rien.
+ */
+export function viewerConversationOf(payload: unknown, viewerId: string): string | null {
+  const conversationId = conversationGoneOf(payload);
+  if (conversationId === null || viewerId === '') return null;
+  return (payload as Readonly<Record<string, unknown>>).userId === viewerId ? conversationId : null;
+}
+
 export function applyConversationGone(queryClient: QueryClient, conversationId: string): void {
   queryClient.setQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY, (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
