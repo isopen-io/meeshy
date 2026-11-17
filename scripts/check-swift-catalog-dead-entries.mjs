@@ -569,6 +569,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client iOS.
+  'ContactExchangeEndpoint.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (iOS)' },
+  'MeEndpoint.contactExchange': { issue: 19205, reason: 'POST /me/contact-exchange — émettre le jeton du partage sans contact (iOS)' },
+  'MeEndpoint.locationGhost': { issue: 19203, reason: 'PUT /me/location/ghost — le fantôme global de position (iOS)' },
+  'RelationsEndpoint.byUserIdLocationRequest': { issue: 19204, reason: 'POST /relations/:userId/location/request — prolonger ou redemander un partage (iOS)' },
+  'UsersEndpoint.meProfileLinkStats': { issue: 19206, reason: 'GET /users/me/profile-link/stats — les visites de mon lien (iOS)' },
+  'InvitationsEndpoint.emailByIdResend': { issue: 19207, reason: 'POST /invitations/email/:id/resend — relancer une invitation (iOS)' },
+  'InvitationsEndpoint.emailOptOut': { issue: 19321, reason: 'POST /invitations/email/opt-out — la page web de désinscription, pas un écran iOS (#19321)' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'ConversationsEndpoint.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (iOS)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la

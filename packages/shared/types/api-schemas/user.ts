@@ -78,6 +78,7 @@ export const userSchema = {
     bio: { type: 'string', nullable: true, description: 'User biography' },
     avatar: { type: 'string', nullable: true, description: 'Avatar image URL' },
     banner: { type: 'string', nullable: true, description: 'Banner image URL' },
+    profileAccentColor: { type: 'string', nullable: true, description: 'Showcase accent colour chosen by the user (#RRGGBB from PROFILE_ACCENT_HEXES), null = automatic (#19201)' },
     phoneNumber: { type: 'string', nullable: true, description: 'Phone number in E.164 format (+33612345678)' },
     phoneCountryCode: { type: 'string', nullable: true, description: 'ISO 3166-1 alpha-2 country code (FR, US)' },
 
@@ -354,6 +355,7 @@ export const updateUserRequestSchema = {
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
     voicePublic: { type: 'boolean', description: 'Expose the cloned voice sample on the public profile' },
     city: { type: 'string', maxLength: 80, nullable: true, description: 'Declared city (empty string or null clears it)' },
-    cityCircle: { type: 'string', enum: [...RELATION_LEVELS, null], nullable: true, description: 'Circle from which the city is readable (null = only the owner)' }
+    cityCircle: { type: 'string', enum: [...RELATION_LEVELS, null], nullable: true, description: 'Circle from which the city is readable (null = only the owner)' },
+    profileAccentColor: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$', nullable: true, description: 'Showcase accent colour: one of PROFILE_ACCENT_HEXES (#RRGGBB), null = automatic' }
   }
 } as const;

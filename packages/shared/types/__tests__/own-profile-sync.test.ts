@@ -51,6 +51,7 @@ describe('profile:updated — la charge est l’instantané des champs que mes a
         'displayName',
         'firstName',
         'lastName',
+        'profileAccentColor',
         'regionalLanguage',
         'systemLanguage',
         'username',
@@ -83,6 +84,20 @@ describe('profile:updated — la charge est l’instantané des champs que mes a
 
     expect(parsed.success).toBe(true);
     expect(parsed.success && parsed.data.profile).not.toHaveProperty('bio');
+  });
+});
+
+describe('profile:updated — la couleur d’accent de la vitrine repeint mes autres appareils (#19201)', () => {
+  it('une teinte choisie, ou `null` (retour à l’accent calculé), se lit telle quelle', () => {
+    for (const profileAccentColor of ['#4ECDC4', null]) {
+      const parsed = profileUpdatedEventDataSchema.parse({ ...event(), profile: { ...event().profile, profileAccentColor } });
+      expect(parsed.profile.profileAccentColor).toBe(profileAccentColor);
+    }
+  });
+
+  it('la trame d’un serveur d’avant, sans la clé, reste valide et ne dit rien de l’accent', () => {
+    const parsed = profileUpdatedEventDataSchema.parse(event());
+    expect(parsed.profile).not.toHaveProperty('profileAccentColor');
   });
 });
 

@@ -1,6 +1,6 @@
 /**
  * L'ARBITRAGE DE MON PROFIL SYNCHRONISÉ, ISOLÉ DE `own-profile-sync.ts` (#18924)
- * — les neuf champs de l'instantané `profile:updated`, leurs types et la règle
+ * — les dix champs de l'instantané `profile:updated`, leurs types et la règle
  * « jamais plus ancien » : tout ce qu'un client WEB importe à l'exécution pour
  * appliquer l'événement. `own-profile-sync.ts` porte en plus le schéma `zod`
  * CLASSIQUE que la passerelle valide, et RÉEXPORTE ces symboles : l'importer
@@ -10,7 +10,7 @@
  *
  * @see schema.prisma model User (`systemLanguage`, `regionalLanguage`,
  * `customDestinationLanguage`, `displayName`, `firstName`, `lastName`,
- * `username`, `avatar`, `banner`, `updatedAt`)
+ * `username`, `avatar`, `banner`, `profileAccentColor`, `updatedAt`)
  */
 
 /** Les champs de l'instantané, dans l'ordre où le Prisme puis l'affichage les lisent. */
@@ -24,6 +24,7 @@ export const OWN_PROFILE_FIELDS = [
   'username',
   'avatar',
   'banner',
+  'profileAccentColor',
 ] as const;
 
 export type OwnProfileField = (typeof OWN_PROFILE_FIELDS)[number];
@@ -44,6 +45,11 @@ export type OwnProfileSnapshot = {
   readonly username: string;
   readonly avatar: string | null;
   readonly banner: string | null;
+  /**
+   * #19201 — la couleur d'accent de la vitrine, `null` = accent calculé. Absente dans la trame
+   * d'un serveur d'avant : une clé ABSENTE ne dit rien de l'accent, et le client garde le sien.
+   */
+  readonly profileAccentColor?: string | null;
 };
 
 export type ProfileUpdatedEventData = {
