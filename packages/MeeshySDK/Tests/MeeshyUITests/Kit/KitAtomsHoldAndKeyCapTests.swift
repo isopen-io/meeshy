@@ -90,6 +90,16 @@ struct KitAtomsHoldAndKeyCapTests {
         #expect(source.contains("MeeshyButtonHoldDecor.feedback(from:"))
     }
 
+    // MARK: - La jauge en écriture de droite à gauche
+
+    @Test("en arabe, le dégradé de la jauge part du bord de début, comme son remplissage")
+    func meter_gradientFollowsTheFill() throws {
+        #expect(MeeshyMeterRecipe.gradientPoints(isRightToLeft: false) == [.leading, .trailing])
+        #expect(MeeshyMeterRecipe.gradientPoints(isRightToLeft: true) == [.trailing, .leading])
+        let source = try KitAtomVectors.code("MeeshyMeter.swift")
+        #expect(source.contains("isRightToLeft: layoutDirection == .rightToLeft"))
+    }
+
     // MARK: - La touche de raccourci
 
     @Test("enfoncée, la touche descend de 1,5 ; sous réduction elle ne bouge pas")
