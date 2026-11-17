@@ -8,29 +8,69 @@ extension BubbleContent {
     /// bulle et la Rivière (#8139) : deux résolutions de la carte finiraient
     /// par diverger au premier format de lien ajouté.
     ///
-    /// `authorIsAnonymous` (#10286) — un invité sans compte n'émet AUCUN lien :
-    /// ni aperçu, ni carte de conversation, ni lecteur intégré, ni lien suivi ;
-    /// son adresse se lit telle qu'écrite.
+    /// Ce que les liens du texte ont le droit de faire SORTIR de l'appareil se
+    /// lit sur le MESSAGE (`LinkExposure.of`), jamais sur un réglage que l'hôte
+    /// poserait : un hôte qui l'oublierait laisserait fuir (#12768).
     static func text(
         raw: String,
-        trackedLinks: [String: String],
+        of message: Message,
         isEmojiOnly: Bool = false,
-        emojiFontSize: CGFloat? = nil,
-        authorIsAnonymous: Bool = false
+        emojiFontSize: CGFloat? = nil
     ) -> Text {
-        if authorIsAnonymous {
+        switch LinkExposure.of(message) {
+        case .inert:
             return Text(
-                raw: raw,
-                isEmojiOnly: isEmojiOnly,
-                emojiFontSize: emojiFontSize,
-                firstLinkURL: nil,
-                embeddedVideo: nil,
-                trackedLinks: [:],
-                embedTrackedURL: nil,
-                conversationCardTarget: nil,
-                linksAreInert: true
+                raw: raw, isEmojiOnly: isEmojiOnly, emojiFontSize: emojiFontSize,
+                firstLinkURL: nil, embeddedVideo: nil, trackedLinks: [:], embedTrackedURL: nil,
+                conversationCardTarget: nil, linksAreInert: true
             )
+        case .sealed:
+            return Text(
+                raw: raw, isEmojiOnly: isEmojiOnly, emojiFontSize: emojiFontSize,
+                firstLinkURL: nil, embeddedVideo: nil, trackedLinks: [:], embedTrackedURL: nil,
+                conversationCardTarget: nil
+            )
+        case .open:
+            return linked(raw: raw, trackedLinks: message.trackedLinkMap, isEmojiOnly: isEmojiOnly, emojiFontSize: emojiFontSize)
         }
+    }
+
+    /// Ce que les liens d'un message ont le droit de faire sortir de l'appareil.
+    enum LinkExposure: Equatable {
+        /// Aperçu OpenGraph, carte de conversation, façade vidéo, lien suivi.
+        case open
+        /// Le texte n'est lu que par cet appareil (#12768, IOS-05) : ses
+        /// adresses restent touchables — ouvrir est un geste explicite —, mais
+        /// rien ne part les chercher, ni chez le site tiers (page, image de
+        /// l'aperçu, vignette vidéo), ni chez le serveur (carte de
+        /// conversation, redirection suivie `/l/<token>`).
+        case sealed
+        /// L'auteur n'a pas de compte (#10286) : aucune adresse n'est un lien
+        /// — ni aperçu, ni carte, ni lecteur, ni lien suivi, ni toucher.
+        case inert
+
+        static func of(_ message: Message) -> LinkExposure {
+            if message.senderIsAnonymous || !message.senderHasAccount { return .inert }
+            return isReadOnlyOnDevice(message) ? .sealed : .open
+        }
+
+        /// Le texte de ce message n'est lu que par l'appareil : servi chiffré
+        /// (un message chiffré au repos par le serveur est servi en clair,
+        /// `isEncrypted` faux), déchiffré ICI (la provenance prime sur les
+        /// étiquettes servies), ou annoncé de bout en bout.
+        static func isReadOnlyOnDevice(_ message: Message) -> Bool {
+            message.isEncrypted
+                || message.isContentDecryptedOnDevice
+                || EndToEndWireMode.isEndToEnd(message.encryptionMode)
+        }
+    }
+
+    private static func linked(
+        raw: String,
+        trackedLinks: [String: String],
+        isEmojiOnly: Bool,
+        emojiFontSize: CGFloat?
+    ) -> Text {
         // Précalcul unique du lien (NSDataDetector) — réutilisé par
         // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
         let firstLinkURL = LinkPreviewFetcher.firstURL(in: raw)
@@ -182,10 +222,9 @@ extension BubbleContent {
         let isEmojiOnly = emojiResult != .notEmojiOnly
         self.text = effective.isEmpty ? nil : Self.text(
             raw: effective,
-            trackedLinks: message.trackedLinkMap,
+            of: message,
             isEmojiOnly: isEmojiOnly,
-            emojiFontSize: emojiResult.fontSize,
-            authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount
+            emojiFontSize: emojiResult.fontSize
         )
         self.arrivalsInvite = ArrivalGreeting.invite(for: message, noticeText: effective)
         // --- Translation panel ---
