@@ -139,19 +139,56 @@ class KeystoreVaultKeyTest {
     }
 
     @Test
-    fun `a locked vault is neither wiped nor replaced by a memory vault`() {
+    fun `a locked vault is neither wiped nor replaced`() {
         var wiped = 0
-        var memory = 0
         assertThrows(E2eeVaultLockedException::class.java) {
             EndToEndVaultOpening.open(
                 key = { throw E2eeVaultLockedException(ProviderException("busy")) },
                 wipe = { wiped++ },
                 sealed = { error("never reached") },
-                memory = { memory++; TransactionalRecordVault(InMemoryRecordBackend()) },
             )
         }
         assertThat(wiped).isEqualTo(0)
-        assertThat(memory).isEqualTo(0)
+    }
+
+    /** #18977 — sans Keystore utilisable, AUCUN coffre ne s'ouvre : jamais une identité jetable en mémoire qui acquitte puis perd. */
+    @Test
+    fun `a keystore that cannot hold the key opens no vault at all`() {
+        var opened = 0
+        assertThrows(E2eeVaultUnavailableException::class.java) {
+            EndToEndVaultOpening.open(
+                key = { throw ProviderException("no usable keystore on this device") },
+                wipe = { error("never reached") },
+                sealed = { opened++; TransactionalRecordVault(InMemoryRecordBackend()) },
+            )
+        }
+        assertThat(opened).isEqualTo(0)
+    }
+
+    /** #18977 — une clé neuve dont la base ne s'ouvre pas ne se replie pas en mémoire non plus. */
+    @Test
+    fun `a fresh key whose database does not open leaves no vault`() {
+        assertThrows(E2eeVaultUnavailableException::class.java) {
+            EndToEndVaultOpening.open(
+                key = { KeystoreVaultKey.Opened(KeyGenerator.getInstance("AES").apply { init(256) }.generateKey(), fresh = true) },
+                wipe = {},
+                sealed = { throw IllegalStateException("disk full") },
+            )
+        }
+    }
+
+    /** #18978 — une clé enveloppée vide (coupure pendant sa première écriture) ouvre un coffre neuf, jamais un verrou éternel. */
+    @Test
+    fun `an empty wrapped key left by a power cut starts a new vault instead of locking it forever`() {
+        val dir = directory()
+        File(dir, "vault.key").writeBytes(ByteArray(0))
+        val master = FakeMaster()
+
+        val opened = KeystoreVaultKey(dir, master).open()
+
+        assertThat(opened.fresh).isTrue()
+        assertThat(opened.key.encoded).hasLength(32)
+        assertThat(KeystoreVaultKey(dir, master).open().key.encoded).isEqualTo(opened.key.encoded)
     }
 
     @Test
@@ -161,7 +198,6 @@ class KeystoreVaultKeyTest {
             key = { KeystoreVaultKey.Opened(KeyGenerator.getInstance("AES").apply { init(256) }.generateKey(), fresh = true) },
             wipe = { calls += "wipe" },
             sealed = { calls += "open"; TransactionalRecordVault(InMemoryRecordBackend()) },
-            memory = { error("never reached") },
         )
         assertThat(vault).isNotNull()
         assertThat(calls).containsExactly("wipe", "open").inOrder()

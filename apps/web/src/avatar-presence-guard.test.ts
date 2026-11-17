@@ -35,6 +35,7 @@ const EXEMPTIONS: readonly Exemption[] = [
   { fichier: 'components/visitor-invitation.tsx', combien: 1, pourquoi: AVANT_SESSION },
   { fichier: 'routes/chat-join-parts.tsx', combien: 1, pourquoi: AVANT_SESSION },
   { fichier: 'components/decor-stage.tsx', combien: 1, pourquoi: `${SOI} — l’aperçu d’une décoration de la boutique la pose sur MON avatar (#16267)` },
+  { fichier: 'components/vitrine-preview.tsx', combien: 1, pourquoi: `${SOI} — l’aperçu « Voir comme » montre MON visage ; la présence que chaque cercle en voit est dite par ses rangées, pas par un point (#18878)` },
   { fichier: 'components/device-account-list.tsx', combien: 1, pourquoi: SOI },
   { fichier: 'components/floating-menus.tsx', combien: 1, pourquoi: SOI },
   { fichier: 'components/story-rail-self-tile.tsx', combien: 1, pourquoi: SOI },

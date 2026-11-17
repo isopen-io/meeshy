@@ -29,7 +29,12 @@ export type CachedDeviceTranslation = { readonly text: string; readonly engine: 
 
 export type DeviceTranslationCache = {
   readonly read: (key: string) => Promise<CachedDeviceTranslation | undefined>;
-  readonly write: (key: string, value: CachedDeviceTranslation) => Promise<void>;
+  /**
+   * `durable: false` — la traduction d'un clair que le serveur ne lit pas
+   * (#18991) : gardée en MÉMOIRE seulement. IndexedDB survit à la session, et
+   * la clé elle-même porte une empreinte du texte qui confirme un message court.
+   */
+  readonly write: (key: string, value: CachedDeviceTranslation, options?: { readonly durable?: boolean }) => Promise<void>;
 };
 
 const MEMORY_LIMIT = 500;
@@ -58,8 +63,9 @@ export function createDeviceTranslationCache(params: { readonly store: KeyValueS
         return undefined;
       }
     },
-    write: async (key, value) => {
+    write: async (key, value, options) => {
       remember(key, value);
+      if (options?.durable === false) return;
       try {
         await params.store.set(key, JSON.stringify(value));
       } catch {

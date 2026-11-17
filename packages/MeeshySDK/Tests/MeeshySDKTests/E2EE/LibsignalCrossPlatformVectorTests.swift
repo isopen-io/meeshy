@@ -74,7 +74,17 @@ final class LibsignalCrossPlatformVectorTests: XCTestCase {
     private static let fileURL = fixturesURL.appendingPathComponent("cross-platform.vectors.json")
 
     private static var legacyURLs: [URL] {
-        let directory = fixturesURL.appendingPathComponent("legacy")
+        vectorURLs(in: "legacy")
+    }
+
+    /// Les jeux SCELLÉS PAR UNE AUTRE PLATEFORME (`sealed-by/`, #17114) : un
+    /// message chiffré sur le web, par le pont WASM, s'ouvre sur l'iPhone (#18943).
+    private static var sealedByURLs: [URL] {
+        vectorURLs(in: "sealed-by")
+    }
+
+    private static func vectorURLs(in folder: String) -> [URL] {
+        let directory = fixturesURL.appendingPathComponent(folder)
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         return names.filter { $0.hasSuffix(".vectors.json") }.sorted().map { directory.appendingPathComponent($0) }
     }
@@ -94,7 +104,7 @@ final class LibsignalCrossPlatformVectorTests: XCTestCase {
     }
 
     private func allVectorSets() throws -> [Vectors] {
-        try ([Self.fileURL] + Self.legacyURLs).map { try loadVectors($0) }
+        try ([Self.fileURL] + Self.legacyURLs + Self.sealedByURLs).map { try loadVectors($0) }
     }
 
     private func bytes(_ base64: String) throws -> Data {
@@ -172,6 +182,14 @@ final class LibsignalCrossPlatformVectorTests: XCTestCase {
         let legacy = try Self.legacyURLs.map { try loadVectors($0).libsignal }
         XCTAssertFalse(legacy.isEmpty, "aucun jeu de legacy/ : une session persistée avant une montée n'est plus éprouvée")
         XCTAssertFalse(legacy.contains(current))
+    }
+
+    func test_aSetSealedByTheWeb_isReplayed() throws {
+        XCTAssertTrue(Self.sealedByURLs.contains { $0.lastPathComponent == "web.vectors.json" },
+                      "aucun jeu scellé par le web : un message chiffré sur le web n'est plus ouvert ici")
+        let pinned = try loadVectors().libsignal
+        let sealedBy = try Self.sealedByURLs.map { try loadVectors($0).libsignal }
+        XCTAssertEqual(sealedBy, [pinned], "le web scelle avec la version de libsignal que ce SDK épingle")
     }
 
     func test_freshSession_bobOpensBothPreKeyMessagesFromHisPreKeysAlone() throws {

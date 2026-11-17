@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "kit_button_busy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_button_deferred",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_medallion_locked",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_spoken_prefix",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_command",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_control",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_shift",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_option",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_alt",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_enter",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_escape",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_space",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_tab",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_delete",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_up",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_down",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_left",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_key_right",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
