@@ -5,11 +5,13 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -144,5 +146,21 @@ class NotificationsViewModelConsumptionTest {
         consumption.publishRolledBack(NotificationReadScope.Single("x"))
 
         coVerify(exactly = 0) { repository.listScopePage(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `un lu et une suppression venus pendant le chargement de la categorie survivent a la page qui arrive`() = runTest {
+        val repository = repository(served())
+        val gate = CompletableDeferred<NetworkResult<NotificationScopePage>>()
+        coEvery { repository.listScopePage(any(), any(), any(), any()) } coAnswers { gate.await() }
+        val vm = viewModel(repository)
+        vm.selectCategory(NotificationFilterCategory.UNREAD)
+
+        consumption.publishRead(NotificationReadScope.Single("x"))
+        consumption.publishDeleted("z")
+        gate.complete(served(row("x"), row("y"), row("z")))
+        advanceUntilIdle()
+
+        assertThat(vm.shown()).containsExactly("y")
     }
 }
