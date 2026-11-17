@@ -190,8 +190,6 @@ export function missionTarget(params: {
  */
 export const missionGlory = (difficulty: MissionDifficulty): number => gloryForMission(difficulty);
 
-export type MissionSlot = 'easy' | 'medium' | 'hard' | 'gold';
-
 export type DrawnMission = {
   readonly difficulty: MissionDifficulty;
   readonly templateKey: string;

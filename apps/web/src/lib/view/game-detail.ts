@@ -47,7 +47,7 @@ import {
 import { awardedDate, dayLabel, languageName, leagueName, rarityName, trophyView, zoneLabel } from '@/lib/view/game-copy-v2';
 import { generatedAchievementLabel } from '@/lib/view/progression';
 import { levelStepLine, levelStepWhat } from '@/lib/view/level-step-copy';
-import { conceptView, flameStateLabel, type ConceptFact, type DetailRef } from '@/lib/view/progression-concepts';
+import { flameStateLabel, type ConceptFact, type DetailRef } from '@/lib/view/progression-concepts';
 import { chestRewardLines } from '@/lib/view/game-chest-copy';
 
 /**
@@ -566,10 +566,4 @@ export function detailOfRef(ref: DetailRef, concept: ProgressionConcept, label: 
     case 'seal':
       return game.season === undefined || game.season === null ? null : sealDetail(game.season);
   }
-}
-
-/** Ce que l'emblème du héros d'une fiche ouvre : l'élément premier du concept. */
-export function primaryDetail(concept: ProgressionConcept, view: EngagementWithGame, now: Date = new Date()): ElementDetail | null {
-  const shown = conceptView(concept, view, now);
-  return detailOfRef(shown.primary, concept, shown.name, shown.value, view);
 }

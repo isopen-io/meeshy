@@ -839,4 +839,3 @@ const MESSAGES: readonly MeeSticker[] = [
 ];
 
 export const INSTANTS: readonly MeeSticker[] = [...METEO, ...MOMENT, ...LIEUX, ...MESSAGES];
-export const INSTANT_GROUPS = { meteo: METEO, moment: MOMENT, lieu: LIEUX, message: MESSAGES } as const;

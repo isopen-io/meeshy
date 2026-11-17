@@ -465,5 +465,4 @@ export type GameAchievementRarities = z.infer<typeof gameAchievementRaritiesSche
 export type GameSettingsResponse = z.infer<typeof gameSettingsResponseSchema>;
 export type GameStanding = z.infer<typeof gameStandingSchema>;
 export type UserGameProfileResponse = z.infer<typeof userGameProfileResponseSchema>;
-export type PrestigeRequest = z.infer<typeof prestigeRequestSchema>;
 export type PrestigeResponse = z.infer<typeof prestigeResponseSchema>;

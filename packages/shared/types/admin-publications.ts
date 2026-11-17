@@ -42,7 +42,6 @@ export type AdminPostGesture = z.infer<typeof adminPostGestureSchema>;
 export const adminPostBatchGestureSchema = adminPostGestureSchema.and(
   z.object({ postIds: z.array(objectId).min(1).max(ADMIN_POST_BATCH_MAX) }),
 );
-export type AdminPostBatchGesture = z.infer<typeof adminPostBatchGestureSchema>;
 
 export const adminPostModerationViewSchema = z.object({
   id: objectId,
@@ -60,19 +59,14 @@ export const adminPostBatchResultSchema = z.object({
   code: z.string().max(64).optional(),
   view: adminPostModerationViewSchema.optional(),
 });
-export type AdminPostBatchResult = z.infer<typeof adminPostBatchResultSchema>;
 
 export const adminPostBatchResponseSchema = z.object({ results: z.array(adminPostBatchResultSchema) });
-export type AdminPostBatchResponse = z.infer<typeof adminPostBatchResponseSchema>;
 
 export const adminReportActSchema = z.object({ action: z.enum(ADMIN_REPORT_ACTIONS), reason });
-export type AdminReportAct = z.infer<typeof adminReportActSchema>;
 
 export const adminRemovedCommentSchema = z.object({ commentId: objectId, removedAt: z.iso.datetime() });
-export type AdminRemovedComment = z.infer<typeof adminRemovedCommentSchema>;
 
 export const adminReportActResponseSchema = z.object({
   report: z.object({ id: objectId, status: z.string() }),
   target: z.union([adminPostModerationViewSchema, adminRemovedCommentSchema]).nullable(),
 });
-export type AdminReportActResponse = z.infer<typeof adminReportActResponseSchema>;
