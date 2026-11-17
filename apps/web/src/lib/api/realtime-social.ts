@@ -17,6 +17,7 @@ import {
   applyServedRepost,
   applyStoryChanged,
 } from './feed-realtime';
+import { STATUS_MOODS_QUERY_KEY } from './stories';
 
 /**
  * **LE TEMPS RÉEL DES PUBLICATIONS** (#18914) — les écoutes des publications,
@@ -155,6 +156,22 @@ export function bindSocialRealtime(deps: SocialRealtimeDeps): () => void {
    */
   const onStoryChanged = (payload?: unknown): void => {
     applyStoryChanged(deps.queryClient, payload);
+  };
+  /**
+   * `status:created` / `status:updated` / `status:deleted` (#18914, WEB-05) —
+   * L'HUMEUR D'UN AMI EN DIRECT. Les humeurs vivent sous leur propre clé
+   * (`STATUS_MOODS_QUERY_KEY`, corpus `?scope=statuses`) — le rail, la
+   * pastille des avatars, la feuille d'humeur — et `status:updated` ne périmait
+   * que le plateau des stories. Une invalidation plutôt qu'une écriture : la
+   * passerelle filtre la charge par audience, le corpus relu est la seule
+   * forme sûre, et seul un écran qui l'observe le relit.
+   */
+  const onStatusMoodChanged = (): void => {
+    void deps.queryClient.invalidateQueries({ queryKey: STATUS_MOODS_QUERY_KEY, exact: true });
+  };
+  const onStatusUpdated = (payload: unknown): void => {
+    onStoryChanged(payload);
+    onStatusMoodChanged();
   };
   /* `story:viewed` (#7116, revue) — le plateau comme ci-dessus, ET le compte
      des vues de l'auteur + sa feuille ouverte (`publication-views-realtime.ts`,
@@ -308,7 +325,9 @@ export function bindSocialRealtime(deps: SocialRealtimeDeps): () => void {
     [SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated],
     [SERVER_EVENTS.STORY_CREATED, onStoryChanged],
     [SERVER_EVENTS.STORY_UPDATED, onStoryChanged],
-    [SERVER_EVENTS.STATUS_UPDATED, onStoryChanged],
+    [SERVER_EVENTS.STATUS_CREATED, onStatusMoodChanged],
+    [SERVER_EVENTS.STATUS_UPDATED, onStatusUpdated],
+    [SERVER_EVENTS.STATUS_DELETED, onStatusMoodChanged],
     [SERVER_EVENTS.STORY_DELETED, onStoryChanged],
     [SERVER_EVENTS.STORY_VIEWED, onStoryViewed],
     [SERVER_EVENTS.STORY_REACTED, onStoryReacted],

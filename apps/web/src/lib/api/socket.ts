@@ -42,7 +42,7 @@ import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-
    n'ajoute AUCUN poids au chunk `realtime`, seulement la capacité de les
    périmer. */
 import { FEED_QUERY_KEY } from './feed';
-import { STORY_TRAY_QUERY_KEY } from './stories';
+import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { MY_PROFILE_QUERY_KEY } from './me-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
@@ -830,6 +830,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        à la reconnexion. */
     void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY, exact: true });
     void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+    /* ET LES HUMEURS (#18914) — le corpus `?scope=statuses` que le rail et les
+       pastilles d'avatar lisent ; nommé exactement, jamais la racine `['stories']`. */
+    void deps.queryClient.invalidateQueries({ queryKey: STATUS_MOODS_QUERY_KEY, exact: true });
     /* ET LES CATEGORIES DE CONVERSATION (#18641) — `['conversation-categories']`
        est une RACINE A PART, jamais couverte par le prefixe `['conversations']`
        ci-dessus : TanStack compare les cles ELEMENT PAR ELEMENT, et le premier
