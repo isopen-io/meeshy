@@ -371,6 +371,7 @@ struct ProfileView: View {
         case .settings: router.push(.settings)
         case .logout: logoutAsked = true
         case .door(let door): open(door)
+        case .route(let route): router.push(route)
         }
     }
 

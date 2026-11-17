@@ -39,6 +39,50 @@ nonisolated enum ProfileActionsCopy {
         String(localized: "profile.actions.legend", defaultValue: "Ma Légende", bundle: .main)
     }
 
+    static var myQR: String {
+        String(localized: "profile.actions.myQR", defaultValue: "Mon QR", bundle: .main)
+    }
+
+    static var scan: String {
+        String(localized: "profile.actions.scan", defaultValue: "Scanner", bundle: .main)
+    }
+
+    static var myMap: String {
+        String(localized: "profile.actions.myMap", defaultValue: "Ma carte", bundle: .main)
+    }
+
+    static var positionTitle: String {
+        String(localized: "profile.actions.position", defaultValue: "Ma position", bundle: .main)
+    }
+
+    /// Ce que ma position est, en une ligne : en pause sous le fantôme, sinon non partagée ou vue par N personnes.
+    static func positionSubtitle(recipients: Int, isGhost: Bool) -> String {
+        if isGhost {
+            return String(localized: "profile.actions.position.ghost", defaultValue: "En pause — le mode fantôme te masque à tous", bundle: .main)
+        }
+        guard recipients > 0 else {
+            return String(localized: "profile.actions.position.off", defaultValue: "Non partagée — tu n'es visible par personne", bundle: .main)
+        }
+        return String(format: String(localized: "locationMap.nearby.seenBy", defaultValue: "Visible par %lld personne(s)", bundle: .main), recipients)
+    }
+
+    /// « Partager » n'est offert qu'à une position ni partagée ni en pause : sinon la rangée mène à la carte.
+    static func positionOffersShare(recipients: Int, isGhost: Bool) -> Bool {
+        recipients == 0 && !isGhost
+    }
+
+    static var positionShare: String {
+        String(localized: "profile.actions.position.share", defaultValue: "Partager", bundle: .main)
+    }
+
+    static var ghostSubtitle: String {
+        String(localized: "profile.actions.ghost.subtitle", defaultValue: "Masque ma position pour tous, Sang compris", bundle: .main)
+    }
+
+    static var ghostFailed: String {
+        String(localized: "profile.actions.ghost.failed", defaultValue: "Le mode fantôme n'a pas changé, réessaie", bundle: .main)
+    }
+
     static var sharingTitle: String {
         String(localized: "profile.actions.sharing", defaultValue: "Ce que je partage avec mes proches", bundle: .main)
     }

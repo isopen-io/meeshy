@@ -14,14 +14,17 @@ enum ProfileFaceAction: Hashable {
     case settings
     case logout
     case door(ProfileDoor)
+    case route(Route)
 }
 
 /// La face Actions de MA fiche (#18869, planche `Moi-Actions`) : ce que je peux faire.
 ///
 /// Faite du kit : les actions libellées en grille (K32), les rangées à interrupteur et à chevron (K06), les en-têtes de
 /// section (K44), le bouton de sortie (K40). Ce qui vivait sur la fiche s'y range sans rien perdre (loi 11) : le partage
-/// de ma batterie et de mon téléphone injoignable, mes contenus, mon activité et ma Légende. « Qui me voit » dit, depuis
-/// la loi d'accès, le cercle à partir duquel ma présence se voit (loi 10) ; chaque interrupteur s'applique aussitôt et se
+/// de ma batterie et de mon téléphone injoignable, mes contenus, mon activité et ma Légende. « Montrer » rejoue Mon QR,
+/// Scanner et Sans contact par les présentations de la face Liens (#19469) ; « Ma position » dit son état et mène à la
+/// carte de mes proches ; le mode fantôme global me masque à tous, Sang compris. « Qui me voit » dit, depuis la loi
+/// d'accès, le cercle à partir duquel ma présence se voit (loi 10) ; chaque interrupteur s'applique aussitôt et se
 /// synchronise ensuite (`UserPreferencesManager`).
 struct ProfileActionsFace: View {
     let user: MeeshyUser?
@@ -33,13 +36,20 @@ struct ProfileActionsFace: View {
     let onAction: (ProfileFaceAction) -> Void
 
     @ObservedObject var prefs: UserPreferencesManager
+    @ObservedObject var sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()
+    @StateObject private var ghost = LocationGhostModel()
 
     @Environment(\.locale) private var locale
     /// « Carte de mes proches » (#18872) : la carte est une action, ouverte en plein écran.
     @State private var showsNearbyMap = false
+    /// Mon QR, Scanner et Sans contact : les présentations de la face Liens, rejouées ici.
+    @State private var presented: ProfileLinksPresented?
+    @State private var sent: SharedContentWrapper?
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var accent: Color { Color(hex: accentColor) }
+    private var profileLink: ProfileLink? { ProfileLink(username: user?.username) }
+    private var recipientCount: Int { sharing.roster.pruned(now: Date()).recipients.count }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
@@ -48,12 +58,17 @@ struct ProfileActionsFace: View {
             sharingSection
             whoSeesMeSection
             if ProfilePackShortcuts.isShown(viewerId: user?.id, profileUserId: user?.id) {
-                ProfileSavedContentRows(accentHex: accentColor, onOpen: { onAction(.door($0)) })
+                ProfileSavedContentRows(stats: stats, accentColor: accentColor, onOpen: { onAction(.door($0)) })
             }
             accountSection
             MeeshyButton(ProfileActionsCopy.logout, systemImage: "rectangle.portrait.and.arrow.right",
                          kind: .danger, width: .fill, isDestructive: true, action: { onAction(.logout) })
         }
+        .fullScreenCover(isPresented: $showsNearbyMap) { NearbyMapScreen() }
+        .modifier(ProfileLinksPresentations(
+            user: user, link: profileLink, accentColor: accentColor, presented: $presented, sent: $sent,
+            onOpen: { onAction(.route($0)) }, onCreated: {}
+        ))
     }
 
     // MARK: - En-tête
@@ -75,16 +90,26 @@ struct ProfileActionsFace: View {
                     MeeshyLabeledAction(title: ProfileActionsCopy.share, systemImage: "square.and.arrow.up",
                                         tint: accent, action: { onAction(.share) })
                 }
+                if profileLink != nil {
+                    MeeshyLabeledAction(title: ProfileActionsCopy.myQR, systemImage: "qrcode",
+                                        tint: accent, action: { presented = .card(.qr) })
+                }
+                MeeshyLabeledAction(title: ProfileActionsCopy.scan, systemImage: "qrcode.viewfinder",
+                                    tint: accent, action: { presented = .scanner })
+                if profileLink != nil {
+                    MeeshyLabeledAction(title: ProfileLinksCopy.contactless, systemImage: "wave.3.right",
+                                        tint: accent, action: { presented = .card(.contactless) })
+                }
                 MeeshyLabeledAction(title: ProfileActionsCopy.seenAs, systemImage: "eye",
                                     tint: accent, action: { onAction(.seenAs) })
                 MeeshyLabeledAction(title: ProfileActionsCopy.edit, systemImage: "pencil",
                                     tint: accent, action: { onAction(.edit) })
+                MeeshyLabeledAction(title: ProfileActionsCopy.myMap, systemImage: "map",
+                                    tint: accent, action: { showsNearbyMap = true })
                 if canSetMood {
                     MeeshyLabeledAction(title: ProfileActionsCopy.mood, systemImage: "face.smiling",
                                         tint: accent, action: { onAction(.mood) })
                 }
-                MeeshyLabeledAction(title: ProfileActionsCopy.legend, systemImage: "trophy",
-                                    tint: accent, action: { onAction(.legend) })
             }
         }
     }
@@ -94,13 +119,51 @@ struct ProfileActionsFace: View {
     private var sharingSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsCopy.sharingTitle)
-            MeeshyToggleRow(LocationMapCopy.nearbyOpen, systemImage: "map", accessory: .chevron, tint: accent,
-                            action: { showsNearbyMap = true })
+            positionRow
                 .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
             BatterySharingSettingsSection(accentColor: accentColor)
             PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
+            VStack(spacing: 0) {
+                ghostRow
+                privacyToggle(ProfileActionsCopy.notifyReturnTitle, systemImage: "bell",
+                              subtitle: nil, keyPath: \.notifyContactsOnReturn, divider: false)
+            }
+            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
         }
-        .fullScreenCover(isPresented: $showsNearbyMap) { NearbyMapScreen() }
+    }
+
+    /// « Ma position » : son état en une ligne ; « Partager » tant qu'elle n'est ni partagée ni en pause. La rangée
+    /// mène à la carte de mes proches, d'où je la partage.
+    private var positionRow: some View {
+        let count = recipientCount
+        let offersShare = ProfileActionsCopy.positionOffersShare(recipients: count, isGhost: ghost.isGhost)
+        return MeeshyToggleRow(ProfileActionsCopy.positionTitle, systemImage: "mappin.and.ellipse",
+                               subtitle: ProfileActionsCopy.positionSubtitle(recipients: count, isGhost: ghost.isGhost),
+                               accessory: offersShare ? .value(ProfileActionsCopy.positionShare) : .chevron,
+                               tint: accent, action: { showsNearbyMap = true })
+            .accessibilityIdentifier("profile.actions.position")
+    }
+
+    /// Le fantôme global : appliqué aussitôt, défait et dit sur un refus.
+    private var ghostRow: some View {
+        MeeshyToggleRow(
+            content: MeeshyToggleRowContent(title: BloodLocationCopy.ghostTitle, subtitle: ProfileActionsCopy.ghostSubtitle,
+                                            accessory: .toggle(isOn: ghost.isGhost), showsDivider: true, tint: accent),
+            action: { toggleGhost() },
+            leading: { MeeshyToggleRowSymbol("theatermasks") },
+            titleAccessory: { MeeshyBadge(.label(LocationMapCopy.isNew), surface: .solid, kind: .accent) },
+            trailing: { MeeshyToggleRowNoSlot() }
+        )
+        .disabled(ghost.isBusy)
+        .accessibilityIdentifier("profile.actions.ghost")
+    }
+
+    private func toggleGhost() {
+        Task {
+            let accepted = await ghost.toggle()
+            guard !accepted else { return }
+            FeedbackToastManager.shared.showError(ProfileActionsCopy.ghostFailed)
+        }
     }
 
     // MARK: - Qui me voit
@@ -115,8 +178,6 @@ struct ProfileActionsFace: View {
                 privacyToggle(ProfileActionsCopy.lastSeenTitle, systemImage: "clock",
                               subtitle: ProfileActionsCopy.visibleFrom(RelationFeature.presenceDetailed.minimumLevel),
                               keyPath: \.showLastSeen, divider: true)
-                privacyToggle(ProfileActionsCopy.notifyReturnTitle, systemImage: "bell",
-                              subtitle: nil, keyPath: \.notifyContactsOnReturn, divider: true)
                 searchToggle
                 privacyToggle(ProfileActionsCopy.friendRequestsTitle, systemImage: "person.badge.plus",
                               subtitle: nil, keyPath: \.allowContactRequests, divider: false)
