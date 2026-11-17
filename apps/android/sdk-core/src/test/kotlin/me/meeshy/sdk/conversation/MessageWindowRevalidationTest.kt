@@ -223,6 +223,38 @@ class MessageWindowRevalidationTest {
             assertThat(harness.cachedMessage("m1").pinnedAt).isNull()
         }
 
+    /**
+     * The same withdrawal, but a write (a receipt, a translation) touched the row while the first page was in flight: that
+     * page kept the stale reaction and pin out of reach of its own values. Its validator used to be kept, so every later
+     * revalidation of a quiet thread was answered 304 and the stale values stayed for good. A page that disavowed part of
+     * what it served leaves no validator: the next revalidation reads the window again, and corrects the row.
+     */
+    @Test
+    fun `a reaction withdrawn while I was away leaves the row at the next quiet refresh, even when a write touched it during the first`() =
+        runHarnessTest { harness ->
+            harness.held(message("m1", T1).copy(reactionSummary = mapOf("👍" to 1), pinnedAt = T2, pinnedBy = "u-peer"))
+            val history = GatewayMessageHistory(served = listOf(message("m1", T1)))
+            var touched = false
+            val gateway = object : MessageApi by history {
+                override suspend fun listConditional(conversationId: String, ifNoneMatch: String?): Response<ApiResponse<List<ApiMessage>>> {
+                    if (!touched) {
+                        touched = true
+                        harness.database.messageDao().bumpChangeVersion("m1")
+                    }
+                    return history.listConditional(conversationId, ifNoneMatch)
+                }
+            }
+            val repo = harness.repository(gateway)
+
+            repo.refresh(CONVERSATION)
+            repo.refresh(CONVERSATION)
+
+            assertThat(history.validators).hasSize(2)
+            assertThat(history.validators.last()).isNull()
+            assertThat(harness.cachedMessage("m1").reactionSummary.orEmpty()).isEmpty()
+            assertThat(harness.cachedMessage("m1").pinnedAt).isNull()
+        }
+
     // — what the revalidation reads: the window first —
 
     /**

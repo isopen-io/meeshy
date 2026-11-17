@@ -252,6 +252,11 @@ internal class MessageCacheSource(
      * The ONE write of a revalidation: the window and its gap under the field-level merge (a message served by both
      * keeps the gap's copy, read last), the prune of the held span the window covers, and `sync_meta` with the
      * window's validator — the gap's rows are all newer than [heldUpTo], so they never widen the prune.
+     *
+     * The validator is kept only when the page describes every row it served. A row another write touched during the
+     * flight keeps its reactions and its pin over the page ([heldBefore]); when the page served other values for them,
+     * its validator would make every later revalidation of a quiet thread a 304, and the kept values would stay for
+     * good. It is dropped instead: the next revalidation reads the window again, without `If-None-Match` (#18915).
      */
     private suspend fun persist(window: ServedWindow, gap: List<ApiMessage>, heldUpTo: Long?, heldBefore: HeldRowVersions) {
         val now = clock.nowMillis()
@@ -260,12 +265,12 @@ internal class MessageCacheSource(
         val span = prunableSpan(rows, heldUpTo)
         val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(window.messages + gap, now, conversationId, settlements, heldBefore)
+            val merged = ingestion.mergeInTransaction(window.messages + gap, now, conversationId, settlements, heldBefore)
             span?.let {
                 erasures?.recordRemovedRows(pruned(window.messages, it, servedIds))
                 messageDao.deleteMissingBetween(conversationId, it.first, it.last, servedIds)
             }
-            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, window.etag, null))
+            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, window.etag.takeUnless { merged.disavowedServed }, null))
         }
         settlements?.forEach { media?.settle(it.previous, it.written) }
     }

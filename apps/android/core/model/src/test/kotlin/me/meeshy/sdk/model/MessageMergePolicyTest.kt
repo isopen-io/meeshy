@@ -178,6 +178,39 @@ class MessageMergePolicyTest {
     }
 
     @Test
+    fun `over a write made during the page's flight, the row keeps its reactions and pin and disavows the page`() {
+        val local = message(reactionSummary = mapOf("🔥" to 1), pinnedAt = "2026-06-01T12:00:00Z")
+
+        val outcome = MessageMergePolicy.mergeOverFlightWrite(local, message(reactionSummary = null, pinnedAt = null))
+
+        assertThat(outcome.message.reactionSummary).containsExactly("🔥", 1)
+        assertThat(outcome.message.pinnedAt).isEqualTo("2026-06-01T12:00:00Z")
+        assertThat(outcome.disavowed).isTrue()
+    }
+
+    @Test
+    fun `over a write made during the page's flight, a page serving the same reactions and pin disavows nothing`() {
+        val local = message(reactionSummary = mapOf("🔥" to 1), pinnedAt = "2026-06-01T12:00:00Z", readCount = 1)
+
+        val outcome = MessageMergePolicy.mergeOverFlightWrite(
+            local,
+            message(reactionSummary = mapOf("🔥" to 1), pinnedAt = "2026-06-01T12:00:00Z", readCount = 2),
+        )
+
+        assertThat(outcome.message.readCount).isEqualTo(2)
+        assertThat(outcome.disavowed).isFalse()
+    }
+
+    @Test
+    fun `an ordinary merge disavows nothing, even under a pending reaction`() {
+        val local = message(reactionSummary = mapOf("🔥" to 1))
+
+        val outcome = MessageMergePolicy.merge(local, message(reactionSummary = null), MessageMergeGuards(pendingReaction = true))
+
+        assertThat(outcome.disavowed).isFalse()
+    }
+
+    @Test
     fun `an opened view-once stays opened`() {
         val outcome = MessageMergePolicy.merge(message(consumedByMe = true), message(consumedByMe = null))
 
