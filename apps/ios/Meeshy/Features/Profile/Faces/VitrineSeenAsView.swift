@@ -70,16 +70,10 @@ struct VitrineSeenAsView: View {
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
             }
-            MeeshyCircleScale(
-                levels: Self.levels,
-                current: RelationLevel.allCases.firstIndex(of: model.level),
-                tint: accent,
-                form: .dots,
-                size: .regular,
-                label: VitrineSeenAsCopy.pickerLabel,
-                onSelect: { index in select(index) }
-            )
-            .frame(maxWidth: .infinity)
+            ViewThatFits(in: .horizontal) {
+                circlePicker.frame(maxWidth: .infinity)
+                ScrollView(.horizontal, showsIndicators: false) { circlePicker }
+            }
             Text(VitrineSeenAsCopy.whatSees(model.level))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundStyle(theme.textMuted)
@@ -89,6 +83,19 @@ struct VitrineSeenAsView: View {
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.sm)
         .meeshyGlass(in: Rectangle(), density: .dense)
+    }
+
+    /// Les six cercles d'une rangée ; aux grandes tailles de texte, la rangée défile plutôt que d'écraser les noms.
+    private var circlePicker: some View {
+        MeeshyCircleScale(
+            levels: Self.levels,
+            current: RelationLevel.allCases.firstIndex(of: model.level),
+            tint: accent,
+            form: .dots,
+            size: .regular,
+            label: VitrineSeenAsCopy.pickerLabel,
+            onSelect: { index in select(index) }
+        )
     }
 
     static let levels: [MeeshyCircleScaleLevel] = RelationLevel.allCases.map { level in
