@@ -2185,6 +2185,7 @@
 		74892C2D538B6711D4D7292E /* NotificationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF8089621289B4B17252154 /* NotificationListView.swift */; };
 		7494BCCEAF5C69FA9C0ACB4C /* CameraZoomController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE4A7F30C1868CF33994393 /* CameraZoomController.swift */; };
 		749D489F87C58746CFFC216D /* FavoriteContactsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE124BF45CD57608E31155A /* FavoriteContactsWidget.swift */; };
+		0F734FF86E7E218141F0C702 /* MyProfileLinkWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B63B13543D9FAD26194F28 /* MyProfileLinkWidget.swift */; };
 		74B2F7173DAA5A687DB8AFE7 /* CallCaptureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD9C3B55B2A65FD37CC35741 /* CallCaptureViews.swift */; };
 		74B302F32DE78A251760C7AC /* futuriste_hud_front.webp in Resources */ = {isa = PBXBuildFile; fileRef = 579B4052184E38739FD9E448 /* futuriste_hud_front.webp */; };
 		74C179CE8410C6127FB61889 /* ConversationListView+PeerSignals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65DB908A5BCFD82BA5E7C136 /* ConversationListView+PeerSignals.swift */; };
@@ -4122,7 +4123,6 @@
 		DEF9E0E15DF50081596781F0 /* ConversationInfoSheet+Pinned.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9FDEE907E437000D5610D87 /* ConversationInfoSheet+Pinned.swift */; };
 		DF0047BF3AF2AA8D90E7513A /* PhoneReachabilityCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B43F34539C4451867A1BF2EB /* PhoneReachabilityCenterTests.swift */; };
 		DF0201582A031F232CCBC9DE /* ComposerCaptureStageWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00F7C05E8C39DE1C833FA02F /* ComposerCaptureStageWiringTests.swift */; };
-		DF0D070C0888AF11ACF5F1E2 /* ShareLinkConfigurationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB10E72CF190A7ECB4A643A /* ShareLinkConfigurationCard.swift */; };
 		DF0FE984241C0AD55A19F0B0 /* CinzelDecorative-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4103CDF9995A2C206150AB80 /* CinzelDecorative-Bold.ttf */; };
 		DF2F48E1B13583B04EB6797B /* StoryNotificationLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3806419CE3FB8E9FBB2D5529 /* StoryNotificationLoadingView.swift */; };
 		DF4B4EAF97EFE6B5782470FD /* StoryUploadProgressStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C9C486784A97DD91A43093 /* StoryUploadProgressStoreTests.swift */; };
@@ -6520,6 +6520,7 @@
 		5AB2B1C90CCB0D5C0623DA28 /* CallManager+Controls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Controls.swift"; sourceTree = "<group>"; };
 		5ADA177DD05ECE6E3D4A1DB6 /* ComposerSoundPromotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSoundPromotion.swift; sourceTree = "<group>"; };
 		5AE124BF45CD57608E31155A /* FavoriteContactsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteContactsWidget.swift; sourceTree = "<group>"; };
+		C2B63B13543D9FAD26194F28 /* MyProfileLinkWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyProfileLinkWidget.swift; sourceTree = "<group>"; };
 		5AEB856CBDAE5FFEFF2729C9 /* ProfilePackShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePackShortcuts.swift; sourceTree = "<group>"; };
 		5B088BC426560C73EB80F084 /* ComposerSceneArrangementRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneArrangementRelay.swift; sourceTree = "<group>"; };
 		5B0E572518B85B56D055F46A /* LocalizedNumber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedNumber.swift; sourceTree = "<group>"; };
@@ -8494,7 +8495,6 @@
 		CA8F52CA9F8649E69DFA4CA4 /* MessageListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListViewController.swift; sourceTree = "<group>"; };
 		CA96FE4677B6D8E45C5C6B4C /* PostDetailView+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PostDetailView+Canvas.swift"; sourceTree = "<group>"; };
 		CAA2EB696BA6CF9246B566BA /* SocialAudioSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialAudioSurface.swift; sourceTree = "<group>"; };
-		CAB10E72CF190A7ECB4A643A /* ShareLinkConfigurationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkConfigurationCard.swift; sourceTree = "<group>"; };
 		CAD8541600597AA63B93C8DC /* PrefetcherHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrefetcherHostView.swift; sourceTree = "<group>"; };
 		CAE14ADE846899854DEF68EA /* AttachmentDownloadCenterProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDownloadCenterProfileTests.swift; sourceTree = "<group>"; };
 		CAE1F2719577F99B55F55C13 /* HybridThreadIntegrity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HybridThreadIntegrity.swift; sourceTree = "<group>"; };
@@ -9534,6 +9534,7 @@
 				9776950F1670772D58BAEB4D /* CallLiveActivity.swift */,
 				394384BD3F5259AC28CE3D8F /* ConversationTimeline.swift */,
 				5AE124BF45CD57608E31155A /* FavoriteContactsWidget.swift */,
+				C2B63B13543D9FAD26194F28 /* MyProfileLinkWidget.swift */,
 				170DBAB52845E566028FB4C3 /* Info.plist */,
 				AFC4EB719EA2C82E690E8E51 /* LiveActivityAvatarStore.swift */,
 				30FB06EC921F79C8305CD7E5 /* LiveActivityCommandIntent.swift */,
@@ -12138,7 +12139,6 @@
 				585C8D98FE86CCE1F82F9CE6 /* ShareableLink.swift */,
 				C5027970EA2CB026250A3FEA /* ShareLinkArrivalsListView.swift */,
 				5F969777BDE76B856E18F480 /* ShareLinkArrivalsSection.swift */,
-				CAB10E72CF190A7ECB4A643A /* ShareLinkConfigurationCard.swift */,
 				F738CDEC975AF7D15DB1CFF6 /* ShareLinkDetailCopy.swift */,
 				26DCCE9827ABBFA7C0B06516 /* ShareLinkDetailView.swift */,
 				840BD8F540DD95A1872FF7D4 /* ShareLinkEditForm.swift */,
@@ -16069,6 +16069,7 @@
 				AEAE12FCFB5F855DB6BA5C3D /* CallLiveActivity.swift in Sources */,
 				C285D8413A4E5DC3811BA3D2 /* ConversationTimeline.swift in Sources */,
 				749D489F87C58746CFFC216D /* FavoriteContactsWidget.swift in Sources */,
+				0F734FF86E7E218141F0C702 /* MyProfileLinkWidget.swift in Sources */,
 				E589D002820F08C4A7E151C0 /* LiveActivityAvatarStore.swift in Sources */,
 				7B818F19290D5B1E40C08E49 /* LiveActivityCommandIntent.swift in Sources */,
 				BCA938F4C2941BAC0C47CEF6 /* LiveActivityStyle.swift in Sources */,
@@ -18317,7 +18318,6 @@
 				ED80339D42E41820498BC494 /* ShareLinkArrivalsListView.swift in Sources */,
 				BAC65F186C921E7019BFFA4F /* ShareLinkArrivalsListViewModel.swift in Sources */,
 				B535FBD7F53C099C2A344A3F /* ShareLinkArrivalsSection.swift in Sources */,
-				DF0D070C0888AF11ACF5F1E2 /* ShareLinkConfigurationCard.swift in Sources */,
 				B7D135CC7B2B835532B3EE5C /* ShareLinkDetailCopy.swift in Sources */,
 				A57AA300300DE42558B137BF /* ShareLinkDetailView.swift in Sources */,
 				EF661222E5F006706EF98DB3 /* ShareLinkDetailViewModel.swift in Sources */,
