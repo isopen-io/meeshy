@@ -109,9 +109,6 @@ importers:
       lottie-web:
         specifier: 5.13.0
         version: 5.13.0
-      preact-render-to-string:
-        specifier: 6.8.2
-        version: 6.8.2(preact@11.2.0)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -13904,6 +13901,7 @@ snapshots:
   preact-render-to-string@6.8.2(preact@11.2.0):
     dependencies:
       preact: 11.2.0(preact-render-to-string@6.8.2)
+    optional: true
 
   preact@11.2.0(preact-render-to-string@6.8.2):
     optionalDependencies:

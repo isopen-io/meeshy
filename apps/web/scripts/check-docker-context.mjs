@@ -101,7 +101,6 @@ const REQUIRED = [
   'apps/web/src/styles/institutional.css',
   'apps/web/src/styles/ios.css',
   'apps/web/src/institutional/page.tsx',
-  'apps/web/src/lib/react-shim.js',
   'packages/design-tokens/package.json',
   'packages/design-tokens/tokens.css',
   'packages/design-tokens/ios.css',

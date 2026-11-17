@@ -101,7 +101,7 @@ export function meeshyPwa(): PluginOption {
      * Avec `prompt`, le worker neuf reste en attente, la page l'annonce
      * (`lib/app-update/service-worker.ts` → bannière) et c'est le clic
      * qui lui envoie `SKIP_WAITING` — le comportement du legacy
-     * (`apps/web/public/sw.js:233-238`).
+     * (`legacy-web-final:apps/web/public/sw.js:233-238`).
      */
     registerType: 'prompt',
     /**

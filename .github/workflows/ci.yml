@@ -323,6 +323,9 @@ jobs:
           # cette étape énumère ses maillons un par un, donc un maillon ajouté
           # au composite seul ne s'exécuterait nulle part.)
           python3 scripts/generate-icons.py --check
+          # La table des pays (`src/lib/countries.ts`) est GÉNÉRÉE depuis
+          # `CountryPicker.swift` : maillon du composite qui ne tournait nulle part.
+          node scripts/generate-countries.mjs --check
           node scripts/check-curve.mjs
           node scripts/check-river-metrics.mjs
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
@@ -1178,6 +1181,17 @@ jobs:
         run: |
           cd apps/web
           node scripts/check-thread-chrome.mjs
+
+      # #7143, #9121 — LA BANDE DU COMPOSEUR OCCULTE CE QUI PASSE DESSOUS : deux
+      # captures de la même bande (repos, fil remonté) dans les deux schémas, la
+      # rangée qui la borde atteignable au doigt, et les icônes de la rangée haute
+      # à la teinte de l'effet armé (3:1 au moins). Gate écrit et joué par aucune
+      # chaîne jusqu'au lot #18900 (#7663).
+      - name: Gate bande du composeur (occultation, geste, teinte de l'effet)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-composer-band.mjs
 
       # #6101 — AU REPOS, LA PILULE DE JOUR NE RECOUVRE AUCUN TEXTE. Boîtes
       # des nœuds texte sous la capsule et opacité calculée, deux schémas,

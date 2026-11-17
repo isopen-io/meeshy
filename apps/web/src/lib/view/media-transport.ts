@@ -49,8 +49,6 @@ export function infoDuration(params: {
 /** `VideoTransportControls.speeds` — les paliers offerts par le menu. */
 export const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 1.75, 2] as const;
 
-export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
-
 /** « 1,25× » en français, « 1.25× » en anglais : le séparateur décimal est celui de la langue d'interface. */
 export function speedLabel(rate: number, language: string): string {
   return `${new Intl.NumberFormat(language).format(rate)}×`;

@@ -143,7 +143,6 @@ final class AnimatedImageConsumerGuardTests: XCTestCase {
         let sites = [
             "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
             "Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
-            "Meeshy/Features/Main/Components/MessageOverlayPreviewMedia.swift",
             "Meeshy/Features/Main/Components/MessagePieceOverlay.swift",
             "Meeshy/Features/Main/Views/Bubble/BubbleCarouselView.swift",
             "Meeshy/Features/Main/Views/ConversationMediaGalleryView+Pages.swift",

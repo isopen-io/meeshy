@@ -9,10 +9,10 @@
  * compte pas ici — c'est tout l'interet de l'avoir sorti du socle.
  *
  * Usage :
- *   node scripts/measure-weight.mjs [--dist <chemin>] [--json] [--ratchet]
+ *   node scripts/measure-weight.mjs [--dist <chemin>] [--json]
  */
 import { gzipSync } from 'node:zlib';
-import { readFileSync, readdirSync, existsSync, statSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,10 +26,8 @@ const valueOf = (name, fallback) => {
 };
 const dist = join(ROOT, valueOf('--dist', 'dist'));
 const asJson = args.includes('--json');
-const ratchet = args.includes('--ratchet');
 
 const BUDGETS_PATH = join(ROOT, 'budgets.json');
-const MEASURES_PATH = join(ROOT, 'budgets-measured.json');
 
 if (!existsSync(dist)) {
   console.error(`Rien a mesurer : ${dist} n'existe pas. Lancer d'abord \`bun run build\`.`);
@@ -259,7 +257,6 @@ for (const [name, spec] of onDemandChunkEntries) {
 }
 
 const measure = {
-  runtime: process.env.MEESHY_RUNTIME === 'react' ? 'react' : 'preact',
   target: process.env.MEESHY_TARGET === 'capacitor' ? 'capacitor' : 'web',
   document_gzip_9_bytes: documentGzip,
   critical_js_gzip_9_bytes: criticalJs,
@@ -283,7 +280,7 @@ const measure = {
 if (asJson) {
   console.log(JSON.stringify(measure, null, 2));
 } else {
-  console.log(`\n  runtime ${measure.runtime} · cible ${measure.target}\n`);
+  console.log(`\n  cible ${measure.target}\n`);
   for (const c of critical) console.log(`  ${String(kb(c.gzip)).padStart(8)} Ko  ${c.file}`);
   console.log(`  ${String(kb(documentGzip)).padStart(8)} Ko  index.html`);
   console.log(`  ${'-'.repeat(48)}`);
@@ -345,15 +342,6 @@ if (audioPlayerLeaks.length > 0) {
       `${audioPlayerLeaks.join(', ')} (fichier CRITIQUE) au lieu du chunk de route (#5805)\n`,
   );
   rc = 1;
-}
-
-if (ratchet) {
-  const metrics = existsSync(MEASURES_PATH) ? JSON.parse(readFileSync(MEASURES_PATH, 'utf8')) : {};
-  metrics.date = new Date().toISOString().slice(0, 10);
-  metrics.variants = metrics.variants ?? {};
-  metrics.variants[`${measure.runtime}-${measure.target}`] = measure;
-  writeFileSync(MEASURES_PATH, `${JSON.stringify(metrics, null, 2)}\n`);
-  console.log(`  releve inscrit dans budgets-measured.json › variantes.${measure.runtime}-${measure.target}\n`);
 }
 
 process.exit(rc);

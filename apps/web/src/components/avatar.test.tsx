@@ -14,16 +14,11 @@ import { Avatar } from './avatar';
 /**
  * « OFFLINE = AUCUNE PASTILLE » PROUVÉ AU RENDU, PAS DÉDUIT (#5559 T12).
  *
- * `renderToStaticMarkup` (react-dom/server, devDependency) plutôt que
- * preact-render-to-string : sous bun test (hors pipeline Vite, donc hors de
- * l'alias qui redirige le runtime JSX React vers Preact), `avatar.tsx`
- * compile son JSX vers de VRAIS éléments React — comme tout composant de
- * l'application qui doit rester agnostique du runtime (le second mode de
- * build, comparatif, le construit aussi). Marquer ce fichier pour qu'il
- * compile directement vers le runtime JSX Preact (le pragma que porte
- * `src/institutional/page.tsx`, lui jamais monté dans l'application vivante)
- * casserait cette seconde variante ; preact-render-to-string rendrait alors
- * une chaîne VIDE sans erreur sur des éléments React (même précédent).
+ * `renderToStaticMarkup` (react-dom/server, devDependency) : sous bun test
+ * (hors pipeline Vite, donc hors de l'alias qui redirige le runtime JSX React
+ * vers Preact), `avatar.tsx` compile son JSX vers de VRAIS éléments React, que
+ * seul un moteur React rend (un moteur Preact rendrait une chaîne VIDE sans
+ * erreur — le précédent de `src/institutional/page.tsx`).
  * `renderToStaticMarkup` rend le MÊME arbre de composants à une chaîne HTML —
  * c'est ce que ce témoin exige : une preuve de rendu réel, pas une déduction
  * sur les props.

@@ -28,13 +28,6 @@ export type ComposerDraft = {
   readonly replyToId?: string;
 };
 
-/** Un brouillon totalement neuf, pour l'appelant qui veut une valeur de repli
- * explicite plutôt que `null` — jamais persisté tel quel (`isDraftEmpty`
- * ci-dessous le purgerait). */
-export function emptyDraft(language: string): ComposerDraft {
-  return { text: '', language, protection: {} };
-}
-
 /**
  * `isEffectivelyEmpty` (`DraftStore.swift:97-107`) — un brouillon SANS texte
  * mais qui porte une réponse, une protection armée, EST conservé : c'est ce
