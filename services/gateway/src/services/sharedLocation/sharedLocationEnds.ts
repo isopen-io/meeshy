@@ -73,6 +73,14 @@ export async function noteSharedLocationServed(cache: SharedLocationKv, emitterI
   ], now);
 }
 
+/**
+ * Le partage COURANT se met à servir un lecteur de plus (une relation montée pendant le partage) :
+ * lui seul prend son échéance, les autres fins ne bougent pas.
+ */
+export async function noteSharedLocationReaderServed(cache: SharedLocationKv, emitterId: string, end: SharedLocationEnd, now: number): Promise<void> {
+  await rewrite(cache, emitterId, (previous) => [...previous.filter((entry) => !sameUser(entry.userId, end.userId)), end], now);
+}
+
 /** Le partage s'arrête : toute fin encore à venir se termine maintenant. */
 export async function noteSharedLocationStopped(cache: SharedLocationKv, emitterId: string, now: number): Promise<void> {
   await rewrite(cache, emitterId, (previous) => previous.map((end) => endedAt(end, now)), now);

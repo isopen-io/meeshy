@@ -74,7 +74,7 @@ import {
   type SharedLocationCell,
   type SharedLocationState,
 } from './sharedLocationStore';
-import { forgetSharedLocationEnds, noteSharedLocationServed, noteSharedLocationStopped, sharedLocationEndsFor } from './sharedLocationEnds';
+import { forgetSharedLocationEnds, noteSharedLocationReaderServed, noteSharedLocationServed, noteSharedLocationStopped, sharedLocationEndsFor } from './sharedLocationEnds';
 
 export type SharedLocationDb = PairAccessDb;
 
@@ -545,6 +545,13 @@ async function notifyNewcomers(
   await deps.notifyStarted(notices).catch(() => undefined);
 }
 
+/** Un lecteur servi en cours de partage (#19202) : sa fin lui sera dite comme aux autres. Jamais bloquant. */
+async function noteReaderServedEnd(deps: SharedLocationRelayDeps, emitterId: string, state: SharedLocationState, readerId: string): Promise<void> {
+  const precision = recipientOf(state, readerId)?.precision;
+  if (!precision) return;
+  await noteSharedLocationReaderServed(deps.cache, emitterId, { userId: readerId.toLowerCase(), endsAt: deadlineOf(state, readerId), precision }, deps.now()).catch(() => undefined);
+}
+
 /** L'accès de chaque sens d'une paire, pour les seuls émetteurs qui ont un partage en cours. */
 export type SharedLocationPairAccess = ReadonlyMap<string, SharedLocationReaderAccess>;
 
@@ -591,7 +598,8 @@ export async function refreshSharedLocationBetween(
     if (served && !sameAccess(after, before)) {
       await markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now);
       serve(deps.io, readerId, served);
-      await revokedSince(deps, emitterId, state, [readerId]);
+      const revoked = await revokedSince(deps, emitterId, state, [readerId]);
+      if (revoked.length === 0) await noteReaderServedEnd(deps, emitterId, state, readerId);
     }
     if (!served && (await sharedLocationSeenAmong(deps.cache, emitterId, state.sessionId, [readerId])).length > 0) {
       unserve(deps.io, readerId, emitterId);
