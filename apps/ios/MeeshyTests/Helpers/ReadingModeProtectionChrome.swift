@@ -1,4 +1,5 @@
 import Foundation
+@testable import Meeshy
 
 /// **Quel fichier rend le chrome de protection, pour CHAQUE mode de lecture**
 /// (#7452).
