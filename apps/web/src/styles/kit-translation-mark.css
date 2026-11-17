@@ -40,6 +40,16 @@
     block-size: 100%;
   }
 
+  .kit-translation__mention {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .kit-translation__announce {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
   .kit-translation__dot {
     color: var(--color-ios-ink-3);
   }

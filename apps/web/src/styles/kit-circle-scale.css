@@ -128,6 +128,10 @@
     transform: scale(var(--kit-scale-pressed));
   }
 
+  .kit-scale__pill-title {
+    white-space: nowrap;
+  }
+
   .kit-scale__leading,
   .kit-scale__trailing {
     display: inline-flex;
