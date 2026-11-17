@@ -346,7 +346,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
-        "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",  // 2
         // Cohésion de `AudioPostComposerView` : la carte d'état, la zone de rognage et le
