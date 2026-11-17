@@ -8,9 +8,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.DndDay
 import me.meeshy.sdk.model.DndWindow
 import me.meeshy.sdk.model.NotificationType
@@ -156,12 +158,19 @@ class NotificationSettingsViewModel @Inject constructor(
 
     private fun deviceUtcOffsetMinutes(): Int = OffsetDateTime.now().offset.totalSeconds / SECONDS_PER_MINUTE
 
+    /**
+     * Une bascule touchée s'écrit ET part au serveur même si l'écran se ferme entre-temps : coupée entre
+     * l'écriture et l'envoi, elle resterait sur l'appareil sans jamais atteindre la passerelle, puis la
+     * relecture suivante du serveur l'effacerait sans un mot.
+     */
     private fun updateNotifications(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {
         viewModelScope.launch {
-            writes.withLock {
-                val updated = notificationPreferencesStore.update(edit)
-                val cmid = notificationPreferencesSyncRepository.enqueueSync(updated)
-                if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
+            withContext(NonCancellable) {
+                writes.withLock {
+                    val updated = notificationPreferencesStore.update(edit)
+                    val cmid = notificationPreferencesSyncRepository.enqueueSync(updated)
+                    if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
+                }
             }
         }
     }
