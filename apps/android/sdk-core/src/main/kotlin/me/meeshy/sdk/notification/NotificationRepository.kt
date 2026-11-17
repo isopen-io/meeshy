@@ -510,29 +510,34 @@ class NotificationRepository @Inject constructor(
      * snapshot.
      */
     suspend fun delete(notificationId: String): NetworkResult<Unit> {
-        val (removedIndex, removed) = synchronized(flightLock) {
+        val removal = synchronized(flightLock) {
             val previous = _notificationsCache.value
             val index = previous?.indexOfFirst { it.id == notificationId } ?: -1
             _notificationsCache.value = previous?.filterNot { it.id == notificationId }
-            index to previous?.getOrNull(index)
+            previous?.getOrNull(index)?.let { Removal(epoch, index, it) }
         }
-        val wasUnread = removed?.state?.isRead == false
-        if (wasUnread) _unreadCount.update { (it - 1).coerceAtLeast(0) }
+        if (removal?.row?.state?.isRead == false) _unreadCount.update { (it - 1).coerceAtLeast(0) }
 
         val result = apiCall { notificationApi.delete(notificationId) }
-        if (result is NetworkResult.Failure) {
-            if (removed != null) restoreAt(removedIndex, removed)
-            if (wasUnread) _unreadCount.update { it + 1 }
-        }
+        if (result is NetworkResult.Failure && removal != null) restore(removal)
         return result
     }
 
-    /** [delete]'s rollback: [row] back at [index] of the LIVE list, unless something already put it back. */
-    private fun restoreAt(index: Int, row: ApiNotification) {
+    /** What [delete] took out: the row, where it stood, and the account generation ([epoch]) it was taken from. */
+    private class Removal(val epoch: Long, val index: Int, val row: ApiNotification)
+
+    /**
+     * [delete]'s rollback: the row back at its index in the LIVE list, unless something already put it back, and its
+     * unread back in the count. Nothing of it once the account that deleted it has left ([clear] since): neither a list
+     * rebuilt around A's row — persisted, then shown to B at the next cold start — nor A's unread in B's count.
+     */
+    private fun restore(removal: Removal) {
         synchronized(flightLock) {
-            val list = _notificationsCache.value.orEmpty()
-            if (list.none { it.id == row.id }) {
-                _notificationsCache.value = list.toMutableList().apply { add(index.coerceIn(0, size), row) }
+            if (removal.epoch != epoch) return
+            if (!removal.row.state.isRead) _unreadCount.update { it + 1 }
+            val list = _notificationsCache.value ?: return
+            if (list.none { it.id == removal.row.id }) {
+                _notificationsCache.value = list.toMutableList().apply { add(removal.index.coerceIn(0, size), removal.row) }
             }
         }
     }

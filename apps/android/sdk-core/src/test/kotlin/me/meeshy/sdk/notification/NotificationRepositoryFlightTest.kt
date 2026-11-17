@@ -117,4 +117,34 @@ class NotificationRepositoryFlightTest {
 
         assertThat(repo.unreadCountStream.value).isEqualTo(2)
     }
+
+    /**
+     * A deletion A asked before signing out is refused after [NotificationRepository.clear]: its rollback used to rebuild
+     * a one-row list of A's notification — persisted, then shown to B at the next cold start — and to give A's unread
+     * back to B's count. Nothing of it lands.
+     */
+    @Test
+    fun `a deletion of the account that left refused after clear puts nothing back`() = runTest {
+        val asked = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val api: NotificationApi = mockk(relaxed = true) {
+            coEvery { delete("a1") } coAnswers {
+                asked.complete(Unit)
+                release.await()
+                throw IOException("offline")
+            }
+        }
+        val repo = NotificationRepository(api)
+        repo.replaceAll(items = listOf(row("a1"), row("a2")))
+        repo.setUnreadCount(2)
+
+        val deleting = async { repo.delete("a1") }
+        asked.await()
+        repo.clear()
+        release.complete(Unit)
+        deleting.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All)).isNull()
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+    }
 }
