@@ -12,6 +12,17 @@ nonisolated enum CirclesLinkStore {
     }
 }
 
+/// Les demandes reçues telles que « Demandes » les a gardées (#19449) : la fiche y peint une proposition de cercle avant
+/// le réseau. Sans magasin (les témoins), aucune.
+nonisolated enum ReceivedCircleRequests {
+    static let live: @concurrent @Sendable () async -> [FriendRequest] = {
+        await CacheCoordinator.shared.friendRequests
+            .loadIgnoringExpiry(for: FriendshipCache.PersistenceKeys.receivedRequests)?.items ?? []
+    }
+
+    static let none: @concurrent @Sendable () async -> [FriendRequest] = { [] }
+}
+
 extension CirclesViewModel {
     convenience init() {
         self.init(
@@ -43,6 +54,7 @@ extension ProfileCircleViewModel {
             friendService: FriendService.shared,
             offlineQueue: OfflineQueue.shared,
             networkMonitor: NetworkMonitor.shared,
+            cachedReceived: ReceivedCircleRequests.live,
             forgetFriendship: { userId in
                 FriendshipCache.shared.didRemoveFriend(userId)
                 await FriendshipCache.shared.invalidatePersistedFriendCaches()

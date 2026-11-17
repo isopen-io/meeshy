@@ -69,6 +69,7 @@ struct OurCircleSheet: View {
                     opened(summary)
                     nextOpens(summary)
                     missing(summary)
+                    ProfileCircleProposalCard(viewModel: viewModel, displayName: displayName)
                     actions(summary)
                 }
                 .padding(.horizontal, MeeshySpacing.lg)

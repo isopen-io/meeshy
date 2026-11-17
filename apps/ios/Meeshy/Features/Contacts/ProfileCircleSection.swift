@@ -6,7 +6,8 @@ import MeeshyUI
 /// `linked` dès qu'un lien d'au moins Connaissance est servi (la fiche range alors la demande de connexion), et ne garde
 /// que « Partager ma position » quand « Où il est » ne l'offre pas. Le niveau, monter, descendre et ce qui reste fermé
 /// vivent dans « Notre cercle » (`OurCircleSheet`), ouvert par sa rangée de « Sa fiche » (#19433, planche
-/// `Autre-Actions`) ; Talkie, « Ensemble » et « Son téléphone » ont leurs sections. Sans lien servi, rien : `linked`
+/// `Autre-Actions`) ; Talkie, « Ensemble » et « Son téléphone » ont leurs sections. Une proposition de cercle reçue de
+/// la personne s'y pose en carte, pour y répondre sans quitter la fiche (#19449). Sans lien servi, rien : `linked`
 /// reste faux et la fiche garde ce qu'elle montrait avant.
 struct ProfileCircleSection: View {
     @StateObject private var viewModel: ProfileCircleViewModel
@@ -22,7 +23,9 @@ struct ProfileCircleSection: View {
     }
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            ProfileCircleProposalCard(viewModel: viewModel, displayName: displayName)
+                .padding(.bottom, viewModel.receivedProposal == nil ? 0 : MeeshySpacing.xxl)
             if showsSharedLocation {
                 ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
                     .padding(.bottom, MeeshySpacing.xxl)

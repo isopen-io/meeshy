@@ -25,6 +25,11 @@ final class ProfileCircleViewModel: ObservableObject {
     @Published private(set) var didUnlink = false
     /// Le niveau auquel la passerelle juge les outils de cercle (`accessLevel`, #16623) ; `nil` tant qu'il n'est pas lu.
     @Published private(set) var toolLevel: RelationLevel?
+    /// La proposition de cercle que CETTE personne m'a faite, au-dessus du commun (#19449) ; `nil` sinon.
+    @Published private(set) var receivedProposal: ProfileCircleProposal?
+
+    /// Les propositions répondues ou remises à plus tard ici : une relecture ne les ramène pas.
+    private var setAside: Set<String> = []
 
     private let relations: RelationsProviding
     private let friendService: FriendServiceProviding
@@ -32,6 +37,7 @@ final class ProfileCircleViewModel: ObservableObject {
     private let networkMonitor: any NetworkMonitorProviding
     private let now: () -> Date
     private let linksStore: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink>
+    private let cachedReceived: @concurrent @Sendable () async -> [FriendRequest]
     private let forgetFriendship: @MainActor (String) async -> Void
 
     init(
@@ -42,6 +48,7 @@ final class ProfileCircleViewModel: ObservableObject {
         networkMonitor: any NetworkMonitorProviding,
         now: @escaping () -> Date = { Date() },
         linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
+        cachedReceived: @escaping @concurrent @Sendable () async -> [FriendRequest] = ReceivedCircleRequests.none,
         forgetFriendship: @escaping @MainActor (String) async -> Void
     ) {
         self.userId = userId
@@ -51,6 +58,7 @@ final class ProfileCircleViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
         self.now = now
         self.linksStore = linksStore
+        self.cachedReceived = cachedReceived
         self.forgetFriendship = forgetFriendship
     }
 
@@ -157,9 +165,12 @@ final class ProfileCircleViewModel: ObservableObject {
             self?.link = served.first { $0.userId == userId }
         }
         let revalidation = await loader.load(fetch: fetch, setLoadState: { _ in }, apply: apply)
+        let cached = await cachedReceived()
+        paintProposal(from: cached)
         await revalidation?.value
         await loadServedDetail()
         await loadPendingRequest()
+        await loadReceivedProposal(cached: cached)
     }
 
     /// `GET /relations/:userId` : le blocage de montée quand la passerelle le sert, et le lien lui-même quand la liste
@@ -224,6 +235,98 @@ final class ProfileCircleViewModel: ObservableObject {
             HapticFeedback.error()
             return false
         }
+    }
+
+    // MARK: - Une proposition reçue (#19449, planche `Autre-Cercle`)
+
+    /// La première page des demandes reçues, filtrée sur CETTE personne : la passerelle ne filtre pas encore par
+    /// expéditeur (#19450). Une liste non servie garde ce que le cache a peint.
+    private func loadReceivedProposal(cached: [FriendRequest]) async {
+        let served = try? await friendService.receivedRequests(offset: 0, limit: Self.requestsPage)
+        paintProposal(from: served?.data ?? cached)
+    }
+
+    private func paintProposal(from requests: [FriendRequest]) {
+        receivedProposal = ProfileCircleProposal.received(in: requests, from: userId, common: shownLevel, setAside: setAside)
+    }
+
+    /// Instantané -> local -> file durable -> retour arrière. Une proposition de Sang ne s'accepte que par le rituel
+    /// (le serveur refuse `PATCH accept` : `RELATION_RITUAL_REQUIRED`) : la carte reste jusqu'au scellement.
+    func acceptProposal(name: String) async -> ProfileCircleProposalAnswer {
+        guard let proposal = receivedProposal, let current = link else { return .notSent }
+        guard proposal.level != .blood else { return .opensRitual(CircleRitualTarget(userId: userId, name: name)) }
+        let pendingBefore = pendingLevel
+        setAside.insert(proposal.requestId)
+        receivedProposal = nil
+        link = Self.accepted(current, at: proposal.level)
+        if let waiting = pendingLevel, waiting <= proposal.level { pendingLevel = nil }
+        let restore: @MainActor () -> Void = { [weak self] in
+            self?.restore(proposal, undoing: (link: current, pending: pendingBefore))
+        }
+        do {
+            try await CircleAnswerSender(offlineQueue: offlineQueue).send(proposal.requestId, action: .accept, onExhausted: restore)
+            await linksStore().invalidate(for: CirclesViewModel.cacheKey)
+            HapticFeedback.success()
+            return .answered
+        } catch {
+            restore()
+            return .notSent
+        }
+    }
+
+    /// Instantané -> local -> file durable -> retour arrière. Le refus ne se lit pas chez l'autre (RG-07).
+    @discardableResult
+    func declineProposal() async -> Bool {
+        guard let proposal = receivedProposal else { return false }
+        setAside.insert(proposal.requestId)
+        receivedProposal = nil
+        let restore: @MainActor () -> Void = { [weak self] in
+            self?.restore(proposal)
+        }
+        do {
+            try await CircleAnswerSender(offlineQueue: offlineQueue).send(proposal.requestId, action: .reject, onExhausted: restore)
+            HapticFeedback.medium()
+            return true
+        } catch {
+            restore()
+            return false
+        }
+    }
+
+    /// « Plus tard » : rien ne part, la carte se range pour cette ouverture de la fiche.
+    func postponeProposal() {
+        guard let proposal = receivedProposal else { return }
+        setAside.insert(proposal.requestId)
+        receivedProposal = nil
+        HapticFeedback.light()
+    }
+
+    /// La carte revient ; une acceptation défaite rend aussi le lien et ma demande d'avant.
+    private func restore(_ proposal: ProfileCircleProposal,
+                         undoing acceptance: (link: RelationLink, pending: RelationLevel?)? = nil) {
+        setAside.remove(proposal.requestId)
+        receivedProposal = proposal
+        if let acceptance {
+            link = acceptance.link
+            pendingLevel = acceptance.pending
+        }
+        notice = String(localized: "circles.notice.respondFailed", defaultValue: "Impossible de répondre à la demande", bundle: .main)
+        HapticFeedback.error()
+    }
+
+    /// Le lien après MON acceptation : la personne accorde déjà le cran proposé, le mien le rejoint.
+    private static func accepted(_ link: RelationLink, at level: RelationLevel) -> RelationLink {
+        RelationLink(
+            userId: link.userId,
+            effectiveLevel: max(link.effectiveLevel, level),
+            grantedByMe: max(link.grantedByMe, level),
+            since: link.since,
+            progress: link.progress,
+            eligibleFor: nil,
+            raiseBlockedUntil: link.raiseBlockedUntil,
+            canRaise: link.canRaise,
+            accessLevel: link.accessLevel
+        )
     }
 
     /// Instantané -> local -> réseau -> retour arrière. Silencieux pour l'autre (RG-07).
