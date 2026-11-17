@@ -4,6 +4,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -59,7 +61,36 @@ class NotificationPreferencesStoreTest {
         }
     }
 
+    @Test
+    fun inMemory_update_appliesTheTransformToTheCurrentBlockAndReturnsIt() = runBlocking {
+        val store = InMemoryNotificationPreferencesStore()
+
+        store.update { it.copy(soundEnabled = false) }
+        val result = store.update { it.copy(vibrationEnabled = false) }
+
+        assertThat(result.soundEnabled).isFalse()
+        assertThat(result.vibrationEnabled).isFalse()
+        assertThat(store.preferences.value).isEqualTo(result)
+    }
+
     // ---- DataStoreNotificationPreferencesStore (durable) ----
+
+    @Test
+    fun dataStore_concurrentUpdates_composeInsteadOfOverwritingEachOther() = runTest(dataStores.dispatcher) {
+        val store = DataStoreNotificationPreferencesStore(
+            dataStores.preferences(tmp.newFile("update.preferences_pb")),
+            dataStores.scope,
+        )
+
+        val first = async { store.update { it.copy(soundEnabled = false) } }
+        val second = async { store.update { it.copy(vibrationEnabled = false) } }
+        awaitAll(first, second)
+
+        val persisted = store.awaitHydrated()
+        assertThat(persisted.soundEnabled).isFalse()
+        assertThat(persisted.vibrationEnabled).isFalse()
+        assertThat(store.preferences.first { !it.soundEnabled && !it.vibrationEnabled }.pushEnabled).isTrue()
+    }
 
     @Test
     fun dataStore_defaultsToTheDefaultBlockOnEmptyStore() = runTest(dataStores.dispatcher) {

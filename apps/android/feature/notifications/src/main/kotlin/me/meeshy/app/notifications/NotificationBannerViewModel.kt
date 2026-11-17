@@ -118,11 +118,22 @@ class NotificationBannerViewModel @Inject constructor(
      */
     private var dismissJob: Job? = null
 
+    /**
+     * La notification dont la bannière se prépare (lecture du nom local de la conversation), et si elle a été
+     * rappelée PENDANT cette lecture : la passerelle émet `notification:deleted` aussitôt qu'un message est
+     * rappelé, et une bannière posée après coup montrerait un contenu disparu pendant 4 s.
+     */
+    private var preparingId: String? = null
+    private var preparingRetracted = false
+
     init {
         viewModelScope.launch {
             messageSocketManager.notificationReceived.collect { notification ->
                 handle(notification)
             }
+        }
+        viewModelScope.launch {
+            messageSocketManager.notificationDeleted.collect { retracted -> onRetracted(retracted.notificationId) }
         }
     }
 
@@ -169,6 +180,11 @@ class NotificationBannerViewModel @Inject constructor(
         return tapped
     }
 
+    private fun onRetracted(notificationId: String) {
+        if (preparingId == notificationId) preparingRetracted = true
+        if (_banner.value?.notificationId == notificationId) dismiss()
+    }
+
     fun dismiss() {
         dismissJob?.cancel()
         dismissJob = null
@@ -188,11 +204,16 @@ class NotificationBannerViewModel @Inject constructor(
         val shown = (decision as? NotificationToastDecision.Show)?.notification ?: return
 
         val conversationId = shown.context?.conversationId
+        preparingId = shown.id
+        preparingRetracted = false
         val conversation = conversationId?.let { id ->
             // #5190 — a single bounded `WHERE id = :id` lookup instead of decoding
             // the ENTIRE cached conversation table just to find one row by id.
             runCatching { conversationRepository.conversationStream(id).first() }.getOrNull()
         }
+        val retractedMeanwhile = preparingRetracted
+        preparingId = null
+        if (retractedMeanwhile) return
 
         val groupName = ConversationBannerName.composed(
             customName = conversation?.preferences?.customName,
