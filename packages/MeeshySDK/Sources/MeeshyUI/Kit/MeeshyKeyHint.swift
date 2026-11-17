@@ -78,24 +78,35 @@ public struct MeeshyKeyHint: View {
                     cap(glyph, recipe: recipe)
                 }
             }
+            .environment(\.layoutDirection, .leftToRight)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
     }
 
+    /// La face et le caractère descendent quand la touche s'enfonce ; le bord et
+    /// la lèvre restent : c'est la lèvre qui dit « touche » et non « puce ».
     private func cap(_ glyph: String, recipe: MeeshyKeyHintRecipe) -> some View {
         let isDark = colorScheme == .dark
-        let shape = RoundedRectangle(cornerRadius: CGFloat(recipe.cornerRadius), style: .continuous)
+        let radius = CGFloat(recipe.cornerRadius)
+        let edge = CGFloat(MeeshyKeyHintRecipe.edgeWidth)
+        let lip = CGFloat(recipe.lipWidth)
+        let face = RoundedRectangle(cornerRadius: max(radius - edge, 0), style: .continuous)
         return Text(verbatim: glyph)
             .meeshyScaledFont(CGFloat(recipe.characterSize), weight: .bold, design: .monospaced)
             .foregroundStyle(MeeshyKeyHintColors.ink(surface: surface, isDark: isDark))
             .lineLimit(1)
             .padding(.horizontal, CGFloat(recipe.horizontalPadding))
-            .padding(.bottom, CGFloat(recipe.lipWidth))
-            .frame(minWidth: CGFloat(recipe.minimumWidth), minHeight: CGFloat(recipe.side))
-            .background(shape.fill(MeeshyKeyHintColors.face(surface: surface, isPressed: recipe.isPressed, isDark: isDark)))
-            .background(shape.fill(MeeshyKeyHintColors.lip(surface: surface, isDark: isDark)))
+            .frame(minWidth: CGFloat(recipe.minimumWidth) - 2 * edge,
+                   minHeight: CGFloat(recipe.side) - edge - lip)
+            .background(face.fill(MeeshyKeyHintColors.face(surface: surface, isPressed: recipe.isPressed,
+                                                             isDark: isDark)))
             .offset(y: CGFloat(recipe.pressOffset))
+            .padding(EdgeInsets(top: edge, leading: edge, bottom: lip, trailing: edge))
+            .background(
+                MeeshyKeyCapRim(cornerRadius: radius, edge: edge, lip: lip)
+                    .fill(MeeshyKeyHintColors.lip(surface: surface, isDark: isDark), style: FillStyle(eoFill: true))
+            )
     }
 }
 
@@ -112,7 +123,6 @@ public struct MeeshyKeyLegend<Leading: View>: View {
     private let container: MeeshyKeyLegendContainer
     private let leading: Leading
 
-    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.colorScheme) private var colorScheme
 
     public init(items: [MeeshyKeyLegendItem],
@@ -127,8 +137,7 @@ public struct MeeshyKeyLegend<Leading: View>: View {
     public var body: some View {
         if MeeshyKeyLegendLaw.rendersContainer(itemCount: items.count) {
             let flow = MeeshyKeyFlowLayout(spacing: CGFloat(MeeshyKeyLegendLaw.groupSpacing),
-                                           lineSpacing: MeeshySpacing.sm,
-                                           isRightToLeft: layoutDirection == .rightToLeft)
+                                           lineSpacing: MeeshySpacing.sm)
             switch container {
             case .none:
                 flow { flowChildren }
@@ -180,11 +189,11 @@ extension MeeshyKeyLegend where Leading == EmptyView {
 }
 
 /// Le coulage de la légende : une paire ne se coupe jamais, on passe à la ligne
-/// entre deux paires. L'ordre se reflète en écriture de droite à gauche.
+/// entre deux paires. Le placement s'écrit depuis le début : SwiftUI le retourne
+/// lui-même en écriture de droite à gauche.
 private struct MeeshyKeyFlowLayout: Layout {
     let spacing: CGFloat
     let lineSpacing: CGFloat
-    let isRightToLeft: Bool
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = layoutRows(width: proposal.width ?? .infinity, subviews: subviews)
@@ -197,8 +206,7 @@ private struct MeeshyKeyFlowLayout: Layout {
         for row in layoutRows(width: bounds.width, subviews: subviews) {
             var x: CGFloat = 0
             for entry in row.entries {
-                let origin = isRightToLeft ? bounds.maxX - x - entry.size.width : bounds.minX + x
-                subviews[entry.index].place(at: CGPoint(x: origin, y: y + (row.height - entry.size.height) / 2),
+                subviews[entry.index].place(at: CGPoint(x: bounds.minX + x, y: y + (row.height - entry.size.height) / 2),
                                             anchor: .topLeading, proposal: .unspecified)
                 x += entry.size.width + spacing
             }
@@ -232,6 +240,23 @@ private struct MeeshyKeyFlowLayout: Layout {
     }
 }
 
+/// Le bord de la touche : un filet de `edge` sur trois côtés et la lèvre de `lip`
+/// en bas, tracés en pair-impair autour de la face qu'ils laissent vide.
+nonisolated struct MeeshyKeyCapRim: Shape {
+    let cornerRadius: CGFloat
+    let edge: CGFloat
+    let lip: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect)
+        let face = CGRect(x: rect.minX + edge, y: rect.minY + edge,
+                          width: rect.width - 2 * edge, height: rect.height - edge - lip)
+        guard face.width > 0, face.height > 0 else { return path }
+        path.addPath(RoundedRectangle(cornerRadius: max(cornerRadius - edge, 0), style: .continuous).path(in: face))
+        return path
+    }
+}
+
 /// Les couleurs de la touche : la seule traduction surface vers couleur.
 enum MeeshyKeyHintColors {
     static func ink(surface: MeeshyKeyHintSurface, isDark: Bool) -> Color {
@@ -241,13 +266,15 @@ enum MeeshyKeyHintColors {
         }
     }
 
+    /// Enfoncée, la face prend l'accent, quelle que soit sa surface.
+    static let pressedFace = MeeshyColors.brandPrimary.opacity(MeeshyOpacity.medium)
+
     static func face(surface: MeeshyKeyHintSurface, isPressed: Bool, isDark: Bool) -> Color {
-        let base: Color
+        guard !isPressed else { return pressedFace }
         switch surface {
-        case .onAccent, .onGlass: base = MeeshyColors.onMedia.opacity(MeeshyOpacity.light)
-        case .auto, .onFill: base = MeeshyColors.surfaceFill(isDark: isDark)
+        case .onAccent, .onGlass: return MeeshyColors.onMedia.opacity(MeeshyOpacity.light)
+        case .auto, .onFill: return MeeshyColors.surfaceFill(isDark: isDark)
         }
-        return isPressed ? base.opacity(MeeshyOpacity.heavy) : base
     }
 
     static func lip(surface: MeeshyKeyHintSurface, isDark: Bool) -> Color {

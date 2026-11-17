@@ -184,7 +184,7 @@ struct KitAtomsLifecycleTests {
     @Test("la vue passe par la bascule et par la raison bornée à l'état éteint")
     func button_viewUsesTheLaws() throws {
         let source = try KitAtomVectors.code("MeeshyButton.swift")
-        #expect(source.contains("holdLaw.toggle(isEnabled: isEnabled)"))
+        #expect(source.contains("holdLaw.toggle(isEnabled: isHoldAvailable)"))
         #expect(!source.contains("hint(disabledReason: disabledReason)),"))
         #expect(source.contains("hint(disabledReason: disabledReason, isEnabled: isEnabled)"))
     }
