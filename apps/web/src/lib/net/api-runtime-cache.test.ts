@@ -243,3 +243,35 @@ describe('`vite/pwa.ts` déclare les deux moitiés, dans le bon ORDRE', () => {
     expect(config).toContain('cacheableResponse: { statuses: [0, 200] }');
   });
 });
+
+/**
+ * **L'ANNUAIRE ET LES ENVELOPPES CHIFFRÉS NE SE REJOUENT JAMAIS** (#18987).
+ *
+ * Le seau `api` rejoue sa copie avec un `200` quand la passerelle ne répond pas
+ * alors que `navigator.onLine` reste vrai. Pour `/e2ee/*`, la copie est FAUSSE
+ * par nature : un bundle dont la pré-clé unique est déjà réservée (le pair ne
+ * pourra pas ouvrir l'enveloppe scellée dessus), une liste d'appareils
+ * périmée (les 409 Sesame tournent en boucle), un rattrapage d'enveloppes déjà
+ * acquittées. Mesuré par la contre-analyse du 2026-11-17 : le motif captait les
+ * quatre chemins, dont `/e2ee/devices`, déjà appelé par « Mes appareils
+ * chiffrés ».
+ */
+describe('une réponse de l’annuaire chiffré ne va JAMAIS dans le cache du service worker (#18987)', () => {
+  test('les quatre chemins e2ee lus par le web sont exclus', () => {
+    expect(apiResponseMayBeCached('/api/v1/e2ee/devices')).toBe(false);
+    expect(apiResponseMayBeCached('/api/v1/e2ee/keys/64b000000000000000000001?deviceIds=1,2')).toBe(false);
+    expect(apiResponseMayBeCached('/api/v1/e2ee/envelopes?after=64b0000000000000000000aa&limit=200')).toBe(false);
+    expect(apiResponseMayBeCached('/api/v1/e2ee/devices/self/prekey-count')).toBe(false);
+  });
+
+  test('tout `/e2ee` l’est, une route à venir comprise — un filtre qui énumère se périme', () => {
+    expect(apiResponseMayBeCached('/api/v1/e2ee')).toBe(false);
+    expect(apiResponseMayBeCached('/api/v1/e2ee/conversations/c1/signals')).toBe(false);
+    expect(apiResponseMayBeCached('/api/v1/e2ee?x=1')).toBe(false);
+  });
+
+  test('CONTRASTE — la garde lit un SEGMENT, jamais un préfixe de chaîne', () => {
+    expect(apiResponseMayBeCached('/api/v1/e2eestats')).toBe(true);
+    expect(apiResponseMayBeCached('/api/v1/conversations/c1/messages')).toBe(true);
+  });
+});

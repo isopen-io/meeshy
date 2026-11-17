@@ -4,6 +4,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import java.io.File
+import java.io.FileOutputStream
 import java.security.KeyStore
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -36,17 +37,25 @@ internal class KeystoreVaultKey(
     /** La clé, et si elle vient d'être tirée (le coffre précédent, s'il existait, ne s'ouvrira plus). */
     data class Opened(val key: SecretKey, val fresh: Boolean)
 
+    /**
+     * Une forme enveloppée trop courte pour être un chiffré AES-GCM (nonce + étiquette) est une écriture interrompue : elle
+     * se traite comme ABSENTE (#18978) — le coffre qu'elle fermait est vide, ou illisible sans elle — jamais comme un
+     * verrou éternel. La nouvelle forme est écrite puis SYNCHRONISÉE sur le disque avant de prendre son nom.
+     */
     fun open(): Opened {
         directory.mkdirs()
         val wrapped = File(directory, WRAPPED_FILE)
         if (wrapped.isFile) {
-            reopen(wrapped)?.let { return Opened(SecretKeySpec(it, "AES"), fresh = false) }
+            if (wrapped.length() >= MIN_WRAPPED_BYTES) reopen(wrapped)?.let { return Opened(SecretKeySpec(it, "AES"), fresh = false) }
             check(wrapped.delete()) { "e2ee vault lost key could not be retired" }
         }
         val raw = ByteArray(KEY_BYTES).also(SecureRandom()::nextBytes)
         val sealed = master.wrap(raw)
         val part = File(directory, "$WRAPPED_FILE.part")
-        part.writeBytes(sealed)
+        FileOutputStream(part).use { stream ->
+            stream.write(sealed)
+            stream.fd.sync()
+        }
         check(part.renameTo(wrapped)) { "e2ee vault key could not take its name" }
         return Opened(SecretKeySpec(raw, "AES"), fresh = true)
     }
@@ -68,6 +77,9 @@ internal class KeystoreVaultKey(
     private companion object {
         const val WRAPPED_FILE = "vault.key"
         const val KEY_BYTES = 32
+
+        /** Le plus petit chiffré AES-GCM : un nonce de 12 octets et une étiquette de 16. */
+        const val MIN_WRAPPED_BYTES = 12L + 16L
     }
 }
 

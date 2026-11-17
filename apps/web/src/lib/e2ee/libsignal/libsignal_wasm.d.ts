@@ -46,6 +46,23 @@ export class Opened {
 }
 
 /**
+ * L'en-tête d'un premier message (`PreKeySignalMessage`), lu SANS le déchiffrer.
+ */
+export class PreKeyMessageInfo {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    get identityKey(): Uint8Array;
+    set identityKey(value: Uint8Array | number[]);
+    get kyberPreKeyId(): number | undefined;
+    set kyberPreKeyId(value: number | null | undefined);
+    get preKeyId(): number | undefined;
+    set preKeyId(value: number | null | undefined);
+    registrationId: number;
+    signedPreKeyId: number;
+}
+
+/**
  * Le magasin ÉPHÉMÈRE d'un appareil, rempli par l'appelant pour UNE opération.
  */
 export class ProtocolStore {
@@ -59,6 +76,13 @@ export class ProtocolStore {
      * présente de nouveau (`mark_kyber_pre_key_used`). Sans elle, un magasin
      * éphémère accepterait le rejeu d'un premier message sur une pré-clé Kyber
      * de dernier recours, vers son expéditeur comme vers une autre adresse.
+     *
+     * IDEMPOTENTE (#18994) : `mark_kyber_pre_key_used` ne rend `InvalidMessage`
+     * que pour une clé DÉJÀ présente (`storage/inmem.rs`). Un doublon persisté
+     * — deux onglets, une reprise après crash — rendait le magasin
+     * inconstructible pour TOUTE opération : le navigateur ne déchiffrait plus
+     * rien. Ce refus-là est ignoré ICI, à l'injection, et seulement ici : le
+     * rejeu d'un premier message reste refusé au déchiffrement.
      */
     addSeenBaseKey(kyber_pre_key_id: number, signed_pre_key_id: number, base_key: Uint8Array | number[]): void;
     addSignedPreKey(id: number, record: Uint8Array | number[]): void;
@@ -96,6 +120,38 @@ export function generateSignedPreKey(identity_key_pair: Uint8Array | number[], i
 
 export function libsignalVersion(): string;
 
+/**
+ * Les pré-clés qu'un premier message engage, la génération et la clé
+ * d'identité de son expéditeur (#18992) : l'ouvreur ne charge du coffre que
+ * les pré-clés utiles, et confronte l'expéditeur avant tout déchiffrement.
+ */
+export function preKeyMessageInfo(body: Uint8Array | number[]): PreKeyMessageInfo;
+
+/**
+ * La `registrationId` du pair qu'une session vise (#18992) — lue dans
+ * l'ENREGISTREMENT, seule source de vérité : une session dont la génération
+ * diffère de l'annuaire se jette et se rouvre (Sesame), et l'enveloppe
+ * s'adresse à cette génération.
+ */
+export function sessionRemoteRegistrationId(session: Uint8Array | number[]): number;
+
+/**
+ * La signature XEdDSA d'un message ARBITRAIRE par la clé d'identité de
+ * l'appareil (#18992) — la preuve de liaison que `POST /e2ee/devices` exige
+ * (`deviceBindingMessage`, `packages/shared/types/e2ee-directory.ts`), que
+ * l'iPhone produit par `privateKey.generateSignature` et que la passerelle
+ * vérifie par `PublicKey.verify`. XEdDSA est aléatoire : deux signatures du
+ * même message diffèrent, et toutes deux se vérifient.
+ */
+export function signWithIdentity(identity_key_pair: Uint8Array | number[], message: Uint8Array | number[]): Uint8Array;
+
+/**
+ * La vérification d'une signature XEdDSA par une clé d'identité publique
+ * (33 octets) — `false` pour une signature fausse, une erreur pour une clé
+ * qui ne se décode pas.
+ */
+export function verifyWithIdentity(identity_key: Uint8Array | number[], message: Uint8Array | number[], signature: Uint8Array | number[]): boolean;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -114,9 +170,15 @@ export interface InitOutput {
     readonly __wbg_get_opened_plaintext: (a: number) => [number, number];
     readonly __wbg_get_opened_preKeyId: (a: number) => number;
     readonly __wbg_get_opened_signedPreKeyId: (a: number) => number;
+    readonly __wbg_get_prekeymessageinfo_identityKey: (a: number) => [number, number];
+    readonly __wbg_get_prekeymessageinfo_kyberPreKeyId: (a: number) => number;
+    readonly __wbg_get_prekeymessageinfo_preKeyId: (a: number) => number;
+    readonly __wbg_get_prekeymessageinfo_registrationId: (a: number) => number;
+    readonly __wbg_get_prekeymessageinfo_signedPreKeyId: (a: number) => number;
     readonly __wbg_get_sealed_body: (a: number) => [number, number];
     readonly __wbg_get_sealed_messageType: (a: number) => number;
     readonly __wbg_opened_free: (a: number, b: number) => void;
+    readonly __wbg_prekeymessageinfo_free: (a: number, b: number) => void;
     readonly __wbg_protocolstore_free: (a: number, b: number) => void;
     readonly __wbg_sealed_free: (a: number, b: number) => void;
     readonly __wbg_set_generatedidentity_identityKey: (a: number, b: number, c: number) => void;
@@ -131,6 +193,11 @@ export interface InitOutput {
     readonly __wbg_set_opened_plaintext: (a: number, b: number, c: number) => void;
     readonly __wbg_set_opened_preKeyId: (a: number, b: number) => void;
     readonly __wbg_set_opened_signedPreKeyId: (a: number, b: number) => void;
+    readonly __wbg_set_prekeymessageinfo_identityKey: (a: number, b: number, c: number) => void;
+    readonly __wbg_set_prekeymessageinfo_kyberPreKeyId: (a: number, b: number) => void;
+    readonly __wbg_set_prekeymessageinfo_preKeyId: (a: number, b: number) => void;
+    readonly __wbg_set_prekeymessageinfo_registrationId: (a: number, b: number) => void;
+    readonly __wbg_set_prekeymessageinfo_signedPreKeyId: (a: number, b: number) => void;
     readonly __wbg_set_sealed_body: (a: number, b: number, c: number) => void;
     readonly __wbg_set_sealed_messageType: (a: number, b: number) => void;
     readonly generateIdentity: () => [number, number, number];
@@ -138,6 +205,7 @@ export interface InitOutput {
     readonly generatePreKey: (a: number) => [number, number, number];
     readonly generateSignedPreKey: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly libsignalVersion: () => [number, number];
+    readonly preKeyMessageInfo: (a: number, b: number) => [number, number, number];
     readonly protocolstore_addKyberPreKey: (a: number, b: number, c: number, d: number) => [number, number];
     readonly protocolstore_addPreKey: (a: number, b: number, c: number, d: number) => [number, number];
     readonly protocolstore_addSeenBaseKey: (a: number, b: number, c: number, d: number, e: number) => [number, number];
@@ -150,6 +218,9 @@ export interface InitOutput {
     readonly protocolstore_session: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly protocolstore_setSession: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly protocolstore_trustIdentity: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+    readonly sessionRemoteRegistrationId: (a: number, b: number) => [number, number, number];
+    readonly signWithIdentity: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly verifyWithIdentity: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;

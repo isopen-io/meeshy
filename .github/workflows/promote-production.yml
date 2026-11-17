@@ -311,11 +311,13 @@ jobs:
           fi
           curl -fsS --max-time 10 -o /dev/null "$WEB_URL/" || ECHEC="$ECHEC frontend"
           # La webapp SERVIE est-elle la révision promue, et sert-elle sa
-          # configuration de démarrage (#10208) ?
+          # configuration de démarrage (#10208) — la DONNÉE que lit le bundle
+          # (`config.json`, #18988) et le script des bundles d'avant (#9223) ?
           if grep -q '^PROMU service=webapp' bascule.txt; then
             ATTENDU=$(sed -n 's/^PLAN service=webapp .* revision=\([0-9a-f]\{40\}\).*/\1/p' plan.txt)
             SERVI=$(curl -fsS --max-time 10 "$WEB_URL/build-info.json" | jq -r '.build.commit // empty')
             [ "$SERVI" = "$ATTENDU" ] || ECHEC="$ECHEC webapp-servie=$SERVI≠$ATTENDU"
+            curl -fsS --max-time 10 "$WEB_URL/config.json" | jq -e 'type == "object"' > /dev/null || ECHEC="$ECHEC webapp-config.json"
             curl -fsS --max-time 10 "$WEB_URL/config.js" | grep -q '__MEESHY_RUNTIME__' || ECHEC="$ECHEC webapp-config.js"
           fi
 

@@ -1,8 +1,15 @@
 package me.meeshy.ui.theme
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import kotlin.math.PI
+import me.meeshy.ui.haptics.MeeshyHaptics
 
 /**
  * Brand motion (charte graphique §13.6) — Meeshy animates with springs, never
@@ -83,4 +90,50 @@ public object MeeshyMotion {
 
     /** Delay before the item at [index] starts entering; the first item (and any negative index) starts at once. */
     public fun staggerDelayMillis(index: Int): Int = index.coerceAtLeast(0) * STAGGER_STEP_MILLIS
+
+    /** Décalage d'un rang de la cascade `rise` : 80 ms (K26). */
+    public const val CASCADE_STEP_MILLIS: Int = 80
+
+    /** Rang le plus loin d'une cascade : quatre rangs au plus, donc trois pas. */
+    public const val CASCADE_MAX_INDEX: Int = 3
+
+    /** Délai du rang [index] de la cascade `rise` : borné à 3, un rang négatif vaut 0 (K26). */
+    public fun delayMillis(index: Int): Int = index.coerceIn(0, CASCADE_MAX_INDEX) * CASCADE_STEP_MILLIS
+
+    /** Avancement 0..1 d'un repli piloté (`collapse`), borné aux deux bouts ; un intervalle vide vaut 0 (K26). */
+    public fun progress(offset: Float, range: ClosedFloatingPointRange<Float> = 0f..MeeshyMotionRecipe.COLLAPSE_RANGE_DP): Float {
+        val span = range.endInclusive - range.start
+        if (span <= 0f) return 0f
+        return ((offset - range.start) / span).coerceIn(0f, 1f)
+    }
+
+    private val easeInOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+    private val easeOut = CubicBezierEasing(0f, 0f, 0.58f, 1f)
+
+    /**
+     * L'animation d'un jeton pour la valeur [T] : le ressort de la table, ou son fondu de 160 ms sous [reduce]. Les boucles
+     * (`float`, `pulse`) s'arrêtent sur leur image de repos ; `collapse`, conduit par le doigt, n'a pas de durée propre.
+     */
+    public fun <T> spec(token: MeeshyMotionToken, reduce: Boolean = false): AnimationSpec<T> {
+        val values = MeeshyMotionRecipe.resolve(token, reduce)
+        return when (values.nature) {
+            MeeshyMotionNature.Spring -> springFor<T>(requireNotNull(values.response), requireNotNull(values.damping))
+            MeeshyMotionNature.Timed -> tween<T>(values.durationMillis, easing = easeOut)
+            MeeshyMotionNature.Driven, MeeshyMotionNature.Still -> snap<T>()
+            MeeshyMotionNature.Loop -> when (token) {
+                MeeshyMotionToken.Float -> infiniteRepeatable<T>(tween(values.durationMillis, easing = easeInOut), RepeatMode.Reverse)
+                else -> infiniteRepeatable<T>(tween(values.durationMillis, easing = easeOut), RepeatMode.Restart)
+            }
+        }
+    }
+
+    /** Joue le retour d'un jeton par le site unique d'haptique ; [MeeshyMotionHaptic.None] laisse l'hôte jouer le sien. */
+    public fun play(haptic: MeeshyMotionHaptic, haptics: MeeshyHaptics) {
+        when (haptic) {
+            MeeshyMotionHaptic.Light -> haptics.light()
+            MeeshyMotionHaptic.Medium -> haptics.medium()
+            MeeshyMotionHaptic.Rigid -> haptics.rigid()
+            MeeshyMotionHaptic.None -> Unit
+        }
+    }
 }
