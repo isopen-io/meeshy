@@ -175,10 +175,10 @@ extension UserProfileSheet {
 
     // MARK: - Compact stats band
 
-    /// A small horizontal band of mini stat chips + member-since, replacing the
-    /// full stats stack. The figures are read with the profile when the sheet
-    /// opens (#10093) — cached first, then synchronized. Achievements grid is
-    /// dropped here for compactness.
+    /// « Membre depuis » puis la bande de chiffres du kit (K34, planche
+    /// `Autre-Vitrine` § « En chiffres »). Les chiffres sont lus avec le profil
+    /// à l'ouverture (#10093) — cache d'abord, puis synchronisés ; le squelette
+    /// du kit ne se montre que sur un cache vide.
     @ViewBuilder
     var compactStatsBand: some View {
         // Aucune marge horizontale ici : `profileSection` porte déjà celles de
@@ -193,50 +193,14 @@ extension UserProfileSheet {
                 )
             }
 
-            if let stats = effectiveUserStats {
-                HStack(spacing: MeeshySpacing.sm) {
-                    miniStatChip(icon: "paperplane.fill", value: stats.totalMessages,
-                                 label: String(localized: "profile.stats.messagesShort", defaultValue: "Messages", bundle: .module))
-                    miniStatChip(icon: "character.book.closed.fill", value: stats.totalTranslations,
-                                 label: String(localized: "profile.stats.translationsShort", defaultValue: "Traductions", bundle: .module))
-                    miniStatChip(icon: "globe", value: stats.languagesUsed,
-                                 label: String(localized: "profile.stats.languagesShort", defaultValue: "Langues", bundle: .module))
-                    miniStatChip(icon: "calendar.badge.checkmark", value: stats.memberDays,
-                                 label: String(localized: "profile.stats.daysShort", defaultValue: "Jours", bundle: .module))
-                }
-            } else if effectiveIsLoadingStats {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ForEach(0..<4, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                            .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                            .frame(height: 56)
-                            .shimmer()
-                    }
-                }
+            if ProfileVitrineFigures.isVisible(stats: effectiveUserStats, isLoading: effectiveIsLoadingStats) {
+                MeeshyFigureBand(items: ProfileVitrineFigures.items(of: effectiveUserStats), size: .compact,
+                                 isLoading: effectiveUserStats == nil && effectiveIsLoadingStats,
+                                 emptyLabel: ProfileVitrineFigures.emptyLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("profile.vitrine.figures")
             }
         }
-    }
-
-    private func miniStatChip(icon: String, value: Int, label: String) -> some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
-                .foregroundStyle(Color(hex: resolvedAccent))
-            Text("\(value)")
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                .foregroundStyle(theme.textPrimary)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(theme.textMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.smPlus)
-        .background(theme.surfaceGradient(tint: resolvedAccent))
-        .glassCard(cornerRadius: MeeshyRadius.lg)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String("\(value) \(label)"))
     }
 
     // MARK: - Stat card (member-since)
