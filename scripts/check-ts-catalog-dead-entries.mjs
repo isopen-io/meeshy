@@ -580,6 +580,8 @@ const PENDING_CLIENT_ENTRIES = {
   // adresses personnelles avant la face Liens web (#18880), qui les appellera.
   'users.meAddressesById': { issue: 18880, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens web' },
   'users.meAddressesOrder': { issue: 18880, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens web' },
+  // « En commun » (#19200) : le serveur sert les communautés, amis et médias en commun avant le tour client (#19234).
+  'users.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — la vue « En commun » de la fiche d’un autre (web)' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et
