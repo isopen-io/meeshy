@@ -14,7 +14,6 @@
     <string name="profile_action_send_message">Envoyer un message</string>
     <string name="profile_activity_title">Activité</string>
     <string name="profile_avatar_edit">Modifier la photo de profil</string>
-    <string name="profile_back">Retour</string>
     <string name="profile_bio_label">Bio</string>
     <string name="profile_bio_placeholder">Parlez de vous...</string>
     <string name="profile_blocked_by_me">Vous avez bloqué cet utilisateur</string>
@@ -36,10 +35,7 @@
     <string name="profile_decor_shop">Plus dans la boutique</string>
     <string name="profile_decor_subtitle">Visibles de tous sur ton profil</string>
     <string name="profile_decor_title">Contour et bannière</string>
-    <string name="profile_detail_country">Pays</string>
-    <string name="profile_detail_system_language">Langue principale</string>
     <string name="profile_display_name_label">Nom d\'affichage</string>
-    <string name="profile_e2ee">Chiffrée de bout en bout</string>
     <string name="profile_e2ee_enabled">Chiffrement de bout en bout activé</string>
     <string name="profile_edit">Modifier</string>
     <string name="profile_email">Email</string>
@@ -51,7 +47,6 @@
     <string name="profile_language_none">Aucune</string>
     <string name="profile_language_primary">Langue principale</string>
     <string name="profile_language_regional">Langue régionale</string>
-    <string name="profile_language_unset">Non défini</string>
     <string name="profile_last_name_label">Nom</string>
     <string name="profile_loadFailed_message">Ce profil n\'a pas pu se charger.</string>
     <string name="profile_name_min_characters">%1$d caractères au moins.</string>
@@ -104,7 +99,6 @@
     <string name="profile_toast_unblock_failed">Impossible de débloquer</string>
     <string name="profile_toast_user_blocked">Utilisateur bloqué</string>
     <string name="profile_toast_user_unblocked">Utilisateur débloqué</string>
-    <string name="profile_unknown">Inconnu</string>
     <string name="profile_username">Pseudo</string>
     <string name="profile_verified">Vérifié</string>
     <string name="profile_view_posts">Publications</string>
