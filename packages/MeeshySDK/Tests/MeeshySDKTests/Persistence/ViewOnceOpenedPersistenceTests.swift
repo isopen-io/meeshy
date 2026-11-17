@@ -110,6 +110,18 @@ final class ViewOnceOpenedPersistenceTests: XCTestCase {
         XCTAssertEqual(message.content, "")
     }
 
+    /// La destruction annoncée par le serveur purge le contenu (#7579) : ses
+    /// traductions, servies tant qu'elle n'était pas ouverte, partent avec lui
+    /// (`MessageEnrichmentLaw`, #18934).
+    func test_markDeleted_byServer_alsoErasesTheTranslations() async throws {
+        try await actor.upsertFromAPIMessages([try decode(Self.payload())])
+        XCTAssertEqual(try translationCount(), 1, "une vue unique pas encore ouverte garde la traduction servie")
+
+        try await actor.markDeleted(localId: Self.messageId, deletedAt: Date(), sparingOpenedViewOnce: true)
+
+        XCTAssertEqual(try translationCount(), 0)
+    }
+
     func test_markDeleted_byUser_stillDeletesAViewOnce() async throws {
         try await actor.upsertFromAPIMessages([try decode(Self.payload())])
         try await actor.markViewOnceOpened(localId: Self.messageId)

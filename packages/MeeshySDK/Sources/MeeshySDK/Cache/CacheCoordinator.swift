@@ -97,7 +97,7 @@ public actor CacheCoordinator {
     public let video: DiskCacheStore
     public let thumbnails: DiskCacheStore
 
-    // MARK: - In-Memory Translation/Transcription/Audio Caches (keyed by messageId)
+    // MARK: - In-Memory Translation Cache (keyed by messageId)
 
     static let maxTranslationCacheEntries = 500
 

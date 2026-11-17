@@ -73,4 +73,54 @@ final class CommunitySettingsViewModelTests: XCTestCase {
     func test_showPrivacyConfirm_fermeParDefaut() {
         XCTAssertFalse(makeSUT(isPrivate: false).showPrivacyConfirm)
     }
+
+    // MARK: - Quitter ou supprimer d'ici écrit « mes communautés » (#18935)
+    //
+    // La feuille de réglages porte ses propres boutons Quitter et Supprimer
+    // (`CommunitySettingsScreen`) : sans cette écriture, la communauté restait
+    // dans la bande Communautés et dans la feuille de partage, alors que la
+    // fiche la retirait.
+
+    private func seedMyCommunities(_ ids: [String]) async throws -> GRDBCacheStore<String, APICommunity> {
+        let store = await CacheCoordinator.shared.communities
+        await store.invalidate(for: "list")
+        try await store.save(ids.map { CommunityStubs.community(id: $0, name: "Club \($0)") }, for: "list")
+        return store
+    }
+
+    func test_leaveCommunity_success_removesItFromMyCommunities() async throws {
+        let store = try await seedMyCommunities(["c-settings-test", "c-other"])
+        let sut = makeSUT()
+
+        await sut.leaveCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(cached, ["c-other"], "quitter depuis les réglages retire la communauté de la bande et du partage")
+    }
+
+    func test_deleteCommunity_success_removesItFromMyCommunities() async throws {
+        let store = try await seedMyCommunities(["c-settings-test", "c-other"])
+        let sut = makeSUT()
+
+        await sut.deleteCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(cached, ["c-other"], "une communauté supprimée ne reste ni dans la bande ni dans le partage")
+    }
+
+    func test_leaveCommunity_refused_keepsItInMyCommunities() async throws {
+        let store = try await seedMyCommunities(["c-settings-test", "c-other"])
+        let service = MockCommunityService()
+        service.voidResult = .failure(MeeshyError.server(statusCode: 500, message: "non"))
+        let sut = makeSUT(service: service)
+
+        await sut.leaveCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertTrue(sut.showError)
+        XCTAssertEqual(cached, ["c-settings-test", "c-other"], "un départ refusé ne retire rien")
+    }
 }

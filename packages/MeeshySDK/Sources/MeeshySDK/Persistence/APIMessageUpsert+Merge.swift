@@ -281,13 +281,13 @@ extension APIMessageUpsert {
         ).save(db)
     }
 
+    /// Les traductions servies se gardent selon la ligne que l'upsert vient d'écrire (`MessageEnrichmentLaw`) : une
+    /// vue unique déjà ouverte (`consumedByMe` l'a scellée), un message chiffré de bout en bout, supprimé ou échu n'en
+    /// garde aucune.
     static func persistTranslations(for api: APIMessage, in db: Database) throws {
-        let viewOnceOpenedForReader = try api.consumedByMe == true
-            || MessageRecord
-                .filter(Column("localId") == api.id || Column("serverId") == api.id)
-                .filter(Column("viewOnceOpenedAt") != nil)
-                .fetchCount(db) > 0
-        guard !viewOnceOpenedForReader, let apiTranslations = api.translations, !apiTranslations.isEmpty else { return }
+        guard let apiTranslations = api.translations, !apiTranslations.isEmpty,
+              let row = try MessageEnrichmentLaw.row(of: api.id, in: db),
+              MessageEnrichmentLaw.keepsEnrichments(of: row) else { return }
         let now = Date()
         for t in apiTranslations {
             let record = TranslationRecord(

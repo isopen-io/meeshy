@@ -31,48 +31,53 @@ final class ConversationContiguityTests: XCTestCase {
     // MARK: - D'où repart un rattrapage
 
     func test_catchUpCursor_unMessageEntreSeulApresLeFil_repartDuFiligrane() {
-        XCTAssertEqual(ConversationContiguity.catchUpCursor(watermark: t1, newestHeld: t1 + 7_200), t1)
+        XCTAssertEqual(ConversationContiguity.catchUpCursor(watermark: t1, oldestHeld: t1 - 3_600, newestHeld: t1 + 7_200), t1)
     }
 
-    func test_catchUpCursor_sansFiligrane_repartDuPlusRecentDetenu() {
-        XCTAssertEqual(ConversationContiguity.catchUpCursor(watermark: nil, newestHeld: t1), t1)
+    /// Sans filigrane, rien n'atteste que deux messages entrés seuls se rejoignent :
+    /// repartir du plus récent laissait invisible le trou entre eux.
+    func test_catchUpCursor_sansFiligrane_repartDuPlusAncienMessageServeurDetenu() {
+        XCTAssertEqual(ConversationContiguity.catchUpCursor(watermark: nil, oldestHeld: t1, newestHeld: t1 + 7_200), t1)
     }
 
     func test_catchUpCursor_neDepasseJamaisLePlusRecentDetenu() {
-        XCTAssertEqual(ConversationContiguity.catchUpCursor(watermark: t1 + 60, newestHeld: t1), t1)
+        XCTAssertEqual(ConversationContiguity.catchUpCursor(watermark: t1 + 60, oldestHeld: t1 - 60, newestHeld: t1), t1)
     }
 
     func test_catchUpCursor_rienDeDetenu_aucunRattrapage() {
-        XCTAssertNil(ConversationContiguity.catchUpCursor(watermark: t1, newestHeld: nil))
+        XCTAssertNil(ConversationContiguity.catchUpCursor(watermark: t1, oldestHeld: nil, newestHeld: nil))
     }
 
     // MARK: - Ce qu'une page des plus récents fait du filigrane
 
     func test_extentOfRefresh_rienNEtaitDetenu_ouvreLeFilAuPlusRecentServi() {
-        let empty = ConversationContiguity.Base(watermark: nil, newestHeld: nil)
+        let empty = ConversationContiguity.Base(watermark: nil, oldestHeld: nil, newestHeld: nil)
         XCTAssertEqual(ConversationContiguity.extent(ofRefresh: [t1 - 60, t1], over: empty), t1)
     }
 
     func test_extentOfRefresh_quiRejointLeBloc_lEtendAuPlusRecentServi() {
-        let base = ConversationContiguity.Base(watermark: t1, newestHeld: t1 + 7_200)
+        let base = ConversationContiguity.Base(watermark: t1, oldestHeld: t1 - 3_600, newestHeld: t1 + 7_200)
         XCTAssertEqual(ConversationContiguity.extent(ofRefresh: [t1, t1 + 3_600, t1 + 7_200], over: base), t1 + 7_200)
     }
 
     /// Le message poussé de T9 est détenu, mais la page commence après T1 : elle
     /// ne rejoint pas le fil, l'écart reste à balayer.
     func test_extentOfRefresh_separeeDuBlocParUnEcart_laisseLeFiligrane() {
-        let base = ConversationContiguity.Base(watermark: t1, newestHeld: t1 + 7_200)
+        let base = ConversationContiguity.Base(watermark: t1, oldestHeld: t1 - 3_600, newestHeld: t1 + 7_200)
         XCTAssertNil(ConversationContiguity.extent(ofRefresh: [t1 + 3_600, t1 + 7_200], over: base))
     }
 
-    func test_extentOfRefresh_sansFiligrane_rejointLePlusRecentDetenu() {
-        let base = ConversationContiguity.Base(watermark: nil, newestHeld: t1)
-        XCTAssertEqual(ConversationContiguity.extent(ofRefresh: [t1, t1 + 60], over: base), t1 + 60)
-        XCTAssertNil(ConversationContiguity.extent(ofRefresh: [t1 + 30, t1 + 60], over: base))
+    /// Sans filigrane, la page n'ouvre le fil que si elle remonte jusqu'au plus
+    /// ANCIEN message serveur détenu : rejoindre le plus récent, entré seul, ne
+    /// prouve rien de l'écart qui le précède.
+    func test_extentOfRefresh_sansFiligrane_neRejointQueLePlusAncienDetenu() {
+        let base = ConversationContiguity.Base(watermark: nil, oldestHeld: t1, newestHeld: t1 + 7_200)
+        XCTAssertEqual(ConversationContiguity.extent(ofRefresh: [t1, t1 + 7_200, t1 + 7_260], over: base), t1 + 7_260)
+        XCTAssertNil(ConversationContiguity.extent(ofRefresh: [t1 + 7_000, t1 + 7_200, t1 + 7_260], over: base))
     }
 
     func test_extentOfRefresh_pageVide_neBougeRien() {
-        XCTAssertNil(ConversationContiguity.extent(ofRefresh: [], over: .init(watermark: nil, newestHeld: nil)))
+        XCTAssertNil(ConversationContiguity.extent(ofRefresh: [], over: .init(watermark: nil, oldestHeld: nil, newestHeld: nil)))
     }
 
     // MARK: - Ce qu'un balayage fait du filigrane
@@ -91,18 +96,23 @@ final class ConversationContiguityTests: XCTestCase {
 
     // MARK: - La table
 
-    func test_base_litLeFiligraneEtLePlusRecentMessageServeur() async throws {
+    func test_base_litLeFiligraneEtLesMessagesServeurExtremes() async throws {
         let actor = try makeActor()
+        try await actor.insertOptimistic(serverRow("srv_0", at: t1 - 600))
         try await actor.insertOptimistic(serverRow("srv_1", at: t1))
         try await actor.insertOptimistic(
             MessageRecordFactory.make(localId: "temp_1", conversationId: Self.conversationId, createdAt: t1 + 600)
+        )
+        try await actor.insertOptimistic(
+            MessageRecordFactory.make(localId: "temp_0", conversationId: Self.conversationId, createdAt: t1 - 1_200)
         )
         try await ConversationContiguity.extend(Self.conversationId, to: t1 - 60, on: actor)
 
         let base = try await ConversationContiguity.base(of: Self.conversationId, on: actor)
 
         XCTAssertEqual(base.watermark, t1 - 60)
-        XCTAssertEqual(base.newestHeld, t1, "une ligne optimiste porte l'horloge de l'appareil : elle n'est jamais le plus récent message détenu")
+        XCTAssertEqual(base.oldestHeld, t1 - 600, "une ligne optimiste porte l'horloge de l'appareil : jamais le plus ancien message détenu")
+        XCTAssertEqual(base.newestHeld, t1, "ni le plus récent")
     }
 
     func test_extend_neReculeJamais() async throws {

@@ -1572,6 +1572,40 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(cachedAtt?.audioTranslations?["fr"]?.cloned, true)
     }
 
+    /// #18934 — un message supprimé ou échu ne garde rien de ce qui doublait son
+    /// contenu (`MessageEnrichmentLaw`) : une transcription tardive ne se pose
+    /// pas sur sa pierre tombale du cache de fil.
+    func test_attachmentUpdated_onADeletedCachedMessage_patchesNothing() async {
+        let convId = "conv-att-upd-tomb"
+        let msgId = "msg-att-upd-tomb"
+        let attachmentId = "att-tomb"
+
+        var msg = TestFactories.makeMessage(id: msgId, conversationId: convId)
+        msg.attachments = [MeeshyMessageAttachment(id: attachmentId, mimeType: "audio/mp4")]
+        msg.deletedAt = Date()
+        msg.content = ""
+        try? await CacheCoordinator.shared.messages.save([msg], for: convId)
+
+        await engine.startSocketRelay()
+
+        let event = makeAttachmentUpdatedEvent(
+            conversationId: convId, messageId: msgId,
+            attachmentJson: ["id": attachmentId, "transcription": ["text": "Le secret effacé", "language": "fr"]]
+        )
+        let exp = expectation(description: "messagesDidChange emitted for the tombstone")
+        engine.messagesDidChange
+            .first(where: { $0 == convId })
+            .sink { _ in exp.fulfill() }
+            .store(in: &cancellables)
+
+        mockMessageSocket.attachmentUpdated.send(event)
+
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.messages.load(for: convId).snapshot() ?? []
+        XCTAssertNil(cached.first(where: { $0.id == msgId })?.attachments.first?.transcription)
+    }
+
     /// An event for an unknown message ID must not crash and must not emit
     /// messagesDidChange for a non-existent patch (the upsertPatch is a no-op
     /// when the item is absent — but we do still emit messagesDidChange to

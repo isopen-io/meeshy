@@ -131,6 +131,45 @@ final class AuthManagerVoicePublicRevalidationTests: XCTestCase {
             "a throttled /auth/me revalidation must not clobber a locally-held voicePublic the self-only response doesn't carry"
         )
     }
+
+    // MARK: - #18924, #19281 — the same two sites must not undo a newer own-profile snapshot
+
+    private func makeProfile(systemLanguage: String, displayName: String, updatedAt: String) -> MeeshyUser {
+        MeeshyUser(
+            id: "user-vp", username: "vp-user", email: "vp@test.com", displayName: displayName,
+            role: "USER", systemLanguage: systemLanguage,
+            createdAt: "2024-01-01T00:00:00.000Z", updatedAt: updatedAt
+        )
+    }
+
+    /// Site 1 — a rotated session carries the user row read at 10:01, after a
+    /// `profile:updated` of 10:05 was applied: the newer snapshot stays.
+    func test_applySession_userOlderThanTheHeldSnapshot_keepsTheSnapshot() throws {
+        let auth = AuthManager.shared
+        auth.currentUser = makeProfile(systemLanguage: "en", displayName: "Alicia", updatedAt: "2026-11-17T10:05:00.000Z")
+
+        try auth.applySession(
+            token: "tok-18924", sessionToken: nil,
+            user: makeProfile(systemLanguage: "fr", displayName: "Alice", updatedAt: "2026-11-17T10:01:00.000Z")
+        )
+
+        XCTAssertEqual(auth.currentUser?.systemLanguage, "en")
+        XCTAssertEqual(auth.currentUser?.displayName, "Alicia")
+        XCTAssertEqual(auth.currentUser?.updatedAt, "2026-11-17T10:05:00.000Z")
+    }
+
+    func test_applySession_userNewerThanTheHeldSnapshot_replacesIt() throws {
+        let auth = AuthManager.shared
+        auth.currentUser = makeProfile(systemLanguage: "en", displayName: "Alicia", updatedAt: "2026-11-17T10:05:00.000Z")
+
+        try auth.applySession(
+            token: "tok-18924-b", sessionToken: nil,
+            user: makeProfile(systemLanguage: "de", displayName: "Ali", updatedAt: "2026-11-17T10:07:00.000Z")
+        )
+
+        XCTAssertEqual(auth.currentUser?.systemLanguage, "de")
+        XCTAssertEqual(auth.currentUser?.displayName, "Ali")
+    }
 }
 
 // MARK: - Stub conforming to AuthServiceProviding

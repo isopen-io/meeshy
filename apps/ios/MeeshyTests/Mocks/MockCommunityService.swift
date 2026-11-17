@@ -68,12 +68,16 @@ final class MockCommunityService: CommunityServiceProviding, @unchecked Sendable
     private(set) var addConversationCallCount = 0
     private(set) var removeMemberCallCount = 0
     private(set) var leaveCallCount = 0
+    /// Appelé PENDANT `list`, la réponse déjà tirée : un témoin y change de compte « en vol ».
+    var onList: (() -> Void)?
 
     func list(search: String?, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunity]> {
         listCallCount += 1
         lastListSearch = search
         lastListOffset = offset
-        return try listResult.get()
+        let served = listResult
+        onList?()
+        return try served.get()
     }
 
     func search(query: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunitySearchResult]> {
