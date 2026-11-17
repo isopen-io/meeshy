@@ -57,6 +57,7 @@ import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
 import { persistableEncryption } from './e2eeRelayPayload';
 import { sealMessageIfConversationObsoleted } from '../conversations/obsoleteMessageSeal';
 import { mayReturnToSalon } from '../conversations/communityMembershipSync';
+import { newMemberRefusal } from '../conversations/newMemberAdmission';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -886,12 +887,16 @@ export class MessagingService {
 
       // #16724 — recréer une participation, c'est ENTRER dans le salon : un
       // salon d'une communauté privée (ou désactivée) n'accueille que son
-      // créateur et ses membres actifs (#16695, #16704).
+      // créateur et ses membres actifs (#16695, #16704). Et c'est faire
+      // entrer un NOUVEAU membre (#16188) : la loi d'entrée refuse un second
+      // membre dans une conversation externe et un troisième dans un
+      // tête-à-tête chiffré de bout en bout, dont Sesame ne connaît que la paire.
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { communityId: true }
+        select: { communityId: true, type: true, encryptionMode: true }
       });
       if (!conversation) return null;
+      if (newMemberRefusal(conversation)) return null;
       if (!(await mayReturnToSalon(this.prisma, { communityId: conversation.communityId, userId }))) return null;
 
       // Check legacy ConversationMember collection via raw query

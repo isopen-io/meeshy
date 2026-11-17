@@ -290,3 +290,53 @@ describe('la SYMÉTRIE des deux gestes se lit sur leurs deux verdicts (#4713)', 
     });
   });
 });
+
+/**
+ * Audit de #19080, E1 (#16188) — lever un bannissement REND l'appartenance que
+ * le bannissement avait prise. Dans un tête-à-tête devenu chiffré de bout en
+ * bout, un tiers banni avant l'activation (la règle de la paire ne compte que
+ * les actifs) redevenait actif. La porte passe par `returningMemberRefusal` :
+ * hors de la paire, le bannissement est levé, l'appartenance n'est pas rendue —
+ * même issue que le refus d'une communauté privée (`liftBanOnly`).
+ */
+describe('leverBannissementDeParticipant — un tête-à-tête chiffré de bout en bout reste à deux (#16188)', () => {
+  const ACTIVATION = new Date('2026-11-10T00:00:00.000Z');
+  const BANNI_AVANT = new Date('2026-11-01T00:00:00.000Z');
+  const BANNI_APRES = new Date('2026-11-12T00:00:00.000Z');
+
+  const prismaE2ee = (banniLe: Date, actifs: readonly string[]) => {
+    const prisma = fabriquerPrisma({
+      cible: { ...CIBLE_ACTIVE, isActive: false, bannedAt: banniLe, leftAt: banniLe },
+    });
+    prisma.participant.findFirst = jest.fn<any>()
+      .mockResolvedValueOnce({
+        id: 'part-acteur', role: 'moderator',
+        conversation: { communityId: null, type: 'direct', encryptionMode: 'e2ee', encryptionEnabledAt: ACTIVATION },
+      })
+      .mockResolvedValueOnce({ ...CIBLE_ACTIVE, isActive: false, bannedAt: banniLe, leftAt: banniLe });
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue(actifs.map((userId) => ({ id: `part-${userId}`, userId })));
+    return prisma;
+  };
+
+  it('un tiers banni avant l’activation : le bannissement est levé, l’appartenance n’est pas rendue', async () => {
+    const prisma = prismaE2ee(BANNI_AVANT, [ACTEUR_ID, 'autre-membre-de-la-paire']);
+    const socket = fabriquerSocket();
+
+    const verdict = await leverBannissementDeParticipant(demande(prisma, socket.passerelle));
+
+    expect(verdict.genre).toBe('ok');
+    expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: CIBLE_PART_ID }, data: { bannedAt: null } });
+    expect(socket.rejointes).toEqual([]);
+  });
+
+  it('un membre de la paire banni après l’activation retrouve sa place (contrôle)', async () => {
+    const prisma = prismaE2ee(BANNI_APRES, [ACTEUR_ID]);
+
+    await leverBannissementDeParticipant(demande(prisma, fabriquerSocket().passerelle));
+
+    expect(prisma.participant.update).toHaveBeenCalledWith({
+      where: { id: CIBLE_PART_ID },
+      data: { bannedAt: null, isActive: true, leftAt: null },
+    });
+  });
+});
