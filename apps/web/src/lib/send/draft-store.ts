@@ -1,3 +1,5 @@
+import { mayPersistConversationContent } from '@/lib/end-to-end-regime-ledger';
+
 import type { ComposeProtection } from './compose-protection';
 
 /**
@@ -92,7 +94,15 @@ export type DraftStore = {
  * `memory` est un cache d'ÉCRITURE, un backend qui LANCE (quota, navigation
  * privée) ne fait perdre aucune valeur pour la session.
  */
-export function createDraftStore(backend: StorageLike | null | undefined = resolveBrowserStorage()): DraftStore {
+/**
+ * `mayPersist` — LE BROUILLON D'UNE CONVERSATION FERMÉE AU CLAIR RESTE EN
+ * MÉMOIRE (#18991) : il portera un jour un clair que le serveur ne lit pas, et
+ * `localStorage` survit à la session. Défaut : la garde unique du régime.
+ */
+export function createDraftStore(
+  backend: StorageLike | null | undefined = resolveBrowserStorage(),
+  mayPersist: (conversationId: string) => boolean = mayPersistConversationContent,
+): DraftStore {
   const memory = new Map<string, string>();
   const listeners = new Set<DraftListener>();
   const notify = (scope: string, conversationId: string): void => {
@@ -114,6 +124,15 @@ export function createDraftStore(backend: StorageLike | null | undefined = resol
       backend?.setItem(key, value);
     } catch {
       /* Le cache mémoire porte déjà la valeur : la session reste correcte. */
+    }
+  };
+
+  const hold = (key: string, value: string): void => {
+    memory.set(key, value);
+    try {
+      backend?.removeItem(key);
+    } catch {
+      /* La mémoire porte la valeur ; le disque n'en garde aucune copie à jour. */
     }
   };
 
@@ -140,7 +159,8 @@ export function createDraftStore(backend: StorageLike | null | undefined = resol
   const setDraft = (scope: string, conversationId: string, draft: ComposerDraft): void => {
     const key = draftKey(scope, conversationId);
     if (isDraftEmpty(draft)) remove(key);
-    else write(key, JSON.stringify(draft));
+    else if (mayPersist(conversationId)) write(key, JSON.stringify(draft));
+    else hold(key, JSON.stringify(draft));
     notify(scope, conversationId);
   };
 
