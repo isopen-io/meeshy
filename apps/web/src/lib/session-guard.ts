@@ -149,16 +149,21 @@ export type RouteKey =
   | 'communityLinks'
   | 'communityLink'
   /**
-   * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
-   * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
-   * porte `fastify.authenticate` (`routes/directory/people.ts`), et
-   * `GET /social/posts?scope=hashtag` rend 401 sans elle
-   * (`routes/posts/feed.ts`). Non déclarées ici, elles seraient PUBLIQUES par
-   * défaut (voir `routeKey` plus bas) : un visiteur sans compte y verrait un
-   * écran qui se peint puis reçoit un 401 en silence — la classe de défaut que
+   * LE MOT-CLÉ (#7032) — PRIVÉE, comme `feed` : `GET /social/posts?scope=hashtag`
+   * rend 401 sans session (`routes/posts/feed.ts`). Non déclarée ici, elle serait
+   * PUBLIQUE par défaut (voir `routeKey` plus bas) : un visiteur sans compte y verrait
+   * un écran qui se peint puis reçoit un 401 en silence — la classe de défaut que
    * `stories`, `feed` et `settings` décrivent juste au-dessus.
+   *
+   * **LA VITRINE D'UNE PERSONNE EST PUBLIQUE (#18878).** `/u/$username` et son
+   * raccourci `/@$username` (`userProfile`, `userShortcut`) ne sont PAS dans cette
+   * liste, et c'est voulu : `GET /directory/people/:handle` sert un lecteur sans compte
+   * (`getOptionalAuth`, `routes/directory/person.ts`), les publications d'un auteur
+   * aussi, et un lien de profil se partage hors de Meeshy. Le visiteur y voit le niveau
+   * Public de la loi d'accès, jamais plus ; 403 et 404 y restent confondus (D-6).
    */
   | 'userProfile'
+  | 'userShortcut'
   | 'hashtag'
   | 'notifications'
   | 'profile'
@@ -373,9 +378,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'affiliateLinkNew',
   'communityLinks',
   'communityLink',
-  /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
-     authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
-  'userProfile',
+  /* LE MOT-CLÉ (#7032) — privé, son port étant authentifié ; la vitrine d'une
+     personne, elle, est PUBLIQUE (#18878) : voir la raison écrite sur `RouteKey`. */
   'hashtag',
   'notifications',
   'profile',
