@@ -41,9 +41,10 @@ jest.mock('../../../services/notifications/conversationUnreadBadge', () => ({
   computeConversationUnreadBadge: (prisma: unknown, userId: string) => mockComputeBadge(prisma, userId),
 }));
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../../services/notifications/NotificationService';
+import { BADGE_SYNC_DEBOUNCE_MS } from '../../../services/notifications/readElsewhereSync';
 
 const USER = '64a000000000000000000001';
 const CONV_A = '64b00000000000000000000a';
@@ -151,6 +152,60 @@ describe('NotificationService — une lecture faite ailleurs remet l’icône à
     await settle();
 
     expect(badgeSyncs()).toHaveLength(1);
+  });
+
+  /**
+   * Revue (#18910) — l'anti-rebond est un DÉLAI, pas une simple coalescence de file. La cascade « messages lus →
+   * notifications lues » part AVANT l'écriture du curseur de lecture (`MessageReadStatusService.markMessagesAsRead`),
+   * et le total se compte sur ce curseur : calculé aussitôt, il compte encore la conversation qu'on vient de lire,
+   * et ce chiffre périmé reste sur l'icône. Il se lit donc une fois la fenêtre écoulée, que la dernière lecture
+   * d'une rafale étale sur plusieurs secondes prolonge.
+   */
+  describe('l’anti-rebond attend que la lecture soit écrite', () => {
+    const drainMicrotasks = async () => {
+      for (let index = 0; index < 10; index += 1) await new Promise((resolve) => setImmediate(resolve));
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('le total est lu après la fenêtre : la conversation dont le curseur s’écrit juste après n’est plus comptée', async () => {
+      let cursorWritten = false;
+      mockComputeBadge.mockImplementation(async () => (cursorWritten ? 0 : 1));
+
+      await service.markConversationNotificationsAsRead(USER, CONV_A);
+      await drainMicrotasks();
+      cursorWritten = true;
+
+      expect(badgeSyncs()).toEqual([]);
+      jest.advanceTimersByTime(BADGE_SYNC_DEBOUNCE_MS);
+      await settle();
+
+      expect(badgeSyncs()).toHaveLength(1);
+      expect(badgeSyncs()[0].payload.badge).toBe(0);
+    });
+
+    it('trois conversations lues à une seconde d’intervalle : UN seul push, au total d’après la dernière', async () => {
+      let readConversations = 0;
+      mockComputeBadge.mockImplementation(async () => 3 - readConversations);
+
+      for (const conversationId of [CONV_A, CONV_B, '64b00000000000000000000c']) {
+        await service.markConversationNotificationsAsRead(USER, conversationId);
+        readConversations += 1;
+        await drainMicrotasks();
+        jest.advanceTimersByTime(1_000);
+      }
+      jest.advanceTimersByTime(BADGE_SYNC_DEBOUNCE_MS);
+      await settle();
+
+      expect(badgeSyncs()).toHaveLength(1);
+      expect(badgeSyncs()[0].payload.badge).toBe(0);
+    });
   });
 
   it('Android : les bannières lues dont le push est parti sont révoquées, par conversation', async () => {
