@@ -164,6 +164,20 @@ const ar = {
   'links.create.error.offline': 'غير متصل: لم يُنشأ الرابط.',
   'links.create.error.refused': 'لا يمكنك إنشاء رابط لهذه المحادثة.',
   'links.create.error.default': 'تعذّر إنشاء الرابط. أعد المحاولة.',
+  'links.face.profile.tag': 'رابط ملفي الشخصي',
+  'links.face.profile.copy': 'نسخ',
+  'links.face.profile.code': 'QR',
+  'links.face.profile.send': 'إرسال',
+  'links.face.profile.codeLabel': 'رمز QR لملفي الشخصي',
+  'links.face.profile.codeOpen': 'تكبير رمز QR لملفي الشخصي',
+  'links.face.profile.copied': 'تم نسخ الرابط',
+  'links.face.profile.copyFailed': 'تعذّر النسخ',
+  'links.face.profile.close': 'إغلاق',
+  'links.face.addresses.title': 'عناويني',
+  'links.face.addresses.hidden': 'مخفي في ملفي الشخصي',
+  'links.face.figure.joined': 'انضمام',
+  'links.face.figure.clicks': 'نقرات',
+  'links.face.figure.communities': 'مجتمعات',
 } satisfies LinkFamiliesCatalog;
 
 export default ar;

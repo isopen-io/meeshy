@@ -172,6 +172,20 @@ const fr = {
   'links.create.error.offline': 'Hors ligne : le lien n’a pas été créé.',
   'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
   'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
+  'links.face.profile.tag': 'Mon lien de profil',
+  'links.face.profile.copy': 'Copier',
+  'links.face.profile.code': 'QR',
+  'links.face.profile.send': 'Envoyer',
+  'links.face.profile.codeLabel': 'Mon QR de profil',
+  'links.face.profile.codeOpen': 'Agrandir mon QR de profil',
+  'links.face.profile.copied': 'Lien copié',
+  'links.face.profile.copyFailed': 'Copie impossible',
+  'links.face.profile.close': 'Fermer',
+  'links.face.addresses.title': 'Mes adresses',
+  'links.face.addresses.hidden': 'Masquée sur ma fiche',
+  'links.face.figure.joined': 'arrivées',
+  'links.face.figure.clicks': 'clics',
+  'links.face.figure.communities': 'communautés',
 } as const;
 
 export default fr;

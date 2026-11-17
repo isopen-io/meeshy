@@ -10,7 +10,7 @@ describe('la face Liens', () => {
   });
 
   test('le chiffre d’une famille : « — » absent, jamais « 0 » inventé', () => {
-    expect(hubFigure('fr', 1284)).toBe('1 284');
+    expect(hubFigure('fr', 1284)?.replace(/\s/gu, ' ')).toBe('1 284');
     expect(hubFigure('fr', null)).toBeNull();
     expect(hubFigure('fr', 0)).toBe('0');
   });

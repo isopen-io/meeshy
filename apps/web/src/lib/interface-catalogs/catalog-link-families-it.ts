@@ -164,6 +164,20 @@ const it = {
   'links.create.error.offline': 'Offline: il link non è stato creato.',
   'links.create.error.refused': 'Non puoi creare un link per questa conversazione.',
   'links.create.error.default': 'Impossibile creare il link. Riprova.',
+  'links.face.profile.tag': 'Il mio link del profilo',
+  'links.face.profile.copy': 'Copia',
+  'links.face.profile.code': 'QR',
+  'links.face.profile.send': 'Invia',
+  'links.face.profile.codeLabel': 'Il mio QR del profilo',
+  'links.face.profile.codeOpen': 'Ingrandisci il mio QR del profilo',
+  'links.face.profile.copied': 'Link copiato',
+  'links.face.profile.copyFailed': 'Copia non riuscita',
+  'links.face.profile.close': 'Chiudi',
+  'links.face.addresses.title': 'I miei indirizzi',
+  'links.face.addresses.hidden': 'Nascosto sul mio profilo',
+  'links.face.figure.joined': 'arrivi',
+  'links.face.figure.clicks': 'clic',
+  'links.face.figure.communities': 'community',
 } satisfies LinkFamiliesCatalog;
 
 export default it;

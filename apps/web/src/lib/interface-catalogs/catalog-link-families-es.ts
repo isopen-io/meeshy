@@ -164,6 +164,20 @@ const es = {
   'links.create.error.offline': 'Sin conexión: el enlace no se creó.',
   'links.create.error.refused': 'No puedes crear un enlace para esta conversación.',
   'links.create.error.default': 'No se pudo crear el enlace. Vuelve a intentarlo.',
+  'links.face.profile.tag': 'Mi enlace de perfil',
+  'links.face.profile.copy': 'Copiar',
+  'links.face.profile.code': 'QR',
+  'links.face.profile.send': 'Enviar',
+  'links.face.profile.codeLabel': 'Mi QR de perfil',
+  'links.face.profile.codeOpen': 'Ampliar mi QR de perfil',
+  'links.face.profile.copied': 'Enlace copiado',
+  'links.face.profile.copyFailed': 'No se pudo copiar',
+  'links.face.profile.close': 'Cerrar',
+  'links.face.addresses.title': 'Mis direcciones',
+  'links.face.addresses.hidden': 'Oculta en mi perfil',
+  'links.face.figure.joined': 'llegadas',
+  'links.face.figure.clicks': 'clics',
+  'links.face.figure.communities': 'comunidades',
 } satisfies LinkFamiliesCatalog;
 
 export default es;

@@ -20,17 +20,17 @@ describe('mes adresses, lues sur le serveur', () => {
 
   test('la liste sort dans l’ordre choisi par son propriétaire', async () => {
     const transport = transportOf({ ok: true, data: { addresses: [wire({ id: 'b', position: 1 }), wire({ id: 'a', position: 0 })] } });
-    const result = await loadMyAddresses({ source: 'live', transport });
+    const result = await loadMyAddresses({ source: 'gateway', transport });
     expect(result.ok && result.data.map((address) => address.id)).toEqual(['a', 'b']);
   });
 
   test('un serveur qui ne sert pas encore les adresses (404) rend une liste vide, jamais une erreur', async () => {
-    const result = await loadMyAddresses({ source: 'live', transport: transportOf({ ok: false, status: 404, error: 'Not found' }) });
+    const result = await loadMyAddresses({ source: 'gateway', transport: transportOf({ ok: false, status: 404, error: 'Not found' }) });
     expect(result).toEqual({ ok: true, data: [] });
   });
 
   test('une vraie panne reste une panne', async () => {
-    const result = await loadMyAddresses({ source: 'live', transport: transportOf({ ok: false, status: 500, error: 'boom' }) });
+    const result = await loadMyAddresses({ source: 'gateway', transport: transportOf({ ok: false, status: 500, error: 'boom' }) });
     expect(result.ok).toBe(false);
   });
 

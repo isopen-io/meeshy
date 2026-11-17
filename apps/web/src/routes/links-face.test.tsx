@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { MyAddress } from '@/lib/api/my-addresses';
 
+import { LinkFamilyCard } from './link-families-parts';
 import { LinksAddresses } from './links-addresses';
 import { LinksProfileTicket } from './links-profile-ticket';
 
@@ -46,5 +47,14 @@ describe('mes adresses', () => {
   test('une adresse masquée sur la fiche reste dans la liste de son propriétaire', () => {
     const html = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address({ isShown: false })]} />);
     expect(html).toContain('Site');
+  });
+});
+
+describe('les familles du hub', () => {
+  test('une famille dit son chiffre quand il est connu, et rien quand il ne l’est pas', () => {
+    const withFigure = renderToStaticMarkup(<LinkFamilyCard language="fr" family="tracking" figure={{ value: '1 284', caption: 'clics' }} />);
+    expect(withFigure).toContain('data-links-family-figure');
+    expect(withFigure).toContain('1 284');
+    expect(renderToStaticMarkup(<LinkFamilyCard language="fr" family="tracking" />)).not.toContain('data-links-family-figure');
   });
 });

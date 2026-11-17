@@ -164,6 +164,20 @@ const de = {
   'links.create.error.offline': 'Offline: Der Link wurde nicht erstellt.',
   'links.create.error.refused': 'Du kannst für diese Unterhaltung keinen Link erstellen.',
   'links.create.error.default': 'Der Link konnte nicht erstellt werden. Versuche es erneut.',
+  'links.face.profile.tag': 'Mein Profil-Link',
+  'links.face.profile.copy': 'Kopieren',
+  'links.face.profile.code': 'QR',
+  'links.face.profile.send': 'Senden',
+  'links.face.profile.codeLabel': 'Mein Profil-QR-Code',
+  'links.face.profile.codeOpen': 'Mein Profil-QR-Code vergrößern',
+  'links.face.profile.copied': 'Link kopiert',
+  'links.face.profile.copyFailed': 'Kopieren nicht möglich',
+  'links.face.profile.close': 'Schließen',
+  'links.face.addresses.title': 'Meine Adressen',
+  'links.face.addresses.hidden': 'Auf meinem Profil verborgen',
+  'links.face.figure.joined': 'Beitritte',
+  'links.face.figure.clicks': 'Klicks',
+  'links.face.figure.communities': 'Communitys',
 } satisfies LinkFamiliesCatalog;
 
 export default de;
