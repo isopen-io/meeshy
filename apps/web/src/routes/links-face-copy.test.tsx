@@ -9,6 +9,7 @@ import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import LinksScreen from './links';
+import { LinksCodeSheet } from './links-code-sheet';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll } = createActMounter();
@@ -49,5 +50,19 @@ describe('copier mon lien de profil depuis la face Liens', () => {
     expect(announcement(host)).toBe('Lien copié');
     act(() => jest.advanceTimersByTime(LINK_ANNOUNCE_MS + 50));
     expect(announcement(host)).toBe('');
+  });
+});
+
+describe('la feuille de mon QR de profil', () => {
+  test('Tab ne quitte pas la feuille modale : le focus reste sur « Fermer »', async () => {
+    const host = await mount(<LinksCodeSheet language="fr" url="https://meeshy.me/u/aissa" onClose={() => undefined} />);
+    const close = host.querySelector<HTMLButtonElement>('[data-links-code-sheet] button');
+    expect(document.activeElement).toBe(close);
+    for (const shiftKey of [false, true]) {
+      const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+      act(() => void close?.dispatchEvent(tab));
+      expect(tab.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(close);
+    }
   });
 });
