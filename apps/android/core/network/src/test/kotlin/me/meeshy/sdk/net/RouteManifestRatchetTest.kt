@@ -142,8 +142,10 @@ class RouteManifestRatchetTest {
          * suppression, ordre — lot `serveur-mes-adresses` de #18857) ; la face Liens Android (#18889) les portera.
          * 139 : plus `GET /users/:id/in-common` (#19231 : nos communautés, nos amis et nos médias en commun sur la
          * fiche d'un autre) ; la fiche Android du chantier #18857 la portera.
+         * 138 : moins `GET /users/me/addresses`, que porte `MyAddressesApi` (#18889 : la rangée « Mes adresses » de la face
+         * Liens) ; création, modification, suppression et ordre restent à porter.
          */
-        const val TO_PORT_CEILING = 139
+        const val TO_PORT_CEILING = 138
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

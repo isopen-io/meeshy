@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "links_face_profile_tag",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_profile_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_copy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_qr",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_send",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_qr_open_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_qr_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_qr_share_image",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_addresses_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_address_hidden",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_face_address_a11y",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
