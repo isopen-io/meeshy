@@ -89,6 +89,13 @@ public nonisolated struct MeeshyLockedRowRecipe: Sendable, Equatable {
         }
     }
 
+    /// Ouverte quand l'hôte la dit ouverte, ou pendant l'ouverture qu'il a demandée une
+    /// fois celle-ci jouée. L'ouverture jouée ne survit pas à la demande : quand l'hôte
+    /// ne dit plus ni l'un ni l'autre (l'accès a été retiré), la rangée se referme.
+    public static func shownOpen(isOpen: Bool, isUnlocking: Bool, hasPlayed: Bool) -> Bool {
+        isOpen || (isUnlocking && hasPlayed)
+    }
+
     /// L'ouverture se joue UNE fois : un second rendu à valeur égale ne rejoue rien.
     public static func unlockStep(isUnlocking: Bool, hasPlayed: Bool) -> UnlockStep {
         isUnlocking && !hasPlayed ? .play : .rest

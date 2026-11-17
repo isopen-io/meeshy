@@ -76,7 +76,8 @@ struct KitAtomsSecondSeriesTests {
         let hold = try #require(source.range(of: "struct MeeshyStepperHold"))
         let body = String(source[hold.lowerBound...])
         let task = try #require(body.range(of: "Task { @MainActor in"))
-        let loop = String(body[task.upperBound...].prefix(600))
+        let close = try #require(body.range(of: "private func end()", range: task.upperBound..<body.endIndex))
+        let loop = String(body[task.upperBound..<close.lowerBound])
         #expect(!loop.contains("onStep()"),
                 "la tâche rappellerait la fermeture capturée au doigt posé : chaque pas repartirait de la même valeur")
         #expect(body.contains("adaptiveOnChange(of: ticks"))

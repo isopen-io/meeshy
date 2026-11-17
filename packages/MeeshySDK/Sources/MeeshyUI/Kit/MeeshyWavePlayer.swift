@@ -33,7 +33,10 @@ public struct MeeshyWavePlayer<Trailing: View>: View {
         MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
     }
     @Environment(\.locale) private var locale
-    @State private var scrubFraction: Double?
+    @State private var scrubLaw = MeeshyWaveScrubLaw()
+    @GestureState private var isTouching = false
+    private var scrubFraction: Double? { scrubLaw.fraction }
+    private var acceptsScrub: Bool { onScrub != nil && isEnabled && phase == .ready }
 
     public init(label: String,
                 samples: [Float] = [],
@@ -82,6 +85,13 @@ public struct MeeshyWavePlayer<Trailing: View>: View {
         }
         .frame(minHeight: recipe.rowHeight)
         .opacity(recipe.opacity)
+        .adaptiveOnChange(of: isTouching) { _, touching in if !touching { cancelScrub() } }
+        .adaptiveOnChange(of: acceptsScrub) { _, accepts in if !accepts { cancelScrub() } }
+        .onDisappear { cancelScrub() }
+    }
+
+    private func cancelScrub() {
+        if scrubLaw.cancel() { onScrubbingChange?(false) }
     }
 
     private var accent: Color { tint ?? .accentColor }
@@ -122,7 +132,7 @@ public struct MeeshyWavePlayer<Trailing: View>: View {
             .contentShape(Rectangle())
             .overlay(GeometryReader { proxy in
                 Color.clear.contentShape(Rectangle())
-                    .highPriorityGesture(scrubGesture(width: Double(proxy.size.width), recipe: recipe))
+                    .highPriorityGesture(scrubGesture(width: Double(proxy.size.width)))
                     .allowsHitTesting(onScrub != nil && recipe.acceptsScrub)
             })
             .accessibilityElement(children: .ignore)
@@ -131,20 +141,21 @@ public struct MeeshyWavePlayer<Trailing: View>: View {
             .modifier(MeeshyWaveAdjustable(isActive: onScrub != nil && recipe.acceptsScrub, progress: progress, onScrub: onScrub))
     }
 
-    private func scrubGesture(width: Double, recipe: MeeshyWavePlayerRecipe) -> some Gesture {
+    private func scrubGesture(width: Double) -> some Gesture {
         DragGesture(minimumDistance: 0)
+            .updating($isTouching) { _, touching, _ in touching = true }
             .onChanged { value in
-                guard onScrub != nil, recipe.acceptsScrub else { return }
-                if scrubFraction == nil { onScrubbingChange?(true) }
-                scrubFraction = MeeshyWaveBarsLaw.scrubFraction(locationX: Double(value.location.x), width: width,
-                                                                isRightToLeft: layoutDirection == .rightToLeft)
+                guard acceptsScrub else { return }
+                let fraction = MeeshyWaveBarsLaw.scrubFraction(locationX: Double(value.location.x), width: width,
+                                                               isRightToLeft: layoutDirection == .rightToLeft)
+                if scrubLaw.move(to: fraction) { onScrubbingChange?(true) }
             }
             .onEnded { value in
-                guard let onScrub, recipe.acceptsScrub else { return }
-                onScrub(MeeshyWaveBarsLaw.scrubFraction(locationX: Double(value.location.x), width: width,
-                                                        isRightToLeft: layoutDirection == .rightToLeft))
-                scrubFraction = nil
-                onScrubbingChange?(false)
+                let fraction = MeeshyWaveBarsLaw.scrubFraction(locationX: Double(value.location.x), width: width,
+                                                               isRightToLeft: layoutDirection == .rightToLeft)
+                let done = scrubLaw.finish(at: fraction, accepts: acceptsScrub)
+                if let commit = done.commit, done.ended { onScrub?(commit) }
+                if done.ended { onScrubbingChange?(false) }
             }
     }
 }

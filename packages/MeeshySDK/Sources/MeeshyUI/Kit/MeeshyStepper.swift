@@ -248,44 +248,62 @@ public struct MeeshyStepper: View {
 
 /// L'appui d'un bouton qui compte : un pas au toucher, puis, tenu, la cadence accélère
 /// jusqu'à un plancher. Aucun pas de plus au relâcher d'un appui long.
+///
+/// La cadence n'appelle jamais `onStep` elle-même : elle avance `ticks`, et la vue
+/// relit `onStep` à chaque battement. La fermeture capturée au doigt posé figerait la
+/// valeur de départ, et chaque pas repartirait d'elle. Le geste annulé (`isTouching`
+/// rendu à faux sans relâcher), la butée (`isActive` éteint) et le départ de la vue
+/// arrêtent la cadence.
 struct MeeshyStepperHold: ViewModifier {
     let isActive: Bool
     let repeats: Bool
     let onStep: () -> Void
 
+    @State private var law = MeeshyStepperHoldLaw()
     @State private var holdTask: Task<Void, Never>?
-    @State private var didRepeat = false
+    @State private var ticks = 0
+    @GestureState private var isTouching = false
 
     func body(content: Content) -> some View {
         content.gesture(
             DragGesture(minimumDistance: 0)
+                .updating($isTouching) { _, touching, _ in touching = true }
                 .onChanged { _ in begin() }
                 .onEnded { _ in end() }
         )
-        .onDisappear { holdTask?.cancel(); holdTask = nil }
+        .adaptiveOnChange(of: ticks) { _, _ in
+            if law.repeatTick(isActive: isActive) { onStep() } else { stopCadence() }
+        }
+        .adaptiveOnChange(of: isTouching) { _, touching in if !touching { cancel() } }
+        .adaptiveOnChange(of: isActive) { _, active in if !active { cancel() } }
+        .onDisappear { cancel() }
     }
 
     private func begin() {
-        guard isActive, holdTask == nil else { return }
-        didRepeat = false
-        guard repeats else { return }
+        guard law.press(isActive: isActive), repeats else { return }
         holdTask = Task { @MainActor in
             var tick = 0
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(MeeshyStepperRecipe.holdDelayMilliseconds(tick: tick))) } catch { return }
                 guard !Task.isCancelled else { return }
-                didRepeat = true
-                onStep()
+                ticks &+= 1
                 tick += 1
             }
         }
     }
 
     private func end() {
+        stopCadence()
+        if law.release(isActive: isActive) { onStep() }
+    }
+
+    private func cancel() {
+        stopCadence()
+        law.cancel()
+    }
+
+    private func stopCadence() {
         holdTask?.cancel()
         holdTask = nil
-        guard isActive else { return }
-        if !didRepeat { onStep() }
-        didRepeat = false
     }
 }

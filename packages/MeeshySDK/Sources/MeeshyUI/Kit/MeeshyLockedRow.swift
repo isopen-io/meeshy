@@ -56,7 +56,9 @@ public struct MeeshyLockedRow: View {
     }
 
     private var accent: Color { tint ?? .accentColor }
-    private var shownOpen: Bool { isOpen || hasUnlocked }
+    private var shownOpen: Bool {
+        MeeshyLockedRowRecipe.shownOpen(isOpen: isOpen, isUnlocking: isUnlocking, hasPlayed: hasUnlocked)
+    }
 
     public var body: some View {
         let recipe = MeeshyLockedRowRecipe.resolve(form: form, hasAction: action != nil, isPending: action?.isPending ?? false,
@@ -74,6 +76,10 @@ public struct MeeshyLockedRow: View {
     }
 
     private func playUnlock(recipe: MeeshyLockedRowRecipe) async {
+        guard isUnlocking else {
+            hasUnlocked = false
+            return
+        }
         guard MeeshyLockedRowRecipe.unlockStep(isUnlocking: isUnlocking, hasPlayed: hasUnlocked) == .play else { return }
         withAnimation(MeeshyMotion.animation(.morph, reduce: reduceMotion)) { hasUnlocked = true }
         do { try await Task.sleep(for: .milliseconds(recipe.unlockFadeMilliseconds)) } catch { return }

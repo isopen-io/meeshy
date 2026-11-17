@@ -10,6 +10,10 @@ import MeeshySDK
 /// état : `isShowingOriginal` lui est remis, et le même booléen choisit le texte de
 /// l'hôte ET le libellé de la marque. Sans traduction, l'hôte ne la monte pas. Sans
 /// `onToggle`, elle informe et ne promet aucun geste.
+///
+/// Avec sa bascule, elle occupe la largeur offerte (contenu calé au bord de début) :
+/// c'est cette largeur, et non celle de son propre contenu, qui décide si la bascule
+/// passe sous la mention.
 public struct MeeshyTranslationMark: View {
     private let sourceLanguageName: String?
     private let originalLanguageName: String?
@@ -66,6 +70,7 @@ public struct MeeshyTranslationMark: View {
                                                          isPressed: false, isPending: isPending, width: width,
                                                          reduceMotion: reduceMotion)
         content(recipe: recipe, mode: resolvedMode)
+            .frame(maxWidth: recipe.showsToggle ? .infinity : nil, alignment: .leading)
             .background(GeometryReader { proxy in
                 Color.clear.preference(key: MeeshyTranslationMarkWidthKey.self, value: Double(proxy.size.width))
             })

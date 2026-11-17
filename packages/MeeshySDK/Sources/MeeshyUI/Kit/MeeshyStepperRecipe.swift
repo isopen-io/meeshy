@@ -75,6 +75,49 @@ public nonisolated enum MeeshyStepperRule {
     }
 }
 
+/// **La loi de l'appui** : un toucher avance d'un pas au relâcher ; tenu, la cadence
+/// avance seule et le relâcher n'ajoute rien. Un geste annulé, un bouton éteint ou
+/// arrivé en butée arrête la cadence et ne compte pas comme un toucher.
+public nonisolated struct MeeshyStepperHoldLaw: Sendable, Equatable {
+    public private(set) var isHeld = false
+    public private(set) var didRepeat = false
+
+    public init() {}
+
+    /// Le doigt se pose : `true` une seule fois, quand il faut lancer la cadence.
+    public mutating func press(isActive: Bool) -> Bool {
+        guard isActive, !isHeld else { return false }
+        isHeld = true
+        didRepeat = false
+        return true
+    }
+
+    /// Un battement de la cadence : `true` s'il faut avancer ; un bouton éteint arrête l'appui.
+    public mutating func repeatTick(isActive: Bool) -> Bool {
+        guard isHeld else { return false }
+        guard isActive else {
+            cancel()
+            return false
+        }
+        didRepeat = true
+        return true
+    }
+
+    /// Le doigt se lève : `true` s'il faut avancer d'un pas (un toucher qui n'a pas répété).
+    public mutating func release(isActive: Bool) -> Bool {
+        guard isHeld else { return false }
+        let steps = isActive && !didRepeat
+        cancel()
+        return steps
+    }
+
+    /// Geste annulé, bouton éteint, vue partie : rien n'avance plus.
+    public mutating func cancel() {
+        isHeld = false
+        didRepeat = false
+    }
+}
+
 /// **La recette de K53 en VALEURS** : mesures de chaque forme, atténuation aux butées,
 /// remplissage, appui long. Aucune couleur : la teinte est celle de l'hôte.
 public nonisolated struct MeeshyStepperRecipe: Sendable, Equatable {

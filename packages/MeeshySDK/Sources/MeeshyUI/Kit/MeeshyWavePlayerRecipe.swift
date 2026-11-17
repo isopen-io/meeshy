@@ -95,6 +95,38 @@ public nonisolated enum MeeshyWaveBarsLaw {
     }
 }
 
+/// **La loi du glissement** : il commence au premier mouvement, remet sa fraction au
+/// relâcher, et se FERME toujours — même quand le lecteur a cessé d'accepter le geste
+/// en cours de route, même quand le geste est annulé ou la vue quittée. Sans cela
+/// l'onde resterait figée sous le doigt et l'hôte croirait le glissement en cours.
+public nonisolated struct MeeshyWaveScrubLaw: Sendable, Equatable {
+    public private(set) var fraction: Double?
+
+    public init() {}
+
+    /// Le doigt glisse : `true` au premier mouvement (le glissement commence).
+    public mutating func move(to fraction: Double) -> Bool {
+        let began = self.fraction == nil
+        self.fraction = MeeshyWaveBarsLaw.normalized(fraction)
+        return began
+    }
+
+    /// Le doigt se lève : la fraction à remettre si le lecteur l'accepte encore, et
+    /// `ended` quand un glissement était en cours.
+    public mutating func finish(at fraction: Double, accepts: Bool) -> (commit: Double?, ended: Bool) {
+        let ended = self.fraction != nil
+        self.fraction = nil
+        return (accepts ? MeeshyWaveBarsLaw.normalized(fraction) : nil, ended)
+    }
+
+    /// Geste annulé ou vue quittée : rien n'est remis ; `true` si un glissement se ferme.
+    public mutating func cancel() -> Bool {
+        let ended = fraction != nil
+        fraction = nil
+        return ended
+    }
+}
+
 /// **La recette de K35 en VALEURS** : disque, glyphe, onde, écart, état lisible,
 /// échelles, opacités. Aucune couleur : la teinte est celle de l'hôte.
 public nonisolated struct MeeshyWavePlayerRecipe: Sendable, Equatable {

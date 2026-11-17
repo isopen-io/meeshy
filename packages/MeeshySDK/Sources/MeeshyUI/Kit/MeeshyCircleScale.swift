@@ -76,13 +76,17 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
             content(recipe: recipe)
                 .opacity(recipe.opacity)
                 .animation(MeeshyMotion.animation(.morph, reduce: reduceMotion), value: recipe.litLevel)
-                .adaptiveOnChange(of: current) { _, _ in
-                    if haptic == .onChange, !reduceMotion { HapticFeedback.medium() }
-                }
         }
     }
 
     private var accent: Color { tint ?? .accentColor }
+
+    private func choose(_ index: Int, onSelect: (Int) -> Void) {
+        if MeeshyCircleScaleRecipe.playsHaptic(haptic, chosen: index, current: current, reduceMotion: reduceMotion) {
+            HapticFeedback.medium()
+        }
+        onSelect(index)
+    }
 
     @ViewBuilder
     private func content(recipe: MeeshyCircleScaleRecipe) -> some View {
@@ -148,7 +152,7 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
         }
         if let onSelect {
             Button {
-                onSelect(index)
+                choose(index, onSelect: onSelect)
             } label: { cell }
             .buttonStyle(.plain)
             .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
@@ -201,7 +205,7 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
             .background(Capsule().fill(accent.opacity(intensity)))
             .overlay(Capsule().stroke(accent.opacity(MeeshyOpacity.strong), lineWidth: recipe.ringStroke))
             if let onSelect {
-                Button { onSelect(lit) } label: { capsule }
+                Button { choose(lit, onSelect: onSelect) } label: { capsule }
                     .buttonStyle(.plain)
                     .frame(minHeight: MeeshyControlSize.tapTarget)
                     .accessibilityLabel(spokenLabel(recipe: recipe))

@@ -109,6 +109,13 @@ public nonisolated struct MeeshyCircleScaleRecipe: Sendable, Equatable {
         intensity >= darkInkThreshold
     }
 
+    /// Le tic suit un CHOIX qui change de niveau. Un niveau remis par l'hôte (profil
+    /// chargé, changement venu d'ailleurs) ne fait rien vibrer.
+    public static func playsHaptic(_ haptic: MeeshyCircleScaleHaptic, chosen: Int, current: Int?,
+                                   reduceMotion: Bool) -> Bool {
+        haptic == .onChange && !reduceMotion && chosen != current
+    }
+
     /// Les comptes ne servent que s'ils ont la longueur des niveaux ; un compte
     /// négatif vaut zéro.
     public static func validCounts(_ counts: [Int]?, levelCount: Int) -> [Int]? {
