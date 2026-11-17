@@ -407,6 +407,22 @@ function persist(storage: SessionStorage, session: PersistedSession): void {
   }
 }
 
+/**
+ * UNE SESSION TENUE NE RÉÉCRIT QUE SA PROPRE ENTRÉE (#18914, audit C3). Deux
+ * onglets partagent `meeshy.session`, et aucun ne suit l'autre : l'onglet
+ * d'Ada qui persistait une édition — ou la projection de `GET /me`, qui tourne
+ * en fond (`served-profile-session.ts`) — écrivait sa session par-dessus celle
+ * de Bob, ouverte dans l'autre onglet, et Bob rechargé se réveillait en Ada.
+ * L'édition reste tenue en mémoire ; elle n'est persistée que si l'entrée
+ * persistée nomme le MÊME compte. Absente ou corrompue, l'entrée n'est pas
+ * recréée : un autre onglet l'a fermée.
+ */
+function persistHeld(storage: SessionStorage, session: PersistedAccount): void {
+  const persisted = readPersisted(storage);
+  if (persisted === 'absent' || persisted === 'corrupted' || persisted.kind === 'guest' || persisted.user.id !== session.user.id) return;
+  persist(storage, session);
+}
+
 function purge(storage: SessionStorage): void {
   try {
     storage.removeItem(STORAGE_KEY);
@@ -533,14 +549,14 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       const current = get().session;
       if (current.status !== 'authenticated') return;
       const user = pickSessionUser(withProfileFields(current.user, fields));
-      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      persistHeld(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
       set({ session: { ...current, user } });
     },
     noteEmailProven: () => {
       const current = get().session;
       if (current.status !== 'authenticated' || current.user.emailUnproven !== true) return;
       const { emailUnproven: _proven, ...user } = current.user;
-      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      persistHeld(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
       set({ session: { ...current, user } });
     },
     restoreSession: () => {

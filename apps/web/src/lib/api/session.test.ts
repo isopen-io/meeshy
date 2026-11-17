@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createSessionStore, type SessionStorage } from './session';
+import { createSessionStore, type SessionStorage, type SessionUser } from './session';
 
 /**
  * LE MAGASIN DE SESSION (#5605, T3) — `zustand/vanilla`, motif
@@ -534,3 +534,59 @@ describe('createSessionStore — la langue choisie par l’invité (#9710)', () 
   });
 });
 
+/**
+ * DEUX ONGLETS, DEUX COMPTES, UN SEUL STOCKAGE (#18914, audit C3) — aucun
+ * onglet ne suit l'autre. La session tenue par l'onglet d'Ada ne réécrit
+ * jamais l'entrée persistée d'un AUTRE compte : l'onglet de Bob, rechargé, se
+ * réveillait en Ada dès qu'Ada éditait son profil, ou que `GET /me` le
+ * projetait en fond.
+ */
+describe('createSessionStore — une session tenue n’écrase pas l’entrée persistée d’un autre compte', () => {
+  const ADA: SessionUser = { id: 'u-ada', username: 'ada', displayName: 'Ada', systemLanguage: 'fr' };
+  const BOB: SessionUser = { id: 'u-bob', username: 'bob', displayName: 'Bob', systemLanguage: 'es' };
+
+  const adaTabThenBobTab = (storage: SessionStorage, ada: SessionUser = ADA) => {
+    const adaTab = createSessionStore({ storage, now: () => FIXED_NOW });
+    adaTab.getState().establish({ user: ada, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    createSessionStore({ storage, now: () => FIXED_NOW }).getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3600 });
+    return adaTab;
+  };
+
+  const reloadedUser = (storage: SessionStorage): SessionUser | undefined => {
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+    store.getState().restoreSession();
+    const session = store.getState().session;
+    return session.status === 'authenticated' ? session.user : undefined;
+  };
+
+  test('l’onglet d’Ada édite son profil : sa session tenue suit, l’onglet de Bob rechargé reste Bob', () => {
+    const storage = fakeStorage();
+    const adaTab = adaTabThenBobTab(storage);
+
+    adaTab.getState().updateUser({ systemLanguage: 'en' });
+
+    const held = adaTab.getState().session;
+    expect(held.status === 'authenticated' ? held.user.systemLanguage : undefined).toBe('en');
+    expect(reloadedUser(storage)?.id).toBe('u-bob');
+    expect(reloadedUser(storage)?.systemLanguage).toBe('es');
+  });
+
+  test('l’adresse d’Ada prouvée dans son onglet ne réécrit pas non plus l’entrée de Bob', () => {
+    const storage = fakeStorage();
+    const adaTab = adaTabThenBobTab(storage, { ...ADA, emailUnproven: true });
+
+    adaTab.getState().noteEmailProven();
+
+    expect(reloadedUser(storage)?.id).toBe('u-bob');
+  });
+
+  test('un seul compte : l’édition se persiste et survit au rechargement, comme avant', () => {
+    const storage = fakeStorage();
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+    store.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+
+    store.getState().updateUser({ systemLanguage: 'en' });
+
+    expect(reloadedUser(storage)?.systemLanguage).toBe('en');
+  });
+});

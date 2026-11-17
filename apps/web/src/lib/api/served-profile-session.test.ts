@@ -331,6 +331,28 @@ describe('la session suit le profil SERVI par GET /me (WEB-01)', () => {
     stop();
   });
 
+  test('deux onglets, deux comptes : la projection dans l’onglet d’Ada n’écrase pas la session persistée par l’onglet de Bob', async () => {
+    const storage = memoryStorage();
+    const adaTab = createSessionStore({ storage, now: () => NOW });
+    adaTab.getState().establish({ user: ADA, token: 'jeton-ada', sessionToken: 'session-ada', expiresIn: 3600 });
+    createSessionStore({ storage, now: () => NOW }).getState().establish({
+      user: { id: 'u-bob', username: 'bob', displayName: 'Bob', systemLanguage: 'es' },
+      token: 'jeton-bob',
+      sessionToken: 'session-bob',
+      expiresIn: 3600,
+    });
+    const { queryClient, stop } = following({ session: adaTab });
+    const { transport } = gateway(() => wireUser({ systemLanguage: 'en' }));
+
+    await readMe(queryClient, transport);
+
+    expect(readerOf(adaTab)[0]).toBe('en');
+    const bobTabReloaded = createSessionStore({ storage, now: () => NOW });
+    bobTabReloaded.getState().restoreSession();
+    expect(sessionUser(bobTabReloaded)?.id).toBe('u-bob');
+    stop();
+  });
+
   test('l’abonnement retiré, la session ne suit plus', async () => {
     const session = signedIn();
     const { queryClient, stop } = following({ session });
