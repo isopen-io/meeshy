@@ -97,18 +97,22 @@ const served = (row: AddressColumns, circle?: RelationLevel): ServedAddress => (
   ...(circle === undefined ? {} : { circle }),
 });
 
-export const servedAddresses = (
-  rows: ReadonlyArray<AddressColumns>,
-  reader: { readonly isSelf: boolean; readonly viewerLevel: RelationLevel },
-): ServedAddress[] =>
+export type AddressReader = { readonly isSelf: boolean; readonly viewerLevel: RelationLevel };
+
+/**
+ * Ce lecteur lit-il une adresse de ce cercle ? La MÊME loi pour la fiche et pour le lien de
+ * suivi de l'adresse (`/l/<jeton>`) : un cercle illisible ne s'ouvre qu'au propriétaire.
+ */
+export const addressOpensTo = (circle: unknown, reader: AddressReader): boolean => {
+  if (reader.isSelf) return true;
+  return isAddressCircle(circle) && relationLevelIfAtLeast(reader.viewerLevel, circle) !== null;
+};
+
+export const servedAddresses = (rows: ReadonlyArray<AddressColumns>, reader: AddressReader): ServedAddress[] =>
   [...rows]
-    .filter((row) => row.isShown)
+    .filter((row) => row.isShown && addressOpensTo(row.circle, reader))
     .sort((a, b) => a.position - b.position)
-    .flatMap((row): ServedAddress[] => {
-      if (!isAddressCircle(row.circle)) return reader.isSelf ? [served(row)] : [];
-      if (reader.isSelf) return [served(row, row.circle)];
-      return relationLevelIfAtLeast(reader.viewerLevel, row.circle) === null ? [] : [served(row)];
-    });
+    .map((row) => served(row, reader.isSelf && isAddressCircle(row.circle) ? row.circle : undefined));
 
 /** « Voir comme » : ce que lirait un lecteur de ce cercle, depuis la lecture du propriétaire. */
 export const addressesSeenAs = (own: ReadonlyArray<ServedAddress>, level: RelationLevel): ServedAddress[] =>

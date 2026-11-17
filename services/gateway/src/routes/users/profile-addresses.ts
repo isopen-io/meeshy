@@ -34,7 +34,7 @@ export async function withServedAddresses<T extends { id: string }>(
   const viewerLevel: RelationLevel = needsRelation
     ? (await readProfileCircleView(fastify.prisma, { viewerId, targetId })).level
     : 'PUBLIC';
-  const links = await ownedAddressLinks(fastify.prisma, targetId, rows.flatMap((r) => (r.trackingToken ? [r.trackingToken] : [])));
+  const links = await ownedAddressLinks(fastify.prisma, targetId, rows.map((r) => ({ id: r.id, trackingToken: r.trackingToken ?? null })));
   const linked = rows.map((r) => {
     const link = r.trackingToken ? links.get(r.trackingToken) : undefined;
     return leadsTo(link, r.url) && link.isOpen ? r : { ...r, trackingToken: null };

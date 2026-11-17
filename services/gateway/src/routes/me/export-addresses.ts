@@ -1,10 +1,11 @@
 /**
  * Les adresses de fiche dans l'export RGPD (#18863) : ce que l'utilisateur a déclaré, le cercle
- * choisi pour chacune, et ce que leurs liens de suivi ont compté. Le jeton du lien ne part pas :
- * c'est une clé technique, `countsClicks` en dit l'effet.
+ * choisi pour chacune, et ce que leurs liens de suivi ont compté — TOUTES ses adresses, sans
+ * plafond, et TOUS ses liens d'adresse (`addressLinks`), y compris un lien qu'aucune adresse ne
+ * désigne plus. Le jeton du lien ne part pas : c'est une clé technique, `countsClicks` en dit l'effet.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ownedAddressLinks } from '../../services/profile-addresses/address-links';
+import { IS_ADDRESS_LINK } from '../../services/profile-addresses/address-links';
 
 export const PROFILE_ADDRESS_EXPORT_SELECT = {
   id: true,
@@ -34,16 +35,31 @@ type ExportedAddressRow = {
 
 export type ExportedAddress = Omit<ExportedAddressRow, 'trackingToken'> & { countsClicks: boolean; clicks: number };
 
+export type ExportedAddressLink = { title: string | null; url: string; isActive: boolean; clicks: number; createdAt: Date };
+
 export async function withExportedAddresses<T extends { profileAddresses?: ExportedAddressRow[] }>(
   prisma: Pick<PrismaClient, 'trackingLink'>,
   userId: string,
   profile: T,
-): Promise<Omit<T, 'profileAddresses'> & { addresses: ExportedAddress[] }> {
+): Promise<Omit<T, 'profileAddresses'> & { addresses: ExportedAddress[]; addressLinks: ExportedAddressLink[] }> {
   const { profileAddresses = [], ...rest } = profile;
-  const links = await ownedAddressLinks(prisma, userId, profileAddresses.flatMap((row) => (row.trackingToken ? [row.trackingToken] : [])));
-  const addresses = profileAddresses.map(({ trackingToken, ...row }) => {
-    const link = trackingToken ? links.get(trackingToken) : undefined;
-    return { ...row, countsClicks: link !== undefined, clicks: link?.totalClicks ?? 0 };
+  const links = await prisma.trackingLink.findMany({
+    where: { createdBy: userId, ...IS_ADDRESS_LINK },
+    select: { token: true, addressId: true, name: true, originalUrl: true, isActive: true, totalClicks: true, createdAt: true },
   });
-  return { ...rest, addresses };
+  const linkOf = (row: ExportedAddressRow) =>
+    links.find((link) => row.trackingToken !== null && link.token === row.trackingToken && link.addressId === row.id);
+  const addresses = profileAddresses.map((row) => {
+    const { trackingToken: _token, ...declared } = row;
+    const link = linkOf(row);
+    return { ...declared, countsClicks: link !== undefined, clicks: link?.totalClicks ?? 0 };
+  });
+  const addressLinks = links.map((link) => ({
+    title: link.name ?? null,
+    url: link.originalUrl,
+    isActive: link.isActive,
+    clicks: link.totalClicks,
+    createdAt: link.createdAt,
+  }));
+  return { ...rest, addresses, addressLinks };
 }

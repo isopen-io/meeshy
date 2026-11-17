@@ -1,13 +1,17 @@
 /**
  * Les adresses personnelles d'une fiche (#18863) : écriture du propriétaire, lecture avec clics.
  *
- * Le compteur n'a pas de modèle propre : une adresse « qui compte » désigne un `TrackingLink`
- * (`/l/<token>`, le MÊME que « Mes liens »). Une adresse masquée DÉSACTIVE son lien : hors
- * audience, elle n'est ni servie ni comptée. Une adresse supprimée, ou qui cesse de compter,
- * EFFACE son lien et ses clics : rien de son URL ne survit à elle, ni à la purge du compte. Aucune règle de lecture par cercle ici — elle
- * vit dans `@meeshy/shared/utils/profile-addresses`.
+ * Le compteur n'a pas de modèle propre : une adresse « qui compte » possède SON `TrackingLink`
+ * (`/l/<token>`), marqué de son identifiant, jamais partagé avec un autre contenu. Le jeton
+ * TOURNE (ancien lien et ses clics effacés) quand l'URL change ou que le cercle se resserre :
+ * un `/l/<jeton>` déjà diffusé ne doit ouvrir ni une autre URL, ni un public plus large que
+ * celui qui l'a reçu. Une adresse masquée DÉSACTIVE son lien ; supprimée, ou qui cesse de
+ * compter, elle EFFACE son lien et ses clics. Aucune règle de lecture par cercle ici — elle vit
+ * dans `@meeshy/shared/utils/profile-addresses`.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
 import {
   ADDRESS_MAX_COUNT,
   DEFAULT_ADDRESS_GLYPH,
@@ -16,9 +20,9 @@ import {
   normalizeAddressTitle,
   normalizeAddressUrl,
 } from '@meeshy/shared/utils/profile-addresses';
-import { TrackingTargetCarriesEmailSecretError } from '../tracking-link-target';
+import { TrackingTargetCarriesEmailSecretError, isServableTrackingTarget } from '../tracking-link-target';
 import { TrackingLinkService } from '../TrackingLinkService';
-import { eraseAddressLinks, leadsTo, ownedAddressLinks, type AddressLink } from './address-links';
+import { eraseAddressLinks, eraseLinksOfAddress, leadsTo, ownedAddressLinks, type AddressLink } from './address-links';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'ProfileAddressService' });
@@ -75,6 +79,12 @@ const validated = (input: AddressInput, base?: Fields): Outcome<Fields> => {
   return ok({ url, title, glyph, circle });
 };
 
+const notFound = (): Outcome<never> => refuse(404, 'ADDRESS_NOT_FOUND', 'Address not found');
+const untrackable = (): Outcome<never> => refuse(400, 'INVALID_ADDRESS_URL', 'This address cannot be tracked');
+
+/** Le nouveau cercle écarte-t-il des lecteurs que l'ancien admettait ? Ils peuvent tenir le jeton : il tourne. */
+const narrows = (from: string, to: string): boolean => isAddressCircle(from) && isAddressCircle(to) && relationLevelIfAtLeast(from, to) === null;
+
 const toOwner = (row: Row, links: ReadonlyMap<string, AddressLink>): OwnerAddress => {
   const link = row.trackingToken ? links.get(row.trackingToken) : undefined;
   return {
@@ -102,7 +112,7 @@ export class ProfileAddressService {
   }
 
   private linksOf(userId: string, rows: ReadonlyArray<Row>): Promise<ReadonlyMap<string, AddressLink>> {
-    return ownedAddressLinks(this.prisma, userId, rows.flatMap((row) => (row.trackingToken ? [row.trackingToken] : [])));
+    return ownedAddressLinks(this.prisma, userId, rows);
   }
 
   /** Le lien de l'adresse s'il désigne encore un lien de son propriétaire (supprimé, renommé ou repris ⇒ `null`). */
@@ -121,9 +131,22 @@ export class ProfileAddressService {
     await this.links.updateTrackingLink({ token, isActive });
   }
 
-  private async openLink(userId: string, fields: Fields): Promise<string> {
-    const link = await this.links.createTrackingLink({ originalUrl: fields.url, name: fields.title, createdBy: userId });
+  /** Le lien DÉDIÉ de cette adresse, fermé d'emblée si elle est masquée. */
+  private async openLink(userId: string, addressId: string, fields: Fields, isShown: boolean): Promise<string> {
+    const link = await this.links.createTrackingLink({ originalUrl: fields.url, name: fields.title, createdBy: userId, addressId });
+    if (!isShown) await this.setLinkActive(link.token, false);
     return link.token;
+  }
+
+  /** La ligne n'est gardée que si elle est parmi les douze premières créées : le plafond tient sous la concurrence. */
+  private async withinLimit(userId: string, id: string): Promise<boolean> {
+    const kept = await this.prisma.profileAddress.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: ADDRESS_MAX_COUNT,
+      select: { id: true },
+    });
+    return kept.some((row) => row.id === id);
   }
 
   async list(userId: string): Promise<OwnerAddress[]> {
@@ -133,28 +156,43 @@ export class ProfileAddressService {
   async create(userId: string, input: AddressInput): Promise<Outcome<OwnerAddress>> {
     const fields = validated(input);
     if (fields.ok === false) return fields;
+    const counts = input.countClicks !== false;
+    if (counts && !isServableTrackingTarget(fields.value.url)) return untrackable();
     const existing = await this.rows(userId);
     if (existing.length >= ADDRESS_MAX_COUNT) return refuse(409, 'ADDRESS_LIMIT_REACHED', 'Too many addresses');
     const isShown = input.isShown ?? true;
+    const position = existing.reduce((max, row) => Math.max(max, row.position + 1), 0);
+    const created = (await this.prisma.profileAddress.create({
+      data: { userId, ...fields.value, position, isShown, trackingToken: null },
+    })) as Row;
+    if (!(await this.withinLimit(userId, created.id))) {
+      await this.prisma.profileAddress.delete({ where: { id: created.id } });
+      return refuse(409, 'ADDRESS_LIMIT_REACHED', 'Too many addresses');
+    }
+    if (!counts) return ok(toOwner(created, new Map()));
     try {
-      const trackingToken = input.countClicks === false ? null : await this.openLink(userId, fields.value);
-      if (trackingToken && !isShown) await this.setLinkActive(trackingToken, false);
-      const position = existing.reduce((max, row) => Math.max(max, row.position + 1), 0);
-      const row = (await this.prisma.profileAddress.create({
-        data: { userId, ...fields.value, position, isShown, trackingToken },
-      })) as Row;
-      return ok(toOwner(row, new Map(trackingToken ? [[trackingToken, { totalClicks: 0, isOpen: isShown, target: fields.value.url }]] : [])));
+      const trackingToken = await this.openLink(userId, created.id, fields.value, isShown);
+      const row = (await this.prisma.profileAddress.update({ where: { id: created.id }, data: { trackingToken } })) as Row;
+      return ok(toOwner(row, new Map([[trackingToken, { totalClicks: 0, isOpen: isShown, target: fields.value.url }]])));
     } catch (error) {
-      if (error instanceof TrackingTargetCarriesEmailSecretError) return refuse(400, 'INVALID_ADDRESS_URL', 'This address cannot be tracked');
+      await this.prisma.profileAddress.delete({ where: { id: created.id } });
+      if (error instanceof TrackingTargetCarriesEmailSecretError) return untrackable();
       throw error;
     }
   }
 
+  private async mine(userId: string, id: string): Promise<Row | null> {
+    if (!isValidObjectId(id)) return null;
+    return (await this.prisma.profileAddress.findFirst({ where: { id, userId } })) as Row | null;
+  }
+
   async update(userId: string, id: string, input: AddressInput): Promise<Outcome<OwnerAddress>> {
-    const current = (await this.prisma.profileAddress.findFirst({ where: { id, userId } })) as Row | null;
-    if (!current) return refuse(404, 'ADDRESS_NOT_FOUND', 'Address not found');
+    const current = await this.mine(userId, id);
+    if (!current) return notFound();
     const fields = validated(input, current);
     if (fields.ok === false) return fields;
+    const tracked = input.countClicks === true || (input.countClicks !== false && current.trackingToken !== null);
+    if (tracked && !isServableTrackingTarget(fields.value.url)) return untrackable();
     const isShown = input.isShown ?? current.isShown;
     try {
       const trackingToken = await this.reconcileLink(userId, current, fields.value, isShown, input.countClicks);
@@ -164,34 +202,35 @@ export class ProfileAddressService {
       })) as Row;
       return ok((await this.viewsOf(userId, [row]))[0]);
     } catch (error) {
-      if (error instanceof TrackingTargetCarriesEmailSecretError) return refuse(400, 'INVALID_ADDRESS_URL', 'This address cannot be tracked');
+      if (error instanceof TrackingTargetCarriesEmailSecretError) return untrackable();
       throw error;
     }
   }
 
-  /** Le jeton du lien de suivi après modification : ouvert, suivi, rouvert, fermé ou détaché. */
+  /**
+   * Le jeton du lien de suivi après modification : ouvert, gardé, renommé, rouvert, fermé,
+   * TOURNÉ (URL changée, cercle resserré, lien dévié hors de l'adresse) ou détaché.
+   */
   private async reconcileLink(userId: string, current: Row, next: Fields, isShown: boolean, countClicks: boolean | undefined): Promise<string | null> {
     const owned = await this.ownedLink(userId, current);
-    const token = owned?.token ?? null;
-    if (countClicks === false) {
-      if (token) await eraseAddressLinks(this.prisma, userId, [token]);
+    if (countClicks === false || (owned === null && countClicks !== true)) {
+      if (owned) await eraseAddressLinks(this.prisma, userId, [owned.token]);
       return null;
     }
-    if (!token) {
-      if (countClicks !== true) return null;
-      const opened = await this.openLink(userId, next);
-      if (!isShown) await this.setLinkActive(opened, false);
-      return opened;
+    const rotates = owned === null || next.url !== current.url || !leadsTo(owned.link, next.url) || narrows(current.circle, next.circle);
+    if (rotates) {
+      if (owned) await eraseAddressLinks(this.prisma, userId, [owned.token]);
+      return this.openLink(userId, current.id, next, isShown);
     }
-    if (!leadsTo(owned?.link, next.url)) await this.links.updateTrackingLink({ token, originalUrl: next.url });
-    if (isShown !== current.isShown) await this.setLinkActive(token, isShown);
-    return token;
+    if (next.title !== current.title) await this.links.updateTrackingLink({ token: owned.token, name: next.title });
+    if (isShown !== current.isShown) await this.setLinkActive(owned.token, isShown);
+    return owned.token;
   }
 
   async remove(userId: string, id: string): Promise<Outcome<null>> {
-    const current = (await this.prisma.profileAddress.findFirst({ where: { id, userId } })) as Row | null;
-    if (!current) return refuse(404, 'ADDRESS_NOT_FOUND', 'Address not found');
-    if (current.trackingToken) await eraseAddressLinks(this.prisma, userId, [current.trackingToken]);
+    const current = await this.mine(userId, id);
+    if (!current) return notFound();
+    await eraseLinksOfAddress(this.prisma, userId, current.id);
     await this.prisma.profileAddress.delete({ where: { id } });
     return ok(null);
   }

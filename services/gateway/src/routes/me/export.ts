@@ -26,7 +26,6 @@ import { exportReadingActivity } from './export-reading';
 import { relationsExportSchema } from './export-relations';
 import { exportRelations } from '../../services/relations/relationExport';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
-import { ADDRESS_MAX_COUNT } from '@meeshy/shared/utils/profile-addresses';
 import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
@@ -647,7 +646,6 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               profileAddresses: {
                 select: PROFILE_ADDRESS_EXPORT_SELECT,
                 orderBy: { position: 'asc' },
-                take: ADDRESS_MAX_COUNT,
               },
             },
           });
