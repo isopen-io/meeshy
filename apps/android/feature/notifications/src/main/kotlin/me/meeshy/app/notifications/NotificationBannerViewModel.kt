@@ -124,6 +124,11 @@ class NotificationBannerViewModel @Inject constructor(
                 handle(notification)
             }
         }
+        viewModelScope.launch {
+            messageSocketManager.notificationDeleted.collect { retracted ->
+                if (_banner.value?.notificationId == retracted.notificationId) dismiss()
+            }
+        }
     }
 
     /**
