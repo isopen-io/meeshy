@@ -80,4 +80,29 @@ class MeeshyCollapsingHeroTest {
         assertThat(at(0.7).controlsDiscOpacity).isWithin(1e-9).of(0.0)
         assertThat(at(0.0).controlsDiscOpacity).isEqualTo(1.0)
     }
+
+    @Test
+    fun `une seule identite glisse du heros a la barre sans changer d arbre`() {
+        val unfolded = MeeshyCollapsingHeroRecipe.identity(progress = 0.0, width = 400.0, top = 24.0)
+        assertThat(unfolded.avatarX).isEqualTo(20.0)
+        assertThat(unfolded.avatarY).isEqualTo(232.0)
+        assertThat(unfolded.titleY).isEqualTo(354.0)
+        val folded = MeeshyCollapsingHeroRecipe.identity(progress = 1.0, width = 400.0, top = 24.0)
+        assertThat(folded.avatarX).isEqualTo(68.0)
+        assertThat(folded.avatarY).isEqualTo(28.0)
+        assertThat(folded.titleX).isEqualTo(114.0)
+        assertThat(folded.titleY).isEqualTo(30.0)
+        assertThat(folded.titleWidth).isEqualTo(400.0 - 114.0 - 16.0)
+        val midway = MeeshyCollapsingHeroRecipe.identity(progress = 0.275, width = 400.0, top = 24.0)
+        assertThat(midway.avatarX).isWithin(1e-9).of(44.0)
+    }
+
+    @Test
+    fun `centre l avatar et le titre se posent sur l axe tant que le titre n a pas fait la moitie de sa course`() {
+        val unfolded = MeeshyCollapsingHeroRecipe.identity(progress = 0.0, width = 400.0, top = 0.0, alignment = MeeshyCollapsingHeroAlignment.Center)
+        assertThat(unfolded.avatarX).isEqualTo(144.0)
+        assertThat(unfolded.isTitleCentered).isTrue()
+        assertThat(unfolded.titleX + unfolded.titleWidth / 2).isEqualTo(200.0)
+        assertThat(MeeshyCollapsingHeroRecipe.identity(progress = 0.6, width = 400.0, top = 0.0, alignment = MeeshyCollapsingHeroAlignment.Center).isTitleCentered).isFalse()
+    }
 }
