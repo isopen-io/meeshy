@@ -212,7 +212,7 @@ export function registerMessagePinRoutes(
         select: { id: true, pinnedAt: true, pinnedBy: true, messageType: true, metadata: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
       });
       if (!message) {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
       // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
       if (conversationRefusesPlainSignal(message.conversation)) {
@@ -381,7 +381,7 @@ export function registerMessagePinRoutes(
         select: { id: true, pinnedAt: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
       });
       if (!message) {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
       // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
       if (conversationRefusesPlainSignal(message.conversation)) {

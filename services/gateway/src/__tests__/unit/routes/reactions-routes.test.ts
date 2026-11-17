@@ -395,7 +395,7 @@ describe('reactionRoutes', () => {
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
       await handler(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       expect(reply.statusCode).toBe(404);
     });
 

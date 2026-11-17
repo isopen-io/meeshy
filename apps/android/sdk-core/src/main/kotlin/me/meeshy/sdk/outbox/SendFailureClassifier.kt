@@ -13,8 +13,10 @@ import java.io.IOException
  * - IOException de transport (connexion, DNS, délai, itinérance) : [SendResult.TransportFailure], aucun essai compté ;
  * - 408 / 429 / 503 / 5xx / 409 et le reste : [SendResult.TransientFailure], budget de [OutboxRepository.MAX_ATTEMPTS].
  *
- * Un 404 sur une suppression (= déjà supprimé) et un 410 (= déjà appliqué) restent des succès : c'est le sender qui les lit,
- * avant d'appeler ce classeur.
+ * Un geste idempotent qui lit un 404 de la passerelle ou un 410 comme « déjà fait » (supprimer un commentaire, archiver une
+ * conversation…) le décide dans son sender, avant ce classeur. Pas la suppression pour tous d'un message (`DELETE_MESSAGE`,
+ * #19047) : le 404 que la passerelle y sert (`MESSAGE_NOT_FOUND`) est un refus définitif dont la raison garde le statut, et
+ * [refusedAsGone] le relit quand la ligne s'épuise pour ne jamais faire revenir le message.
  */
 public object SendFailureClassifier {
 
