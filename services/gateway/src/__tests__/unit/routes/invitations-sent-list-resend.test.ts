@@ -23,7 +23,7 @@ jest.mock('../../../utils/logger', () => ({
 }));
 
 import { invitationRoutes } from '../../../routes/invitations';
-import { invitationOptOutHash, invitationOptOutUrl } from '../../../services/referrals/emailInvitations';
+import { INVITATION_OPT_OUT_PAGE, invitationOptOutHash, invitationOptOutLink, invitationOptOutUrl } from '../../../services/referrals/emailInvitations';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const OTHER_ID = '507f1f77bcf86cd799439099';
@@ -270,10 +270,7 @@ describe('POST /invitations/email/:id/resend — une relance par 72 h, trois au 
 });
 
 describe('POST /invitations/email/opt-out — l’invité ne veut plus d’invitation', () => {
-  const linkOf = (email: string) => {
-    const url = new URL(invitationOptOutUrl(email));
-    return { address: url.searchParams.get('address'), key: url.searchParams.get('key') };
-  };
+  const linkOf = invitationOptOutLink;
 
   it('garde l’empreinte de l’adresse, jamais l’adresse', async () => {
     const { app, prisma } = await buildApp(store());
@@ -315,7 +312,7 @@ describe('POST /invitations/email/opt-out — l’invité ne veut plus d’invit
     expect(prisma.emailInvitationOptOut.create).not.toHaveBeenCalled();
   });
 
-  it('le lien part dans l’e-mail de l’invité, à l’envoi comme à la relance, jamais dans la réponse au parrain', async () => {
+  it('le lien ne part dans l’e-mail que si sa page web est servie, à l’envoi comme à la relance, jamais dans la réponse au parrain', async () => {
     const { app, sendInvitationEmail } = await buildApp(store());
     const sent = await app.inject({ method: 'POST', url: '/invitations/email', payload: { email: 'nouveau@example.com' } });
     const resent = await app.inject({ method: 'POST', url: `/invitations/email/${INVITATION_ID}/resend` });
@@ -323,9 +320,20 @@ describe('POST /invitations/email/opt-out — l’invité ne veut plus d’invit
 
     expect(sendInvitationEmail).toHaveBeenNthCalledWith(1, expect.objectContaining({ optOutUrl: invitationOptOutUrl('nouveau@example.com') }));
     expect(sendInvitationEmail).toHaveBeenNthCalledWith(2, expect.objectContaining({ optOutUrl: invitationOptOutUrl('marie.dupont@gmail.com') }));
-    const { key } = linkOf('nouveau@example.com');
-    expect(sent.body).not.toContain(key);
+    expect(sent.body).not.toContain(linkOf('nouveau@example.com').key);
     expect(resent.body).not.toContain(linkOf('marie.dupont@gmail.com').key);
+  });
+
+  it('tant qu’aucune page ne la sert, l’e-mail ne porte aucun lien de désinscription', () => {
+    expect(INVITATION_OPT_OUT_PAGE).toBeNull();
+    expect(invitationOptOutUrl('marie.dupont@gmail.com')).toBeUndefined();
+  });
+
+  it('une fois la page posée, le lien porte l’empreinte et sa clé, jamais l’adresse', () => {
+    const url = new URL(invitationOptOutUrl('marie.dupont@gmail.com', '/invitations/opt-out') ?? '');
+    expect(url.pathname).toBe('/invitations/opt-out');
+    expect({ address: url.searchParams.get('address'), key: url.searchParams.get('key') }).toEqual(linkOf('marie.dupont@gmail.com'));
+    expect(url.toString()).not.toContain('marie');
   });
 });
 

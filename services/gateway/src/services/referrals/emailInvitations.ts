@@ -27,7 +27,8 @@
  * Le lien de l'e-mail porte cette empreinte et sa CLÉ (domaine `invitation-opt-out-link:`),
  * que seul l'e-mail transporte : jamais le jeton d'inscription, que le parrain détient
  * (`invitationUrl`) — sans quoi il désinscrirait l'adresse pour tout le monde. Le lien ne
- * dépend d'aucune ligne : il vaut encore après l'effacement du compte du parrain. Une
+ * dépend d'aucune ligne : il vaut encore après l'effacement du compte du parrain. Il ne part
+ * dans l'e-mail que lorsque sa page web est servie (`INVITATION_OPT_OUT_PAGE`). Une
  * liste où l'on dit pourquoi une adresse est refusée apprendrait au parrain qui l'a refusé : la
  * liste ne dit que « pas de relance possible ».
  */
@@ -198,11 +199,26 @@ const OPT_OUT_HEX = /^[0-9a-f]{64}$/;
 export const invitationOptOutKey = (emailHash: string, secret: string = readerKeySecret()): string =>
   createHmac('sha256', secret).update(`invitation-opt-out-link:${emailHash}`).digest('hex');
 
-/** Le lien « Ne plus recevoir d'invitation » de l'e-mail : l'empreinte et sa clé, jamais l'adresse. */
-export function invitationOptOutUrl(email: string): string {
+/** Ce que porte le lien « Ne plus recevoir d'invitation » : l'empreinte et sa clé, jamais l'adresse. */
+export function invitationOptOutLink(email: string): { readonly address: string; readonly key: string } {
   const address = invitationOptOutHash(email);
-  const params = new URLSearchParams({ address, key: invitationOptOutKey(address) });
-  return `${process.env.FRONTEND_URL || 'http://localhost:3100'}/invitations/opt-out?${params.toString()}`;
+  return { address, key: invitationOptOutKey(address) };
+}
+
+/**
+ * La page web qui lit `address` et `key` et appelle `POST /invitations/email/opt-out`.
+ * `null` tant qu'aucune route de `apps/web/src/routes/route-table.tsx` ne la sert : un lien
+ * de désinscription mort dans un e-mail envoyé à un non-inscrit est pire que pas de lien.
+ * Le lot web qui la fusionne pose ici son adresse ; le témoin de
+ * `invitations-sent-list-resend.test.ts` vérifie qu'elle est déclarée par le web.
+ */
+export const INVITATION_OPT_OUT_PAGE: string | null = null;
+
+/** Le lien « Ne plus recevoir d'invitation » de l'e-mail, absent tant que sa page n'est pas servie. */
+export function invitationOptOutUrl(email: string, page: string | null = INVITATION_OPT_OUT_PAGE): string | undefined {
+  if (page === null) return undefined;
+  const params = new URLSearchParams(invitationOptOutLink(email));
+  return `${process.env.FRONTEND_URL || 'http://localhost:3100'}${page}?${params.toString()}`;
 }
 
 const isOptOutKeyValid = (address: string, key: string): boolean =>
