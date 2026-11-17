@@ -68,10 +68,7 @@ extension MessagePersistenceActor {
             record.updatedAt = Date()
             record.changeVersion += 1
             try record.update(db)
-            _ = try TranslationRecord
-                .filter(Column("messageLocalId") == record.localId
-                        || Column("messageServerId") == (record.serverId ?? record.localId))
-                .deleteAll(db)
+            try MessageEnrichmentLaw.erase(enrichmentsOf: record, in: db)
             try MessagePlaintextErasures.settle(localId, cause: .viewOnceOpened, origin: origin, in: db)
         }
         if let convId = affectedConversationId {

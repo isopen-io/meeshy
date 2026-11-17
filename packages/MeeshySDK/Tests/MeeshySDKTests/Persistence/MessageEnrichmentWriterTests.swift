@@ -4,7 +4,8 @@ import GRDB
 
 /// #18934 — un enrichissement reçu (transcription, pistes traduites, traductions
 /// du texte) atteint la base du compte au MÊME site, conversation ouverte ou
-/// fermée ; un message protégé n'en garde rien en clair.
+/// fermée, et s'y garde tant que le contenu qu'il double s'y garde en clair
+/// (`MessageEnrichmentLaw`).
 final class MessageEnrichmentWriterTests: XCTestCase {
 
     private static let conversationId = "conv_enrich"
@@ -73,17 +74,46 @@ final class MessageEnrichmentWriterTests: XCTestCase {
         XCTAssertEqual(try actor.translations(for: Self.messageId).map(\.translatedContent), ["Meet you at the station"])
     }
 
-    func test_apply_protectedMessages_keepNothingInClear() async throws {
-        let protections: [(String, (inout MessageRecord) -> Void)] = [
-            ("éphémère", { $0.expiresAt = Date().addingTimeInterval(3_600) }),
-            ("vue unique", { $0.effectFlags = MessageEffectFlags.viewOnce.rawValue }),
+    /// Le contenu de ces messages est dans la même base, en clair : les priver de
+    /// leurs enrichissements ne protégerait rien, et priverait le lecteur de son
+    /// Prisme hors ligne — et de la traduction d'une vue unique au moment de l'ouvrir.
+    func test_contentStillKeptInClear_keepsItsEnrichments() async throws {
+        let stillInClear: [(String, (inout MessageRecord) -> Void)] = [
+            ("éphémère vivant", { $0.expiresAt = Date().addingTimeInterval(3_600) }),
+            ("vue unique pas encore ouverte", { $0.effectFlags = MessageEffectFlags.viewOnce.rawValue }),
             ("flouté", { $0.effectFlags = MessageEffectFlags.blurred.rawValue }),
+            ("pièce à vue unique pas encore ouverte", { record in
+                var piece = MeeshyMessageAttachment(id: "att_vocal", fileName: "v.m4a", originalName: "v.m4a",
+                                                    mimeType: "audio/mp4", fileSize: 4_096, fileUrl: "https://cdn/v.m4a",
+                                                    uploadedBy: "user-x")
+                piece.isViewOnce = true
+                record.attachmentsJson = try? JSONEncoder().encode([piece])
+            }),
+        ]
+        for (label, flag) in stillInClear {
+            let actor = try makeActor()
+            try await insertVocal(into: actor, protect: flag)
+
+            try await MessageEnrichmentWriter.apply(Self.enrichment, into: actor)
+            try await MessageEnrichmentWriter.save([Self.translation], into: actor)
+
+            let attachment = try storedAttachment(in: actor)
+            XCTAssertEqual(attachment?.transcription?.text, "On se retrouve à la gare", "\(label) : la transcription se garde")
+            XCTAssertEqual(attachment?.audioTranslations?["en"]?.url, "https://cdn/v_en.m4a", "\(label) : la piste se garde")
+            XCTAssertEqual(try actor.translations(for: Self.messageId).count, 1, "\(label) : la traduction se garde")
+        }
+    }
+
+    func test_contentNoLongerKeptInClear_keepsNothing() async throws {
+        let erasures: [(String, (inout MessageRecord) -> Void)] = [
             ("chiffré de bout en bout", { $0.isEncrypted = true; $0.encryptionMode = E2EEWire.mode }),
             ("vue unique déjà ouverte", { $0.viewOnceOpenedAt = Date() }),
+            ("supprimé", { $0.deletedAt = Date() }),
+            ("éphémère échu", { $0.expiresAt = Date().addingTimeInterval(-60) }),
         ]
-        for (label, protect) in protections {
+        for (label, erase) in erasures {
             let actor = try makeActor()
-            try await insertVocal(into: actor, protect: protect)
+            try await insertVocal(into: actor, protect: erase)
 
             try await MessageEnrichmentWriter.apply(Self.enrichment, into: actor)
             try await MessageEnrichmentWriter.save([Self.translation], into: actor)
@@ -95,18 +125,22 @@ final class MessageEnrichmentWriterTests: XCTestCase {
         }
     }
 
-    func test_apply_viewOncePiece_keepsNothingInClear() async throws {
-        let actor = try makeActor()
-        try await insertVocal(into: actor) { record in
-            var piece = MeeshyMessageAttachment(id: "att_vocal", fileName: "v.m4a", originalName: "v.m4a",
-                                                mimeType: "audio/mp4", fileSize: 4_096, fileUrl: "https://cdn/v.m4a",
-                                                uploadedBy: "user-x")
-            piece.isViewOnce = true
-            record.attachmentsJson = try? JSONEncoder().encode([piece])
+    /// Effacer le contenu efface ce qui le doublait : supprimé pour tous, ou
+    /// éphémère échu (même écriture, `expired: true`).
+    func test_markDeleted_erasesTheTranslationsAndThePiecesEnrichments() async throws {
+        for expired in [false, true] {
+            let actor = try makeActor()
+            try await insertVocal(into: actor)
+            try await MessageEnrichmentWriter.apply(Self.enrichment, into: actor)
+            try await MessageEnrichmentWriter.save([Self.translation], into: actor)
+
+            try await actor.markDeleted(localId: Self.messageId, deletedAt: Date(), expired: expired)
+
+            let attachment = try storedAttachment(in: actor)
+            XCTAssertEqual(attachment?.id, "att_vocal", "la pièce reste, sans ce qui la transcrivait")
+            XCTAssertNil(attachment?.transcription, "expired=\(expired) : la transcription part avec le contenu")
+            XCTAssertNil(attachment?.audioTranslations, "expired=\(expired) : les pistes partent avec le contenu")
+            XCTAssertTrue(try actor.translations(for: Self.messageId).isEmpty, "expired=\(expired) : les traductions aussi")
         }
-
-        try await MessageEnrichmentWriter.apply(Self.enrichment, into: actor)
-
-        XCTAssertNil(try storedAttachment(in: actor)?.transcription, "une pièce à vue unique protège son message")
     }
 }

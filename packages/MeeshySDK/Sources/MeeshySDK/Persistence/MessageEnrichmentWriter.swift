@@ -50,14 +50,14 @@ public struct AttachmentEnrichment: Sendable, Equatable {
 /// 24 h). Le vocal reçu groupe fermé s'ouvrait donc dans le métro sans sa
 /// transcription ni sa piste dans la langue du lecteur.
 ///
-/// Un message PROTÉGÉ n'en garde rien en clair — éphémère, vue unique, flouté,
-/// chiffré de bout en bout, ou déjà retiré : son contenu se lit à l'écran,
-/// jamais depuis un enrichissement gravé après coup sur le disque.
+/// Ce qui s'écrit suit `MessageEnrichmentLaw` : un enrichissement se garde
+/// tant que le contenu qu'il double se garde en clair — jamais sous un message
+/// chiffré de bout en bout, une vue unique ouverte, un message supprimé ou un
+/// éphémère échu. Le REST suit la même loi (`APIMessageUpsert.persistTranslations`).
 public enum MessageEnrichmentWriter {
 
     public static func apply(_ enrichment: AttachmentEnrichment, into persistence: MessagePersistenceActor) async throws {
-        let protected = try await isProtected(messageId: enrichment.messageId, on: persistence)
-        guard !protected else { return }
+        guard try await keepsEnrichments(of: enrichment.messageId, on: persistence) else { return }
         try await persistence.applyAttachmentEnrichment(
             messageId: enrichment.messageId,
             attachmentId: enrichment.attachmentId,
@@ -69,8 +69,7 @@ public enum MessageEnrichmentWriter {
     public static func save(_ translations: [TranslationData], into persistence: MessagePersistenceActor) async throws {
         let receivedAt = Date()
         for translation in translations {
-            let protected = try await isProtected(messageId: translation.messageId, on: persistence)
-            guard !protected else { continue }
+            guard try await keepsEnrichments(of: translation.messageId, on: persistence) else { continue }
             try await persistence.saveTranslation(record(of: translation, receivedAt: receivedAt))
         }
     }
@@ -89,24 +88,9 @@ public enum MessageEnrichmentWriter {
         )
     }
 
-    static func isProtected(messageId: String, on persistence: isolated MessagePersistenceActor) throws -> Bool {
+    static func keepsEnrichments(of messageId: String, on persistence: isolated MessagePersistenceActor) throws -> Bool {
         try persistence.dbWriter.read { db in
-            try MessageRecord
-                .filter(Column("localId") == messageId || Column("serverId") == messageId)
-                .fetchOne(db)
-                .map { MessageEnrichmentWriter.protects($0) } ?? false
+            try MessageEnrichmentLaw.row(of: messageId, in: db).map { MessageEnrichmentLaw.keepsEnrichments(of: $0) } ?? true
         }
-    }
-
-    /// Les protections d'une ligne, au niveau du MESSAGE comme de ses PIÈCES.
-    static func protects(_ record: MessageRecord) -> Bool {
-        let lifecycle = MessageEffectFlags(rawValue: record.effectFlags).intersection(.lifecycleMask)
-        guard lifecycle.isEmpty, record.expiresAt == nil, record.ephemeralDuration == nil,
-              record.viewOnceOpenedAt == nil, record.deletedAt == nil,
-              !EndToEndDiskPlaintextLaw.sealsContent(isEncrypted: record.isEncrypted, encryptionMode: record.encryptionMode)
-        else { return true }
-        let attachments = record.attachmentsJson
-            .flatMap { try? JSONDecoder().decode([MeeshyMessageAttachment].self, from: $0) } ?? []
-        return attachments.contains { $0.declaresViewOnce || $0.declaresBlur }
     }
 }

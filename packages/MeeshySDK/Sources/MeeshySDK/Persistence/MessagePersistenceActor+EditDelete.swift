@@ -176,6 +176,7 @@ extension MessagePersistenceActor {
                 record.updatedAt = Date()
                 record.changeVersion += 1
                 try record.update(db)
+                try MessageEnrichmentLaw.erase(enrichmentsOf: record, in: db)
                 return record.conversationId
             }
             try db.execute(
@@ -186,6 +187,7 @@ extension MessagePersistenceActor {
                     """,
                 arguments: [deletedAt, Date(), localId, localId]
             )
+            try MessageEnrichmentLaw.erase(enrichmentsOf: record, in: db)
             try MessagePlaintextErasures.settle(localId, awaitingConfirmation: awaitingConfirmation, in: db)
             try MessagePlaintextErasures.settle(localId, cause: .deleted, origin: origin, in: db)
             try Self.followQuotes(of: record, in: db) { quote in

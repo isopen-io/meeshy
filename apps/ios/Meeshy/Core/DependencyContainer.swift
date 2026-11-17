@@ -358,8 +358,8 @@ final class DependencyContainer {
             case let .senderRepainted(event):
                 try await persistence.repaintSender(event)
             case let .attachmentEnriched(enrichment):
-                // #18934 — le même site que la conversation OUVERTE, et sa règle
-                // des messages protégés.
+                // #18934 — le même site que la conversation OUVERTE, et sa loi
+                // (`MessageEnrichmentLaw`).
                 try await MessageEnrichmentWriter.apply(enrichment, into: persistence)
             case let .translationsReceived(translations):
                 try await MessageEnrichmentWriter.save(translations, into: persistence)

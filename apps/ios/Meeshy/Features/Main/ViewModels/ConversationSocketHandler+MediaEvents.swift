@@ -248,7 +248,7 @@ extension ConversationSocketHandler {
         delegate.messageTranslations = next
     }
 
-    /// Le site que partage la conversation fermée (#18934), et sa règle des messages protégés.
+    /// Le site que partage la conversation fermée (#18934), et sa loi (`MessageEnrichmentLaw`).
     private func persistTranslations(_ events: [TranslationEvent], in persistence: MessagePersistenceActor) async {
         for event in events {
             do {
