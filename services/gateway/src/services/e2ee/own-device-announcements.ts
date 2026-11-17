@@ -22,7 +22,7 @@
  * reconnexion ne dépend ni de l'événement ni du push : ils n'en sont que l'accélération.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { readCapabilities, type E2EEOwnDevice } from '@meeshy/shared/types/e2ee-directory';
+import { e2eePlatformSchema, readCapabilities, type E2EEOwnDevice } from '@meeshy/shared/types/e2ee-directory';
 import {
   DEVICE_TRUST_CAPABILITY,
   E2EE_DEVICE_ANNOUNCEMENTS_PER_HOUR,
@@ -30,7 +30,6 @@ import {
   isComparablePlatform,
   type E2EEOwnDeviceEnrolledEventData,
 } from '@meeshy/shared/types/e2ee-device-trust';
-import { e2eePlatformSchema } from '@meeshy/shared/types/e2ee-directory';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
