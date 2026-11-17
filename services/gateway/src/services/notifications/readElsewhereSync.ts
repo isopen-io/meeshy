@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { notificationLogger } from '../../utils/logger-enhanced';
+import { guardedTimeout } from '../../utils/guarded-timer';
 import { buildBadgeSyncPush } from './badgeSyncPush';
 import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
@@ -79,14 +80,19 @@ export const BADGE_SYNC_DEBOUNCE_MS = 2_000;
  * propre, tests).
  */
 export class BadgeSyncDebouncer {
-  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly timers = new Map<string, NodeJS.Timeout>();
 
   constructor(private readonly run: (userId: string) => void) {}
 
   schedule(userId: string): void {
     const previous = this.timers.get(userId);
     if (previous !== undefined) clearTimeout(previous);
-    const timer = setTimeout(() => this.fire(userId), BADGE_SYNC_DEBOUNCE_MS);
+    const timer = guardedTimeout({
+      name: 'badge-sync-debounce',
+      run: () => this.fire(userId),
+      afterMs: BADGE_SYNC_DEBOUNCE_MS,
+      logger: notificationLogger,
+    });
     timer.unref?.();
     this.timers.set(userId, timer);
   }
