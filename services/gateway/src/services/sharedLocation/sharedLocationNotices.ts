@@ -32,25 +32,26 @@ export type SharedLocationRequestNotice = {
 /** Une demande reste lisible un jour : au-delà, elle ne dit plus rien d'actuel. */
 const REQUEST_NOTICE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const PERSON_SELECT = { id: true, username: true, displayName: true, avatar: true, ...RECIPIENT_LANG_SELECT } as const;
+const ACTOR_SELECT = { id: true, username: true, displayName: true, avatar: true } as const;
 
 type Person = {
   readonly id: string;
   readonly username: string;
   readonly displayName: string | null;
   readonly avatar: string | null;
-  readonly systemLanguage?: string | null;
-  readonly regionalLanguage?: string | null;
-  readonly customDestinationLanguage?: string | null;
-  readonly deviceLocale?: string | null;
 };
 
 const nameOf = (person: Person): string => person.displayName?.trim() || person.username;
 const actorOf = (person: Person) => ({ id: person.id, username: person.username, displayName: nameOf(person), avatar: person.avatar });
 
-async function peopleById(prisma: SharedLocationNoticesDb, ids: readonly string[]): Promise<ReadonlyMap<string, Person>> {
-  const rows = (await prisma.user.findMany({ where: { id: { in: [...new Set(ids)] } }, select: PERSON_SELECT })) as readonly Person[];
-  return new Map(rows.map((row) => [row.id, row]));
+async function actorOfId(prisma: SharedLocationNoticesDb, id: string): Promise<Person | null> {
+  return (await prisma.user.findUnique({ where: { id }, select: ACTOR_SELECT })) as Person | null;
+}
+
+/** La langue de CADRAGE du destinataire : les quatre colonnes du prisme, lues ensemble (#4642). */
+async function framingLanguageOf(prisma: SharedLocationNoticesDb, id: string): Promise<string | null> {
+  const recipient = await prisma.user.findUnique({ where: { id }, select: { id: true, ...RECIPIENT_LANG_SELECT } });
+  return recipient === null ? null : recipientLanguage(recipient, 'fr');
 }
 
 /** La durée en heures pleines (« Pendant 8 h »), sinon en minutes (« Pendant 10 min »). */
@@ -79,17 +80,14 @@ export function sharedLocationNoticesOf(params: {
 
   const started = async (notices: readonly SharedLocationStartedNotice[]): Promise<void> => {
     if (notifications === null || notices.length === 0) return;
-    const people = await peopleById(params.prisma, notices.flatMap((notice) => [notice.emitterId, notice.readerId]));
     await Promise.all(
-      notices.map((notice) => {
-        const emitter = people.get(notice.emitterId);
-        const reader = people.get(notice.readerId);
-        if (!emitter || !reader) return Promise.resolve(false);
-        const lang = recipientLanguage(reader, 'fr');
+      notices.map(async (notice) => {
+        const [emitter, lang] = await Promise.all([actorOfId(params.prisma, notice.emitterId), framingLanguageOf(params.prisma, notice.readerId)]);
+        if (!emitter || lang === null) return false;
         const metadata: LocationShareStartedNotificationMetadata = { action: 'view_profile', userId: emitter.id, durationMinutes: notice.durationMinutes };
         return quietly(() =>
           notifications.createNotification({
-            userId: reader.id,
+            userId: notice.readerId,
             type: 'location_share_started',
             priority: 'normal',
             lang,
@@ -108,15 +106,12 @@ export function sharedLocationNoticesOf(params: {
 
   const requested = async (notice: SharedLocationRequestNotice): Promise<boolean> => {
     if (notifications === null) return false;
-    const people = await peopleById(params.prisma, [notice.emitterId, notice.requesterId]);
-    const emitter = people.get(notice.emitterId);
-    const requester = people.get(notice.requesterId);
-    if (!emitter || !requester) return false;
-    const lang = recipientLanguage(emitter, 'fr');
+    const [requester, lang] = await Promise.all([actorOfId(params.prisma, notice.requesterId), framingLanguageOf(params.prisma, notice.emitterId)]);
+    if (!requester || lang === null) return false;
     const metadata: LocationShareRequestedNotificationMetadata = { action: 'view_profile', userId: requester.id, requestKind: notice.kind };
     return quietly(() =>
       notifications.createNotification({
-        userId: emitter.id,
+        userId: notice.emitterId,
         type: 'location_share_requested',
         priority: 'normal',
         lang,
