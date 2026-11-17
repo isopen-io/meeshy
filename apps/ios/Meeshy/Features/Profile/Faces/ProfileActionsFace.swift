@@ -35,6 +35,8 @@ struct ProfileActionsFace: View {
     @ObservedObject var prefs: UserPreferencesManager
 
     @Environment(\.locale) private var locale
+    /// « Carte de mes proches » (#18872) : la carte est une action, ouverte en plein écran.
+    @State private var showsNearbyMap = false
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var accent: Color { Color(hex: accentColor) }
@@ -92,9 +94,13 @@ struct ProfileActionsFace: View {
     private var sharingSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsCopy.sharingTitle)
+            MeeshyToggleRow(LocationMapCopy.nearbyOpen, systemImage: "map", accessory: .chevron, tint: accent,
+                            action: { showsNearbyMap = true })
+                .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
             BatterySharingSettingsSection(accentColor: accentColor)
             PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
         }
+        .fullScreenCover(isPresented: $showsNearbyMap) { NearbyMapScreen() }
     }
 
     // MARK: - Qui me voit

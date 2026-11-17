@@ -71,6 +71,7 @@ public struct UserProfileSheet: View {
     @Environment(\.profileGameSection) var gameSection
     @Environment(\.profileRelationSection) var relationSection
     @Environment(\.profileRelationPill) var relationPill
+    @Environment(\.profileLocationMap) var locationMap
     @Environment(\.profileLoading) private var injectedProfileLoading
     @Environment(\.dismiss) var dismiss
     /// La face lue (loi 1, #18870) ; la Vitrine d'abord.

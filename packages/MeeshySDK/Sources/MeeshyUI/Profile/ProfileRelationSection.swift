@@ -95,3 +95,45 @@ public struct ProfileConnectedBadge: View {
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
     }
 }
+
+// MARK: - La carte comme action (#18872, loi 6)
+
+/// Ce que la fiche remet à la carte : qui, et ce que la carte peut rendre à la fiche (écrire, appeler).
+public struct ProfileLocationMapRequest {
+    public let userId: String
+    public let displayName: String
+    public let onWrite: (() -> Void)?
+    public let onCall: (() -> Void)?
+
+    public init(userId: String, displayName: String, onWrite: (() -> Void)?, onCall: (() -> Void)?) {
+        self.userId = userId
+        self.displayName = displayName
+        self.onWrite = onWrite
+        self.onCall = onCall
+    }
+}
+
+/// Ce que l'app fournit : si la carte d'une personne a quelque chose à montrer (une position servie), et la carte
+/// elle-même. Sans emplacement, la fiche ne propose pas « Carte » : le SDK ne connaît ni positions ni magasin.
+public struct ProfileLocationMap {
+    public let isOffered: (_ userId: String) -> Bool
+    public let destination: (ProfileLocationMapRequest) -> AnyView
+
+    public init(isOffered: @escaping (_ userId: String) -> Bool,
+                destination: @escaping (ProfileLocationMapRequest) -> AnyView) {
+        self.isOffered = isOffered
+        self.destination = destination
+    }
+}
+
+private struct ProfileLocationMapKey: EnvironmentKey {
+    static let defaultValue: ProfileLocationMap? = nil
+}
+
+public extension EnvironmentValues {
+    /// La carte des positions d'une fiche ; `nil` : la face Actions ne propose pas « Carte ».
+    var profileLocationMap: ProfileLocationMap? {
+        get { self[ProfileLocationMapKey.self] }
+        set { self[ProfileLocationMapKey.self] = newValue }
+    }
+}

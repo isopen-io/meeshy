@@ -53,9 +53,21 @@ extension UserProfileSheet {
                     labeledAction(.call) { requestCall(isVideo: false) }
                     labeledAction(.video) { requestCall(isVideo: true) }
                 }
+                if let locationMap, let request = locationMapRequest, locationMap.isOffered(request.userId) {
+                    ProfileLocationMapAction(map: locationMap, request: request, tint: accentTint)
+                }
             }
             .disabled(isInteractionDisabled)
         }
+    }
+
+    // MARK: - La carte comme action (#18872)
+
+    private var locationMapRequest: ProfileLocationMapRequest? {
+        guard let userId = resolvedUserId, !userId.isEmpty, !isCurrentUser else { return nil }
+        return ProfileLocationMapRequest(userId: userId, displayName: displayUser.resolvedDisplayName,
+                                         onWrite: isInteractionDisabled ? nil : { openConversation() },
+                                         onCall: offersCall ? { requestCall(isVideo: false) } : nil)
     }
 
     static var writeRequestHint: String {
@@ -160,27 +172,8 @@ extension UserProfileSheet {
     // MARK: - Bloquer, signaler
 
     private var safetySection: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            if isBlocked {
-                MeeshyButton(
-                    String(localized: "profile.action.unblockUser", defaultValue: "Débloquer l'utilisateur", bundle: .module),
-                    systemImage: "hand.raised.slash", kind: .outline, width: .fill,
-                    action: { Task { await unblockUser() } }
-                )
-            } else {
-                MeeshyButton(
-                    String(localized: "profile.action.blockUser", defaultValue: "Bloquer cet utilisateur", bundle: .module),
-                    systemImage: ProfileRelationAction.block.systemImage, kind: .danger, width: .fill, isDestructive: true,
-                    action: { Task { await blockUser() } }
-                )
-            }
-            MeeshyButton(
-                String(localized: "profile.action.report", defaultValue: "Signaler", bundle: .module),
-                systemImage: ProfileRelationAction.report.systemImage, kind: .danger, width: .fill, isDestructive: true,
-                action: { showReportSheet = true }
-            )
-        }
-        .padding(.top, MeeshySpacing.md)
+        ProfileSafetyButtons(isBlocked: isBlocked, onUnblock: { Task { await unblockUser() } },
+                             onBlock: { Task { await blockUser() } }, onReport: { showReportSheet = true })
     }
 
     private func submitReport(reportType: String) {

@@ -73,13 +73,15 @@ enum SharedLocationsLiveHolder {
 
 extension SharedLocationsMapViewModel {
     convenience init() {
+        let live = SharedLocationsLiveHolder.live()
         self.init(
-            live: SharedLocationsLiveHolder.live(),
+            live: live,
             people: CirclePeopleDirectory.shared,
             presence: { PresenceManager.shared.knownPresenceState(for: $0) },
             presenceRefresh: PresenceManager.shared.refreshSignal.$presenceVersion
                 .map { _ in () }
-                .eraseToAnyPublisher()
+                .eraseToAnyPublisher(),
+            endings: SharedLocationEndingsLog.log(for: live).$endings.eraseToAnyPublisher()
         )
     }
 }

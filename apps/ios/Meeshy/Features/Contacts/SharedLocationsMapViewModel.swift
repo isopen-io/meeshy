@@ -14,6 +14,10 @@ struct SharedLocationPin: Identifiable, Equatable {
     let initials: String
     let presence: PresenceState?
     let deadline: Date
+    var avatarURL: String? = nil
+    /// Le cercle servi avec la position (#17966) ; `nil` : non servi, la carte dessine un marqueur neutre.
+    var circle: RelationLevel? = nil
+    var updatedAt: Date = .distantPast
 
     var detail: String {
         let until = deadline.formatted(date: .omitted, time: .shortened)
@@ -35,6 +39,16 @@ struct SharedLocationPin: Identifiable, Equatable {
     }
 }
 
+/// Un partage qui vient de s'arrêter : qui, de quel cercle, depuis quand. Jamais une position.
+struct SharedLocationEndedPin: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let initials: String
+    let avatarURL: String?
+    let circle: RelationLevel?
+    let endedAt: Date
+}
+
 /// LA CARTE DES POSITIONS QU'ON ME PARTAGE, SUR iOS (#16983 ; iso de la carte web `shared-locations-map.tsx`, #16984).
 ///
 /// - Elle PROJETTE le magasin du SDK (`SharedLocationsLive`) : le serveur a déjà tronqué chaque position à la précision
@@ -48,6 +62,8 @@ struct SharedLocationPin: Identifiable, Equatable {
 final class SharedLocationsMapViewModel: ObservableObject {
 
     @Published private(set) var pins: [SharedLocationPin] = []
+    /// Les partages qui viennent de s'arrêter, « pas sur la carte » (#18872), du plus récent au plus ancien.
+    @Published private(set) var ended: [SharedLocationEndedPin] = []
 
     private let live: SharedLocationsLive
     private let people: CirclePeopleResolving
@@ -64,6 +80,7 @@ final class SharedLocationsMapViewModel: ObservableObject {
         people: CirclePeopleResolving,
         presence: @escaping (String) -> PresenceState?,
         presenceRefresh: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher(),
+        endings: AnyPublisher<SharedLocationEndings, Never> = Empty<SharedLocationEndings, Never>().eraseToAnyPublisher(),
         calm: Duration = .milliseconds(300)
     ) {
         self.live = live
@@ -76,6 +93,14 @@ final class SharedLocationsMapViewModel: ObservableObject {
         presenceRefresh
             .sink { [weak self] _ in self?.repaintPresence() }
             .store(in: &cancellables)
+        endings
+            .sink { [weak self] endings in self?.projectEnded(endings) }
+            .store(in: &cancellables)
+    }
+
+    /// La position servie d'une personne, si elle me la partage en ce moment.
+    func pin(for userId: String) -> SharedLocationPin? {
+        pins.first { $0.id == userId }
     }
 
     /// À l'apparition : le monde fait foi, une fin survenue carte fermée s'efface partout.
@@ -112,11 +137,27 @@ final class SharedLocationsMapViewModel: ObservableObject {
         project(live.byUser)
     }
 
+    private var lastEndings = SharedLocationEndings()
+
+    private func projectEnded(_ endings: SharedLocationEndings) {
+        lastEndings = endings
+        ended = endings.ordered.map { item in
+            let person = known[item.id]
+            let name = person?.name ?? String(localized: "circles.locations.someone", defaultValue: "Quelqu'un", bundle: .main)
+            return SharedLocationEndedPin(id: item.id, name: name, initials: Self.initials(of: name),
+                                          avatarURL: person?.avatarURL, circle: endings.circles[item.id], endedAt: item.endedAt)
+        }
+        let unnamed = endings.endedAt.keys.filter { known[$0] == nil }
+        guard !unnamed.isEmpty else { return }
+        Task { [weak self] in await self?.name(Array(unnamed)) }
+    }
+
     private func name(_ ids: [String]) async {
         let found = await people.people(for: ids)
         guard !found.isEmpty else { return }
         known.merge(found) { _, new in new }
         project(live.byUser)
+        projectEnded(lastEndings)
     }
 
     private func pin(_ userId: String, _ entry: SharedLocationEntry) -> SharedLocationPin {
@@ -132,7 +173,10 @@ final class SharedLocationsMapViewModel: ObservableObject {
             name: name,
             initials: Self.initials(of: name),
             presence: served == .offline ? nil : served,
-            deadline: entry.deadline
+            deadline: entry.deadline,
+            avatarURL: known[userId]?.avatarURL,
+            circle: entry.circle,
+            updatedAt: entry.updatedAt
         )
     }
 

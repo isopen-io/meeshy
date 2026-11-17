@@ -25,10 +25,8 @@ struct ProfileShareLocationRow: View {
             .background(MeeshyColors.indigo500.opacity(MeeshyOpacity.subtle))
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .sheet(isPresented: $choosing) {
-                ShareLocationChoiceSheet(displayName: displayName) { precision, duration in
-                    choosing = false
-                    Task { await share(precision: precision, duration: duration) }
-                }
+                ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: nil)],
+                                     center: center)
             }
     }
 
@@ -73,14 +71,6 @@ struct ProfileShareLocationRow: View {
         }
     }
 
-    private func share(precision: SharedLocationPrecision, duration: SharedLocationShareDuration) async {
-        guard let problem = await center.share(with: userId, precision: precision, duration: duration) else {
-            HapticFeedback.success()
-            return
-        }
-        FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
-    }
-
     private func stop() async {
         switch await center.stopSharing(with: userId) {
         case nil:
@@ -90,58 +80,6 @@ struct ProfileShareLocationRow: View {
         case let problem?:
             FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
         }
-    }
-}
-
-/// La feuille du choix : durée et précision, la ville par défaut (on ouvre plus, jamais l'inverse).
-struct ShareLocationChoiceSheet: View {
-    let displayName: String
-    let onShare: (SharedLocationPrecision, SharedLocationShareDuration) -> Void
-    @State private var precision: SharedLocationPrecision = .city
-    @State private var duration: SharedLocationShareDuration = .oneHour
-    @State private var openNoteID: String?
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Picker(ShareLocationWording.durationTitle, selection: $duration) {
-                        ForEach(SharedLocationShareDuration.allCases, id: \.self) { Text(ShareLocationWording.duration($0)).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text(ShareLocationWording.durationTitle)
-                }
-                Section {
-                    Picker(ShareLocationWording.precisionTitle, selection: $precision) {
-                        ForEach([SharedLocationPrecision.city, .neighborhood, .exact], id: \.self) {
-                            Text(ShareLocationWording.precision($0)).tag($0)
-                        }
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                } header: {
-                    Text(ShareLocationWording.precisionTitle)
-                } footer: {
-                    MeeshyInfoNoted(note: ShareLocationWording.explainNote, openNoteID: $openNoteID) {
-                        Text(ShareLocationWording.explain(name: displayName))
-                    }
-                }
-            }
-            .navigationTitle(ShareLocationWording.sheetTitle(name: displayName))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(ShareLocationWording.confirm) { onShare(precision, duration) }
-                        .accessibilityIdentifier("sharedLocation.confirm")
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
     }
 }
 

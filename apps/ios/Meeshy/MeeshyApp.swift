@@ -535,6 +535,13 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName in
                 ProfileSlot.view(.pill, userId: userId, displayName: displayName)
             })
+            .environment(\.profileLocationMap, ProfileLocationMap(
+                isOffered: { userId in SharedLocationsLiveHolder.live().byUser[userId] != nil },
+                destination: { request in
+                    ProfileSlot.view(.locationMap, userId: request.userId, displayName: request.displayName,
+                                     mapRequest: request)
+                }
+            ))
             .environment(\.profileLoading, LiveProfileLoading())
             .environment(\.avatarListeningSource, ListeningCenter.shared.source)
     }
@@ -544,10 +551,12 @@ struct ProfileSheetEnvironment: ViewModifier {
 /// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case banner, relation, pill
+    case banner, relation, pill, locationMap
 
-    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) -> AnyView {
-        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked))
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false),
+                     mapRequest: ProfileLocationMapRequest? = nil) -> AnyView {
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked,
+                                   mapRequest: mapRequest))
     }
 }
 
@@ -556,6 +565,7 @@ private struct ProfileSlotContent: View {
     let userId: String
     let displayName: String
     @Binding var linked: Bool
+    let mapRequest: ProfileLocationMapRequest?
 
     var body: some View {
         switch slot {
@@ -567,6 +577,9 @@ private struct ProfileSlotContent: View {
         case .pill:
             ProfileRelationPillView(userId: userId, displayName: displayName)
                 .id(userId)
+        case .locationMap:
+            PersonLocationMapScreen(userId: userId, displayName: displayName,
+                                    onWrite: mapRequest?.onWrite, onCall: mapRequest?.onCall)
         }
     }
 }
