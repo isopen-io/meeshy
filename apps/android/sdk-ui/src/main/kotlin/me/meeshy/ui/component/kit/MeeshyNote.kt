@@ -23,14 +23,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -191,19 +192,19 @@ private fun NoteLead(lead: MeeshyNoteLead, values: MeeshyNoteValues, color: Colo
         MeeshyNoteLead.None -> Unit
         is MeeshyNoteLead.Icon -> Icon(lead.icon, contentDescription = null, tint = color, modifier = Modifier.size(values.glyphDp.dp).decorative())
         MeeshyNoteLead.Dot, MeeshyNoteLead.Pulse -> {
-            val alpha = if (values.pulses) {
+            val alpha: State<Float>? = if (values.pulses) {
                 rememberInfiniteTransition(label = "note-dot").animateFloat(
                     initialValue = 1f,
                     targetValue = LOW_ALPHA,
                     animationSpec = infiniteRepeatable(tween(MeeshyMotionRecipe.PULSE_MILLIS, easing = LinearEasing), RepeatMode.Reverse),
                     label = "note-dot-alpha",
-                ).value
+                )
             } else {
-                1f
+                null
             }
             Box(Modifier.size(MeeshyNoteRecipe.DOT_DP.dp * HALO_SCALE).decorative(), contentAlignment = Alignment.Center) {
                 if (values.showsHalo) Box(Modifier.size(MeeshyNoteRecipe.DOT_DP.dp * HALO_SCALE).background(color.copy(alpha = HALO_ALPHA), CircleShape))
-                Box(Modifier.size(MeeshyNoteRecipe.DOT_DP.dp).alpha(alpha).background(color, CircleShape))
+                Box(Modifier.size(MeeshyNoteRecipe.DOT_DP.dp).graphicsLayer { this.alpha = alpha?.value ?: 1f }.background(color, CircleShape))
             }
         }
     }
