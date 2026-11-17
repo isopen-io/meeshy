@@ -4,7 +4,7 @@ import { useStore } from 'zustand/react';
 import type { ConversationCard } from '@meeshy/shared/types/conversation-card';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
-import { endRevokedSession } from '@/lib/api/account-caches';
+import { endRevokedSession } from '@/lib/api/account-end';
 import { publicWebOrigin } from '@/lib/links/public-origin';
 import { cardWithMembership, conversationCardQueryKey, conversationCardsFilter, leaveConversation, loadConversationCard } from '@/lib/api/conversation-card';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';

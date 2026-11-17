@@ -184,7 +184,18 @@ export type HttpRequest = {
   /** Transmis à `fetch` : la requête survit au déchargement de la page
    * (`pagehide`), pour un dernier appel qu'on n'attendra pas (#10474). */
   readonly keepalive?: boolean;
+  /**
+   * L'IDENTITÉ QUI A LANCÉ L'OPÉRATION (audit #19352, X1) — une opération en
+   * plusieurs requêtes (téléverser, puis envoyer, puis publier) ne se termine
+   * jamais sous un autre compte : si l'identité courante n'est plus celle-ci
+   * au moment d'ÉMETTRE, rien ne part et l'appel rend
+   * {@link IDENTITY_CHANGED}. Posée par `boundToIdentity` (`owned-deps.ts`).
+   */
+  readonly expectedIdentity?: string | null;
 };
+
+/** Le refus d'émettre une requête dont l'opération appartient à une autre identité. */
+export const IDENTITY_CHANGED = 'IDENTITY_CHANGED';
 
 export type HttpTransportOptions = {
   readonly base: string;
@@ -380,7 +391,10 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  async function request<T>(req: HttpRequest): Promise<ApiResult<T>> {
+  async function attempt<T>(req: HttpRequest, mayReplay: boolean): Promise<ApiResult<T>> {
+    if (req.expectedIdentity !== undefined && options.identity !== undefined && options.identity() !== req.expectedIdentity) {
+      return { ok: false, status: 0, error: IDENTITY_CHANGED, code: IDENTITY_CHANGED };
+    }
     const url = `${options.base}${req.path}`;
     const locale = options.deviceLocale?.() ?? null;
     const forced = req.credential !== undefined;
@@ -453,7 +467,11 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
        ferme jamais la session de B ouverte entre-temps. Ni de la session
        courante du MÊME compte, si elle n'a pas présenté ce crédential : l'onglet
        a repris entre-temps celle que l'appareil tient (#19132). */
-    const credentialChanged = JSON.stringify(options.credential?.() ?? null) !== JSON.stringify(credential);
+    const followed = options.credential?.() ?? null;
+    const credentialChanged = JSON.stringify(followed) !== JSON.stringify(credential);
+    /* Le MÊME compte tient désormais un autre jeton (audit #19352) : la requête,
+       que la passerelle a refusée avant de l'exécuter, repart une fois sous lui. */
+    if (unauthorized && presentsIdentity && !identityChanged() && credentialChanged && followed !== null && mayReplay) return attempt<T>(req, false);
     if (unauthorized && presentsIdentity && !identityChanged() && !credentialChanged) options.onUnauthorized?.(refusalOf(envelope));
     if (deletedAccount !== null) options.onAccountDeleted?.(deletedAccount);
 
@@ -494,6 +512,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     };
   }
 
+  const request = <T,>(req: HttpRequest): Promise<ApiResult<T>> => attempt<T>(req, true);
   const transport = (({ method, path, body }) => request({ method, path, body })) as HttpTransport;
   transport.request = request;
   return transport;

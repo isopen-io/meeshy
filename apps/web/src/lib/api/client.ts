@@ -5,12 +5,11 @@ import { apiConfig } from './config';
 import { createHttpTransport, type ApiFailure, type ApiResult, type Credential, type HttpTransport } from './http';
 import { navigate } from '../router';
 
-import { endRevokedSession } from './account-caches';
 import { retireDeletedAccountLater } from './account-deleted';
 import { endGuestAccess } from './guest-access-end';
 import { VIEWER_ID } from './fixtures-base';
 import { ownerCredentialOf, ownerScopeOf, type OwnerCredential } from './owner-session';
-import { sessionIdentityKey, sessionStore, type SessionState } from './session';
+import { sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
 
 /**
  * LE TRANSPORT DE PRODUCTION — l'UNIQUE instance que toute l'application
@@ -66,6 +65,9 @@ export function currentDeviceLocale(): string | null {
  * sont pas (le client TUS, `post-media-upload.ts`). */
 export const currentCredential = (): Credential | null => credentialFromSession(sessionStore.getState().session);
 
+/** QUI parle à cet instant — la clé que le transport relit au départ et à l'arrivée de chaque requête (#8674). */
+export const currentIdentity = (): string | null => sessionIdentityKey(sessionStore.getState().session);
+
 /**
  * LE JETON DU PROPRIÉTAIRE D'UNE ATTENTE (#9743, `owner-session.ts`) — la
  * session lue en UN instantané, ou, sur fixtures (ni session ni réseau : ce
@@ -83,6 +85,11 @@ export function sessionEmailUnproven(session: SessionState): boolean {
   return session.status === 'authenticated' && session.user.emailUnproven === true;
 }
 
+/** La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte rien. */
+const endSessionOf = (store: SessionStoreApi): void => {
+  void import('./account-end').then(({ endRevokedSession }) => endRevokedSession(store));
+};
+
 /** Enveloppé par la garde de l'e-mail (#8365) : un refus `EMAIL_NOT_VERIFIED`
  * ouvre la validation et la requête repart au code validé
  * (`lib/activation/email-gated-transport.ts`). */
@@ -90,11 +97,11 @@ export const httpTransport: HttpTransport = withEmailGate(
   createHttpTransport({
     base: apiConfig.base,
     credential: currentCredential,
-    identity: () => sessionIdentityKey(sessionStore.getState().session),
+    identity: currentIdentity,
     deviceLocale: currentDeviceLocale,
-    onUnauthorized: () => endRevokedSession(sessionStore),
+    onUnauthorized: () => endSessionOf(sessionStore),
     onAccountDeleted: retireDeletedAccountLater,
-    onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
+    onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endSessionOf, navigate }),
   }),
   { ask: emailGate.ask, emailUnproven: () => sessionEmailUnproven(sessionStore.getState().session) },
 );

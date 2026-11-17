@@ -2,13 +2,8 @@ import { afterEach, describe, expect, test } from 'bun:test';
 
 import { createCallJournalStore } from '../calls/call-network-journal-store';
 
-import {
-  ACCOUNT_CACHE_PREFIX,
-  MAX_SHELVED_ACCOUNTS,
-  createAccountCacheShelf,
-  endRevokedSession,
-  forgetAccountCaches,
-} from './account-caches';
+import { ACCOUNT_CACHE_PREFIX, MAX_SHELVED_ACCOUNTS, createAccountCacheShelf } from './account-caches';
+import { endRevokedSession, forgetAccountCaches } from './account-end';
 import { createAppQueryClient, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore, type SessionStoreApi } from './session';

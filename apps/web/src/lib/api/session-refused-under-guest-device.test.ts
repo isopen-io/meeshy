@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { createAccountCacheShelf, endRevokedSession, forgetAccountCaches, setDeviceFollower } from './account-caches';
+import { createAccountCacheShelf } from './account-caches';
+import { endRevokedSession, forgetAccountCaches, setDeviceFollower } from './account-end';
 import { createSessionStore, type SessionStorage, type SessionUser } from './session';
 import { followDeviceSession, watchDeviceSession } from './session-follow';
 
