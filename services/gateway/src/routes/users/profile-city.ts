@@ -3,6 +3,7 @@ import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { isCityCircle, servedCity } from '@meeshy/shared/utils/profile-city';
 import { readProfileCircleView } from '../../services/relations/profileCircleView';
 import { profileViewerId } from './profile-block-gate';
+import { logError } from '../../utils/logger';
 
 type CityRow = { id: string; city?: string | null; cityCircle?: string | null };
 
@@ -12,8 +13,9 @@ type CityRow = { id: string; city?: string | null; cityCircle?: string | null };
  * `city` et `cityCircle` sont toujours RETIRÉS de la ligne, puis `city` n'est reposé que si le
  * cercle choisi par la personne le permet ; `cityCircle` (le réglage) ne part qu'à son
  * propriétaire. Un cercle PUBLIC ne demande aucune lecture de relation, et un lecteur sans
- * compte n'a jamais mieux que le niveau PUBLIC. Une lecture de relation qui échoue lève :
- * l'appelant ferme, la ville ne part pas.
+ * compte n'a jamais mieux que le niveau PUBLIC. Une lecture de relation qui échoue ferme la
+ * VILLE seule : elle ne part pas, et la fiche reste servie (une donnée facultative ne fait pas
+ * tomber la porte qui la porte).
  */
 export async function withServedCity<T extends CityRow>(
   fastify: FastifyInstance,
@@ -24,15 +26,28 @@ export async function withServedCity<T extends CityRow>(
   const viewerId = profileViewerId(request);
   const isSelf = viewerId !== undefined && viewerId === String(row.id);
   const needsRelation = !isSelf && viewerId !== undefined && isCityCircle(cityCircle) && cityCircle !== 'PUBLIC' && !!city;
-  const viewerLevel: RelationLevel = needsRelation
-    ? (await readProfileCircleView(fastify.prisma, { viewerId, targetId: String(row.id) })).level
+  const viewerLevel: RelationLevel | null = needsRelation
+    ? await readViewerLevel(fastify, { viewerId, targetId: String(row.id) })
     : 'PUBLIC';
-  const served = servedCity({ city, cityCircle }, { isSelf, viewerLevel });
+  const served = viewerLevel === null ? null : servedCity({ city, cityCircle }, { isSelf, viewerLevel });
   return {
     ...rest,
     ...(served === null ? {} : { city: served }),
     ...(isSelf && 'cityCircle' in row ? { cityCircle: cityCircle ?? null } : {}),
   };
+}
+
+/** Le niveau du lecteur, ou `null` quand la loi d'accès ne répond pas : la ville se ferme alors. */
+async function readViewerLevel(
+  fastify: FastifyInstance,
+  pair: { readonly viewerId: string; readonly targetId: string },
+): Promise<RelationLevel | null> {
+  try {
+    return (await readProfileCircleView(fastify.prisma, pair)).level;
+  } catch (error) {
+    logError(fastify.log, '[PROFILE_CITY] relation read failed, city withheld', error);
+    return null;
+  }
 }
 
 /** « Voir comme » : la ville telle que la lirait un lecteur de ce cercle. */

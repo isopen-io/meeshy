@@ -85,6 +85,7 @@ function prismaDouble({ niveau, avecValeurs, cityCircle = 'FRIEND' }: Cas) {
     },
     userRelation: { findUnique: jest.fn<any>(async () => row), findMany: jest.fn<any>(async () => [row]) },
     friendRequest: { findFirst: jest.fn<any>(async () => null), findMany: jest.fn<any>(async () => []) },
+    communityMember: { findMany: jest.fn<any>(async () => []) },
   };
 }
 

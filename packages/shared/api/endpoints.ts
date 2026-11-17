@@ -85,7 +85,6 @@ import * as uGroup from './endpoints/u.js';
 import * as uploadsGroup from './endpoints/uploads.js';
 import * as userGroup from './endpoints/user.js';
 import * as userPreferencesGroup from './endpoints/user-preferences.js';
-import * as usernameGroup from './endpoints/username.js';
 import * as usersGroup from './endpoints/users.js';
 import * as voiceGroup from './endpoints/voice.js';
 import * as worldGroup from './endpoints/world.js';
@@ -152,7 +151,6 @@ export const API_ENDPOINTS = {
   uploads: uploadsGroup,
   user: userGroup,
   userPreferences: userPreferencesGroup,
-  username: usernameGroup,
   users: usersGroup,
   voice: voiceGroup,
   world: worldGroup,
@@ -170,7 +168,6 @@ export const API_PATH_TEMPLATES = [
   '/api/socketio/disconnect-user',
   '/api/socketio/stats',
   '/api/user/deleted-conversations',
-  '/api/v1/@:username',
   '/api/v1/account/deletion/resolve',
   '/api/v1/admin/agent/archetypes',
   '/api/v1/admin/agent/configs',
@@ -847,7 +844,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/socketio/disconnect-user': ['POST'],
   '/api/socketio/stats': ['GET'],
   '/api/user/deleted-conversations': ['GET'],
-  '/api/v1/@:username': ['GET'],
   '/api/v1/account/deletion/resolve': ['POST'],
   '/api/v1/admin/agent/archetypes': ['GET'],
   '/api/v1/admin/agent/configs': ['GET'],

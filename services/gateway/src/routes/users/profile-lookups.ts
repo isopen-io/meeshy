@@ -12,7 +12,7 @@ import { depreciee, annoncerDepreciation, dateDeRetrait, type AdresseDepreciee }
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UsernameParams } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest } from '../../utils/response';
-import { gateProfilePresence, getOptionalAuth } from './presence-gate';
+import { getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsAroundViewer } from '../../services/ContactDirectoryService';
 import { undiscoverableAmong } from '../../services/profile-discoverability';
 import { parseFieldList, restrictFields, type FieldSet } from '../../utils/sparse-fieldset';
@@ -21,7 +21,7 @@ import { createCustomRateLimiter } from '../../utils/rate-limiter';
 import {
   publicProfileSchema,
   publicUserSelect,
-  buildPublicProfile,
+  composePublicProfile,
   servirProfilPublic,
 } from './public-profile';
 import { apiPath } from '@meeshy/shared/api/prefix';
@@ -354,7 +354,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
+      return sendSuccess(reply, await composePublicProfile(fastify, request, user));
     } catch (error) {
       logError(fastify.log, 'Get user by email error:', error);
       return sendInternalError(reply, 'Internal server error');
@@ -488,7 +488,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
+      return sendSuccess(reply, await composePublicProfile(fastify, request, user));
     } catch (error) {
       logError(fastify.log, 'Get user by phone error:', error);
       return sendInternalError(reply, 'Internal server error');

@@ -318,8 +318,21 @@ export async function servirProfilPublic(
     return null;
   }
 
-  // Garder D'ABORD, composer ensuite : la garde lit `isOnline`,
-  // `lastActiveAt` et `deactivatedAt` sur la ligne chargée.
+  return (await composePublicProfile(fastify, request, user)) as unknown as Record<string, unknown>;
+}
+
+/**
+ * La ligne chargée par `publicUserSelect` devient la fiche SERVIE à ce lecteur — le site UNIQUE
+ * des portes de profil (fiche, `/users/email/:email`, `/users/phone/:phone`).
+ *
+ * Garder D'ABORD, composer ensuite : la garde de présence lit `isOnline`, `lastActiveAt` et
+ * `deactivatedAt` sur la ligne chargée, puis la ville suit le cercle choisi par son propriétaire
+ * (#18862). Une porte qui composerait sans ce site servirait `city` et `cityCircle` bruts : le
+ * `select` les charge et `publicProfileSchema` les déclare.
+ */
+export async function composePublicProfile<
+  T extends Parameters<typeof gateProfilePresence>[2] & { id: string; city?: string | null; cityCircle?: string | null; voiceModel?: VoiceModelFields | null },
+>(fastify: FastifyInstance, request: FastifyRequest, user: T) {
   const gated = await gateProfilePresence(fastify, request, user);
-  return buildPublicProfile(await withServedCity(fastify, request, gated)) as unknown as Record<string, unknown>;
+  return buildPublicProfile(await withServedCity(fastify, request, gated));
 }
