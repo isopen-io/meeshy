@@ -29,6 +29,7 @@ import { createE2EEEnvelopeRelay, type E2EEEnvelopeRelay } from '../services/e2e
 import { E2eeRelayRefusedError } from '../services/e2ee/e2ee-relay-errors';
 import { libsignalSignatureVerifier, loadLibsignal } from '../services/e2ee/signature-verifier';
 import { mayReadKeysOf } from '../services/e2ee/key-access';
+import { createKeyReservationBudget, type KeyReservationBudget } from '../services/e2ee/key-reservation-budget';
 import { joinSessionSocketsToDeviceRoom } from '../services/e2ee/device-room';
 import { currentE2EEIO } from '../services/e2ee/envelope-delivery';
 import { invalidateSession } from '../services/SessionService';
@@ -78,6 +79,11 @@ export type E2EERouteDeps = {
   readonly directory: E2EEDirectory;
   readonly relay: E2EEEnvelopeRelay;
   readonly mayReadKeysOf: (requesterUserId: string, targetUserId: string) => Promise<boolean>;
+  /**
+   * Les budgets de réservation de bundles, par demandeur et par cible (GW-01, #18906).
+   * Absent : un budget en mémoire, propre à cet enregistrement — jamais aucun budget.
+   */
+  readonly keyBudget?: KeyReservationBudget;
   /**
    * Retirer un appareil depuis une AUTRE session ferme aussi la sienne, par défaut (#13013) :
    * sans quoi un appareil volé, toujours connecté, se réenrôle aussitôt sous une
@@ -175,6 +181,7 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
 
 function registerKeyRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): void {
   const options = { preValidation: [deps.auth], config: { rateLimit: bundleRateLimit } };
+  const keyBudget = deps.keyBudget ?? createKeyReservationBudget();
 
   const authorizedTarget = async (request: FastifyRequest, reply: FastifyReply, caller: Caller): Promise<string | null> => {
     const target = parsedOr400(reply, objectIdParam.safeParse((request.params as { userId?: string }).userId));
@@ -191,7 +198,17 @@ function registerKeyRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): void 
     const raw = (request.query as { deviceIds?: string }).deviceIds;
     const deviceIds = raw === undefined ? undefined : parsedOr400(reply, deviceIdsQuery.safeParse(raw));
     if (deviceIds === null) return;
-    const devices = await deps.directory.reserveBundles({ requesterUserId: caller.userId, targetUserId: target, deviceIds });
+    // GW-01 (#18906) — le demandeur patiente au-delà de son budget ; au-delà de celui
+    // de la cible, le bundle est de dernier recours, et la cible reste joignable.
+    const budget = await keyBudget.spend({ requesterUserId: caller.userId, targetUserId: target });
+    if (!budget.requesterAllowed) {
+      logger.warn('SECURITY: e2ee key reservation budget exceeded', { requesterUserId: caller.userId });
+      reply.header('Retry-After', String(budget.retryAfter));
+      return sendError(reply, 429, 'Trop de demandes de clés. Patientez avant de réessayer.', { code: E2EE_ERROR_CODES.KEYS_BUDGET_EXCEEDED });
+    }
+    const devices = await deps.directory.reserveBundles({
+      requesterUserId: caller.userId, targetUserId: target, deviceIds, spendOneTimeKeys: budget.spendOneTimeKeys,
+    });
     return sendSuccess(reply, { userId: target, devices });
   }));
 
@@ -232,6 +249,7 @@ export default async function e2eeRoutes(fastify: FastifyInstance): Promise<void
     directory: createE2EEDirectory({ prisma, verifier: libsignalSignatureVerifier(loadLibsignal) }),
     relay: createE2EEEnvelopeRelay({ prisma }),
     mayReadKeysOf: (requester, target) => mayReadKeysOf(prisma, requester, target),
+    keyBudget: createKeyReservationBudget(fastify.redis ?? undefined),
     onEnrolled: (enrolled) => joinSessionSocketsToDeviceRoom(currentE2EEIO(), enrolled),
     closeSession: createRetiredDeviceSessionCloser({
       invalidate: (sessionId) => invalidateSession(sessionId, 'user_revoked'),
