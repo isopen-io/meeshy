@@ -29,7 +29,7 @@ const RANK: Readonly<Record<RelationLevel, number>> = {
   BLOOD: 5,
 };
 
-const isRelationLevel = (value: unknown): value is RelationLevel =>
+export const isRelationLevel = (value: unknown): value is RelationLevel =>
   typeof value === 'string' && Object.prototype.hasOwnProperty.call(RANK, value);
 
 export const parseRelationLevel = (value: unknown): RelationLevel => (isRelationLevel(value) ? value : 'PUBLIC');
@@ -91,6 +91,9 @@ export const relationLevelBelow = (level: RelationRequestLevel): RelationLevel =
 /** `candidate` retient-il un lien que `removed` fondait ? Vrai quand il vise le même cran ou un cran au-dessus. */
 export const requestLevelSustains = (candidate: RelationRequestLevel, removed: RelationRequestLevel): boolean =>
   RANK[candidate] >= RANK[removed];
+
+/** Cet accord atteint-il ce cran ? (la fiche par cercle dit lequel des deux côtés manque pour monter, #18861) */
+export const grantReaches = (granted: RelationLevel, rung: RelationRequestLevel): boolean => RANK[granted] >= RANK[rung];
 
 export type RelationPairKey = { readonly userLowId: string; readonly userHighId: string };
 
