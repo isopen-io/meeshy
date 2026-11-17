@@ -24,6 +24,9 @@ jest.mock('../../../utils/sanitize', () => ({
       input?.replace(/[^a-zA-Z0-9_.-]/g, '').substring(0, 50) || ''
     ),
     sanitizeURL: jest.fn((input: string) => input || null),
+    // Même contrat que la production : un chemin relatif ou une URL http(s)
+    // survit. Un double PARTIEL fait échouer la création, pas l'assertion.
+    sanitizeURLOrPath: jest.fn((input: string) => input || null),
     sanitizeJSON: jest.fn((input: unknown) => input),
     isValidNotificationType: jest.fn(() => true),
     isValidPriority: jest.fn(() => true),
@@ -986,6 +989,51 @@ describe('NotificationService — message push title/body', () => {
       const payload = lastPushPayload() as { title: string; body: string };
       expect(payload.title).toBe('Meeshy');
       expect(payload.body).toBe('Petit message texte');
+    });
+
+    describe('identité de l\'expéditeur sur le fil (#18910)', () => {
+      const SENDER_AVATAR = 'https://cdn.example.com/alice.png';
+      const IDENTITY_KEYS = ['senderDisplayName', 'senderUsername', 'senderAvatar', 'imageURL'] as const;
+
+      beforeEach(() => {
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+          username: 'alice', displayName: 'Alice Martin', avatar: SENDER_AVATAR,
+        });
+      });
+
+      it('test_showSenderNameFalse_dataCarriesNoNameNoHandleNoAvatar_senderIdStays', async () => {
+        (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+          notification: { showSenderName: false },
+        });
+
+        await createAndFlush();
+        const data = lastPushPayload().data!;
+        IDENTITY_KEYS.forEach((key) => expect(data[key]).toBe(''));
+        expect(data.senderId).toBe(SENDER_ID);
+      });
+
+      it('test_showSenderNameTrue_dataKeepsTheSenderIdentity', async () => {
+        (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+          notification: { showSenderName: true },
+        });
+
+        await createAndFlush();
+
+        const data = lastPushPayload().data!;
+        expect(data.senderDisplayName).toBe('Alice Martin');
+        expect(data.senderUsername).toBe('alice');
+        expect(data.senderAvatar).toBe(SENDER_AVATAR);
+        expect(data.imageURL).toBe(SENDER_AVATAR);
+        expect(data.senderId).toBe(SENDER_ID);
+      });
+
+      it('test_showSenderNameUnset_keepsTheIdentity_legacyDefault', async () => {
+        (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(null);
+
+        await createAndFlush();
+
+        expect(lastPushPayload().data!.senderDisplayName).toBe('Alice Martin');
+      });
     });
 
     describe('tz-aware DND (shared isWithinDnd)', () => {
