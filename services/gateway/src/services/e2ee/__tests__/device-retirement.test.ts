@@ -10,7 +10,15 @@ const BOB = 'b2'.repeat(12);
 const NOW = new Date('2026-10-24T12:00:00Z');
 const sessionIdOf = (index: number): string => index.toString(16).padStart(24, 'e');
 
-function storeWith(devices: { userId: string; deviceId: number; session: 'live' | 'closed' | 'expired' | 'gone' }[]) {
+/**
+ * `closed` : close sans motif ; `evicted` et `revoked` : closes par
+ * `SessionService` avec le motif qu'il écrit ; `expired` : échue, pas encore balayée.
+ */
+type SessionState = 'live' | 'closed' | 'expired' | 'evicted' | 'revoked' | 'gone';
+
+const REASONS: Partial<Record<SessionState, string>> = { evicted: 'session_limit_exceeded', revoked: 'user_revoked' };
+
+function storeWith(devices: { userId: string; deviceId: number; session: SessionState }[]) {
   const store = createFakeE2EEStore();
   devices.forEach((device, index) => {
     const sessionId = sessionIdOf(index + 1);
@@ -18,8 +26,9 @@ function storeWith(devices: { userId: string; deviceId: number; session: 'live' 
       store.collections.UserSession.insert({
         id: sessionId,
         userId: device.userId,
-        isValid: device.session !== 'closed',
+        isValid: device.session === 'live' || device.session === 'expired',
         expiresAt: new Date(NOW.getTime() + (device.session === 'expired' ? -1 : 86_400_000)),
+        ...(REASONS[device.session] ? { invalidatedReason: REASONS[device.session] } : {}),
       });
     }
     store.collections.E2EEDevice.insert({ userId: device.userId, deviceId: device.deviceId, registrationId: 10 + index, sessionId, identityKey: 'ik', platform: 'ios' });
@@ -71,6 +80,29 @@ describe("le retrait d'un appareil chiffré à la fin de sa session (#12543)", (
     await expect(sweepDevicesOfEndedSessions(store.prisma as never, { now: NOW, batchSize: 2 })).resolves.toBe(3);
 
     expect(activeOf(store)).toEqual(['alice:2', 'bob:2']);
+    expect(leftoversOf(store, BOB, 1)).toEqual({ preKeys: 0, envelopes: 0 });
+  });
+
+  // GW-13 (#19016) — l'enveloppe d'une génération qui peut revenir reste jusqu'au
+  // balayage de 30 jours ; une fin explicite, sans motif ou une session disparue l'efface.
+  it('le balayage garde les enveloppes des sessions échues ou évincées, efface celles des sessions révoquées, closes sans motif ou disparues', async () => {
+    const store = storeWith([
+      { userId: ALICE, deviceId: 1, session: 'expired' },
+      { userId: ALICE, deviceId: 2, session: 'evicted' },
+      { userId: ALICE, deviceId: 3, session: 'revoked' },
+      { userId: ALICE, deviceId: 4, session: 'closed' },
+      { userId: BOB, deviceId: 1, session: 'gone' },
+    ]);
+
+    await expect(sweepDevicesOfEndedSessions(store.prisma as never, { now: NOW })).resolves.toBe(5);
+
+    expect(activeOf(store)).toEqual([]);
+    expect([1, 2, 3, 4].map((deviceId) => leftoversOf(store, ALICE, deviceId))).toEqual([
+      { preKeys: 0, envelopes: 1 },
+      { preKeys: 0, envelopes: 1 },
+      { preKeys: 0, envelopes: 0 },
+      { preKeys: 0, envelopes: 0 },
+    ]);
     expect(leftoversOf(store, BOB, 1)).toEqual({ preKeys: 0, envelopes: 0 });
   });
 
