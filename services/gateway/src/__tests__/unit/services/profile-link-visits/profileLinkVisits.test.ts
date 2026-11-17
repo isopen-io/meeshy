@@ -150,6 +150,9 @@ describe('isPreviewRobot', () => {
     'curl/8.4.0',
     'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
     'Facebot',
+    'Mozilla/5.0 (compatible; Snap URL Preview Service; bot; snapchat_preview@snap.com)',
+    'Pinterest/0.2 (+http://www.pinterest.com/bot.html)',
+    'Slack-ImgProxy (+https://api.slack.com/robots)',
     '',
   ])('reconnaît %s', (ua) => {
     expect(isPreviewRobot(ua)).toBe(true);
@@ -160,6 +163,12 @@ describe('isPreviewRobot', () => {
     'Meeshy/1.42 (iPhone; iOS 26.0) CFNetwork/1568 Darwin/25.0.0',
     'okhttp/4.12.0',
     'Mozilla/5.0 (Linux; Android 10; CUBOT X30) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
+    // Le navigateur INTÉGRÉ d'une messagerie ou d'un réseau : une personne qui a touché le lien, pas l'aperçu.
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36 Telegram-Android/11.2.2 (Google Pixel 8; Android 14; SDK 34; HIGH)',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Snapchat/13.12.0.34 (like Safari/8617.2.4.10.8, panda)',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [LinkedInApp]/9.30.1',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [Pinterest/iOS]',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/537.36 (KHTML, like Gecko) Slack/4.41.97 Chrome/130.0 Electron/33.0 Safari/537.36 Sonic Slack_SSB/4.41.97',
   ])("laisse passer l'application et les navigateurs : %s", (ua) => {
     expect(isPreviewRobot(ua)).toBe(false);
   });
