@@ -1,6 +1,8 @@
 package me.meeshy.ui.component.kit
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -141,7 +143,11 @@ public fun <T> MeeshyReorderList(
                 reduceMotion = reduce,
             )
             val shift = siblingShift(index, grabbed, target, sizes.getOrElse(grabbed.coerceAtLeast(0)) { 0f } + spacingPx)
-            val shifted by animateFloatAsState(if (reduce) 0f else shift, label = "reorder-shift")
+            val shifted by animateFloatAsState(
+                targetValue = if (reduce) 0f else shift,
+                animationSpec = if (grabbed == NO_INDEX) snap() else spring(),
+                label = "reorder-shift",
+            )
             val scale by animateFloatAsState(values.scale, label = "reorder-scale")
             val moves = if (enabled) MeeshyReorderListRecipe.voiceMoves(index, items.size) else emptyList()
             val handle = @Composable {
