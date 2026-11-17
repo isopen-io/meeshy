@@ -33,6 +33,7 @@ public struct EndToEndPlaintextRowSealer: Sendable {
                     rows += db.changesCount
                     try Self.sealQuotes(of: chunk, in: db)
                 }
+                try Self.eraseRefusedQueuedText(in: conversations, db: db)
                 return .commit
             }
             try db.execute(sql: "INSERT INTO messages_fts(messages_fts) VALUES('optimize')")
@@ -41,6 +42,27 @@ public struct EndToEndPlaintextRowSealer: Sendable {
             }
             return Outcome(rows: rows, conversationIds: conversations)
         } }
+    }
+
+    /// La file hors ligne gardait le TEXTE d'un message ou d'une modification
+    /// enfilés avant l'activation, refusés depuis (#16747) — en échec ou
+    /// épuisés, jusqu'à 7 jours. Ceux des conversations qui se scellent
+    /// s'effacent ici. Une ligne encore en file reste : la garde de la file la
+    /// refuse avant tout transport, et la file l'efface (`OutboxFlusher.erasesRefusedRow`).
+    private static func eraseRefusedQueuedText(in conversationIds: Set<String>, db: Database) throws {
+        for chunk in Array(conversationIds).chunkedForSQL() where !chunk.isEmpty {
+            let placeholders = chunk.map { _ in "?" }.joined(separator: ",")
+            try db.execute(
+                sql: """
+                    DELETE FROM outbox
+                    WHERE kind IN (?, ?) AND status IN (?, ?) AND conversationId IN (\(placeholders))
+                    """,
+                arguments: StatementArguments([
+                    OutboxKind.sendMessage.rawValue, OutboxKind.editMessage.rawValue,
+                    OutboxStatus.failed.rawValue, OutboxStatus.exhausted.rawValue,
+                ]) + StatementArguments(chunk)
+            )
+        }
     }
 
     private static func target(_ keys: [String]) -> (filter: String, arguments: StatementArguments) {

@@ -74,6 +74,11 @@ class PatternRules(unittest.TestCase):
         ("onchange-single", ".onChange(of: x) { v in\n.onChange(of: x) { _ in f() }\n", ".onChange(of: x) { _, v in\n.onChange(of: x, initial: true) { old, new in\n.adaptiveOnChange(of: x) { _, v in\n"),
         ("coder-strategy", "d.dateDecodingStrategy = .iso8601\ne.keyEncodingStrategy = .convertToSnakeCase\n", "if d.dateDecodingStrategy == .deferredToDate {}\nlet d = MeeshyCoders.decoder(.api)\n"),
         ("onchange-single", ".onChange(of: order) { memory.order = $0 }\n.onChange(of: x, perform: f)\n", ".onChange(of: x) { _, v in\n"),
+        (
+            "log-text-length-public",
+            'log.info("n=\\(text.count, privacy: .public)")\nlog.info("n=\\(outgoing.text.utf8.count, privacy: .public)")\n',
+            'log.info("n=\\(text.count, privacy: .private)")\nlog.info("n=\\(messageIds.count, privacy: .public)")\n',
+        ),
     )
 
     def test_each_rule_counts_its_occurrences_and_ignores_lookalikes(self):
