@@ -25,6 +25,7 @@ import { exportGame } from './export-game';
 import { exportReadingActivity } from './export-reading';
 import { relationsExportSchema } from './export-relations';
 import { exportRelations } from '../../services/relations/relationExport';
+import { exportSharedLocationEndsOf } from '../../services/sharedLocation/sharedLocationDeps';
 import { exportProfileLinkVisitsOf } from '../../services/profile-link-visits/profileLinkVisits';
 import { exportSentInvitationsOf } from '../../services/referrals/emailInvitations';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
@@ -847,7 +848,10 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('relations')) {
-          exportData.relations = await exportRelations(fastify.prisma, userId, page);
+          exportData.relations = {
+            ...(await exportRelations(fastify.prisma, userId, page)),
+            sharedLocationEnds: await exportSharedLocationEndsOf(userId, (error) => logger.warn('[DataExport] fins de partage de position non lues', error)),
+          };
         }
 
         if (requestedTypes.includes('packs')) {

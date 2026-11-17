@@ -7,6 +7,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
+import { exportSharedLocationEnds, type SharedLocationEnd } from './sharedLocationEnds';
 import { redisSharedLocationKv, UNAVAILABLE_SHARED_LOCATION_KV, type SharedLocationKv } from './sharedLocationKv';
 import {
   captureSharedLocationAccess,
@@ -86,5 +87,18 @@ export async function endSharedLocationAfter(params: RefreshParams, accountId: s
     if (!ack.success) params.report(new Error(`shared location of ${accountId} not ended`));
   } catch (error) {
     params.report(error);
+  }
+}
+
+/**
+ * L'export RGPD (#19202) : les fins de mes partages récents, gardées un jour. Le magasin en
+ * panne rend une liste vide et le signale : l'export ne s'arrête pas pour une donnée éphémère.
+ */
+export async function exportSharedLocationEndsOf(userId: string, report: (error: unknown) => void): Promise<readonly SharedLocationEnd[]> {
+  try {
+    return await exportSharedLocationEnds(lazyCache, userId, Date.now());
+  } catch (error) {
+    report(error);
+    return [];
   }
 }
