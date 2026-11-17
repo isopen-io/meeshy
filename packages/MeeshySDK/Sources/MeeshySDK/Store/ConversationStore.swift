@@ -38,7 +38,7 @@ public actor ConversationStore {
     private let preferenceService: ConversationPreferenceWriting
     private let conversationService: ConversationLifecycleWriting
     private let categoryService: ConversationCategoryCreating
-    private let cache: ConversationCacheReading
+    let cache: ConversationCacheReading
     private let outbox: ConversationStateOutbox
 
     // MARK: - Init

@@ -17,10 +17,25 @@ extension ConversationStore {
     ///   `false` si la conversation est introuvable : l'appelant garde son POST direct.
     public func markReadDurably(_ convId: String) async -> Bool {
         if conversation(id: convId) == nil {
-            await hydrateFromCache()
+            await seedFromCache(convId)
         }
         guard conversation(id: convId) != nil else { return false }
         try? await apply(.markAsRead, for: convId)
         return true
+    }
+
+    /// Sème la SEULE ligne manquante, par le chemin gardé par version (`hydrateMetadata`, celui de
+    /// la liste). Relire tout le cache par `hydrateList` remplaçait en bloc l'état des
+    /// conversations déjà connues par celui du disque : une lecture locale encore en vol y
+    /// rallumait sa pastille, un épinglage optimiste s'y défaisait.
+    private func seedFromCache(_ convId: String) async {
+        switch await cache.loadConversationList() {
+        case .fresh(let convs, _), .stale(let convs, _):
+            let row = convs.filter { $0.id == convId }
+            guard !row.isEmpty else { return }
+            hydrateMetadata(row)
+        case .expired, .empty:
+            break
+        }
     }
 }
