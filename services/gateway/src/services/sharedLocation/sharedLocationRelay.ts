@@ -633,8 +633,9 @@ export type LocationGhostChange = 'entered' | 'left' | 'unchanged';
 
 /**
  * Le partage en cours suit le fantôme global (#19203), comme un partage en pause. À l'ENTRÉE,
- * ceux que la session servait reçoivent la fin, eux seuls (l'accès relu est fermé pour tous) ;
- * le partage reste rangé et les positions suivantes s'y écrivent sans partir. À la SORTIE, rien
+ * ceux que la session servait reçoivent la fin, eux seuls (l'accès relu est fermé pour tous),
+ * et leur fin se range parmi les partages terminés comme à un arrêt : rien ne distingue le
+ * fantôme d'un arrêt (#13937). Le partage reste rangé et les positions suivantes s'y écrivent sans partir. À la SORTIE, rien
  * ne part : la session est marquée, et seule une position postérieure se sert de nouveau — au
  * direct comme au rattrapage. Même sans cet appel, la position suivante relit le fantôme.
  */
@@ -645,6 +646,7 @@ export async function reflectSharedLocationGhost(deps: SharedLocationRelayDeps, 
   if (!state) return;
   if (change === 'entered') {
     await closeStaleReaders(deps, emitterId, state, await accessOf(deps, emitterId, state, recipientIdsOf(state)));
+    await noteSharedLocationStopped(deps.cache, emitterId, now).catch(() => undefined);
     return;
   }
   await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom: new Date(now).toISOString() }, now);
@@ -751,14 +753,16 @@ export async function sharedLocationSnapshotFor(
 /**
  * « Pas sur la carte » (#19202) : les partages qui servaient `readerId`, terminés depuis moins
  * d'un jour — qui, quand, son cercle, jamais une position. La loi `location.temporary` est relue
- * maintenant : rien sous Ami, rien à un bloqueur, rien d'un compte parti. L'heure d'un lecteur
- * flouté tombe sur le quart d'heure, comme celle de ses points.
+ * maintenant : rien sous Ami, rien à un bloqueur, rien d'un compte parti. Le fantôme global
+ * (#19203) n'y entre pas : aucune position n'y voyage, et une fin qui disparaîtrait à son entrée
+ * dirait « il est passé en fantôme ». L'heure d'un lecteur flouté tombe sur le quart d'heure,
+ * comme celle de ses points.
  */
 export async function sharedLocationEndedFor(deps: SharedLocationRelayDeps, readerId: string): Promise<readonly SharedLocationEndedItem[]> {
   const now = deps.now();
   const ends = await sharedLocationEndsFor(deps.cache, readerId, await snapshotCandidates(deps, readerId), now);
   if (ends.size === 0) return [];
-  const allowed = await snapshotAllowed(deps, readerId, [...ends.keys()], now);
+  const allowed = await snapshotAllowed(deps, readerId, [...ends.keys()], now, { ghostHides: false });
   return [...ends]
     .flatMap(([emitterId, end]): SharedLocationEndedItem[] => {
       if (!allowed.has(emitterId)) return [];
@@ -775,13 +779,15 @@ export async function sharedLocationEndedFor(deps: SharedLocationRelayDeps, read
  * réponse HTTP ne la contredit pas ; une baisse écrite après la relecture le trouve noté.
  * Un lecteur qui avait déjà reçu le point en direct et que la relecture retire reçoit la
  * fin : la baisse ne le trouvera plus parmi les servis. Qui n'avait rien vu n'apprend rien.
- * Rend, pour chaque émetteur ouvert, le cercle que la loi vient de juger (#17966).
+ * Rend, pour chaque émetteur ouvert, le cercle que la loi vient de juger (#17966). `ghostHides` éteint :
+ * l'émetteur en fantôme (#19203) reste ouvert — la liste des partages terminés, sans position, n'en dépend pas.
  */
 async function snapshotAllowed(
   deps: SharedLocationRelayDeps,
   readerId: string,
   emitterIds: readonly string[],
   now: number,
+  options: { readonly ghostHides: boolean } = { ghostHides: true },
 ): Promise<ReadonlyMap<string, SharedLocationCircle | null>> {
   const [law, accounts] = await Promise.all([
     pairAccessAmong(deps.prisma, { feature: 'location.temporary', subjectId: readerId, otherIds: emitterIds, subjectIs: 'viewer', now: new Date(now), consentOf: () => 'granted' }),
@@ -789,7 +795,7 @@ async function snapshotAllowed(
   ]);
   return new Map(
     emitterIds
-      .filter((emitterId) => accounts.usable.has(readerId) && emitting(accounts, emitterId) && law.get(emitterId)?.allowed === true)
+      .filter((emitterId) => accounts.usable.has(readerId) && (options.ghostHides ? emitting(accounts, emitterId) : accounts.usable.has(emitterId)) && law.get(emitterId)?.allowed === true)
       .map((emitterId) => [emitterId, circleOf(law.get(emitterId)?.effectiveLevel)] as const),
   );
 }
