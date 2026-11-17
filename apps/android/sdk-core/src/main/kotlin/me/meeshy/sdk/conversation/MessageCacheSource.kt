@@ -143,9 +143,13 @@ internal class MessageCacheSource(
 
     /**
      * #14670 — « back to the present »: the recent window alone, whatever the cache's newest row. After a jump
-     * to an old message the cache's high-water mark is that island's, so a gap sweep would walk from there and
-     * stop [MAX_AFTER_PAGES] later, still in the past — the gap is paged by scrolling instead. The high-water
-     * mark is still read before the request: it bounds what the page may prune (#18915).
+     * to an old message a gap sweep would walk from the cache's high-water mark and stop [MAX_AFTER_PAGES] pages
+     * later, still in the past: the window lands without one, so the present is cached at once. What lies between
+     * the window and the history held below it is NOT filled — neither by this revalidation, nor by backward
+     * paging, which starts from the oldest of the newest rows held ([MessageDao.oldestSyncedAmongRecent]) and so
+     * walks down through rows already held, past the hole. The thread keeps that hole, silently, until a
+     * contiguity watermark records where the held history stops being whole. The high-water mark is still read
+     * before the request: it bounds what the page may prune (#18915).
      */
     suspend fun revalidatePresent() {
         val ticket = fence?.currentTicket()
@@ -180,8 +184,16 @@ internal class MessageCacheSource(
      * (ascending order + `skip` pinned to 0 server-side means the `after`
      * value itself is the cursor — [MessageApi.listAfter]'s doc-comment).
      * A sweep that hits its ceiling hands back what it read (#14670): it lands
-     * with the window, and what lies beyond the ceiling is paged by scrolling
-     * up. Returns `null` — never a partial, silently-trusted list —
+     * with the window, so the present is always cached. What lies beyond the
+     * ceiling — after the last message it read, up to the window's oldest, a
+     * gap of more than [MAX_AFTER_PAGES] × [AFTER_PAGE_SIZE] = 1 000 messages
+     * missed — is NOT recovered: the high-water mark is then above it, so no
+     * later revalidation sees it, and backward paging starts from the oldest
+     * of the newest rows held ([MessageDao.oldestSyncedAmongRecent]), so it
+     * walks down through the rows this sweep read, past the hole. The thread
+     * keeps that hole, silently, until a contiguity watermark records where
+     * the held history stops being whole. Returns `null` — never a partial,
+     * silently-trusted list —
      * on ANY transport failure, a refused envelope (`success = false`), or a
      * response whose `cursorPagination` (or its `hasMore`) is missing: none
      * of those prove anything about what is actually missing.
