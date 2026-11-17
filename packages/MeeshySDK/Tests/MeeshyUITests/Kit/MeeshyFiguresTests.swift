@@ -97,8 +97,8 @@ struct MeeshyFiguresTests {
         try KitAssemblyGuards.assertAgnostic(files)
         for file in files {
             let source = try KitAtomVectors.code(file)
-            #expect(!source.contains("NumberFormatter"), file)
-            #expect(!source.contains("formatted("), file)
+            #expect(!source.contains("NumberFormatter"), "\(file)")
+            #expect(!source.contains("formatted("), "\(file)")
         }
     }
 }

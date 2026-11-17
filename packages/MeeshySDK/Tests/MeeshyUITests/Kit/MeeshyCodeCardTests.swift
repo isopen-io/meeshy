@@ -64,7 +64,7 @@ struct MeeshyCodeCardTests {
         for hex in ["FBBF24", "34D399", "818CF8", "FFFFFF", "000000"] {
             let tint = MeeshyKitRGB(hex: hex) ?? .black
             let served = MeeshyCodeCardRecipe.servedTint(tint, style: .glass)
-            #expect(MeeshyKitRGB.contrast(served, MeeshyCodeCardRecipe.plateColor(style: .glass)) >= 4.5, hex)
+            #expect(MeeshyKitRGB.contrast(served, MeeshyCodeCardRecipe.plateColor(style: .glass)) >= 4.5, "\(hex)")
         }
         #expect(MeeshyCodeCardRecipe.plateColor(style: .glass) == MeeshyKitRGB(hex: "F5F3FF"))
         #expect(MeeshyCodeCardRecipe.inkColor(style: .glass) == MeeshyKitRGB(hex: "1B1140"))
@@ -86,9 +86,9 @@ struct MeeshyCodeCardTests {
         try KitAssemblyGuards.assertAgnostic(files)
         for file in files {
             let source = try KitAtomVectors.code(file)
-            #expect(!source.contains("CIQRCodeGenerator"), file)
-            #expect(!source.contains("UIBlurEffect"), file)
-            #expect(!source.contains("print("), file)
+            #expect(!source.contains("CIQRCodeGenerator"), "\(file)")
+            #expect(!source.contains("UIBlurEffect"), "\(file)")
+            #expect(!source.contains("print("), "\(file)")
         }
     }
 }

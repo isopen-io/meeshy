@@ -91,8 +91,8 @@ struct MeeshyLabeledActionTests {
         try KitAssemblyGuards.assertAgnostic(files)
         for file in files {
             let source = try KitAtomVectors.code(file)
-            #expect(!source.contains(".meeshyGlass("), file)
-            #expect(!source.contains("UIBlurEffect"), file)
+            #expect(!source.contains(".meeshyGlass("), "\(file)")
+            #expect(!source.contains("UIBlurEffect"), "\(file)")
         }
     }
 }

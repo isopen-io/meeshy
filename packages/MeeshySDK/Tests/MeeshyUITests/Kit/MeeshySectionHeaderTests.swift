@@ -90,7 +90,7 @@ struct MeeshySectionHeaderTests {
         let files = ["MeeshySectionHeader.swift", "MeeshySectionHeaderRecipe.swift"]
         try KitAssemblyGuards.assertAgnostic(files)
         for file in files {
-            #expect(!(try KitAtomVectors.code(file)).contains("UIBlurEffect"), file)
+            #expect(!(try KitAtomVectors.code(file)).contains("UIBlurEffect"), "\(file)")
         }
     }
 }
