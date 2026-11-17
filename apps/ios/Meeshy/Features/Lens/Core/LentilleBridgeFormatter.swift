@@ -11,7 +11,7 @@ import MeeshySDK
 ///   le même `data` passé à deux `t` différents rend deux phrases
 ///   différentes, la langue vivant entièrement dans le `t` injecté.
 ///
-/// Types RÉUTILISÉS du SDK (C-029, `CoreModels.swift`) — `ConversationBridgeData`
+/// Types RÉUTILISÉS du SDK (C-029, `ConversationBridgeData.swift`) — `ConversationBridgeData`
 /// et `ConversationBridgeMediaCounts` — jamais redéfinis ici.
 ///
 /// `nonisolated` sur CHAQUE déclaration de ce fichier : la cible app compile
