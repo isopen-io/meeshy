@@ -209,7 +209,7 @@ class ChatComposerControllerTest {
         assertThat(r.text.text).isEqualTo("rendez-vous à 8 h")
         assertThat(r.state.replyingToMessageId).isEqualTo("m0")
         assertThat(r.state.errorMessage).isNull()
-        assertThat(r.state.endToEndSendRefusals).isEqualTo(1)
+        assertThat(r.controller.endToEndSendRefusals.value).isEqualTo(1)
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 

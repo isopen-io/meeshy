@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -356,6 +357,11 @@ internal class ChatComposerController(
     /** Le lieu choisi attend le prochain envoi, comme la pastille « lieu » du plateau iOS. */
     val pendingPlace: StateFlow<SharedPlace?> = _pendingPlace.asStateFlow()
 
+    private val _endToEndSendRefusals = MutableStateFlow(0)
+
+    /** #18975 — combien d'envois chiffrés n'ont pas pu partir : chaque échec se dit, traduit, et son texte revient au composeur. */
+    val endToEndSendRefusals: StateFlow<Int> = _endToEndSendRefusals.asStateFlow()
+
     fun setPendingPlace(place: SharedPlace) {
         _pendingPlace.value = place
     }
@@ -486,7 +492,7 @@ internal class ChatComposerController(
         val restored = EndToEndSendRestoration.restoration(text, replyToId, composerText.text, state.value.replyingToMessageId)
         restored.text?.let { composerText.replace(it) }
         restored.replyToId?.let { reply -> state.update { it.copy(replyingToMessageId = reply) } }
-        state.update { it.copy(endToEndSendRefusals = it.endToEndSendRefusals + 1) }
+        _endToEndSendRefusals.update { it + 1 }
     }
 
     /**
