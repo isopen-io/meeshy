@@ -85,6 +85,8 @@ export function sharedLocationNoticesOf(params: {
   readonly notifications: SharedLocationNotifier | null;
   /** Prend la clé pour `ttlSeconds` si elle est libre (atomique) ; rend `false` si elle est déjà prise. */
   readonly claim: (key: string, ttlSeconds: number) => Promise<boolean>;
+  /** Rend une clé prise pour un avis qui n'est pas parti : la fenêtre ne se consomme qu'à l'envoi. */
+  readonly release?: (key: string) => Promise<void>;
   readonly now?: () => number;
 }) {
   const now = params.now ?? Date.now;
@@ -96,9 +98,10 @@ export function sharedLocationNoticesOf(params: {
       notices.map(async (notice) => {
         const [emitter, lang] = await Promise.all([actorOfId(params.prisma, notice.emitterId), framingLanguageOf(params.prisma, notice.readerId)]);
         if (!emitter || lang === null) return false;
-        if (!(await params.claim(sharedLocationStartedNoticeKey(notice.emitterId, notice.readerId), STARTED_NOTICE_WINDOW_SECONDS).catch(() => false))) return false;
+        const key = sharedLocationStartedNoticeKey(notice.emitterId, notice.readerId);
+        if (!(await params.claim(key, STARTED_NOTICE_WINDOW_SECONDS).catch(() => false))) return false;
         const metadata: LocationShareStartedNotificationMetadata = { action: 'view_profile', userId: emitter.id, durationMinutes: notice.durationMinutes };
-        return quietly(() =>
+        const sent = await quietly(() =>
           notifications.createNotification({
             userId: notice.readerId,
             type: 'location_share_started',
@@ -113,6 +116,8 @@ export function sharedLocationNoticesOf(params: {
             expiresAt: new Date(notice.expiresAt),
           }),
         );
+        if (!sent) await params.release?.(key).catch(() => undefined);
+        return sent;
       }),
     );
   };

@@ -25,7 +25,9 @@ La seule voie existante était l'adresse publique `/@:username`, sans intention 
   `publicProfileSchema`) ; la demande d'ami si elle était offerte, de l'émetteur vers le lecteur,
   par `envoyerDemande` (blocage, compte désactivé, demande existante, loi des crans), sous
   `privacy.allowContactRequests` du lecteur, sans l'idempotence du lecteur ; enfin
-  `contact-exchange:received` `{ reader, received, receivedAt }` à la seule room de l'émetteur.
+  `contact-exchange:received` `{ reader, received, receivedAt }` à la seule room de l'émetteur —
+  et seulement si `received` n'est pas vide : un émetteur qui n'a rien donné n'apprend pas qui a
+  scanné.
 - Expiré, rejoué, contrefait, émis par un compte qui bloque le lecteur (ou bloqué par lui), parti,
   ou lu par son émetteur : le MÊME 404 `CONTACT_EXCHANGE_UNAVAILABLE`. L'émetteur qui lit son
   propre jeton ne le consomme pas (l'émetteur se lit avant la prise) ; tout autre refus le consomme.
@@ -34,7 +36,8 @@ La seule voie existante était l'adresse publique `/@:username`, sans intention 
   verrouillé (`locked`) et aucun champ voisin ne le porte (le sérialiseur retire ce que la vitrine
   ne déclare pas).
 - **Derrière `CONTACT_EXCHANGE_ENABLED`, éteint par défaut** (`contactExchangeFlag.ts`, seul
-  site) : éteintes, les deux routes répondent comme des routes absentes. Le drapeau s'allume
+  site) : éteintes, les deux routes répondent comme des routes absentes, AVANT l'authentification
+  (jamais un 401 qui trahirait leur existence). Le drapeau s'allume
   après la revue `auditeur-adversarial` exigée par l'issue (jeton, rejeu, énumération).
 
 ### Données personnelles

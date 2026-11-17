@@ -35,6 +35,7 @@ export const noticesParams = (prisma: PrismaClient) => ({
   prisma,
   notifications: getSharedNotificationService() ?? null,
   claim: (key: string, ttlSeconds: number) => getCacheStore().setnx(key, '1', ttlSeconds),
+  release: (key: string) => getCacheStore().del(key),
 });
 
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {

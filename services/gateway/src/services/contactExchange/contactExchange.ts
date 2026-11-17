@@ -167,7 +167,9 @@ export async function acceptContactExchange(
   const sent = offers.includes('friendRequest') ? await sendFriendRequest(deps, pair.issuer.id, pair.reader.id) : undefined;
 
   const received: ContactExchangeOffer[] = offers.filter((offer) => offer === 'vitrine' || sent === true);
-  acknowledge(deps, pair.issuer.id, { reader: personOf(pair.reader), received, receivedAt: new Date(deps.now()).toISOString() });
+  if (received.length > 0) {
+    acknowledge(deps, pair.issuer.id, { reader: personOf(pair.reader), received, receivedAt: new Date(deps.now()).toISOString() });
+  }
   return {
     success: true,
     data: {
