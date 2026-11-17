@@ -39,7 +39,6 @@ nonisolated enum ShareMediaStagingError: Error, Equatable, Sendable {
     case notDownloadedFromICloud
     case insufficientFreeSpace(needed: Int, free: Int)
     case byteBudgetExceeded(total: Int, limit: Int)
-    case fileCountExceeded(count: Int, limit: Int)
     case copyFailed(String)
     /// La source n'est pas un fichier que le système a remis, ou elle vit là
     /// où l'extension a des droits que l'app hôte n'a pas (App Group, bundle).

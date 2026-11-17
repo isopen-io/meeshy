@@ -256,13 +256,13 @@ final class GameProgressionRenderTests: XCTestCase {
 
     // MARK: - Le tableau de bord a disparu (amendement n° 4)
 
-    /// L'ancienne route ouvre la première page une version durant (liens déjà posés) ; plus rien ne la pousse.
-    func test_theOldDashboardRoute_opensTheFirstPage_andNothingPushesItAnymore() throws {
+    /// L'ancienne route a servi sa version de transition (liens déjà posés) : elle a quitté la navigation.
+    func test_theOldDashboardRoute_isGone_andNothingPushesItAnymore() throws {
         let ios = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         for host in ["Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift", "Meeshy/Features/Main/Views/iPadRootView+Panels.swift"] {
             let code = try String(contentsOf: ios.appendingPathComponent(host), encoding: .utf8)
-            XCTAssertTrue(code.contains("case .progression, .progressionDashboard:"), "\(host) : l'ancienne route n'ouvre pas la première page")
+            XCTAssertFalse(code.contains("progressionDashboard"), "\(host) : l'ancienne route est revenue")
         }
         XCTAssertEqual(try sourceCount(of: "push(.progressionDashboard"), 0, "une page du jeu pousse encore le tableau de bord")
         XCTAssertFalse(FileManager.default.fileExists(atPath: ios.appendingPathComponent("Meeshy/Features/Game/ProgressionDashboardPage.swift").path))

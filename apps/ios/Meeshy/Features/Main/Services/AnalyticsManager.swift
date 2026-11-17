@@ -70,7 +70,6 @@ extension Route {
         case .progressionNotebook: return "Progression.Notebook"
         case .gamePage(let page, _): return page.analyticsName
         case .progressionConcept(let concept, _): return "Progression.Concept.\(concept.rawValue)"
-        case .progressionDashboard: return "Progression.Dashboard"
         case .links: return "Links"
         case .affiliate: return "Affiliate"
         case .trackingLinks: return "TrackingLinks"

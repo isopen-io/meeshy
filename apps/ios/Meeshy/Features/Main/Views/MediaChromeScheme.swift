@@ -389,9 +389,4 @@ extension View {
         modifier(MediaChromeGlyph())
     }
 
-    /// Le plancher de lisibilité d'un glyphe nu : l'ombre de la légende, dans la polarité
-    /// opposée à sa teinte.
-    func mediaChromeHalo() -> some View {
-        modifier(MediaChromeHalo())
-    }
 }
