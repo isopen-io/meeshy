@@ -1,6 +1,10 @@
 package me.meeshy.sdk.profile
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.profile.MyAddressWire
@@ -57,5 +61,25 @@ class MyAddressesRepositoryTest {
         repository.clear()
 
         assertThat(repository.cached()).isNull()
+    }
+
+    private class Gated(val gate: CompletableDeferred<ApiResponse<MyAddressesPayload>>) : MyAddressesApi {
+        override suspend fun list(): ApiResponse<MyAddressesPayload> = gate.await()
+    }
+
+    @Test
+    fun `une lecture partie avant la deconnexion ne remplit pas le cache du compte suivant`() = runTest {
+        val gate = CompletableDeferred<ApiResponse<MyAddressesPayload>>()
+        val repository = MyAddressesRepository(Gated(gate))
+        var answered: List<String>? = listOf("pas encore")
+        launch { answered = repository.refresh()?.map { it.id } }
+        runCurrent()
+
+        repository.clear()
+        gate.complete(served(one))
+        advanceUntilIdle()
+
+        assertThat(repository.cached()).isNull()
+        assertThat(answered).isNull()
     }
 }

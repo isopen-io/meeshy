@@ -99,8 +99,12 @@ class LinksHubViewModelTest {
     private fun addresses(answer: () -> ApiResponse<MyAddressesPayload> = { ApiResponse(success = true, data = MyAddressesPayload(listOf(site))) }) =
         MyAddressesRepository(Addresses(answer))
 
-    private fun session(username: String? = "aissa") = mockk<SessionRepository> {
-        every { currentUser } returns MutableStateFlow(username?.let { MeeshyUser(id = "u1", username = it) })
+    private fun user(username: String?) = username?.let { MeeshyUser(id = "u1", username = it) }
+
+    private fun session(username: String? = "aissa") = session(MutableStateFlow(user(username)))
+
+    private fun session(current: MutableStateFlow<MeeshyUser?>) = mockk<SessionRepository> {
+        every { currentUser } returns current
     }
 
     private fun hub(
@@ -115,6 +119,22 @@ class LinksHubViewModelTest {
         val vm = hub()
 
         assertThat(vm.state.value.profileLink?.webLink).isEqualTo("https://meeshy.me/u/aissa")
+    }
+
+    @Test
+    fun `mon lien de profil suit la session sans attendre un rechargement`() = runTest {
+        val current = MutableStateFlow(user(null))
+        val vm = hub(session = session(current))
+        advanceUntilIdle()
+        assertThat(vm.state.value.profileLink).isNull()
+
+        current.value = user("aissa")
+        advanceUntilIdle()
+        assertThat(vm.state.value.profileLink?.webLink).isEqualTo("https://meeshy.me/u/aissa")
+
+        current.value = user("aissandiaye")
+        advanceUntilIdle()
+        assertThat(vm.state.value.profileLink?.webLink).isEqualTo("https://meeshy.me/u/aissandiaye")
     }
 
     @Test
