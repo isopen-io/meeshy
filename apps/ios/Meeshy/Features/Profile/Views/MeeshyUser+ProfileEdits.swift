@@ -65,7 +65,8 @@ extension MeeshyUser {
             voiceQuality: voiceQuality,
             activation: activation,
             profileDecor: profileDecor,
-            addresses: addresses
+            addresses: addresses,
+            city: city, cityCircle: cityCircle
         )
     }
 }
@@ -116,8 +117,19 @@ extension ProfileView {
     /// instantiating the SwiftUI view.
     static func mergingServerUser(_ server: MeeshyUser, onto local: MeeshyUser?) -> MeeshyUser {
         let decor = server.profileDecor ?? local?.profileDecor
-        let merged = server.voicePublic == nil && local?.voicePublic != nil ? server.withProfileChanges(voicePublic: local?.voicePublic) : server
+        let carried = server.carryingDeclaredCity(from: local)
+        let merged = carried.voicePublic == nil && local?.voicePublic != nil ? carried.withProfileChanges(voicePublic: local?.voicePublic) : carried
         return merged.profileDecor == decor ? merged : merged.withProfileDecor(decor)
+    }
+
+    /// Ce qui part pour ma ville et son cercle (#19388) : `nil` pour ce qui n'a pas changé (omis du PATCH), `""` pour
+    /// une ville effacée, la saisie rognée sinon. Une ville trop longue est coupée à la borne de la passerelle.
+    static func cityEditToSend(typed: String, circle: RelationLevel?,
+                               original: MeeshyUser) -> (city: String?, circle: RelationLevel?) {
+        let normalized = ProfileCity.normalized(typed).map { String($0.prefix(ProfileCity.maxLength)) }
+        let city: String? = normalized == original.declaredCity ? nil : (normalized ?? "")
+        let sentCircle: RelationLevel? = circle == original.declaredCityCircle ? nil : circle
+        return (city, sentCircle)
     }
 
     /// Ce qui part pour un champ d'identité : la saisie ROGNÉE, ou `nil` quand

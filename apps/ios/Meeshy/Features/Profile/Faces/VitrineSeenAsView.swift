@@ -160,6 +160,12 @@ struct VitrineSeenAsView: View {
             Text(verbatim: "@\(shown.username)")
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium, design: .monospaced))
                 .foregroundStyle(theme.textMuted)
+            if let city = Self.seenCity(of: user, by: model.level) {
+                Text(city)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+                    .accessibilityIdentifier("profile.seenAs.city")
+            }
             if let bio = shown.bio, !bio.isEmpty {
                 Text(bio)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))
@@ -176,6 +182,12 @@ struct VitrineSeenAsView: View {
                 MeeshyBadge(.label(name), surface: .tonal, kind: .accent, tint: accent)
             }
         }
+    }
+
+    /// Ma ville telle que CE cercle la lit (#19388) : lue de MON réglage, jamais de la fiche servie ni projetée — une
+    /// projection porte ma fiche entière, et un serveur d'avant #19164 pourrait la servir à tort.
+    static func seenCity(of owner: MeeshyUser, by level: RelationLevel) -> String? {
+        ProfileCity.seen(city: owner.city, circle: owner.cityCircle, by: level)
     }
 
     /// Les langues du Prisme que la Vitrine affiche, dans leur ordre, sans doublon.

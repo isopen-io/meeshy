@@ -241,7 +241,8 @@ extension MeeshyUser {
             voiceQuality: voiceQuality,
             activation: activation,
             profileDecor: profileDecor,
-            addresses: addresses
+            addresses: addresses,
+            city: city, cityCircle: cityCircle
         )
     }
 }

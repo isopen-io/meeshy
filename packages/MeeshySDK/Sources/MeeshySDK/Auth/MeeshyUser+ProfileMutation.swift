@@ -47,7 +47,8 @@ extension MeeshyUser {
             signalIdentityKeyPublic: signalIdentityKeyPublic,
             activation: activation,
             profileDecor: profileDecor,
-            addresses: addresses
+            addresses: addresses,
+            city: city, cityCircle: cityCircle
         )
     }
 
@@ -79,7 +80,8 @@ extension MeeshyUser {
             signalIdentityKeyPublic: signalIdentityKeyPublic,
             activation: activation,
             profileDecor: profileDecor,
-            addresses: addresses
+            addresses: addresses,
+            city: city, cityCircle: cityCircle
         )
     }
 }

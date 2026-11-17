@@ -264,4 +264,49 @@ final class ProfileViewSaveProfileTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - La ville déclarée (#19388)
+
+    private func makeUserInDakar() -> MeeshyUser {
+        makeFullUser().withDeclaredCity("Dakar", circle: .friend)
+    }
+
+    func test_cityEditToSend_untouchedCityAndCircle_sendsNothing() {
+        let edit = ProfileView.cityEditToSend(typed: " Dakar ", circle: .friend, original: makeUserInDakar())
+        XCTAssertNil(edit.city)
+        XCTAssertNil(edit.circle)
+    }
+
+    func test_cityEditToSend_aNewCityAndCircle_areSent() {
+        let edit = ProfileView.cityEditToSend(typed: "Lisbonne", circle: .close, original: makeUserInDakar())
+        XCTAssertEqual(edit.city, "Lisbonne")
+        XCTAssertEqual(edit.circle, .close)
+    }
+
+    func test_cityEditToSend_aClearedCity_isSentEmptyNotOmitted() {
+        let edit = ProfileView.cityEditToSend(typed: "   ", circle: .friend, original: makeUserInDakar())
+        XCTAssertEqual(edit.city, "")
+        XCTAssertNil(edit.circle)
+    }
+
+    func test_applyingProfileEdits_carriesTheDeclaredCity() {
+        let updated = makeUserInDakar().applyingProfileEdits(bio: "Nouvelle bio")
+        XCTAssertEqual(updated.declaredCity, "Dakar")
+        XCTAssertEqual(updated.declaredCityCircle, .friend)
+    }
+
+    func test_mergingServerUser_aResponseWithoutTheCity_keepsTheOptimisticCity() {
+        let local = makeUserInDakar()
+        let merged = ProfileView.mergingServerUser(makeFullUser(displayName: "Alice B"), onto: local)
+        XCTAssertEqual(merged.declaredCity, "Dakar")
+        XCTAssertEqual(merged.declaredCityCircle, .friend)
+    }
+
+    func test_mergingServerUser_aResponseWithTheCity_serverWins() {
+        let server = makeFullUser().withDeclaredCity("Porto", circle: .public)
+        let merged = ProfileView.mergingServerUser(server, onto: makeUserInDakar())
+        XCTAssertEqual(merged.declaredCity, "Porto")
+        XCTAssertEqual(merged.declaredCityCircle, .public)
+    }
 }
+

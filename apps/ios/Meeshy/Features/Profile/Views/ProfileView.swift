@@ -20,6 +20,8 @@ struct ProfileView: View {
     @State private var lastName = ""
     @State private var displayName = ""
     @State private var bio = ""
+    @State private var city = ""
+    @State private var cityCircle: RelationLevel?
     @State private var systemLanguage = ""
     @State private var regionalLanguage = ""
     @State private var customDestinationLanguage = ""
@@ -331,7 +333,8 @@ struct ProfileView: View {
                               accentHex: accentColor, onOpen: open)
         ProfileIdentitySection(
             isEditing: isEditing, firstName: $firstName, lastName: $lastName,
-            displayName: $displayName, bio: $bio, username: user?.username, accentColor: accentColor
+            displayName: $displayName, bio: $bio, city: $city, cityCircle: $cityCircle,
+            username: user?.username, accentColor: accentColor
         )
         if isEditing {
             ProfileContactSection(
@@ -478,7 +481,7 @@ struct ProfileView: View {
                     .foregroundStyle(Color(hex: accentColor))
             }
 
-            if let membership = ProfileMembershipLine.text(createdAt: user?.createdAt, locale: Self.interfaceLocale, now: Date()) {
+            if let membership = ProfileMembershipLine.text(city: user?.declaredCity, createdAt: user?.createdAt, locale: Self.interfaceLocale, now: Date()) {
                 Text(membership)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundStyle(theme.textMuted)
@@ -619,6 +622,8 @@ struct ProfileView: View {
         lastName = user?.lastName ?? ""
         displayName = user?.displayName ?? user?.username ?? ""
         bio = user?.bio ?? ""
+        city = user?.declaredCity ?? ""
+        cityCircle = user?.declaredCityCircle
         systemLanguage = user?.systemLanguage ?? "fr"
         regionalLanguage = user?.regionalLanguage ?? ""
         customDestinationLanguage = user?.customDestinationLanguage ?? ""
@@ -713,7 +718,11 @@ struct ProfileView: View {
             regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
             customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage)
         )
-        authManager.currentUser = optimistic
+        let cityEdit = Self.cityEditToSend(typed: city, circle: cityCircle, original: original)
+        let changesCity = cityEdit.city != nil || cityEdit.circle != nil
+        authManager.currentUser = changesCity
+            ? optimistic.withDeclaredCity(ProfileCity.normalized(city), circle: cityCircle)
+            : optimistic
         setEditing(false)
         HapticFeedback.success()
 
@@ -724,7 +733,9 @@ struct ProfileView: View {
             bio: Self.changedOrNil(bio, original: original.bio),
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
             regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
-            customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage)
+            customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage),
+            city: cityEdit.city,
+            cityCircle: cityEdit.circle
         )
 
         // Offline path — persist the request to SettingsActionQueue so it

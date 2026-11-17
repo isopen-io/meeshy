@@ -171,6 +171,15 @@ extension UserProfileSheet {
             HStack(spacing: MeeshySpacing.xs) {
                 Text("@\(displayUser.username)")
                     .foregroundStyle(Color(hex: resolvedAccent))
+                // Sa ville déclarée (planches `Autre-Inconnu`, `Etat-HorsLigne`), telle que le serveur me l'a servie :
+                // son cercle m'ouvre, sinon elle n'est pas dans la charge et la ligne s'en passe.
+                if let city = displayUser.city {
+                    Text(verbatim: "·").foregroundStyle(theme.textSecondary)
+                    Text(verbatim: city)
+                        .foregroundStyle(theme.textSecondary)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("profile.header.city")
+                }
                 // Présence datée après le pseudo — rendue seulement si le serveur
                 // l'a jugée montrable (lastActiveAt non nil pour cet observateur).
                 if let lastActive = displayUser.lastActiveAt {

@@ -563,6 +563,12 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// à mon cercle. Jamais une adresse que mon cercle n'ouvre : le serveur filtre, le client ne fait que montrer.
     public let addresses: ServedProfileAddresses?
 
+    /// La ville DÉCLARÉE (#18862) — un mot, jamais une position. Servie à un autre seulement si son cercle l'ouvre ;
+    /// `nil` = un ancien serveur, aucune ville, ou un cercle qui ne m'ouvre pas : la fiche s'en passe.
+    public let city: String?
+    /// Le cercle à partir duquel ma ville se lit, servi à MOI seul (`nil` = moi seul). Lu par `ProfileCity`.
+    public let cityCircle: String?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -589,7 +595,9 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         voiceQuality: Double? = nil,
         activation: UserActivation? = nil,
         profileDecor: ServedProfileDecor? = nil,
-        addresses: ServedProfileAddresses? = nil
+        addresses: ServedProfileAddresses? = nil,
+        city: String? = nil,
+        cityCircle: String? = nil
     ) {
         self.id = id
         self.username = username
@@ -631,6 +639,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.activation = activation
         self.profileDecor = profileDecor
         self.addresses = addresses
+        self.city = city
+        self.cityCircle = cityCircle
     }
 
     /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
@@ -663,7 +673,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voiceQuality: voiceQuality,
             activation: activation,
             profileDecor: decor,
-            addresses: addresses
+            addresses: addresses,
+            city: city, cityCircle: cityCircle
         )
     }
 
@@ -711,7 +722,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voiceQuality: voiceQuality,
             activation: activation,
             profileDecor: profileDecor,
-            addresses: addresses
+            addresses: addresses,
+            city: city, cityCircle: cityCircle
         )
     }
 

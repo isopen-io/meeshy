@@ -33,4 +33,18 @@ final class UserProfileSheetRepaintTests: XCTestCase {
     func test_repaintedProfile_notLoadedYet_isNil() throws {
         XCTAssertNil(UserProfileSheet.repaintedProfile(nil, with: try event(userId: "u-bob")))
     }
+
+    /// #19388 — la ville que le serveur m'a servie se lit sur la fiche, et un repeint ne l'efface pas.
+    func test_servedCity_isShown_andSurvivesARepaint() throws {
+        let loaded = MeeshyUser(id: "u-bob", username: "bob", city: " Porto ")
+        XCTAssertEqual(ProfileSheetUser.from(user: loaded).city, "Porto")
+        let repainted = try XCTUnwrap(UserProfileSheet.repaintedProfile(loaded, with: try event(userId: "u-bob")))
+        XCTAssertEqual(ProfileSheetUser.from(user: repainted).city, "Porto")
+    }
+
+    func test_noServedCity_noCityOnTheSheet() {
+        XCTAssertNil(ProfileSheetUser.from(user: MeeshyUser(id: "u-bob", username: "bob")).city)
+        XCTAssertNil(ProfileSheetUser.from(user: MeeshyUser(id: "u-bob", username: "bob", city: "  ")).city)
+    }
 }
+

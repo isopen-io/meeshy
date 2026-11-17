@@ -8,7 +8,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         lhs.id == rhs.id &&
         lhs.avatarURL == rhs.avatarURL &&
         lhs.bannerURL == rhs.bannerURL &&
-        lhs.profileDecor == rhs.profileDecor
+        lhs.profileDecor == rhs.profileDecor &&
+        lhs.city == rhs.city
     }
 
     public var id: String { userId ?? participantId ?? username }
@@ -41,6 +42,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
     public let voiceQuality: Double?
     /// Contour d'avatar et bannière de design équipés (#10632) ; `nil` = rendu historique.
     public let profileDecor: ServedProfileDecor?
+    /// La ville déclarée que le serveur m'a servie (#18862, #19388) — seulement si son cercle m'ouvre ; `nil` = rien.
+    public let city: String?
 
     public init(
         userId: String? = nil, username: String, displayName: String? = nil,
@@ -53,7 +56,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         voicePublic: Bool? = nil, voiceSampleUrl: String? = nil,
         voiceSampleDurationMs: Int? = nil, voiceQuality: Double? = nil,
         participantId: String? = nil, isAnonymous: Bool = false,
-        profileDecor: ServedProfileDecor? = nil
+        profileDecor: ServedProfileDecor? = nil,
+        city: String? = nil
     ) {
         self.userId = userId
         self.participantId = participantId
@@ -78,6 +82,7 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         self.voiceSampleDurationMs = voiceSampleDurationMs
         self.voiceQuality = voiceQuality
         self.profileDecor = profileDecor
+        self.city = ProfileCity.normalized(city)
     }
 
     public var resolvedDisplayName: String {
@@ -209,7 +214,8 @@ extension ProfileSheetUser {
             voiceSampleUrl: user.voiceSampleUrl,
             voiceSampleDurationMs: user.voiceSampleDurationMs,
             voiceQuality: user.voiceQuality,
-            profileDecor: user.profileDecor
+            profileDecor: user.profileDecor,
+            city: user.declaredCity
         )
     }
 }

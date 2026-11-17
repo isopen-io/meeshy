@@ -537,6 +537,17 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertEqual(VitrineSeenAsView.publicVoice(of: publicVoice)?.url, "/v.m4a")
     }
 
+    /// « Voir comme » montre ma ville au cercle que j'ai choisi et au-dessus, jamais en dessous ni sans cercle (#19388).
+    func test_seenAs_showsMyCity_onlyFromTheCircleIChose() {
+        let me = MeeshyUser(id: "me", username: "aicha", city: "Dakar", cityCircle: "FRIEND")
+        XCTAssertNil(VitrineSeenAsView.seenCity(of: me, by: .public), "le Public ne lit pas une ville réservée aux amis")
+        XCTAssertNil(VitrineSeenAsView.seenCity(of: me, by: .acquaintance))
+        XCTAssertEqual(VitrineSeenAsView.seenCity(of: me, by: .friend), "Dakar")
+        XCTAssertEqual(VitrineSeenAsView.seenCity(of: me, by: .blood), "Dakar")
+        let undecided = MeeshyUser(id: "me", username: "aicha", city: "Dakar")
+        XCTAssertNil(VitrineSeenAsView.seenCity(of: undecided, by: .blood), "sans cercle choisi, ma ville n'est qu'à moi")
+    }
+
     func test_viewedByAndWhatSees_sitOnTheBanner() throws {
         let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
         XCTAssertTrue(profile.contains(".overlay(alignment: .topTrailing)"), "« Vue par : Moi » est posé sur la bannière")
