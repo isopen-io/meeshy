@@ -4,9 +4,12 @@
  * LE LIEN D'UNE FICHE SE DÉPLIE EN CARTE DE PROFIL CHEZ LES ROBOTS D'APERÇU (#18865).
  *
  * `GET /people/:username/og` est ce que Traefik sert aux robots qui déplient
- * `/u/<pseudo>` ou `/@<pseudo>`. Le robot est un lecteur ANONYME : la carte ne porte que
- * le niveau PUBLIC — nom, pseudo, bannière sinon avatar, bio, ville si son cercle est
- * PUBLIC. Jamais l'e-mail, le téléphone, la présence, le pays, le fuseau.
+ * `/u/<pseudo>` ou `/@<pseudo>`. Le robot est un lecteur ANONYME, et un profil ne se
+ * montre qu'à un membre connecté (#10205) : PAR DÉFAUT la page est l'aperçu GÉNÉRIQUE de
+ * Meeshy, quel que soit le pseudo, sans aucune lecture de `User`. La carte nommée (niveau
+ * PUBLIC : nom, pseudo, bannière sinon avatar, bio, ville d'un cercle PUBLIC) ne vit que
+ * derrière le drapeau serveur `PERSON_UNFURL_NAMED_CARD`, éteint, en attendant la
+ * décision du porteur. Jamais l'e-mail, le téléphone, la présence, le pays, le fuseau.
  * Les témoins lisent la page RENDUE (`app.inject`).
  */
 
@@ -15,6 +18,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 
 import { registerLinkUnfurlRoute } from '../../../../routes/links/unfurl';
+import { personUnfurlNamedCardEnabled } from '../../../../services/linkUnfurl/person';
 import { clearPrivacyPreferencesCache } from '../../../../services/preferences/privacy-cache';
 
 const ORIGIN = 'https://staging.meeshy.me';
@@ -89,18 +93,23 @@ const prismaStrict = (ligne: Ligne, options: { readonly hides?: boolean; readonl
   };
 };
 
-const monter = async (ligne: Ligne, options: Parameters<typeof prismaStrict>[1] = {}) => {
+type Drapeau = { readonly nommee?: boolean | 'absent' };
+
+const monter = async (ligne: Ligne, options: Parameters<typeof prismaStrict>[1] & Drapeau = {}) => {
   const { prisma, findFirst } = prismaStrict(ligne, options);
   const app: FastifyInstance = Fastify({ logger: false });
   await app.register(rateLimit, { global: false, skipOnError: true });
-  registerLinkUnfurlRoute(app, { prisma: prisma as never, origin: ORIGIN });
+  const nommee = options.nommee ?? true;
+  registerLinkUnfurlRoute(app, nommee === 'absent'
+    ? { prisma: prisma as never, origin: ORIGIN }
+    : { prisma: prisma as never, origin: ORIGIN, namedPersonCard: nommee });
   await app.ready();
   return { app, findFirst };
 };
 
 const page = async (
   ligne: Ligne = fiche(),
-  options: { readonly username?: string; readonly acceptLanguage?: string; readonly hides?: boolean; readonly privacyFails?: boolean } = {},
+  options: { readonly username?: string; readonly acceptLanguage?: string; readonly hides?: boolean; readonly privacyFails?: boolean } & Drapeau = {},
 ) => {
   const { app, findFirst } = await monter(ligne, options);
   const reponse = await app.inject({
@@ -119,7 +128,38 @@ const meta = (html: string, cle: string): string | undefined => {
 
 beforeEach(() => clearPrivacyPreferencesCache());
 
-describe('Une fiche vivante se déplie en carte de profil au niveau Public', () => {
+describe('Par défaut, un profil ne se montre pas hors de Meeshy (#10205) : l’aperçu est générique', () => {
+  const generiqueSansLecture = (body: string) => {
+    expect(meta(body, 'og:title')).toBe(GENERIQUE_FR);
+    expect(meta(body, 'og:image')).toBe(IMAGE_DE_MARQUE);
+    for (const trace of ['amani', 'Amani', 'Dakar', 'wolof', 'banniere', 'avatar.png']) expect(body).not.toContain(trace);
+  };
+
+  it('sans drapeau, une fiche vivante rend l’aperçu générique sans lire User', async () => {
+    const { reponse, findFirst } = await page(fiche(), { nommee: 'absent' });
+    expect(reponse.statusCode).toBe(200);
+    generiqueSansLecture(reponse.body);
+    expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it('drapeau éteint : la même page pour un pseudo vivant et un pseudo inconnu', async () => {
+    const vivante = await page(fiche(), { nommee: false });
+    const inconnue = await page(null, { nommee: false, username: 'personne' });
+    generiqueSansLecture(vivante.reponse.body);
+    expect(vivante.findFirst).not.toHaveBeenCalled();
+    expect(vivante.reponse.body).toBe(inconnue.reponse.body);
+  });
+
+  it('le drapeau serveur ne s’allume que sur « true » explicite', () => {
+    expect(personUnfurlNamedCardEnabled({})).toBe(false);
+    expect(personUnfurlNamedCardEnabled({ PERSON_UNFURL_NAMED_CARD: '' })).toBe(false);
+    expect(personUnfurlNamedCardEnabled({ PERSON_UNFURL_NAMED_CARD: '1' })).toBe(false);
+    expect(personUnfurlNamedCardEnabled({ PERSON_UNFURL_NAMED_CARD: 'false' })).toBe(false);
+    expect(personUnfurlNamedCardEnabled({ PERSON_UNFURL_NAMED_CARD: 'true' })).toBe(true);
+  });
+});
+
+describe('Drapeau allumé : une fiche vivante se déplie en carte de profil au niveau Public', () => {
   it('nomme la personne, montre sa bannière et sa bio, et ouvre /u/<pseudo>', async () => {
     const { reponse } = await page();
     const html = reponse.body;
@@ -191,7 +231,7 @@ describe('Une fiche vivante se déplie en carte de profil au niveau Public', () 
   });
 });
 
-describe('Tout ce qui n’a pas à être nommé rend l’aperçu générique, indiscernable d’une fiche inconnue', () => {
+describe('Drapeau allumé : tout ce qui n’a pas à être nommé rend l’aperçu générique, indiscernable d’une fiche inconnue', () => {
   const generique = (body: string) => {
     expect(meta(body, 'og:title')).toBe(GENERIQUE_FR);
     expect(meta(body, 'og:image')).toBe(IMAGE_DE_MARQUE);
@@ -237,6 +277,7 @@ describe('Tout ce qui n’a pas à être nommé rend l’aperçu générique, in
     registerLinkUnfurlRoute(casse, {
       prisma: { user: { findFirst: async () => { throw new Error('db down'); } } } as never,
       origin: ORIGIN,
+      namedPersonCard: true,
     });
     await casse.ready();
     const reponse = await casse.inject({ method: 'GET', url: '/people/amani/og' });
