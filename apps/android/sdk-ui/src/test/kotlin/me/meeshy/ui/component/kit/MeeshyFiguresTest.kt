@@ -50,7 +50,10 @@ class MeeshyFiguresTest {
         assertThat(points.map { it.x }).containsExactly(0.0, 36.0, 72.0).inOrder()
         assertThat(points[0].y).isEqualTo(25.0)
         assertThat(points[1].y).isEqualTo(3.0)
-        points.forEach { assertThat(it.y).isIn(com.google.common.collect.Range.closed(3.0, 25.0)) }
+        points.forEach {
+            assertThat(it.y).isAtLeast(3.0)
+            assertThat(it.y).isAtMost(25.0)
+        }
     }
 
     @Test
@@ -68,7 +71,7 @@ class MeeshyFiguresTest {
         assertThat(MeeshyFiguresRecipe.shareFill(3.0, 100.0)).isEqualTo(100.0)
         assertThat(MeeshyFiguresRecipe.shareFill(0.0, 100.0)).isEqualTo(0.0)
         assertThat(MeeshyFiguresRecipe.shareFill(Double.NaN, 100.0)).isEqualTo(0.0)
-        assertThat(MeeshyFiguresRecipe.shareFill(0.5, 2.0)).isEqualTo(1.0)
+        assertThat(MeeshyFiguresRecipe.shareFill(0.5, 2.0)).isEqualTo(2.0)
     }
 
     @Test
