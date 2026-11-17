@@ -77,7 +77,6 @@ const RingOrnamentStrokeSchema = z.object({
   /** Le groupe que les mouvements désignent. */
   group: z.optional(frameGroupSchema),
 });
-export type RingOrnamentStroke = z.infer<typeof RingOrnamentStrokeSchema>;
 
 export const AvatarRingDesignSchema = z
   .object({

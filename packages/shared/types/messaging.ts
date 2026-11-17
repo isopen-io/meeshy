@@ -284,27 +284,6 @@ export interface MessageResponse extends ApiResponse<SocketIOMessage> {
  */
 export type MessageSendEventType = 'message:send';
 
-/**
- * Type d'événement WebSocket pour la diffusion
- */
-export type MessageBroadcastEventType = 'message:new';
-
-/**
- * Format d'événement WebSocket pour l'envoi de message
- */
-export interface MessageSendEvent {
-  readonly type: MessageSendEventType;
-  readonly payload: MessageRequest;
-  readonly requestId?: string;              // Pour traçabilité
-}
-
-/**
- * Format de callback/ACK WebSocket 
- */
-export interface MessageSendCallback {
-  (response: MessageResponse): void;
-}
-
 // ===== VALIDATION TYPES =====
 
 /**

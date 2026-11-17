@@ -10,7 +10,7 @@ import type { ContentPage } from './type';
  *
  * CONTENU ÉCRIT POUR CE LOT, et c'est le seul des sept documents
  * institutionnels dans ce cas : les cinq autres reprennent
- * `apps/web/locales/fr/` mot pour mot, mais le legacy n'a jamais servi de page
+ * `legacy-web-final:apps/web/locales/fr/` mot pour mot, mais le legacy n'a jamais servi de page
  * d'aide — il n'y avait rien à reprendre.
  *
  * ORIENTÉ GESTE, là où `/faq` est orientée QUESTION. La séparation n'est pas

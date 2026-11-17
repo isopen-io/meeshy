@@ -65,4 +65,3 @@ export const relationPersonSettingsUpdateSchema = z
   })
   .strict()
   .refine((update) => Object.keys(update).length > 0, { message: 'Aucun réglage' });
-export type RelationPersonSettingsUpdate = z.infer<typeof relationPersonSettingsUpdateSchema>;

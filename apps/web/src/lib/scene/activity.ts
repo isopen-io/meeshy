@@ -196,13 +196,3 @@ export const isGestureHeld = (state: SceneActivityState, at: number): boolean =>
  */
 export const isSceneActive = (state: SceneActivityState, at: number): boolean =>
   state.armed && state.reveal.lastScrolledAt !== null && at - state.reveal.lastScrolledAt < SCENE_REST_DELAY_MS;
-
-export const sceneActivity = {
-  initialState,
-  reduce,
-  flatten,
-  isRevealed,
-  isArmed,
-  isSceneActive,
-  isGestureHeld,
-};

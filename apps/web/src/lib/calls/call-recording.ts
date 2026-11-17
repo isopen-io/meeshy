@@ -233,5 +233,3 @@ export function createCallRecording(deps: CallRecordingDeps) {
     },
   };
 }
-
-export type CallRecordingController = ReturnType<typeof createCallRecording>;

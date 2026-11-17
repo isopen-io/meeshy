@@ -20,7 +20,7 @@ export type { AdminRoute };
  * ## Ce que ce module reprend
  *
  * La liste part de la barre latérale du legacy
- * (`apps/web/components/admin/AdminLayout.tsx`, onze entrées), rangée depuis
+ * (`legacy-web-final:apps/web/components/admin/AdminLayout.tsx`, onze entrées), rangée depuis
  * #8876 en sept groupes et dix-neuf sections (`docs/superpowers/specs/
  * 2026-09-30-admin-vue-de-dieu-design.md`, § 1) ; huit groupes et vingt sections
  * depuis le Système et ses Opérations (#10391).
@@ -97,9 +97,6 @@ export type AdminPermissionKey = keyof AdminPermissions;
  * doit exister dans le catalogue, sinon `translateAdmin` ne compile plus.
  */
 export type AdminSectionLabelKey = `admin.nav.${AdminSectionId}`;
-
-/** Une ligne qui dit ce qu'on fait dans la section — le hub la pose sous le libellé. */
-export type AdminSectionHintKey = `admin.nav.${AdminSectionId}.hint`;
 
 export type AdminGroupLabelKey = `admin.group.${AdminGroupId}`;
 
