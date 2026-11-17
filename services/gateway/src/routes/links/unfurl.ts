@@ -93,9 +93,10 @@ export function publicAppOrigin(raw: string | undefined = process.env.FRONTEND_U
 
 export function registerLinkUnfurlRoute(
   fastify: FastifyInstance,
-  deps: { readonly prisma: PrismaClient; readonly origin: string }
+  deps: { readonly prisma: PrismaClient; readonly origin: string; readonly namedPersonCard?: boolean }
 ): void {
   const { prisma, origin } = deps;
+  const namedPersonCard = deps.namedPersonCard === true;
   const rows = new BoundedTtlCache<string, LinkUnfurlSource | null>({
     maxSize: LINK_UNFURL_CACHE_MAX,
     ttlMs: LINK_UNFURL_CACHE_TTL_MS
@@ -295,12 +296,13 @@ export function registerLinkUnfurlRoute(
 
   /**
    * `GET /people/:username/og` — la page que lisent les robots d'aperçu quand on colle
-   * `https://meeshy.me/u/<pseudo>` ou `https://meeshy.me/@<pseudo>` (#18865) : la carte de
-   * profil au niveau PUBLIC, jamais plus (`services/linkUnfurl/person.ts`).
+   * `https://meeshy.me/u/<pseudo>` ou `https://meeshy.me/@<pseudo>` (#18865). Par défaut
+   * l'aperçu GÉNÉRIQUE, sans lire `User` (#10205) ; drapeau allumé, la carte de profil au
+   * niveau PUBLIC, jamais plus (`services/linkUnfurl/person.ts`).
    */
   fastify.get<{ Params: { username: string } }>('/people/:username/og', {
     schema: {
-      description: 'Aperçu d’une fiche pour les robots d’aperçu des messageries (#18865). Carte de profil au niveau PUBLIC : nom, pseudo, bannière sinon avatar, bio, ville si son cercle est public. Toujours 200 : un pseudo inconnu, un compte désactivé ou caché de la recherche rend l’aperçu générique de Meeshy.',
+      description: 'Aperçu d’une fiche pour les robots d’aperçu des messageries (#18865). Par défaut l’aperçu générique de Meeshy, quel que soit le pseudo : un profil ne se montre qu’à un membre connecté (#10205). Drapeau serveur PERSON_UNFURL_NAMED_CARD=true : carte de profil au niveau PUBLIC. Toujours 200.',
       tags: ['links'],
       summary: 'Aperçu d’une fiche pour les robots',
       params: {
@@ -316,7 +318,7 @@ export function registerLinkUnfurlRoute(
     config: { rateLimit: unfurlRateLimit('person-unfurl') }
   }, async (request, reply: FastifyReply) => {
     const { username } = request.params;
-    const source = await readPerson(username).catch((error: unknown) => {
+    const source = !namedPersonCard ? null : await readPerson(username).catch((error: unknown) => {
       logWarn(fastify.log, 'Person unfurl read failed — serving the generic preview', error);
       return null;
     });

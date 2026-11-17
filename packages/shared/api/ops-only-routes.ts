@@ -107,9 +107,9 @@ export const OPS_ONLY_ROUTES: readonly OpsOnlyRoute[] = [
     method: 'GET',
     path: '/api/v1/people/:username/og',
     reason:
-      "`services/gateway/src/routes/links/unfurl.ts` (#18865) — carte de profil au niveau PUBLIC que " +
+      "`services/gateway/src/routes/links/unfurl.ts` (#18865) — aperçu (générique par défaut, #10205) que " +
       "Traefik sert aux ROBOTS d'aperçu quand ils déplient `/u/<pseudo>` ou `/@<pseudo>` : aucun " +
-      "écran d'app ne l'appelle, l'app lit la fiche par `GET /directory/people/:handle`.",
+      "écran d'app ne l'appelle, l'app lit la carte par `GET /directory/people/:handle?via=link`.",
   },
   {
     method: 'GET',

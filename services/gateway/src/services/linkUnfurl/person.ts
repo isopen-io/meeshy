@@ -1,6 +1,14 @@
 /**
- * L'APERÇU D'UNE FICHE POUR LES ROBOTS (#18865, chantier #18857) — `/u/<pseudo>` et
- * `/@<pseudo>` se déplient en carte de profil : « Amani Diallo (@amani) sur Meeshy »,
+ * L'APERÇU D'UNE FICHE POUR LES ROBOTS (#18865, chantier #18857).
+ *
+ * PAR DÉFAUT, AUCUNE CARTE NOMMÉE : un profil ne se montre qu'à un membre connecté (directive
+ * du porteur, #10205), et le robot d'aperçu n'en est pas un. La route rend l'aperçu GÉNÉRIQUE
+ * de Meeshy sans lire `User` tant que le drapeau serveur `PERSON_UNFURL_NAMED_CARD` n'est pas
+ * `true` — la question est posée au porteur par une issue `décision-produit` sous #18857.
+ * Dans une conversation Meeshy, le lecteur CONNECTÉ reçoit la carte par la porte de la fiche
+ * (`GET /directory/people/:handle?via=link`), jamais par cette page.
+ *
+ * Drapeau allumé : `/u/<pseudo>` et `/@<pseudo>` se déplient en carte de profil : « Amani Diallo (@amani) sur Meeshy »,
  * sa bannière pour image, sinon son avatar, sinon l'image de marque, sa bio pour texte.
  *
  * Le robot est un lecteur ANONYME, lisible par n'importe qui : la carte ne porte JAMAIS plus
@@ -32,6 +40,11 @@ const NAME_MAX = 40;
 const BIO_MAX = 160;
 const CITY_MAX = 40;
 const SEPARATOR = ' · ';
+
+/** La carte nommée ne s'allume que sur `PERSON_UNFURL_NAMED_CARD=true` explicite. */
+export function personUnfurlNamedCardEnabled(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  return env.PERSON_UNFURL_NAMED_CARD === 'true';
+}
 
 /** Un pseudo plausible. Tout le reste est inconnu, sans lecture. */
 export function isPersonHandle(handle: string): boolean {
@@ -68,7 +81,7 @@ const personUnfurlSelect = {
 } as const;
 
 /** Se cacher de la recherche : illisible ⇒ « caché » (fail-closed). */
-async function hidesFromSearch(prisma: PrismaClient, userId: string): Promise<boolean> {
+export async function hidesFromSearch(prisma: PrismaClient, userId: string): Promise<boolean> {
   try {
     return (await loadPrivacyPreferencesCached(prisma, [userId])).get(userId)?.hideProfileFromSearch === true;
   } catch {
