@@ -8,13 +8,16 @@ import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import me.meeshy.core.database.entity.MessageTranslationEntity
+import me.meeshy.core.database.entity.EditRevisionEntity
+import me.meeshy.core.database.entity.EphemeralReceiptEntity
+import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CursorPagination
 import me.meeshy.sdk.model.MessagesApiResponse
+import me.meeshy.sdk.model.StoredTextTranslation
 import me.meeshy.sdk.net.api.MessageApi
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,14 +28,15 @@ import retrofit2.Response
  * What leaves the device with a thread or a message (audit of #19046 / #19115):
  * - A2 — the revalidation runs in a job of its own, out of reach of the screen: a thread purged during its flight
  *   (« Supprimer pour moi », « Quitter ») must not come back from its page, its keys included;
- * - A3 — a message the recent window declares gone, and every message of a purged thread, leave with their child rows:
- *   a retained translation keeps the text of the message it translates.
+ * - A3 (#19440) — a message the recent window declares gone, and every message of a purged thread, leave with their child
+ *   rows: the edit history keeps the PAST texts of the message in clear, the memory of the translations its translation.
+ *   The disk rows of the translations leave through a trigger that predates A3, so they are no witness of it.
  */
 @RunWith(RobolectricTestRunner::class)
 class MessageThreadPurgeTest {
 
     private fun message(id: String, at: String) =
-        ApiMessage(id = id, conversationId = CONVERSATION, senderId = "u-peer", content = "texte $id", createdAt = at)
+        ApiMessage(id = id, conversationId = CONVERSATION, senderId = "u-peer", content = "texte $id", originalLanguage = "en", createdAt = at)
 
     private fun page(vararg messages: ApiMessage) = Response.success(ApiResponse(success = true, data = messages.toList()))
 
@@ -48,12 +52,6 @@ class MessageThreadPurgeTest {
         clock,
         regime = EndToEndRegimeKeeper(EndToEndRegimeLedger.None, database),
     )
-
-    private suspend fun MessageCollaboratorHarness.retainTranslation(messageId: String) =
-        database.messageTranslationDao().upsertText(MessageTranslationEntity(messageId, "fr", "texte traduit", "en", null, null, 1L))
-
-    private suspend fun MessageCollaboratorHarness.retainedTranslations(messageId: String) =
-        database.messageTranslationDao().textsFor(listOf(messageId))
 
     @Test
     fun `a thread purged while its revalidation flies stays purged, its messages and its key included`() =
@@ -84,31 +82,78 @@ class MessageThreadPurgeTest {
             assertThat(harness.database.syncMetaDao().lastSyncedAt(KEY)).isNull()
         }
 
-    @Test
-    fun `a message the recent window declares gone leaves with its retained translation`() = runHarnessTest { harness ->
-        harness.seedSynced(message("m1", T1))
-        harness.seedSynced(message("m2", T2))
-        harness.retainTranslation("m2")
-        val api = mockk<MessageApi> {
-            coEvery { listConditional(CONVERSATION, any()) } returns page(message("m1", T1))
-            coEvery { listAfter(CONVERSATION, any(), any()) } returns nothingAfter
-        }
+    /** The child rows [MessageChildRows] takes away, which no trigger takes: past texts in clear, the id bridge, the receipt. */
+    private suspend fun MessageCollaboratorHarness.retainChildRowsOf(messageId: String) {
+        database.editRevisionDao().upsert(EditRevisionEntity(messageId, 1, "texte antérieur de $messageId", 1L))
+        database.pendingIdDao().upsert(PendingIdEntity("cid_$messageId", messageId, CONVERSATION, null))
+        database.ephemeralReceiptDao().insertIfAbsent(EphemeralReceiptEntity(messageId, CONVERSATION, 1L, null))
+    }
 
-        harness.repository(api).refresh(CONVERSATION)
+    private suspend fun MessageCollaboratorHarness.editHistoryOf(messageId: String) = database.editRevisionDao().forMessage(messageId)
 
-        assertThat(harness.database.messageDao().find("m2")).isNull()
-        assertThat(harness.retainedTranslations("m2")).isEmpty()
+    private suspend fun MessageCollaboratorHarness.rememberTranslationInMemory(messageId: String) =
+        TranslationLayer.of(database).saveText(messageId, StoredTextTranslation(messageId, "fr", "texte traduit", "en", null, null), 1L)
+
+    private suspend fun MessageCollaboratorHarness.translationsShown(local: LocalMessage) =
+        TranslationLayer.of(database).project(local).message.translations
+
+    private fun pageServingOnlyM1() = mockk<MessageApi> {
+        coEvery { listConditional(CONVERSATION, any()) } returns page(message("m1", T1))
+        coEvery { listAfter(CONVERSATION, any(), any()) } returns nothingAfter
     }
 
     @Test
-    fun `a purged thread leaves with the retained translations of its messages`() = runHarnessTest { harness ->
+    fun `a message the recent window declares gone takes its edit history, its id bridge and its receipt with it`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(message("m1", T1))
+            harness.seedSynced(message("m2", T2))
+            harness.retainChildRowsOf("m2")
+
+            harness.repository(pageServingOnlyM1()).refresh(CONVERSATION)
+
+            assertThat(harness.database.messageDao().find("m2")).isNull()
+            assertThat(harness.editHistoryOf("m2")).isEmpty()
+            assertThat(harness.database.pendingIdDao().byServerId("m2")).isNull()
+            assertThat(harness.database.ephemeralReceiptDao().find("m2")).isNull()
+        }
+
+    @Test
+    fun `a message the recent window declares gone is forgotten by the translation memory, not only by the disk`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(message("m1", T1))
+            harness.seedSynced(message("m2", T2))
+            harness.rememberTranslationInMemory("m2")
+            val local = LocalMessage(harness.cachedMessage("m2"))
+            assertThat(harness.translationsShown(local)).isNotEmpty()
+
+            harness.repository(pageServingOnlyM1()).refresh(CONVERSATION)
+
+            assertThat(harness.translationsShown(local)).isEmpty()
+        }
+
+    @Test
+    fun `a purged thread takes the edit history, the id bridges and the receipts of its messages with it`() = runHarnessTest { harness ->
         harness.seedSynced(message("m1", T1))
-        harness.retainTranslation("m1")
+        harness.retainChildRowsOf("m1")
 
         harness.database.withTransaction { harness.database.clearThreadCache(CONVERSATION) }
 
         assertThat(harness.database.messageDao().find("m1")).isNull()
-        assertThat(harness.retainedTranslations("m1")).isEmpty()
+        assertThat(harness.editHistoryOf("m1")).isEmpty()
+        assertThat(harness.database.pendingIdDao().byServerId("m1")).isNull()
+        assertThat(harness.database.ephemeralReceiptDao().find("m1")).isNull()
+    }
+
+    @Test
+    fun `a purged thread is forgotten by the translation memory, not only by the disk`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1))
+        harness.rememberTranslationInMemory("m1")
+        val local = LocalMessage(harness.cachedMessage("m1"))
+        assertThat(harness.translationsShown(local)).isNotEmpty()
+
+        harness.database.withTransaction { harness.database.clearThreadCache(CONVERSATION) }
+
+        assertThat(harness.translationsShown(local)).isEmpty()
     }
 
     private companion object {

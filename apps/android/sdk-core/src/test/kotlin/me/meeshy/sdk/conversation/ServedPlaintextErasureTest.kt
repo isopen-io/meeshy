@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CursorPagination
 import me.meeshy.sdk.model.MessagesApiResponse
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.net.api.MessageApi
 import org.junit.Test
@@ -160,6 +161,61 @@ class ServedPlaintextErasureTest {
 
         assertThat(harness.database.messageDao().find("m1")).isNotNull()
         assertThat(harness.database.messageDao().find("m2")).isNotNull()
+        assertThat(erasures.keys()).isEmpty()
+    }
+
+    /** [pageServing], the recent window saying whether older messages remain behind it (`pagination.hasMore`). */
+    private fun windowServing(hasMore: Boolean?, vararg messages: ApiMessage): MessageApi = pageServing(*messages).also { api ->
+        val pagination = hasMore?.let { Pagination(total = messages.size, offset = 0, limit = 20, hasMore = it) }
+        coEvery { api.listConditional("c1", any()) } returns
+            Response.success(ApiResponse(success = true, data = messages.toList(), pagination = pagination))
+    }
+
+    private suspend fun MessageCollaboratorHarness.holdOlderThanTheWindow() =
+        seedSynced(sealed("m0", "me", cid = "cid_0", at = "2026-11-01T08:00:00Z"))
+
+    private fun theWholeHistory(hasMore: Boolean?) = windowServing(
+        hasMore,
+        sealed("m1", "alice", at = "2026-11-01T09:00:00Z"),
+        sealed("m2", "alice", at = "2026-11-01T09:10:00Z"),
+        sealed("m3", "alice", at = "2026-11-01T09:20:00Z"),
+    )
+
+    /**
+     * #19423 (A8) — the recent window serves EVERY message of the thread (`hasMore == false`): a message held older than its
+     * oldest no longer exists on the server. The prune used to stop at the oldest served, and kept that row and its plaintext.
+     */
+    @Test
+    fun `a window serving the whole history takes the older held sealed row and its plaintext with it`() = runHarnessTest { harness ->
+        harness.holdOlderThanTheWindow()
+        val erasures = ledger(harness)
+
+        source(harness, theWholeHistory(hasMore = false), erasures).revalidate()
+
+        assertThat(harness.database.messageDao().find("m0")).isNull()
+        assertThat(harness.database.messageDao().find("m1")).isNotNull()
+        assertThat(erasures.keys()).containsExactly("m0", "cid_0")
+    }
+
+    @Test
+    fun `a window with older messages behind it keeps the older held row, alive beyond its limit`() = runHarnessTest { harness ->
+        harness.holdOlderThanTheWindow()
+        val erasures = ledger(harness)
+
+        source(harness, theWholeHistory(hasMore = true), erasures).revalidate()
+
+        assertThat(harness.database.messageDao().find("m0")).isNotNull()
+        assertThat(erasures.keys()).isEmpty()
+    }
+
+    @Test
+    fun `a window that does not say whether older messages remain keeps the older held row (fail-closed)`() = runHarnessTest { harness ->
+        harness.holdOlderThanTheWindow()
+        val erasures = ledger(harness)
+
+        source(harness, theWholeHistory(hasMore = null), erasures).revalidate()
+
+        assertThat(harness.database.messageDao().find("m0")).isNotNull()
         assertThat(erasures.keys()).isEmpty()
     }
 
