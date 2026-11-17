@@ -15,7 +15,11 @@ public struct MeeshyWaveBars: View {
     private let height: Double
 
     @Environment(\.layoutDirection) private var layoutDirection
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     public init(samples: [Float] = [], progress: Double, isLive: Bool = false, tint: Color? = nil, height: Double = 40) {
         self.samples = samples

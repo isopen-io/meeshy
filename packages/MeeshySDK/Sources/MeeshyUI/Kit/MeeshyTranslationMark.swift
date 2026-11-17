@@ -24,7 +24,11 @@ public struct MeeshyTranslationMark: View {
     private let onExplore: (() -> Void)?
     private let label: String?
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @Environment(\.locale) private var locale
     @State private var width: Double = 390
 

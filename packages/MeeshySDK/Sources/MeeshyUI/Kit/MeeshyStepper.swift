@@ -28,7 +28,11 @@ public struct MeeshyStepper: View {
 
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.layoutDirection) private var layoutDirection
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var locale
 
@@ -258,6 +262,7 @@ struct MeeshyStepperHold: ViewModifier {
                 .onChanged { _ in begin() }
                 .onEnded { _ in end() }
         )
+        .onDisappear { holdTask?.cancel(); holdTask = nil }
     }
 
     private func begin() {

@@ -11,7 +11,11 @@ import SwiftUI
 public struct MeeshySkeleton: View {
     private let shape: MeeshySkeletonShape
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @State private var hasWaitedDelay = false
 
     public init(shape: MeeshySkeletonShape) {
