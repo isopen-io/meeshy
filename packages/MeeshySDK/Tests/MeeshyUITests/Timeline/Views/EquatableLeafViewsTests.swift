@@ -16,14 +16,6 @@ final class EquatableLeafViewsTests: XCTestCase {
         TimelineGeometry(zoomScale: zoom)
     }
 
-    // MARK: - VideoClipBar
-
-    // MARK: - AudioClipBar
-
-    // MARK: - TextClipBar
-
-    // MARK: - TransitionBadge
-
     // MARK: - RulerView
 
     func test_rulerView_equal_whenPropsIdentical() {
@@ -39,8 +31,6 @@ final class EquatableLeafViewsTests: XCTestCase {
         let b = RulerView(totalDuration: 61, geometry: geo, isDark: false, height: 24, onTapTime: { _ in })
         XCTAssertNotEqual(a, b, "Duration change must invalidate equality")
     }
-
-    // MARK: - PlayheadView
 
     // MARK: - KeyframeMarkerView
 
