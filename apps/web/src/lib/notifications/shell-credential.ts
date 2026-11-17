@@ -40,8 +40,8 @@ const credentialOptions = ({ apiBase, credential }: DeliveryReceiptCredential): 
 export function bindShellCredential(params: { readonly native: Native; readonly sessionStore: SessionStoreLike }): () => void {
   return watchDeliveryReceiptCredential({
     sessionStore: params.sessionStore,
-    write: (value) => {
-      const options = credentialOptions(value);
+    write: (read) => {
+      const options = credentialOptions(read());
       // Best effort : un pont qui rejette laisse le natif sans credential,
       // jamais une erreur qui remonterait à l'écran.
       return (options === null ? params.native('clearCredential', {}) : params.native('setCredential', options))

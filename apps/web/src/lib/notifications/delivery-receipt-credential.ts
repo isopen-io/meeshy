@@ -47,16 +47,20 @@ export function deliveryReceiptCredentialOf(session: SessionState): DeliveryRece
   return { apiBase: apiConfig.base, credential: credentialFromSession(heldAccountOf(session) ?? session) };
 }
 
-export type CredentialWriter = (value: DeliveryReceiptCredential) => Promise<void>;
+/** Le rédacteur reçoit la LECTURE, et l'évalue au moment d'écrire (#19132) :
+ * deux onglets qui écrivent ensemble finissent sur ce que l'appareil tient
+ * quand la dernière écriture part, jamais sur ce qu'il tenait quand elle a été
+ * demandée. */
+export type CredentialWriter = (read: () => DeliveryReceiptCredential) => Promise<void>;
 
 /**
  * La forme MINIMALE que ce module lit du magasin de session — jamais
- * `SessionStoreApi` entier (`session.ts`) : un témoin qui n'a besoin que de
- * `{ session }` n'a pas à fabriquer les six actions de la session réelle pour
- * satisfaire le type. `sessionStore` (réel) la satisfait par structure.
+ * `SessionStoreApi` entier (`session.ts`) : un témoin n'a pas à fabriquer les
+ * actions de la session réelle pour satisfaire le type. `sessionStore` (réel)
+ * la satisfait par structure.
  */
 export type SessionStoreLike = {
-  getState(): { readonly session: SessionState };
+  getState(): { deviceSession(): SessionState };
   subscribe(listener: (state: { readonly session: SessionState }) => void): () => void;
 };
 
@@ -65,13 +69,20 @@ export type SessionStoreLike = {
  * discipline que `ensureSessionWatch` (`api/receipts.ts`) : une déconnexion
  * doit RETIRER le crédential du magasin partagé, jamais laisser le worker
  * accuser sous une identité qui n'est plus celle du lecteur.
+ *
+ * LE CRÉDENTIAL EST CELUI DE L'APPAREIL (#19132), pas celui de l'onglet :
+ * l'entrée `meeshy-push` est UNE pour l'origine, et l'onglet resté sur un
+ * ancien jeton y remettait le sien à la moindre édition de profil — ou `null`
+ * à son 401 —, laissant le worker accuser avec un jeton révoqué, ou plus du
+ * tout.
  */
 export function watchDeliveryReceiptCredential(params: {
   readonly sessionStore: SessionStoreLike;
   readonly write: CredentialWriter;
 }): () => void {
+  const read = (): DeliveryReceiptCredential => deliveryReceiptCredentialOf(params.sessionStore.getState().deviceSession());
   const push = (): void => {
-    void params.write(deliveryReceiptCredentialOf(params.sessionStore.getState().session));
+    void params.write(read);
   };
   push();
   return params.sessionStore.subscribe(push);
@@ -84,7 +95,7 @@ export function watchDeliveryReceiptCredential(params: {
  * erreur qui remonterait à l'écran (même doctrine que `poserBadge`,
  * `sw-push.js`).
  */
-export const writeDeliveryReceiptCredential: CredentialWriter = (value) =>
+export const writeDeliveryReceiptCredential: CredentialWriter = (read) =>
   new Promise((resolve) => {
     if (typeof indexedDB === 'undefined') {
       resolve();
@@ -106,7 +117,7 @@ export const writeDeliveryReceiptCredential: CredentialWriter = (value) =>
       const db = request.result;
       try {
         const tx = db.transaction(DELIVERY_RECEIPT_STORE_NAME, 'readwrite');
-        tx.objectStore(DELIVERY_RECEIPT_STORE_NAME).put(value, DELIVERY_RECEIPT_KEY);
+        tx.objectStore(DELIVERY_RECEIPT_STORE_NAME).put(read(), DELIVERY_RECEIPT_KEY);
         tx.oncomplete = () => {
           db.close();
           resolve();

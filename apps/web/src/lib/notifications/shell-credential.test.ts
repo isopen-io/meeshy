@@ -22,7 +22,7 @@ function sessionHarness(initial: unknown) {
   let session = initial;
   const listeners: Array<(state: { readonly session: never }) => void> = [];
   const store = {
-    getState: () => ({ session }),
+    getState: () => ({ session, deviceSession: () => session }),
     subscribe: (listener: (state: { readonly session: never }) => void) => {
       listeners.push(listener);
       return () => void listeners.splice(listeners.indexOf(listener), 1);

@@ -5,8 +5,8 @@ import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import { linkDeviceSecrets as browserLinkDeviceSecrets, type LinkDeviceSecrets } from '../links/link-device-secret';
 import { linkConfirmationOf, type LinkConfirmationRequired } from './link-confirmation';
 import { accountReplacementOf, admitProvenSession, provenSessionOf } from './proven-session';
-import type { PendingUser, SessionStoreApi, SessionUser } from './session';
-import { sessionStore } from './session';
+import type { AuthenticatedSession, PendingUser, SessionStoreApi, SessionUser } from './session';
+import { heldAccountOf, heldSessionKey, sessionStore } from './session';
 import {
   verifyEmailBody,
   type VerificationStatusData,
@@ -508,20 +508,37 @@ export function createAuthClient({ transport, store, linkSecrets = browserLinkDe
     // à porter l'identité de CET appel en EN-TÊTES EXPLICITES plutôt que de
     // la relire depuis un `credential()` qui, interrogé après le wipe,
     // rendrait `null` — l'appel resterait authentifié malgré le wipe local.
-    const current = store.getState().session;
-    const headers: Record<string, string> =
-      current.status === 'authenticated'
-        ? { Authorization: `Bearer ${current.token}`, 'X-Session-Token': current.sessionToken }
-        : {};
+    const state = store.getState();
+    const held = state.session.status === 'authenticated' ? state.session : null;
+    // L'APPAREIL TIENT UNE AUTRE SESSION DE CE COMPTE (#19132) — un autre
+    // onglet s'est reconnecté. Se déconnecter la ferme AUSSI, serveur compris,
+    // et son entrée part : rien de ce compte ne reste ouvert, ni sur
+    // l'appareil ni sur la passerelle, et l'autre onglet suit
+    // (`session-follow.ts`). La session d'un AUTRE compte n'est pas touchée :
+    // on ne se déconnecte que du compte qu'on voit.
+    const device = heldAccountOf(state.deviceSession());
+    const other =
+      held !== null && device !== null && device.user.id === held.user.id && heldSessionKey(device) !== heldSessionKey(held) ? device : null;
 
-    store.getState().clearSession();
+    state.clearSession({ device: other !== null });
 
     // Un transport qui rejette NE réauthentifie PAS (§ doctrine ci-dessus) :
     // le wipe local a déjà eu lieu, et c'est la direction d'erreur qui ne
     // COÛTE rien — un « déconnecté localement, session serveur survivante »
     // se répare tout seul au prochain appel authentifié qui échoue en 401 ;
     // l'inverse serait une session fantôme.
-    return transport.request<{ message: string }>({ method: 'POST', path: authEndpoints.logout, headers });
+    const close = (session: AuthenticatedSession | null) =>
+      transport.request<{ message: string }>({
+        method: 'POST',
+        path: authEndpoints.logout,
+        headers: session === null ? {} : { Authorization: `Bearer ${session.token}`, 'X-Session-Token': session.sessionToken },
+      });
+    // Les deux fermetures partent ensemble et sont attendues ensemble : un échec
+    // de la première ne reste pas orphelin pendant que la seconde voyage, et il
+    // revient à l'appelant.
+    const result = close(held);
+    if (other !== null) await Promise.allSettled([result, close(other)]);
+    return result;
   }
 
   return {
