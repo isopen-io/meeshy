@@ -98,7 +98,7 @@ const CLES_PROFIL_NU = [
 
 function prismaProfil() {
   return {
-    profileAddress: { findMany: async () => [] },
+    profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] },
     user: {
       // La question du blocage (`where.blockedUserIds`) n'a pas de ligne.
       findFirst: jest.fn<any>(async (args?: any) => (args?.where?.blockedUserIds ? null : {

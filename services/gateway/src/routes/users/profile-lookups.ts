@@ -185,6 +185,8 @@ export async function getUserByUsername(fastify: FastifyInstance) {
                 city: publicProfileSchema.properties.city,
                 cityCircle: publicProfileSchema.properties.cityCircle,
                 addresses: publicProfileSchema.properties.addresses,
+                lockedAddresses: publicProfileSchema.properties.lockedAddresses,
+                openCommunities: publicProfileSchema.properties.openCommunities,
                 languages: publicProfileSchema.properties.languages
               }
             }

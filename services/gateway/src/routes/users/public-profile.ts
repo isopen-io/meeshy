@@ -7,6 +7,7 @@ import { servedProfileDecor, servedProfileDecorJsonSchema } from '../../services
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { withServedCity } from './profile-city';
 import { withServedAddresses } from './profile-addresses';
+import { withOpenCommunities } from './profile-open-communities';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { isFieldServed } from '../../utils/sparse-fieldset';
 import { targetHasBlockedViewer } from './profile-block-gate';
@@ -138,6 +139,33 @@ export const publicProfileSchema = {
         },
       },
     },
+    // #19274 : ce qui reste FERMÉ au lecteur, un compte par cercle qui l'ouvrirait — ni titre,
+    // ni URL, ni glyphe, ni jeton ; absent quand rien n'est fermé, vers soi ou hors d'atteinte.
+    lockedAddresses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          circle: { type: 'string' },
+          count: { type: 'number' },
+        },
+      },
+    },
+    // #19274 : ses communautés PUBLIQUES, qu'il ne cache pas de sa liste ; absent quand aucune.
+    openCommunities: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          identifier: { type: 'string' },
+          name: { type: 'string' },
+          avatar: { type: 'string', nullable: true },
+          memberCount: { type: 'number' },
+          isMember: { type: 'boolean' },
+        },
+      },
+    },
     // #10632 / #10932 : le contour d'avatar, la bannière de design et le cadre de bannière ÉQUIPÉS (additif).
     profileDecor: servedProfileDecorJsonSchema,
     // #19373 : les langues DÉCLARÉES, dans l'ordre du Prisme, dédoublonnées (cercle Public) ;
@@ -246,6 +274,8 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
     city: ['city', 'cityCircle'],
     cityCircle: ['cityCircle'],
     addresses: [],
+    lockedAddresses: [],
+    openCommunities: [],
     profileDecor: ['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame'],
     languages: ['systemLanguage', 'regionalLanguage', 'customDestinationLanguage'],
   },
@@ -374,6 +404,8 @@ export async function composePublicProfile<
 >(fastify: FastifyInstance, request: FastifyRequest, user: T, fields: FieldSet = null) {
   const gated = await gateProfilePresence(fastify, request, user);
   const withCity = await withServedCity(fastify, request, gated);
-  const composed = isFieldServed(fields, 'addresses') ? await withServedAddresses(fastify, request, withCity) : withCity;
+  const addressParts = { addresses: isFieldServed(fields, 'addresses'), lockedAddresses: isFieldServed(fields, 'lockedAddresses') };
+  const withAddresses = await withServedAddresses(fastify, request, withCity, addressParts);
+  const composed = isFieldServed(fields, 'openCommunities') ? await withOpenCommunities(fastify, request, withAddresses) : withAddresses;
   return buildPublicProfile(composed);
 }

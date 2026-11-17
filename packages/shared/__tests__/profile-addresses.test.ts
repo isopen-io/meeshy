@@ -8,6 +8,7 @@ import {
   servedAddresses,
   addressesSeenAs,
   addressOpensTo,
+  lockedAddressCounts,
   type AddressColumns,
 } from '../utils/profile-addresses';
 import { RELATION_LEVELS } from '../types/relation';
@@ -145,5 +146,57 @@ describe('addressOpensTo : la loi que la fiche et le lien de suivi d’une adres
   it('un cercle illisible ne s’ouvre qu’au propriétaire', () => {
     expect(addressOpensTo('EVERYONE', { isSelf: false, viewerLevel: 'BLOOD' })).toBe(false);
     expect(addressOpensTo('EVERYONE', { isSelf: true, viewerLevel: 'PUBLIC' })).toBe(true);
+  });
+});
+
+describe('lockedAddressCounts : ce qui est fermé se voit, compté par cercle, sans rien porter de l’adresse (#19274)', () => {
+  const fiche = [
+    adresse({ id: 'pub', circle: 'PUBLIC', title: 'Public' }),
+    adresse({ id: 'ami', circle: 'FRIEND', title: 'Amis', url: 'https://ami.example.com/', trackingToken: 'tokAmi' }),
+    adresse({ id: 'proche', circle: 'CLOSE', title: 'Proches' }),
+    adresse({ id: 'sang1', circle: 'BLOOD', title: 'Sang 1', position: 3 }),
+    adresse({ id: 'sang2', circle: 'BLOOD', title: 'Sang 2', position: 4 }),
+    adresse({ id: 'cachee', circle: 'BLOOD', isShown: false }),
+    adresse({ id: 'illisible', circle: 'ATOM' }),
+  ];
+
+  it('un Ami (cercle autre que le premier) lit le compte des cercles au-dessus du sien, rangés du plus proche au plus intime', () => {
+    expect(lockedAddressCounts(fiche, { isSelf: false, viewerLevel: 'FRIEND', reachable: true })).toEqual([
+      { circle: 'CLOSE', count: 1 },
+      { circle: 'BLOOD', count: 2 },
+    ]);
+  });
+
+  it('chaque entrée ne porte QUE le cercle et le compte : ni titre, ni URL, ni glyphe, ni jeton, ni identifiant', () => {
+    const counts = lockedAddressCounts(fiche, { isSelf: false, viewerLevel: 'COMMUNITY', reachable: true });
+    for (const entry of counts) expect(Object.keys(entry).sort()).toEqual(['circle', 'count']);
+    const text = JSON.stringify(counts);
+    for (const voisin of ['Amis', 'ami.example.com', 'tokAmi', 'site', 'ami', 'proche', 'sang1']) expect(text).not.toContain(voisin);
+  });
+
+  it('une adresse masquée ou à cercle illisible ne se compte pas', () => {
+    const counts = lockedAddressCounts(fiche, { isSelf: false, viewerLevel: 'CLOSE', reachable: true });
+    expect(counts).toEqual([{ circle: 'BLOOD', count: 2 }]);
+  });
+
+  it('un Sang n’a plus rien de fermé : la liste est vide', () => {
+    expect(lockedAddressCounts(fiche, { isSelf: false, viewerLevel: 'BLOOD', reachable: true })).toEqual([]);
+  });
+
+  it('le propriétaire lit tout : rien n’est verrouillé pour lui', () => {
+    expect(lockedAddressCounts(fiche, { isSelf: true, viewerLevel: 'PUBLIC', reachable: true })).toEqual([]);
+  });
+
+  it('un lecteur qui ne peut atteindre aucun cercle (blocage, compte désactivé) ne lit aucun compte', () => {
+    expect(lockedAddressCounts(fiche, { isSelf: false, viewerLevel: 'PUBLIC', reachable: false })).toEqual([]);
+  });
+
+  it('se lit par la MÊME loi que la fiche : une adresse servie n’est jamais aussi comptée fermée', () => {
+    for (const viewerLevel of RELATION_LEVELS) {
+      const reader = { isSelf: false, viewerLevel, reachable: true };
+      const served = servedAddresses(fiche, reader).length;
+      const locked = lockedAddressCounts(fiche, reader).reduce((sum, entry) => sum + entry.count, 0);
+      expect(served + locked).toBe(5);
+    }
   });
 });
