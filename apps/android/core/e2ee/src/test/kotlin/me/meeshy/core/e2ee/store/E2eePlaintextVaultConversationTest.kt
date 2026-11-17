@@ -29,4 +29,28 @@ class E2eePlaintextVaultConversationTest {
 
         assertThat(vault.entries(listOf("m1", "m2", "m3", "m4", "m5")).keys).containsExactly("m3", "m4", "m5")
     }
+
+    /** #14672 — l'horloge de l'ÉMETTEUR (dans le chiffré) ne protège pas son message de la suppression de la conversation. */
+    @Test
+    fun aMessageWhoseSenderClockRunsAhead_leavesWithItsConversation() {
+        val local = E2eePlaintextVault(TransactionalRecordVault(InMemoryRecordBackend()), owner = null)
+        val now = System.currentTimeMillis()
+        local.save(E2eePlaintextEntry.Readable(E2eeContent.compose("en avance", "fr", null, "c1", null, now + 600_000L), "alice"), listOf("m-ahead"))
+
+        local.removeConversation("c1", composedUpTo = now + 60_000L)
+
+        assertThat(local.entry("m-ahead")).isNull()
+    }
+
+    /** #14672 — un message rangé APRÈS la suppression reste, même si l'horloge de son émetteur retarde. */
+    @Test
+    fun aMessageStoredAfterTheDeletion_staysEvenIfItsSenderClockLags() {
+        val local = E2eePlaintextVault(TransactionalRecordVault(InMemoryRecordBackend()), owner = null)
+        val now = System.currentTimeMillis()
+        local.save(E2eePlaintextEntry.Readable(E2eeContent.compose("en retard", "fr", null, "c1", null, now - 600_000L), "alice"), listOf("m-late"))
+
+        local.removeConversation("c1", composedUpTo = now - 60_000L)
+
+        assertThat(local.entry("m-late")).isNotNull()
+    }
 }
