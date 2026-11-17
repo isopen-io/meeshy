@@ -216,14 +216,17 @@ export class PresenceVisibilityService {
   }
 }
 
-let singleton: PresenceVisibilityService | null = null;
+let singleton: { readonly prisma: PrismaClient; readonly service: PresenceVisibilityService } | null = null;
 
 /**
- * Instance partagée pour les routes (cache de préférences mutualisé entre handlers).
+ * Instance partagée pour les routes (le cache de préférences, lui, est déjà
+ * mutualisé par `preferences/privacy-cache`). Elle répond pour le client QU'ON
+ * LUI PASSE : un appel avec un autre client reconstruit l'instance plutôt que de
+ * résoudre la présence sur une base qui n'est pas celle de l'appelant.
  */
 export function getPresenceVisibilityService(prisma: PrismaClient): PresenceVisibilityService {
-  if (!singleton) {
-    singleton = new PresenceVisibilityService(prisma, new PrivacyPreferencesService(prisma));
+  if (singleton?.prisma !== prisma) {
+    singleton = { prisma, service: new PresenceVisibilityService(prisma, new PrivacyPreferencesService(prisma)) };
   }
-  return singleton;
+  return singleton.service;
 }

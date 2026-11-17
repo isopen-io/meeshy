@@ -90,6 +90,16 @@ class NotificationRevocationTest {
     }
 
     @Test
+    fun `an ephemeral message has a banner of its own and a server revocation still reaches it`() {
+        val ephemeralIndex = MessageNotificationId.of(type = "new_message", conversationId = convA, notificationId = n1, ephemeral = true)
+
+        assertThat(ephemeralIndex).isEqualTo(n1.hashCode())
+        assertThat(ephemeralIndex).isNotEqualTo(convA.hashCode())
+        val revocation = NotificationRevocation(notificationIds = listOf(n1), conversationIds = listOf(convA), types = listOf("new_message"))
+        assertThat(revocation.notificationManagerIds()).contains(ephemeralIndex)
+    }
+
+    @Test
     fun `two social notifications never collide on the same index`() {
         val first = MessageNotificationId.of(type = "post_comment", conversationId = "", notificationId = n1)
         val second = MessageNotificationId.of(type = "post_comment", conversationId = "", notificationId = n2)

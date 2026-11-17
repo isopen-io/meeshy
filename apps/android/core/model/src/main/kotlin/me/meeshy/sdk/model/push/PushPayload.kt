@@ -55,7 +55,17 @@ public data class PushPayload(
     val conversationEncryptionMode: String? = null,
     /** La communauté que la notification nomme (#18052 : « ajouté à la communauté ») ; `''` sur le fil = absente. */
     val communityId: String? = null,
+    /** `true` : le push se DÉCLARE correction d'une notification déjà annoncée (`reproduced`, #7342) ; absent d'une passerelle antérieure. */
+    val reproduced: Boolean? = null,
 ) {
+    /**
+     * Le texte d'après d'une notification déjà annoncée (message modifié) : la passerelle le pousse sous la MÊME identité
+     * et la nomme (`replacesNotificationId`). Ce n'est pas un nouvel arrivage — il ne sonne pas, ne compte pas pour un
+     * message de plus, et ne se rend que s'il y a une bannière à corriger.
+     */
+    val isCorrection: Boolean
+        get() = reproduced == true && notificationId != null && replacesNotificationId == notificationId
+
     /**
      * #13794 — la conversation que ce push apprend chiffrée de bout en bout, au même titre que la mémoire locale : le mode
      * servi ne peut qu'AJOUTER le bout en bout au registre, jamais l'en retirer (#12949). `null` pour tout autre mode.
@@ -129,6 +139,7 @@ public data class PushPayload(
                 imageUrl = text("imageURL"),
                 conversationEncryptionMode = text("conversationEncryptionMode"),
                 communityId = text("communityId"),
+                reproduced = bool("reproduced"),
             )
         }
     }
