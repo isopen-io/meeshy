@@ -185,7 +185,7 @@ const communs = { repo: REPO, base: BASE, essais: ESSAIS, ...(ATTR ? { attributi
 
 if (!FUSIONNER) {
   phase('Développer')
-  const r = await workflow('meeshy-issues-dev', { ...communs, issues: aDevelopper.map((l, i) => enIssue(l, i ? aDevelopper[i - 1].cle : null)) })
+  const r = await workflow({ scriptPath: `${REPO}/.claude/workflows/meeshy-issues-dev.js` }, { ...communs, issues: aDevelopper.map((l, i) => enIssue(l, i ? aDevelopper[i - 1].cle : null)) })
   return { chaine: P, mode: 'PR empilées, non fusionnées', deja: bilan, ...r }
 }
 
@@ -195,7 +195,7 @@ for (const l of aDevelopper) {
   phase('Développer')
   log(`Lot ${l.cle} (#${num[l.cle].n}) : développement depuis origin/${BASE}`)
   let r = null
-  try { r = await workflow('meeshy-issues-dev', { ...communs, issues: [enIssue(l, null)] }) } catch (e) { r = null }
+  try { r = await workflow({ scriptPath: `${REPO}/.claude/workflows/meeshy-issues-dev.js` }, { ...communs, issues: [enIssue(l, null)] }) } catch (e) { r = null }
   const pr = r && Array.isArray(r.prs) ? r.prs[0] : null
   if (!pr) {
     const b = r && Array.isArray(r.bloques) && r.bloques[0] ? r.bloques[0].raison : 'développement perdu'
