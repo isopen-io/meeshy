@@ -29,9 +29,9 @@ import {
   APNS_PERMANENT_REASONS,
   apnsFailureOutcome,
   circuitOpenError,
-  fcmFailureIsTokenFault,
+  fcmFailureVerdict,
+  fcmRejectionOutcome,
   type FcmSendOutcome,
-  isFcmTokenDeadCode,
   isRetryableApnsReason,
   isRetryableFcmCode,
 } from './pushFailureClassification';
@@ -159,6 +159,7 @@ const config = pushTransportConfigFromEnv(process.env);
 // transient failure is surfaced as a real delivery failure.
 const PUSH_RETRY_MAX_ATTEMPTS = 2;
 const PUSH_RETRY_BASE_DELAY_MS = 200;
+const FCM_PROVIDER_HEALTH_WINDOW_MS = 10 * 60_000;
 
 /**
  * Le son APNs : le nom, ou le dictionnaire CRITIQUE quand le producteur l'a
@@ -207,6 +208,10 @@ export class PushNotificationService {
     timeout: 10_000,
     fallback: () => { throw circuitOpenError('APNS'); },
   });
+
+  // Dernière livraison FCM réussie par plateforme : un refus d'identifiants n'accuse le jeton que si Firebase
+  // livre ailleurs sur la même plateforme (#18910).
+  private fcmLastDeliveryAt = new Map<string, number>();
 
   // In-flight deactivation guard: prevents duplicate DB writes when the same
   // token fails multiple concurrent sends (e.g. a burst of push requests).
@@ -608,9 +613,10 @@ export class PushNotificationService {
       );
       if (outcome.rejection) {
         pushLogger.warn('push.sendViaFCM.rejected', { ...fcmCorr, errorCode: outcome.rejection.code });
-        const error = isFcmTokenDeadCode(outcome.rejection.code) ? 'TOKEN_INVALID' : outcome.rejection.message;
-        return { success: false, tokenId: tokenRecord.id, error };
+        const providerHealthy = this.fcmDeliveredRecentlyOn(tokenRecord.platform);
+        return { success: false, tokenId: tokenRecord.id, ...fcmRejectionOutcome(outcome.rejection, { providerHealthy }) };
       }
+      this.fcmLastDeliveryAt.set(tokenRecord.platform, Date.now());
       pushLogger.info('push.sendViaFCM.success', fcmCorr);
       return { success: true, tokenId: tokenRecord.id };
     } catch (error: any) {
@@ -631,6 +637,11 @@ export class PushNotificationService {
     }
   }
 
+  private fcmDeliveredRecentlyOn(platform: string): boolean {
+    const at = this.fcmLastDeliveryAt.get(platform);
+    return at !== undefined && Date.now() - at <= FCM_PROVIDER_HEALTH_WINDOW_MS;
+  }
+
   /**
    * Sends via FCM, retrying transient provider errors (`messaging/internal-error`,
    * etc.) with exponential backoff. A rejection of the token or of the message
@@ -644,9 +655,9 @@ export class PushNotificationService {
         return { rejection: null };
       } catch (error: any) {
         const code = error?.code || error?.errorInfo?.code;
-        if (fcmFailureIsTokenFault(code)) return { rejection: { code, message: error?.message || code } };
         if (!isRetryableFcmCode(code) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
-          throw error;
+          if (fcmFailureVerdict(code) === 'provider-outage') throw error;
+          return { rejection: { code, message: error?.message || code } };
         }
         pushLogger.warn('push.sendViaFCM.retry', { ...corr, attempt: attempt + 1, code });
         await this.wait(PUSH_RETRY_BASE_DELAY_MS * 2 ** attempt);

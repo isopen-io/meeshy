@@ -206,7 +206,7 @@ describe('serveur-transport — la panne du fournisseur n\'est pas la faute du j
     });
 
     it.each(['messaging/mismatched-credential', 'messaging/third-party-auth-error', 'app/network-error'])(
-      'un échec fournisseur %s ne compte aucune faute au jeton',
+      'un échec fournisseur %s, Firebase n\'ayant rien livré sur la plateforme, ne compte aucune faute au jeton',
       async (code) => {
         const svc = await service();
         mockFirebaseMessagingSend.mockRejectedValue(fcmError(code));
@@ -216,6 +216,87 @@ describe('serveur-transport — la panne du fournisseur n\'est pas la faute du j
         expect(strikes()).toHaveLength(0);
       },
     );
+
+    it.each(['messaging/mismatched-credential', 'messaging/third-party-auth-error'])(
+      'cinq jetons %s d\'affilée (autre projet Firebase) ne coupent pas Firebase aux autres : le sixième, sain, part',
+      async (code) => {
+        const svc = await service();
+        mockFirebaseMessagingSend.mockRejectedValue(fcmError(code));
+        await send(svc, ids('x', 5).map((id) => token(id, 'fcm')));
+        await send(svc, ids('y', 5).map((id) => token(id, 'fcm')));
+        mockFirebaseMessagingSend.mockReset();
+        mockFirebaseMessagingSend.mockResolvedValue('msg-id');
+
+        const [sixth] = await send(svc, [token('healthy', 'fcm')]);
+
+        expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(1);
+        expect(sixth.success).toBe(true);
+      },
+    );
+
+    it('un jeton d\'un autre projet Firebase, alors que Firebase livre sur la même plateforme, prend sa faute', async () => {
+      const svc = await service();
+      await send(svc, [token('healthy', 'fcm')]);
+      mockFirebaseMessagingSend.mockRejectedValue(fcmError('messaging/mismatched-credential'));
+      mockPrisma.pushToken.update.mockClear();
+
+      const [foreign] = await send(svc, [token('foreign', 'fcm')]);
+
+      expect(foreign).toMatchObject({ success: false });
+      expect(foreign.transient).toBeFalsy();
+      expect(strikes()).toHaveLength(1);
+      expect(deactivations()).toHaveLength(1);
+    });
+
+    it('un jeton FID désinscrit (installation-id-not-registered) est désactivé dès le premier échec', async () => {
+      const svc = await service();
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockFirebaseMessagingSend.mockRejectedValue(fcmError('messaging/installation-id-not-registered'));
+      const [result] = await send(svc, [token('fid', 'fcm')]);
+      expect(result.error).toBe('TOKEN_INVALID');
+      expect(deactivations()).toHaveLength(1);
+    });
+
+    it('un 429 de Firebase (message-rate-exceeded) est réessayé, puis ne compte aucune faute au jeton sain', async () => {
+      const svc = await service();
+      mockFirebaseMessagingSend.mockRejectedValue(fcmError('messaging/message-rate-exceeded'));
+      const [result] = await send(svc, [token('healthy', 'fcm')]);
+      expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(3);
+      expect(result).toMatchObject({ success: false, transient: true });
+      expect(strikes()).toHaveLength(0);
+      expect(deactivations()).toHaveLength(0);
+    });
+
+    it.each([
+      'messaging/unknown-error', 'messaging/payload-size-limit-exceeded', 'messaging/invalid-data-payload-key',
+      'messaging/invalid-payload', 'messaging/invalid-options', 'messaging/device-message-rate-exceeded',
+    ])('%s ne compte aucune faute au jeton sain, et cinq d\'affilée ne coupent pas Firebase aux autres', async (code) => {
+      const svc = await service();
+      mockFirebaseMessagingSend.mockRejectedValue(fcmError(code));
+      const failed = await send(svc, ids('p', 5).map((id) => token(id, 'fcm')));
+      expect(failed.every((r) => r.success === false && r.transient === true)).toBe(true);
+      expect(strikes()).toHaveLength(0);
+      expect(deactivations()).toHaveLength(0);
+      mockFirebaseMessagingSend.mockReset();
+      mockFirebaseMessagingSend.mockResolvedValue('msg-id');
+
+      const [sixth] = await send(svc, [token('healthy', 'fcm')]);
+
+      expect(sixth.success).toBe(true);
+    });
+
+    it('une panne d\'authentification de NOTRE compte de service (authentication-error) compte pour le disjoncteur, pas pour le jeton', async () => {
+      const svc = await service();
+      mockFirebaseMessagingSend.mockRejectedValue(fcmError('messaging/authentication-error'));
+      await send(svc, ids('a', 5).map((id) => token(id, 'fcm')));
+      mockFirebaseMessagingSend.mockClear();
+
+      const [sixth] = await send(svc, [token('healthy', 'fcm')]);
+
+      expect(mockFirebaseMessagingSend).not.toHaveBeenCalled();
+      expect(sixth).toMatchObject({ success: false, transient: true });
+      expect(deactivations()).toHaveLength(0);
+    });
   });
 
   describe('APNs', () => {
@@ -225,6 +306,9 @@ describe('serveur-transport — la panne du fournisseur n\'est pas la faute du j
       ['une clé fournisseur invalide', { sent: [], failed: [{ device: 'd', status: 403, response: { reason: 'InvalidProviderToken' } }] }],
       ['une clé fournisseur expirée', { sent: [], failed: [{ device: 'd', status: 403, response: { reason: 'ExpiredProviderToken' } }] }],
       ['une charge trop grosse', { sent: [], failed: [{ device: 'd', status: 413, response: { reason: 'PayloadTooLarge' } }] }],
+      ...(['TooManyProviderTokenUpdates', 'IdleTimeout', 'DuplicateHeaders', 'MissingDeviceToken', 'UnrelatedKeyIdInToken', 'BadEnvironmentKeyIdInToken']
+        .map((reason): [string, { sent: unknown[]; failed: unknown[] }] =>
+          [`la raison Apple ${reason}`, { sent: [], failed: [{ device: 'd', status: 400, response: { reason } }] }])),
     ];
 
     it.each(outcomes)('%s : le jeton sain à deux fautes n\'est ni puni ni désactivé', async (_label, outcome) => {
