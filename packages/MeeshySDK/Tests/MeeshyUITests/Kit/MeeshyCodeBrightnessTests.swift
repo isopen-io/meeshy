@@ -32,7 +32,7 @@ struct MeeshyCodeBrightnessTests {
         #expect(ledger.release(card) == 0.5)
     }
 
-    @Test("carte retirée pendant l'arrière-plan : rien n'est rendu deux fois, le retour ne repousse rien")
+    @Test("carte retirée pendant l'arrière-plan : rien n'est rendu deux fois, le retour ne repousse rien, la carte suivante pousse")
     func leavingWhileSuspended_restoresNothingTwice() {
         let card = UUID()
         var ledger = MeeshyBrightnessLedger()
@@ -40,6 +40,9 @@ struct MeeshyCodeBrightnessTests {
         #expect(ledger.suspend() == 0.3)
         #expect(ledger.release(card) == nil)
         #expect(ledger.resume(current: 0.3) == nil)
+        let next = UUID()
+        #expect(ledger.acquire(next, current: 0.3) == MeeshyBrightnessLedger.boosted)
+        #expect(ledger.release(next) == 0.3)
     }
 
     @Test("une carte qui arrive en arrière-plan attend le retour pour pousser")

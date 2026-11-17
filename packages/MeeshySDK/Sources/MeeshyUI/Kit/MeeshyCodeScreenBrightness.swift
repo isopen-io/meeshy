@@ -3,8 +3,10 @@ import SwiftUI
 import UIKit
 
 /// La luminosité poussée au maximum tant que le code est à l'écran, rendue à sa
-/// valeur d'avant en partant (et en passant en arrière-plan). L'écran se lit sur
-/// la fenêtre de la vue : aucun singleton d'écran.
+/// valeur d'avant en partant et en passant en arrière-plan, repoussée au retour.
+/// L'écran se lit sur la fenêtre de la vue ; la comptabilité est UNIQUE
+/// (`MeeshyBrightnessLedger`), pour que deux cartes ne se rendent pas l'une
+/// l'autre une valeur d'avant fausse.
 struct MeeshyCodeScreenBrightness: UIViewRepresentable {
     let isActive: Bool
 
@@ -19,43 +21,74 @@ struct MeeshyCodeScreenBrightness: UIViewRepresentable {
         uiView.applyIfNeeded()
     }
 
+    static func dismantleUIView(_ uiView: BrightnessProbe, coordinator: ()) {
+        uiView.releaseIfHeld()
+    }
+
     final class BrightnessProbe: UIView {
         var isActive = false
-        private var previous: CGFloat?
-        private var screen: UIScreen?
-        private var observer: NSObjectProtocol?
+        private let lease = UUID()
+        private var holds = false
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            if window == nil { restore() } else { applyIfNeeded() }
+            applyIfNeeded()
         }
 
         func applyIfNeeded() {
-            guard isActive else { restore(); return }
-            guard let target = window?.windowScene?.screen else { return }
-            if previous == nil {
-                previous = target.brightness
-                screen = target
-            }
-            target.brightness = 1
-            if observer == nil {
-                observer = NotificationCenter.default.addObserver(
-                    forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
-                ) { [weak self] _ in self?.restore() }
-            }
+            guard isActive, let target = window?.windowScene?.screen else { return releaseIfHeld() }
+            guard !holds else { return }
+            holds = true
+            MeeshyCodeBrightnessLeases.acquire(lease, on: target)
         }
 
-        private func restore() {
-            if let previous, let screen { screen.brightness = previous }
-            previous = nil
-            screen = nil
-            if let observer { NotificationCenter.default.removeObserver(observer) }
-            observer = nil
+        func releaseIfHeld() {
+            guard holds else { return }
+            holds = false
+            MeeshyCodeBrightnessLeases.release(lease)
         }
+    }
+}
 
-        deinit {
-            if let observer { NotificationCenter.default.removeObserver(observer) }
-        }
+/// Le seul site qui écrit la luminosité de l'écran : il tient la comptabilité et
+/// écoute le cycle de l'application dès la première carte, pour toute la vie du
+/// processus (deux observateurs), afin que l'état « en arrière-plan » reste juste
+/// même quand la dernière carte part pendant l'arrière-plan.
+@MainActor
+enum MeeshyCodeBrightnessLeases {
+    private static var ledger = MeeshyBrightnessLedger()
+    private static weak var screen: UIScreen?
+    private static var observers: [NSObjectProtocol] = []
+
+    static func acquire(_ lease: UUID, on target: UIScreen) {
+        if ledger.holders.isEmpty { screen = target }
+        apply(ledger.acquire(lease, current: Double(target.brightness)))
+        observeLifecycle()
+    }
+
+    static func release(_ lease: UUID) {
+        apply(ledger.release(lease))
+        if ledger.holders.isEmpty { screen = nil }
+    }
+
+    private static func apply(_ value: Double?) {
+        guard let value, let screen else { return }
+        screen.brightness = CGFloat(value)
+    }
+
+    private static func observeLifecycle() {
+        guard observers.isEmpty else { return }
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { apply(ledger.suspend()) }
+            },
+            center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated {
+                    apply(ledger.resume(current: screen.map { Double($0.brightness) } ?? MeeshyBrightnessLedger.boosted))
+                }
+            },
+        ]
     }
 }
 #else
