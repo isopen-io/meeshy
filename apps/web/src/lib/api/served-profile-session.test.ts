@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
 import { QueryClient, dehydrate, hydrate } from '@tanstack/react-query';
 
@@ -9,9 +11,11 @@ import { resolveReaderLanguages } from '../reader';
 import { createAccountVault, type AccountVault } from './accounts';
 import { createHttpTransport, type HttpTransport } from './http';
 import { MY_PROFILE_QUERY_KEY, myProfileQueryOptions, type MyProfile } from './profile';
+import { appProfileActionDeps } from './profile-action-deps';
 import { performImageUpdate, performProfileEdit } from './profile-actions';
+import { appQueryClient } from './query-client';
 import { followServedProfile } from './served-profile-session';
-import { createSessionStore, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
+import { createSessionStore, sessionStore, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
 
 /**
  * **LA SESSION SUIT LE PROFIL SERVI** (#18914, WEB-01) — la langue, le nom et
@@ -362,5 +366,25 @@ describe('la session suit le profil SERVI par GET /me (WEB-01)', () => {
     await readMe(queryClient, transport);
 
     expect(readerOf(session)[0]).toBe('fr');
+  });
+});
+
+/**
+ * **LA PROJECTION EST BRANCHÉE** (WEB-01, P0). `followServedProfile` ne sert
+ * à rien s'il n'est pas appelé : c'est `realtime.ts` qui l'appelle, au
+ * chargement du module, avec le client et la session de l'application. Ce
+ * module n'est importé par aucun témoin (ses abonnements de module
+ * toucheraient les singletons de toute la suite) : on lit donc sa source,
+ * motif `banner-revocation.test.ts`, en exigeant une instruction de PREMIER
+ * niveau — ni commentée, ni enfermée dans une fonction.
+ */
+describe('la projection de GET /me est branchée dans l’application', () => {
+  test('realtime.ts suit le profil servi, avec le client et la session de l’application', () => {
+    const lines = readFileSync(new URL('./realtime.ts', import.meta.url), 'utf8').split('\n');
+
+    expect(lines.filter((line) => line.includes('followServedProfile('))).toContain('followServedProfile(appProfileActionDeps());');
+    const deps = appProfileActionDeps();
+    expect(deps.queryClient).toBe(appQueryClient);
+    expect(deps.session).toBe(sessionStore);
   });
 });

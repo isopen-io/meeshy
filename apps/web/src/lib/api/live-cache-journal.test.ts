@@ -13,10 +13,9 @@ import { routedTransport } from '@/test-support/routed-transport';
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
 
 import { performDeparture } from './conversation-departure';
-import { CONVERSATIONS_QUERY_KEY, conversationQuery, conversationQueryKey, findCachedConversation } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, conversationQuery, conversationQueryKey, findCachedConversation, patchConversationDetail } from './conversations';
 import type { ConversationsPage } from './conversations-pages';
 import { performDeleteForMe } from './delete-message';
-import { LIVE_CACHE_ROOT } from './live-cache-journal';
 import { messagesQueryKey } from './messages';
 import { threadWindowOf, type MessagesPage, type MessagesPageParam } from './messages-pages';
 import {
@@ -585,7 +584,18 @@ describe('hors ligne, la racine des conversations reste EN PAUSE', () => {
 });
 
 describe('le journal vit sous la racine des conversations', () => {
-  test('sa racine est celle de la liste, de la fiche et du fil', () => {
-    expect(LIVE_CACHE_ROOT).toEqual(CONVERSATIONS_QUERY_KEY);
+  test('la fiche d’une conversation en est : une écriture vive pendant sa relecture survit à la réponse', async () => {
+    const queryClient = liveQueryClient();
+    queryClient.setQueryData(conversationQueryKey('c-a'), row({ title: 'Avant' }));
+    const inFlight = deferred<Conversation>();
+    const observer = new QueryObserver(queryClient, { queryKey: conversationQueryKey('c-a'), queryFn: () => inFlight.promise, staleTime: 0 });
+    const stop = observer.subscribe(() => undefined);
+
+    patchConversationDetail(queryClient, 'c-a', (conversation) => ({ ...conversation, title: 'Renommée' }));
+    inFlight.resolve(row({ title: 'Avant' }));
+    await settle(queryClient);
+
+    expect(queryClient.getQueryData<Conversation>(conversationQueryKey('c-a'))?.title).toBe('Renommée');
+    stop();
   });
 });
