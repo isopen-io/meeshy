@@ -159,29 +159,46 @@ const emptyPage = (limit: number): SharedMediaPage => ({
   pagination: { limit, hasMore: false, nextCursor: null },
 });
 
-/** Les conversations lisibles par le lecteur ET où la cible est active, hors bout en bout. */
+/**
+ * Une conversation dont le serveur peut servir le contenu par la fiche d'un
+ * autre : ni chiffrée de bout en bout, ni rendue obsolète (#14643 : `isActive`
+ * faux et `deletedAt` posé, contenu illisible tout de suite). `deletedAt` se lit
+ * en mémoire — sur Mongo, un champ absent ne matche pas `null`.
+ */
+const isReadableConversation = (conversation: {
+  readonly encryptionMode: string | null;
+  readonly isActive: boolean;
+  readonly deletedAt: Date | null;
+}): boolean => conversation.encryptionMode !== E2EE_MODE && conversation.isActive !== false && !conversation.deletedAt;
+
+/**
+ * Les conversations lisibles par le lecteur ET où la cible est active, hors
+ * bout en bout, hors obsolètes, hors celles que le lecteur a supprimées pour
+ * lui (`deletedForMe` : cachée pour toujours, elle ne ressort pas par la fiche).
+ */
 export type SharedScope = { readonly conversationIds: readonly string[]; readonly historyFloor: Record<string, unknown> };
 
 export async function sharedScope(prisma: PrismaClient, viewerId: string, targetId: string): Promise<SharedScope | null> {
   const mine = await prisma.participant.findMany({
     where: { userId: viewerId, isActive: true },
-    select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
+    select: { conversationId: true, deletedForMe: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
     take: MEMBERSHIP_LIMIT,
   });
-  if (mine.length === 0) return null;
+  const kept = mine.filter((m) => !m.deletedForMe);
+  if (kept.length === 0) return null;
   const theirs = await prisma.participant.findMany({
-    where: { userId: targetId, isActive: true, conversationId: { in: mine.map((m) => m.conversationId) } },
+    where: { userId: targetId, isActive: true, conversationId: { in: kept.map((m) => m.conversationId) } },
     select: { conversationId: true },
     take: MEMBERSHIP_LIMIT,
   });
   if (theirs.length === 0) return null;
   const conversations = await prisma.conversation.findMany({
     where: { id: { in: [...new Set(theirs.map((p) => p.conversationId))] } },
-    select: { id: true, encryptionMode: true },
+    select: { id: true, encryptionMode: true, isActive: true, deletedAt: true },
     take: MEMBERSHIP_LIMIT,
   });
-  const readable = new Set(conversations.filter((c) => c.encryptionMode !== E2EE_MODE).map((c) => c.id));
-  const participations = mine.filter((m) => readable.has(m.conversationId));
+  const readable = new Set(conversations.filter(isReadableConversation).map((c) => c.id));
+  const participations = kept.filter((m) => readable.has(m.conversationId));
   if (participations.length === 0) return null;
 
   const { floors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, participations);
