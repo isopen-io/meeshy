@@ -20,7 +20,6 @@ const frCallJoin = {
   'callJoin.detail.loading': 'Chargement de l’appel',
   'callJoin.detail.notFound.title': 'Appel introuvable',
   'callJoin.detail.notFound.body': 'Cet appel n’existe plus ou ne vous est pas accessible.',
-  'callJoin.detail.joining': 'Connexion à l’appel…',
   'keypad.title': 'Clavier',
   'keypad.open': 'Composer un numéro',
   'keypad.input.placeholder': 'Numéro ou nom',

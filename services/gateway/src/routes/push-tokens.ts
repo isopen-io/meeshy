@@ -14,6 +14,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
+import { currentSessionOf } from '../services/auth/current-session';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../utils/response.js';
 
 // ============================================
@@ -201,6 +202,10 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
 
       const registeredAt = new Date();
 
+      // The token lives and dies with the session that registers it (#9616): ending that session
+      // retires it. A client that sends no `sid` keeps the link already stored (or none).
+      const sessionId = currentSessionOf(request).sessionId ?? undefined;
+
       // A token belongs to the LAST account that registered it: the previous
       // owner's rows are detached first, so no instant has the token aimed at
       // two accounts (#13570).
@@ -229,6 +234,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           failedAttempts: 0, // Reset failed attempts on re-registration
           lastError: null,
           registeredAt,
+          sessionId,
           updatedAt: registeredAt
         },
         create: {
@@ -242,7 +248,8 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           bundleId: body.bundleId,
           apnsEnvironment,
           isActive: true,
-          registeredAt
+          registeredAt,
+          sessionId
         },
         select: {
           id: true,

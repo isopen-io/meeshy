@@ -29,6 +29,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs }
 import { emailProofFields, settleEmailAddressProof } from './auth/email-address-proof';
 import { scheduleContactJoinedAnnouncement } from './notifications/contact-joined';
 import { retireDevicesAfterSessionEnd } from './e2ee/device-retirement';
+import { retirePushTokensAfterSessionEnd } from './pushTokenSessions';
 import { emailSecretLink } from '../utils/email-secret-link';
 import {
   createResetSecondFactorAttempts,
@@ -504,6 +505,9 @@ export class PasswordResetService {
       // #12543 — les appareils chiffrés des sessions fermées cessent d'être destinataires.
       await retireDevicesAfterSessionEnd(this.prisma, { userId: user.id }, (error) =>
         logger.warn('e2ee devices not retired after password reset; the sweep will', { error }));
+      // #9616 — les jetons push des sessions fermées cessent de réveiller leurs appareils.
+      await retirePushTokensAfterSessionEnd(this.prisma, { userId: user.id }, (error) =>
+        logger.warn('push tokens not retired after password reset; the send gate will', { error }));
 
       if (mailboxProof.emailVerifiedAt) {
         await settleEmailAddressProof(

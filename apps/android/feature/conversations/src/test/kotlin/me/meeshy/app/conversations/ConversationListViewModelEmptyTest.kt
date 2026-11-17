@@ -157,6 +157,7 @@ class ConversationListViewModelEmptyTest {
     ): me.meeshy.sdk.socket.PreferencesSocketManager =
         mockk<me.meeshy.sdk.socket.PreferencesSocketManager> {
             every { conversationPreferencesUpdated } returns events
+            every { conversationsReordered } returns MutableSharedFlow<me.meeshy.sdk.model.UserPreferencesReorderedSocketData>()
         }
 
     private fun storyRepo(): me.meeshy.sdk.story.StoryRepository =

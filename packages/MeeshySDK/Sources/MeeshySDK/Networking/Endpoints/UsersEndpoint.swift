@@ -13,6 +13,7 @@ import Foundation
 
 public enum UsersEndpoint: MeeshyEndpoint, Sendable {
     case byId(id: String)
+    case byIdInCommon(id: String)
     case byUserIdAffiliateToken(userId: String)
     case byUserIdBlock(userId: String)
     case byUserIdGame(userId: String)
@@ -57,6 +58,7 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
     public var path: String {
         switch self {
         case .byId(let id): return "/api/v1/users/\(id)"
+        case .byIdInCommon(let id): return "/api/v1/users/\(id)/in-common"
         case .byUserIdAffiliateToken(let userId): return "/api/v1/users/\(userId)/affiliate-token"
         case .byUserIdBlock(let userId): return "/api/v1/users/\(userId)/block"
         case .byUserIdGame(let userId): return "/api/v1/users/\(userId)/game"

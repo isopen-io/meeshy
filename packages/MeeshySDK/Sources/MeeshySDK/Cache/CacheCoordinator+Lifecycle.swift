@@ -138,8 +138,6 @@ extension CacheCoordinator {
         // une passe NLLB par message au rendu suivant (bulles retombées sur
         // l'original — violation du Prisme). On le laisse chaud ; l'éviction
         // FIFO (evictTranslationCacheIfNeeded) reste le garde-fou de taille.
-        transcriptionCache.removeAll()
-        audioTranslationCache.removeAll()
 
         logger.info("Memory pressure — flushed dirty keys, evicted L1 caches and expired media")
     }

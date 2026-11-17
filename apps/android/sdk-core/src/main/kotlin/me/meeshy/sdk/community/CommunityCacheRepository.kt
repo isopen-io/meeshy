@@ -14,8 +14,10 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CommunityMemberChange
 import me.meeshy.sdk.model.CommunityUpdatedEvent
 import me.meeshy.sdk.model.applying
+import me.meeshy.sdk.model.applyingMember
 import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -23,6 +25,7 @@ import me.meeshy.sdk.net.toContentFetchFailure
 import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 
 /**
  * Lecture cache-first (stale-while-revalidate) des communautés : la liste (page 0), la fiche, les
@@ -78,6 +81,49 @@ class CommunityCacheRepository(
         val page = ListSerializer(ApiCommunity.serializer())
         cache.get(LIST_NAMESPACE, FIRST_PAGE, page)?.value?.applying(event)?.let { next ->
             cache.update(LIST_NAMESPACE, FIRST_PAGE, page, ticket) { next }
+        }
+    }
+
+    /**
+     * `community:member-joined` / `-left` / `-role-updated` (#18768, web `community-member-live.ts`) :
+     * l'effectif se recopie sur la fiche et la ligne de la première page DÉJÀ tenues, et la ligne de
+     * la personne y suit son rôle — c'est d'elle que le lecteur tient ses droits d'écran. La liste
+     * des membres tenue suit un départ ou un rôle sans réseau ; une ENTRÉE la fait relire (la charge
+     * ne porte pas le profil, et la relecture repasse par les gardes de la passerelle).
+     *
+     * Le LECTEUR qui entre ou sort relit sa liste de communautés. Sorti d'une communauté PRIVÉE, il
+     * n'en garde ni les membres ni les channels : la passerelle ne les lui servirait plus.
+     */
+    suspend fun applyMemberChange(change: CommunityMemberChange, viewerId: String?) {
+        val ticket = cache.ticket()
+        val detail = ApiCommunity.serializer()
+        val heldDetail = cache.get(DETAIL_NAMESPACE, change.communityId, detail)?.value
+        heldDetail?.applying(change, viewerId)?.let { next ->
+            cache.update(DETAIL_NAMESPACE, change.communityId, detail, ticket) { next }
+        }
+        val page = ListSerializer(ApiCommunity.serializer())
+        val heldPage = cache.get(LIST_NAMESPACE, FIRST_PAGE, page)?.value
+        heldPage?.applying(change, viewerId)?.let { next ->
+            cache.update(LIST_NAMESPACE, FIRST_PAGE, page, ticket) { next }
+        }
+        val viewerLeftPrivate = change.userId == viewerId && change.hasLeft &&
+            (heldDetail ?: heldPage?.firstOrNull { it.id == change.communityId })?.isPrivate != false
+        if (viewerLeftPrivate) {
+            cache.clear(MEMBERS_NAMESPACE, change.communityId)
+            cache.clear(CHANNELS_NAMESPACE, change.communityId)
+        } else {
+            applyToMembers(change, ticket)
+        }
+        if (change.userId == viewerId && change.kind != CommunityMemberChange.Kind.ROLE_UPDATED) revalidating(listSource())
+    }
+
+    private suspend fun applyToMembers(change: CommunityMemberChange, ticket: AccountTicket?) {
+        val members = ListSerializer(ApiCommunityMember.serializer())
+        val held = cache.get(MEMBERS_NAMESPACE, change.communityId, members)?.value ?: return
+        val next = held.applyingMember(change)
+        when {
+            next != null -> cache.update(MEMBERS_NAMESPACE, change.communityId, members, ticket) { next }
+            change.kind == CommunityMemberChange.Kind.JOINED -> revalidating(membersSource(change.communityId))
         }
     }
 

@@ -1,0 +1,60 @@
+{
+  "composant": "MeeshyGroupCard",
+  "cle": "K43",
+  "note": "Vecteurs de parité (fiche K43 § 10). N enfants rendent N − 1 filets, en retrait de 18 ; rayon 26 (30 en verre) ; danger : fond 8 %, bord 34 %, filets 24 % ; accent : lavis 22 %, bord 30 % ; verrouillée : 42 %.",
+  "filets": [
+    {
+      "enfants": 0,
+      "filets": 0
+    },
+    {
+      "enfants": 1,
+      "filets": 0
+    },
+    {
+      "enfants": 2,
+      "filets": 1
+    },
+    {
+      "enfants": 5,
+      "filets": 4
+    }
+  ],
+  "fonds": [
+    {
+      "fond": "raised",
+      "rayon": 26,
+      "bord": 1,
+      "lavis": 0
+    },
+    {
+      "fond": "glass",
+      "rayon": 30,
+      "bord": 1,
+      "lavis": 0
+    },
+    {
+      "fond": "danger",
+      "rayon": 26,
+      "bord": 1,
+      "lavis": 0.08,
+      "opaciteBord": 0.34,
+      "opaciteFilet": 0.24
+    },
+    {
+      "fond": "accent",
+      "rayon": 26,
+      "bord": 1,
+      "lavis": 0.22,
+      "opaciteBord": 0.3
+    },
+    {
+      "fond": "dashed",
+      "rayon": 26,
+      "bord": 1.5,
+      "lavis": 0
+    }
+  ],
+  "retraitFilet": 18,
+  "opaciteVerrouillee": 0.42
+}

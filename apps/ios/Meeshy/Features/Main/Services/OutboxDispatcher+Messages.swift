@@ -297,7 +297,7 @@ extension OutboxDispatcher {
             )
 
         } else if record.id.hasPrefix("mrq_") {
-            // `MessageRetryQueue` was removed but legacy `mrq_*` rows may
+            // The message retry queue was removed but legacy `mrq_*` rows may
             // still live on devices that upgraded mid-queue. The payload
             // format was a strict superset of the fields needed for replay;
             // we hand-roll a minimal struct here instead of keeping the

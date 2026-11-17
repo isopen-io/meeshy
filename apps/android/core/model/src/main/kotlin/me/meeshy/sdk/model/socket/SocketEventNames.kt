@@ -109,6 +109,9 @@ object SocketEventNames {
     const val COMMENT_UPDATED = "comment:updated"
 
     // community
+    const val COMMUNITY_MEMBER_JOINED = "community:member-joined"
+    const val COMMUNITY_MEMBER_LEFT = "community:member-left"
+    const val COMMUNITY_MEMBER_ROLE_UPDATED = "community:member-role-updated"
     const val COMMUNITY_UPDATED = "community:updated"
 
     // conversation
@@ -207,6 +210,9 @@ object SocketEventNames {
 
     // reaction
     const val PROFILE_DECOR_UPDATED = "profile:decor-updated"
+
+    /** #18924 — mon profil changé sur un autre de mes appareils, vers `user:<moi>` seulement. */
+    const val PROFILE_UPDATED = "profile:updated"
     const val REACTION_ADDED = "reaction:added"
     const val REACTION_REMOVED = "reaction:removed"
 
@@ -259,6 +265,7 @@ object SocketEventNames {
 
     // user
     const val USER_PREFERENCES_UPDATED = "user:preferences-updated"
+    const val USER_PREFERENCES_REORDERED = "user:preferences-reordered"
     const val USER_STATUS = "user:status"
     const val USER_UPDATED = "user:updated"
 
@@ -384,6 +391,9 @@ object SocketEventNames {
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,
         COMMENT_UPDATED,
+        COMMUNITY_MEMBER_JOINED,
+        COMMUNITY_MEMBER_LEFT,
+        COMMUNITY_MEMBER_ROLE_UPDATED,
         COMMUNITY_UPDATED,
         CONVERSATION_CLOSED,
         CONVERSATION_DELETED,
@@ -454,6 +464,7 @@ object SocketEventNames {
         PRESENCE_APP_STATE,
         PRESENCE_SNAPSHOT,
         PROFILE_DECOR_UPDATED,
+        PROFILE_UPDATED,
         REACTION_ADDED,
         REACTION_REMOVED,
         FRIEND_REQUEST_CANCELLED,
@@ -486,6 +497,7 @@ object SocketEventNames {
         TYPING_START,
         TYPING_STOP,
         USER_PREFERENCES_UPDATED,
+        USER_PREFERENCES_REORDERED,
         USER_STATUS,
         USER_UPDATED,
         VIEWING_ACTIVITY,

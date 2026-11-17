@@ -9,7 +9,7 @@ import Foundation
 
 // MARK: - Translation Event Data
 
-public struct TranslationData: Codable, Sendable, CacheIdentifiable {
+public struct TranslationData: Codable, Sendable, CacheIdentifiable, Equatable {
     public let id: String
     public let messageId: String
     public let sourceLanguage: String

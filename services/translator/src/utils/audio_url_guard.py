@@ -27,6 +27,11 @@ jamais suivies (à la charge de l'appelant : `allow_redirects=False`).
 
 Le refus ne porte qu'une RAISON fixe, jamais l'URL ni l'hôte : ni les journaux
 ni les charges d'erreur n'en reçoivent une miette.
+
+La `webhookUrl` d'un job de traduction vocale (#18772) passe par la MÊME forme et
+le MÊME résolveur, sous une politique distincte (`WEBHOOK_URL_POLICY`) : sa liste
+est `TRANSLATOR_WEBHOOK_ALLOWED_HOSTS`, vide par défaut, et un hôte autorisé pour
+l'audio ne l'est pas pour un webhook (ni l'inverse).
 """
 
 import asyncio
@@ -34,23 +39,49 @@ import ipaddress
 import os
 import socket
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple
+from typing import Any, Awaitable, Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple, Type
 from urllib.parse import urlsplit
 
 ALLOWED_HOSTS_ENV = "TRANSLATOR_AUDIO_URL_ALLOWED_HOSTS"
 AUDIO_URL_REJECTED_MESSAGE = "Audio URL rejected"
+WEBHOOK_ALLOWED_HOSTS_ENV = "TRANSLATOR_WEBHOOK_ALLOWED_HOSTS"
+WEBHOOK_URL_REJECTED_MESSAGE = "Webhook URL rejected"
 ALLOWED_PORTS = (None, 443)
 
 AddrInfo = Tuple[int, int, int, str, Tuple[Any, ...]]
 GetAddrInfo = Callable[..., Awaitable[Sequence[AddrInfo]]]
 
 
-class AudioUrlRejected(Exception):
-    """URL audio refusée. `reason` est un libellé fixe, sans donnée de requête."""
+class GuardedUrlRejected(Exception):
+    """URL refusée. `reason` est un libellé fixe, sans donnée de requête."""
+
+    label = "URL rejected"
 
     def __init__(self, reason: str):
         self.reason = reason
-        super().__init__(f"{AUDIO_URL_REJECTED_MESSAGE}: {reason}")
+        super().__init__(f"{self.label}: {reason}")
+
+
+class AudioUrlRejected(GuardedUrlRejected):
+    label = AUDIO_URL_REJECTED_MESSAGE
+
+
+class WebhookUrlRejected(GuardedUrlRejected):
+    label = WEBHOOK_URL_REJECTED_MESSAGE
+
+
+@dataclass(frozen=True)
+class UrlPolicy:
+    allowed_hosts_env: str
+    rejected: Type[GuardedUrlRejected]
+
+    def allowed_hosts(self) -> FrozenSet[str]:
+        raw = os.getenv(self.allowed_hosts_env) or ""
+        return frozenset(entry.strip().lower() for entry in raw.split(",") if entry.strip())
+
+
+AUDIO_URL_POLICY = UrlPolicy(allowed_hosts_env=ALLOWED_HOSTS_ENV, rejected=AudioUrlRejected)
+WEBHOOK_URL_POLICY = UrlPolicy(allowed_hosts_env=WEBHOOK_ALLOWED_HOSTS_ENV, rejected=WebhookUrlRejected)
 
 
 @dataclass(frozen=True)
@@ -60,8 +91,7 @@ class AdmittedAudioUrl:
 
 
 def allowed_audio_url_hosts() -> FrozenSet[str]:
-    raw = os.getenv(ALLOWED_HOSTS_ENV) or ""
-    return frozenset(entry.strip().lower() for entry in raw.split(",") if entry.strip())
+    return AUDIO_URL_POLICY.allowed_hosts()
 
 
 def is_public_address(raw: str) -> bool:
@@ -97,31 +127,43 @@ def _is_malformed(raw: object) -> bool:
 
 
 def admit_audio_url(raw: object, allowed_hosts: Optional[FrozenSet[str]] = None) -> AdmittedAudioUrl:
-    """Rend l'URL et son hôte normalisé si la forme est admise, sinon lève."""
+    """Rend l'URL et son hôte normalisé si la forme est admise, sinon lève `AudioUrlRejected`."""
+    return admit_guarded_url(raw, AUDIO_URL_POLICY, allowed_hosts)
+
+
+def admit_webhook_url(raw: object, allowed_hosts: Optional[FrozenSet[str]] = None) -> AdmittedAudioUrl:
+    """Même forme que l'audioUrl, liste `TRANSLATOR_WEBHOOK_ALLOWED_HOSTS`, refus `WebhookUrlRejected`."""
+    return admit_guarded_url(raw, WEBHOOK_URL_POLICY, allowed_hosts)
+
+
+def admit_guarded_url(
+    raw: object, policy: UrlPolicy, allowed_hosts: Optional[FrozenSet[str]] = None
+) -> AdmittedAudioUrl:
+    rejected = policy.rejected
     if _is_malformed(raw):
-        raise AudioUrlRejected("malformed")
+        raise rejected("malformed")
     try:
         parts = urlsplit(raw)
         port = parts.port
     except ValueError:
-        raise AudioUrlRejected("malformed") from None
+        raise rejected("malformed") from None
     if parts.scheme.lower() != "https":
-        raise AudioUrlRejected("scheme")
+        raise rejected("scheme")
     if parts.username is not None or parts.password is not None:
-        raise AudioUrlRejected("userinfo")
+        raise rejected("userinfo")
     host = (parts.hostname or "").lower()
     if not host:
-        raise AudioUrlRejected("malformed")
+        raise rejected("malformed")
     if port not in ALLOWED_PORTS:
-        raise AudioUrlRejected("port")
+        raise rejected("port")
     literal = _ip_literal(host)
     if literal is None and _client_takes_for_an_address(host):
-        raise AudioUrlRejected("malformed")
+        raise rejected("malformed")
     if literal is not None and not is_public_address(literal):
-        raise AudioUrlRejected("private_address")
-    allowed = allowed_hosts if allowed_hosts is not None else allowed_audio_url_hosts()
+        raise rejected("private_address")
+    allowed = allowed_hosts if allowed_hosts is not None else policy.allowed_hosts()
     if host not in allowed:
-        raise AudioUrlRejected("host_not_allowed")
+        raise rejected("host_not_allowed")
     return AdmittedAudioUrl(url=raw, host=host)
 
 
@@ -141,24 +183,26 @@ class VerifiedAudioHostResolver:
         self,
         getaddrinfo: Optional[GetAddrInfo] = None,
         allowed_hosts: Optional[FrozenSet[str]] = None,
+        policy: UrlPolicy = AUDIO_URL_POLICY,
     ):
         self._getaddrinfo = getaddrinfo or _system_getaddrinfo
         self._allowed_hosts = allowed_hosts
+        self._policy = policy
 
     def _allowed(self) -> FrozenSet[str]:
-        return self._allowed_hosts if self._allowed_hosts is not None else allowed_audio_url_hosts()
+        return self._allowed_hosts if self._allowed_hosts is not None else self._policy.allowed_hosts()
 
     async def resolve(self, host: str, port: int = 0, family: int = socket.AF_UNSPEC) -> List[Dict[str, Any]]:
         if host.lower() not in self._allowed():
-            raise AudioUrlRejected("host_not_allowed")
+            raise self._policy.rejected("host_not_allowed")
         try:
             infos = await self._getaddrinfo(host, port, family)
         except (OSError, UnicodeError):
-            raise AudioUrlRejected("resolution_failed") from None
+            raise self._policy.rejected("resolution_failed") from None
         if not infos:
-            raise AudioUrlRejected("resolution_failed")
+            raise self._policy.rejected("resolution_failed")
         if not all(is_public_address(str(info[4][0])) for info in infos):
-            raise AudioUrlRejected("private_address")
+            raise self._policy.rejected("private_address")
         return [
             {
                 "hostname": host,

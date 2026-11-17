@@ -5,10 +5,6 @@
       "resDir": "sdk-ui/src/main/res",
       "entries": [
         {
-          "androidName": "bubble_retry_resend",
-          "status": "android-only"
-        },
-        {
           "androidName": "bubble_retry_sending",
           "status": "android-only"
         }

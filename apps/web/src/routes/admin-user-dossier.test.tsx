@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { act, type ReactElement } from 'react';
 
-import { securityEventLabel, SECURITY_EVENT_TYPES } from '@/lib/admin/user-dossier-labels';
+import { securityEventLabel } from '@/lib/admin/user-dossier-labels';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import type { AdminDeps } from '@/lib/api/admin';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
@@ -302,6 +302,50 @@ describe('signalements', () => {
     noHex(host);
   });
 });
+
+/** Les types d'événements que la passerelle écrit aujourd'hui (`services/gateway/src/services/auth/security-event-view.ts`) — chacun a son libellé. */
+const SECURITY_EVENT_TYPES = [
+  'PASSWORD_RESET_REQUEST',
+  'PASSWORD_RESET_SUCCESS',
+  'PASSWORD_RESET_FAILED',
+  'PASSWORD_RESET_UNVERIFIED_EMAIL',
+  'PASSWORD_RESET_TOKEN_REUSE',
+  'PASSWORD_RESET_REVOKED_TOKEN',
+  'PASSWORD_RESET_INVALID_TOKEN',
+  'PASSWORD_RESET_EXPIRED_TOKEN',
+  'PASSWORD_RESET_LOCKED_ACCOUNT',
+  'PASSWORD_RESET_ABUSE',
+  'SUSPICIOUS_PASSWORD_RESET',
+  'PASSWORD_CHANGE',
+  'LOGIN_SUCCESS',
+  'LOGIN_FAILED',
+  'LOGIN_BLOCKED',
+  'LOGOUT',
+  'ACCOUNT_LOCKED',
+  'ACCOUNT_UNLOCKED',
+  'SESSION_CREATED',
+  'SESSION_REVOKED',
+  'SESSION_EXPIRED',
+  'SESSION_TRUSTED',
+  'TWO_FACTOR_ENABLED',
+  'TWO_FACTOR_DISABLED',
+  'TWO_FACTOR_SUCCESS',
+  'TWO_FACTOR_FAILED',
+  'TWO_FA_FAILED',
+  'EMAIL_CHANGE',
+  'PHONE_CHANGE',
+  'PHONE_TRANSFERRED_OUT',
+  'PHONE_TRANSFERRED_IN',
+  'PHONE_TRANSFER_CODE_RESENT',
+  'SUSPICIOUS_ACTIVITY',
+  'RATE_LIMIT_EXCEEDED',
+  'BRUTE_FORCE_DETECTED',
+  'MAGIC_LINK_REQUESTED',
+  'MAGIC_LINK_LOGIN_SUCCESS',
+  'MAGIC_LINK_REUSE_ATTEMPT',
+  'MAGIC_LINK_EXPIRED',
+  'EMAIL_RELEASED_BY_CLAIM',
+] as const;
 
 describe('les événements de sécurité ont tous un libellé', () => {
   test('chaque type connu est étiqueté en français et en anglais', async () => {

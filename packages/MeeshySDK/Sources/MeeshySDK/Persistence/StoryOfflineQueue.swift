@@ -106,7 +106,7 @@ public actor StoryOfflineQueue: OfflineQueueProviding {
 
     // `setOnPublish` a été SUPPRIMÉ. Il permettait d'écraser le gestionnaire de
     // publication de `StoryPublishQueue` depuis l'extérieur, et son unique
-    // appelant (`StoryOfflineQueueBootstrap`) y installait un pont qui
+    // appelant (l'ancien amorçage de la file) y installait un pont qui
     // ré-enfilait l'item dans la MÊME file — une boucle sur elle-même qui ne
     // survivait que parce que `StoryPublishService.setExecutor` repassait
     // derrière. Le gestionnaire n'a qu'un propriétaire légitime : ce service.

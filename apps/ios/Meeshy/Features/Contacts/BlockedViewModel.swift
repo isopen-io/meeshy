@@ -48,7 +48,8 @@ final class BlockedViewModel: ObservableObject {
     /// l'appel REST direct online-only. Retrait optimiste de la liste + flip de
     /// la blocklist canonique (`setBlockedOptimistic`, lue par les swipe labels
     /// ailleurs) ; le dispatcher outbox possède le DELETE réseau. Rollback des
-    /// deux sur enqueue-fail ET sur `.exhausted` (miroir UserProfileViewModel).
+    /// deux sur enqueue-fail ET sur `.exhausted` (même patron que
+    /// `BlockActionCoordinator`).
     func unblock(userId: String) async {
         let snapshot = blockedUsers
         let cmid = ClientMutationId.generate()

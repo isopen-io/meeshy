@@ -15,7 +15,7 @@ import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { RequestContext } from './GeoIPService';
 import { adoptionDeadlineOf, openingExpiry } from './auth/session-adoption';
 import { retireDevicesAfterSessionEnd, type SessionEndScope } from './e2ee/device-retirement';
-import { retirePushToTalkTokensAfterSessionEnd } from './talkie/pushToTalkTokens';
+import { retirePushTokensAfterSessionEnd } from './pushTokenSessions';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'SessionService' });
@@ -43,13 +43,14 @@ const ACTIVE_SESSION_FILTER = {
 };
 
 /**
- * #12543 — l'appareil chiffré qu'une session avait enrôlé ne lui survit pas ; #17142 — son jeton
- * PushToTalk non plus (il réveillerait l'appareil pour un compte qui n'y est plus connecté).
+ * #12543 — l'appareil chiffré qu'une session avait enrôlé ne lui survit pas ; #17142 / #9616 — ses jetons
+ * push (apns, fcm, voip, PushToTalk) non plus : ils réveilleraient l'appareil, aperçus compris, pour un
+ * compte qui n'y est plus connecté.
  */
 async function retireEncryptedDevices(db: PrismaClient, scope: SessionEndScope): Promise<void> {
   await Promise.all([
     retireDevicesAfterSessionEnd(db, scope, (error) => logger.warn('e2ee devices not retired at session end; the sweep will', { error })),
-    retirePushToTalkTokensAfterSessionEnd(db, scope, (error) => logger.warn('PushToTalk tokens not retired at session end; the wake gate will', { error })),
+    retirePushTokensAfterSessionEnd(db, scope, (error) => logger.warn('push tokens not retired at session end; the send gate will', { error })),
   ]);
 }
 

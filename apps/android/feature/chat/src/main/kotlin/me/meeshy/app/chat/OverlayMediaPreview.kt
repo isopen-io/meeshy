@@ -55,7 +55,7 @@ import kotlin.math.roundToInt
  * [OverlayMediaTransport], reconciled onto the thread's Media3 [VoiceNoteEngine]
  * by [OverlayAudioPreview] (#13862: `MediaPlayer` skipped the Ogg Opus of a
  * translated voice note below Android 10); this composable is the glue. A
- * faithful port of iOS `PreviewAudioPlayer` (`MessageOverlayMenu.swift`), which
+ * faithful port of the iOS overlay audio player (`MessageOverlayMenu.swift`), which
  * Android surpasses with the single-tap speed chip instead of a context menu.
  *
  * Video interactive preview is a tracked follow-up: `BubbleContent` does not yet

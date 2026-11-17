@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentDeletedEvent
 import me.meeshy.sdk.model.AttachmentRemovalDeltas
+import me.meeshy.sdk.model.conversationlist.ConversationLiveFacets
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
@@ -34,6 +35,8 @@ class AttachmentDeletionApplier internal constructor(
     private val fence: AccountFence?,
     private val mediaHub: ConversationMediaHubIndex,
     private val filePurger: DeletedAttachmentFilePurger = DeletedAttachmentFilePurger.None,
+    /** #18926 — the preview patched here during a list sweep is journaled: the page built before cannot undo it. */
+    private val journal: ConversationLiveJournal = ConversationLiveJournal(),
 ) {
     @Inject
     constructor(
@@ -43,7 +46,8 @@ class AttachmentDeletionApplier internal constructor(
         fence: AccountFence?,
         mediaHub: ConversationMediaHubIndex,
         filePurger: DeletedAttachmentFilePurger = DeletedAttachmentFilePurger.None,
-    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, fence, mediaHub, filePurger)
+        journal: ConversationLiveJournal = ConversationLiveJournal(),
+    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, fence, mediaHub, filePurger, journal)
 
     suspend fun apply(event: AttachmentDeletedEvent) {
         if (event.messageId.isBlank() || event.attachmentId.isBlank()) return
@@ -79,6 +83,7 @@ class AttachmentDeletionApplier internal constructor(
                 val patched = AttachmentRemovalDeltas.preview(conversation, event.messageId, event.attachmentId, previous)
                 if (patched === conversation) return@withTransaction
                 database.conversationDao().upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(patched))))
+                journal.record(event.conversationId, ConversationLiveFacets.changed(conversation, patched))
             }
         }
     }

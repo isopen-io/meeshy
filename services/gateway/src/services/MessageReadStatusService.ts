@@ -23,7 +23,7 @@ import { MessageMediaConsumptionService, type MediaConsumptionServed } from './M
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { unsetOrNull } from '../utils/prisma-unset';
-import { computeContiguousReadPrefix, computeRecipientCount, resolveCursorDeliveredAt, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
+import { computeContiguousPrefix, computeRecipientCount, resolveCursorDeliveredAt, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
 import {
@@ -60,9 +60,9 @@ import { guardedInterval } from '../utils/guarded-timer';
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
 
 /**
- * Borne du balayage cherchant jusqu'où le curseur de lecture peut avancer.
- * Protège d'un scan non maîtrisé sur une conversation très en retard : le
- * curseur rattrapera au passage suivant.
+ * Borne du balayage cherchant jusqu'où un curseur peut avancer — LECTURE et
+ * LIVRAISON (#18731). Protège d'un scan non maîtrisé sur une conversation très
+ * en retard : le curseur rattrapera au passage suivant.
  */
 const EXACT_CURSOR_SCAN_LIMIT = 500;
 
@@ -590,18 +590,92 @@ export class MessageReadStatusService {
       // Best-effort: only bounds the freeze window, never fails the cursor
       // advance below (which is now the sole source of truth for staleness).
       let prevDeliveredAt: Date | null = null;
+      // #18731 — la POSITION du curseur, distincte de son horloge MURALE.
+      // `lastDeliveredAt` est posé à `now` par `_advanceCursor` : c'est l'heure
+      // à laquelle un accusé a été TRAITÉ. Ancrer la fenêtre de contiguïté
+      // dessus EXCLURAIT le trou qu'on cherche — M1 (10:00) est sous un
+      // `lastDeliveredAt` de 11:00, et c'est exactement le défaut que ce lot
+      // ferme. Repli sur l'horloge quand la colonne manque (lignes écrites
+      // avant son introduction) : la fenêtre démarre alors trop TARD, donc on
+      // ne re-litige pas un passé dont le repli curseur rend déjà compte.
+      let prevDeliveredPosition: Date | null = null;
       let cursorExists = false;
       try {
         const prevCursor = await this.prisma.conversationReadCursor.findUnique({
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastDeliveredAt: true },
+          select: { lastDeliveredAt: true, lastDeliveredMessageCreatedAt: true },
         });
         prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
+        prevDeliveredPosition =
+          prevCursor?.lastDeliveredMessageCreatedAt ?? prevCursor?.lastDeliveredAt ?? null;
         cursorExists = prevCursor != null;
       } catch {
         prevDeliveredAt = null;
+        prevDeliveredPosition = null;
+      }
+
+      // ── LE PÉRIMÈTRE EXACT (#18731) ────────────────────────────────────────
+      //
+      // Quand l'appelant NOMME ce qu'il a remis — le rejeu hors ligne, seul
+      // dans ce cas (#18614) — les deux écritures de cette méthode ne
+      // connaissent pas le même ensemble :
+      //
+      //   • `freezeMessageStatus({ messageIds })` grave l'ensemble EXACT ;
+      //   • `_advanceCursor({ messageId })` sautait jusqu'au plus RÉCENT de
+      //     l'accusé, SANS regarder si les messages franchis ont été livrés.
+      //
+      // Le curseur affirmait donc un préfixe qu'il n'avait pas vérifié, et le
+      // trou le plus fréquent — un message évincé au plafond de 500 de la file,
+      // donc INVISIBLE au drain — est ANTÉRIEUR au dernier livré : aucune
+      // BORNE ne peut l'exclure, seule la CONTIGUÏTÉ le peut.
+      //
+      // L'ordre s'inverse en conséquence, et c'est le cœur du lot : **le gel
+      // d'abord**, parce qu'il est l'écriture DURABLE et qu'il est l'autorité
+      // que la lecture consulte en premier (`resolveReceivedAt`) ; le curseur
+      // ensuite, en index rapide d'un préfixe PROUVÉ. L'ancien ordre faisait
+      // dépendre le gel du verdict de fraîcheur du curseur (`if (!advanced)
+      // return 0`) : un accusé que la garde écarte ne gravait RIEN, y compris
+      // les messages qu'il était le seul à nommer.
+      if (options?.messageIds) {
+        const frozenCount = await this.freezeMessageStatus({
+          participantId,
+          conversationId,
+          since: prevDeliveredAt,
+          at: now,
+          field: "deliveredAt",
+          messageIds: options.messageIds,
+        });
+
+        const target = await this._computeExactDeliveredCursorTarget({
+          participantId,
+          conversationId,
+          since: prevDeliveredPosition,
+        });
+
+        // Pas de cible ⇒ le curseur reste en place. C'est le verdict JUSTE du
+        // scénario de l'issue (le trou est en tête de fenêtre) : un curseur
+        // qui n'avance pas sert une réponse plus PAUVRE, jamais une réponse
+        // FAUSSE, et les entrées figées portent l'exactitude au-delà du trou.
+        // Il est monotone, donc rien de ce qu'il affirmait déjà n'est retiré.
+        if (target) {
+          await this._advanceCursor({
+            participantId,
+            conversationId,
+            messageId: target,
+            now,
+            idField: "lastDeliveredMessageId",
+            atField: "lastDeliveredAt",
+            resetUnreadCount: false,
+            cursorExists,
+          });
+        }
+
+        logger.info(
+          `[MessageReadStatus] Participant ${participantId} received update in conversation ${conversationId}`
+        );
+        return frozenCount;
       }
 
       // Out-of-order delivery receipt (e.g. two devices/retries racing): the
@@ -632,30 +706,26 @@ export class MessageReadStatusService {
       // cette méthode rend à son tour : c'est la seule vraie mesure de ce qui a
       // été figé, là où `getUnreadCount` mesurait autre chose.
       //
-      // #18614 — le PÉRIMÈTRE du gel. Sans `messageIds`, `freezeMessageStatus`
-      // résout une PLAGE (`createdAt > since`), c'est-à-dire TOUT message non
-      // supprimé de la conversation créé depuis le curseur précédent. C'est la
-      // sémantique juste des quatre appelants qui disent « tout ce qui précède
-      // est arrivé » — un lecteur EN LIGNE, dans le fil.
-      //
-      // Le REJEU hors ligne est le seul à savoir qu'il a livré un sous-ensemble
-      // STRICT de cette fenêtre : une émission qui lève en sort une entrée, et
-      // le plafond de 500 de la file en évince d'autres AVANT même le drain,
-      // sans aucune panne. Sous la plage, ces messages recevaient `deliveredAt`
-      // — en écriture WRITE-ONCE, donc sans retour — et la coche de leur auteur
-      // passait à « remis » pour un message jamais reçu.
+      // #18614 — le PÉRIMÈTRE du gel. Ici, `freezeMessageStatus` résout une
+      // PLAGE (`createdAt > since`), c'est-à-dire TOUT message non supprimé de
+      // la conversation créé depuis le curseur précédent. C'est la sémantique
+      // juste des quatre appelants qui disent « tout ce qui précède est
+      // arrivé » — un lecteur EN LIGNE, dans le fil — et ce bloc ne sert plus
+      // qu'eux depuis #18731 : le périmètre EXACT est rendu plus haut, où
+      // l'ordre gel-puis-curseur lui est propre.
       //
       // `undefined` vaut « je n'ai pas calculé » et garde la fenêtre ; une
       // liste VIDE vaut « j'ai livré, et rien ». La distinction est celle de
       // `bridgeComputed` / `bridgeNotComputed`, un étage plus bas : ne jamais
-      // laisser une IGNORANCE et une AFFIRMATION s'écrire pareil.
+      // laisser une IGNORANCE et une AFFIRMATION s'écrire pareil — c'est elle
+      // qui discrimine les deux blocs, et elle est portée par `if
+      // (options?.messageIds)`, jamais par une longueur.
       const frozenCount = await this.freezeMessageStatus({
         participantId,
         conversationId,
         since: prevDeliveredAt,
         at: now,
         field: "deliveredAt",
-        ...(options?.messageIds ? { messageIds: options.messageIds } : {}),
       });
 
       logger.info(
@@ -1194,13 +1264,99 @@ export class MessageReadStatusService {
         select: { messageId: true },
       });
 
-      return computeContiguousReadPrefix(
+      return computeContiguousPrefix(
         orderedIds,
         new Set(readEntries.map((e) => e.messageId))
       );
     } catch (error) {
       logger.error(
         `[MessageReadStatus] _computeExactReadCursorTarget failed for participant ${participantId} in conversation ${conversationId}:`,
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Jusqu'où le curseur de LIVRAISON peut avancer sans franchir un message que
+   * personne ne prouve avoir remis (#18731) — la jumelle exacte de
+   * `_computeExactReadCursorTarget`, et c'est la symétrie qui manquait.
+   *
+   * `_advanceCursor` sautait jusqu'au message le plus RÉCENT de l'accusé.
+   * Depuis #18614 le GEL, lui, est borné à ce que le drain a réellement émis :
+   * les deux écritures du même appel cessaient donc de parler du même
+   * ensemble, et c'est le curseur — l'approximation — qui l'emportait sur la
+   * lecture d'un message sans entrée figée (`resolveReceivedAt`).
+   *
+   * **Pourquoi le préfixe, et pas une borne.** Le trou le plus fréquent ne
+   * vient d'aucune panne : le `LTRIM` à 500 de `RedisDeliveryQueue` évince les
+   * arrivées les plus anciennes AVANT le drain, qui ne les voit jamais. Elles
+   * sont donc ANTÉRIEURES au dernier message livré, et aucune borne — horloge,
+   * position, bascule — ne les exclut. Seule la contiguïté le fait.
+   *
+   * **Ce qui PROUVE est l'entrée FIGÉE, jamais la liste rapportée.** Le
+   * balayage tourne APRÈS le gel, et interroge ce que la base porte :
+   *
+   * - une liste déclarée est un sous-ensemble strict du réel (un message remis
+   *   par un autre chemin — direct, `GET …/messages` — n'y figure pas, mais
+   *   porte son entrée) ;
+   * - un gel qui ÉCHOUE est best-effort et rend `0` sans jeter ; faire
+   *   confiance à la liste ferait alors avancer le curseur sur une preuve qui
+   *   n'a pas été écrite. Ici, il n'avance pas : fail-CLOSED sur l'index,
+   *   jamais sur la donnée durable.
+   *
+   * **Ce que coûte un trou qui ne se referme pas** : la fenêtre repart de la
+   * même position à chaque drain, bornée par `EXACT_CURSOR_SCAN_LIMIT`. Un
+   * curseur qui n'avance plus sert une réponse plus PAUVRE (les entrées figées
+   * répondent seules), jamais une réponse FAUSSE — et le chemin EN LIGNE, qui
+   * garde la fenêtre, le fait repartir dès que le lecteur revient dans le fil.
+   *
+   * Résilient : ne jette jamais. À défaut, le curseur reste en place.
+   */
+  private async _computeExactDeliveredCursorTarget(params: {
+    participantId: string;
+    conversationId: string;
+    since: Date | null;
+  }): Promise<string | null> {
+    const { participantId, conversationId, since } = params;
+    try {
+      const candidates = await this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          // Un participant ne se remet pas ses propres messages à lui-même : les
+          // inclure poserait un trou PERMANENT à chaque message qu'il envoie.
+          senderId: { not: participantId },
+          ...(since ? { createdAt: { gt: since } } : {}),
+        },
+        orderBy: { createdAt: "asc" },
+        take: EXACT_CURSOR_SCAN_LIMIT,
+        select: { id: true },
+      });
+      if (candidates.length === 0) return null;
+
+      const orderedIds = candidates.map((m) => m.id);
+      const deliveredEntries = await this.prisma.messageStatusEntry.findMany({
+        where: {
+          messageId: { in: orderedIds },
+          participantId,
+          // `{ not: null }` rend `$ne: null`, qui écarte la colonne ABSENTE
+          // comme la colonne nulle — exactement ce qu'il faut ici. Une entrée
+          // créée par la moitié LECTURE du gel écrit `deliveredAt: null`
+          // explicitement ; une entrée héritée peut ne pas porter la colonne
+          // du tout. Les deux disent « pas de livraison prouvée ».
+          deliveredAt: { not: null },
+        },
+        select: { messageId: true },
+      });
+
+      return computeContiguousPrefix(
+        orderedIds,
+        new Set(deliveredEntries.map((e) => e.messageId))
+      );
+    } catch (error) {
+      logger.error(
+        `[MessageReadStatus] _computeExactDeliveredCursorTarget failed for participant ${participantId} in conversation ${conversationId}:`,
         error
       );
       return null;

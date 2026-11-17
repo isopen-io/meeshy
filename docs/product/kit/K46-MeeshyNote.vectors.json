@@ -1,0 +1,70 @@
+{
+  "composant": "MeeshyNote",
+  "cle": "K46",
+  "note": "Vecteurs de parité (fiche K46 § 03, § 06, § 10). Phrase en points par forme, tête, conteneur, annonce.",
+  "formes": [
+    {
+      "forme": "line",
+      "phrase": 12.5,
+      "tete": 16,
+      "conteneur": "none",
+      "filet": 0,
+      "hauteurMin": 0
+    },
+    {
+      "forme": "band",
+      "phrase": 13,
+      "tete": 16,
+      "conteneur": "tinted",
+      "filet": 3,
+      "hauteurMin": 0,
+      "rayon": 16,
+      "teintePourcent": 10
+    },
+    {
+      "forme": "banner",
+      "phrase": 14,
+      "tete": 22,
+      "conteneur": "full",
+      "filet": 0,
+      "hauteurMin": 48,
+      "filetBas": 1
+    },
+    {
+      "forme": "live",
+      "phrase": 13.5,
+      "tete": 9,
+      "conteneur": "none",
+      "filet": 0,
+      "hauteurMin": 0
+    }
+  ],
+  "annonce": [
+    {
+      "sens": "neutral",
+      "annonce": false
+    },
+    {
+      "sens": "info",
+      "annonce": false
+    },
+    {
+      "sens": "ok",
+      "annonce": false
+    },
+    {
+      "sens": "warn",
+      "annonce": true
+    },
+    {
+      "sens": "security",
+      "annonce": false
+    }
+  ],
+  "interligne": 1.4,
+  "secondeLigne": 12.5,
+  "liste": {
+    "compact": 13,
+    "regular": 14.5
+  }
+}

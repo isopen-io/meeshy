@@ -266,6 +266,49 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertTrue(received)
     }
 
+    /// #18934 — conversation FERMÉE, l'enrichissement d'un vocal n'atteignait
+    /// que `cache.messages` (que l'écran ne rend pas) et un cache mémoire jamais
+    /// relu : ouvrir le groupe hors ligne montrait la bulle sans transcription.
+    func test_attachmentUpdatedRelay_conversationClosed_reachesCanonicalStore() async throws {
+        let (engine, socket, _) = try makeEngine()
+        let collector = RealtimeMutationCollector()
+        engine.realtimeMessagePersistor = { await collector.append($0) }
+        await engine.startSocketRelay()
+        let wrapper: [String: Any] = [
+            "conversationId": "c-closed",
+            "messageId": "m-vocal",
+            "attachment": ["id": "att-vocal", "transcription": ["text": "On se retrouve à la gare", "language": "fr"]],
+        ]
+        let event = try JSONDecoder().decode(
+            AttachmentUpdatedEvent.self, from: JSONSerialization.data(withJSONObject: wrapper)
+        )
+
+        socket.attachmentUpdated.send(event)
+
+        let received = await waitUntil { await collector.mutations.contains {
+            guard case let .attachmentEnriched(enrichment) = $0 else { return false }
+            return enrichment.messageId == "m-vocal" && enrichment.attachmentId == "att-vocal"
+                && enrichment.transcription?.resolvedText == "On se retrouve à la gare"
+        } }
+        XCTAssertTrue(received, "la transcription part vers la table canonique, comme conversation ouverte")
+    }
+
+    func test_translationReceivedRelay_conversationClosed_reachesCanonicalStore() async throws {
+        let (engine, socket, _) = try makeEngine()
+        let collector = RealtimeMutationCollector()
+        engine.realtimeMessagePersistor = { await collector.append($0) }
+        await engine.startSocketRelay()
+        let translation = TranslationData(
+            id: "tr-en", messageId: "m-closed", sourceLanguage: "fr", targetLanguage: "en",
+            translatedContent: "Meet you at the station", translationModel: "nllb"
+        )
+
+        socket.translationReceived.send(TranslationEvent(messageId: "m-closed", translations: [translation]))
+
+        let received = await waitUntil { await collector.mutations.contains(.translationsReceived([translation])) }
+        XCTAssertTrue(received, "la traduction ne vit plus seulement dans un cache purgé à 24 h")
+    }
+
     func test_messageDeletedRelay_forwardsDeletionToTheCanonicalStore() async throws {
         let (engine, socket, _) = try makeEngine()
         let collector = RealtimeMutationCollector()

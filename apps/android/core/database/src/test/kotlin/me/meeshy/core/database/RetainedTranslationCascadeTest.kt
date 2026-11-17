@@ -95,7 +95,7 @@ class RetainedTranslationCascadeTest {
         db.messageDao().upsertAll(listOf(message("served")))
         db.retain("served")
 
-        db.messageDao().deleteMissing("c1", listOf("served"))
+        db.messageDao().deleteMissingBetween("c1", Long.MIN_VALUE, Long.MAX_VALUE, listOf("served"))
 
         db.assertOnlyKeptRemains()
         assertThat(db.retained("served")).isEqualTo(3)
@@ -105,7 +105,7 @@ class RetainedTranslationCascadeTest {
     fun `l'elagage fenetre emporte aussi les lignes`() = withDatabase { db ->
         db.seedPair()
 
-        db.messageDao().deleteMissingSince("c1", minCreatedAt = 0L, ids = listOf("aucun"))
+        db.messageDao().deleteMissingBetween("c1", fromMillis = 0L, throughMillis = Long.MAX_VALUE, ids = listOf("aucun"))
 
         db.assertOnlyKeptRemains()
     }

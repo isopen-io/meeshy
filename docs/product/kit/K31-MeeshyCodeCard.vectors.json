@@ -1,0 +1,49 @@
+{
+  "composant": "MeeshyCodeCard",
+  "cle": "K31",
+  "note": "Vecteurs de parité (fiche K31 § 10). Pivot borné à ±16° en lacet et ±6° en tangage ; reflet de 112 % à −32 % ; plaque ±7 px ; pastille ±13 px (6 de plus) ; mini et plain rendent zéro partout.",
+  "inclinaisons": [
+    {
+      "lacet": -16,
+      "reflet": 112,
+      "plaque": 7,
+      "pastille": 13
+    },
+    {
+      "lacet": 0,
+      "reflet": 40,
+      "plaque": 0,
+      "pastille": 0
+    },
+    {
+      "lacet": 16,
+      "reflet": -32,
+      "plaque": -7,
+      "pastille": -13
+    },
+    {
+      "lacet": 90,
+      "reflet": -32,
+      "plaque": -7,
+      "pastille": -13
+    }
+  ],
+  "cotes": [
+    {
+      "taille": "mini",
+      "cote": 72
+    },
+    {
+      "taille": "compact",
+      "cote": 160
+    },
+    {
+      "taille": "large",
+      "cote": 220
+    }
+  ],
+  "largeurCarte": {
+    "cote": 220,
+    "largeur": 318
+  }
+}

@@ -5,7 +5,7 @@ import XCTest
 /// per-bubble; `@ObservedObject ThemeManager.shared` there re-renders EVERY
 /// image bubble in the scroll list on every theme mutation (Zero Unnecessary
 /// Re-render rule). `@Environment(\.colorScheme)` is the SwiftUI-native
-/// substitute (cf. `ChatBubble.swift` precedent). Source-guard since the view
+/// substitute. Source-guard since the view
 /// isn't introspectable without ViewInspector.
 @MainActor
 final class ImageViewerViewColorSchemeMigrationTests: XCTestCase {

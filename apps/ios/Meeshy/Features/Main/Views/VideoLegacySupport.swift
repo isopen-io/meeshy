@@ -6,7 +6,7 @@ import MeeshyUI
 
 // MARK: - OrientationManager
 //
-// Moved from MeeshySDK (VideoFullscreenPlayerView.swift — deleted Phase 5).
+// Moved from MeeshySDK when its legacy fullscreen player was deleted (Phase 5).
 // Used by AppDelegate to honour orientation-lock requests from fullscreen video.
 
 @MainActor
@@ -30,7 +30,7 @@ final class OrientationManager: ObservableObject {
 
 // MARK: - FullscreenAVPlayerLayerView
 //
-// Moved from MeeshySDK (VideoFullscreenPlayerView.swift — deleted Phase 5).
+// Moved from MeeshySDK when its legacy fullscreen player was deleted (Phase 5).
 // Used by ConversationMediaGalleryView for the shared AVPlayer layer.
 
 struct FullscreenAVPlayerLayerView: UIViewRepresentable {

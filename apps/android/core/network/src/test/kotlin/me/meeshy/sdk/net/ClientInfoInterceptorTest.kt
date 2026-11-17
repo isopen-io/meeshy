@@ -76,7 +76,7 @@ class ClientInfoInterceptorTest {
     fun `seules les capacites dont l ecran est livre sont declarees`() {
         val seen = run(request(), ClientInfoInterceptor(provider()))
 
-        assertThat(seen.header("X-Meeshy-Capabilities")).isEqualTo("onboarding-profile")
+        assertThat(seen.header("X-Meeshy-Capabilities")).isEqualTo("onboarding-profile,live-receipts")
     }
 
     @Test

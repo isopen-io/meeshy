@@ -173,16 +173,41 @@ class PreferencesSocketManagerTest {
         }
 
     /**
-     * `user:preferences-reordered` carries `orderInCategory` only, which no Android
-     * surface reads (`ConversationSections.of` buckets on `isPinned` + `categoryId`).
-     * Not listening to it is the decision, not an omission — this witness is what
-     * makes the next reader notice they have to add the listener rather than assume
-     * it is already there.
+     * #18915 (AND-04) — `user:preferences-reordered`, as `reorderConversationPreferences` broadcasts it (copied key by
+     * key). The list sorts a category's section by `orderInCategory`, and the gateway publishes the order through this
+     * event alone: unheard, a drag made on another device reached this one only through a full reload.
      */
     @Test
-    fun `no reorder listener is registered`() {
+    fun `a reorder broadcast emits the decoded order updates`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.conversationsReordered.test {
+            handlers.getValue("user:preferences-reordered").invoke(
+                arrayOf(
+                    JSONObject(
+                        """
+                        {"userId":"u1","updates":[
+                          {"conversationId":"c-a","orderInCategory":1},
+                          {"conversationId":"c-b","orderInCategory":0}
+                        ]}
+                        """.trimIndent(),
+                    ),
+                ),
+            )
+
+            val event = awaitItem()
+            assertThat(event.userId).isEqualTo("u1")
+            assertThat(event.updates.map { it.conversationId to it.orderInCategory })
+                .containsExactly("c-a" to 1, "c-b" to 0)
+                .inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /** The community reorder stays unheard: nothing under `apps/android` caches a community-preference row. */
+    @Test
+    fun `the conversation reorder is listened to, the community reorder is not`() {
         val (_, handlers) = managerWithHandlers()
 
-        assertThat(handlers.keys).containsExactly("user:preferences-updated")
+        assertThat(handlers.keys).containsExactly("user:preferences-updated", "user:preferences-reordered")
     }
 }

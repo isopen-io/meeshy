@@ -5,8 +5,8 @@ import MeeshySDK
 /// surtout SOUS QUELLE CLÉ le ranger.
 ///
 /// Le préchargement rangeait ses bitmaps sous `slideImages[url.absoluteString]`.
-/// Or `slideImages` est la map des FONDS de slide, lue par `slideImages[slide.id]`
-/// (`StoryComposerView+SyncRestore`, `+Publication`), tandis que le canvas
+/// Or `slideImages` est la map des FONDS de slide, lue par `slideImages[slide.id]`,
+/// tandis que le canvas
 /// d'édition lit `loadedImages` keyé par `StoryMediaObject.id`. Aucun lecteur
 /// n'interrogeait donc jamais une clé-URL : le préchargement était
 /// intégralement perdu et le canvas repartait à zéro au montage.

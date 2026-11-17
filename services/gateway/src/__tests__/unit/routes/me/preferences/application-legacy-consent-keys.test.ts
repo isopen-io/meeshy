@@ -44,6 +44,8 @@ const USER_ID = 'usr-00000000000001';
 
 function makePrisma() {
   return {
+    // La fusion d'un `PATCH` se fait DANS la base (`preference-atomic-merge`).
+    $runCommandRaw: jest.fn<any>().mockResolvedValue({ ok: 1, n: 1 }),
     userPreferences: {
       findUnique: jest.fn<any>().mockResolvedValue({ application: {}, id: 'pref-1' }),
       upsert: jest.fn<any>().mockResolvedValue({ application: {}, id: 'pref-1' }),

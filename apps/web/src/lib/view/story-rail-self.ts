@@ -5,9 +5,15 @@ import type { StoryTrayGroup } from '@/lib/view/story-tray';
 
 /**
  * **LA CELLULE « SOI » DU RAIL DES STORIES** (#6150) — sa loi, PURE, hors de
- * tout rendu. Miroir de `LentilleRailSelfEntry` et de
- * `LentilleRailPolicy.shouldRender(selfEntry:entries:)`
- * (`apps/ios/.../Lens/Chrome/StoriesVivantsRail.swift`).
+ * tout rendu. Miroir iOS : `MyStoryButton` et le rail qui le monte TOUJOURS
+ * en tête, avant les autres auteurs (`StoryTrayView.storyScrollView`,
+ * `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`) ; « mon
+ * groupe » y est retiré des autres par `StoryTrayProjection.visibleGroups(for:at:)`
+ * (`…/Stories/ViewModels/StoryTrayProjection.swift`), comme ici par
+ * {@link railGroupsWithoutSelf}. Miroir Android : la cellule « Votre story »
+ * de `StoryTray` (`apps/android/feature/stories/.../StoryTray.kt`). L'ancien
+ * miroir `LentilleRailSelfEntry` / `LentilleRailPolicy` (`StoriesVivantsRail`)
+ * a quitté iOS quand la liste a adopté le rail du fil (#11033).
  *
  * **Elle est SÉPARÉE des groupes d'auteurs, et ce n'est pas une commodité.**
  * Un `StoryTrayGroup` naît d'au moins UNE story (`groupStoriesByAuthor` ne

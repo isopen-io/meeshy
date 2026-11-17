@@ -16,18 +16,19 @@
 ## Project Structure
 ```
 Meeshy/
-├── MeeshyApp.swift              → Entry point, auth flow, splash
-├── DesignSystem/
-│   ├── DesignSystem.swift       → View modifiers, effects, haptics
-│   └── Theme.swift              → ThemeManager, colors, gradients
+├── MeeshyApp.swift              → Entry point (+ `MeeshyApp+LaunchSequence`, `+Lifecycle`)
+├── App/                         → Root scene, session gate, overlay host, external entry
 ├── Features/Main/
 │   ├── Views/                   → Full-screen views
 │   ├── ViewModels/              → State management (MVVM)
 │   ├── Models/                  → Data models (API + local)
-│   ├── Navigation/              → Router, Route enum (NavigationStack)
+│   ├── Stores/                  → App-side stores
 │   ├── Services/                → Networking & business logic
 │   └── Components/              → Reusable UI components
+├── Features/Navigation/         → Router, Route enum (NavigationStack)
+├── Features/<Domaine>/          → Composer, Stories, Call, Profile, Settings, Lens…
 └── Assets.xcassets
+(Le thème — `ThemeManager`, `MeeshyColors` — vit dans le SDK : `MeeshyUI/Theme/`.)
 ```
 
 ## Build Commands
@@ -149,7 +150,7 @@ SocialSocketManager.shared  // Social/presence events
 PresenceManager.shared      // User online status
 ThemeManager.shared         // Dark/light mode
 AudioPlayerManager.shared   // Audio playback
-MediaCacheManager.shared    // Disk caching
+CacheCoordinator.shared     // Unified cache (GRDB + disk)
 
 // Reactive patterns
 @MainActor class ViewModel: ObservableObject {

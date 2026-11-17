@@ -107,7 +107,6 @@
     <string name="bubble_a11y_location">موقع تمت مشاركته</string>
     <string name="bubble_a11y_reactions">التفاعلات: %1$s</string>
     <string name="bubble_a11y_reply_to">الرد على %1$s</string>
-    <string name="bubble_attachment_file_fallback">ملف</string>
     <string name="bubble_audio_stack_position">الرسالة الصوتية %1$d من %2$d</string>
     <string name="bubble_blur_view_once">عرض مرة واحدة</string>
     <string name="bubble_contact_card_a11y_on_meeshy">على Meeshy: %1$s</string>
@@ -363,7 +362,6 @@
     <string name="media_summary_voice">🎙️ رسالة صوتية</string>
     <string name="media_trim_loading">جارٍ تحميل المعاينة</string>
     <string name="media_trim_of_total">من %1$s</string>
-    <string name="media_trim_window">الجزء المحتفظ به</string>
     <string name="media_video_pip_enter">صورة داخل صورة</string>
     <string name="media_video_unavailable_retry">الفيديو غير متاح. أعد المحاولة.</string>
     <string name="media_voice_message">رسالة صوتية</string>
@@ -449,7 +447,6 @@
     <string name="retouch_filter_golden">ذهبي</string>
     <string name="retouch_filter_monochrome">أبيض وأسود</string>
     <string name="retouch_filter_muted">ناعم</string>
-    <string name="retouch_filter_natural">طبيعي</string>
     <string name="retouch_filter_sky">سماء</string>
     <string name="retouch_filter_softNight">ليل هادئ</string>
     <string name="retouch_filter_velvet">مخملي</string>
@@ -556,7 +553,6 @@
     <string name="talkie_header_badge_live">مباشر</string>
     <string name="talkie_header_badge_recorded">مسجّل</string>
     <string name="talkie_header_badge_relayed">غير متصل</string>
-    <string name="talkie_header_live">الاتصال اللاسلكي جارٍ</string>
     <string name="talkie_send_connecting">جارٍ الاتصال…</string>
     <string name="talkie_send_failed">تعذّر إرسال جهاز اللاسلكي.</string>
     <string name="talkie_send_hold">اضغط مطولًا للتحدث</string>

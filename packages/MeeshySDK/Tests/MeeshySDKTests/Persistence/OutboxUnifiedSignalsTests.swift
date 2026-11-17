@@ -8,8 +8,8 @@ import GRDB
 /// `enqueueReaction` coalescing state machine on `OfflineQueue`.
 ///
 /// These tests lock the API contract before consumers (ConversationViewModel,
-/// OutboxDispatcher) are migrated off the legacy `MessageRetryQueue` /
-/// `ReactionQueue` Combine publishers.
+/// OutboxDispatcher) are migrated off the legacy message-retry / reaction
+/// queue Combine publishers.
 final class OutboxUnifiedSignalsTests: XCTestCase {
 
     private var cancellables: Set<AnyCancellable> = []

@@ -1,0 +1,37 @@
+{
+  "composant": "MeeshyTicket",
+  "cle": "K30",
+  "note": "Vecteurs de parité (fiche K30 § 10). Coupe : hero 125, row 77, compact 61. Encre de la pastille choisie au contraste : sombre #0B0B12 ou blanc, selon le meilleur rapport.",
+  "coupes": [
+    {
+      "taille": "hero",
+      "coupe": 125
+    },
+    {
+      "taille": "row",
+      "coupe": 77
+    },
+    {
+      "taille": "compact",
+      "coupe": 61
+    }
+  ],
+  "encres": [
+    {
+      "teinte": "818CF8",
+      "encre": "sombre"
+    },
+    {
+      "teinte": "4F46E5",
+      "encre": "blanche"
+    },
+    {
+      "teinte": "FBBF24",
+      "encre": "sombre"
+    },
+    {
+      "teinte": "34D399",
+      "encre": "sombre"
+    }
+  ]
+}

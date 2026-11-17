@@ -1,0 +1,186 @@
+{
+  "composant": "MeeshyWavePlayer",
+  "cle": "K35",
+  "note": "Vecteurs de parité (fiche K35 § 03, § 10). Une barre tous les 6 px au plus, jamais de barre sous 3 de haut, remplissage dépendant du seul progress.",
+  "tailles": [
+    {
+      "taille": "row",
+      "disque": 60,
+      "glyphe": 22,
+      "onde": 40,
+      "rangee": 60,
+      "ecart": 14
+    },
+    {
+      "taille": "compact",
+      "disque": 44,
+      "glyphe": 18,
+      "onde": 28,
+      "rangee": 44,
+      "ecart": 10
+    }
+  ],
+  "glyphes": [
+    {
+      "etat": "repos",
+      "glyphe": "play.fill"
+    },
+    {
+      "etat": "lecture",
+      "glyphe": "pause.fill"
+    },
+    {
+      "etat": "pause",
+      "glyphe": "play.fill"
+    },
+    {
+      "etat": "termine",
+      "glyphe": "arrow.counterclockwise"
+    }
+  ],
+  "barres": [
+    {
+      "largeur": 80,
+      "niveaux": 0,
+      "nombre": 13
+    },
+    {
+      "largeur": 80,
+      "niveaux": 2000,
+      "nombre": 13
+    },
+    {
+      "largeur": 300,
+      "niveaux": 40,
+      "nombre": 50
+    },
+    {
+      "largeur": 600,
+      "niveaux": 5,
+      "nombre": 100
+    },
+    {
+      "largeur": 5,
+      "niveaux": 10,
+      "nombre": 1
+    }
+  ],
+  "remplissage": [
+    {
+      "barres": 50,
+      "progress": 0,
+      "pleines": 0
+    },
+    {
+      "barres": 50,
+      "progress": 1,
+      "pleines": 50
+    },
+    {
+      "barres": 50,
+      "progress": 0.5,
+      "pleines": 25
+    },
+    {
+      "barres": 10,
+      "progress": 0.34,
+      "pleines": 3
+    },
+    {
+      "barres": 10,
+      "progress": -2,
+      "pleines": 0
+    },
+    {
+      "barres": 10,
+      "progress": 9,
+      "pleines": 10
+    }
+  ],
+  "glissement": [
+    {
+      "x": -20,
+      "largeur": 200,
+      "rtl": false,
+      "fraction": 0
+    },
+    {
+      "x": 50,
+      "largeur": 200,
+      "rtl": false,
+      "fraction": 0.25
+    },
+    {
+      "x": 50,
+      "largeur": 200,
+      "rtl": true,
+      "fraction": 0.75
+    },
+    {
+      "x": 900,
+      "largeur": 200,
+      "rtl": false,
+      "fraction": 1
+    },
+    {
+      "x": 10,
+      "largeur": 0,
+      "rtl": false,
+      "fraction": 0
+    }
+  ],
+  "horloge": [
+    {
+      "duree": 9,
+      "progress": 0.5,
+      "lecture": true,
+      "mode": "remaining",
+      "texte": "0:05"
+    },
+    {
+      "duree": 9,
+      "progress": 0.5,
+      "lecture": false,
+      "mode": "remaining",
+      "texte": "0:09"
+    },
+    {
+      "duree": 9,
+      "progress": 0.5,
+      "lecture": true,
+      "mode": "elapsed",
+      "texte": "0:05"
+    },
+    {
+      "duree": 9,
+      "progress": 0.5,
+      "lecture": true,
+      "mode": "total",
+      "texte": "0:09"
+    },
+    {
+      "duree": 0,
+      "progress": 0,
+      "lecture": false,
+      "mode": "remaining",
+      "texte": "–:––"
+    },
+    {
+      "duree": 125,
+      "progress": 0,
+      "lecture": false,
+      "mode": "remaining",
+      "texte": "2:05"
+    }
+  ],
+  "mesures": {
+    "barre": 3,
+    "ecartBarre": 3,
+    "hauteurMin": 3,
+    "zoneGlissement": 44,
+    "pressedScale": 0.94,
+    "scrubScale": 1.12,
+    "avenir": 0.3,
+    "pulseBas": 0.62
+  }
+}

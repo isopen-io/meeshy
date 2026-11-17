@@ -69,7 +69,8 @@ const mockPrisma = {
     update: jest.fn(),
     delete: jest.fn(),
     deleteMany: jest.fn()
-  }
+  },
+  userSession: { findMany: jest.fn(async () => [{ id: 'live-session' }]) },
 };
 
 jest.mock('@meeshy/shared/prisma/client', () => {

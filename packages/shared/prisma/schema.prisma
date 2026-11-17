@@ -4366,9 +4366,10 @@ model PushToken {
   /// which installs are still alive. Null on rows older than #10856.
   registeredAt DateTime?
 
-  /// La session (`UserSession.id`) qui a enregistré ce jeton — posée pour les jetons
-  /// PushToTalk (#17142) : ils réveillent l'appareil pour UN compte, et se retirent quand
-  /// cette session se ferme (déconnexion, révocation, compte supprimé). Null ailleurs.
+  /// La session (`UserSession.id`) qui a enregistré ce jeton — posée à l'enregistrement de TOUT
+  /// type de jeton (PushToTalk #17142, apns/fcm/voip #9616) : il réveille l'appareil pour UN
+  /// compte, et se retire quand cette session se ferme (déconnexion, révocation, réinitialisation
+  /// du mot de passe). Null : ligne d'avant le lien, ou client sans `sid` — elle reste servie.
   sessionId String? @db.ObjectId
 
   /// Number of consecutive failed delivery attempts (for cleanup)

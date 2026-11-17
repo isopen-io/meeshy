@@ -64,8 +64,8 @@ extension ComposerObjectEditorView {
                 // **La grille du SDK, telle quelle** (#5041). `StoryFilterGridView`
                 // est autonome — aucun rappel, aucune dépendance à la coquille
                 // plein écran — et c'est ce qui la rend montable ici sans rien
-                // réécrire. L'aperçu qu'elle teinte est le fond de la slide,
-                // comme chez `EmbeddedSceneInspector` : le filtre est un réglage
+                // réécrire. L'aperçu qu'elle teinte est le fond de la slide :
+                // le filtre est un réglage
                 // de SLIDE, et lui donner la vignette de l'objet aurait montré
                 // un aperçu qui ne correspond pas à ce qui change.
                 // **Le filtre de CET objet** (retour porteur 2026-09-28 : « les

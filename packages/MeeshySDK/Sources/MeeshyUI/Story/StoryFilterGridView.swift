@@ -1,14 +1,10 @@
 import SwiftUI
 import MeeshySDK
 
-/// **Public depuis le lot 3A du composer unifié (#4035).** Déjà une vue
-/// autonome — aucun rappel, aucune dépendance à la coquille plein écran
-/// (`StoryComposerView` / `ComposerControlsLayer` / `ComposerBottomBand` /
-/// `ComposerToolPanelHost`) — c'est ce qui en fait le candidat le plus sûr
-/// pour le premier montage de `EmbeddedSceneInspector` (zone contextuelle
-/// NEUVE de l'écran document). L'init explicite préserve le site d'appel
-/// existant de `ComposerToolPanelHost.textPanel` (mêmes labels, même ordre) :
-/// zéro régression sur l'atelier.
+/// **Public depuis le lot 3A du composer unifié (#4035).** Une vue autonome —
+/// aucun rappel, aucune dépendance à une coquille plein écran — c'est ce qui
+/// la rend montable par les hôtes de l'app (`ComposerMediaControls`,
+/// `MeeshyComposerHost+SceneColumns`) sans rien réécrire.
 public struct StoryFilterGridView: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     var previewImage: UIImage?
@@ -50,9 +46,8 @@ public struct StoryFilterGridView: View {
     @State private var tiles: [String: UIImage] = [:]
 
     public var body: some View {
-        // Header interne + background ultraThinMaterial retires : le bandeau parent
-        // (ComposerToolPanelHost) fournit deja le bouton retour "< Filtres" et le
-        // background glass. Triple encapsulation visuelle eliminee.
+        // Header interne + background ultraThinMaterial retires : l'hôte fournit
+        // son propre conteneur. Triple encapsulation visuelle eliminee.
         VStack(spacing: 10) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {

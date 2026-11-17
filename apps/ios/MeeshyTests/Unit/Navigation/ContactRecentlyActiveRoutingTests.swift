@@ -64,7 +64,7 @@ final class ContactRecentlyActiveRoutingTests: XCTestCase {
         let iPhone = try profileBranchLabels(in: source("Meeshy/Features/Main/Views/RootNotificationNavigator.swift")).joined()
         let iPad = try profileBranchLabels(in: source("Meeshy/Features/Main/Views/iPadRootView+Navigation.swift"))
 
-        for type in [".contactJoined", ".contactRecentlyActive"] {
+        for type in [".contactJoined", ".contactRecentlyActive", ".relationAcquaintance"] {
             XCTAssertTrue(iPhone.contains(type))
             XCTAssertTrue(iPad.allSatisfy { $0.contains(type) }, "\(type) diverge entre iPhone et iPad")
         }

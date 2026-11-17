@@ -112,19 +112,11 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['android', 'ios'],
+    absents: ['ios'],
     raison:
-      "l'effectif d'une communauté en temps réel (#18766) : la passerelle et le web le portent ; iOS (#18767) et "
-      + 'Android (#18768) le liront sur le modèle de `community:updated` — dette mesurée, chacune son issue.',
+      "l'effectif d'une communauté en temps réel (#18766) : la passerelle, le web et Android (#18768) le portent ; "
+      + 'iOS (#18767) le lira sur le modèle de `community:updated` — dette mesurée, son issue.',
     events: ['community:member-joined', 'community:member-left', 'community:member-role-updated'],
-  },
-  {
-    absents: ['android', 'ios'],
-    raison:
-      "mon profil synchronisé entre mes appareils (#18924) : la passerelle l'émet sur `user:<moi>` et le web le "
-      + "lit sur la branche de ce lot ; les lots iOS et Android de #18924 le liront. Dette mesurée, à réconcilier "
-      + "à l'intégration des trois branches.",
-    events: ['profile:updated'],
   },
   {
     absents: ['web', 'ios'],

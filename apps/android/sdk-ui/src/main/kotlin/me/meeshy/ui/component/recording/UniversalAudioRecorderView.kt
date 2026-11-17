@@ -70,7 +70,7 @@ public class RecordedAudio(
 )
 
 /**
- * L'enregistreur plein écran unifié (iOS `UniversalAudioRecorderView`) pour les messages, stories et posts :
+ * L'enregistreur plein écran unifié (iOS `AudioRecorderSheet`) pour les messages, stories et posts :
  * gros bouton rond en bas, onde en temps réel, durée en chiffres, point rouge pulsant ; la prise terminée
  * s'ouvre en aperçu (onde, lecture, éditer, refaire, accepter). Un refus de micro s'explique sous les
  * contrôles avec un accès aux Réglages. L'accent est celui du contexte, passé en paramètre ; [onEdit] est le

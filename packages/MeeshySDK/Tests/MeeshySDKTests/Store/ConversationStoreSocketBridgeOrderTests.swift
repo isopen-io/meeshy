@@ -44,7 +44,8 @@ final class ConversationStoreSocketBridgeOrderTests: XCTestCase {
                 categoryStore: UserCategoryStore(service: MockCategoryWriter()),
                 currentUserId: { "me" },
                 fetchConversation: fetchConversation,
-                isConversationOpen: isConversationOpen
+                isConversationOpen: isConversationOpen,
+                fetchChangedPreferences: { _ in [] }
             )
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),

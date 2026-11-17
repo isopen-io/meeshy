@@ -1,12 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { LensSkeleton } from './lens-skeleton';
+import { LensSkeletonRows } from './lens-skeleton';
 import { ROW_HEIGHT } from './lens-row';
 import { SECTION_TOGGLE_MIN_HEIGHT } from './lens-sticker';
 
-describe('LensSkeleton — F5/§5 étape 9 (#5650)', () => {
-  const html = renderToStaticMarkup(<LensSkeleton />);
+describe('LensSkeletonRows — F5/§5 étape 9 (#5650)', () => {
+  const html = renderToStaticMarkup(
+    <ul>
+      <LensSkeletonRows />
+    </ul>,
+  );
 
   test('six lignes, chacune data-skeleton-row', () => {
     expect((html.match(/data-skeleton-row/g) ?? []).length).toBe(6);
@@ -14,11 +18,6 @@ describe('LensSkeleton — F5/§5 étape 9 (#5650)', () => {
 
   test(`chaque ligne mesure ROW_HEIGHT (${ROW_HEIGHT}px), importé — jamais un littéral réécrit`, () => {
     expect((html.match(new RegExp(`height:${ROW_HEIGHT}px`, 'g')) ?? []).length).toBe(6);
-  });
-
-  test('aria-busy et aria-label sur la liste', () => {
-    expect(html).toContain('aria-busy="true"');
-    expect(html).toContain('aria-label="Chargement des conversations"');
   });
 
   test('aucun texte VISIBLE (seulement des barres décoratives et un bandeau de section invisible)', () => {

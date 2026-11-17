@@ -2,8 +2,8 @@ import SwiftUI
 import MeeshyUI
 
 extension View {
-    /// Fournit à l'atelier de story (`StoryComposerView`, côté SDK) le viseur
-    /// du composeur, servi seul en plein écran (#9125). Même doctrine que
+    /// Fournit au composer (`MeeshyComposerHost+Portals`, via l'environnement
+    /// du SDK) le viseur du composeur, servi seul en plein écran (#9125). Même doctrine que
     /// `storyLocationPickerProvided` : piloter une `AVCaptureSession`, ses
     /// permissions et son écran de refus est de l'orchestration produit, donc
     /// app-side (SDK purity). Sans cet appel, l'amorce « Caméra » de la page

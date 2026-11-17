@@ -5,7 +5,6 @@
     <string name="reels_action_send">Send</string>
     <string name="reels_author_profile">Author\'s profile</string>
     <string name="reels_caption_translated">Translation available</string>
-    <string name="reels_close">Close</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d comment</item>
         <item quantity="other">%1$d comments</item>
@@ -32,7 +31,6 @@
     <string name="reels_report_reason_spam">Spam</string>
     <string name="reels_report_reason_violence">Violence</string>
     <string name="reels_scrub">Skip forward or back</string>
-    <string name="reels_share">Share</string>
     <string name="reels_toast_delete_failed">Error deleting post</string>
     <string name="reels_toast_deleted">Post deleted</string>
     <string name="reels_toast_pin_failed">Error pinning post</string>

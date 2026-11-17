@@ -6,10 +6,11 @@ import MeeshyUI
 final class LiveProfileLoading: ProfileLoading {
     nonisolated deinit {}
 
+    /// Lire n'est pas revalider (#18937) : remettre l'horloge à zéro ici gardait un profil revisité
+    /// toutes les quatre minutes `.fresh` pour toujours. La rétention se prolonge dans `storeProfile`,
+    /// à chaque revalidation réussie.
     func cachedProfile(for key: String) async -> CacheResult<[MeeshyUser]> {
-        let result = await CacheCoordinator.shared.profiles.load(for: key)
-        await CacheCoordinator.shared.profiles.touch(for: key)
-        return result
+        await CacheCoordinator.shared.profiles.load(for: key)
     }
 
     func fetchProfile(handle: String) async throws -> MeeshyUser {

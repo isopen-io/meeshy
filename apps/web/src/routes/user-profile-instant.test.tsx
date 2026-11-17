@@ -109,6 +109,7 @@ for (const [surface, render] of Object.entries(surfaces)) {
       expect(el.querySelector('[data-profile-action]') === null).toBe(true);
       await settle();
       expect(heroName(el)).toBe('Kwame Mensah');
+      act(() => el.querySelector<HTMLButtonElement>('[data-profile-faces] [data-kit-chip="actions"]')?.click());
       expect(el.querySelector('[data-profile-action]') !== null).toBe(true);
     });
   });

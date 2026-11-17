@@ -105,32 +105,18 @@ extension ConversationSyncEngine {
         messageSocket.conversationRestored
             .relay(through: lane) { [weak self] in await self?.handleConversationRestored($0) }
             .store(in: &socketSubscriptions)
-        messageSocket.conversationJoined
-            .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
-            .store(in: &socketSubscriptions)
-        messageSocket.conversationLeft
-            .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
-            .store(in: &socketSubscriptions)
+        socketSubscriptions.formUnion(ParticipantRosterInvalidation.relays(from: messageSocket, into: cache, on: lane))
         messageSocket.participantRoleUpdated
             .relay(through: lane) { [weak self] in await ViewerRoleApplier(engine: self)?.apply($0) }
             .store(in: &socketSubscriptions)
     }
 
+    // Transcription et pistes traduites arrivent ENTIÈRES par
+    // `message:attachment-updated` (#18934) : leurs événements partiels ne
+    // nourrissaient qu'un cache mémoire que personne ne relisait.
     private func relayEnrichmentEvents(on lane: OrderedEventLane) {
         messageSocket.translationReceived
-            .relay(through: lane) { [weak self] in await self?.cache.cacheTranslation($0) }
-            .store(in: &socketSubscriptions)
-        messageSocket.transcriptionReady
-            .relay(through: lane) { [weak self] in await self?.cache.cacheTranscription($0) }
-            .store(in: &socketSubscriptions)
-        messageSocket.audioTranslationReady
-            .relay(through: lane) { [weak self] in await self?.cache.cacheAudioTranslation($0) }
-            .store(in: &socketSubscriptions)
-        messageSocket.audioTranslationProgressive
-            .relay(through: lane) { [weak self] in await self?.cache.cacheAudioTranslation($0) }
-            .store(in: &socketSubscriptions)
-        messageSocket.audioTranslationCompleted
-            .relay(through: lane) { [weak self] in await self?.cache.cacheAudioTranslation($0) }
+            .relay(through: lane) { [weak self] in await self?.handleTranslationReceived($0) }
             .store(in: &socketSubscriptions)
         messageSocket.attachmentStatusUpdated
             .relay(through: lane) { [weak self] in await self?.handleAttachmentStatusUpdated($0) }

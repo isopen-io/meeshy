@@ -11,11 +11,11 @@ import Foundation
 /// JAMAIS soumises à cette condition de durée. L'auteur peut toujours forcer
 /// un `POST` (toggle Réel⇄Post) ; il ne peut jamais forcer un `REEL` non
 /// qualifiant. Pure and stateless so it is testable and shared by every
-/// composer path — miroir exact du prédicat gateway
-/// (`services/gateway/src/services/posts/reelComposition.ts`).
+/// composer path — miroir exact du prédicat partagé que la passerelle
+/// consomme (`packages/shared/utils/reel-composition.ts`).
 public enum ReelComposition {
     /// Plancher de durée (ms) pour qu'une vidéo ou un audio qualifie seul —
-    /// miroir de `MIN_QUALIFYING_DURATION_MS` côté gateway.
+    /// miroir de `MIN_QUALIFYING_DURATION_MS` (`packages/shared`).
     public static let minQualifyingDurationMs = 3000
 
     /// `true` when a post with these media kinds qualifies as a reel: a video

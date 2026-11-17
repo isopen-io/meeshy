@@ -8,8 +8,8 @@ import MeeshySDK
 ///
 /// La conversation se lit de cinq façons (`focal`, `script`, `summary`,
 /// `river`, `bubbles`). Relevé sur `dev` 3ff99d3aa3 : le décompte d'un
-/// éphémère n'existait qu'en Focal/Script (`FocalEphemeralBadge`) et en Bulle
-/// (`BubbleEphemeralBadge`) — deux implémentations distinctes du même badge —
+/// éphémère n'existait qu'en Focal/Script et en Bulle — deux implémentations
+/// distinctes du même badge —
 /// et **pas du tout** en Résumé ni en Rivière. Un message qui allait disparaître
 /// dans trente secondes ne le disait donc pas à deux lecteurs sur cinq.
 ///

@@ -55,6 +55,29 @@ export async function computeConversationUnreadBadge(
   prisma: PrismaClient,
   userId: string
 ): Promise<number> {
+  return (await computeConversationUnreadState(prisma, userId)).badge;
+}
+
+/**
+ * Le non-lu du destinataire en UNE lecture : le `badge` (conversations non
+ * lues, hors muettes — ce que `computeConversationUnreadBadge` rend) et, par
+ * conversation NON MUETTE, son nombre de MESSAGES non lus (#18910,
+ * android-systeme-7). Le second alimente `data.conversationUnread` du push, que
+ * le registre de non-lus d'Android indexe par conversation : même carte, donc
+ * aucune seconde requête, et jamais deux nombres qui divergent.
+ *
+ * Une conversation muette est absente de la carte : ni badge ni compteur.
+ */
+export type ConversationUnreadState = {
+  readonly badge: number;
+  readonly byConversation: ReadonlyMap<string, number>;
+};
+
+export async function computeConversationUnreadState(
+  prisma: PrismaClient,
+  userId: string
+): Promise<ConversationUnreadState> {
+  const none: ConversationUnreadState = { badge: 0, byConversation: new Map() };
   const [participants, mutedRows] = await Promise.all([
     // #14107 (audit M4) — une demande de message en attente ne compte pas : elle
     // ne sonne pas, son badge ne doit pas l'annoncer non plus.
@@ -68,7 +91,7 @@ export async function computeConversationUnreadBadge(
     }),
   ]);
 
-  if (participants.length === 0) return 0;
+  if (participants.length === 0) return none;
 
   const mutedConversationIds = new Set(mutedRows.map((row) => row.conversationId));
   const conversationIds = [
@@ -78,7 +101,7 @@ export async function computeConversationUnreadBadge(
         .filter((conversationId) => !mutedConversationIds.has(conversationId))
     ),
   ];
-  if (conversationIds.length === 0) return 0;
+  if (conversationIds.length === 0) return none;
 
   // Import PARESSEUX, comme `GET /conversations` le fait du même service
   // (`routes/conversations/core-list.ts:487`) : `MessageReadStatusService`
@@ -101,5 +124,24 @@ export async function computeConversationUnreadBadge(
     throw new Error('conversation unread counts unavailable');
   }
 
-  return [...unreadByConversation.values()].filter((unread) => unread > 0).length;
+  return { badge: [...unreadByConversation.values()].filter((unread) => unread > 0).length, byConversation: unreadByConversation };
+}
+
+/**
+ * Ce qu'un push de notification emprunte au non-lu : le `badge` et le non-lu de
+ * SA conversation, best-effort. Une panne rend `{}` — le push part sans
+ * pastille ni compteur plutôt qu'avec un « 0 » qui effacerait l'icône.
+ */
+export async function conversationUnreadOf(
+  prisma: PrismaClient,
+  userId: string,
+  conversationId: string | null | undefined
+): Promise<{ readonly badge?: number; readonly conversationUnread?: number }> {
+  try {
+    const state = await computeConversationUnreadState(prisma, userId);
+    const conversationUnread = conversationId ? state.byConversation.get(conversationId) : undefined;
+    return { badge: state.badge, ...(conversationUnread !== undefined ? { conversationUnread } : {}) };
+  } catch {
+    return {};
+  }
 }

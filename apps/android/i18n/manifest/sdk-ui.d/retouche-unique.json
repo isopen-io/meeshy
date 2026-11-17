@@ -42,12 +42,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "video.filter.preset.natural",
-          "androidName": "retouch_filter_natural",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "video.filter.preset.warm",
           "androidName": "retouch_filter_warm",
           "status": "adopted"

@@ -57,8 +57,8 @@ extension CachePolicy {
     public static let conversationMedia = CachePolicy(ttl: .months(6), staleTTL: .minutes(10), maxItemCount: nil, storageLocation: .grdb)
     public static let participants = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     /// Profil d'un autre utilisateur. TTL 30 j + fenêtre fraîche courte : affichage
-    /// cache instantané, prolongé à chaque visite via `touch`, revalidation SWR
-    /// silencieuse au-delà de la fenêtre fraîche.
+    /// cache instantané, prolongé à chaque revalidation réussie (jamais à la simple
+    /// lecture, #18937), revalidation SWR silencieuse au-delà de la fenêtre fraîche.
     public static let userProfiles = CachePolicy(ttl: .days(30), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
     public static let mediaImages = CachePolicy(ttl: .years(1), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Images", maxBytes: 300_000_000))
     public static let mediaAudio = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Audio", maxBytes: 200_000_000))

@@ -1,7 +1,7 @@
 package me.meeshy.sdk.model.composer
 
 /**
- * Les deux boutons de SCÈNE que le rail gauche porte après ses portes (iOS `ComposerSceneToggle`, #8713) : l'éclair
+ * Les deux boutons de SCÈNE que le rail gauche porte après ses portes (#8713) : l'éclair
  * (mode Animé), puis le Cadre. Ce ne sont pas des portes — ils ne font entrer aucune matière — mais des réglages de la scène.
  */
 enum class ComposerSceneToggle { ANIMATED, FRAME }

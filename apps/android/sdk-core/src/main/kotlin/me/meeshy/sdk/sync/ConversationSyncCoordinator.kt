@@ -29,6 +29,12 @@ import timber.log.Timber
 /** Ce que le coordinateur lance : UNE synchro des conversations ; `false` = elle a échoué (le cache reste). */
 fun interface ConversationSyncRunner {
     suspend fun run(): Boolean
+
+    /**
+     * #18927 — la passe d'un rattrapage de reconnexion : elle doit PARTIR après la demande, jamais rejoindre une synchro
+     * déjà en vol, construite avant les événements manqués. Par défaut, [run].
+     */
+    suspend fun catchUp(): Boolean = run()
 }
 
 /**
@@ -107,7 +113,7 @@ class ConversationSyncCoordinator internal constructor(
             var passes = 0
             do {
                 synchronized(lock) { state = state.startedAt(clock.nowMillis()) }
-                ok = runner.run()
+                ok = if (catchUp) runner.catchUp() else runner.run()
                 if (!ok) synchronized(lock) { state = state.failed() }
                 passes++
                 catchUp = synchronized(lock) { takeCatchUp() }
@@ -146,6 +152,10 @@ internal abstract class ConversationSyncCoordinatorModule {
     companion object {
         @Provides
         fun runner(repository: ConversationRepository): ConversationSyncRunner =
-            ConversationSyncRunner { repository.syncSilently() }
+            object : ConversationSyncRunner {
+                override suspend fun run(): Boolean = repository.syncSilently()
+
+                override suspend fun catchUp(): Boolean = repository.catchUpSilently()
+            }
     }
 }

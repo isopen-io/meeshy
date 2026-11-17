@@ -1,4 +1,3 @@
-@preconcurrency import AVFoundation
 import Foundation
 import ImageIO
 import CoreGraphics
@@ -25,8 +24,8 @@ public actor WaveformCache {
         }
     }
 
-    /// Les caches des mesures d'avant (normalisées au pic ; la seconde boucle
-    /// d'`AudioWaveform`) : leurs valeurs ne sont plus lisibles, rien ne les relit.
+    /// Les caches des mesures d'avant (normalisées au pic, et ceux de l'ancienne
+    /// frise) : leurs valeurs ne sont plus lisibles, rien ne les relit.
     private static let retiredDirectories = ["com.meeshy.waveforms", "story-waveforms"]
 
     private let cacheDirectory: URL

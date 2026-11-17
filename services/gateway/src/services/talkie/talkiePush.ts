@@ -36,7 +36,7 @@ import type { PushTransports } from '../push-transport-config';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import type { TalkieWakeChannel, TalkieWakeLookup } from './talkieGate';
 import { talkieAudioUrl } from './talkieAudioToken';
-import { retireOrphanPushToTalkTokens, type PushToTalkPrisma } from './pushToTalkTokens';
+import { retireOrphanPushToTalkTokens, type PushTokenSessionPrisma } from '../pushTokenSessions';
 import { tokenRoutesPushType } from '../push-type-routing';
 
 export const TALKIE_PUSH_CATEGORY = 'MEESHY_TALKIE';
@@ -59,7 +59,7 @@ const isWakeTokenType = (type: string): type is WakeTokenType => (WAKE_TOKEN_TYP
  * pushs coupés pour le processus, aucun jeton capable, ou le transport du premier jeton capable non configuré.
  */
 export async function resolveTalkieWake(
-  prisma: PushToTalkPrisma,
+  prisma: PushTokenSessionPrisma,
   userId: string,
   transports: PushTransports,
   now: Date = new Date(),
@@ -83,7 +83,7 @@ export async function resolveTalkieWake(
 
 /** Le canal que les jetons du destinataire offrent, transports supposés prêts (#17142) ; `null` sans jeton capable. */
 export async function talkieWakeChannel(
-  prisma: PushToTalkPrisma,
+  prisma: PushTokenSessionPrisma,
   userId: string,
   now: Date = new Date(),
 ): Promise<TalkieWakeChannel | null> {

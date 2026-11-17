@@ -140,6 +140,20 @@ public final class NotificationToastManager: ObservableObject {
     /// cache durable, lui, est rendu par `applyUnreadToCache`.
     public let notificationReadRolledBack = PassthroughSubject<String, Never>()
 
+    /// Une notification est ARRIVÉE DÉJÀ LUE — le plus souvent une notification
+    /// RÉÉCRITE après une édition (`notification:deleted` puis
+    /// `notification:new`, même id) que l'utilisateur avait déjà lue. Elle ne
+    /// sonne pas, ne compte pas et ne passe pas par `newNotificationReceived`
+    /// (bannières du jeu, révélations) ; la cloche montée, qui vient de retirer
+    /// la ligne sur le `deleted`, se relit sur ce signal (#19104).
+    public let notificationArrivedRead = PassthroughSubject<String, Never>()
+
+    /// Un autre appareil vient de PURGER les notifications lues
+    /// (`notification:deleted-bulk`, portée `read`). La cloche montée retire
+    /// TOUTES ses lignes lues, y compris celles des pages chargées au-delà du
+    /// cache, que `notificationWasDeleted` ne peut pas nommer (#19104).
+    public let readNotificationsPurged = PassthroughSubject<Void, Never>()
+
     /// Joueur d'haptique injecté par la cible app (le SDK core n'importe pas
     /// UIKit) — même pattern que `conversationPresentationProvider`. Appelé à l'apparition
     /// d'un toast, UNIQUEMENT si la préférence « Vibrations »

@@ -25,6 +25,7 @@ import { zodIssueSchema, issuesServies } from '../../../utils/zod-issue-schema';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { withMutationLog } from '../../../utils/withMutationLog';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
+import { mergeCategoriesAtomically, type PreferenceRow } from './preference-atomic-merge';
 import { depreciee, type AdresseDepreciee } from '../../../utils/deprecation';
 import {
   applyCategoryWriteEffects,
@@ -357,7 +358,11 @@ export function createPreferenceRouter(
           // La base de fusion est CE QUE LE SERVEUR OBÉIT, pas ce que le seul
           // document dit : sinon une clé absente du document repart au défaut,
           // et un réglage qu'on ne touchait pas se trouve levé en silence.
-          const merged = { ...(await resolveCompleteFor(userId)), ...validated };
+          // Sans rangement propre, la fusion se fait DANS la base
+          // (`mergeCategoriesAtomically`) : lire puis réécrire la colonne entière
+          // perdait la bascule voisine (#18910). Seul un rangement hérité
+          // (`privacy`) garde la lecture-puis-écriture côté serveur.
+          const merged = storage ? { ...(await resolveCompleteFor(userId)), ...validated } : null;
 
           // #4578 — la garde de consentement lit ce que le corps NOMME, jamais
           // le document fusionné ni les défauts du schéma.
@@ -424,6 +429,14 @@ export function createPreferenceRouter(
             // `converges` — un upsert de préférences rend le même état.
             replayCost: 'converges',
             op: async () => {
+              if (!merged) {
+                return mergeCategoriesAtomically(
+                  fastify.prisma,
+                  userId,
+                  [{ category, defaults, submitted: validated }],
+                  { id: true, [category]: true }
+                );
+              }
               const u = await fastify.prisma.userPreferences.upsert({
                 where: { userId },
                 create: {
@@ -435,14 +448,14 @@ export function createPreferenceRouter(
                 },
                 select: { [category]: true, id: true }
               });
-              return u as typeof u & { id: string };
+              return u as unknown as PreferenceRow;
             },
             onDuplicate: async () => {
               const u = await fastify.prisma.userPreferences.findUnique({
                 where: { userId },
                 select: { [category]: true, id: true }
               });
-              return u as (typeof u & { id: string }) | null;
+              return u as unknown as PreferenceRow | null;
             },
           });
 

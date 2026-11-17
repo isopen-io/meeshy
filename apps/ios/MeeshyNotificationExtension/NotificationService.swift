@@ -72,7 +72,9 @@ class NotificationService: UNNotificationServiceExtension {
     override func serviceExtensionTimeWillExpire() {
         enrichment?.cancel()
         guard let bestAttemptContent else { return }
-        delivery?.deliver(bestAttemptContent)
+        delivery?.deliver(Self.isRevokedWhilePreparing(bestAttemptContent.userInfo)
+            ? Self.withdrawnContent(from: bestAttemptContent)
+            : bestAttemptContent)
     }
 
     // MARK: - Pipeline
@@ -246,7 +248,29 @@ class NotificationService: UNNotificationServiceExtension {
             discard(result)
             return
         }
+        guard !isRevokedWhilePreparing(working.userInfo) else {
+            discard(result)
+            delivery.deliver(withdrawnContent(from: working))
+            return
+        }
         delivery.deliver(finalContent(from: working, result: result, isCommunicationType: isCommunicationType))
+    }
+
+    /// ios-systeme-7 (#19104) — le push silencieux `notification_revoked` peut arriver dans l'app
+    /// PENDANT que cette extension télécharge la pièce jointe : il n'y avait alors aucune bannière
+    /// à retirer. L'app inscrit la révocation dans le groupe d'apps ; on la relit au dernier
+    /// instant, juste avant de livrer.
+    private static func isRevokedWhilePreparing(_ userInfo: [AnyHashable: Any]) -> Bool {
+        PendingBannerRevocations.inAppGroup().isRevoked(userInfo, now: Date())
+    }
+
+    private static func withdrawnContent(from content: UNMutableNotificationContent) -> UNNotificationContent {
+        let neutralBody = NSLocalizedString(
+            NSEAttachmentPolicy.withdrawnBannerLocKey,
+            bundle: InterfaceLanguageResolver.bundle(),
+            comment: ""
+        )
+        return NSEAttachmentPolicy.withdrawing(content, neutralBody: neutralBody)
     }
 
     private static func finalContent(
@@ -315,10 +339,9 @@ class NotificationService: UNNotificationServiceExtension {
              "story_new_comment",
              "story_thread_reply",
              "friend_story_comment",
-             // Friend content fan-out (Phase 4F)
-             "friend_new_story",
-             "friend_new_post",
-             "friend_new_mood":
+             // Friend content fan-out (Phase 4F), and a friend's relayed activity (#14068-#14072)
+             "friend_new_story", "friend_new_post", "friend_new_mood",
+             "friend_content_reaction", "friend_content_share", "friend_content_repost", "friend_content_quote":
             category = NotificationPayloadHelpers.socialCategoryIdentifier(
                 type: rawType,
                 postId: content.userInfo["postId"] as? String
@@ -414,6 +437,7 @@ class NotificationService: UNNotificationServiceExtension {
         "comment_like", "comment_reply", "comment_reaction",
         "story_new_comment", "story_thread_reply", "friend_story_comment",
         "friend_new_story", "friend_new_post", "friend_new_mood",
+        "friend_content_reaction", "friend_content_share", "friend_content_repost", "friend_content_quote",
     ]
 
     /// Fire-and-forget prefetch of the post referenced by a SOCIAL notification.
@@ -473,9 +497,12 @@ class NotificationService: UNNotificationServiceExtension {
             let entries = delivered.map {
                 (id: $0.request.identifier, userInfo: $0.request.content.userInfo)
             }
+            // ios-systeme-7 — aussi les bannières livrées APRÈS une révocation que l'app avait déjà
+            // traitée : l'inscription du groupe d'apps est ce qui les désigne.
             let expired = EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now)
+                + PendingBannerRevocations.inAppGroup().revokedIdentifiers(from: entries, now: now)
             guard !expired.isEmpty else { return }
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: expired)
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: Array(Set(expired)))
         }
     }
 
@@ -526,7 +553,8 @@ class NotificationService: UNNotificationServiceExtension {
         "comment_like", "comment_reply", "comment_reaction",
         "story_new_comment", "story_thread_reply", "friend_story_comment",
         "friend_new_story", "friend_new_post", "friend_new_mood",
-        "friend_request", "contact_request", "contact_joined", "contact_recently_active",
+        "friend_content_reaction", "friend_content_share", "friend_content_repost", "friend_content_quote",
+        "friend_request", "contact_request", "contact_joined", "contact_recently_active", "relation_acquaintance",
         // Le jeu (#9490) : un duo vient d'un ami, dont l'avatar dit QUI. La ligue et la saison n'ont pas d'acteur.
         "game_duo_invited", "game_duo_accepted"
     ]

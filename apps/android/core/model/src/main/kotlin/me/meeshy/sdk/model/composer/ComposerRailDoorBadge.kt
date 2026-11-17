@@ -2,7 +2,7 @@ package me.meeshy.sdk.model.composer
 
 import me.meeshy.sdk.model.StorySlide
 
-/** Ce que la scène porte déjà, porte par porte (iOS `ComposerRailMatter`). */
+/** Ce que la scène porte déjà, porte par porte. */
 data class ComposerRailMatter(
     val texts: Int = 0,
     val media: Int = 0,
@@ -17,7 +17,7 @@ data class ComposerRailMatter(
 )
 
 /**
- * Le compteur d'une porte (iOS `ComposerRailDoorBadge`) : l'auteur voit que la scène porte trois textes sans ouvrir la
+ * Le compteur d'une porte (comme sur iOS) : l'auteur voit que la scène porte trois textes sans ouvrir la
  * porte. Un compte nul n'affiche RIEN — pas de « 0 » — et le fond ne se compte pas : il remplace, il ne s'ajoute pas.
  */
 object ComposerRailDoorBadge {

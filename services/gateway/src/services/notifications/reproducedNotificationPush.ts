@@ -30,7 +30,8 @@ import { retractedNotificationOf, type RetractedNotification } from './retracted
  */
 export function reproducedPushData(
   row: Readonly<Record<string, unknown>>,
-  unreadBadge: number | undefined
+  unreadBadge: number | undefined,
+  conversationUnread?: number
 ): Readonly<Record<string, string>> & { readonly conversationId: string; readonly messageId: string } {
   const context = row.context !== null && typeof row.context === 'object' ? (row.context as Record<string, unknown>) : {};
   const read = (key: string): string => {
@@ -41,6 +42,7 @@ export function reproducedPushData(
   return {
     notificationId,
     ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
+    ...(conversationUnread !== undefined ? { conversationUnread: String(conversationUnread) } : {}),
     type: String(row.type ?? ''),
     conversationId: read('conversationId'),
     messageId: read('messageId'),

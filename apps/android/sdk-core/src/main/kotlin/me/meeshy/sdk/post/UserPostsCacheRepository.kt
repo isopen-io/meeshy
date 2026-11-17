@@ -62,8 +62,38 @@ class UserPostsCacheRepository @Inject constructor(
         }
     }
 
+    /**
+     * #18931 — a live gesture on [postId] ([patch]: the gateway's absolute counts) reaches EVERY author's cached page that
+     * holds it; each page keeps its own freshness (a gesture is not a reload).
+     */
+    suspend fun patchEverywhere(postId: String, patch: (ApiPost) -> ApiPost?, ticket: AccountTicket?) =
+        rewriteEverywhere(postId, ticket) { snapshot ->
+            val index = snapshot.posts.indexOfFirst { it.id == postId }
+            snapshot.posts.getOrNull(index)?.let(patch)?.let { next ->
+                snapshot.copy(posts = snapshot.posts.toMutableList().also { it[index] = next })
+            }
+        }
+
+    /** #18931 — a post deleted elsewhere (`post:deleted`) leaves every author's cached page. */
+    suspend fun removeEverywhere(postId: String, ticket: AccountTicket?) =
+        rewriteEverywhere(postId, ticket) { snapshot ->
+            if (snapshot.posts.none { it.id == postId }) null else snapshot.copy(posts = snapshot.posts.filterNot { it.id == postId })
+        }
+
+    private suspend fun rewriteEverywhere(postId: String, ticket: AccountTicket?, rewrite: (UserPostsSnapshot) -> UserPostsSnapshot?) {
+        fence.commitOrWrite(ticket) {
+            dao.namingUnderPrefix(KEY_PREFIX, postId).forEach { row ->
+                val snapshot = runCatching { MeeshyApi.json.decodeFromString<UserPostsSnapshot>(row.payload) }.getOrNull()
+                    ?: return@forEach
+                val next = rewrite(snapshot) ?: return@forEach
+                dao.upsert(row.copy(payload = MeeshyApi.json.encodeToString(UserPostsSnapshot.serializer(), next)))
+            }
+        }
+    }
+
     internal companion object {
         const val MAX_CACHED: Int = 100
-        fun key(userId: String): String = "profile_posts:$userId"
+        private const val KEY_PREFIX = "profile_posts:"
+        fun key(userId: String): String = KEY_PREFIX + userId
     }
 }

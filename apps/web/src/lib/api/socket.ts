@@ -14,8 +14,6 @@ import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
 import type { SocketAuth, SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
-import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
-import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
 import { deletedAccountOf, deletedAccountOfRevocation, ownDeletedAccount } from './account-deleted';
 import { attachmentStatusDetailsQueryKey } from './attachments';
@@ -48,17 +46,9 @@ import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { MY_PROFILE_QUERY_KEY } from './me-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
-import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
+import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY, type NotificationsDeps } from './notifications';
 import { bindPublicationRoomTransport } from './publication-rooms';
-import {
-  applyNotificationCounts,
-  applyNotificationDeleted,
-  applyNotificationDeletedBulk,
-  applyNotificationNew,
-  applyNotificationRead,
-  applyNotificationReadBulk,
-  notificationIdOf,
-} from './notifications-realtime';
+import { createNotificationLiveHandlers } from './notifications-live';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -164,16 +154,6 @@ const CATCH_UP_PERSONAL_FAMILIES: readonly (readonly unknown[])[] = [
   MY_PROFILE_QUERY_KEY,
 ];
 
-/** Les notifications qui annoncent l'ARRIVÉE d'un message — jamais une
- * réaction ni une édition, qui nomment un message que le fil peut ne pas avoir
- * chargé sans qu'il manque quoi que ce soit (#9291). */
-const MESSAGE_ARRIVAL_NOTIFICATIONS: ReadonlySet<string> = new Set([
-  'new_message',
-  'message_reply',
-  'user_mentioned',
-  'mention',
-]);
-
 function isTypingEvent(payload: unknown): payload is TypingEvent {
   if (typeof payload !== 'object' || payload === null) return false;
   const p = payload as Record<string, unknown>;
@@ -242,6 +222,8 @@ export type RealtimeDeps = {
   readonly onAccountDeleted?: (accountId: string) => void;
   /** `conversation:closed` / `conversation:obsoleted` (#14645) : le fil ouvert de cette conversation se referme. */
   readonly onConversationGone?: (conversationId: string) => void;
+  /** Le transport de la cloche : la notification arrivée sur le fil OUVERT se marque lue par lui (#18907). Absent : elle reste non lue. */
+  readonly notificationsApi?: NotificationsDeps;
   /** Le compte de la session qui a OUVERT la connexion — seul nommable (audit #10237) ; `null` pour un invité. */
   readonly account?: string | null;
   /** Horloge INJECTABLE (motif `perform-send.ts`) — jamais `Date.now()` lu
@@ -676,48 +658,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   /**
    * `notification:*` (#6288) — LA CLOCHE SUIT LA PASSERELLE SANS RELIRE : les
-   * règles vivent dans `notifications-realtime.ts`, ces lignes les branchent.
-   *
-   * Le DÉDOUBLONNAGE de `notification:new` vit ICI, sur la connexion : une
-   * notification dont aucune liste n'est en cache (cloche jamais ouverte) ne
-   * peut pas être reconnue par le cache, et le compte l'avancerait à chaque
-   * rediffusion. La mémoire est BORNÉE — une session longue ne doit rien
-   * retenir d'autre que les derniers identifiants vus.
+   * règles vivent dans `notifications-realtime.ts`, le câblage de la connexion
+   * dans `notifications-live.ts` (le budget de ce fichier est plein).
    */
-  const seenNotifications = new Set<string>();
-  const SEEN_NOTIFICATIONS_CAP = 200;
-  const onNotificationNew = (payload: unknown): void => {
-    const notification = decodeRealtimeNotification(payload);
-    if (notification === null || seenNotifications.has(notification.id)) return;
-    seenNotifications.add(notification.id);
-    if (seenNotifications.size > SEEN_NOTIFICATIONS_CAP) {
-      const oldest = seenNotifications.values().next().value;
-      if (oldest !== undefined) seenNotifications.delete(oldest);
-    }
-    applyNotificationNew(deps.queryClient, notification);
-    /* LA CLOCHE SONNE, LE FIL SUIT (#9291) — la notification d'un message
-       absent du fil ouvert le relit. */
-    const { conversationId, messageId } = notification.context;
-    if (MESSAGE_ARRIVAL_NOTIFICATIONS.has(notification.type) && conversationId !== undefined && messageId !== undefined) {
-      catchUpThreadMessage(deps.queryClient, { conversationId, messageId });
-    }
-    /* LA BANNIÈRE IN-APP (#8727) — seulement devant un onglet VISIBLE : un
-       onglet caché reçoit le push système, et une bannière posée pendant
-       l'absence surgirait, périmée, au retour. */
-    if (typeof document !== 'undefined' && !document.hidden) offerInAppBanner(notification, { pathname: window.location.pathname });
-  };
-  const onNotificationRead = (payload: unknown): void => applyNotificationRead(deps.queryClient, payload);
-  const onNotificationReadBulk = (payload: unknown): void => applyNotificationReadBulk(deps.queryClient, payload);
-  /* Un id supprimé qui revient est une notification RÉÉCRITE (édition :
-     `notification:deleted` puis `notification:new`, même identité) — la
-     mémoire de dédoublonnage l'oublie pour la laisser reprendre sa place. */
-  const onNotificationDeleted = (payload: unknown): void => {
-    const id = notificationIdOf(payload);
-    if (id !== null) seenNotifications.delete(id);
-    applyNotificationDeleted(deps.queryClient, payload);
-  };
-  const onNotificationDeletedBulk = (payload: unknown): void => applyNotificationDeletedBulk(deps.queryClient, payload);
-  const onNotificationCounts = (payload: unknown): void => applyNotificationCounts(deps.queryClient, payload);
+  const notificationLive = createNotificationLiveHandlers({ queryClient: deps.queryClient, now: deps.now, notificationsApi: deps.notificationsApi });
 
   /**
    * `friend-request:*` (#6321) — LES DEMANDES D'AMITIÉ SUIVENT LA PASSERELLE :
@@ -934,12 +878,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, notificationLive.onNew);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, notificationLive.onRead);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, notificationLive.onReadBulk);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, notificationLive.onDeleted);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, notificationLive.onDeletedBulk);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, notificationLive.onCounts);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_NEW, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
@@ -1016,12 +960,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, notificationLive.onNew);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, notificationLive.onRead);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, notificationLive.onReadBulk);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, notificationLive.onDeleted);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, notificationLive.onDeletedBulk);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, notificationLive.onCounts);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_NEW, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
