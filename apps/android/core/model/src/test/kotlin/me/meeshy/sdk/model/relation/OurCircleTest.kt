@@ -63,6 +63,6 @@ class OurCircleTest {
         val view = OurCircleView.of(link(effective = RelationLevel.BLOOD))
         assertThat(view.next).isNull()
         assertThat(view.locked).isEmpty()
-        assertThat(view.missing).isEqualTo(OurCircleMissing.Nothing)
+        assertThat(view.missing).isEqualTo(OurCircleMissing.None)
     }
 }

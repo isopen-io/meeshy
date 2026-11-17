@@ -12,11 +12,13 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,18 +48,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.relation.ProfileCircle
+import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.profile.ProfileActionPlan
+import me.meeshy.sdk.model.profile.ProfileFace
+import me.meeshy.sdk.model.profile.ProfileFaceRule
 import me.meeshy.sdk.model.profile.ProfileHeaderMetrics
 import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.ProfileTab
 import me.meeshy.ui.accessibility.LocalReduceMotion
-import me.meeshy.ui.component.battery.BatteryPersonSection
-import me.meeshy.ui.component.battery.BatteryPersonSurface
-import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSection
-import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSurface
 import me.meeshy.ui.profile.ProfileFullscreenImage
 import me.meeshy.ui.profile.ProfileFullscreenImageViewer
 import me.meeshy.ui.theme.MeeshyMotion
@@ -68,9 +70,10 @@ private const val PRESENCE_TICK_MS: Long = 30_000L
 
 /**
  * La fiche peinte (cache ou réseau), en UN SEUL défilement (miroir de `collapsibleLayout` iOS) : le
- * grand en-tête repliable, les onglets épinglés sous la barre compacte (Détails par défaut), puis le
- * contenu de l'onglet ; la barre compacte apparaît par-dessus avec la progression. Une personne que
- * j'ai bloquée n'a pas d'onglets : l'en-tête grisé puis la carte « Débloquer ».
+ * grand en-tête repliable puis UNE des trois faces — la Vitrine (les onglets épinglés sous la barre compacte,
+ * Détails par défaut), les Liens ou les Actions — que choisit le sélecteur au pied de la fiche ; la barre
+ * compacte apparaît par-dessus avec la progression. La pilule de relation dit le cercle commun et ouvre « Notre
+ * cercle ». Une personne que j'ai bloquée n'a ni faces ni onglets : l'en-tête grisé puis la carte « Débloquer ».
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -99,9 +102,16 @@ internal fun ProfileSheetLoadedContent(
     val isBlockedByMe = plan?.layout == ProfileLayout.BLOCKED_BY_ME
     val signs = ProfileHeaderSigns.of(live, profile, isBlockedByMe, state.isBlockedByTarget, now)
     val showsTabs = plan?.showsTabs ?: true
+    val faces = ProfileFaceRule.offered(state.isSelf, plan)
+    var savedFace by rememberSaveable(profile.id) { mutableStateOf(ProfileFace.DEFAULT.name) }
+    val face = ProfileFaceRule.shown(ProfileFace.restored(savedFace), faces)
+    var circleOpen by rememberSaveable(profile.id) { mutableStateOf(false) }
+    var shareOpen by rememberSaveable(profile.id) { mutableStateOf(false) }
+    val circle = actionsState.circle?.takeIf { actionsState.userId == profile.id }
+    val share = remember(profile) { ProfileShareBuilder.build(profile) }
     val reduceMotion = LocalReduceMotion.current
     val postsEmit: (LazyListScope.() -> Unit)? =
-        if (showsTabs && tabs.selected == ProfileTab.POSTS) environment.postsItems?.invoke(profile.id, state.isSelf) else null
+        if (showsTabs && face == ProfileFace.VITRINE && tabs.selected == ProfileTab.POSTS) environment.postsItems?.invoke(profile.id, state.isSelf) else null
 
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -121,7 +131,9 @@ internal fun ProfileSheetLoadedContent(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(bottom = MeeshySpacing.xxxl + MeeshySpacing.sm),
+            contentPadding = PaddingValues(
+                bottom = MeeshySpacing.xxxl + MeeshySpacing.sm + if (faces.isEmpty()) 0.dp else PROFILE_FACE_BAR_CLEARANCE,
+            ),
         ) {
             item(key = "header", contentType = "header") {
                 ProfileCollapsibleHeader(
@@ -137,7 +149,38 @@ internal fun ProfileSheetLoadedContent(
                     onMoodTap = openMood,
                 )
             }
-            if (showsTabs) {
+            if (showsTabs && face != ProfileFace.VITRINE) {
+                item(key = "face-${face.name}", contentType = "face") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = MeeshySpacing.xl)
+                            .padding(top = MeeshySpacing.lg),
+                    ) {
+                        ProfileOtherFace(
+                            face = face,
+                            plan = plan,
+                            profile = profile,
+                            displayName = header.displayName,
+                            circle = circle,
+                            receptions = actionsState.receptionsOnProfile.takeIf { actionsState.userId == profile.id && it.isNotEmpty() }
+                                ?.let { ProfileReceptionBlocks(profile.id, it) },
+                            isOpeningConversation = actionsState.isOpeningConversation,
+                            actions = actions,
+                            share = share,
+                            onOpenCircle = { circleOpen = true },
+                            onOpenShare = { shareOpen = true },
+                        )
+                    }
+                }
+            } else if (showsTabs) {
+                if (circle != null && faces.isNotEmpty()) {
+                    item(key = "relation", contentType = "relation") {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xl).padding(top = MeeshySpacing.md)) {
+                            ProfileRelationPill(level = circle.level, onClick = { circleOpen = true })
+                        }
+                    }
+                }
                 stickyHeader(key = "tabs", contentType = "tabs") {
                     val statusInset = if (isExpanded) statusBarTop else 0.dp
                     ProfileTabBar(
@@ -159,20 +202,6 @@ internal fun ProfileSheetLoadedContent(
                             .padding(top = MeeshySpacing.lg),
                         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
                     ) {
-                        // La batterie (#14147) : le détail, seulement en épisode.
-                        if (!state.isSelf) {
-                            BatteryPersonSection(
-                                userId = profile.id,
-                                name = header.displayName,
-                                surface = BatteryPersonSurface.PROFILE,
-                            )
-                            // Le téléphone injoignable (#18737) : depuis quand, la cause, et le partage dès Proche.
-                            PhoneReachabilityPersonSection(
-                                userId = profile.id,
-                                name = header.displayName,
-                                surface = PhoneReachabilityPersonSurface.PROFILE,
-                            )
-                        }
                         AnimatedContent(
                             targetState = tabs.selected,
                             transitionSpec = { profileTabTransition(initialState, targetState, reduceMotion) },
@@ -188,9 +217,6 @@ internal fun ProfileSheetLoadedContent(
                                     accent = accent,
                                     plan = plan,
                                     isOpeningConversation = actionsState.isOpeningConversation,
-                                    circle = actionsState.circle?.takeIf { actionsState.userId == profile.id },
-                                    receptions = actionsState.receptionsOnProfile.takeIf { actionsState.userId == profile.id && it.isNotEmpty() }
-                                        ?.let { ProfileReceptionBlocks(profile.id, it) },
                                     isInteractionDisabled = isBlockedByMe || state.isBlockedByTarget,
                                     environment = environment,
                                     actions = actions,
@@ -221,7 +247,28 @@ internal fun ProfileSheetLoadedContent(
             onMoodTap = openMood,
             modifier = Modifier.align(Alignment.TopStart),
         )
+        if (faces.isNotEmpty()) {
+            ProfileFaceBar(
+                faces = faces,
+                selected = face,
+                onSelect = { savedFace = it.name },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = MeeshySpacing.xl, vertical = MeeshySpacing.md),
+            )
+        }
     }
+    if (circleOpen && circle != null) {
+        OurCircleSheet(
+            circle = circle,
+            displayName = header.displayName,
+            actions = actions,
+            allowPromote = plan?.connectionActions.isNullOrEmpty(),
+            onDismiss = { circleOpen = false },
+        )
+    }
+    if (shareOpen && share != null) ProfileShareSheet(share = share, onDismiss = { shareOpen = false })
     fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
     val mood = signs.moodEmoji
     if (moodOpen && mood != null) ProfileMoodBubble(emoji = mood, text = live.moodText, onDismiss = { moodOpen = false })
@@ -257,8 +304,6 @@ private fun ProfileSheetTabContent(
     accent: Color,
     plan: ProfileActionPlan?,
     isOpeningConversation: Boolean,
-    circle: ProfileCircle?,
-    receptions: ProfileReceptionBlocks?,
     isInteractionDisabled: Boolean,
     environment: ProfileSheetEnvironment,
     actions: ProfileActionCallbacks,
@@ -281,34 +326,7 @@ private fun ProfileSheetTabContent(
                 onSendMessage = actions.onSendMessage,
             )
         }
-        ProfileTab.DETAILS -> ProfileDetailsTab(
-            details = details,
-            accent = accent,
-            actions = profileActionsSlot(plan, state.isSelf, header.displayName, isOpeningConversation, actions, circle, receptions),
-        )
-    }
-}
-
-/** Le contenu du point d'insertion « Actions » de l'onglet Détails ; `null` = aucune section. */
-private fun profileActionsSlot(
-    plan: ProfileActionPlan?,
-    isSelf: Boolean,
-    displayName: String,
-    isOpeningConversation: Boolean,
-    callbacks: ProfileActionCallbacks,
-    circle: ProfileCircle?,
-    receptions: ProfileReceptionBlocks?,
-): (@Composable () -> Unit)? {
-    val shown = plan?.takeIf { !isSelf && it.layout != ProfileLayout.CLOSED } ?: return null
-    return {
-        ProfileActionsSection(
-            plan = shown,
-            displayName = displayName,
-            isOpeningConversation = isOpeningConversation,
-            callbacks = callbacks,
-            circle = circle,
-            receptions = receptions,
-        )
+        ProfileTab.DETAILS -> ProfileDetailsTab(details = details, accent = accent)
     }
 }
 
