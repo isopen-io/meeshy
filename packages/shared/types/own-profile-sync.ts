@@ -10,12 +10,13 @@
  *
  * `profile:updated` est émis sur `user:<auteur>` SEULEMENT, après chaque
  * écriture qui change un des champs ci-dessous (`PATCH /users/me`,
- * `/users/me/avatar`, `/users/me/banner`). Sa charge est l'INSTANTANÉ de ces
- * champs tels que la ligne les porte après l'écriture — pas un delta : un
- * événement perdu est réparé par le suivant, et deux événements reçus dans le
- * désordre s'arbitrent par `updatedAt` (`ownProfileSnapshotIsStale`). Les trois
- * langues voyagent ensemble parce que le Prisme les lit ensemble ; les quatre
- * composants du nom aussi, pour la raison de `UserUpdatedEventData`.
+ * `/users/me/avatar`, `/users/me/banner`, `/users/me/username`). Sa charge
+ * est l'INSTANTANÉ de ces champs tels que la ligne les porte après l'écriture —
+ * pas un delta : un événement perdu est réparé par le suivant, et deux
+ * événements reçus dans le désordre s'arbitrent par `updatedAt`
+ * (`ownProfileSnapshotIsStale`). Les trois langues voyagent ensemble parce que
+ * le Prisme les lit ensemble ; les quatre composants du nom aussi, pour la
+ * raison de `UserUpdatedEventData`.
  *
  * Rétrocompatible : un ancien client n'écoute pas cet événement, et rien ne
  * change pour lui ; aucun champ de `user:updated` n'est retiré. Un client lit

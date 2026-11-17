@@ -38,9 +38,12 @@ lequel les clients arbitrent.
 
 **4. Seules les écritures qui touchent un champ de l'instantané diffusent** —
 `PATCH /users/me` quand une langue ou un nom change, `PATCH /users/me/avatar`,
-`PATCH /users/me/banner`. Une bio, une ville ou un réglage seuls ne diffusent
-rien : un « rien n'a changé » enverrait mes autres appareils réconcilier un
-non-événement.
+`PATCH /users/me/banner`, `PATCH /users/me/username` (le pseudo est l'un des
+quatre composants du nom ; son `select` lit désormais l'instantané entier).
+Une bio, une ville ou un réglage seuls ne diffusent rien : un « rien n'a
+changé » enverrait mes autres appareils réconcilier un non-événement. Les
+écrivains se cherchent par CHAMP de l'instantané, pas par route : c'est en
+énumérant ceux du pseudo que le quatrième a été trouvé.
 
 **5. La diffusion est un canal LATÉRAL** : rien dans `announceOwnProfileUpdated`
 ne lève, et une écriture faite ne se rapporte jamais comme un échec.

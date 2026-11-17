@@ -25,7 +25,11 @@ import { io as connect, type Socket as ClientSocket } from 'socket.io-client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { profileUpdatedEventDataSchema, type ProfileUpdatedEventData } from '@meeshy/shared/types/own-profile-sync';
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn(), logWarn: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../../utils/logger') as object),
+  logError: jest.fn(),
+  logWarn: jest.fn(),
+}));
 
 jest.mock('../../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })) },
@@ -45,11 +49,16 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn(({ op }: { op: () => unknown }) => op()),
 }));
 
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as object),
+  verifyPassword: jest.fn(async () => true),
+}));
+
 jest.mock('../../../../routes/auth/types', () => ({
   formatUserResponse: jest.fn((u: Record<string, unknown>) => ({ ...u, formatted: true })),
 }));
 
-import { updateUserAvatar, updateUserBanner, updateUserProfile } from '../../../../routes/users/profile';
+import { updateUserAvatar, updateUserBanner, updateUserProfile, updateUsername } from '../../../../routes/users/profile';
 import { ownProfileUpdatedPayload } from '../../../../routes/users/own-profile-sync';
 
 const ALICE = '507f1f77bcf86cd799439011';
@@ -144,7 +153,8 @@ function makePrisma(served: Record<string, unknown>) {
     messageAttachment: { findFirst: jest.fn(async () => ({ id: 'att-own' })) },
     participant: { updateMany: jest.fn(async () => ({ count: 2 })) },
     user: {
-      findUnique: jest.fn(async () => aliceRow()),
+      findUnique: jest.fn(async () => aliceRow({ usernameHistory: [] })),
+      findFirst: jest.fn(async () => null),
       update: jest.fn(async () => served),
     },
   };
@@ -315,6 +325,28 @@ describe('#18924 — la photo et la bannière suivent le même chemin', () => {
 
     expect(res.statusCode).toBe(200);
     expect((await received).profile.banner).toBe(NEW_BANNER);
+    await app.close();
+  });
+});
+
+describe('#18924 — le pseudo fait partie du nom : `PATCH /users/me/username` suit le même chemin', () => {
+  it('l’autre appareil reçoit le nouveau pseudo, avec l’instantané entier', async () => {
+    const { io, clients } = await liveSockets([ALICE, ALICE, BOB]);
+    const [, aliceOther, bob] = clients;
+    const bobReceived = recordProfileUpdates(bob!);
+    const { app } = await buildApp({ route: updateUsername, served: aliceRow({ username: 'alicia' }), io });
+    const received = nextProfileUpdate(aliceOther!);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/username',
+      payload: { newUsername: 'alicia', currentPassword: 'pass' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect((await received).profile).toMatchObject({ username: 'alicia', systemLanguage: 'fr', displayName: 'Alice Cooper' });
+    await settle(150);
+    expect(bobReceived()).toEqual([]);
     await app.close();
   });
 });
