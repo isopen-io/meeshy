@@ -66,6 +66,8 @@ export const AUTH_USER_SELECT = {
   displayName: true,
   avatar: true,
   banner: true,
+  // #19201 — la couleur d'accent de la vitrine, promise par `userSchema`.
+  profileAccentColor: true,
   bio: true,
   systemLanguage: true,
   regionalLanguage: true,

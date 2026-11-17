@@ -7,6 +7,7 @@ import {
   updateBloodLocationSettings,
 } from '../../services/bloodLocation/bloodLocationService';
 import { bloodLocationDepsOf } from '../../services/bloodLocation/bloodLocationDeps';
+import { setLocationGhostAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
@@ -26,6 +27,7 @@ export default async function bloodLocationMeRoutes(fastify: FastifyInstance): P
   const writes = relationLimiter(fastify, 'rel:blood-loc:w', 120);
   const reads = relationLimiter(fastify, 'rel:blood-loc:r', 60);
   const depsOf = () => bloodLocationDepsOf({ prisma: fastify.prisma, io: fastify.socketIOHandler?.getManager?.()?.getIO() as never, report: (error) => logError(fastify.log, 'Blood location side effect:', error) });
+  const ghostParamsOf = () => ({ prisma: fastify.prisma, io: fastify.socketIOHandler?.getManager?.()?.getIO() as never, report: (error: unknown) => logError(fastify.log, 'Location ghost side effect:', error) });
   const sink = { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object', additionalProperties: true } } } as const;
 
   fastify.post('/location/blood', {
@@ -77,6 +79,10 @@ export default async function bloodLocationMeRoutes(fastify: FastifyInstance): P
     const parsed = bloodLocationSettingsPayloadSchema.safeParse(request.body);
     if (!parsed.success) return sendBadRequest(reply, 'Réglage illisible');
     try {
+      if (parsed.data.userId === undefined && parsed.data.ghost !== undefined) {
+        await setLocationGhostAfter(ghostParamsOf(), request.user!.userId, parsed.data.ghost);
+        return sendSuccess(reply, { ok: true });
+      }
       const result = await updateBloodLocationSettings(depsOf(), request.user!.userId, { ...parsed.data, ...(parsed.data.userId ? { userId: parsed.data.userId.toLowerCase() } : {}) });
       return result.ok ? sendSuccess(reply, result) : sendBadRequest(reply, 'Réglage refusé');
     } catch (error) {
