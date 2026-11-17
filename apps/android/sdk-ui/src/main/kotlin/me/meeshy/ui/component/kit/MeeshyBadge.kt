@@ -121,6 +121,7 @@ public fun MeeshyBadge(
         .let { if (onPress != null) it.meeshyTapTarget() else it }
         .graphicsLayer { scaleX = values.scale; scaleY = values.scale }
         .alpha(values.opacity)
+        .meeshySaturation(values.saturation)
         .let { m ->
             if (onPress != null) {
                 m.clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onPress)

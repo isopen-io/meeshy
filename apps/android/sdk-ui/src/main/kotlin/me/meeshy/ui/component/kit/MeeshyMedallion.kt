@@ -18,12 +18,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
@@ -98,7 +98,8 @@ private fun medallionBase(kind: MeeshyMedallionKind, tint: Color?): Color {
  *
  * Il n'a ni cible, ni état pressé, ni rôle de bouton : dans une rangée qui se touche, c'est la rangée. Un disque teinté qui
  * répond au doigt est un `MeeshyGlassButton`. Sans [label] il est caché à la voix. Le mouvement réduit fige la forme et ne
- * garde qu'une onde. Jumeau iOS : `MeeshyMedallion`.
+ * garde qu'une onde ; l'organique dérive au dessin, sans recomposer. En aplat, l'encre est sombre dans les deux thèmes.
+ * Jumeau iOS : `MeeshyMedallion`.
  */
 @Composable
 @Suppress("LongParameterList", "LongMethod")
@@ -124,7 +125,7 @@ public fun MeeshyMedallion(
     val base = medallionBase(kind, tint)
     val tokens = MeeshyTheme.tokens
     val ink = when (values.paint) {
-        MeeshyMedallionPaint.Solid -> tokens.backgroundPrimary
+        MeeshyMedallionPaint.Solid -> MeeshyPalette.PlateauNoir
         MeeshyMedallionPaint.Soft -> base
         MeeshyMedallionPaint.Outline -> tokens.textSecondary
     }
@@ -140,16 +141,21 @@ public fun MeeshyMedallion(
     } else {
         null
     }
-    val phase = if (values.drifts) {
-        transition.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(MeeshyMotionRecipe.FLOAT_MILLIS, easing = LinearEasing), RepeatMode.Restart), label = "blob").value
+    val phase: State<Float>? = if (values.drifts) {
+        transition.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(MeeshyMotionRecipe.FLOAT_MILLIS, easing = LinearEasing), RepeatMode.Restart), label = "blob")
     } else {
-        0f
+        null
     }
-    val clipShape: Shape = when (values.shape) {
+    val restShape: Shape = when (values.shape) {
         MeeshyMedallionShape.Disc -> CircleShape
         MeeshyMedallionShape.Squircle -> RoundedCornerShape((values.diameterDp * MeeshyMedallionRecipe.SQUIRCLE_RADIUS_FRACTION).dp)
         MeeshyMedallionShape.Scallop -> ScallopShape
-        MeeshyMedallionShape.Blob -> blobShape(phase)
+        MeeshyMedallionShape.Blob -> blobShape(0f)
+    }
+    val shapeNow: () -> Shape = if (phase != null) {
+        { blobShape(phase.value) }
+    } else {
+        { restShape }
     }
     val lockedName = stringResource(R.string.kit_medallion_locked)
     val spoken = if (MeeshyMedallionRecipe.isHiddenFromVoice(label)) null else if (state == MeeshyMedallionState.Locked) "$label, $lockedName" else label
@@ -162,7 +168,10 @@ public fun MeeshyMedallion(
         modifier = modifier
             .size(values.diameterDp.dp)
             .drawBehind { drawDecor(values, base, surface, turn?.value ?: 0f, wave?.value ?: 0f) }
-            .clip(clipShape)
+            .graphicsLayer {
+                this.shape = shapeNow()
+                this.clip = true
+            }
             .let { m ->
                 if (gradientEnd != null && values.paint == MeeshyMedallionPaint.Solid) {
                     m.background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(base, gradientEnd)))
@@ -170,7 +179,7 @@ public fun MeeshyMedallion(
                     m.background(background)
                 }
             }
-            .let { if (values.borderDp > 0f) it.dashedBorder(values.borderDp, values.borderIsDashed, tokens.hairline, clipShape) else it }
+            .let { if (values.borderDp > 0f) it.dashedBorder(values.borderDp, values.borderIsDashed, tokens.hairline, shapeNow) else it }
             .let { if (spoken == null) it.decorative() else it.clearAndSetSemantics { contentDescription = spoken } },
         contentAlignment = Alignment.Center,
     ) {
@@ -187,11 +196,11 @@ public fun MeeshyMedallion(
  * Le contour du verrou : un trait de [widthDp] à l'intérieur de [shape], pointillé si [dashed]. Le trait est tracé à double
  * largeur sous la découpe de la forme, dont seule la moitié intérieure reste visible.
  */
-private fun Modifier.dashedBorder(widthDp: Float, dashed: Boolean, color: Color, shape: Shape): Modifier = drawWithContent {
+private fun Modifier.dashedBorder(widthDp: Float, dashed: Boolean, color: Color, shape: () -> Shape): Modifier = drawWithContent {
     drawContent()
     val stroke = widthDp.dp.toPx() * 2f
     val effect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())) else null
-    drawOutline(shape.createOutline(size, layoutDirection, this), color, style = Stroke(width = stroke, pathEffect = effect))
+    drawOutline(shape().createOutline(size, layoutDirection, this), color, style = Stroke(width = stroke, pathEffect = effect))
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDecor(

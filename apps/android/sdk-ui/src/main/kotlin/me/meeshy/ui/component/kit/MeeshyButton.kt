@@ -70,7 +70,8 @@ private const val SPINNER_STROKE_DP = 2
  * - [isPending] : l'indicateur prend la place du glyphe, la largeur ne bouge pas, un second toucher ne part pas.
  * - [enabled] faux : contenu à 45 %, ni action ni tic ; [disabledReason] s'écrit sous le bouton et se lit après son nom.
  * - [isDeferred] : le bouton reste actif, l'action est mise en file par l'app ; l'horloge dit « sera envoyé ».
- * - `hold` : [holdState] est remis par l'hôte, le bouton rapporte [onHoldChange] (maintenu ou relâché), rien d'autre.
+ * - `hold` : [holdState] est remis par l'hôte, le bouton rapporte [onHoldChange] (maintenu ou relâché), rien d'autre ; un maintien
+ *   tenu se relâche quand le bouton s'éteint ou s'en va, qu'il vienne du doigt ou du lecteur d'écran.
  * - Le genre [MeeshyButtonKind.Glass] rend ici la surface tonale du thème (aucun flou sur Android).
  * - Le tic léger part au toucher par le site unique d'haptique ; [pressed] fige l'état pressé (catalogue).
  *
@@ -128,7 +129,7 @@ public fun MeeshyButton(
         edge?.let { latestHold.value?.invoke(it) }
     }
     if (isHold) {
-        DisposableEffect(holdLaw) {
+        DisposableEffect(holdLaw, enabled) {
             onDispose { report(holdLaw.cancel()) }
         }
     }

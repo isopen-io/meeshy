@@ -95,6 +95,7 @@ public data class MeeshyBadgeValues(
     val hasAccentBorder: Boolean,
     val opacity: Float,
     val isDesaturated: Boolean,
+    val saturation: Float,
     val scale: Float,
     val hitDp: Int?,
     val isButton: Boolean,
@@ -110,6 +111,7 @@ public object MeeshyBadgeRecipe {
     public const val OUTLINE_DP: Float = 1.5f
     public const val PRESSED_SCALE: Float = 0.94f
     public const val STALE_OPACITY: Float = 0.62f
+    public const val STALE_SATURATION: Float = 0.4f
     public const val DISABLED_OPACITY: Float = 0.4f
     private const val GLASS_RADIUS_DP: Int = 12
     private const val CODE_RADIUS_DP: Int = 7
@@ -151,6 +153,7 @@ public object MeeshyBadgeRecipe {
             hasAccentBorder = isCurrent,
             opacity = opacity(isStale, isInteractive && !isEnabled),
             isDesaturated = isStale,
+            saturation = if (isStale) STALE_SATURATION else 1f,
             scale = if (isInteractive && isEnabled && isPressed) PRESSED_SCALE else 1f,
             hitDp = if (isInteractive) max(size.heightDp, MIN_TARGET_DP) else null,
             isButton = isInteractive,
