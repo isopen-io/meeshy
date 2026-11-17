@@ -6,15 +6,15 @@ import { MeeshyAvatarMorph, MeeshyAvatarMorphScope, meeshyAvatarMorphJewels, mee
 
 const { mount, act } = kitMount();
 type TransitionHost = { startViewTransition?: (update: () => void) => { finished: Promise<void> } };
-const host = document as unknown as TransitionHost;
+const host = (): TransitionHost => document as unknown as TransitionHost;
 
 afterEach(() => {
-  delete host.startViewTransition;
+  delete host().startViewTransition;
 });
 
 const installTransitions = (): { calls: number } => {
   const log = { calls: 0 };
-  host.startViewTransition = (update) => {
+  host().startViewTransition = (update) => {
     log.calls += 1;
     update();
     return { finished: Promise.resolve() };

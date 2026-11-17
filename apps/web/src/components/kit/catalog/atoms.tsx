@@ -10,6 +10,7 @@ import { MEESHY_MOTION_TOKENS, meeshyMotionRecipe } from '../meeshy-motion';
 import { MeeshyNote } from '../meeshy-note';
 import { CONTENTS_B, MEESHY_KIT_ATOMS_B } from './atoms-b';
 import { CONTENTS_C, MEESHY_KIT_ASSEMBLIES_A } from './atoms-c';
+import { CONTENTS_D, MEESHY_KIT_ASSEMBLIES_B } from './atoms-d';
 
 /**
  * LES ATOMES DU PROFIL AU CATALOGUE (#18874, #18875, chantier #18857 ; les assemblages sont dans `atoms-c.tsx`) — K26, K33, K35, K37,
@@ -19,7 +20,7 @@ import { CONTENTS_C, MEESHY_KIT_ASSEMBLIES_A } from './atoms-c';
  * `MeeshyKitCatalog.atoms` / `atomContent` les rendent ; leur entrée dans le registre, avec
  * les images de référence, est un lot de la chaîne outillage.
  */
-export type MeeshyKitAtom = { readonly entry: MeeshyKitCatalogEntry; readonly file: string };
+export type MeeshyKitAtom = { readonly entry: MeeshyKitCatalogEntry; readonly file: string; readonly alsoFiles?: readonly string[] };
 
 const glyph = (path: string): ReactNode => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -193,6 +194,7 @@ export const MEESHY_KIT_ATOMS: readonly MeeshyKitAtom[] = [
   { entry: entryK55, file: 'meeshy-key-hint.tsx' },
   ...MEESHY_KIT_ATOMS_B,
   ...MEESHY_KIT_ASSEMBLIES_A,
+  ...MEESHY_KIT_ASSEMBLIES_B,
 ].sort((a, b) => keyNumber(a) - keyNumber(b));
 
 const CONTENTS: Readonly<Record<string, (state: MeeshyKitCatalogState) => ReactNode>> = {
@@ -205,6 +207,7 @@ const CONTENTS: Readonly<Record<string, (state: MeeshyKitCatalogState) => ReactN
   K55: contentK55,
   ...CONTENTS_B,
   ...CONTENTS_C,
+  ...CONTENTS_D,
 };
 
 export const atomEntries: readonly MeeshyKitCatalogEntry[] = MEESHY_KIT_ATOMS.map((atom) => atom.entry);

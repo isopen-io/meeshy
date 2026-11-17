@@ -4,17 +4,18 @@ import { MeeshyCircleScale } from '../meeshy-circle-scale';
 import { kitCatalogEntry, kitCatalogState, type MeeshyKitCatalogEntry, type MeeshyKitCatalogState } from '../meeshy-kit-catalog';
 import { MeeshyLockedGroup, MeeshyLockedRow } from '../meeshy-locked-row';
 import { MeeshySkeleton } from '../meeshy-skeleton';
+import { MeeshyStateBlock } from '../meeshy-state-block';
 import { MeeshyStepper } from '../meeshy-stepper';
 import { MeeshyTranslationMark } from '../meeshy-translation-mark';
 import { MeeshyWavePlayer } from '../meeshy-wave-player';
 
 /**
  * LA SECONDE SÉRIE D'ATOMES DU PROFIL AU CATALOGUE (#18875, chantier #18857) — K33, K35,
- * K37, K38 (le seul atome `MeeshySkeleton`), K51, K53. Même régime que `atoms.tsx` : ils ne
+ * K37, K38 (le bloc d'état `MeeshyStateBlock` et son atome `MeeshySkeleton`), K51, K53. Même régime que `atoms.tsx` : ils ne
  * sont pas dans le registre `.claude/workflows/meeshy-kit-planche.lots.json` (fichier de la
  * chaîne outillage), ils vivent à part et `MeeshyKitCatalog.atoms` les rend.
  */
-export type MeeshyKitAtomB = { readonly entry: MeeshyKitCatalogEntry; readonly file: string };
+export type MeeshyKitAtomB = { readonly entry: MeeshyKitCatalogEntry; readonly file: string; readonly alsoFiles?: readonly string[] };
 
 const glyph = (path: string): ReactNode => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -31,7 +32,7 @@ const states = (...ids: readonly (readonly [string, Partial<Parameters<typeof ki
 export const entryK33 = kitCatalogEntry({ key: 'K33', name: 'MeeshyCircleScale', states: states(['formes'], ['niveaux'], ['selection', { isTouchable: true }], ['theme', { backdrop: 'light' }]) });
 export const entryK35 = kitCatalogEntry({ key: 'K35', name: 'MeeshyWavePlayer', states: states(['repos', { isTouchable: true }], ['lecture', { isTouchable: true }], ['phases'], ['compact', { isTouchable: true }], ['theme', { backdrop: 'light' }]) });
 export const entryK37 = kitCatalogEntry({ key: 'K37', name: 'MeeshyLockedRow', states: states(['formes'], ['geste', { isTouchable: true }], ['ouvert'], ['groupe', { isTouchable: true }], ['theme', { backdrop: 'light' }]) });
-export const entryK38 = kitCatalogEntry({ key: 'K38', name: 'MeeshySkeleton', states: states(['formes'], ['theme', { backdrop: 'light' }]) });
+export const entryK38 = kitCatalogEntry({ key: 'K38', name: 'MeeshyStateBlock', states: states(['genres', { isTouchable: true }], ['compact', { isTouchable: true }], ['formes'], ['theme', { backdrop: 'light' }]) });
 export const entryK51 = kitCatalogEntry({ key: 'K51', name: 'MeeshyTranslationMark', states: states(['densites'], ['modes', { isTouchable: true }], ['sans-geste'], ['legende', { backdrop: 'media' }]) });
 export const entryK53 = kitCatalogEntry({ key: 'K53', name: 'MeeshyStepper', states: states(['boutons', { isTouchable: true }], ['piste', { isTouchable: true }], ['jalons'], ['theme', { backdrop: 'light' }]) });
 
@@ -120,8 +121,20 @@ const contentK37 = (state: MeeshyKitCatalogState): ReactNode => {
   return <MeeshyLockedRow title="Présence" requirement="dès Ami" words={WORDS_LOCKED} />;
 };
 
-const contentK38 = (): ReactNode =>
-  column(
+const contentK38 = (state: MeeshyKitCatalogState): ReactNode => {
+  if (state.id === 'genres') {
+    return column(
+      <>
+        <MeeshyStateBlock kind="empty" title="Ton premier lien t’attend" message="Une adresse à toi, à poser partout." art={{ ghost: 'ticket', count: 1 }} primary={{ title: 'Créer mon lien de profil', perform: noop }} secondary={{ title: 'Scanner un code', perform: noop }} />
+        <MeeshyStateBlock kind="error" title="Tes liens n’ont pas pu se charger" primary={{ title: 'Réessayer', perform: noop }} announces={false} hapticOnError={false} />
+        <MeeshyStateBlock kind="denied" title="Le micro est coupé pour Meeshy" message="Autorise-le pour envoyer un vocal." art={{ ghost: 'pin', count: 1 }} primary={{ title: 'Ouvrir les réglages', perform: noop }} secondary={{ title: 'Plus tard', perform: noop }} />
+        <MeeshyStateBlock kind="offline" title="Tu es hors ligne" message="Rien en mémoire pour cet écran." art={{ ghost: 'row', count: 2 }} primary={{ title: 'Réessayer', perform: noop }} />
+      </>,
+    );
+  }
+  if (state.id === 'compact') return <MeeshyStateBlock kind="error" size="compact" title="Tes liens n’ont pas pu se charger" primary={{ title: 'Réessayer', perform: noop }} announces={false} hapticOnError={false} />;
+  if (state.id === 'theme') return <MeeshyStateBlock kind="success" title="Signalement envoyé" consequences={['Rui ne peut plus t’écrire', 'Notre équipe regarde sous 24 h']} primary={{ title: 'Terminé', perform: noop }} />;
+  return column(
     <>
       <MeeshySkeleton shape={{ kind: 'line', widthRatio: 0.7 }} />
       <MeeshySkeleton shape={{ kind: 'line', widthRatio: 0.45, height: 11 }} />
@@ -131,6 +144,7 @@ const contentK38 = (): ReactNode =>
       <MeeshySkeleton shape={{ kind: 'card', aspect: 4 / 3, radius: 18 }} />
     </>,
   );
+};
 
 const contentK51 = (state: MeeshyKitCatalogState): ReactNode => {
   if (state.id === 'densites') {
@@ -164,7 +178,7 @@ export const MEESHY_KIT_ATOMS_B: readonly MeeshyKitAtomB[] = [
   { entry: entryK33, file: 'meeshy-circle-scale.tsx' },
   { entry: entryK35, file: 'meeshy-wave-player.tsx' },
   { entry: entryK37, file: 'meeshy-locked-row.tsx' },
-  { entry: entryK38, file: 'meeshy-skeleton.tsx' },
+  { entry: entryK38, file: 'meeshy-state-block.tsx', alsoFiles: ['meeshy-skeleton.tsx'] },
   { entry: entryK51, file: 'meeshy-translation-mark.tsx' },
   { entry: entryK53, file: 'meeshy-stepper.tsx' },
 ];
