@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import net from 'node:net';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
@@ -91,6 +92,44 @@ describe('GET /@:username : l’adresse courte redirige vers l’adresse canoniq
     expect(tiret.statusCode).toBe(307);
     const point = await app.inject({ method: 'GET', url: `${PREFIXE}/@ai.ssa` });
     expect(point.statusCode).toBe(404);
+  });
+});
+
+describe('GET /@:username : une requête aux caractères inhabituels ne rend jamais 500', () => {
+  const brut = (port: number, cible: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const socket = net.connect(port, '127.0.0.1', () => {
+        socket.write(Buffer.from(`GET ${cible} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n`, 'latin1'));
+      });
+      let recu = '';
+      socket.on('data', (morceau) => { recu += morceau.toString('latin1'); });
+      socket.on('close', () => resolve(recu.split('\r\n')[0] ?? ''));
+      socket.on('error', reject);
+    });
+
+  it('par le vrai serveur HTTP : un octet que l’en-tête refuserait est rejeté par l’analyseur (400) avant la route, le reste redirige (307)', async () => {
+    const app = await monter(ligne());
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    try {
+      const { port } = app.server.address() as net.AddressInfo;
+      for (const octet of ['\t', '\x7f', '\x80', '\xe9', '\xff']) {
+        expect(await brut(port, `${PREFIXE}/@aissa?q=a${octet}b`)).toMatch(/^HTTP\/1\.1 400 /);
+      }
+      for (const signe of ['"', '|', '{', '`', '%0d%0a']) {
+        expect(await brut(port, `${PREFIXE}/@aissa?q=a${signe}b`)).toMatch(/^HTTP\/1\.1 307 /);
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('par l’injection : tout caractère non ASCII arrive encodé et la redirection garde la requête', async () => {
+    const app = await monter(ligne());
+    for (const valeur of ['中', 'é', 'a\u0001b']) {
+      const res = await app.inject({ method: 'GET', url: `${PREFIXE}/@aissa?q=${valeur}` });
+      expect(res.statusCode).toBe(307);
+      expect(res.headers.location).toBe(`${PREFIXE}/directory/people/aissa?q=${encodeURIComponent(valeur)}`);
+    }
   });
 });
 
