@@ -538,10 +538,6 @@ public struct UserProfileSheet: View {
         sendMessageButtonContent(compact: false)
     }
 
-    var sendMessageButtonCompact: some View {
-        sendMessageButtonContent(compact: true)
-    }
-
     private func sendMessageButtonContent(compact: Bool) -> some View {
         Button {
             HapticFeedback.medium()

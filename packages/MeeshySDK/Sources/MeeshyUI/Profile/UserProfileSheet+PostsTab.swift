@@ -14,9 +14,10 @@ extension UserProfileSheet {
         if let postsContent, let userId = resolvedUserId, !userId.isEmpty {
             postsContent(userId)
         } else if let userId = resolvedUserId, !userId.isEmpty {
-            ProfilePostsFallback(userId: userId, accentColor: resolvedAccent, social: dependencies.social)
+            ProfilePostsFallback(userId: userId, accentColor: resolvedAccent, social: dependencies.social,
+                                 authorName: isCurrentUser ? nil : displayUser.resolvedDisplayName)
         } else {
-            ProfilePostsEmpty(accentColor: resolvedAccent)
+            ProfilePostsEmpty(authorName: isCurrentUser ? nil : displayUser.resolvedDisplayName)
         }
     }
 }
@@ -27,8 +28,8 @@ private struct ProfilePostsFallback: View {
     let userId: String
     let accentColor: String
     let social: any ProfileSocialActionsProviding
+    let authorName: String?
 
-    @ResolvedThemePalette private var theme
     @State private var posts: [APIPost] = []
     @State private var isLoading = false
     @State private var didLoad = false
@@ -38,15 +39,12 @@ private struct ProfilePostsFallback: View {
             if posts.isEmpty && isLoading {
                 VStack(spacing: MeeshySpacing.md) {
                     ForEach(0..<3, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .fill(theme.surface(tint: accentColor, intensity: 0.1))
-                            .frame(height: 72)
-                            .shimmer()
+                        MeeshySkeleton(shape: .card(aspect: 4.5, radius: Double(MeeshyRadius.md)))
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.xl)
             } else if posts.isEmpty {
-                ProfilePostsEmpty(accentColor: accentColor)
+                ProfilePostsEmpty(authorName: authorName)
             } else {
                 VStack(spacing: MeeshySpacing.md) {
                     ForEach(posts, id: \.id) { post in
@@ -108,21 +106,21 @@ private struct ProfilePostRow: View, Equatable {
     }
 }
 
+/// Rien de publié : le bloc d'état compact du kit (K38). Chez un autre, il le nomme (planche `Etat-Vide`, #18873).
 private struct ProfilePostsEmpty: View {
-    let accentColor: String
-    @ResolvedThemePalette private var theme
+    let authorName: String?
 
     var body: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            Image(systemName: "square.text.square")
-                .font(.system(size: MeeshyIconSize.xxxl))
-                .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.strong))
-                .accessibilityHidden(true)
-            Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .module))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.heavy))
+        MeeshyStateBlock(kind: .empty, title: title, size: .compact, systemImage: "square.text.square")
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.vertical, MeeshySpacing.lg)
+    }
+
+    private var title: String {
+        guard let authorName, !authorName.isEmpty else {
+            return String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .module)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.xxl)
+        return String(format: String(localized: "profile.posts.emptyOf", defaultValue: "%@ n'a encore rien publié", bundle: .module),
+                      authorName)
     }
 }

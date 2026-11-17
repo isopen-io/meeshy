@@ -80,4 +80,19 @@ final class ProfileSheetPhaseTests: XCTestCase {
         XCTAssertEqual(ProfileLoadFailure.classify(MeeshyError.network(.serverUnreachable)), .unreachable)
         XCTAssertEqual(ProfileLoadFailure.classify(URLError(.badServerResponse)), .unreachable)
     }
+
+    /// Planche `Etat-Vide` — un vide a toujours une sortie quand il y en a une : « Envoyer un premier message » sous
+    /// « Aucune conversation en commun », et chez un autre, « Léo n'a encore rien publié ». Le tout fait du kit (K38).
+    func test_emptyStates_areStateBlocksOfTheKit_withAnExit() throws {
+        let profile = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Profile")
+        let common = try String(contentsOf: profile.appendingPathComponent("UserProfileSheet+ConversationsTab.swift"), encoding: .utf8)
+        XCTAssertTrue(common.contains("MeeshyStateBlock("))
+        XCTAssertTrue(common.contains("\"profile.conversations.firstMessage\""))
+        let posts = try String(contentsOf: profile.appendingPathComponent("UserProfileSheet+PostsTab.swift"), encoding: .utf8)
+        XCTAssertTrue(posts.contains("MeeshyStateBlock("))
+        XCTAssertTrue(posts.contains("MeeshySkeleton("))
+        XCTAssertFalse(posts.contains(".shimmer()"), "le squelette est celui du kit")
+    }
 }

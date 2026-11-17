@@ -4,8 +4,8 @@ import MeeshySDK
 // MARK: - UserProfileSheet — Conversations tab
 //
 // Moved verbatim from the historical `conversationsTabContent`. Reuses
-// `sendMessageButton`/`sendMessageButtonCompact`, `MeeshyAvatar`, and the
-// shared-conversation navigation.
+// `sendMessageButton`, `MeeshyAvatar`, and the shared-conversation navigation. Sans conversation en commun, le bloc
+// d'état du kit (K38) dit le vide et propose « Envoyer un premier message » (planche `Etat-Vide`, #18873).
 
 extension UserProfileSheet {
 
@@ -16,24 +16,17 @@ extension UserProfileSheet {
     @ViewBuilder
     var conversationsTab: some View {
         if effectiveConversations.isEmpty {
-            VStack(spacing: MeeshySpacing.smPlus) {
-                Image(systemName: isInteractionDisabled ? "nosign" : "bubble.left.and.bubble.right")
-                    .font(.system(size: MeeshyIconSize.xxxl))
-                    .foregroundStyle(theme.textMuted.opacity(isInteractionDisabled ? 0.3 : 0.5))
-                    .accessibilityHidden(true)
-
-                if !isCurrentUser, !isInteractionDisabled {
-                    sendMessageButtonCompact
-                }
-
-                Text(isInteractionDisabled
-                     ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions désactivées", bundle: .module)
-                     : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundStyle(theme.textSecondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.xxl)
+            MeeshyStateBlock(
+                kind: isInteractionDisabled ? .denied : .empty,
+                title: isInteractionDisabled
+                    ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions désactivées", bundle: .module)
+                    : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module),
+                primary: firstMessageExit,
+                size: .compact,
+                tint: accentTint,
+                systemImage: isInteractionDisabled ? "nosign" : "bubble.left.and.bubble.right"
+            )
+            .padding(.horizontal, MeeshySpacing.xl)
         } else {
             VStack(spacing: 0) {
                 if !isCurrentUser {
@@ -86,6 +79,18 @@ extension UserProfileSheet {
                     }
                 }
             }
+        }
+    }
+
+    /// La sortie du vide : écrire le premier message, sur la fiche d'un autre qu'aucun blocage ne ferme.
+    private var firstMessageExit: MeeshyStateBlockAction? {
+        guard !isCurrentUser, !isInteractionDisabled else { return nil }
+        return MeeshyStateBlockAction(
+            title: String(localized: "profile.conversations.firstMessage", defaultValue: "Envoyer un premier message", bundle: .module),
+            systemImage: "paperplane"
+        ) {
+            HapticFeedback.medium()
+            openConversation()
         }
     }
 
