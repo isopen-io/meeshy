@@ -113,7 +113,7 @@ describe('user:preferences-updated (portée conversation) — TOUTE la charge, p
     expect(customNameOf(listRow(queryClient))).toBe('Les cousins');
   });
 
-  test('les huit champs que la ligne déclare suivent, sur la ligne ET la fiche du fil', () => {
+  test('les champs que la ligne déclare suivent, sur la ligne ET la fiche du fil, avec la version de la diffusion', () => {
     const queryClient = seeded();
     const { sync } = syncOn(queryClient);
 
@@ -126,7 +126,20 @@ describe('user:preferences-updated (portée conversation) — TOUTE la charge, p
       expect(appearanceOf(row)).toEqual(SOLID);
     }
     expect(listRow(queryClient).userPreferences).toEqual([
-      { isPinned: false, isMuted: false, isArchived: true, tags: ['travail'], categoryId: 'cat-1', customName: null, reaction: '⭐', appearance: SOLID },
+      {
+        isPinned: false,
+        isMuted: false,
+        isArchived: true,
+        mentionsOnly: false,
+        orderInCategory: null,
+        clearHistoryBefore: null,
+        tags: ['travail'],
+        categoryId: 'cat-1',
+        customName: null,
+        reaction: '⭐',
+        appearance: SOLID,
+        version: 2,
+      },
     ]);
   });
 
@@ -139,8 +152,9 @@ describe('user:preferences-updated (portée conversation) — TOUTE la charge, p
     const served = listRow(queryClient).userPreferences;
     const keys = Array.isArray(served) ? Object.keys(served[0] ?? {}) : [];
     expect(keys).toContain('isPinned');
-    expect(keys).not.toContain('mentionsOnly');
-    expect(keys).not.toContain('orderInCategory');
+    /* Déclarés par la ligne depuis #18925 (`conversationMinimalSchema.userPreferences`) : la relecture les sert aussi. */
+    expect(keys).toContain('mentionsOnly');
+    expect(keys).toContain('orderInCategory');
     expect(keys).not.toContain('readingMode');
   });
 
