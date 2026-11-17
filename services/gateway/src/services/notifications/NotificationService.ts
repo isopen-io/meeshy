@@ -143,6 +143,7 @@ import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { guardedInterval } from '../../utils/guarded-timer';
 import { refusesActorContent } from './blocked-actor-content';
 import { isSecurityEmailType } from './security-types';
+import { senderIdentityPushFields } from './senderIdentityPushFields';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -1197,10 +1198,7 @@ export class NotificationService {
                 postType: pickMetadataString(params.metadata, 'postType')
                   || pickMetadataString(params.metadata, 'contentType'),
                 senderId: params.actor?.id || '',
-                senderUsername: params.actor?.username || '',
-                senderDisplayName: params.actor?.displayName || '',
-                senderAvatar: params.actor?.avatar || '',
-                imageURL: params.actor?.avatar || '',
+                ...senderIdentityPushFields({ actor: params.actor, showSenderName }),
                 // Réactions : l'emoji compose le corps ; le push remplace la bannière
                 // du même acteur sur le même sujet (❤️ → 😂 n'en laisse qu'une).
                 ...actorSubjectReplacementPushField(params.type),
