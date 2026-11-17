@@ -11,7 +11,7 @@ import { decodeConversation } from './decode';
 import { conversationById, conversationsWithSurged, directConversationWith } from './fixtures';
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
-import { writeLive, type LiveWriteOptions } from './live-cache-journal';
+import { writeLive, writtenLiveWithin, type LiveWriteOptions } from './live-cache-journal';
 import type { Conversation } from './types';
 import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
@@ -190,9 +190,24 @@ function takeMergedPage(client: QueryClient | undefined, pageParam: string): Con
  * le repli (premier chargement, delta tronqué, fusion sans curseur sûr,
  * intervalle de réconciliation écoulé, tirer-pour-rafraîchir).
  */
+/**
+ * **UNE LISTE QUE LE TEMPS RÉEL VIENT D'ÉCRIRE NE SE RELIT PAS EN ENTIER**
+ * (#19117) — au remontage ni au retour d'onglet, pendant `LIVE_LIST_GRACE_MS`
+ * après sa dernière écriture vive. Une écriture temps réel ne rajeunit plus la
+ * liste (WEB-08) ; tant que le delta est mort (#9638 : la passerelle ne sert
+ * pas `updatedAt`), revenir sur une liste lue il y a plus de 30 s la relisait
+ * page après page, même mise à jour une seconde plus tôt. Une reconnexion la
+ * relit toujours : des évènements ont pu se perdre.
+ */
+export const LIVE_LIST_GRACE_MS = 30_000;
+
+const rereadsList = <Q extends object>(query: Q): boolean => !writtenLiveWithin(query, LIVE_LIST_GRACE_MS);
+
 export function conversationsInfiniteOptions(deps: ConversationsDeps) {
   return {
     queryKey: CONVERSATIONS_QUERY_KEY,
+    refetchOnMount: rereadsList,
+    refetchOnWindowFocus: rereadsList,
     queryFn: async ({ pageParam, signal, client }: { readonly pageParam?: ConversationsPageParam; readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
       if (pageParam == null) return loadFirstPage(client, deps, signal);
       return (

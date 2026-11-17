@@ -89,6 +89,14 @@ declare module 'bun:test' {
     useRealTimers(): void;
     advanceTimersByTime(ms: number): void;
   };
+
+  /**
+   * L'horloge du SYSTÈME seule (#19117) — `Date.now()` avance, les minuteurs
+   * restent réels : un témoin qui attend que TanStack ait fini (`setTimeout`)
+   * mesure une fraîcheur à l'instant qu'il choisit. Sans argument, l'horloge
+   * réelle revient.
+   */
+  export function setSystemTime(now?: Date | number): void;
 }
 
 /**

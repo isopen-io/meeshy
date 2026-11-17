@@ -88,6 +88,8 @@ type Entry = { readonly replay: Replay; readonly gesture: object | null };
 const journals = new WeakMap<object, readonly Entry[]>();
 /** La réponse d'une lecture, et la requête qui l'a demandée. */
 const servedBy = new WeakMap<object, object>();
+/** L'instant de la dernière écriture vive de chaque requête. */
+const writtenAt = new WeakMap<object, number>();
 const installed = new WeakSet<QueryClient>();
 
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
@@ -172,10 +174,23 @@ export function writeLive<T>(
 ): void {
   const query = queryClient.getQueryCache().find<T>({ queryKey, exact: true });
   if (query === undefined) return;
-  if (query.state.data !== undefined) queryClient.setQueryData<T>(queryKey, updater, { updatedAt: query.state.dataUpdatedAt });
+  if (query.state.data !== undefined) {
+    queryClient.setQueryData<T>(queryKey, updater, { updatedAt: query.state.dataUpdatedAt });
+    writtenAt.set(query, Date.now());
+  }
   const journaled = installed.has(queryClient) && options.relative !== true && query.state.fetchStatus !== 'idle' && partialMatchKey(queryKey, LIVE_CACHE_ROOT);
   if (!journaled) return;
   /* Le journal d'une requête ne reçoit jamais que SA donnée : `T`. */
   journals.set(query, [...(journals.get(query) ?? []), { replay: (data) => updater(data as T), gesture: ambient?.token ?? null }]);
   ambient?.touched.add(query);
+}
+
+/**
+ * Le temps réel a-t-il écrit cette requête depuis moins de `ms` (#19117) ? Une
+ * écriture vive ne rajeunit pas la donnée (WEB-08) : c'est ce témoin, et non
+ * `dataUpdatedAt`, qui dit qu'une liste suit le temps réel à l'instant.
+ */
+export function writtenLiveWithin(query: object, ms: number): boolean {
+  const at = writtenAt.get(query);
+  return at !== undefined && Date.now() - at < ms;
 }
