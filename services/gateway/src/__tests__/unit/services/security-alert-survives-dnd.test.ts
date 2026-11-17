@@ -208,6 +208,18 @@ describe('une alerte de sécurité sous Ne pas déranger', () => {
     expect(email.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
   });
 
+  it('le push de l\'alerte ne demande aucun contournement : le transport le garde silencieux', async () => {
+    const { service } = makeWorld();
+    const sendToUser = jest.fn().mockResolvedValue([]);
+    service.setPushNotificationService({ sendToUser } as any);
+
+    await service.createLoginNewDeviceNotification({ recipientUserId: 'u1' });
+
+    const requests = sendToUser.mock.calls as Array<[{ bypassDnd?: boolean }]>;
+    expect(requests.length).toBeGreaterThan(0);
+    expect(requests.every(([request]) => request.bypassDnd !== true)).toBe(true);
+  });
+
   it('un message ordinaire reste retenu par la même fenêtre', async () => {
     const { prisma, service } = makeWorld();
 

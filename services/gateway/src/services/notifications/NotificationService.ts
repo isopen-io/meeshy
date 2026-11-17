@@ -142,6 +142,7 @@ import {
 import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { guardedInterval } from '../../utils/guarded-timer';
 import { refusesActorContent } from './blocked-actor-content';
+import { isSecurityEmailType } from './security-types';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -158,25 +159,6 @@ type ReproducedNotificationPush = {
   readonly subtitle?: string;
   readonly stale: RetractedNotification;
 };
-
-/**
- * Notification types whose offline email is a genuine account-security alert
- * (login, password, 2FA, lockout…). Used to (a) keep these in a separate
- * email-throttle bucket so a social email can never suppress a security alert,
- * and (b) route them to the security email template rather than the generic one.
- */
-const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
-  'login_new_device',
-  'login_suspicious',
-  'suspicious_activity',
-  'password_changed',
-  'two_factor_enabled',
-  'two_factor_disabled',
-  'account_locked',
-  'security_alert',
-]);
-
-const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
 
 /**
  * Le lot d'un retrait par chemin JSON. Très au-dessus du réel — une demande
@@ -836,7 +818,9 @@ export class NotificationService {
 
     // 2) Vérifier le mode Ne Pas Déranger — helper PARTAGÉ tz-aware (GW7),
     // même implémentation que PushNotificationService.isPushAllowed.
-    if (isWithinDnd(prefs)) {
+    // Une alerte de sécurité y échappe : le silence du téléphone est le
+    // travail de `isPushAllowed`, pas un effacement de ce qui s'est passé.
+    if (!isSecurityEmailType(type) && isWithinDnd(prefs)) {
       notificationLogger.info('Notification bloquée par DND', { userId, type });
       return false;
     }
