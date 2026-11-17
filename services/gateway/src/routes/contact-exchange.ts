@@ -63,15 +63,11 @@ const acceptedSchema = envelope({
 });
 
 /** Éteint : la route n'existe pas. Invité : un compte est requis (#10205). */
-/** Drapeau éteint : la route n'existe pas, AVANT toute authentification — un 401 trahirait son existence. */
-async function contactExchangeFlag(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
+async function contactExchangeGate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!contactExchangeEnabled()) {
     sendNotFound(reply, 'Route not found');
     return reply;
   }
-}
-
-async function contactExchangeGate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (isGuestViewer((request as FastifyRequest & { authContext?: GuestViewerContext }).authContext)) {
     sendAccountRequired(reply, 'A Meeshy account is required for contactless sharing');
     return reply;
@@ -122,7 +118,7 @@ export default async function contactExchangeRoutes(fastify: FastifyInstance): P
   const accepts = relationLimiter(fastify, 'contact-exchange:accept', 20);
 
   fastify.post('/me/contact-exchange', {
-    onRequest: [contactExchangeFlag, fastify.authenticate, contactExchangeGate],
+    onRequest: [fastify.authenticate, contactExchangeGate],
     preHandler: [issues.middleware()],
     schema: {
       description: 'Issue a short-lived, single-use contactless sharing token (NFC or QR) that carries what I give: my showcase, a friend request, or both. Never my phone number.',
@@ -143,7 +139,7 @@ export default async function contactExchangeRoutes(fastify: FastifyInstance): P
   });
 
   fastify.post<{ Params: { token: string } }>('/contact-exchange/:token/accept', {
-    onRequest: [contactExchangeFlag, fastify.authenticate, contactExchangeGate],
+    onRequest: [fastify.authenticate, contactExchangeGate],
     preHandler: [accepts.middleware()],
     schema: {
       description: 'Accept a contactless sharing token: receive what its issuer gave. Expired, replayed, forged or blocked tokens all get the same 404.',

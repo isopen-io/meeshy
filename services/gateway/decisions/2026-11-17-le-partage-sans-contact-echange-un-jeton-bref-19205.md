@@ -36,8 +36,9 @@ La seule voie existante était l'adresse publique `/@:username`, sans intention 
   verrouillé (`locked`) et aucun champ voisin ne le porte (le sérialiseur retire ce que la vitrine
   ne déclare pas).
 - **Derrière `CONTACT_EXCHANGE_ENABLED`, éteint par défaut** (`contactExchangeFlag.ts`, seul
-  site) : éteintes, les deux routes répondent comme des routes absentes, AVANT l'authentification
-  (jamais un 401 qui trahirait leur existence). Le drapeau s'allume
+  site) : éteintes, les deux routes répondent comme des routes absentes à un compte authentifié.
+  Un appelant SANS jeton reçoit 401 d'abord, comme toute route non publique : c'est la loi de
+  `route-auth-coverage.test.ts`, qui prime ici sur l'indiscernabilité du drapeau. Le drapeau s'allume
   après la revue `auditeur-adversarial` exigée par l'issue (jeton, rejeu, énumération).
 
 ### Données personnelles

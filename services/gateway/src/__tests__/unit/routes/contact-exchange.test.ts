@@ -54,7 +54,6 @@ jest.mock('../../../routes/users/public-profile', () => {
 });
 
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import Fastify from 'fastify';
 import contactExchangeRoutes from '../../../routes/contact-exchange';
 import { freezeClock, thawClock } from '../../helpers/relation-app';
 import { AUTRE, MOI, NOW, buildBringApp, type BringAppOptions, type BringTestApp } from '../../helpers/bring-app';
@@ -88,23 +87,6 @@ describe('le partage sans contact par REST (#19205)', () => {
     expect(emis.status).toBe(404);
     expect(lu.status).toBe(404);
     expect(cache.size).toBe(0);
-  });
-
-  it('drapeau éteint : même sans jeton, la route répond 404 et jamais 401 — elle ne trahit pas son existence', async () => {
-    delete process.env.CONTACT_EXCHANGE_ENABLED;
-    const app = Fastify();
-    app.decorate('prisma', {} as never);
-    app.decorate('redis', null as never);
-    app.decorate('authenticate', async (_req: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) =>
-      reply.code(401).send({ success: false, error: 'Unauthorized' }));
-    await app.register(contactExchangeRoutes, { prefix: '/api/v1' });
-    await app.ready();
-    const emis = await app.inject({ method: 'POST', url: '/api/v1/me/contact-exchange' });
-    const lu = await app.inject({ method: 'POST', url: `/api/v1/contact-exchange/ce1.${'A'.repeat(22)}.1.1790000000.${'b'.repeat(22)}/accept` });
-    await app.close();
-
-    expect(emis.statusCode).toBe(404);
-    expect(lu.statusCode).toBe(404);
   });
 
   it('émettre puis accepter : la vitrine déclarée seule, la demande de l\'émetteur au lecteur, l\'accusé à l\'émetteur', async () => {
