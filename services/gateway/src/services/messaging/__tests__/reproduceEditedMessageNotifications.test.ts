@@ -496,3 +496,67 @@ describe('reproduceEditedMessageNotifications — la protection survit à l\'éd
     expect(update).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * #18910 (serveur-notifications-4) — une correction qui ne change RIEN de ce
+ * que la ligne affiche ne se réécrit ni ne s'annonce. Le corps d'une ligne est
+ * une SYNTHÈSE (« Petit message texte ») : corriger une faute de frappe la
+ * laisse identique, et l'annoncer faisait pourtant repartir `deleted` + `new`
+ * — donc, jusqu'ici, un push d'alerte — vers chaque destinataire. C'est la
+ * garde que porte déjà le jumeau des posts.
+ */
+describe('une édition qui laisse la synthèse intacte (#18910)', () => {
+  const settledRow = (over: Record<string, unknown> = {}) =>
+    row({
+      content: 'Petit message texte',
+      context: { conversationId: '507f1f77bcf86cd799439021' },
+      metadata: { action: 'view_message', messagePreview: 'Petit message texte' },
+      ...over,
+    });
+
+  it('ne réécrit pas la ligne et n’annonce rien', async () => {
+    findMany.mockResolvedValue([settledRow()]);
+
+    const reproduced = await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'nouveau texte' }, announcer
+    );
+
+    expect(update).not.toHaveBeenCalled();
+    expect(announceNotificationsReproduced).not.toHaveBeenCalled();
+    expect(reproduced).toBe(0);
+  });
+
+  it('une traduction périmée dans le contexte est bien purgée, donc la ligne est réécrite et annoncée', async () => {
+    findMany.mockResolvedValue([
+      settledRow({ context: { conversationId: '507f1f77bcf86cd799439021', translatedContent: 'old', translatedLanguage: 'en' } }),
+    ]);
+
+    const reproduced = await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'nouveau texte' }, announcer
+    );
+
+    expect(reproduced).toBe(1);
+    expect(updatedData().context).not.toHaveProperty('translatedContent');
+    expect(announceNotificationsReproduced).toHaveBeenCalledTimes(1);
+  });
+
+  it('seules les lignes dont la synthèse change sont annoncées', async () => {
+    findMany.mockResolvedValue([
+      settledRow({ id: '607f1f77bcf86cd799439001' }),
+      settledRow({
+        id: '607f1f77bcf86cd799439002',
+        content: 'Message texte',
+        metadata: { action: 'view_message', messagePreview: 'Message texte' },
+      }),
+    ]);
+
+    await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'nouveau texte' }, announcer
+    );
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(announceNotificationsReproduced).toHaveBeenCalledWith([
+      { id: '607f1f77bcf86cd799439002', userId: RECIPIENT_ID },
+    ]);
+  });
+});
