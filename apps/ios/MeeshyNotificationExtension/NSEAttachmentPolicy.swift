@@ -161,6 +161,7 @@ nonisolated enum NSEAttachmentPolicy {
     /// demain à sa charge reste refusée. Décrocher depuis la bannière exige
     /// les serveurs ICE (`iceServers`, le relais TURN) et l'avatar de
     /// l'appelant : ni l'un ni l'autre ne décrit le contenu de la conversation.
+    /// `isGroup` dit l'appel de groupe, comme `isVideo` dit la vidéo (#19262).
     static let sealedConversationKeys: Set<String> = [
         "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
         "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
@@ -168,7 +169,7 @@ nonisolated enum NSEAttachmentPolicy {
         "contentId", "contentType",
         "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
         "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
-        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "callType", "isVideo", "isGroup", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
         "iceServers",
         "isEncrypted", "apiBaseURL",
     ]

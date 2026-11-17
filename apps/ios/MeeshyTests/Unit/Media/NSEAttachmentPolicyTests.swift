@@ -269,7 +269,7 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         "contentId", "contentType",
         "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
         "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
-        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "callType", "isVideo", "isGroup", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
         "iceServers",
         "isEncrypted", "apiBaseURL",
         "notificationLocKey",
