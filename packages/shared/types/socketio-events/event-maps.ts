@@ -178,6 +178,12 @@ import type {
 } from './friend-request.js';
 import type { LinkMessageNewEventData } from './link.js';
 import type {
+  AffiliateReferralJoinedEventData,
+  CommunityLinkEntryEventData,
+  ShareLinkArrivalEventData,
+  TrackingLinkClickedEventData,
+} from './link-activity.js';
+import type {
   RelationLevelLoweredEventData,
   RelationLevelRaisedEventData,
   RelationRitualCompletedEventData,
@@ -424,6 +430,10 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.BATTERY_CHANGED]: (data: BatteryChangedEventData) => void;
   [SERVER_EVENTS.BATTERY_CLEARED]: (data: BatteryClearedEventData) => void;
   [SERVER_EVENTS.BATTERY_PULL_REQUESTED]: (data: BatteryPullRequestedEventData) => void;
+  [SERVER_EVENTS.TRACKING_LINK_CLICKED]: (data: TrackingLinkClickedEventData) => void;
+  [SERVER_EVENTS.SHARE_LINK_ARRIVAL]: (data: ShareLinkArrivalEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_LINK_ENTRY]: (data: CommunityLinkEntryEventData) => void;
+  [SERVER_EVENTS.AFFILIATE_REFERRAL_JOINED]: (data: AffiliateReferralJoinedEventData) => void;
   [SERVER_EVENTS.PHONE_UNREACHABLE]: (data: PhoneReachabilityChangedEventData) => void;
   [SERVER_EVENTS.PHONE_REACHABLE]: (data: PhoneReachabilityClearedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;

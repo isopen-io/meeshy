@@ -35,6 +35,7 @@ import {
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
 import { linkVisitorFromRequest } from '../links/utils/link-visitor';
+import { linkActivityRelayOf, type TrackingLinkClickInput } from '../../socketio/linkActivityEvents';
 
 /**
  * Routes de suivi et analytics des liens de tracking
@@ -50,6 +51,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
     requireAuth: true,
     allowAnonymous: false
   });
+
+  /** #19446 — le créateur voit ses chiffres bouger ; un résultat incomplet ne dit rien. */
+  const announceClick = (result: Partial<TrackingLinkClickInput> | undefined): void => {
+    if (result?.link && result.click) linkActivityRelayOf(fastify).trackingLinkClicked({ link: result.link, click: result.click });
+  };
 
   /**
    * 2. Rediriger un lien de tracking et enregistrer le clic
@@ -146,7 +152,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         participantId = request.authContext.participantId;
       }
 
-      await trackingLinkService.recordClick({
+      const recorded = await trackingLinkService.recordClick({
         token,
         userId,
         participantId,
@@ -160,6 +166,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         referrer,
         visitor: linkVisitorFromRequest(request)
       });
+      announceClick({ link: recorded?.trackingLink, click: recorded?.click });
 
       return reply.redirect(served);
 
@@ -319,6 +326,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         utmClickContent: body.utmClickContent,
         visitor: linkVisitorFromRequest(request),
       });
+      announceClick({ link: result.trackingLink, click: result.click });
 
       const served = servedTrackingLinkTarget(result.trackingLink.originalUrl);
       return sendSuccess(reply, {
