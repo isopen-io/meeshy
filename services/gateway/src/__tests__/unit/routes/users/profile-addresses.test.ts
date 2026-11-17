@@ -37,7 +37,7 @@ jest.mock('../../../../services/relations/profileCircleView', () => {
 const created: Array<{ originalUrl: string; createdBy?: string; name?: string }> = [];
 const linkUpdates: Array<{ token: string; isActive?: boolean; originalUrl?: string }> = [];
 let tokenSeq = 0;
-type Link = { createdBy: string; isActive: boolean; totalClicks: number; expiresAt?: Date | null };
+type Link = { createdBy: string; isActive: boolean; totalClicks: number; originalUrl: string; expiresAt?: Date | null };
 let links: Record<string, Link> = {};
 jest.mock('../../../../services/TrackingLinkService', () => ({
   resolveFrontendBaseUrl: () => 'https://meeshy.me',
@@ -45,13 +45,14 @@ jest.mock('../../../../services/TrackingLinkService', () => ({
     async createTrackingLink(p: { originalUrl: string; createdBy?: string; name?: string }) {
       created.push(p);
       tokenSeq += 1;
-      links[`tok${tokenSeq}`] = { createdBy: p.createdBy ?? '', isActive: true, totalClicks: 0 };
+      links[`tok${tokenSeq}`] = { createdBy: p.createdBy ?? '', isActive: true, totalClicks: 0, originalUrl: p.originalUrl };
       return { id: `tl${tokenSeq}`, token: `tok${tokenSeq}`, totalClicks: 0 };
     }
     async updateTrackingLink(p: { token: string; isActive?: boolean; originalUrl?: string }) {
       if (!links[p.token]) throw new Error('Tracking link not found');
       linkUpdates.push(p);
       if (p.isActive !== undefined) links[p.token].isActive = p.isActive;
+      if (p.originalUrl !== undefined) links[p.token].originalUrl = p.originalUrl;
       return { token: p.token };
     }
   },
@@ -113,7 +114,7 @@ async function monter(): Promise<FastifyInstance> {
 
 beforeEach(() => {
   rows = []; created.length = 0; linkUpdates.length = 0; viewerId = OWNER; viewerLevel = 'PUBLIC'; relationReads = 0; tokenSeq = 0;
-  links = { tokA: { createdBy: OWNER, isActive: true, totalClicks: 128 } };
+  links = { tokA: { createdBy: OWNER, isActive: true, totalClicks: 128, originalUrl: 'https://aissandiaye.studio/' } };
 });
 
 const corps = (over: Record<string, unknown> = {}) => ({ url: 'youtube.com/@aissa.snd', title: 'Vidéos', glyph: 'videos', circle: 'FRIEND', ...over });
@@ -329,7 +330,7 @@ describe('le lien de suivi d’une adresse ne sert que s’il est encore le sien
   });
 
   it('jeton repris par un AUTRE compte (lien renommé puis recréé) : ni servi, ni compté, ni touché', async () => {
-    links.repris = { createdBy: OTHER, isActive: true, totalClicks: 999 };
+    links.repris = { createdBy: OTHER, isActive: true, totalClicks: 999, originalUrl: 'https://aissandiaye.studio/' };
     rows = [adresse({ id: 'a', trackingToken: 'repris' })];
     const app = await monter();
     viewerId = OTHER;
@@ -353,5 +354,21 @@ describe('le lien de suivi d’une adresse ne sert que s’il est encore le sien
     viewerId = OWNER;
     const [mienne] = (await app.inject({ method: 'GET', url: '/api/v1/users/me/addresses' })).json().data.addresses;
     expect(mienne).toMatchObject({ clicks: 128, trackedPath: '/l/tokA' });
+  });
+
+  it('destination changée depuis « Mes liens » : le lien ne sert plus, ni au lecteur ni au propriétaire, et la prochaine modification la réaligne', async () => {
+    links.tokA.originalUrl = 'http://192.168.1.1/admin';
+    rows = [adresse({ id: 'a', trackingToken: 'tokA', url: 'https://ma-banque.fr/' })];
+    const app = await monter();
+    viewerId = OTHER;
+    expect((await fiche(app)).addresses).toEqual([{ id: 'a', title: 'Site', url: 'https://ma-banque.fr/', glyph: 'site' }]);
+    viewerId = OWNER;
+    const [mienne] = (await app.inject({ method: 'GET', url: '/api/v1/users/me/addresses' })).json().data.addresses;
+    expect(mienne).toMatchObject({ clicks: 128 });
+    expect('trackedPath' in mienne).toBe(false);
+    expect((await app.inject({ method: 'PATCH', url: '/api/v1/users/me/addresses/a', payload: { title: 'Banque' } })).statusCode).toBe(200);
+    expect(links.tokA.originalUrl).toBe('https://ma-banque.fr/');
+    viewerId = OTHER;
+    expect((await fiche(app)).addresses).toEqual([expect.objectContaining({ id: 'a', trackedPath: '/l/tokA' })]);
   });
 });

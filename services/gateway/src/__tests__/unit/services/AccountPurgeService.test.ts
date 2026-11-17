@@ -41,7 +41,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     externalConversationPeer: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Les adresses de fiche (#18863) : un compte qui n'en a publié aucune.
     profileAddress: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-    trackingLink: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    trackingLink: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    trackingLinkClick: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
     ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
@@ -153,19 +154,24 @@ describe('purgeAccountIsolatedData', () => {
     expect(summary.externalPeerHandlesDeleted).toBe(2);
   });
 
-  it("efface ses adresses de fiche (#18863) et ferme leurs liens de suivi : un /l/<jeton> déjà partagé ne mène plus à ses sites", async () => {
+  it("efface ses adresses de fiche (#18863), leurs liens de suivi et les clics de leurs lecteurs : aucune copie de l'URL ne survit", async () => {
     const prisma = fakePrisma({
       profileAddress: {
         findMany: jest.fn<any>().mockResolvedValue([{ trackingToken: 'tokA' }, { trackingToken: null }, { trackingToken: 'tokB' }]),
         deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }),
       },
-      trackingLink: { updateMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
+      trackingLink: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'tl1' }, { id: 'tl2' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }),
+      },
+      trackingLinkClick: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 5 }) },
     });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
-    expect(prisma.trackingLink.updateMany).toHaveBeenCalledWith({
+    expect(prisma.trackingLink.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { token: { in: ['tokA', 'tokB'] }, createdBy: USER_ID },
-      data: { isActive: false },
-    });
+    }));
+    expect(prisma.trackingLinkClick.deleteMany).toHaveBeenCalledWith({ where: { trackingLinkId: { in: ['tl1', 'tl2'] } } });
+    expect(prisma.trackingLink.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['tl1', 'tl2'] } } });
     expect(prisma.profileAddress.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.profileAddressesDeleted).toBe(3);
   });

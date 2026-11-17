@@ -92,6 +92,7 @@ function base() {
     // Les adresses de fiche (#18863) : un compte qui n'en a publié aucune.
     profileAddress: table([]),
     trackingLink: table([]),
+    trackingLinkClick: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,
