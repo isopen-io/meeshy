@@ -34,7 +34,6 @@ import {
  */
 export { PASSWORD_MIN_LENGTH } from './validation-primitives.js';
 
-
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
 
@@ -159,7 +158,7 @@ export const CommonSchemas = {
 /**
  * Rôles utilisateur
  */
-export const userRoleEnum = z.enum([
+const userRoleEnum = z.enum([
   'USER', 'ADMIN', 'MODO', 'BIGBOSS', 'AUDIT', 'ANALYST',
   'MODERATOR', 'CREATOR', 'MEMBER'
 ]);
@@ -489,7 +488,7 @@ export const messageTypeEnum = z.enum(['text', 'image', 'file', 'audio', 'video'
 /**
  * Source du message
  */
-export const messageSourceEnum = z.enum(['user', 'system', 'ads', 'app', 'agent', 'authority']);
+const messageSourceEnum = z.enum(['user', 'system', 'ads', 'app', 'agent', 'authority']);
 
 /**
  * Mode de chiffrement
@@ -499,7 +498,7 @@ export const encryptionModeEnum = z.enum(['server', 'e2ee', 'hybrid']);
 /**
  * Modèle de traduction
  */
-export const translationModelEnum = z.enum(['basic', 'medium', 'premium']);
+const translationModelEnum = z.enum(['basic', 'medium', 'premium']);
 
 /**
  * Schema de traduction de message (défini séparément pour éviter référence circulaire)
@@ -615,17 +614,17 @@ export const conversationTypeEnum = z.enum(['direct', 'group', 'public', 'global
 /**
  * Statut de conversation
  */
-export const conversationStatusEnum = z.enum(['active', 'archived', 'deleted']);
+const conversationStatusEnum = z.enum(['active', 'archived', 'deleted']);
 
 /**
  * Visibilité de conversation
  */
-export const conversationVisibilityEnum = z.enum(['public', 'private', 'restricted']);
+const conversationVisibilityEnum = z.enum(['public', 'private', 'restricted']);
 
 /**
  * Type de lien de conversation
  */
-export const conversationLinkTypeEnum = z.enum(['invite', 'share', 'embed']);
+const conversationLinkTypeEnum = z.enum(['invite', 'share', 'embed']);
 
 /**
  * Schémas pour les routes de conversations
@@ -1089,12 +1088,12 @@ export function copyAndZeroize(buffer: Buffer): Buffer {
 /**
  * Status de scan de fichier
  */
-export const scanStatusEnum = z.enum(['pending', 'clean', 'infected', 'error']);
+const scanStatusEnum = z.enum(['pending', 'clean', 'infected', 'error']);
 
 /**
  * Status de modération
  */
-export const moderationStatusEnum = z.enum(['pending', 'approved', 'flagged', 'rejected']);
+const moderationStatusEnum = z.enum(['pending', 'approved', 'flagged', 'rejected']);
 
 /**
  * Schémas pour les attachements de messages
@@ -1233,63 +1232,6 @@ export const ReactionSchemas = {
 };
 
 // =============================================================================
-// MENTION SCHEMAS
-// =============================================================================
-
-/**
- * Schémas pour les mentions
- */
-export const MentionSchemas = {
-  // Mention complète
-  full: z.object({
-    id: z.string(),
-    messageId: z.string(),
-    mentionedUserId: z.string(),
-    mentionedAt: z.iso.datetime(),
-    mentionedUser: UserSchemas.minimal,
-  }),
-};
-
-// =============================================================================
-// FRIEND REQUEST SCHEMAS
-// =============================================================================
-
-/**
- * Statut de demande d'ami
- */
-export const friendRequestStatusEnum = z.enum(['pending', 'accepted', 'rejected', 'blocked']);
-
-/**
- * Schémas pour les demandes d'ami
- */
-export const FriendRequestSchemas = {
-  // Demande d'ami complète
-  full: z.object({
-    id: z.string(),
-    senderId: z.string(),
-    receiverId: z.string(),
-    message: z.string().nullable().optional(),
-    status: friendRequestStatusEnum,
-    respondedAt: z.iso.datetime().nullable().optional(),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-    sender: UserSchemas.minimal.optional(),
-    receiver: UserSchemas.minimal.optional(),
-  }),
-
-  // Envoyer une demande
-  send: z.object({
-    receiverId: z.string().min(1),
-    message: z.string().max(200).optional(),
-  }),
-
-  // Répondre à une demande
-  respond: z.object({
-    action: z.enum(['accept', 'reject', 'block']),
-  }),
-};
-
-// =============================================================================
 // NOTIFICATION SCHEMAS
 // =============================================================================
 
@@ -1299,56 +1241,6 @@ export { notificationTypeEnum } from './notification-type-enum.js';
  * Priorité de notification
  */
 export const notificationPriorityEnum = z.enum(['low', 'normal', 'high', 'urgent']);
-
-/**
- * Schémas pour les notifications
- */
-export const NotificationSchemas = {
-  // Notification complète
-  full: z.object({
-    id: z.string(),
-    userId: z.string(),
-    type: notificationTypeEnum,
-    title: z.string(),
-    content: z.string(),
-    data: z.string().nullable().optional(),
-    priority: notificationPriorityEnum,
-    isRead: z.boolean(),
-    readAt: z.iso.datetime().nullable().optional(),
-    emailSent: z.boolean(),
-    pushSent: z.boolean(),
-    expiresAt: z.iso.datetime().nullable().optional(),
-    createdAt: z.iso.datetime(),
-
-    // Sender info
-    senderId: z.string().nullable().optional(),
-    senderUsername: z.string().nullable().optional(),
-    senderAvatar: z.string().nullable().optional(),
-    senderDisplayName: z.string().nullable().optional(),
-    messagePreview: z.string().nullable().optional(),
-
-    // References
-    conversationId: z.string().nullable().optional(),
-    messageId: z.string().nullable().optional(),
-    callSessionId: z.string().nullable().optional(),
-  }),
-
-  // Notification minimale
-  minimal: z.object({
-    id: z.string(),
-    type: notificationTypeEnum,
-    title: z.string(),
-    content: z.string(),
-    isRead: z.boolean(),
-    createdAt: z.iso.datetime(),
-  }),
-
-  // Marquer comme lu
-  markRead: z.object({
-    notificationIds: z.array(z.string()).min(1).optional(),
-    all: z.boolean().optional(),
-  }),
-};
 
 /**
  * Schémas pour les préférences de notification
@@ -1409,160 +1301,14 @@ export const NotificationPreferenceSchemas = {
 };
 
 // =============================================================================
-// COMMUNITY SCHEMAS
-// =============================================================================
-
-/**
- * Rôle dans une communauté
- */
-export const communityRoleEnum = z.enum(['admin', 'moderator', 'member']);
-
-/**
- * Schémas pour les communautés
- */
-export const CommunitySchemas = {
-  // Communauté complète
-  full: z.object({
-    id: z.string(),
-    identifier: z.string(),
-    name: z.string(),
-    description: z.string().nullable().optional(),
-    avatar: z.string().nullable().optional(),
-    banner: z.string().nullable().optional(),
-    isPrivate: z.boolean(),
-    isActive: z.boolean(),
-    deletedAt: z.iso.datetime().nullable().optional(),
-    createdBy: z.string(),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-    creator: UserSchemas.minimal.optional(),
-    memberCount: z.number().optional(),
-    conversationCount: z.number().optional(),
-  }),
-
-  // Communauté minimale
-  minimal: z.object({
-    id: z.string(),
-    identifier: z.string(),
-    name: z.string(),
-    avatar: z.string().nullable().optional(),
-    isPrivate: z.boolean(),
-    memberCount: z.number().optional(),
-  }),
-
-  // Membre de communauté
-  member: z.object({
-    id: z.string(),
-    communityId: z.string(),
-    userId: z.string(),
-    joinedAt: z.iso.datetime(),
-    role: communityRoleEnum,
-    isActive: z.boolean(),
-    leftAt: z.iso.datetime().nullable().optional(),
-    user: UserSchemas.minimal.optional(),
-  }),
-
-  // Créer une communauté
-  create: z.object({
-    name: z.string().min(1).max(100),
-    identifier: z.string().min(1).max(50).regex(/^[a-zA-Z0-9\-_]+$/).optional(),
-    description: z.string().max(500).optional(),
-    isPrivate: z.boolean().default(true),
-  }),
-
-  // Mettre à jour une communauté
-  update: z.object({
-    name: z.string().min(1).max(100).optional(),
-    description: z.string().max(500).optional(),
-    avatar: z.url().optional(),
-    banner: z.url().optional(),
-    isPrivate: z.boolean().optional(),
-  }),
-
-  // Ajouter un membre
-  addMember: z.object({
-    userId: z.string().min(1),
-    role: communityRoleEnum.optional(),
-  }),
-
-  // Changer le rôle d'un membre
-  updateMemberRole: z.object({
-    role: communityRoleEnum,
-  }),
-};
-
-// =============================================================================
 // CALL SESSION SCHEMAS
 // =============================================================================
-
-/**
- * Mode d'appel
- */
-export const callModeEnum = z.enum(['voice', 'video']);
 
 /**
  * Type d'appel (alias pour compatibilité gateway)
  * Utilise 'audio' au lieu de 'voice' pour cohérence avec WebRTC
  */
 export const callTypeEnum = z.enum(['audio', 'video']);
-
-/**
- * Statut d'appel
- */
-export const callStatusEnum = z.enum(['ringing', 'active', 'ended', 'missed', 'rejected', 'failed']);
-
-/**
- * Rôle de participant d'appel
- */
-export const callParticipantRoleEnum = z.enum(['initiator', 'participant', 'observer']);
-
-/**
- * Statut de participant d'appel
- */
-export const callParticipantStatusEnum = z.enum(['invited', 'ringing', 'connected', 'disconnected', 'declined']);
-
-/**
- * Schémas pour les sessions d'appel
- */
-export const CallSessionSchemas = {
-  // Session complète
-  full: z.object({
-    id: z.string(),
-    conversationId: z.string(),
-    initiatorId: z.string(),
-    mode: callModeEnum,
-    status: callStatusEnum,
-    startedAt: z.iso.datetime().nullable().optional(),
-    endedAt: z.iso.datetime().nullable().optional(),
-    duration: z.number().nullable().optional(),
-    isRecorded: z.boolean(),
-    recordingUrl: z.string().nullable().optional(),
-    isTranscribed: z.boolean(),
-    transcriptionId: z.string().nullable().optional(),
-    averageQuality: z.number().nullable().optional(),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-    initiator: UserSchemas.minimal.optional(),
-    participantCount: z.number().optional(),
-  }),
-
-  // Session minimale
-  minimal: z.object({
-    id: z.string(),
-    mode: callModeEnum,
-    status: callStatusEnum,
-    startedAt: z.iso.datetime().nullable().optional(),
-    duration: z.number().nullable().optional(),
-    participantCount: z.number().optional(),
-  }),
-
-  // Démarrer un appel
-  start: z.object({
-    conversationId: z.string().min(1),
-    mode: callModeEnum,
-    participantIds: z.array(z.string()).optional(),
-  }),
-};
 
 // `CallParticipantSchemas` a été retiré le 2026-08-13 : il n'avait AUCUNE
 // référence dans le dépôt et décrivait une entité qui n'a jamais existé —
@@ -1571,150 +1317,18 @@ export const CallSessionSchemas = {
 // `leftAt`). Le décrire à nouveau demande de partir du modèle, pas de ce texte.
 
 // =============================================================================
-// REPORT SCHEMAS
-// =============================================================================
-
-/**
- * Type de rapport
- */
-export const reportTypeEnum = z.enum(['spam', 'harassment', 'inappropriate_content', 'impersonation', 'other']);
-
-/**
- * Type de cible de rapport
- */
-export const reportTargetTypeEnum = z.enum(['user', 'message', 'conversation', 'community']);
-
-/**
- * Statut de rapport
- */
-export const reportStatusEnum = z.enum(['pending', 'investigating', 'resolved', 'dismissed']);
-
-/**
- * Schémas pour les rapports
- */
-export const ReportSchemas = {
-  // Rapport complet
-  full: z.object({
-    id: z.string(),
-    reporterId: z.string(),
-    reportType: reportTypeEnum,
-    targetType: reportTargetTypeEnum,
-    targetId: z.string(),
-    reason: z.string(),
-    evidence: z.string().nullable().optional(),
-    status: reportStatusEnum,
-    resolution: z.string().nullable().optional(),
-    resolvedBy: z.string().nullable().optional(),
-    resolvedAt: z.iso.datetime().nullable().optional(),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-    reporter: UserSchemas.minimal.optional(),
-  }),
-
-  // Créer un rapport
-  create: z.object({
-    reportType: reportTypeEnum,
-    targetType: reportTargetTypeEnum,
-    targetId: z.string().min(1),
-    reason: z.string().min(10).max(1000),
-    evidence: z.string().max(5000).optional(),
-  }),
-
-  // Mettre à jour le statut (admin)
-  updateStatus: z.object({
-    status: reportStatusEnum,
-    resolution: z.string().max(1000).optional(),
-  }),
-};
-
-// =============================================================================
-// USER STATS SCHEMAS
-// =============================================================================
-
-/**
- * Schémas pour les statistiques utilisateur
- */
-export const UserStatsSchemas = {
-  // Stats complètes
-  full: z.object({
-    id: z.string(),
-    userId: z.string(),
-
-    // Message stats
-    totalMessagesSent: z.number(),
-    totalMessagesReceived: z.number(),
-    messagesThisWeek: z.number(),
-    messagesThisMonth: z.number(),
-
-    // Conversation stats
-    totalConversations: z.number(),
-    activeConversations: z.number(),
-    publicConversationsCreated: z.number(),
-
-    // Call stats
-    totalCallsInitiated: z.number(),
-    totalCallsReceived: z.number(),
-    totalCallDuration: z.number(),
-
-    // Translation stats
-    totalTranslationsRequested: z.number(),
-    topLanguagesPaired: z.string().nullable().optional(),
-
-    // Social stats
-    totalFriends: z.number(),
-    communitiesJoined: z.number(),
-    communitiesCreated: z.number(),
-
-    // Engagement
-    averageResponseTime: z.number().nullable().optional(),
-    lastActiveAt: z.iso.datetime().nullable().optional(),
-    streakDays: z.number(),
-
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-  }),
-};
-
-// =============================================================================
 // AUDIO TRANSCRIPTION SCHEMAS
 // =============================================================================
 
 /**
  * Statut de transcription/traduction audio
  */
-export const audioProcessingStatusEnum = z.enum(['pending', 'processing', 'completed', 'failed']);
+const audioProcessingStatusEnum = z.enum(['pending', 'processing', 'completed', 'failed']);
 
 /**
  * Statut de modèle vocal
  */
-export const voiceModelStatusEnum = z.enum(['training', 'ready', 'failed', 'deleted']);
-
-/**
- * Schémas pour la transcription audio
- */
-export const AudioTranscriptionSchemas = {
-  // Transcription complète
-  full: z.object({
-    id: z.string(),
-    messageId: z.string(),
-    attachmentId: z.string().nullable().optional(),
-    sourceLanguage: z.string(),
-    transcriptionText: z.string(),
-    confidence: z.number().min(0).max(1).nullable().optional(),
-    duration: z.number().nullable().optional(),
-    model: z.string().nullable().optional(),
-    status: audioProcessingStatusEnum,
-    errorMessage: z.string().nullable().optional(),
-    createdAt: z.iso.datetime(),
-    completedAt: z.iso.datetime().nullable().optional(),
-  }),
-
-  // Demander une transcription
-  request: z.object({
-    messageId: z.string().min(1),
-    attachmentId: z.string().optional(),
-  }),
-};
+const voiceModelStatusEnum = z.enum(['training', 'ready', 'failed', 'deleted']);
 
 /**
  * Schémas pour l'audio traduit
@@ -1777,81 +1391,6 @@ export const VoiceModelSchemas = {
     name: z.string().min(1).max(100).optional(),
     isDefault: z.boolean().optional(),
     isPublic: z.boolean().optional(),
-  }),
-};
-
-// =============================================================================
-// CONVERSATION READ CURSOR SCHEMAS
-// =============================================================================
-
-/**
- * Schémas pour les curseurs de lecture
- */
-export const ReadCursorSchemas = {
-  // Curseur de lecture
-  full: z.object({
-    id: z.string(),
-    conversationId: z.string(),
-    userId: z.string(),
-    lastReadMessageId: z.string().nullable().optional(),
-    lastReadAt: z.iso.datetime(),
-    unreadCount: z.number(),
-  }),
-
-  // Mettre à jour le curseur
-  update: z.object({
-    lastReadMessageId: z.string().min(1),
-  }),
-};
-
-// =============================================================================
-// ADMIN AUDIT LOG SCHEMAS
-// =============================================================================
-
-/**
- * Actions d'audit admin
- */
-export const adminActionEnum = z.enum([
-  'user_ban', 'user_unban', 'user_delete', 'user_role_change',
-  'content_delete', 'content_flag', 'content_approve',
-  'report_resolve', 'report_dismiss',
-  'community_delete', 'community_suspend',
-  'settings_change', 'system_config'
-]);
-
-/**
- * Type cible d'audit
- */
-export const auditTargetTypeEnum = z.enum(['user', 'message', 'conversation', 'community', 'report', 'system']);
-
-/**
- * Schémas pour les logs d'audit admin
- */
-export const AdminAuditLogSchemas = {
-  // Log complet
-  full: z.object({
-    id: z.string(),
-    adminId: z.string(),
-    action: adminActionEnum,
-    targetType: auditTargetTypeEnum,
-    targetId: z.string().nullable().optional(),
-    details: z.string().nullable().optional(),
-    previousState: z.string().nullable().optional(),
-    newState: z.string().nullable().optional(),
-    ipAddress: z.string().nullable().optional(),
-    userAgent: z.string().nullable().optional(),
-    createdAt: z.iso.datetime(),
-    admin: UserSchemas.minimal.optional(),
-  }),
-
-  // Filtres de recherche
-  search: z.object({
-    adminId: z.string().optional(),
-    action: adminActionEnum.optional(),
-    targetType: auditTargetTypeEnum.optional(),
-    targetId: z.string().optional(),
-    startDate: z.iso.datetime().optional(),
-    endDate: z.iso.datetime().optional(),
   }),
 };
 
@@ -1951,127 +1490,6 @@ export const SecurityEventSchemas = {
 };
 
 // =============================================================================
-// AFFILIATE SCHEMAS
-// =============================================================================
-
-/**
- * Types de token affiliate
- */
-export const affiliateTokenTypeEnum = z.enum(['referral', 'promo', 'partner', 'influencer']);
-
-/**
- * Statut de relation affiliate
- */
-export const affiliateRelationStatusEnum = z.enum(['pending', 'active', 'expired', 'revoked']);
-
-/**
- * Schémas pour les tokens affiliate
- */
-export const AffiliateTokenSchemas = {
-  // Token complet
-  full: z.object({
-    id: z.string(),
-    userId: z.string(),
-    token: z.string(),
-    type: affiliateTokenTypeEnum,
-    description: z.string().nullable().optional(),
-    commission: z.number().nullable().optional(),
-    maxUses: z.number().nullable().optional(),
-    currentUses: z.number(),
-    isActive: z.boolean(),
-    expiresAt: z.iso.datetime().nullable().optional(),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-  }),
-
-  // Créer un token
-  create: z.object({
-    type: affiliateTokenTypeEnum,
-    description: z.string().max(500).optional(),
-    commission: z.number().min(0).max(100).optional(),
-    maxUses: z.number().min(1).optional(),
-    expiresAt: z.iso.datetime().optional(),
-  }),
-};
-
-/**
- * Schémas pour les relations affiliate
- */
-export const AffiliateRelationSchemas = {
-  // Relation complète
-  full: z.object({
-    id: z.string(),
-    affiliateId: z.string(),
-    referredUserId: z.string(),
-    tokenId: z.string(),
-    status: affiliateRelationStatusEnum,
-    earnings: z.number(),
-    createdAt: z.iso.datetime(),
-    affiliate: UserSchemas.minimal.optional(),
-    referredUser: UserSchemas.minimal.optional(),
-  }),
-};
-
-// =============================================================================
-// TRACKING LINK SCHEMAS
-// =============================================================================
-
-/**
- * Schémas pour les liens de tracking
- */
-export const TrackingLinkSchemas = {
-  // Lien complet
-  full: z.object({
-    id: z.string(),
-    userId: z.string(),
-    shortCode: z.string(),
-    destinationUrl: z.string(),
-    title: z.string().nullable().optional(),
-    campaign: z.string().nullable().optional(),
-    source: z.string().nullable().optional(),
-    medium: z.string().nullable().optional(),
-    totalClicks: z.number(),
-    uniqueClicks: z.number(),
-    isActive: z.boolean(),
-    expiresAt: z.iso.datetime().nullable().optional(),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-  }),
-
-  // Créer un lien
-  create: z.object({
-    destinationUrl: z.url(),
-    shortCode: z.string().min(3).max(20).regex(/^[a-zA-Z0-9-_]+$/).optional(),
-    title: z.string().max(100).optional(),
-    campaign: z.string().max(50).optional(),
-    source: z.string().max(50).optional(),
-    medium: z.string().max(50).optional(),
-    expiresAt: z.iso.datetime().optional(),
-  }),
-};
-
-/**
- * Schémas pour les clics de tracking
- */
-export const TrackingLinkClickSchemas = {
-  // Clic complet
-  full: z.object({
-    id: z.string(),
-    linkId: z.string(),
-    ipAddress: z.string().nullable().optional(),
-    userAgent: z.string().nullable().optional(),
-    referrer: z.string().nullable().optional(),
-    country: z.string().nullable().optional(),
-    city: z.string().nullable().optional(),
-    deviceType: z.string().nullable().optional(),
-    browser: z.string().nullable().optional(),
-    os: z.string().nullable().optional(),
-    isUnique: z.boolean(),
-    createdAt: z.iso.datetime(),
-  }),
-};
-
-// =============================================================================
 // ANONYMOUS PARTICIPANT SCHEMAS
 // =============================================================================
 
@@ -2103,73 +1521,6 @@ export const AnonymousParticipantSchemas = {
     // `.max(6)` : parité avec `CommonSchemas.language` (code 639-3 régionalisé).
     language: z.string().min(2).max(6).default('fr'),
     email: z.email().optional(),
-  }),
-};
-
-// =============================================================================
-// USER PREFERENCE SCHEMAS
-// =============================================================================
-
-/**
- * Thème de l'application
- */
-export const themeEnum = z.enum(['light', 'dark', 'system']);
-
-/**
- * Taille de police
- */
-export const fontSizeEnum = z.enum(['small', 'medium', 'large']);
-
-/**
- * Qualité média
- */
-export const mediaQualityEnum = z.enum(['low', 'medium', 'high', 'original']);
-
-/**
- * Schémas pour les préférences utilisateur
- */
-export const UserPreferenceSchemas = {
-  // Préférences complètes
-  full: z.object({
-    id: z.string(),
-    userId: z.string(),
-
-    // Theme & Display
-    theme: themeEnum,
-    fontSize: fontSizeEnum,
-    compactMode: z.boolean(),
-
-    // Privacy
-    showOnlineStatus: z.boolean(),
-    showLastSeen: z.boolean(),
-    showReadReceipts: z.boolean(),
-    showTypingIndicator: z.boolean(),
-
-    // Media
-    autoPlayMedia: z.boolean(),
-    autoDownloadMedia: z.boolean(),
-    mediaQuality: mediaQualityEnum,
-
-    // Keyboard
-    enterToSend: z.boolean(),
-
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-  }),
-
-  // Mettre à jour les préférences
-  update: z.object({
-    theme: themeEnum.optional(),
-    fontSize: fontSizeEnum.optional(),
-    compactMode: z.boolean().optional(),
-    showOnlineStatus: z.boolean().optional(),
-    showLastSeen: z.boolean().optional(),
-    showReadReceipts: z.boolean().optional(),
-    showTypingIndicator: z.boolean().optional(),
-    autoPlayMedia: z.boolean().optional(),
-    autoDownloadMedia: z.boolean().optional(),
-    mediaQuality: mediaQualityEnum.optional(),
-    enterToSend: z.boolean().optional(),
   }),
 };
 
@@ -2300,16 +1651,6 @@ export const ApiResponseSchemas = {
 // TYPE EXPORTS (Validated types - prefixed with V to avoid conflicts)
 // =============================================================================
 
-/**
- * Types inférés depuis les schemas Zod
- * Préfixés avec "V" pour "Validated" afin d'éviter les conflits
- * avec les types existants dans conversation.ts et api-schemas.ts
- */
-export type VUserPermissions = z.infer<typeof UserSchemas.permissions>;
-export type VUserMinimal = z.infer<typeof UserSchemas.minimal>;
-export type VUserFull = z.infer<typeof UserSchemas.full>;
-export type VUserUpdate = z.infer<typeof UserSchemas.update>;
-
 export type VLoginRequest = z.infer<typeof AuthSchemas.login>;
 export type VRegisterRequest = z.infer<typeof AuthSchemas.register>;
 export type VVerifyEmailRequest = z.infer<typeof AuthSchemas.verifyEmail>;
@@ -2320,120 +1661,14 @@ export type VResetPasswordRequest = z.infer<typeof AuthSchemas.resetPassword>;
 export type VSessionMinimal = z.infer<typeof SessionSchemas.minimal>;
 export type VSessionFull = z.infer<typeof SessionSchemas.full>;
 
-export type VMessageTranslation = z.infer<typeof MessageSchemas.translation>;
-export type VAnonymousSender = z.infer<typeof MessageSchemas.anonymousSender>;
-export type VMessageMinimal = z.infer<typeof MessageSchemas.minimal>;
-export type VMessageFull = z.infer<typeof MessageSchemas.full>;
-export type VSendMessageRequest = z.infer<typeof MessageSchemas.send>;
-export type VEditMessageRequest = z.infer<typeof MessageSchemas.edit>;
-
-export type VConversationParticipant = z.infer<typeof ConversationSchemas.participant>;
-export type VConversationSettings = z.infer<typeof ConversationSchemas.settings>;
-export type VConversationLink = z.infer<typeof ConversationSchemas.link>;
-export type VConversationStats = z.infer<typeof ConversationSchemas.stats>;
-export type VConversationMinimal = z.infer<typeof ConversationSchemas.minimal>;
-export type VConversationFull = z.infer<typeof ConversationSchemas.full>;
-export type VCreateConversationRequest = z.infer<typeof ConversationSchemas.create>;
-export type VUpdateConversationRequest = z.infer<typeof ConversationSchemas.update>;
-
-export type VUserRole = z.infer<typeof userRoleEnum>;
-export type VMessageType = z.infer<typeof messageTypeEnum>;
-export type VMessageSource = z.infer<typeof messageSourceEnum>;
 export type VEncryptionMode = z.infer<typeof encryptionModeEnum>;
-export type VTranslationModel = z.infer<typeof translationModelEnum>;
-export type VConversationType = z.infer<typeof conversationTypeEnum>;
-export type VConversationStatus = z.infer<typeof conversationStatusEnum>;
-export type VConversationVisibility = z.infer<typeof conversationVisibilityEnum>;
-export type VConversationLinkType = z.infer<typeof conversationLinkTypeEnum>;
 
 // User profile update types
-export type VUpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
-export type VUpdateAvatar = z.infer<typeof updateAvatarSchema>;
-export type VUpdateBanner = z.infer<typeof updateBannerSchema>;
 export type VUpdatePassword = z.infer<typeof updatePasswordSchema>;
-export type VUpdateUsername = z.infer<typeof updateUsernameSchema>;
-
-// Attachment types
-export type VScanStatus = z.infer<typeof scanStatusEnum>;
-export type VModerationStatus = z.infer<typeof moderationStatusEnum>;
-export type VAttachmentMinimal = z.infer<typeof AttachmentSchemas.minimal>;
-export type VAttachmentFull = z.infer<typeof AttachmentSchemas.full>;
-export type VAttachmentUpload = z.infer<typeof AttachmentSchemas.upload>;
-
-// Reaction types
-export type VReactionFull = z.infer<typeof ReactionSchemas.full>;
-export type VReactionSummary = z.infer<typeof ReactionSchemas.summary>;
-export type VReactionAdd = z.infer<typeof ReactionSchemas.add>;
-
-// Mention types
-export type VMentionFull = z.infer<typeof MentionSchemas.full>;
-
-// Friend request types
-export type VFriendRequestStatus = z.infer<typeof friendRequestStatusEnum>;
-export type VFriendRequestFull = z.infer<typeof FriendRequestSchemas.full>;
-export type VFriendRequestSend = z.infer<typeof FriendRequestSchemas.send>;
-export type VFriendRequestRespond = z.infer<typeof FriendRequestSchemas.respond>;
 
 // Notification types
 export type VNotificationType = z.infer<typeof notificationTypeEnum>;
 export type VNotificationPriority = z.infer<typeof notificationPriorityEnum>;
-export type VNotificationFull = z.infer<typeof NotificationSchemas.full>;
-export type VNotificationMinimal = z.infer<typeof NotificationSchemas.minimal>;
-export type VNotificationMarkRead = z.infer<typeof NotificationSchemas.markRead>;
-export type VNotificationPreferenceFull = z.infer<typeof NotificationPreferenceSchemas.full>;
-export type VNotificationPreferenceUpdate = z.infer<typeof NotificationPreferenceSchemas.update>;
-
-// Community types
-export type VCommunityRole = z.infer<typeof communityRoleEnum>;
-export type VCommunityFull = z.infer<typeof CommunitySchemas.full>;
-export type VCommunityMinimal = z.infer<typeof CommunitySchemas.minimal>;
-export type VCommunityMember = z.infer<typeof CommunitySchemas.member>;
-export type VCommunityCreate = z.infer<typeof CommunitySchemas.create>;
-export type VCommunityUpdate = z.infer<typeof CommunitySchemas.update>;
-export type VCommunityAddMember = z.infer<typeof CommunitySchemas.addMember>;
-export type VCommunityUpdateMemberRole = z.infer<typeof CommunitySchemas.updateMemberRole>;
-
-// Call session types
-export type VCallMode = z.infer<typeof callModeEnum>;
-export type VCallType = z.infer<typeof callTypeEnum>;
-export type VCallStatus = z.infer<typeof callStatusEnum>;
-export type VCallParticipantRole = z.infer<typeof callParticipantRoleEnum>;
-export type VCallParticipantStatus = z.infer<typeof callParticipantStatusEnum>;
-export type VCallSessionFull = z.infer<typeof CallSessionSchemas.full>;
-export type VCallSessionMinimal = z.infer<typeof CallSessionSchemas.minimal>;
-export type VCallSessionStart = z.infer<typeof CallSessionSchemas.start>;
-
-// Report types
-export type VReportType = z.infer<typeof reportTypeEnum>;
-export type VReportTargetType = z.infer<typeof reportTargetTypeEnum>;
-export type VReportStatus = z.infer<typeof reportStatusEnum>;
-export type VReportFull = z.infer<typeof ReportSchemas.full>;
-export type VReportCreate = z.infer<typeof ReportSchemas.create>;
-export type VReportUpdateStatus = z.infer<typeof ReportSchemas.updateStatus>;
-
-// User stats types
-export type VUserStatsFull = z.infer<typeof UserStatsSchemas.full>;
-
-// Audio transcription types
-export type VAudioProcessingStatus = z.infer<typeof audioProcessingStatusEnum>;
-export type VVoiceModelStatus = z.infer<typeof voiceModelStatusEnum>;
-export type VAudioTranscriptionFull = z.infer<typeof AudioTranscriptionSchemas.full>;
-export type VAudioTranscriptionRequest = z.infer<typeof AudioTranscriptionSchemas.request>;
-export type VTranslatedAudioFull = z.infer<typeof TranslatedAudioSchemas.full>;
-export type VTranslatedAudioRequest = z.infer<typeof TranslatedAudioSchemas.request>;
-export type VVoiceModelFull = z.infer<typeof VoiceModelSchemas.full>;
-export type VVoiceModelCreate = z.infer<typeof VoiceModelSchemas.create>;
-export type VVoiceModelUpdate = z.infer<typeof VoiceModelSchemas.update>;
-
-// Read cursor types
-export type VReadCursorFull = z.infer<typeof ReadCursorSchemas.full>;
-export type VReadCursorUpdate = z.infer<typeof ReadCursorSchemas.update>;
-
-// Admin audit log types
-export type VAdminAction = z.infer<typeof adminActionEnum>;
-export type VAuditTargetType = z.infer<typeof auditTargetTypeEnum>;
-export type VAdminAuditLogFull = z.infer<typeof AdminAuditLogSchemas.full>;
-export type VAdminAuditLogSearch = z.infer<typeof AdminAuditLogSchemas.search>;
 
 // Security event types
 export type VSecurityEventType = z.infer<typeof securityEventTypeEnum>;
@@ -2441,26 +1676,3 @@ export type VSecuritySeverity = z.infer<typeof securitySeverityEnum>;
 export type VSecurityStatus = z.infer<typeof securityStatusEnum>;
 export type VSecurityEventFull = z.infer<typeof SecurityEventSchemas.full>;
 export type VSecurityEventSearch = z.infer<typeof SecurityEventSchemas.search>;
-
-// Affiliate types
-export type VAffiliateTokenType = z.infer<typeof affiliateTokenTypeEnum>;
-export type VAffiliateRelationStatus = z.infer<typeof affiliateRelationStatusEnum>;
-export type VAffiliateTokenFull = z.infer<typeof AffiliateTokenSchemas.full>;
-export type VAffiliateTokenCreate = z.infer<typeof AffiliateTokenSchemas.create>;
-export type VAffiliateRelationFull = z.infer<typeof AffiliateRelationSchemas.full>;
-
-// Tracking link types
-export type VTrackingLinkFull = z.infer<typeof TrackingLinkSchemas.full>;
-export type VTrackingLinkCreate = z.infer<typeof TrackingLinkSchemas.create>;
-export type VTrackingLinkClickFull = z.infer<typeof TrackingLinkClickSchemas.full>;
-
-// Anonymous participant types
-export type VAnonymousParticipantFull = z.infer<typeof AnonymousParticipantSchemas.full>;
-export type VAnonymousParticipantJoin = z.infer<typeof AnonymousParticipantSchemas.join>;
-
-// User preference types
-export type VTheme = z.infer<typeof themeEnum>;
-export type VFontSize = z.infer<typeof fontSizeEnum>;
-export type VMediaQuality = z.infer<typeof mediaQualityEnum>;
-export type VUserPreferenceFull = z.infer<typeof UserPreferenceSchemas.full>;
-export type VUserPreferenceUpdate = z.infer<typeof UserPreferenceSchemas.update>;
