@@ -33,22 +33,30 @@ class MeeshyNoteTest {
     }
 
     @Test
-    fun `le bandeau - rayon 16 teinte a 10 pour cent pleine largeur`() {
-        val banner = resolve(form = MeeshyNoteForm.Banner)
-        assertThat(banner.cornerRadiusDp).isEqualTo(16)
-        assertThat(banner.tintAlpha).isEqualTo(0.10f)
-        assertThat(banner.fillsWidth).isTrue()
-        assertThat(banner.insetsDp).containsExactly(12, 14, 12, 18).inOrder()
+    fun `la bande - arrondie a 16, teinte a 10 pour cent, barre d'accent de 3 et marges 12 14 12 18 avec la plus large du cote de la barre`() {
+        val band = resolve(form = MeeshyNoteForm.Band)
+        assertThat(band.cornerRadiusDp).isEqualTo(16)
+        assertThat(band.tintAlpha).isEqualTo(0.10f)
+        assertThat(band.accentBarDp).isEqualTo(3)
+        assertThat(band.insetsDp).containsExactly(12, 14, 12, 18).inOrder()
+        assertThat(band.minHeightDp).isEqualTo(0)
+        assertThat(band.hasBottomHairline).isFalse()
+        assertThat(band.fillsWidth).isFalse()
+        assertThat(band.animatesHeight).isFalse()
+        assertThat(resolve(form = MeeshyNoteForm.Line).accentBarDp).isEqualTo(0)
     }
 
     @Test
-    fun `la bande - pleine largeur sans rayon 48 au moins filet bas et barre d'accent de 3`() {
-        val band = resolve(form = MeeshyNoteForm.Band)
-        assertThat(band.cornerRadiusDp).isEqualTo(0)
-        assertThat(band.minHeightDp).isEqualTo(48)
-        assertThat(band.hasBottomHairline).isTrue()
-        assertThat(band.accentBarDp).isEqualTo(3)
-        assertThat(resolve(form = MeeshyNoteForm.Line).accentBarDp).isEqualTo(0)
+    fun `le bandeau - pleine largeur, 48 au moins, filet bas, sans rayon ni barre, et seul a s'ouvrir et se replier`() {
+        val banner = resolve(form = MeeshyNoteForm.Banner)
+        assertThat(banner.fillsWidth).isTrue()
+        assertThat(banner.minHeightDp).isEqualTo(48)
+        assertThat(banner.hasBottomHairline).isTrue()
+        assertThat(banner.cornerRadiusDp).isEqualTo(0)
+        assertThat(banner.accentBarDp).isEqualTo(0)
+        assertThat(banner.animatesHeight).isTrue()
+        assertThat(resolve(form = MeeshyNoteForm.Banner, reduceMotion = true).animatesHeight).isFalse()
+        assertThat(resolve(form = MeeshyNoteForm.Line).animatesHeight).isFalse()
     }
 
     @Test
@@ -74,7 +82,7 @@ class MeeshyNoteTest {
         assertThat(reduced.showsHalo).isTrue()
         assertThat(reduced.animatesHeight).isFalse()
         assertThat(MeeshyNoteRecipe.CROSSFADE_MILLIS).isEqualTo(150)
-        assertThat(resolve().animatesHeight).isTrue()
+        assertThat(resolve(form = MeeshyNoteForm.Banner).animatesHeight).isTrue()
     }
 
     @Test
