@@ -527,7 +527,8 @@ export async function refreshSharedLocationBetween(
   }
 }
 
-const within = (item: SharedLocationChangedEventData, bbox: SharedLocationBbox | undefined): boolean =>
+/** Le point servi est-il dans l'emprise ? Absente : toute la carte. */
+export const withinBbox = (item: { readonly latitude: number; readonly longitude: number }, bbox: SharedLocationBbox | undefined): boolean =>
   !bbox ||
   (item.latitude >= bbox.minLatitude &&
     item.latitude <= bbox.maxLatitude &&
@@ -612,7 +613,7 @@ export async function sharedLocationSnapshotFor(
   const kept = opened.filter(({ emitterId }) => confirmed.has(emitterId));
   const current = await currentSharedLocationSessions(deps.cache, kept.map(({ emitterId }) => emitterId));
   const items = kept.filter(({ emitterId, state }) => current.get(emitterId) === state.sessionId).map(({ projection }) => projection);
-  return { items: items.filter((item) => within(item, options.bbox)) };
+  return { items: items.filter((item) => withinBbox(item, options.bbox)) };
 }
 
 /**
