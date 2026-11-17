@@ -53,7 +53,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Le contenu de la feuille de stickers — poignée exclue (la pose [StickerSheetHost]) : fond dégradé indigo,
+ * Le contenu de la feuille de stickers — poignée exclue (chaque hôte la pose) : fond dégradé indigo,
  * en-tête (marque, « Stickers », croix), barre d'onglets capsule, puis UNE liste paresseuse à en-têtes de
  * section. Les pages injectées (packs, Personnalisés, Boutique) posent par [LocalStickerSheetPicker]. Changer d'onglet repart du haut ; l'onglet choisi retombe sur le premier s'il disparaît (un pack
  * retiré). La [destination] décide ce que devient un choix ; poser alimente les récents.
