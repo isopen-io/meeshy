@@ -64,11 +64,16 @@ async function allowedOwners(deps: BloodLocationDeps, viewerId: string, ownerIds
   }));
 }
 
-/** Note la consultation de la carte, sauf si ce lecteur a déjà consulté ce Sang dans la fenêtre. */
-async function noteMapConsultation(deps: BloodLocationDeps, observedId: string, observerId: string): Promise<void> {
+/** Note la consultation de la carte pour chaque Sang que ce lecteur n'a pas déjà consulté dans la fenêtre — le journal lu en UNE requête. */
+async function noteMapConsultations(deps: BloodLocationDeps, observedIds: readonly string[], observerId: string): Promise<void> {
   const since = new Date(deps.now() - BLOOD_MAP_CONSULTATION_WINDOW_MINUTES * 60_000);
-  const recent = await deps.prisma.bloodLocationConsultation.count({ where: { observedId, observerId, consultedAt: { gt: since } } });
-  if (recent === 0) await noteConsultation(deps, observedId, observerId);
+  const recent = await deps.prisma.bloodLocationConsultation.findMany({
+    where: { observerId, observedId: { in: [...observedIds] }, consultedAt: { gt: since } },
+    distinct: ['observedId'],
+    select: { observedId: true },
+  });
+  const seen = new Set(recent.map((row) => row.observedId));
+  await Promise.all(observedIds.filter((observedId) => !seen.has(observedId)).map((observedId) => noteConsultation(deps, observedId, observerId)));
 }
 
 /** Ceux qui me masquent aujourd'hui leur position : fantôme global, ou fantôme ciblé sur moi. */
@@ -80,6 +85,15 @@ async function ghostedFor(deps: BloodLocationDeps, viewerId: string, ownerIds: r
   return new Set([...global.map((row) => row.id), ...targeted.map((row) => row.ownerId)]);
 }
 
+/** Le premier point, du plus récent, qui ne m'est pas masqué : on n'ouvre que ce qu'il faut. */
+function firstVisible(ownerId: string, viewerId: string, rows: readonly { readonly sealed: string; readonly recordedAt: Date }[]) {
+  for (const row of rows) {
+    const point = openPoint(ownerId, row.sealed);
+    if (point && !point.hiddenFrom.includes(viewerId)) return { point, recordedAt: row.recordedAt };
+  }
+  return null;
+}
+
 async function latestPointOf(deps: BloodLocationDeps, ownerId: string, viewerId: string): Promise<Omit<SharedLocationBloodItem, 'circle'> | null> {
   const now = deps.now();
   const rows = await deps.prisma.bloodLocationPoint.findMany({
@@ -88,11 +102,7 @@ async function latestPointOf(deps: BloodLocationDeps, ownerId: string, viewerId:
     take: LATEST_SCAN,
     select: { sealed: true, recordedAt: true },
   });
-  const visible = rows.flatMap((row) => {
-    const point = openPoint(ownerId, row.sealed);
-    return point && !point.hiddenFrom.includes(viewerId) ? [{ point, recordedAt: row.recordedAt }] : [];
-  });
-  const [latest] = visible;
+  const latest = firstVisible(ownerId, viewerId, rows);
   if (!latest) return null;
   const { point, recordedAt } = latest;
   return { userId: ownerId, latitude: point.latitude, longitude: point.longitude, ...(point.accuracy === undefined ? {} : { accuracy: point.accuracy }), recordedAt: recordedAt.toISOString() };
@@ -105,7 +115,7 @@ export async function bloodLocationMapFor(deps: BloodLocationDeps, viewerId: str
   const allowed = await allowedOwners(deps, viewerId, candidates);
   const owners = [...allowed.keys()];
   if (owners.length === 0) return [];
-  await Promise.all(owners.map((ownerId) => noteMapConsultation(deps, ownerId, viewerId)));
+  await noteMapConsultations(deps, owners, viewerId);
   const ghosted = await ghostedFor(deps, viewerId, owners);
   const points = await Promise.all(owners.filter((ownerId) => !ghosted.has(ownerId)).map((ownerId) => latestPointOf(deps, ownerId, viewerId)));
   return points.flatMap((point) => {
