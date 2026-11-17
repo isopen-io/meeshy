@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   PROFILE_CAPABILITIES,
-  PROFILE_CAPABILITY_FEATURE,
-  PROFILE_FIELD_FEATURE,
   profileFieldOpen,
   profileFieldServed,
   resolveProfileCircleView,
   resolveProfileCircleViewAs,
+  resolveProfilePresenceAs,
+  type ProfileCapabilityKey,
   type ProfileCircleViewInput,
 } from '../utils/profile-circle-view';
 import { resolvePresenceVisibility, type PresenceVisibilityInput } from '../utils/presence-visibility';
-import { RELATION_FEATURE_MIN_LEVEL, RELATION_CONSENT_FEATURES } from '../utils/relation-levels';
+import { RELATION_FEATURE_MIN_LEVEL, RELATION_CONSENT_FEATURES, type RelationFeature } from '../utils/relation-levels';
 import { RELATION_LEVELS, compareRelationLevel, type RelationLevel } from '../types/relation';
 
 const inputAt = (granted: RelationLevel, overrides: Partial<ProfileCircleViewInput> = {}): ProfileCircleViewInput => ({
@@ -26,15 +26,41 @@ const inputAt = (granted: RelationLevel, overrides: Partial<ProfileCircleViewInp
   ...overrides,
 });
 
-const stateOf = (view: ReturnType<typeof resolveProfileCircleView>, key: keyof typeof PROFILE_CAPABILITY_FEATURE) =>
-  view.capabilities[key];
+/**
+ * La table attendue, écrite ICI : le module ne l'exporte plus, pour qu'aucun fichier
+ * n'interroge `presence.online` / `presence.detailed` sans s'inscrire à la garde.
+ */
+const FEATURE_OF: Readonly<Record<ProfileCapabilityKey, RelationFeature>> = {
+  presence: 'presence.online',
+  presenceDetailed: 'presence.detailed',
+  game: 'game.basic',
+  gameSparks: 'game.sparksGlory',
+  directMessage: 'dm.direct',
+  messageRequest: 'dm.request',
+  ring: 'call.ring',
+  talkie: 'talkie',
+  together: 'together',
+  bring: 'bring',
+  listeningCategory: 'listening.category',
+  listeningTitle: 'listening.title',
+  locationTemporary: 'location.temporary',
+  locationLive: 'location.live',
+  locationHistory: 'location.history',
+  locationProximity: 'location.proximity',
+  battery: 'device.battery',
+  batteryPull: 'device.battery.pull',
+  unreachable: 'device.unreachable',
+};
+
+const stateOf = (view: ReturnType<typeof resolveProfileCircleView>, key: ProfileCapabilityKey) =>
+  view.capabilities[key]!;
 
 describe('resolveProfileCircleView — ce que le cercle du lecteur ouvre', () => {
   it('chaque capacité s ouvre exactement au plancher de la matrice, sur CHAQUE cercle', () => {
     for (const level of RELATION_LEVELS) {
       const view = resolveProfileCircleView(inputAt(level));
       for (const key of PROFILE_CAPABILITIES) {
-        const floor = RELATION_FEATURE_MIN_LEVEL[PROFILE_CAPABILITY_FEATURE[key]];
+        const floor = RELATION_FEATURE_MIN_LEVEL[FEATURE_OF[key]];
         const expected = compareRelationLevel(level, floor) >= 0 ? 'open' : 'locked';
         expect(stateOf(view, key).state, `${key} @ ${level}`).toBe(expected);
         expect(stateOf(view, key).circle, `${key} circle`).toBe(floor);
@@ -81,7 +107,7 @@ describe('resolveProfileCircleView — ce que le cercle du lecteur ouvre', () =>
   it('une feature à consentement ne dit jamais ce que la personne a CHOISI : elle porte consentRequired, statique', () => {
     const view = resolveProfileCircleView(inputAt('BLOOD'));
     for (const key of PROFILE_CAPABILITIES) {
-      const feature = PROFILE_CAPABILITY_FEATURE[key];
+      const feature = FEATURE_OF[key];
       expect(stateOf(view, key).consentRequired).toBe(RELATION_CONSENT_FEATURES.has(feature));
     }
     expect(stateOf(view, 'locationLive')).toMatchObject({ state: 'open', consentRequired: true });
@@ -89,6 +115,22 @@ describe('resolveProfileCircleView — ce que le cercle du lecteur ouvre', () =>
 
   it('un blocage ferme TOUT, y compris ce que le cercle ouvrirait', () => {
     const view = resolveProfileCircleView(inputAt('BLOOD', { blockedEitherWay: true }));
+    for (const key of PROFILE_CAPABILITIES) expect(stateOf(view, key).state, key).toBe('locked');
+  });
+
+  it('un blocage ne sert AUCUN accord : ni ce que chacun accorde, ni ce qui manque (#18861, audit)', () => {
+    const view = resolveProfileCircleView(inputAt('CLOSE', { blockedEitherWay: true }));
+    expect('grantedByViewer' in view).toBe(false);
+    expect('grantedByTarget' in view).toBe(false);
+    expect('missing' in view).toBe(false);
+    expect(view.level).toBe('PUBLIC');
+  });
+
+  it('une cible désactivée : aucun accord servi, toutes les capacités fermées (#18861, audit)', () => {
+    const view = resolveProfileCircleView(inputAt('BLOOD', { targetDeactivated: true }));
+    expect('grantedByViewer' in view).toBe(false);
+    expect('grantedByTarget' in view).toBe(false);
+    expect('missing' in view).toBe(false);
     for (const key of PROFILE_CAPABILITIES) expect(stateOf(view, key).state, key).toBe('locked');
   });
 
@@ -118,7 +160,6 @@ describe('resolveProfileCircleView — ce que le cercle du lecteur ouvre', () =>
 
 describe('profileFieldOpen — fuseau et pays d inscription selon le cercle', () => {
   it('le pays s ouvre dès Ami, le fuseau dès Proche, sur un cercle AUTRE que le premier', () => {
-    expect(PROFILE_FIELD_FEATURE).toEqual({ country: 'presence.online', timezone: 'presence.detailed' });
     const ami = resolveProfileCircleView(inputAt('FRIEND'));
     const proche = resolveProfileCircleView(inputAt('CLOSE'));
     const connaissance = resolveProfileCircleView(inputAt('ACQUAINTANCE'));
@@ -182,5 +223,44 @@ describe('resolveProfileCircleViewAs — « Voir comme » passe par la MÊME loi
       expect(as.level).toBe(level);
       expect(as.isSelf).toBe(false);
     }
+  });
+});
+
+describe('« Voir comme » rend ce que reçoit un VRAI lecteur du cercle — âge, rôle et préférences du propriétaire (#18861, audit)', () => {
+  it('propriétaire mineur déclaré, vu comme Connaissance : les capacités se ferment comme pour un vrai lecteur adulte', () => {
+    const as = resolveProfileCircleViewAs({ level: 'ACQUAINTANCE', targetId: 'target', targetMinor: 'minor', targetRole: 'USER' });
+    const real = resolveProfileCircleView(inputAt('ACQUAINTANCE', { targetMinor: 'minor' }));
+    expect(as.capabilities).toEqual(real.capabilities);
+    expect(stateOf(as, 'ring').state).toBe('locked');
+  });
+
+  it('propriétaire de l équipe : un lecteur ordinaire du cercle n hérite d aucun privilège', () => {
+    const as = resolveProfileCircleViewAs({ level: 'FRIEND', targetId: 'target', targetMinor: 'adult', targetRole: 'MODERATOR' });
+    const real = resolveProfileCircleView(inputAt('FRIEND', { targetRole: 'MODERATOR', targetMinor: 'adult' }));
+    expect(as.capabilities).toEqual(real.capabilities);
+    expect(as.level).toBe('FRIEND');
+  });
+
+  const owner = { targetMinor: 'unknown' as const, targetRole: 'USER', targetShowOnlineStatus: true, targetShowLastSeen: true, targetIsDeactivated: false };
+
+  it('la présence vue comme Proche suit les préférences RÉELLES : dernière vue cachée ⇒ ni heure locale ni dernière vue', () => {
+    const visibility = resolveProfilePresenceAs({ level: 'CLOSE', ...owner, targetShowLastSeen: false });
+    expect(visibility).toEqual(presenceAt('CLOSE', { targetShowLastSeen: false }));
+    expect(visibility.showLastSeenTimestamp).toBe(false);
+    expect(profileFieldServed(visibility, 'timezone')).toBe(false);
+  });
+
+  it('présence cachée ⇒ ni « en ligne » ni pays, même vu comme Sang', () => {
+    const visibility = resolveProfilePresenceAs({ level: 'BLOOD', ...owner, targetShowOnlineStatus: false });
+    expect(visibility).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(profileFieldServed(visibility, 'country')).toBe(false);
+  });
+
+  it('compte désactivé ⇒ rien', () => {
+    expect(resolveProfilePresenceAs({ level: 'BLOOD', ...owner, targetIsDeactivated: true })).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+
+  it('sans préférence : exactement la présence d un vrai lecteur de chaque cercle (non-régression)', () => {
+    for (const level of RELATION_LEVELS) expect(resolveProfilePresenceAs({ level, ...owner }), level).toEqual(presenceAt(level));
   });
 });

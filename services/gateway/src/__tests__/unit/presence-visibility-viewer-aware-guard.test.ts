@@ -85,6 +85,16 @@ const PRESENCE_FEATURE_SITES: readonly string[] = [
 const EXPORTED_PRESENCE_FEATURE_NAME = /export\s+const\s+\w+\s*=\s*['"]presence\.(?:online|detailed)['"]/;
 
 /**
+ * La même cécité, par une TABLE : une constante exportée qui porte le nom en VALEUR
+ * (`{ presence: 'presence.online' }`) le remet à quiconque l'importe
+ * (`TABLE.presence`), sans littéral au site qui interroge la loi (#18861, audit).
+ * Les CLÉS d'une matrice (`'presence.online': 'FRIEND'`) ne sont pas visées : elles
+ * déclarent un plancher, elles ne livrent pas le nom.
+ */
+const EXPORTED_PRESENCE_FEATURE_TABLE =
+  /export\s+const\s+\w+[^=;]*=\s*\{[^}]*?[\w$]+\s*:\s*['"]presence\.(?:online|detailed)['"]/;
+
+/**
  * Une clé de tri liée DIRECTEMENT à un champ homonyme de la requête —
  * `sortBy: query.sortBy`, `sortOrder: q.sortOrder ?? 'desc'`. Le défaut ne vit pas
  * dans l'opérateur de repli (`||`, `??`) mais dans l'absence de RÉSOLVEUR : la
@@ -199,6 +209,25 @@ describe('garde — la présence se lit sur le niveau, jamais sur un booléen d\
   it('aucun fichier n exporte le nom d une feature de présence — le balayage resterait aveugle', () => {
     const offenders = scannedFiles()
       .filter((file) => EXPORTED_PRESENCE_FEATURE_NAME.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(REPO_ROOT, file));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('reconnaît une table exportée qui porte le nom d une feature de présence en VALEUR', () => {
+    expect(
+      EXPORTED_PRESENCE_FEATURE_TABLE.test("export const CAPABILITY_FEATURE = {\n  game: 'game.basic',\n  presence: 'presence.online',\n} as const;"),
+    ).toBe(true);
+    expect(
+      EXPORTED_PRESENCE_FEATURE_TABLE.test("export const FIELD: Readonly<Record<string, string>> = { timezone: 'presence.detailed' };"),
+    ).toBe(true);
+    expect(EXPORTED_PRESENCE_FEATURE_TABLE.test("export const MIN = {\n  'presence.online': 'FRIEND',\n};")).toBe(false);
+    expect(EXPORTED_PRESENCE_FEATURE_TABLE.test("const LOCAL = { presence: 'presence.online' };")).toBe(false);
+  });
+
+  it('aucune table exportée ne livre le nom d une feature de présence — `TABLE.presence` contournerait le balayage', () => {
+    const offenders = scannedFiles()
+      .filter((file) => EXPORTED_PRESENCE_FEATURE_TABLE.test(readFileSync(file, 'utf8')))
       .map((file) => relative(REPO_ROOT, file));
 
     expect(offenders).toEqual([]);
