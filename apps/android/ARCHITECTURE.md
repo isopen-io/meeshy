@@ -24,7 +24,7 @@ it. Audience: senior mobile engineers. Companions: `decisions.md` (ADR-001..033)
 | G8 | **Secure messenger, not just a secure app** | Explicit threat model + real E2EE protocol (§8). |
 | G9 | **Operable in production** | Observability + remote kill-switches are infrastructure (§12). |
 
-Platform: `minSdk 26`, `targetSdk 35`, Kotlin 2.x, Compose (Material 3),
+Platform: `minSdk 26`, `targetSdk 36`, Kotlin 2.x, Compose (Material 3),
 single-Activity, Android only (no Compose-Multiplatform / desktop target).
 
 ---
@@ -69,15 +69,18 @@ the four feature → feature edges admitted by ADR-033:
 
 **Modules**
 
-- **`:core:common`** — `CoroutineDispatchers`, `MeeshyResult`/error model,
-  `Clock` + server-time offset, Timber facade, pure utils. No Android-UI deps.
+- **`:core:common`** — `CoroutineDispatchers`, error recording, best-effort
+  and bounded-resolution helpers, keyed debounce: pure utils. No Android-UI deps.
 - **`:core:model`** — pure domain models & DTOs (`kotlinx.serialization`) plus
   `LanguageResolver` (the Prisme resolution the models implement). Depends on
   nothing — the base of the graph; compiled on a bare JVM by
   `scripts/jvm-check`.
-- **`:core:network`** — Retrofit/OkHttp (one HTTP client), the two Socket.IO
-  wrappers, `MeeshyConfig`, interceptors, certificate pinning, correlation-ID
-  propagation. Two `Json` instances (lenient + strict — §8.6).
+- **`:core:network`** — Retrofit/OkHttp (`MeeshyApi`, the authenticated client,
+  plus `MediaHttpClient` for media hops), `MeeshyConfig`, interceptors,
+  certificate pinning, the token stores. The Socket.IO client is not here: it
+  lives in `:sdk-core` (`socket/SocketManager`). Its lenient `Json` is the one
+  `:sdk-core` also provides; a strict decoder for crypto/auth (§8.6) is a
+  target, not a separate instance today.
 - **`:core:database`** — Room DB, DAOs, FTS5, migrations. Single source of truth.
 - **`:core:datastore`** — `DataStore` (preferences) + `EncryptedSharedPreferences`
   wrappers; per-user namespacing.
@@ -91,9 +94,9 @@ the four feature → feature edges admitted by ADR-033:
 - **`:sdk-core`** — the domain SDK: repositories, use-cases, the SWR engine
   (`CacheResult`/`cacheFirstFlow`), the outbox, `ConversationSyncEngine`,
   `MessageStateMachine`, `NotificationCoordinator`, `DynamicColorGenerator`.
-  `explicitApi()`, no Compose.
+  No Compose.
 - **`:sdk-ui`** — the Compose **design system** + reusable UI (charte graphique,
-  primitives, the Message Bubble family). `explicitApi()`.
+  primitives, the Message Bubble family).
 - Navigation has no module of its own: the routes and the graphs live in `:app`
   (`navigation/Routes.kt`, `NavBackChrome`, `navigation/graph/`); the planned
   `:core:navigation` was never populated and was removed (#18901).
@@ -362,10 +365,11 @@ on media-URL resolution retained.
 
 ## 9. Navigation & adaptive layout
 
-- **Single Activity**, Navigation-Compose, **type-safe `@Serializable` routes**;
-  each `:feature:*` contributes a nav sub-graph, registered by `:app`
-  (`navigation/graph/`); cross-feature contracts are `:sdk-core` interfaces
-  bound by Hilt (`CallLauncher`) or `CompositionLocal`s provided by `:app`.
+- **Single Activity**, Navigation-Compose, string routes declared once in
+  `:app` (`navigation/Routes.kt`); every nav graph lives in `:app`
+  (`navigation/graph/`), the features expose screens and never a sub-graph;
+  cross-feature contracts are `:sdk-core` interfaces bound by Hilt or
+  `CompositionLocal`s provided by `:app` (`startup/AppLocalsProvider.kt`).
 - **Overlays** (feed, radial menu, call pill, toasts, banners) in a Compose
   overlay layer (`Box` + `zIndex`) above the `NavHost`.
 - **Adaptive (G5), first-class from day one.** `:app` hosts a
