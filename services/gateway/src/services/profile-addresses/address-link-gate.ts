@@ -24,7 +24,8 @@ export type GatedLink = {
   readonly originalUrl?: string | null;
 };
 
-async function ownerIsActive(prisma: PrismaClient, ownerId: string): Promise<boolean> {
+/** Le propriétaire a encore un compte actif — la même loi pour la fiche (`withServedAddresses`) et le lien. */
+export async function ownerIsActive(prisma: PrismaClient, ownerId: string): Promise<boolean> {
   const owner = await prisma.user.findUnique({
     where: { id: ownerId },
     select: { isActive: true, deletedAt: true, deactivatedAt: true },
