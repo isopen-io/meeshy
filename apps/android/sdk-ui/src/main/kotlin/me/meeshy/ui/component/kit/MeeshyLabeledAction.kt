@@ -49,7 +49,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  *
  * Agnostique : des textes déjà écrits et une icône. Elle ne sait pas ce que le geste fait, ne dessine aucun fond (le disque vient
  * de `MeeshyGlassButtonFace`, mis à l'échelle) et ne confirme rien. En attente ou désactivée, ni action ni tic. La [size] vient de
- * la grille qui la range. Jumeau iOS : `MeeshyLabeledAction`.
+ * la grille qui la range. Désactivée, TOUTE l'action passe à 40 % une seule fois (le disque de K02 n'est pas atténué une seconde
+ * fois). Jumeau iOS : `MeeshyLabeledAction`.
  */
 @Composable
 @Suppress("LongParameterList", "LongMethod")
@@ -108,7 +109,6 @@ public fun MeeshyLabeledAction(
                 kind = kind,
                 size = MeeshyGlassButtonSize.S48,
                 tint = tint,
-                enabled = enabled,
                 pressed = isPressed,
             )
             if (values.showsRing && !reduceMotion) {

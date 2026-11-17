@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -33,10 +35,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.ui.theme.MeeshyKitInkColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -46,7 +50,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  *
  * Agnostique : des emplacements. Sept fonds et cinq gabarits (voir `MeeshyGroupCardRecipe`) ; le verre ne vient que de K01 ;
  * `Danger` teinte fond, bord ET filets. Avec [onPress], toute la carte se touche (carte d'action) ; verrouillée ([isLocked]),
- * elle est annoncée désactivée et ne répond plus. Les filets entre enfants sont posés par [MeeshyGroupCardDivider]. Jumeau iOS :
+ * elle est annoncée désactivée et ne répond plus. Le sur-titre est un en-tête ; l'aplat (`Solid`) donne l'encre sombre du kit à
+ * son contenu (`LocalContentColor`). Les filets entre enfants sont posés par [MeeshyGroupCardDivider]. Jumeau iOS :
  * `MeeshyGroupCard`.
  */
 @Composable
@@ -97,20 +102,31 @@ public fun MeeshyGroupCard(
     } else {
         Modifier
     }
+    val ink = if (values.usesDarkInk) MeeshyKitInkColors.TicketDarkInk else tokens.textPrimary
     val inner: @Composable () -> Unit = {
-        Column(Modifier.alpha(values.contentOpacity.toFloat()).heightIn(min = values.minHeight.dp).padding(vertical = values.verticalPadding.dp)) {
-            if (MeeshyGroupCardRecipe.showsHeader(overline != null, accessory != null)) {
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = values.headerHeight.dp).padding(horizontal = values.dividerInset.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    if (overline != null) Text(overline.uppercase(), color = tokens.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    if (accessory != null) accessory()
+        CompositionLocalProvider(LocalContentColor provides ink) {
+            Column(Modifier.alpha(values.contentOpacity.toFloat()).heightIn(min = values.minHeight.dp).padding(vertical = values.verticalPadding.dp)) {
+                if (MeeshyGroupCardRecipe.showsHeader(overline != null, accessory != null)) {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = values.headerHeight.dp).padding(horizontal = values.dividerInset.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        if (overline != null) {
+                            Text(
+                                overline.uppercase(),
+                                color = if (values.usesDarkInk) ink else tokens.textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.semantics { heading() },
+                            )
+                        }
+                        if (accessory != null) accessory()
+                    }
                 }
+                content()
+                if (footer != null) Box(Modifier.padding(horizontal = values.dividerInset.dp, vertical = 12.dp)) { footer() }
             }
-            content()
-            if (footer != null) Box(Modifier.padding(horizontal = values.dividerInset.dp, vertical = 12.dp)) { footer() }
         }
     }
     Box(
