@@ -7,7 +7,9 @@ import type { AttachmentReactionUpdateEventData } from '@meeshy/shared/types/soc
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
 
 import { conversationStore } from '@/lib/conversation-store';
+import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { createOutboxStore } from '@/lib/send/outbox-store';
+import { E2EE_PLAINTEXT_SENTINEL, sentinelLeaks } from '@/test-support/e2ee-plaintext-sentinel';
 import { liveQueryClient } from '@/test-support/live-query-client';
 import { routedTransport } from '@/test-support/routed-transport';
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
@@ -16,7 +18,7 @@ import { performDeparture } from './conversation-departure';
 import { CONVERSATIONS_QUERY_KEY, conversationQuery, conversationQueryKey, findCachedConversation, patchConversationDetail } from './conversations';
 import type { ConversationsPage } from './conversations-pages';
 import { performDeleteForMe } from './delete-message';
-import { messagesQueryKey } from './messages';
+import { messagesQueryKey, upsertThreadMessage } from './messages';
 import { threadWindowOf, type MessagesPage, type MessagesPageParam } from './messages-pages';
 import {
   applyConversationUnreadUpdated,
@@ -580,6 +582,55 @@ describe('hors ligne, la racine des conversations reste EN PAUSE', () => {
     expect(threadOf(queryClient, 'c-a')?.messages.map((m) => m.id)).toEqual(['m-lu', 'm-recu']);
     stop();
     queryClient.clear();
+  });
+});
+
+/**
+ * **LE JOURNAL N'OUVRE AUCUN CHEMIN VERS LE DISQUE** (#18914, #18991). Son
+ * crochet `persister` ne range rien : il marque la réponse, en mémoire. Un
+ * clair déchiffré posé dans le fil d'une conversation fermée au clair par une
+ * écriture VIVE, puis rejoué sur la réponse d'une relecture, reste en mémoire
+ * et n'entre jamais dans le cache rangé (`estFilScelle`, `query-client.ts` ;
+ * liste noire `lib/e2ee/durable-plaintext-sinks.ts`).
+ */
+describe('le journal et le fil d’une conversation fermée au clair', () => {
+  test('une écriture vive pendant la relecture, puis son rejeu sur la réponse, gardent le clair en mémoire et hors du cache rangé', async () => {
+    const sealed = 'c-scellee-journal';
+    endToEndRegimeLedger.getState().learnEndToEnd(sealed, 1);
+    const raw = new Map<string, string>();
+    const storage: StorageLike = {
+      getItem: (key) => raw.get(key) ?? null,
+      setItem: (key, value) => {
+        raw.set(key, value);
+      },
+      removeItem: (key) => {
+        raw.delete(key);
+      },
+    };
+    const queryClient = createAppQueryClient({ buster: 'test:journal-scelle', storage });
+    const before = localMessage({ id: 'm-0', conversationId: sealed, senderId: 'u-other', content: 'avant' });
+    queryClient.setQueryData(messagesQueryKey(sealed), threadPages([before]));
+    queryClient.setQueryData(messagesQueryKey('c-claire-journal'), threadPages([localMessage({ id: 'm-clair', conversationId: 'c-claire-journal', content: 'bonjour en clair' })]));
+    const inFlight = deferred<MessagesPage>();
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: messagesQueryKey(sealed),
+      queryFn: () => inFlight.promise,
+      initialPageParam: undefined as MessagesPageParam,
+      getNextPageParam: () => undefined,
+      staleTime: 0,
+    });
+    const stop = observer.subscribe(() => undefined);
+
+    upsertThreadMessage(queryClient, sealed, localMessage({ id: 'm-dechiffre', conversationId: sealed, senderId: 'u-other', content: E2EE_PLAINTEXT_SENTINEL }));
+    inFlight.resolve(pageOf([before]));
+    await settle(queryClient);
+    queryClient.persist();
+
+    expect(threadOf(queryClient, sealed)?.messages.map((m) => m.content)).toContain(E2EE_PLAINTEXT_SENTINEL);
+    const written = [...raw.values()].join('');
+    expect(sentinelLeaks({ 'meeshy.query-cache': written })).toEqual([]);
+    expect(written).toContain('bonjour en clair');
+    stop();
   });
 });
 
