@@ -41,7 +41,7 @@ const PREFIXE = '/api/v1/directory';
 const MOI = '507f1f77bcf86cd799439099';
 const CIBLE = '507f1f77bcf86cd799439011';
 
-async function monter(options: { bloques?: string[]; retraitEnPanne?: boolean; sansService?: boolean } = {}) {
+async function monter(options: { bloques?: string[]; retraitEnPanne?: boolean; sansService?: boolean; retraitSansFin?: boolean } = {}) {
   const etat = { bloques: [...(options.bloques ?? [])] };
   const prisma = {
     user: {
@@ -57,6 +57,7 @@ async function monter(options: { bloques?: string[]; retraitEnPanne?: boolean; s
   };
   const retractNotificationsFromActor = jest.fn<any>(async () => {
     if (options.retraitEnPanne) throw new Error('mongo down');
+    if (options.retraitSansFin) await new Promise(() => undefined);
     return 1;
   });
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -108,6 +109,16 @@ describe('PUT /directory/blocks/:userId retire les notifications de la paire (#1
 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.blocked).toBe(true);
+    await app.close();
+  });
+
+  it('la réponse n’attend pas le retrait : des années de notifications ne retiennent pas le geste de blocage', async () => {
+    const { app, retractNotificationsFromActor } = await monter({ retraitSansFin: true });
+
+    const res = await bloquer(app);
+
+    expect(res.statusCode).toBe(200);
+    expect(retractNotificationsFromActor).toHaveBeenCalledWith(MOI, CIBLE);
     await app.close();
   });
 

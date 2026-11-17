@@ -177,15 +177,14 @@ export async function bloquer(
 
   // #18910 — les notifications de l'autre quittent les deux listes, rejoué même sur un blocage déjà posé.
   // Côté bloqueur : tout, annoncé. Côté bloqué : le seul contenu du bloqueur, SANS rien lui annoncer
-  // (une disparition en direct lui apprendrait le blocage). Best-effort : une panne ne défait pas le blocage.
+  // (une disparition en direct lui apprendrait le blocage). Best-effort : une panne ne défait pas le blocage. Hors
+  // de la réponse : des années de notifications (50 lots de 1 000) ne retiennent pas le geste.
   const notifications = fastify.notificationService;
   if (notifications) {
-    try {
-      await notifications.retractNotificationsFromActor(moi, cibleId);
-      await notifications.retractNotificationsFromActor(cibleId, moi, 'actor-content');
-    } catch (error: unknown) {
-      logError(fastify.log, '[BLOCKS] Notifications not retracted after block', error);
-    }
+    Promise.all([
+      notifications.retractNotificationsFromActor(moi, cibleId),
+      notifications.retractNotificationsFromActor(cibleId, moi, 'actor-content'),
+    ]).catch((error: unknown) => logError(fastify.log, '[BLOCKS] Notifications not retracted after block', error));
   }
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
