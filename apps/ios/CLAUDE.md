@@ -122,7 +122,7 @@ Based on [Swift.org API Design Guidelines](https://www.swift.org/documentation/a
 | Services | `{Function}Manager` | `AuthManager`, `PresenceManager` |
 | Models (API) | `API{Entity}` | `APIConversation` |
 | Models (local) | `{Entity}` | `Conversation` |
-| Components | PascalCase | `ChatBubble`, `MeeshyAvatar` |
+| Components | PascalCase | `MeeshyAvatar`, `EmojiReactionPicker` |
 | Protocols (what it is) | Nouns | `MessageProvider`, `AudioSource` |
 | Protocols (capability) | `-able`/`-ible`/`-ing` | `Sendable`, `Cacheable`, `ProgressReporting` |
 | Boolean properties | Reads as assertion | `isEmpty`, `isConnected`, `hasUnread` |

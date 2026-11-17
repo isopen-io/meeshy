@@ -20,7 +20,6 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         ("Community/CommunitySettingsScreen.swift", "viewModel.localColor = hex"),
         ("Community/CommunityListScreen.swift", "onTap()"),
         ("Community/CommunityDetailScreen.swift", "onSelectConversation?(conversation)"),
-        ("Primitives/UserIdentityBar.swift", "Button(action: action)"),
         ("Primitives/MoodBadge.swift", "onTap(CGPoint("),
         ("Media/AudioRecorderSheet.swift", "toggleRecording()")
     ]
@@ -28,7 +27,6 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
     private static let exposedGestures: [(file: String, action: String)] = [
         ("Story/Controls/AudioForegroundChip.swift", "onTap"),
         ("Primitives/MeeshyAvatar.swift", "performTap"),
-        ("Primitives/UserIdentityBar.swift", "onTap?(code)"),
         ("Location/LocationMessageView.swift", "onTapFullscreen?()"),
         ("Media/MeeshyVideoThumbnail.swift", "onTap?()"),
         ("Media/ImageViewerView.swift", "openFullscreen()")

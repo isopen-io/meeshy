@@ -28,7 +28,7 @@ Ce code va dans `apps/ios/Meeshy/Features/Main/Views/` (ou ViewModels selon le c
 | Rule engines stateless (pures functions) | SDK | `MediaDownloadPolicyEngine.shouldAutoDownload` |
 | Services low-level | SDK | `APIClient`, `CacheCoordinator`, `NetworkConditionMonitor` |
 | Stores de préférences | SDK | `MediaDownloadPreferencesStore` |
-| State machines internes | SDK (internal) | `VideoPlaybackController` |
+| State machines internes | SDK (internal) | `SyncEngineState` |
 | **View wrappers cascadant cache + policy + downloader** | **APP** | `VideoAvailabilityResolver` |
 | **Downloaders qui parlent au CacheCoordinator nommé du produit** | **APP** | `AttachmentDownloader` |
 | **ViewModels** | APP | `ConversationViewModel`, `FeedViewModel` |

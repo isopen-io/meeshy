@@ -6,7 +6,6 @@ final class MainQueueTimerSourceGuardTests: XCTestCase {
         "Primitives/EmojiReactionPicker.swift": 0,
         "Community/CommunityListScreen.swift": 0,
         "Primitives/MeeshyAvatar.swift": 0,
-        "Primitives/ErrorBannerView.swift": 0,
         "Media/DocumentViewerView.swift": 0,
         "Media/ImageViewerView.swift": 0,
         "Media/MeeshyVideoPlayer+FullscreenSave.swift": 0,

@@ -32,9 +32,6 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Profile/UserProfileSheet+PostsTab.swift",
         "Notifications/NotificationListScreen.swift",
         "Primitives/LanguagePickerSheet.swift",
-        "Primitives/TagInputView.swift",
-        "Primitives/StatsCard.swift",
-        "Primitives/ErrorBannerView.swift",
         "Primitives/FeedbackToastView.swift",
         "Packs/PackShopView.swift",
         "Packs/FramePackShelfView.swift",
@@ -42,7 +39,6 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Media/DocumentViewerView.swift",
         "Media/CodeViewerView.swift",
         "Media/AudioRecorderSheet.swift",
-        "Media/UniversalAudioRecorderView.swift",
         "Media/AudioEditorToolPanel.swift",
         "Media/MeeshyAudioEditorView.swift"
     ]
@@ -264,7 +260,6 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Primitives/EmojiReactionPicker.swift": 6,
         "Primitives/LanguagePickerSheet.swift": 2,
         "Primitives/ProfileCompletionRing.swift": 1,
-        "Primitives/UserIdentityBar.swift": 1,
         "Profile/UserProfileSheet.swift": 1,
         "Story/StickerPickerView+Emoji.swift": 1,
         "Story/StickerPickerView+Packs.swift": 1,

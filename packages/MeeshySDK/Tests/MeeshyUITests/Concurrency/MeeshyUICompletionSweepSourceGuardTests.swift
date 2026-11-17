@@ -27,7 +27,6 @@ final class MeeshyUICompletionSweepSourceGuardTests: XCTestCase {
         "Story/StoryMediaLoader.swift",
         "Community/CommunityListScreen.swift",
         "Primitives/MeeshyAvatar.swift",
-        "Primitives/ErrorBannerView.swift",
         "Primitives/EmojiReactionPicker.swift",
     ]
 

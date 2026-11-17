@@ -196,10 +196,6 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             ]
         ),
         Exemption(
-            reason: "couleur CALCULÉE d'une entité : la couleur hachée d'un tag",
-            globs: ["\(ui)/Primitives/TagInputView.swift"]
-        ),
-        Exemption(
             reason: "drapeaux de langue : couleurs de drapeau",
             globs: ["\(app)/Components/LanguageFlagChip.swift"]
         ),
@@ -285,7 +281,8 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
 
     /// Littéraux `Color(hex: "…")` hors cadre libre. **Ne doit que DESCENDRE.**
     /// `git ls-files … | grep -vE "$EXEMPT" | xargs grep -Po '(?<![A-Za-z])Color\(hex:[ \t]*\x22' | wc -l` → 13.
-    private static let hexCeiling = 13
+    /// 12 au 2026-11-17 (#18899) : les primitives sans écran du SDK sortent, mesuré par la commande de référence.
+    private static let hexCeiling = 12
 
     /// Littéraux `Color(red: 0.1, …)` hors cadre libre. **Ne doit que DESCENDRE.**
     /// `… | xargs grep -Po '(?<![A-Za-z])Color\(red:[ \t]*[0-9.]' | wc -l` → 3.
@@ -296,13 +293,15 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
     /// 119 au 2026-10-21, quand les styles de survol pointeur passent sur `MeeshyRadius`
     /// et `MeeshyPointerShape.rectangle`.
     /// 108 au 2026-11-17 (#18899) : la frise d'atelier du SDK sort, mesuré par la commande de référence.
-    private static let cornerRadiusCeiling = 108
+    /// 106 au 2026-11-17 (#18899) : les primitives sans écran du SDK sortent, mesuré par la commande de référence.
+    private static let cornerRadiusCeiling = 106
 
     /// Marges numériques hors cadre libre. **Ne doit que DESCENDRE.**
     /// `… | xargs grep -Po '\.padding\((\.[a-z]+,[ \t]*|\[[^\]\n]*\],[ \t]*)?[0-9]' | wc -l` → 190.
     /// 179 au 2026-11-17 (#18899) : la frise d'atelier du SDK sort, mesuré par la commande de référence.
     /// 178 au 2026-11-17 (#18899) : les commandes et éditeurs de l'ancien atelier sortent, mesuré par la commande de référence.
-    private static let paddingCeiling = 178
+    /// 176 au 2026-11-17 (#18899) : les primitives sans écran du SDK sortent, mesuré par la commande de référence.
+    private static let paddingCeiling = 176
 
     private static func ceiling(_ population: Population) -> Int {
         switch population {
