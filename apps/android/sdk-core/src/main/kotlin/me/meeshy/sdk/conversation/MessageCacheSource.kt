@@ -21,6 +21,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.sync.LiveReceiptsContinuity
@@ -243,11 +244,23 @@ internal class MessageCacheSource(
         held.threadKnown && syncMetaDao.lastSyncedAt(resourceKey) == null && database.conversationDao().find(conversationId) == null
 
     /**
-     * The recent window as the server served it, and the validator to keep with it. [reachesOldest] — the page says no
-     * older message remains (`pagination.hasMore == false` with its `total`, #19423): an absent or partial pagination
-     * proves nothing, and counts as « more remain ».
+     * The recent window as the server served it, and the validator to keep with it. [reachesOldest] — the page proves no
+     * older message remains ([servesWholeHistory], #19423).
      */
     private class ServedWindow(val messages: List<ApiMessage>, val etag: String?, val reachesOldest: Boolean)
+
+    /**
+     * #19423 — the window serves the WHOLE history only when the page says so (`hasMore == false` with its `total`) AND
+     * is shorter than its `limit`. The gateway counts `total` and reads the page in two queries without a shared
+     * snapshot: a message written between them lets a FULL page claim `hasMore == false` while an older message still
+     * exists behind it. A page that did not reach its limit is the read's own proof. An absent or partial pagination
+     * proves nothing, and counts as « more remain ».
+     */
+    private fun servesWholeHistory(served: Int, pagination: Pagination?): Boolean {
+        if (pagination == null) return false
+        val limit = pagination.limit ?: return false
+        return pagination.total != null && !pagination.hasMore && served < limit
+    }
 
     /** The messages read beyond the window, and how far that read went. */
     private class GapRead(val messages: List<ApiMessage>, val sweep: Sweep)
@@ -347,7 +360,7 @@ internal class MessageCacheSource(
             is ConditionalResult.Fresh -> ServedWindow(
                 result.data,
                 result.etag,
-                reachesOldest = result.pagination?.let { it.total != null && !it.hasMore } == true,
+                reachesOldest = servesWholeHistory(result.data.size, result.pagination),
             )
             is ConditionalResult.Failure -> throw MessageSyncException(result.error.message)
         }
