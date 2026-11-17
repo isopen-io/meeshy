@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.meeshy.sdk.model.DndDay
 import me.meeshy.sdk.model.DndWindow
 import me.meeshy.sdk.model.NotificationType
@@ -47,6 +49,13 @@ class NotificationSettingsViewModel @Inject constructor(
         NotificationSettingsUiState(notifications = notificationPreferencesStore.preferences.value),
     )
     val state: StateFlow<NotificationSettingsUiState> = _state.asStateFlow()
+
+    /**
+     * Les écritures passent UNE à la fois, dans l'ordre des touchers : l'écriture ET l'envoi au serveur
+     * d'une bascule finissent avant que la suivante lise. Sans cela, un envoi lent laisserait l'instantané
+     * le plus ancien arriver en dernier, et la file n'en garde que le dernier.
+     */
+    private val writes = Mutex()
 
     init {
         viewModelScope.launch {
@@ -149,10 +158,11 @@ class NotificationSettingsViewModel @Inject constructor(
 
     private fun updateNotifications(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {
         viewModelScope.launch {
-            val updated = edit(notificationPreferencesStore.preferences.value)
-            notificationPreferencesStore.setPreferences(updated)
-            val cmid = notificationPreferencesSyncRepository.enqueueSync(updated)
-            if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
+            writes.withLock {
+                val updated = notificationPreferencesStore.update(edit)
+                val cmid = notificationPreferencesSyncRepository.enqueueSync(updated)
+                if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
+            }
         }
     }
 }
