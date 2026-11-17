@@ -42,11 +42,22 @@ export interface FreezeMessageStatusParams {
   readonly at: Date;
   readonly field: 'readAt' | 'deliveredAt';
   /**
-   * Restreint le gel aux messages réellement affichés. Une liste VIDE est
-   * significative — « rien n'a été affiché » — et ne retombe donc pas sur la
-   * fenêtre. Seule l'absence du paramètre déclenche le repli historique.
-   * Réservé à `readAt` : un message récupéré est livré même s'il n'a jamais été
-   * affiché, donc la fenêtre reste correcte pour `deliveredAt`.
+   * Restreint le gel aux messages réellement SERVIS — affichés (`readAt`) ou
+   * remis (`deliveredAt`). Une liste VIDE est significative — « rien n'a été
+   * servi » — et ne retombe donc pas sur la fenêtre. Seule l'absence du
+   * paramètre déclenche le repli historique.
+   *
+   * **Ce paragraphe disait « Réservé à `readAt` », et il était faux deux fois
+   * (#18731).** #18614 l'a ouvert à `deliveredAt` sans le relire ; et sa
+   * justification — « un message récupéré est livré même s'il n'a jamais été
+   * affiché, donc la fenêtre reste correcte pour `deliveredAt` » — ne vaut que
+   * pour un lecteur EN LIGNE, chez qui tout ce qui précède EST arrivé. Elle est
+   * FAUSSE du rejeu hors ligne, le seul appelant qui nomme sa liste : la file
+   * évince au plafond de 500 des messages que le drain ne voit jamais, donc la
+   * fenêtre y sur-déclare — c'est le défaut même de #18614.
+   *
+   * Un doc-comment qui EXEMPTE une unité d'une règle est une affirmation : il
+   * se vérifie contre les appelants, et il se relit quand l'un d'eux change.
    */
   readonly messageIds?: readonly string[];
 
