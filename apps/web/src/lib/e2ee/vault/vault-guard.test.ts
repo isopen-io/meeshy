@@ -48,6 +48,22 @@ const sharedLocks = (): VaultLockManager => {
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 1));
 
+/** Ce qu'une opération a levé — `undefined` si elle a réussi. */
+const thrownBy = (operate: () => unknown): unknown => {
+  try {
+    operate();
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+};
+
+const rejectionOf = (attempt: Promise<unknown>): Promise<unknown> =>
+  attempt.then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+
 describe('le verrou du coffre — un nom FIGÉ, une exclusion entre contextes', () => {
   test('le nom est un contrat entre deux versions du code : `meeshy-e2ee:<userId>`', () => {
     expect(E2EE_VAULT_LOCK_PREFIX).toBe('meeshy-e2ee:');
@@ -74,8 +90,8 @@ describe('le verrou du coffre — un nom FIGÉ, une exclusion entre contextes', 
   test('un échec sous le verrou le RELÂCHE : l’opération suivante passe', async () => {
     const locks = sharedLocks();
 
-    await expect(withE2EEVaultLock(locks, 'u1', () => Promise.reject(new Error('stockage refusé')))).rejects.toThrow('stockage refusé');
-    await expect(withE2EEVaultLock(locks, 'u1', () => Promise.resolve('suivante'))).resolves.toBe('suivante');
+    expect(await rejectionOf(withE2EEVaultLock(locks, 'u1', () => Promise.reject(new Error('stockage refusé'))))).toMatchObject({ message: 'stockage refusé' });
+    expect(await withE2EEVaultLock(locks, 'u1', () => Promise.resolve('suivante'))).toBe('suivante');
   });
 
   test('deux comptes du même navigateur ne s’attendent pas', async () => {
@@ -92,14 +108,14 @@ describe('le verrou du coffre — un nom FIGÉ, une exclusion entre contextes', 
   });
 
   test('sans Web Locks, le navigateur REFUSE de tenir des clés — jamais une exclusion de façade', () => {
-    expect(() => vaultLockManager({})).toThrow(E2EEVaultUnavailable);
-    expect(() => vaultLockManager({ locks: undefined })).toThrow(expect.objectContaining({ reason: 'NO_WEB_LOCKS' }));
+    expect(thrownBy(() => vaultLockManager({}))).toBeInstanceOf(E2EEVaultUnavailable);
+    expect(thrownBy(() => vaultLockManager({ locks: undefined }))).toMatchObject({ reason: 'NO_WEB_LOCKS' });
     const locks = sharedLocks();
     expect(vaultLockManager({ locks })).toBe(locks);
   });
 });
 
-type Upgrade = { readonly oldVersion: number; readonly newVersion: number };
+type Upgrade = { readonly oldVersion: number; readonly newVersion: number | null };
 
 /**
  * Un `IDBFactory` réduit à l'ouverture versionnée : la version sur disque,
@@ -192,14 +208,14 @@ describe('la base du coffre — une version qui monte à chaque changement de fo
 
     const opening = openE2EEVaultDatabase({ factory, userId: 'u1', upgrade: () => void (upgraded = true), onSuperseded: () => undefined });
 
-    await expect(opening).rejects.toThrow(expect.objectContaining({ reason: 'NEWER_VAULT' }));
+    expect(await rejectionOf(opening)).toMatchObject({ reason: 'NEWER_VAULT' });
     expect(upgraded).toBe(false);
     expect(onDisk.get(e2eeVaultDatabaseName('u1'))).toBe(E2EE_VAULT_DB_VERSION + 1);
   });
 
   test('sans IndexedDB, le navigateur refuse de tenir des clés', async () => {
-    await expect(
-      openE2EEVaultDatabase({ factory: undefined, userId: 'u1', upgrade: () => undefined, onSuperseded: () => undefined }),
-    ).rejects.toThrow(expect.objectContaining({ reason: 'NO_INDEXED_DB' }));
+    const opening = openE2EEVaultDatabase({ factory: undefined, userId: 'u1', upgrade: () => undefined, onSuperseded: () => undefined });
+
+    expect(await rejectionOf(opening)).toMatchObject({ reason: 'NO_INDEXED_DB' });
   });
 });
