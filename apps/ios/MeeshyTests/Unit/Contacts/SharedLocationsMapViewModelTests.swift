@@ -209,6 +209,46 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         XCTAssertEqual(rig.spy.requested, [last])
     }
 
+    // MARK: - Le cercle servi et « Pas sur la carte » (#18872)
+
+    func test_theServedCircle_andTheDirectoryAvatar_reachThePin() async {
+        let rig = makeRig(people: [CirclePerson(id: "alice", name: "Alice Martin", username: nil, avatarURL: "https://cdn/a.jpg")])
+
+        rig.live.receive(SharedLocationChanged(
+            userId: "alice", latitude: 38.71, longitude: -9.13, precision: .neighborhood, radiusMeters: 1200,
+            updatedAt: t0, expiresAt: t0.addingTimeInterval(3600), circle: .close
+        ))
+        await waitForPins(rig.sut) { $0.first?.avatarURL != nil }
+
+        XCTAssertEqual(rig.sut.pins.first?.circle, .close)
+        XCTAssertEqual(rig.sut.pins.first?.avatarURL, "https://cdn/a.jpg")
+        XCTAssertEqual(rig.sut.pins.first?.updatedAt, t0)
+    }
+
+    func test_aStoppedShare_goesNotOnTheMap_namedByTheDirectory_withoutAnyPosition() async {
+        let rig = makeRig()
+        let start = t0
+        let log = SharedLocationEndingsLog(live: rig.live, now: { start })
+        let sut = SharedLocationsMapViewModel(
+            live: rig.live,
+            people: FakeCirclePeople([CirclePerson(id: "yuki", name: "Yuki Tanaka", username: nil, avatarURL: nil)]),
+            presence: { _ in nil },
+            endings: log.$endings.eraseToAnyPublisher(),
+            calm: .milliseconds(20)
+        )
+        rig.live.receive(served("yuki"))
+        let named = expectation(description: "Yuki est « pas sur la carte »")
+        let watch = sut.$ended.first { $0.first?.name == "Yuki Tanaka" }.sink { _ in named.fulfill() }
+
+        rig.ended.send(SharedLocationEnded(userId: "yuki"))
+        await fulfillment(of: [named], timeout: 2)
+        watch.cancel()
+
+        XCTAssertEqual(sut.ended.map(\.id), ["yuki"])
+        XCTAssertEqual(sut.ended.first?.endedAt, start)
+        XCTAssertTrue(sut.pins.isEmpty)
+    }
+
     // MARK: - L'emprise d'une région
 
     func test_regionBounds_matchTheVisibleRegion() {
@@ -230,5 +270,89 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         )
 
         XCTAssertNil(SharedLocationsMapRegion.bounds(of: region))
+    }
+}
+
+/// La position d'un Sang, côté écran (#18872, planche Carte-Sang) : mon fantôme s'applique aussitôt et revient si la
+/// passerelle le refuse ; l'historique lu se peint à la réouverture, jamais pour un autre compte.
+@MainActor
+final class BloodLocationModelTests: XCTestCase {
+
+    final class FakeBloodLocation: BloodLocationProviding, @unchecked Sendable {
+        var accepts = true
+        var points: [BloodLocationPoint] = []
+        var fails = false
+        var changes: [BloodLocationSettingsChange] = []
+
+        func history(of userId: String, since: Date?, limit: Int?) async throws -> BloodLocationHistory {
+            if fails { throw URLError(.notConnectedToInternet) }
+            return BloodLocationHistory(points: points)
+        }
+
+        func consultations() async throws -> BloodLocationConsultations { BloodLocationConsultations(items: []) }
+
+        func update(_ change: BloodLocationSettingsChange) async throws -> Bool {
+            changes.append(change)
+            return accepts
+        }
+
+        func eraseHistory() async throws {}
+    }
+
+    final class GhostMemory: BloodGhostStoring {
+        var isGhost = false
+        nonisolated deinit {}
+    }
+
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func makeSUT(_ service: FakeBloodLocation, account: String = "me", online: Bool = true) -> BloodLocationModel {
+        let now = self.now
+        return BloodLocationModel(userId: "mina", service: service, ghostStore: GhostMemory(), isOnline: { online },
+                                  now: { now }, account: account)
+    }
+
+    func test_ghost_appliesAtOnce_andComesBackWhenRefused() async {
+        let service = FakeBloodLocation()
+        service.accepts = false
+        let sut = makeSUT(service)
+
+        await sut.setGhost(true)
+
+        XCTAssertFalse(sut.isGhost)
+        XCTAssertEqual(service.changes.first?.ghost, true)
+        XCTAssertNil(service.changes.first?.userId)
+    }
+
+    func test_ghost_staysWhenAccepted() async {
+        let sut = makeSUT(FakeBloodLocation())
+
+        await sut.setGhost(true)
+
+        XCTAssertTrue(sut.isGhost)
+    }
+
+    func test_theReadHistory_paintsAtReopening_onlyForTheSameAccount() async {
+        let service = FakeBloodLocation()
+        service.points = [BloodLocationPoint(latitude: 38.71, longitude: -9.13, recordedAt: now.addingTimeInterval(-600))]
+        await makeSUT(service, account: "cache-a").load()
+
+        service.fails = true
+        let reopened = makeSUT(service, account: "cache-a")
+        let otherAccount = makeSUT(service, account: "cache-b")
+
+        XCTAssertEqual(reopened.state, .loaded)
+        XCTAssertEqual(reopened.points.count, 1)
+        XCTAssertTrue(otherAccount.points.isEmpty)
+    }
+
+    func test_aFailedFirstLoad_saysOfflineWhenTheNetworkIsGone() async {
+        let service = FakeBloodLocation()
+        service.fails = true
+        let sut = makeSUT(service, account: "cache-offline", online: false)
+
+        await sut.load()
+
+        XCTAssertEqual(sut.state, .failed(offline: true))
     }
 }

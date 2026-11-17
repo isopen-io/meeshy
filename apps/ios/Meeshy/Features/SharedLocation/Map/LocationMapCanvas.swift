@@ -72,7 +72,11 @@ struct LocationMapCanvas: UIViewRepresentable {
                 span: MKCoordinateSpan(latitudeDelta: focus.region.latitudeDelta, longitudeDelta: focus.region.longitudeDelta)
             )
             map.setRegion(map.regionThatFits(region), animated: focus.animated && !isFirst)
-            publish(map)
+        }
+
+        /// La carte a sa taille : elle dit ce qu'elle montre, l'hôte peut alors poser sa région et ses épingles.
+        func mapViewDidFinishLoadingMap(_ mapView: MKMapView) {
+            publish(mapView)
         }
 
         func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
