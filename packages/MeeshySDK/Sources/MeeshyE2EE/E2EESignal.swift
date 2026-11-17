@@ -200,8 +200,10 @@ extension E2EESignal: Codable {
 
     /// Refuse un format que cet appareil ne sait pas lire. Comme pour un
     /// contenu, la version se lit AVANT toute autre clé (contrat #18940) : un
-    /// signal d'une version future, quelle que soit sa forme, se garde.
+    /// signal d'une version future, quelle que soit sa forme, se garde — pourvu
+    /// que ce soit un JSON bien formé (`E2EEPlaintextForm`).
     public static func decoded(from data: Data) throws -> E2EESignal {
+        try E2EEPlaintextForm.validate(data)
         let version = try JSONDecoder().decode(VersionProbe.self, from: data).s
         guard version == currentVersion else {
             throw version > currentVersion ? E2EESignalError.unsupportedVersion(version) : E2EESignalError.invalidVersion(version)
@@ -223,8 +225,12 @@ public enum E2EEPayloadKind: Equatable, Sendable {
         let s: Int?
     }
 
+    /// Un signal si et seulement si `s` est un entier d'un JSON bien formé :
+    /// tout le reste est un message, que le lecteur de contenu jugera (contrat
+    /// #18940) — un signal mal formé est donc un message illisible.
     public static func of(_ plaintext: Data) -> E2EEPayloadKind {
-        (try? JSONDecoder().decode(Probe.self, from: plaintext))?.s == nil ? .message : .signal
+        guard E2EEPlaintextForm.isWellFormed(plaintext) else { return .message }
+        return (try? JSONDecoder().decode(Probe.self, from: plaintext))?.s == nil ? .message : .signal
     }
 }
 

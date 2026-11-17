@@ -91,8 +91,11 @@ public struct E2EEContent: Codable, Equatable, Sendable {
     /// toute autre clé (contrat #18940, verdict `future-version`) : une version
     /// future se reconnaît quelle que soit sa forme, pour être GARDÉE et relue
     /// après la mise à jour (IOS-04) ; une version absente, non entière ou
-    /// antérieure à la première rend le contenu illisible.
+    /// antérieure à la première rend le contenu illisible. La forme se juge
+    /// avant la version : un clair mal formé est illisible, quelle que soit la
+    /// version qu'il annonce (`E2EEPlaintextForm`).
     public static func decoded(from data: Data) throws -> E2EEContent {
+        try E2EEPlaintextForm.validate(data)
         let version = try JSONDecoder().decode(VersionProbe.self, from: data).v
         guard version == currentVersion else {
             throw version > currentVersion ? E2EEContentError.unsupportedVersion(version) : E2EEContentError.invalidVersion(version)
