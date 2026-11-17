@@ -33,13 +33,18 @@ export type SlidingWindowCounter = {
 
 const retryAfterOf = (oldest: number, windowMs: number, now: number): number => Math.max(1, Math.ceil((oldest + windowMs - now) / 1000));
 
+/** Au-delà de ce nombre de clés, la mémoire élague celles dont le dernier événement a passé la plus longue fenêtre servie. */
+const MEMORY_PRUNE_AT = 10_000;
+const LONGEST_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /** La mémoire du processus : un tableau de dates par clé, élagué à chaque passage. */
 export function createMemorySlidingWindow(): SlidingWindowCounter {
   const events = new Map<string, number[]>();
   const prune = (now: number, windowMs: number) => {
-    if (events.size < 10_000) return;
+    if (events.size < MEMORY_PRUNE_AT) return;
+    const horizon = now - Math.max(windowMs, LONGEST_WINDOW_MS);
     events.forEach((dates, key) => {
-      if ((dates[dates.length - 1] ?? 0) <= now - windowMs) events.delete(key);
+      if ((dates[dates.length - 1] ?? 0) <= horizon) events.delete(key);
     });
   };
   return {

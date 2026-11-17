@@ -56,10 +56,23 @@ const guarded = (handler: Handler) => async (request: FastifyRequest, reply: Fas
 
 const invalid = (reply: FastifyReply) => sendBadRequest(reply, 'Requête de confirmation invalide', { code: DEVICE_VERIFICATION_ERROR_CODES.INVALID });
 
+/**
+ * Les dépôts : 60 par minute et par compte, AVANT toute lecture de l'annuaire. Les débits par
+ * génération du relais (4 demandes, 30 messages par heure) bornent ce qui est déposé.
+ */
+const sendRateLimit = {
+  max: 60,
+  timeWindow: '1 minute',
+  hook: 'preHandler' as const,
+  skipOnError: false,
+  keyGenerator: (request: FastifyRequest) => `e2ee:verifications:${(request as UnifiedAuthRequest).authContext?.userId ?? `ip:${request.ip}`}`,
+  errorResponseBuilder: () => ({ success: false, error: 'Trop de messages de comparaison. Patientez avant de réessayer.', statusCode: 429 }),
+};
+
 export function registerE2EEDeviceTrustRoutes(fastify: FastifyInstance, deps: E2EEDeviceTrustRouteDeps): void {
   const preValidation = [deps.auth];
 
-  fastify.post('/e2ee/devices/self/verifications', { preValidation }, guarded(async (request, reply, caller) =>
+  fastify.post('/e2ee/devices/self/verifications', { preValidation, config: { rateLimit: sendRateLimit } }, guarded(async (request, reply, caller) =>
     sendSuccess(reply, await deps.relay.send({ caller, payload: request.body }), { statusCode: 201 }),
   ));
 

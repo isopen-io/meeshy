@@ -6,7 +6,7 @@
  * refus et son code.
  */
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { DeviceVerificationSendAck } from '@meeshy/shared/types/e2ee-device-trust';
+import { DEVICE_VERIFICATION_ERROR_CODES, type DeviceVerificationSendAck } from '@meeshy/shared/types/e2ee-device-trust';
 import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 import { DeviceVerificationRefusedError, type E2EEDeviceVerificationRelay } from '../../services/e2ee/E2EEDeviceVerificationRelay';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -17,9 +17,17 @@ const logger = enhancedLogger.child({ module: 'E2EEDeviceVerificationHandler' })
 /** Ce que le transport sait de l'appelant : son compte (inscrit ou non). */
 export type VerificationSocketCaller = { readonly userId: string; readonly isAnonymous: boolean } | null;
 
+/**
+ * La cadence de la socket, par compte, AVANT toute lecture de l'annuaire : les débits par
+ * génération du relais (4 demandes, 30 messages par heure) bornent ce qui est déposé, celui-ci
+ * borne ce qui est seulement tenté.
+ */
+export const E2EE_VERIFICATION_SOCKET_RATE_LIMIT = { maxRequests: 60, windowMs: 60_000, keyPrefix: 'socket:e2ee:verification' } as const;
+
 export type E2EEDeviceVerificationHandlerDeps = {
   readonly relay: E2EEDeviceVerificationRelay;
   readonly callerOf: (socketId: string) => VerificationSocketCaller;
+  readonly withinRate?: (userId: string) => Promise<boolean>;
 };
 
 type VerificationSocket = {
@@ -45,6 +53,9 @@ export async function handleE2EEDeviceVerification(
   const caller = deps.callerOf(socket.id);
   const sessionId = sessionOf(socket);
   if (!caller || caller.isAnonymous || !sessionId) return refused('Un compte inscrit et une session d’appareil sont requis', E2EE_ERROR_CODES.DEVICE_NOT_BOUND);
+  if (deps.withinRate && !(await deps.withinRate(caller.userId))) {
+    return refused('Trop de messages de comparaison. Patientez avant de réessayer.', DEVICE_VERIFICATION_ERROR_CODES.RATE_LIMITED);
+  }
   try {
     return { success: true, data: await deps.relay.send({ caller: { userId: caller.userId, sessionId }, payload: data }) };
   } catch (error) {

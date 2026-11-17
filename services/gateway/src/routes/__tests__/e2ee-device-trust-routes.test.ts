@@ -132,6 +132,21 @@ describe('`e2ee:send-verification` (#19156)', () => {
     expect(lying).toEqual({ success: false, error: expect.any(String), code: DEVICE_VERIFICATION_ERROR_CODES.FROM_MISMATCH });
   });
 
+  it('au-delà de la cadence de la socket, refuse AVANT toute lecture de l’annuaire', async () => {
+    const { relay, newcomer, store } = await buildApp();
+    const reads = { count: 0 };
+    const findFirst = store.prisma.e2EEDevice.findFirst;
+    store.prisma.e2EEDevice.findFirst = (async (...args: Parameters<typeof findFirst>) => {
+      reads.count += 1;
+      return findFirst(...args);
+    }) as typeof findFirst;
+
+    const ack = await handleE2EEDeviceVerification(socketOf(SESSIONS.newcomer), { to: 'others', message: requestFrom(newcomer) }, { relay, callerOf: caller, withinRate: async () => false });
+
+    expect(ack).toEqual({ success: false, error: expect.any(String), code: DEVICE_VERIFICATION_ERROR_CODES.RATE_LIMITED });
+    expect(reads.count).toBe(0);
+  });
+
   it('écoute `e2ee:send-verification` et répond par l’accusé', async () => {
     const { relay, newcomer } = await buildApp();
     const listeners = new Map<string, (data: unknown, ack?: (response: DeviceVerificationSendAck) => void) => void>();

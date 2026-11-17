@@ -7,7 +7,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { deviceTrustRuntime } from '../../services/e2ee/device-trust-runtime';
 import { e2eeSignalHandlerDeps, listenE2EESignals } from './E2EESignalHandler';
-import { listenE2EEDeviceVerifications } from './E2EEDeviceVerificationHandler';
+import { E2EE_VERIFICATION_SOCKET_RATE_LIMIT, listenE2EEDeviceVerifications } from './E2EEDeviceVerificationHandler';
+import { getSocketRateLimiter } from '../../utils/socket-rate-limiter';
 
 type ChannelSocket = Parameters<typeof listenE2EESignals>[0] & Parameters<typeof listenE2EEDeviceVerifications>[0];
 
@@ -27,5 +28,6 @@ export function listenE2EEDeviceChannels(
       const user = userId ? params.connectedUsers.get(userId) : undefined;
       return userId && user ? { userId, isAnonymous: user.isAnonymous } : null;
     },
+    withinRate: (userId) => getSocketRateLimiter().checkLimit(userId, E2EE_VERIFICATION_SOCKET_RATE_LIMIT),
   });
 }
