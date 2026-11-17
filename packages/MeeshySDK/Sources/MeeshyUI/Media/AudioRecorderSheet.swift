@@ -7,7 +7,7 @@ import MeeshySDK
 
 /// LA feuille d'enregistrement audio, partagée par toutes les surfaces qui
 /// capturent de la voix pour une composition : stories, posts et réels
-/// (2026-08-13 — unification de l'enregistreur vocal des stories et de l'UI
+/// (unification de l'enregistreur vocal des stories et de l'UI
 /// dupliquée d'`AudioPostComposerView`).
 ///
 /// Uses injected AudioRecordingProviding for actual recording logic.
