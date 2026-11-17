@@ -44,6 +44,7 @@ import { refreshParticipantNameSnapshots } from '../../services/participantNameS
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { announceOwnProfileUpdated } from './own-profile-sync';
 
 /**
  * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
@@ -369,6 +370,14 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         announceProfileAccentChange(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
       }
 
+      // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
+      // `user:<moi>` seulement. Les partenaires ont `user:updated` ci-dessus, et sa
+      // charge publique ; une écriture qui ne touche aucun champ de l'instantané
+      // (bio, ville, réglages) ne diffuse rien.
+      if (langChanged || nameChanged) {
+        announceOwnProfileUpdated(fastify, updatedUser);
+      }
+
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(
         {
           bio: body.bio !== undefined,
@@ -493,6 +502,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { avatar: updatedUser.avatar } })
         .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] emitUserUpdated failed', err));
+      announceOwnProfileUpdated(fastify, updatedUser);
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
@@ -589,6 +599,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
       fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { banner: updatedUser.banner } })
         .catch((err: unknown) => logError(fastify.log, '[BANNER_UPDATE] emitUserUpdated failed', err));
+      announceOwnProfileUpdated(fastify, updatedUser);
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 

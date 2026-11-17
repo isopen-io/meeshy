@@ -3,7 +3,8 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { forgetAccountCaches } from './account-caches';
 import { ApiError } from './client';
 import { isMediaAbsent, noteMediaAbsent, resetAbsentMedia } from './media-absent';
-import { CACHE_SCHEMA, createAppQueryClient, persistableQuery, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
+import { apiConfig } from './config';
+import { CACHE_SCHEMA, cacheBuster, cacheBusterFor, createAppQueryClient, persistableQuery, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore } from './session';
 /* La CONSTANTE, jamais son littéral : un `'admin-souverain'` recopié ici
@@ -267,84 +268,64 @@ describe('la session purge le cache', () => {
 });
 
 /**
- * LA MISE À JOUR DE L'APPLICATION JETTE LE CACHE PERSISTÉ — et il ne revient
- * pas (#6936).
- *
- * `discardPersisted()` est appelée juste avant le rechargement qui charge la
- * version neuve. Le piège qu'elle doit fermer n'est pas l'effacement (une
- * ligne) mais la RÉÉCRITURE : `persist` est câblée sur `pagehide` et
- * `visibilitychange`, tous deux déclenchés PAR ce rechargement. Une purge qui
- * n'arrête pas la persistance réécrit la même clé, avec le même `buster`,
- * dans la milliseconde qui suit — elle n'a rien purgé.
- *
- * Et elle ne touche QUE cette clé : la session, les préférences et les
- * brouillons vivent dans le même `localStorage` et doivent survivre à la mise
- * à jour (« en préservant la session », directive porteur 2026-09-17).
+ * UNE NOUVELLE VERSION DE L'APPLICATION GARDE LE CACHE DU LECTEUR (#18923, qui
+ * révise #6936). Le `buster` portait la version de `package.json` : chaque
+ * mise en ligne jetait le cache, et le premier démarrage qui suivait peignait
+ * des squelettes partout puis relisait la liste sur N pages — « cache d'abord,
+ * jamais de spinner sur un cache non vide », démenti à chaque version. Seul un
+ * changement de FORME doit purger, et c'est le rôle de `CACHE_SCHEMA` (tenu
+ * par `persisted-shapes.test.ts`). La session, les préférences et les
+ * brouillons restent hors de ce cache, comme avant.
  */
-describe('la mise à jour de l’application jette le cache persisté, et la session survit', () => {
-  test('la clé du cache part, les autres clés du stockage restent', () => {
-    const storage = fakeStorage();
-    storage.setItem('meeshy.session', '{"user":"ada"}');
-    storage.setItem('meeshy.draft.u_a.c1', 'brouillon');
+describe('une nouvelle version garde le cache persisté ; seul CACHE_SCHEMA le purge', () => {
+  const persistedUnder = (storage: StorageLike, buster: string): void => {
+    const writer = createAppQueryClient({ storage, buster });
+    writer.setQueryData(['conversations'], { pages: [{ conversations: [{ id: 'c-1' }] }], pageParams: ['seed'] });
+    writer.persist();
+  };
 
-    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
-    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
-    client.persist();
+  test('le buster d’un compte ne porte pas la version de l’application', () => {
+    expect(cacheBusterFor('u-1')).not.toContain(__APP_VERSION__);
+    expect(cacheBusterFor('u-1')).toBe(cacheBuster({ schema: CACHE_SCHEMA, apiBase: apiConfig.base, userId: 'u-1' }));
+  });
+
+  test('le schéma, l’origine de l’API et le compte le distinguent encore', () => {
+    const base = { schema: CACHE_SCHEMA, apiBase: 'https://gate.meeshy.me', userId: 'u-1' } as const;
+
+    expect(cacheBuster({ ...base, schema: CACHE_SCHEMA + 1 })).not.toBe(cacheBuster(base));
+    expect(cacheBuster({ ...base, apiBase: 'https://staging.meeshy.me' })).not.toBe(cacheBuster(base));
+    expect(cacheBuster({ ...base, userId: 'u-2' })).not.toBe(cacheBuster(base));
+    expect(cacheBuster({ ...base, userId: null })).not.toBe(cacheBuster(base));
+  });
+
+  test('un cache écrit sous le MÊME schéma par une autre version est relu', () => {
+    const storage = fakeStorage();
+    persistedUnder(storage, cacheBuster({ schema: CACHE_SCHEMA, apiBase: apiConfig.base, userId: 'u-1' }));
+
+    const nextVersion = createAppQueryClient({ storage, buster: cacheBusterFor('u-1') });
+
+    expect(nextVersion.getQueryData(['conversations'])).toEqual({ pages: [{ conversations: [{ id: 'c-1' }] }], pageParams: ['seed'] });
     expect(storage.raw.has('meeshy.query-cache')).toBe(true);
-
-    client.discardPersisted();
-
-    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
-    expect(storage.getItem('meeshy.session')).toBe('{"user":"ada"}');
-    expect(storage.getItem('meeshy.draft.u_a.c1')).toBe('brouillon');
   });
 
-  /* `persist()` EST ce que le `pagehide` du rechargement appelle
-     (`createAppQueryClient` § AUTO-PERSISTANCE) : l'appeler directement teste
-     la même porte sans dépendre d'un DOM. */
-  test('après elle, plus aucun `persist()` ne réécrit la clé — c’est ce que le `pagehide` du rechargement déclenche', () => {
+  test('un cache écrit sous un AUTRE schéma est purgé, jamais hydraté', () => {
     const storage = fakeStorage();
-    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    persistedUnder(storage, cacheBuster({ schema: CACHE_SCHEMA - 1, apiBase: apiConfig.base, userId: 'u-1' }));
+
+    const afterBump = createAppQueryClient({ storage, buster: cacheBusterFor('u-1') });
+
+    expect(afterBump.getQueryData(['conversations'])).toBeUndefined();
+    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+  });
+
+  test('le client ne jette plus son cache : rien ne l’y invite, et un rechargement le relit', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: cacheBusterFor('u-1') });
     client.setQueryData(['conversations'], [{ id: 'c-1' }]);
     client.persist();
 
-    client.discardPersisted();
-    client.persist();
-
-    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
-  });
-
-  test('une écriture de cache APRÈS elle ne rallume pas la persistance', async () => {
-    const storage = fakeStorage();
-    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
-
-    client.discardPersisted();
-    client.setQueryData(['conversations'], [{ id: 'c-2' }]);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
-  });
-
-  test('le cache EN MÉMOIRE reste servi — la page qui part ne se vide pas à l’écran', () => {
-    const storage = fakeStorage();
-    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
-    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
-
-    client.discardPersisted();
-
-    expect(client.getQueryData(['conversations'])).toEqual([{ id: 'c-1' }]);
-  });
-
-  test('la version NEUVE ne relit rien — le cache jeté ne se réhydrate pas', () => {
-    const storage = fakeStorage();
-    const ancienne = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
-    ancienne.setQueryData(['conversations'], [{ id: 'c-1' }]);
-    ancienne.persist();
-    ancienne.discardPersisted();
-
-    const neuve = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
-
-    expect(neuve.getQueryData(['conversations'])).toBeUndefined();
+    expect('discardPersisted' in client).toBe(false);
+    expect(createAppQueryClient({ storage, buster: cacheBusterFor('u-1') }).getQueryData(['conversations'])).toEqual([{ id: 'c-1' }]);
   });
 });
 

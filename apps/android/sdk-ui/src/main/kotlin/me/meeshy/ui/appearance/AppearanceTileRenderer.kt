@@ -19,7 +19,7 @@ import me.meeshy.sdk.model.appearance.AppearanceTilePlan
 
 /**
  * Le rendu d'une tuile de motif (spec § 8.2) : hors écran, déterministe, depuis les MÊMES chemins que le web
- * et iOS (`SvgPathData`). Les nombres du contrat sont en unités de tuile ; l'échelle du modèle agrandit la
+ * et iOS. Les nombres du contrat sont en unités de tuile ; l'échelle du modèle agrandit la
  * tuile, jamais l'épaisseur seule.
  */
 internal object AppearanceTileRenderer {

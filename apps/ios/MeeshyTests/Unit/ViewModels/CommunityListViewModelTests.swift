@@ -33,6 +33,7 @@ final class CommunityListViewModelTests: XCTestCase {
     }
 
     func test_loadIfNeeded_secondAppel_neRappellePasLeService() async {
+        await CacheCoordinator.shared.communities.invalidate(for: "list")
         let service = MockCommunityService()
         let sut = CommunityListViewModel(service: service)
 
@@ -40,6 +41,73 @@ final class CommunityListViewModelTests: XCTestCase {
         await sut.loadIfNeeded()
 
         XCTAssertEqual(service.listCallCount, 1)
+    }
+
+    // MARK: - Cache-first (#18935)
+
+    /// L'écran des communautés n'avait aucun cache : un indicateur à chaque
+    /// ouverture, et une liste vide hors ligne. Il se peint désormais depuis
+    /// « mes communautés », puis se revalide en silence.
+    func test_loadIfNeeded_withCachedCommunities_paintsBeforeNetwork() async throws {
+        let store = await CacheCoordinator.shared.communities
+        try await store.save([CommunityStubs.community(id: "a")], for: "list")
+        await store.debugRewindFetchTimestamp(by: 600, for: "list")
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a"), CommunityStubs.community(id: "b", name: "Beta")]))
+        let sut = CommunityListViewModel(service: service)
+        var firstPaint: [String]?
+        var networkCallsAtFirstPaint: Int?
+        var loadingAtFirstPaint: Bool?
+        let revalidated = expectation(description: "revalidée en silence")
+        revalidated.assertForOverFulfill = false
+        let watch = sut.$communities.dropFirst().sink { communities in
+            if firstPaint == nil {
+                firstPaint = communities.map(\.id)
+                networkCallsAtFirstPaint = service.listCallCount
+                loadingAtFirstPaint = sut.isLoading
+            }
+            if communities.count == 2 { revalidated.fulfill() }
+        }
+
+        await sut.loadIfNeeded()
+        await fulfillment(of: [revalidated], timeout: 2)
+        watch.cancel()
+        await store.invalidate(for: "list")
+
+        XCTAssertEqual(firstPaint, ["a"], "le cache se peint d'abord")
+        XCTAssertEqual(networkCallsAtFirstPaint, 0, "avant tout appel réseau")
+        XCTAssertEqual(loadingAtFirstPaint, false, "aucun indicateur sur un cache non vide")
+        XCTAssertEqual(sut.communities.map(\.id), ["a", "b"])
+    }
+
+    func test_loadIfNeeded_offlineWithCachedCommunities_keepsThem() async throws {
+        let store = await CacheCoordinator.shared.communities
+        try await store.save([CommunityStubs.community(id: "a")], for: "list")
+        await store.debugRewindFetchTimestamp(by: 25 * 3600, for: "list")
+        let service = MockCommunityService()
+        service.listResult = .failure(URLError(.notConnectedToInternet))
+        let sut = CommunityListViewModel(service: service)
+
+        await sut.loadIfNeeded()
+        await store.invalidate(for: "list")
+
+        XCTAssertEqual(sut.communities.map(\.id), ["a"], "hors ligne, le disque reste à l'écran")
+        XCTAssertFalse(sut.isLoading)
+    }
+
+    func test_refresh_freshCache_stillAsksTheNetworkAndKeepsTheFirstPage() async throws {
+        let store = await CacheCoordinator.shared.communities
+        try await store.save([CommunityStubs.community(id: "a")], for: "list")
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "b", name: "Beta")]))
+        let sut = CommunityListViewModel(service: service)
+
+        await sut.refresh()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(service.listCallCount, 1, "tirer pour rafraîchir interroge toujours le serveur")
+        XCTAssertEqual(cached, ["b"], "la première page servie devient « mes communautés »")
     }
 
     func test_load_echec_gardeLaListeEtNeLeveRien() async {
@@ -94,5 +162,87 @@ final class CommunityListViewModelTests: XCTestCase {
         sut.apply(CommunityStubs.communityUpdated(communityId: "ghost", name: "Fantôme"))
 
         XCTAssertEqual(sut.communities.map(\.name), ["Alpha"])
+    }
+}
+
+/// « Mes communautés » (#18935) — la source que la bande Communautés observe :
+/// témoins sur le modèle, puisque le repeint d'un `@State` de vue ne se prouve
+/// pas sans lui.
+@MainActor
+final class MyCommunitiesTests: XCTestCase {
+
+    private func seed(_ ids: [String]) async throws -> GRDBCacheStore<String, APICommunity> {
+        let store = await CacheCoordinator.shared.communities
+        await store.invalidate(for: "list")
+        try await store.save(ids.map { CommunityStubs.community(id: $0, name: "Club \($0)") }, for: "list")
+        return store
+    }
+
+    func test_load_freshCache_publishesItWithoutTheNetwork() async throws {
+        let store = try await seed(["c1", "c2"])
+        let service = MockCommunityService()
+        let sut = MyCommunities(service: service)
+
+        await sut.load()
+        await store.invalidate(for: "list")
+
+        XCTAssertEqual(sut.communities.map(\.id), ["c1", "c2"])
+        XCTAssertEqual(service.listCallCount, 0)
+    }
+
+    func test_remove_dropsItFromTheStripAndTheCache() async throws {
+        let store = try await seed(["c1", "c2"])
+        let sut = MyCommunities(service: MockCommunityService())
+        await sut.load()
+        var repainted: [[String]] = []
+        let watch = sut.$communities.dropFirst().sink { repainted.append($0.map(\.id)) }
+
+        await sut.remove(communityId: "c1")
+
+        watch.cancel()
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(repainted, [["c2"]], "la bande se repeint sans la communauté quittée")
+        XCTAssertEqual(cached, ["c2"], "et la feuille de partage ne la propose plus")
+    }
+
+    func test_add_insertsItAtTheHeadOnce() async throws {
+        let store = try await seed(["c2"])
+        let sut = MyCommunities(service: MockCommunityService())
+        await sut.load()
+
+        await sut.add(CommunityStubs.community(id: "c1", name: "Club Lecture"))
+        await sut.add(CommunityStubs.community(id: "c1", name: "Club Lecture"))
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(sut.communities.map(\.id), ["c1", "c2"])
+        XCTAssertEqual(cached, ["c1", "c2"])
+    }
+
+    func test_communityUpdated_repaintsTheStripRow() async throws {
+        let store = try await seed(["c1"])
+        let sut = MyCommunities(service: MockCommunityService(), communityUpdates: Empty().eraseToAnyPublisher())
+        await sut.load()
+        await store.invalidate(for: "list")
+
+        sut.apply(CommunityStubs.communityUpdated(communityId: "c1", name: "Club renommé"))
+
+        XCTAssertEqual(sut.communities.map(\.name), ["Club renommé"])
+    }
+
+    func test_refresh_freshCache_stillAsksTheNetwork() async throws {
+        let store = try await seed(["c1"])
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "c3", name: "Club Neuf")]))
+        let sut = MyCommunities(service: service)
+
+        await sut.refresh()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(service.listCallCount, 1, "tirer pour rafraîchir ne s'arrête pas au cache frais")
+        XCTAssertEqual(sut.communities.map(\.id), ["c3"])
+        XCTAssertEqual(cached, ["c3"])
     }
 }

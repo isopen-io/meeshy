@@ -19,7 +19,7 @@ import MeeshySDK
 /// palette 39 couleurs) pour les 4 derniers. La normalisation
 /// type-fil→type-contexte (`public`/`global`/`broadcast`/`community` →
 /// `.community`) passe par `MeeshyConversation.computeColorPalette`
-/// (`CoreModels.swift`) — l'adaptateur RÉEL et déjà en production, cité
+/// (`MeeshyConversation.swift`) — l'adaptateur RÉEL et déjà en production, cité
 /// comme source de vérité par le miroir TS lui-même
 /// (`packages/shared/utils/conversation-colors.ts`,
 /// `WIRE_TYPE_TO_CONTEXT_TYPE`) — jamais une réimplémentation locale de ce
@@ -212,8 +212,8 @@ final class AccentVectorTests: XCTestCase {
 
     /// Calcule `{primary, secondary, accent}` via l'API RÉELLE — la
     /// normalisation type-fil→type-contexte passe par
-    /// `MeeshyConversation.computeColorPalette` (`CoreModels.swift`
-    /// L537-551), PAS par une réimplémentation locale du switch
+    /// `MeeshyConversation.computeColorPalette` (`MeeshyConversation.swift`),
+    /// PAS par une réimplémentation locale du switch
     /// `public/global/community/broadcast → .community` : c'est la SEULE
     /// source de vérité Swift pour ce mapping, citée comme telle par
     /// `conversation-colors.ts` (`WIRE_TYPE_TO_CONTEXT_TYPE`, commentaire

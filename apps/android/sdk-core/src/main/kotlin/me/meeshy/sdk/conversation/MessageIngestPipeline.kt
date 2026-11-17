@@ -8,8 +8,8 @@ import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ConversationEventDeltas
+import me.meeshy.sdk.model.MessageMergeGuards
 import me.meeshy.sdk.model.MessageMergePolicy
-import me.meeshy.sdk.model.PendingMessageMutations
 import me.meeshy.sdk.model.ReplyReferenceBuilder
 import me.meeshy.sdk.model.PendingRowEventReplay
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
@@ -46,7 +46,7 @@ internal class MessageIngestPipeline(
     suspend fun ingest(messages: List<ApiMessage>, nowMillis: Long): Set<String> {
         if (messages.isEmpty()) return emptySet()
         val settlements = media?.let { mutableListOf<LocalFilesSettlement>() }
-        val changed = database.withTransaction { mergeInTransaction(messages, nowMillis, settlements = settlements) }
+        val changed = database.withTransaction { mergeInTransaction(messages, nowMillis, settlements = settlements).conversations }
         settlements?.forEach { media?.settle(it.previous, it.written) }
         return changed
     }
@@ -55,26 +55,41 @@ internal class MessageIngestPipeline(
     internal class LocalFilesSettlement(val previous: List<ApiMessageAttachment>, val written: List<ApiMessageAttachment>)
 
     /**
+     * Ce qu'une fusion a écrit : les [conversations] réellement changées, et si elle a tenu à l'écart des réactions ou un
+     * épinglage que la charge servait ([disavowedServed], #18915) — la page ne décrit alors plus toutes ses lignes.
+     */
+    internal class Merged(val conversations: Set<String>, val disavowedServed: Boolean)
+
+    /** Une ligne fusionnée, et le fait que sa fusion a tenu à l'écart des valeurs servies. */
+    private class MergedRow(val row: MessageEntity, val disavowed: Boolean)
+
+    /**
      * Fusionne [messages] — À APPELER dans la transaction de l'appelant (une page REST et son
      * élagage ne font qu'une écriture). [conversationId] range la page sous la conversation
-     * synchronisée ; `null` garde celle de chaque message. Rend les conversations écrites.
+     * synchronisée ; `null` garde celle de chaque message. Rend les conversations écrites ([Merged]).
      *
      * Lève [PendingOutboxReadException] quand l'outbox est illisible : la transaction est alors
      * abandonnée plutôt que d'écraser une mutation en attente.
+     *
+     * [heldBefore] — les lignes telles qu'une revalidation les a trouvées AVANT sa requête (#18915) : une ligne qu'une
+     * autre écriture a touchée pendant le vol garde ses réactions et son épinglage, que la page, bâtie avant, ignore
+     * ([MessageMergePolicy.mergeOverFlightWrite]).
      */
     suspend fun mergeInTransaction(
         messages: List<ApiMessage>,
         nowMillis: Long,
         conversationId: String? = null,
         settlements: MutableList<LocalFilesSettlement>? = null,
-    ): Set<String> {
-        if (messages.isEmpty()) return emptySet()
+        heldBefore: HeldRowVersions? = null,
+    ): Merged {
+        if (messages.isEmpty()) return Merged(emptySet(), disavowedServed = false)
         val pending = outboxGuard.load()
         val messageDao = database.messageDao()
         val writes = LinkedHashMap<String, MessageEntity>()
         val replacedLocalIds = mutableSetOf<String>()
         val replacements = mutableListOf<Pair<MessageEntity, ApiMessage>>()
         val changed = mutableSetOf<String>()
+        val disavowed = mutableSetOf<String>()
         val rowIdOfMessage = HashMap<String, String>()
         val baseOfRow = HashMap<String, MessageEntity>()
         val latest = latestPerId(messages)
@@ -89,7 +104,9 @@ internal class MessageIngestPipeline(
             // Une vue unique déjà ouverte par ce lecteur entre scellée, même à sa première ingestion (#15897).
             val incoming = if (base == null) sealedIfOpened(ReplyReferenceBuilder.engrave(served), openedHere = false) else served
             val fresh = MessageEntityFactory.cached(incoming, cachedAt = nowMillis, conversationId = filedUnder)
-            val row = if (base == null) fresh else merged(base, incoming, fresh, pending)
+            val merge = base?.let { merged(it, incoming, fresh, pending.guardsFor(incoming.id), heldBefore?.movedSince(it) == true) }
+            val row = merge?.row ?: fresh
+            if (merge?.disavowed == true) disavowed += incoming.id
             rowIdOfMessage[incoming.id] = row.id
             if (base != null) baseOfRow[row.id] = base
             listOfNotNull(direct, optimistic).filter { it.id != row.id }.forEach {
@@ -121,7 +138,7 @@ internal class MessageIngestPipeline(
         retained.supersededAttachments.forEach { (keys, changes) -> DedicatedTranslationRows.supersedeAttachments(database, keys, changes) }
         regime?.learnFromServed(latest, conversationId)
         erasures?.recordServedGone(latest)
-        return changed
+        return Merged(changed, disavowedServed = disavowed.isNotEmpty())
     }
 
     /**
@@ -157,21 +174,30 @@ internal class MessageIngestPipeline(
      * La ligne [base] après fusion de [incoming] : payload et colonnes dérivées recalculés depuis
      * le message fusionné, colonnes locales gardées. Une bulle optimiste (autre clé primaire)
      * devient la ligne serveur : seul l'état « vue unique ouverte » la suit, ses tentatives d'envoi
-     * appartenaient à l'envoi désormais acquitté.
+     * appartenaient à l'envoi désormais acquitté. [overFlightWrite] : une autre écriture a touché
+     * [base] pendant le vol de la page (#18915).
      */
     private fun merged(
         base: MessageEntity,
         incoming: ApiMessage,
         fresh: MessageEntity,
-        pending: PendingMessageMutations,
-    ): MessageEntity {
+        guards: MessageMergeGuards,
+        overFlightWrite: Boolean,
+    ): MergedRow {
         val openedHere = base.viewOnceOpenedAt != null
         val cached = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(base.payload) }.getOrNull()
-            ?: return MessageEntityFactory.refreshed(fresh, sealedIfOpened(incoming, openedHere)).copy(
-                viewOnceOpenedAt = base.viewOnceOpenedAt ?: fresh.viewOnceOpenedAt,
-                changeVersion = base.changeVersion + 1,
+            ?: return MergedRow(
+                MessageEntityFactory.refreshed(fresh, sealedIfOpened(incoming, openedHere)).copy(
+                    viewOnceOpenedAt = base.viewOnceOpenedAt ?: fresh.viewOnceOpenedAt,
+                    changeVersion = base.changeVersion + 1,
+                ),
+                disavowed = false,
             )
-        val outcome = MessageMergePolicy.merge(cached, incoming, pending.guardsFor(incoming.id))
+        val outcome = if (overFlightWrite) {
+            MessageMergePolicy.mergeOverFlightWrite(cached, incoming, guards)
+        } else {
+            MessageMergePolicy.merge(cached, incoming, guards)
+        }
         val sameRow = base.id == fresh.id
         val rebuilt = MessageEntityFactory.refreshed(fresh, sealedIfOpened(outcome.message, openedHere)).copy(
             createdAt = isoToEpochMillisOrNull(outcome.message.createdAt) ?: base.createdAt,
@@ -179,11 +205,12 @@ internal class MessageIngestPipeline(
             viewOnceOpenedAt = base.viewOnceOpenedAt ?: fresh.viewOnceOpenedAt,
             changeVersion = base.changeVersion + 1,
         )
-        return if (sameRow) {
+        val row = if (sameRow) {
             rebuilt.copy(retryCount = base.retryCount, lastError = base.lastError, sendState = base.sendState)
         } else {
             rebuilt
         }
+        return MergedRow(row, outcome.disavowed)
     }
 
     /**

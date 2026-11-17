@@ -12,6 +12,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationLastMessage
@@ -246,6 +247,8 @@ class ConversationLivePatcherTest {
     fun `being banned or leaving removes the row and invalidates its cached messages`() = runTest {
         seed(group("c1"))
         seed(group("c2"))
+        db.syncMetaDao().upsert(SyncMetaEntity("messages:c1", lastSyncedAt = 1L, etag = "\"e1\""))
+        db.syncMetaDao().upsert(SyncMetaEntity("messages:c2", lastSyncedAt = 1L, etag = "\"e2\""))
         val p = patcher()
 
         p.applyBanned(ParticipantBannedEvent(conversationId = "c1", userId = "me"))
@@ -253,6 +256,9 @@ class ConversationLivePatcherTest {
 
         assertThat(stored("c1")).isNull()
         assertThat(stored("c2")).isNull()
+        // #19050 — a thread whose messages left the cache keeps no validator: a 304 would confirm it empty.
+        assertThat(db.syncMetaDao().etag("messages:c1")).isNull()
+        assertThat(db.syncMetaDao().lastSyncedAt("messages:c2")).isNull()
     }
 
     @Test

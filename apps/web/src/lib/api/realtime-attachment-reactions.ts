@@ -69,19 +69,22 @@ export function applyAttachmentReactionUpdate(
   if (attachments === undefined || !attachments.some((a) => a.id === data.attachmentId)) return;
 
   const mineMoved = typeof data.userId === 'string' && data.userId === viewerId;
-  const next: Message = {
-    ...existing,
-    attachments: attachments.map((a) =>
-      a.id === data.attachmentId
-        ? {
-            ...a,
-            reactionSummary: { ...data.reactionSummary },
-            ...(mineMoved ? { currentUserReactions: nextMine(a.currentUserReactions, data.emoji, data.action) } : {}),
-          }
-        : a,
-    ),
-  };
-  patchThreadMessages(queryClient, data.conversationId, (messages) =>
-    messages.map((m) => (m.id === data.messageId ? next : m)),
-  );
+  /* Calculé SUR la rangée reçue, jamais sur un instantané : une relecture en
+     vol rejoue cette écriture sur sa réponse (#18914). */
+  const counted = (message: Message): Message =>
+    message.attachments === undefined
+      ? message
+      : {
+          ...message,
+          attachments: message.attachments.map((a) =>
+            a.id === data.attachmentId
+              ? {
+                  ...a,
+                  reactionSummary: { ...data.reactionSummary },
+                  ...(mineMoved ? { currentUserReactions: nextMine(a.currentUserReactions, data.emoji, data.action) } : {}),
+                }
+              : a,
+          ),
+        };
+  patchThreadMessages(queryClient, data.conversationId, (messages) => messages.map((m) => (m.id === data.messageId ? counted(m) : m)));
 }

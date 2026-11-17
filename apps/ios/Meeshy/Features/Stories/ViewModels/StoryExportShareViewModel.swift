@@ -66,7 +66,7 @@ final class StoryExportShareViewModel: ObservableObject {
     ///
     /// La résolution est BORNÉE par `introTimeout` — LA MÊME borne que les
     /// autres chemins d'export (`StoryPhotoSaveService`,
-    /// `TimelineExportController.introTimeout`), domiciliée à côté du mécanisme
+    /// `ComposerSceneExportController.introTimeout`), domiciliée à côté du mécanisme
     /// lui-même : `BoundedAsyncResolution.defaultTimeout`.
     ///
     /// Revue finale (item 4) : « Partager » était le SEUL des trois chemins à

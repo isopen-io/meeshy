@@ -714,7 +714,7 @@ struct ComposerObjectEditorView: View {
             // **POLICE n'est pas un cas particulier** : les éléments Effets et Polices
             // sont alignés correctement, et tout entre bien dans le viewport.
             //
-            // Servie par `TextStyleSpecimenBand` — le spécimen `2e`, le vrai texte sur
+            // Servie par une bande de spécimens — le spécimen `2e`, le vrai texte sur
             // son vrai fond —, une bande HORIZONTALE à deux rangs verrait ses dix-huit
             // vignettes s'étendre de x=16 à **x=512 sur un écran de 402 points** : neuf
             // polices sur dix-huit hors du champ, atteignables par un défilement latéral
@@ -749,10 +749,9 @@ struct ComposerObjectEditorView: View {
         .padding(.bottom, 28)
     }
 
-    // Pas de `styleSection` : elle monterait `TextStyleSpecimenBand` pour la
+    // Pas de `styleSection` : elle monterait une bande de spécimens pour la
     // seule POLICE, et c'est ce cas particulier qui laisserait neuf polices hors
-    // du champ. Le spécimen sur le vrai texte reste disponible dans le SDK ; il
-    // n'a simplement pas d'hôte ici.
+    // du champ.
 
 
     // MARK: - D'où à où, et le plan 2D

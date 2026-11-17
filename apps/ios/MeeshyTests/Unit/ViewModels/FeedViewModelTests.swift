@@ -509,6 +509,27 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(cached?.likes, 8)
     }
 
+    /// #18939 — un like puis son retrait, rapides : chaque copie du post en cache
+    /// finit dans l'état FINAL. Deux `Task.detached` non ordonnés pouvaient poser
+    /// le retrait AVANT le like et laisser les clés détail, favoris et réels
+    /// « aimé » jusqu'à l'écho du socket. Le témoin lit l'ORDRE des patchs.
+    func test_likePost_likeThenUnlike_patchesEveryCopyInTheOrderOfTheGestures() async {
+        let store = RecordingFeedCacheStore()
+        let (sut, api, _, _) = makeSUT(feedCache: store)
+        let post = Self.makeAPIPost(id: "order-test", likeCount: 4)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
+        await sut.loadFeed(forceRefresh: true)
+        try? await store.save([sut.posts[0]], for: "order-test")
+
+        await sut.likePost("order-test")
+        await sut.likePost("order-test")
+
+        XCTAssertEqual(store.likePatches, [true, false], "the like, then its withdrawal — never reversed, never pending")
+        XCTAssertEqual(store.items(for: "order-test")?.first?.isLiked, false)
+        XCTAssertEqual(store.items(for: "order-test")?.first?.likes, 4)
+        XCTAssertEqual(store.items(for: "main-feed")?.first?.isLiked, false)
+    }
+
     func test_likePost_failure_rollsBackIsLikedAndCount() async {
         // T10b — likePost now routes through the outbox, so "failure" means the
         // enqueue is refused (not a direct API error). Rollback semantics unchanged.
@@ -2404,6 +2425,53 @@ private final class GatedFeedCacheStore: FeedCacheStoring {
         released = true
         gate.forEach { $0.resume() }
         gate.removeAll()
+    }
+
+    func items(for key: String) -> [FeedPost]? { storage[key] }
+}
+
+// MARK: - Recording feed cache double
+
+/// Magasin de cache du fil en mémoire qui ENREGISTRE l'état « aimé » que chaque
+/// `patchEverywhere` pose (#18939) : le témoin lit l'ordre des écritures, pas
+/// seulement leur dernier état.
+@MainActor
+private final class RecordingFeedCacheStore: FeedCacheStoring {
+    private var storage: [String: [FeedPost]] = [:]
+    private(set) var likePatches: [Bool] = []
+    nonisolated deinit {}
+
+    func load(for key: String) async -> CacheResult<[FeedPost]> {
+        guard let items = storage[key] else { return .empty }
+        return .fresh(items, age: 0)
+    }
+
+    func save(_ items: [FeedPost], for key: String) async throws {
+        storage[key] = items
+    }
+
+    func savePreservingFreshness(_ items: [FeedPost], for key: String) async throws {
+        storage[key] = items
+    }
+
+    func patchEverywhere(itemId: String, mutate: @Sendable (inout FeedPost) -> Void) async {
+        for (key, items) in storage {
+            storage[key] = items.map { item in
+                guard item.id == itemId else { return item }
+                var copy = item
+                mutate(&copy)
+                return copy
+            }
+        }
+        if let patched = storage.values.flatMap({ $0 }).first(where: { $0.id == itemId }) {
+            likePatches.append(patched.isLiked)
+        }
+    }
+
+    func removeEverywhere(itemId: String) async {
+        for (key, items) in storage {
+            storage[key] = items.filter { $0.id != itemId }
+        }
     }
 
     func items(for key: String) -> [FeedPost]? { storage[key] }

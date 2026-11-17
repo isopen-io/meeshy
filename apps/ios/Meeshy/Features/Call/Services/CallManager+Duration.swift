@@ -1,12 +1,10 @@
 import Foundation
 import AVFoundation
-@preconcurrency import CallKit
 import Combine
 import Network
 import UIKit
 import MeeshySDK
 import MeeshyUI
-@preconcurrency import WebRTC
 import os
 
 /// La durée d'un appel telle qu'on la LIT (« 02:05 ») et telle qu'on l'ENTEND

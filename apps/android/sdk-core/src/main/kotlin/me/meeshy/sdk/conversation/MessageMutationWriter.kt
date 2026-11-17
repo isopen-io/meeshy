@@ -75,9 +75,9 @@ internal class MessageMutationWriter(
 
     /**
      * Applies a `message:edited` frame — the gateway's FULL message, edited in place
-     * (a text edit, or a live call notice turned terminal) — over the cached row. The
-     * forward-watermark refresh never re-reads a message whose `createdAt` did not move,
-     * so without this the cached copy stays the old one. Returns `false` (nothing
+     * (a text edit, or a live call notice turned terminal) — over the cached row. A
+     * refresh only re-reads the recent window (#18915): beyond it, and between two
+     * refreshes, this frame is what reaches the cached copy. Returns `false` (nothing
      * written) when this device never cached the message or only holds its optimistic
      * local bubble.
      */

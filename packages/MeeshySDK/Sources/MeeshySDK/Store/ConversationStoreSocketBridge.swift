@@ -93,6 +93,11 @@ public final class ConversationStoreSocketBridge {
     /// Multi-fenêtre : TOUTE conversation qu'une scène affiche, pas seulement la dernière ouverte.
     private let isConversationOpen: @Sendable (String) -> Bool
 
+    /// La relecture des préférences par conversation CHANGÉES depuis un
+    /// filigrane serveur (#18916) — `GET /user-preferences/conversations`.
+    /// Injectée pour que le pont se teste sans réseau.
+    private let fetchChangedPreferences: @Sendable @concurrent (_ changedSince: Date?) async throws -> [APIConversationPreferences]
+
     public init(
         store: ConversationStore = .shared,
         categoryStore: UserCategoryStore = .shared,
@@ -101,13 +106,17 @@ public final class ConversationStoreSocketBridge {
             guard let api = try? await ConversationService.shared.getById(conversationId) else { return nil }
             return api.toConversation(currentUserId: me)
         },
-        isConversationOpen: @escaping @Sendable (String) -> Bool = { ConversationSyncEngine.shared.isConversationOpen($0) }
+        isConversationOpen: @escaping @Sendable (String) -> Bool = { ConversationSyncEngine.shared.isConversationOpen($0) },
+        fetchChangedPreferences: @escaping @Sendable (_ changedSince: Date?) async throws -> [APIConversationPreferences] = { changedSince in
+            try await PreferenceService.shared.conversationPreferences(changedSince: changedSince)
+        }
     ) {
         self.store = store
         self.categoryStore = categoryStore
         self.currentUserId = currentUserId
         self.fetchConversation = fetchConversation
         self.isConversationOpen = isConversationOpen
+        self.fetchChangedPreferences = fetchChangedPreferences
     }
 
     /// Wire the shared socket manager's broadcasts to the stores.
@@ -379,9 +388,17 @@ public final class ConversationStoreSocketBridge {
 
     // Les rattrapages réseau ont leur file : un `flushOutbox` ou une
     // hydratation lents ne retiennent aucun événement.
+    //
+    // Les préférences par conversation se relisent à chaque reconnexion ET
+    // après la première hydratation du store (#18916) : `didReconnect` ne part
+    // pas au premier connect, et `applyServedPreferences` ignore une
+    // conversation que le store ne connaît pas encore. Le filigrane vit le
+    // temps d'une activation — un autre compte repart de zéro.
     private func wireCatchUp(_ feeds: ConversationStoreSocketFeeds, on lane: OrderedEventLane) {
         let store = self.store
         let categoryStore = self.categoryStore
+        let fetchChanged = self.fetchChangedPreferences
+        let watermark = Locked<Date?>(nil)
 
         feeds.didReconnect
             .relay(through: lane) { _ in
@@ -392,8 +409,37 @@ public final class ConversationStoreSocketBridge {
                     // Les catégories restent celles du dernier chargement.
                     Logger.socket.error("Category store hydration failed after socket event: \(error.localizedDescription, privacy: .public)")
                 }
+                await Self.catchUpServedPreferences(into: store, fetchingWith: fetchChanged, watermark: watermark)
             }
             .store(in: &cancellables)
+
+        store.listPublisher()
+            .first { @Sendable conversations in !conversations.isEmpty }
+            .map { @Sendable _ in () }
+            .relay(through: lane) { _ in
+                await Self.catchUpServedPreferences(into: store, fetchingWith: fetchChanged, watermark: watermark)
+            }
+            .store(in: &cancellables)
+    }
+
+    nonisolated static func catchUpServedPreferences(
+        into store: ConversationStore,
+        fetchingWith fetchChanged: @Sendable @concurrent (_ changedSince: Date?) async throws -> [APIConversationPreferences],
+        watermark: Locked<Date?>
+    ) async {
+        do {
+            let served = try await fetchChanged(watermark.read { $0 })
+            await store.applyServedPreferences(served)
+            watermark.mutate { $0 = ConversationStoreSocketBridge.servedWatermark(after: $0, rows: served) }
+        } catch {
+            // Le filigrane ne bouge pas : la prochaine relecture reprend la fenêtre.
+            Logger.socket.error("Served conversation preferences not caught up: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Le plus récent `updatedAt` SERVI — jamais l'horloge de l'appareil.
+    nonisolated static func servedWatermark(after current: Date?, rows: [APIConversationPreferences]) -> Date? {
+        ([current] + rows.map(\.updatedAt)).compactMap { $0 }.max()
     }
 
     /// Drop all subscriptions (e.g. on logout).

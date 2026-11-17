@@ -375,7 +375,7 @@ extension iPadRootView {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .contactRecentlyActive, .deviceBattery, .deviceUnreachable, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
@@ -423,7 +423,7 @@ extension iPadRootView {
              .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
              .storyReaction, .statusReaction, .contentRemoved,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
-             .friendNewStory, .friendNewMood:
+             .friendNewStory, .friendNewMood, .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote:
             openSocialNotification(ctx)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:

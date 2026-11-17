@@ -13,9 +13,8 @@ import Foundation
 /// Valeur pure (struct), triviale à tester en isolation. Le câblage sur le
 /// vrai flux + le déclenchement d'une resync sur gap détecté = A5.2.
 ///
-/// **Miroirs** : `apps/web/lib/sync/sync-seq-state.ts` et
-/// `apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/sync/SyncSeqState.kt`
-/// portent la MÊME règle (détecter avant d'enregistrer, jamais de gap au premier
+/// **Miroir** : `apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/sync/SyncSeqState.kt`
+/// porte la MÊME règle (le miroir du web legacy est parti avec lui au #7668) (détecter avant d'enregistrer, jamais de gap au premier
 /// event, jamais de régression du curseur, `nil`/absence de `_seq` = no-op).
 /// Toute évolution de la règle touche les TROIS fichiers — une divergence
 /// fabriquerait des faux trous sur une plateforme et des trous manqués sur une

@@ -333,6 +333,12 @@ const dragEach = async (page, cdp, selector) => {
   const results = [];
   for (let index = 0; index < count; index += 1) {
     const track = page.locator(selector).nth(index);
+    /* Le carrousel vient de s'ouvrir : on attend qu'il ait posé ses vignettes (sa marge de défilement) avant de la mesurer — une mesure trop tôt lisait 0 et passait pour « rien à faire défiler ». */
+    await track.evaluate((element) => new Promise((resolve) => {
+      const started = performance.now();
+      const read = () => (element.scrollWidth - element.clientWidth > 1 || performance.now() - started > 3000 ? resolve(null) : requestAnimationFrame(read));
+      read();
+    })).catch(() => null);
     const box = await track.boundingBox();
     const room = await track.evaluate((element) => element.scrollWidth - element.clientWidth);
     if (box === null || room <= 1) {
@@ -665,6 +671,22 @@ try {
       check(await until(page, () => document.querySelector('[data-call-rails="shown"]') !== null && [...document.querySelectorAll('[data-call-rail-scroll]')].some((rail) => rail.scrollHeight - rail.clientHeight > 1)), 'doigt : en paysage (568 × 320), un rail déborde et défile sur place');
       /* Ma vignette rejoint son coin de paysage en glissant (`useFlip`, une animation Web) : on la mesure posée. */
       await until(page, () => (document.querySelector('[data-call-corner-frame]')?.getAnimations().length ?? 0) === 0, undefined, 2000);
+      /* Le glissé ne démarre qu'à l'image suivant le changement de taille : « aucune animation » peut être lu AVANT qu'elle parte. On attend donc aussi que le coin ne bouge plus pendant douze images de suite. */
+      await until(page, () => new Promise((resolve) => {
+        const corner = document.querySelector('[data-call-corner-frame]');
+        const key = () => { const box = corner?.getBoundingClientRect(); return box ? [box.x, box.y, box.width, box.height].map((value) => Math.round(value * 10)).join(',') : ''; };
+        let last = key();
+        let still = 0;
+        const started = performance.now();
+        const step = () => {
+          const now = key();
+          still = now === last && (corner?.getAnimations().length ?? 0) === 0 ? still + 1 : 0;
+          last = now;
+          if (still >= 12 || performance.now() - started > 4000) resolve(true);
+          else requestAnimationFrame(step);
+        };
+        step();
+      }), undefined, 6000);
       const landscape = await railsOf(page);
       check(landscape.length === 2 && landscape.every((rail) => rail.clearOfTile && rail.fade), `doigt : en paysage, aucun rail ne recouvre ma vignette, et ce qui y défile s’estompe à ses deux bords (${JSON.stringify(landscape.map((rail) => [rail.family, rail.clearOfTile, rail.fade, rail.box, rail.tile]))})`);
       const slid = await page.evaluate(() => [...document.querySelectorAll('[data-call-rail]')].map((rail) => ({ family: rail.getAttribute('data-call-rail'), room: Math.round((rail.querySelector('[data-call-rail-scroll]')?.scrollHeight ?? 0) - (rail.querySelector('[data-call-rail-scroll]')?.clientHeight ?? 0)), box: rail.getBoundingClientRect().toJSON() })).filter((rail) => rail.room > 1));

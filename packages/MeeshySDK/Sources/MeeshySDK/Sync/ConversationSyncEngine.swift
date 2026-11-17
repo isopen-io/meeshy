@@ -56,6 +56,12 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// dénormalisé de SES messages suit, toutes conversations confondues
     /// (`MessagePersistenceActor.repaintSender`).
     case senderRepainted(UserUpdatedEvent)
+    /// `message:attachment-updated` (#18934) — transcription et pistes
+    /// traduites d'une pièce, écrites conversation FERMÉE comme la conversation
+    /// ouverte les écrit : un site, `MessageEnrichmentWriter`.
+    case attachmentEnriched(AttachmentEnrichment)
+    /// `message:translation` (#18934) — les traductions d'un message, même site.
+    case translationsReceived([TranslationData])
 }
 
 extension RealtimeMessageMutation {

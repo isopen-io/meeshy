@@ -137,6 +137,7 @@ const makePrisma = (rows: readonly TokenRow[]) => ({
     update: jest.fn(async () => ({})),
   },
   userPreferences: { findUnique: jest.fn(async () => null) },
+  userSession: { findMany: jest.fn(async () => [{ id: 'live-session' }]) },
 });
 
 const servedTokenIds = async (rows: readonly TokenRow[], type: string | undefined): Promise<readonly string[]> => {

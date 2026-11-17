@@ -11,6 +11,8 @@ final class CommentThreadViewModelRootsTests: XCTestCase {
 
     private final class Store {
         var cached: [String: CacheResult<[FeedComment]>] = [:]
+        /// What the disk still holds past the TTL — read only on `.expired`.
+        var onDisk: [String: [FeedComment]] = [:]
         var saved: [String: [FeedComment]] = [:]
         var onLoad: () -> Void = {}
     }
@@ -24,7 +26,8 @@ final class CommentThreadViewModelRootsTests: XCTestCase {
             entity: entity, embedded: embedded, postService: mock, preferredLanguages: { ["fr"] },
             store: CommentThreadStore(
                 load: { key in store.onLoad(); return store.cached[key] ?? .empty },
-                save: { key, comments in store.saved[key] = comments }))
+                save: { key, comments in store.saved[key] = comments },
+                loadIgnoringExpiry: { store.onDisk[$0] }))
         return (sut, mock, store)
     }
 
@@ -110,6 +113,59 @@ final class CommentThreadViewModelRootsTests: XCTestCase {
 
         XCTAssertEqual(sut.roots.map(\.id), ["c1", "deep"],
                        "a cached row the first page does not reach is not gone: only a row inside its span is")
+    }
+
+    // MARK: - Expired cache (#18938)
+
+    /// Comments of a post seen two hours ago: the 1 h TTL has passed, the rows
+    /// are still on disk. They are on screen before the network is even asked,
+    /// with no loading state over them, then the first page merges over them.
+    func test_loadRoots_expiredCache_paintsTheDiskRowsBeforeTheNetworkAnswers() async {
+        let (sut, mock, store) = makeSUT(.post("p1"))
+        store.cached["post-p1"] = .expired
+        store.onDisk["post-p1"] = [Self.comment("c1"), Self.comment("c2")]
+        mock.getCommentsResult = Self.page(["c1", "c2", "c3"])
+        var shownBeforeTheNetwork: [String]?
+        var networkCallsWhenShown: Int?
+        var loadingOverTheRows: Bool?
+        sut.onRootsLoaded = { _ in
+            guard shownBeforeTheNetwork == nil else { return }
+            shownBeforeTheNetwork = sut.roots.map(\.id)
+            networkCallsWhenShown = mock.getCommentsCallCount
+            loadingOverTheRows = sut.isLoadingRoots && sut.roots.isEmpty
+        }
+
+        let outcome = await sut.loadRoots()
+
+        XCTAssertEqual(shownBeforeTheNetwork, ["c1", "c2"], "the disk rows are painted, not only the embedded ones")
+        XCTAssertEqual(networkCallsWhenShown, 0, "painted before the network was asked")
+        XCTAssertEqual(loadingOverTheRows, false, "no loading state over rows already on screen")
+        XCTAssertEqual(outcome, .network, "an expired cache is still revalidated")
+        XCTAssertEqual(sut.roots.map(\.id), ["c1", "c2", "c3"])
+        XCTAssertEqual(store.saved["post-p1"]?.map(\.id), ["c1", "c2", "c3"])
+    }
+
+    func test_loadRoots_expiredCacheOffline_keepsTheDiskRows() async {
+        let (sut, mock, store) = makeSUT(.post("p1"), embedded: [Self.comment("e1")])
+        store.cached["post-p1"] = .expired
+        store.onDisk["post-p1"] = [Self.comment("c1"), Self.comment("c2")]
+        mock.getCommentsResult = .failure(Offline())
+
+        let outcome = await sut.loadRoots()
+
+        XCTAssertEqual(outcome, .failed)
+        XCTAssertEqual(sut.roots.map(\.id), ["e1", "c1", "c2"], "offline, the thread is the disk, never an empty sheet")
+    }
+
+    func test_loadRoots_expiredCacheWithNothingOnDisk_loadsTheFirstPage() async {
+        let (sut, mock, store) = makeSUT(.reel("r1"))
+        store.cached["post-r1"] = .expired
+        mock.getCommentsResult = Self.page(["c1"])
+
+        let outcome = await sut.loadRoots()
+
+        XCTAssertEqual(outcome, .network)
+        XCTAssertEqual(sut.roots.map(\.id), ["c1"])
     }
 
     func test_loadRoots_pageSize_isFiftyForAStory_andTwentyForAPostOrAReel() async {

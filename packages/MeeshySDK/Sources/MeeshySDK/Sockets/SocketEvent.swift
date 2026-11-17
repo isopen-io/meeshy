@@ -187,6 +187,7 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case presenceAppState = "presence:app-state"
     case presenceSnapshot = "presence:snapshot"
     case profileDecorUpdated = "profile:decor-updated"
+    case profileUpdated = "profile:updated"
     case reactionAdded = "reaction:added"
     case reactionRemoved = "reaction:removed"
     case readStatusUpdated = "read-status:updated"

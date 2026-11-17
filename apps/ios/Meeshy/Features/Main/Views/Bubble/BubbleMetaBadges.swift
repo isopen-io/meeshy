@@ -151,8 +151,8 @@ struct BubbleForwardedIndicator: View, Equatable {
 
 // MARK: - Le badge éphémère a quitté ce fichier (#7452)
 //
-// `BubbleEphemeralBadge` vivait ici, et `FocalEphemeralBadge` en était une
-// seconde implémentation pour la rangée plate — deux badges pour une même
+// Le badge éphémère de la bulle vivait ici, et la rangée plate en avait une
+// seconde implémentation — deux badges pour une même
 // chose, et RIEN en Rivière ni en Résumé. Les cinq modes consomment désormais
 // `MessageProtectionChrome` (`MeeshyUI/Conversation/`), qui porte le décompte,
 // la vue unique et le flou, et n'a plus de minuteur par cellule.

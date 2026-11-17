@@ -54,10 +54,14 @@ import { sanitizeNotificationInputs, persistedNotificationTitle } from './saniti
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { truncateByCodePoints } from '../../utils/truncate-text';
 import { filterMutedRecipients } from './mutedRecipients';
-import { computeConversationUnreadBadge } from './conversationUnreadBadge';
+import { conversationUnreadOf } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
+import { retractNotificationRows } from './retractNotificationRows';
+import { BadgeSyncDebouncer, pushedUnreadBanners, sendBadgeSyncToIos } from './readElsewhereSync';
+import { accountDeviceLane, BULK_DEVICE_LANE, DEVICE_LANE_MAX_PENDING, DeviceWorkLanes } from './deviceWorkLanes';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
 import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
+import { reproducedPushAudience } from './reproducedPushAudience';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
@@ -141,7 +145,9 @@ import {
 } from './builders/account-security';
 import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { guardedInterval } from '../../utils/guarded-timer';
-import { refusesActorContent } from './blocked-actor-content';
+import { ACTOR_CONTENT_TYPES, refusesActorContent } from './blocked-actor-content';
+import { isSecurityEmailType } from './security-types';
+import { bannerTextsWithoutActorName, pushActorOfRow, senderIdentityPushFields } from './senderIdentityPushFields';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -157,44 +163,6 @@ type ReproducedNotificationPush = {
   readonly title: string;
   readonly subtitle?: string;
   readonly stale: RetractedNotification;
-};
-
-/**
- * Notification types whose offline email is a genuine account-security alert
- * (login, password, 2FA, lockout…). Used to (a) keep these in a separate
- * email-throttle bucket so a social email can never suppress a security alert,
- * and (b) route them to the security email template rather than the generic one.
- */
-const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
-  'login_new_device',
-  'login_suspicious',
-  'suspicious_activity',
-  'password_changed',
-  'two_factor_enabled',
-  'two_factor_disabled',
-  'account_locked',
-  'security_alert',
-]);
-
-const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
-
-/**
- * Le lot d'un retrait par chemin JSON. Très au-dessus du réel — une demande
- * d'amitié produit UNE notification, à sa création — et `singleBatch` en fait
- * une lecture close plutôt qu'un curseur laissé ouvert côté serveur.
- */
-const RETRACTION_BATCH_SIZE = 1000;
-
-/**
- * Le retour d'une commande Mongo `find` brute réduite à sa projection d'ids.
- *
- * `_id` arrive en Extended JSON (`{ $oid }`) et non en `string` : c'est la
- * différence entre la commande brute et un `findMany` Prisma, et la raison pour
- * laquelle le retrait relit puis supprime par ids typés plutôt que d'enchaîner
- * deux commandes brutes.
- */
-type RawNotificationIdBatch = {
-  cursor?: { firstBatch?: ReadonlyArray<{ _id: string | { $oid: string } }> };
 };
 
 export class NotificationService {
@@ -791,6 +759,10 @@ export class NotificationService {
     return true;
   }
 
+  private mutedConversationOf(userId: string, type: NotificationType): (conversationId: string) => Promise<boolean> {
+    return (conversationId) => this.isConversationMutedFor(userId, conversationId, type);
+  }
+
   /** Ce qu'un éventail batch emprunte à l'instance — fermé sur `this` à CHAQUE appel (jamais mis en cache : `fanout-delegation.test.ts`, #7093). */
   private fanoutDependencies(): FanoutDependencies {
     return {
@@ -836,7 +808,9 @@ export class NotificationService {
 
     // 2) Vérifier le mode Ne Pas Déranger — helper PARTAGÉ tz-aware (GW7),
     // même implémentation que PushNotificationService.isPushAllowed.
-    if (isWithinDnd(prefs)) {
+    // Une alerte de sécurité y échappe : le silence du téléphone est le
+    // travail de `isPushAllowed`, pas un effacement de ce qui s'est passé.
+    if (!isSecurityEmailType(type) && isWithinDnd(prefs)) {
       notificationLogger.info('Notification bloquée par DND', { userId, type });
       return false;
     }
@@ -1113,28 +1087,24 @@ export class NotificationService {
           // GW7 — préférences de confidentialité du banner : showPreview:false
           // remplace le corps par un libellé générique localisé (et supprime le
           // subtitle, porteur d'aperçus) ; showSenderName:false remplace le
-          // titre (nom de l'acteur) par un titre neutre.
-          const showPreview = notifPrefs?.showPreview ?? true;
-          const showSenderName = notifPrefs?.showSenderName ?? true;
+          // titre par un titre neutre et le nom de l'acteur, dans le corps
+          // comme dans le subtitle, par « Quelqu'un ».
+          const showPreview = notifPrefs ? notifPrefs.showPreview ?? true : false;
+          const showSenderName = notifPrefs ? notifPrefs.showSenderName ?? true : false;
           // Corps générique localisé dans la langue du DESTINATAIRE — résolue
           // paresseusement quand l'appelant ne l'a pas fournie (réponses,
           // réactions, mentions…), jamais un 'fr' codé en dur.
-          const pushBody = showPreview
-            ? truncateByCodePoints(params.content, 200)
-            : notificationString(await recipientLang(), 'push.private');
+          const banner = showPreview
+            ? await bannerTextsWithoutActorName({ body: params.content, subtitle: pushSubtitle, actor: params.actor, showSenderName, someone: async () => notificationString(await recipientLang(), 'someone') })
+            : null;
+          const pushBody = banner ? truncateByCodePoints(banner.body, 200) : notificationString(await recipientLang(), 'push.private');
 
           // F1/D-L1 (#7218) — badge d'icône = CONVERSATIONS non lues (hors
           // muettes), comme iOS/web-v2 ; `computeConversationUnreadBadge`.
           // La cloche (`notification:counts`) reste sur les notifications.
           // `data.unreadCount` alimente le miroir App Group de la NSE.
           // Best-effort : échec ⇒ push sans badge (comportement historique).
-          let unreadBadge: number | undefined;
-          try {
-            const count = await computeConversationUnreadBadge(this.prisma, params.userId);
-            if (typeof count === 'number') unreadBadge = count;
-          } catch {
-            unreadBadge = undefined;
-          }
+          const { badge: unreadBadge, conversationUnread } = await conversationUnreadOf(this.prisma, params.userId, params.context.conversationId);
 
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
           // GW4 — native grouping + actionable banner set by the producer:
@@ -1157,9 +1127,9 @@ export class NotificationService {
               // MÊME phrase d'action que le subtitle — on garde le corps (seul
               // champ rendu par les trois plateformes) et on laisse tomber le
               // subtitle. Cf. `dedupePushSubtitle`.
-              ...(showPreview
+              ...(banner
                 ? (() => {
-                    const deduped = dedupePushSubtitle({ subtitle: pushSubtitle, body: pushBody });
+                    const deduped = dedupePushSubtitle({ subtitle: banner.subtitle, body: pushBody });
                     return deduped ? { subtitle: deduped } : {};
                   })()
                 : {}),
@@ -1177,6 +1147,8 @@ export class NotificationService {
                 // friend_request) restaient non lus à vie après un tap push.
                 notificationId: formatted.id,
                 ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
+                // #18910 — le non-lu de CETTE conversation, que le registre Android indexe par conversation.
+                ...(conversationUnread !== undefined ? { conversationUnread: String(conversationUnread) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
                 conversationTitle: params.context.conversationTitle || '',
@@ -1213,10 +1185,7 @@ export class NotificationService {
                 postType: pickMetadataString(params.metadata, 'postType')
                   || pickMetadataString(params.metadata, 'contentType'),
                 senderId: params.actor?.id || '',
-                senderUsername: params.actor?.username || '',
-                senderDisplayName: params.actor?.displayName || '',
-                senderAvatar: params.actor?.avatar || '',
-                imageURL: params.actor?.avatar || '',
+                ...senderIdentityPushFields({ actor: params.actor, showSenderName }),
                 // Réactions : l'emoji compose le corps ; le push remplace la bannière
                 // du même acteur sur le même sujet (❤️ → 😂 n'en laisse qu'une).
                 ...actorSubjectReplacementPushField(params.type),
@@ -3048,6 +3017,8 @@ export class NotificationService {
     }
 
     try {
+      const readAt = new Date().toISOString();
+      const banners = contextKey === 'conversationId' ? await pushedUnreadBanners(this.prisma, { userId, conversationId: contextValue }) : [];
       const result = await (this.prisma as unknown as {
         $runCommandRaw: (cmd: Record<string, unknown>) => Promise<{ nModified?: number }>;
       }).$runCommandRaw({
@@ -3058,7 +3029,7 @@ export class NotificationService {
             isRead: false,
             [`context.${contextKey}`]: contextValue,
           },
-          u: { $set: { isRead: true, readAt: { $date: new Date().toISOString() } } },
+          u: { $set: { isRead: true, readAt: { $date: readAt } } },
           multi: true,
         }],
       });
@@ -3072,6 +3043,7 @@ export class NotificationService {
         this.announceReadBulk(userId, { kind: 'context', contextKey, contextValue });
         // Rafraîchir les compteurs côté client (cloche + badge) en temps réel.
         this.emitCountsUpdate(userId).catch(() => {});
+        if (banners.length > 0) this.revokeDeliveredPushes(banners, accountDeviceLane(userId));
       }
 
       return count;
@@ -3084,6 +3056,18 @@ export class NotificationService {
       });
       return 0;
     }
+  }
+
+  private readonly badgeSync = new BadgeSyncDebouncer((userId) =>
+    this.queueDeviceWork(() => sendBadgeSyncToIos({ prisma: this.prisma, pushService: this.pushService, userId }), accountDeviceLane(userId)));
+
+  /**
+   * #18910 — une lecture ÉCRITE (`broadcastReadStatus`, après le curseur, que des notifications soient marquées ou
+   * non) remet la pastille de l'iPhone à son total, une fois par rafale. Les bannières lues d'Android, elles, sont
+   * révoquées par le marquage des notifications de la conversation.
+   */
+  noteReadCursorMoved(userId: string): void {
+    if (/^[0-9a-f]{24}$/i.test(userId)) this.badgeSync.schedule(userId);
   }
 
   /**
@@ -3162,53 +3146,47 @@ export class NotificationService {
    * produit UNE notification, à sa création).
    */
   async retractFriendRequestNotifications(userId: string, friendRequestId: string): Promise<number> {
-    if (!/^[0-9a-f]{24}$/i.test(userId)) {
-      return 0;
-    }
+    return retractNotificationRows({
+      prisma: this.prisma,
+      userId,
+      match: { 'context.friendRequestId': friendRequestId },
+      // `delivery.pushSent` : la révocation push ne réveille un appareil que
+      // là où un push est parti (cf. `retractedNotificationOf`).
+      projection: { _id: 1, 'delivery.pushSent': 1 },
+      announce: (retracted) => this.announceNotificationsRetracted(retracted),
+      failure: { message: 'Failed to retract friend request notifications', context: { friendRequestId } },
+    });
+  }
 
-    try {
-      const raw = await (this.prisma as unknown as {
-        $runCommandRaw: (cmd: Record<string, unknown>) => Promise<RawNotificationIdBatch>;
-      }).$runCommandRaw({
-        find: 'Notification',
-        filter: {
-          userId: { $oid: userId },
-          'context.friendRequestId': friendRequestId,
-        },
-        // `delivery.pushSent` : la révocation push ne réveille un appareil que
-        // là où un push est parti (cf. `retractedNotificationOf`).
-        projection: { _id: 1, 'delivery.pushSent': 1 },
-        singleBatch: true,
-        batchSize: RETRACTION_BATCH_SIZE,
-      });
-
-      const rows = (raw?.cursor?.firstBatch ?? []).map((row) => ({
-        id: typeof row._id === 'string' ? row._id : row._id.$oid,
-        delivery: (row as { delivery?: unknown }).delivery,
-      }));
-
-      if (rows.length === 0) {
-        return 0;
-      }
-
-      const ids = rows.map((row) => row.id);
-      await this.prisma.notification.deleteMany({ where: { id: { in: ids } } });
-
-      // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
-      // qu'elle recalcule doivent voir la base d'après le retrait.
-      await this.announceNotificationsRetracted(
-        rows.map((row) => retractedNotificationOf({ id: row.id, userId, delivery: row.delivery }))
-      );
-
-      return ids.length;
-    } catch (error) {
-      notificationLogger.error('Failed to retract friend request notifications', {
-        error,
-        userId,
-        friendRequestId,
-      });
-      return 0;
-    }
+  /**
+   * RETIRE les notifications qu'un acteur a produites chez `userId` — le geste
+   * d'un BLOCAGE (#18910), dans ses deux sens.
+   *
+   *  - `'all'` (côté bloqueur, acteur = la personne bloquée) : tous les types,
+   *    annoncés comme tout retrait (`notification:deleted` par ligne, compteurs,
+   *    révocation des bannières). Une demande d'ami « accepter » ou une réaction
+   *    d'une personne bloquée ne reste pas dans la cloche ni dans le compteur ;
+   *  - `'actor-content'` (côté bloqué, acteur = le bloqueur) : seulement les
+   *    types qui portent le CONTENU de l'acteur (`ACTOR_CONTENT_TYPES` : extrait,
+   *    vignette, avatar), et SILENCIEUX — aucune émission vers lui, car une
+   *    disparition en direct lui apprendrait le blocage que la route veut taire.
+   */
+  async retractNotificationsFromActor(
+    userId: string,
+    actorId: string,
+    scope: 'all' | 'actor-content' = 'all'
+  ): Promise<number> {
+    return retractNotificationRows({
+      prisma: this.prisma,
+      userId,
+      match: {
+        'actor.id': actorId,
+        ...(scope === 'actor-content' ? { type: { $in: [...ACTOR_CONTENT_TYPES] } } : {}),
+      },
+      projection: { _id: 1, type: 1, 'context.conversationId': 1, 'delivery.pushSent': 1 },
+      announce: scope === 'all' ? (retracted) => this.announceNotificationsRetracted(retracted) : undefined,
+      failure: { message: 'Failed to retract notifications from actor', context: { actorId, scope } },
+    });
   }
 
   /**
@@ -3460,7 +3438,9 @@ export class NotificationService {
         )
       );
 
-      replacements.push({ row, title, subtitle: socketPayload.subtitle, stale });
+      const audience = await reproducedPushAudience(row, this.mutedConversationOf(userId, row.type as NotificationType));
+      if (audience === 'replace') replacements.push({ row, title, subtitle: socketPayload.subtitle, stale });
+      if (audience === 'revoke') revoked.push(stale);
     }
 
     this.revokeDeliveredPushes(revoked);
@@ -3483,10 +3463,13 @@ export class NotificationService {
    * de CONTRÔLE part alors en repli, APRÈS lui — il n'a rien posé qu'elle
    * puisse effacer.
    *
-   * En SÉRIE, sur la file d'appareil, et jamais attendu par l'appelant :
-   * l'édition d'un post réécrit une audience entière par lots de 200, et le
-   * geste qui l'a demandée ne doit pas payer APNs. Un envoi qui lève n'emporte
-   * pas les suivants.
+   * Jamais attendu par l'appelant : l'édition d'un post réécrit une audience
+   * entière par lots de 200, et le geste qui l'a demandée ne doit pas payer
+   * APNs. La file `bulk` parcourt l'audience en série (pic d'un envoi) et
+   * confie chaque remplacement à la file du COMPTE destinataire, celle de sa
+   * révocation de lecture (#19211) : une lecture enfilée pendant l'envoi part
+   * APRÈS lui, et retire la bannière qu'il vient de poser. Un envoi qui lève
+   * n'emporte pas les suivants.
    */
   private async pushReproducedNotifications(
     replacements: readonly ReproducedNotificationPush[]
@@ -3494,49 +3477,57 @@ export class NotificationService {
     if (!this.pushService) return;
 
     for (const replacement of replacements) {
-      const delivered = await this.pushReproducedNotification(replacement).catch((error) => {
-        notificationLogger.warn('reproduced notification push failed — rewrite already durable', {
-          notificationId: replacement.row.id,
-          error: error instanceof Error ? error.message : String(error),
+      await this.deviceLanes.schedule(accountDeviceLane(replacement.row.userId as string), async () => {
+        const handled = await this.pushReproducedNotification(replacement).catch((error) => {
+          notificationLogger.warn('reproduced notification push failed — rewrite already durable', {
+            notificationId: replacement.row.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return false;
         });
-        return false;
+        if (!handled) await sendNotificationRevocationPushes({ pushService: this.pushService, revoked: [replacement.stale] });
       });
-      if (!delivered) await sendNotificationRevocationPushes({ pushService: this.pushService, revoked: [replacement.stale] });
     }
   }
 
+  /** `true` quand la bannière d'avant est remplacée ou qu'il n'y en a pas ; `false` ⇒ la révoquer. */
   private async pushReproducedNotification(replacement: ReproducedNotificationPush): Promise<boolean> {
     const { row, title, subtitle } = replacement;
     const userId = row.userId as string;
 
     // GW7 — mêmes substitutions de confidentialité que le push de création :
     // `showPreview:false` remplace le corps par un libellé générique localisé,
-    // `showSenderName:false` neutralise le titre. Une bannière de remplacement
-    // qui les ignorerait rendrait en clair ce que la première avait masqué.
+    // `showSenderName:false` neutralise le titre et le nom de l'acteur dans le
+    // corps comme dans le subtitle (#19210). Une bannière de remplacement qui
+    // les ignorerait rendrait en clair ce que la première avait masqué.
     const prefs = await this.loadNotificationPrefs(userId);
-    const showPreview = prefs?.showPreview ?? true;
-    const showSenderName = prefs?.showSenderName ?? true;
-    const body = showPreview
-      ? truncateByCodePoints((row.content as string | null) ?? '', 200)
-      : notificationString(await this.resolveRecipientLang(userId), 'push.private');
+    const showPreview = prefs ? prefs.showPreview ?? true : false;
+    const showSenderName = prefs ? prefs.showSenderName ?? true : false;
+    const banner = showPreview
+      ? await bannerTextsWithoutActorName({ body: (row.content as string | null) ?? '', subtitle, actor: pushActorOfRow(row.actor), showSenderName, someone: async () => notificationString(await this.resolveRecipientLang(userId), 'someone') })
+      : null;
+    const body = banner ? truncateByCodePoints(banner.body, 200) : notificationString(await this.resolveRecipientLang(userId), 'push.private');
 
     // D-L1 (#7218) — même projection que le push de création (conversations
     // non lues, hors muettes) ; voir `computeConversationUnreadBadge`.
-    let unreadBadge: number | undefined;
-    try {
-      const count = await computeConversationUnreadBadge(this.prisma, userId);
-      if (typeof count === 'number') unreadBadge = count;
-    } catch {
-      unreadBadge = undefined;
-    }
+    const rowConversationId = (row.context as { conversationId?: unknown } | null)?.conversationId;
+    const { badge: unreadBadge, conversationUnread } = await conversationUnreadOf(
+      this.prisma, userId, typeof rowConversationId === 'string' ? rowConversationId : undefined);
 
-    const data = reproducedPushData(row, unreadBadge);
+    const data = reproducedPushData(row, unreadBadge, conversationUnread);
     const { conversationId, messageId } = data;
     const link = conversationId
       ? (messageId ? `/conversations/${conversationId}?messageId=${messageId}` : `/conversations/${conversationId}`)
       : undefined;
 
     const category = pushCategoryForNotificationType(row.type as NotificationType);
+    // La ligne RELUE juste avant l'envoi (#19211) : lue, mise en sourdine ou
+    // retirée depuis l'annonce, elle ne re-sonne pas — la bannière d'avant est
+    // révoquée au lieu d'être remplacée.
+    const live = await this.prisma.notification.findUnique({ where: { id: row.id as string } });
+    if (!live) return false;
+    const liveAudience = await reproducedPushAudience(live, this.mutedConversationOf(userId, live.type as NotificationType));
+    if (liveAudience !== 'replace') return liveAudience === 'none';
     const results = await this.pushService!.sendToUser({
       userId,
       // Jamais `voip` : une notification ordinaire livrée à PushKit ferait
@@ -3544,7 +3535,7 @@ export class NotificationService {
       types: ['apns', 'fcm'],
       payload: {
         title: showSenderName ? title : 'Meeshy',
-        ...(showPreview && subtitle ? { subtitle } : {}),
+        ...(banner?.subtitle ? { subtitle: banner.subtitle } : {}),
         body,
         ...(link ? { link } : {}),
         // `data.replacesNotificationId` annule la bannière d'AVANT ; la
@@ -3593,8 +3584,8 @@ export class NotificationService {
   }
 
   /**
-   * La FILE d'appareil : tout ce que les hubs d'annonce envoient vers APNs/FCM
-   * y passe, dans l'ordre, un envoi à la fois.
+   * Les FILES d'appareil (`DeviceWorkLanes`, bornées) : ce que les hubs d'annonce envoient vers APNs/FCM y passe dans
+   * l'ordre, un envoi à la fois par file — une par compte pour une lecture, `bulk` pour les retraits de masse.
    *
    * Rien n'est attendu par l'appelant : le retrait ou la réécriture qui l'a
    * demandé est déjà durable, son appelant répond à un geste utilisateur
@@ -3607,16 +3598,16 @@ export class NotificationService {
    * quelle que soit la taille de l'audience » ; un `void` par lot rendait ce
    * plafond caduc dès que l'envoi était plus lent que le drainage.
    *
-   * La file tient DEUX invariants d'un coup : le pic reste à un envoi, et
+   * La file `bulk` tient DEUX invariants d'un coup : le pic reste à un envoi, et
    * l'ORDRE d'enfilement est l'ordre d'envoi — ce dont dépend la réécriture,
    * dont la révocation doit précéder le remplacement de la même bannière.
    */
-  private deviceQueue: Promise<void> = Promise.resolve();
+  private readonly deviceLanes = new DeviceWorkLanes({ maxPending: DEVICE_LANE_MAX_PENDING,
+    onDrop: (lane) => notificationLogger.warn('device push lane full — step dropped, banner left in place', { lane }),
+    onError: (lane, error) => notificationLogger.error('device push queue step failed', { lane, error }) });
 
-  private queueDeviceWork(work: () => Promise<void>): void {
-    this.deviceQueue = this.deviceQueue.then(work).catch((error) => {
-      notificationLogger.error('device push queue step failed', { error });
-    });
+  private queueDeviceWork(work: () => Promise<void>, lane = BULK_DEVICE_LANE): void {
+    this.deviceLanes.schedule(lane, work);
   }
 
   /**
@@ -3625,19 +3616,18 @@ export class NotificationService {
    * bannière de ceux qui ne le sont pas (`notificationRevocationPush`). Le
    * module ne rejette jamais.
    */
-  private revokeDeliveredPushes(revoked: readonly RetractedNotification[]): void {
-    this.queueDeviceWork(() =>
-      sendNotificationRevocationPushes({ pushService: this.pushService, revoked })
-    );
+  private revokeDeliveredPushes(revoked: readonly RetractedNotification[], lane = BULK_DEVICE_LANE): void {
+    this.queueDeviceWork(() => sendNotificationRevocationPushes({ pushService: this.pushService, revoked }), lane);
   }
 
   /**
-   * Attend que la file d'appareil soit vide. Sert aux TESTS et à un arrêt
-   * propre : rien du chemin nominal ne l'appelle — c'est précisément l'intérêt
-   * de la file.
+   * Déclenche les synchronisations de pastille en attente, puis attend que la
+   * file d'appareil soit vide. Sert aux TESTS et à un arrêt propre : rien du
+   * chemin nominal ne l'appelle — c'est précisément l'intérêt de la file.
    */
   async flushPendingRevocations(): Promise<void> {
-    await this.deviceQueue;
+    this.badgeSync.flush();
+    await this.deviceLanes.drain();
   }
 
   // ==============================================

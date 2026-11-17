@@ -11,6 +11,7 @@ import { decodeConversation } from './decode';
 import { conversationById, conversationsWithSurged, directConversationWith } from './fixtures';
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
+import { writeLive, writtenLiveWithin, type LiveWriteOptions } from './live-cache-journal';
 import type { Conversation } from './types';
 import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
@@ -189,9 +190,24 @@ function takeMergedPage(client: QueryClient | undefined, pageParam: string): Con
  * le repli (premier chargement, delta tronqué, fusion sans curseur sûr,
  * intervalle de réconciliation écoulé, tirer-pour-rafraîchir).
  */
+/**
+ * **UNE LISTE QUE LE TEMPS RÉEL VIENT D'ÉCRIRE NE SE RELIT PAS EN ENTIER**
+ * (#19117) — au remontage ni au retour d'onglet, pendant `LIVE_LIST_GRACE_MS`
+ * après sa dernière écriture vive. Une écriture temps réel ne rajeunit plus la
+ * liste (WEB-08) ; tant que le delta est mort (#9638 : la passerelle ne sert
+ * pas `updatedAt`), revenir sur une liste lue il y a plus de 30 s la relisait
+ * page après page, même mise à jour une seconde plus tôt. Une reconnexion la
+ * relit toujours : des évènements ont pu se perdre.
+ */
+export const LIVE_LIST_GRACE_MS = 30_000;
+
+const rereadsList = <Q extends object>(query: Q): boolean => !writtenLiveWithin(query, LIVE_LIST_GRACE_MS);
+
 export function conversationsInfiniteOptions(deps: ConversationsDeps) {
   return {
     queryKey: CONVERSATIONS_QUERY_KEY,
+    refetchOnMount: rereadsList,
+    refetchOnWindowFocus: rereadsList,
     queryFn: async ({ pageParam, signal, client }: { readonly pageParam?: ConversationsPageParam; readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
       if (pageParam == null) return loadFirstPage(client, deps, signal);
       return (
@@ -212,15 +228,6 @@ export function conversationsQuery(deps: ConversationsDeps) {
   return { ...conversationsInfiniteOptions(deps), select: flattenConversationPages };
 }
 
-/**
- * `conversationQuery` — pose `initialData` depuis la liste EN CACHE
- * (`findCachedConversation`) et `initialDataUpdatedAt` depuis l'état de cette
- * même requête : la case du fil se peint depuis la liste, sans requête si la
- * liste est FRAÎCHE (TanStack respecte `staleTime` sur `initialDataUpdatedAt`).
- * `queryClient` est OPTIONNEL : la fabrique reste appelable sans lui (témoin,
- * ou un appelant qui n'a pas encore de liste en cache), simplement sans ce
- * raccourci.
- */
 /**
  * `findCachedConversation` — parcourt les PAGES du cache de liste ; `undefined`
  * si absente, si le cache est vide, ou si le cache porte encore l'ANCIENNE
@@ -250,18 +257,24 @@ export function patchConversation(
   queryClient: QueryClient,
   conversationId: string,
   updater: (conversation: Conversation) => Conversation,
+  options: LiveWriteOptions = {},
 ): void {
-  queryClient.setQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY, (data) => {
-    if (data === undefined) return data;
-    return {
-      ...data,
-      pages: data.pages.map((page) =>
-        page.conversations.some((c) => c.id === conversationId)
-          ? { ...page, conversations: page.conversations.map((c) => (c.id === conversationId ? updater(c) : c)) }
-          : page,
-      ),
-    };
-  });
+  writeLive<ConversationsInfiniteData>(
+    queryClient,
+    CONVERSATIONS_QUERY_KEY,
+    (data) => {
+      if (data === undefined) return data;
+      return {
+        ...data,
+        pages: data.pages.map((page) =>
+          page.conversations.some((c) => c.id === conversationId)
+            ? { ...page, conversations: page.conversations.map((c) => (c.id === conversationId ? updater(c) : c)) }
+            : page,
+        ),
+      };
+    },
+    options,
+  );
 }
 
 /**
@@ -279,10 +292,19 @@ export function patchConversationDetail(
   queryClient: QueryClient,
   conversationId: string,
   updater: (conversation: Conversation) => Conversation,
+  options: LiveWriteOptions = {},
 ): void {
-  queryClient.setQueryData<Conversation>(conversationQueryKey(conversationId), (data) =>
-    data === undefined ? data : updater(data),
-  );
+  writeLive<Conversation>(queryClient, conversationQueryKey(conversationId), (data) => (data === undefined ? data : updater(data)), options);
+}
+
+/**
+ * LA PROCHAINE RELECTURE DE LA LISTE SERA COMPLÈTE (#18914) — pas le delta :
+ * ce qui a changé ne bouge pas `Conversation.updatedAt` (une conversation
+ * restaurée pour soi, `conversation:restored`), donc `updatedSince` ne le
+ * ramènerait pas. Consommé par la relecture qui suit, une fois.
+ */
+export function requestFullConversationRead(queryClient: QueryClient): void {
+  fullReadRequested.add(queryClient);
 }
 
 /**
@@ -297,7 +319,7 @@ export function patchConversationDetail(
  * `completing failed`.
  */
 export function refreshConversations(queryClient: QueryClient, deps: ConversationsDeps): Promise<void> {
-  fullReadRequested.add(queryClient);
+  requestFullConversationRead(queryClient);
   return queryClient
     .fetchInfiniteQuery({ ...conversationsInfiniteOptions(deps), pages: 1, staleTime: 0 })
     .then(() => undefined);
@@ -404,16 +426,29 @@ export function createGroupConversation(
   });
 }
 
+/**
+ * `conversationQuery` — la case d'un fil. Elle se PEINT depuis la ligne de la
+ * liste en cache (`findCachedConversation`, posée en `initialData`) : aucun
+ * squelette à l'ouverture. Mais la ligne n'est qu'un SOUS-ENSEMBLE de la fiche
+ * (la passerelle y sert cinq participants, cent dans la fiche) : elle ne
+ * certifie jamais sa fraîcheur (#18914, WEB-08 et M2). L'amorce est donc datée
+ * de ZÉRO — périmée dès sa naissance — et l'ouverture relit la fiche en fond.
+ * Sans date, TanStack la daterait de MAINTENANT (`initialDataUpdatedAt ??
+ * Date.now()`) : fraîche, jamais relue. Datée de la LISTE, comme avant ce lot,
+ * une liste lue il y a moins de 30 s — ou rajeunie par le temps réel —
+ * dispensait la fiche d'être lue, et le fil tournait sur les participants de
+ * la ligne. Une fiche déjà en cache garde SA date : seule l'amorce est datée
+ * de zéro. `queryClient` est OPTIONNEL : la fabrique reste appelable sans lui
+ * (témoin, ou un appelant qui n'a pas encore de liste en cache), sans amorce.
+ */
 export function conversationQuery(deps: ConversationsDeps, id: string, init?: { readonly queryClient?: QueryClient }) {
   const found = init?.queryClient === undefined ? undefined : findCachedConversation(init.queryClient, id);
-  const dataUpdatedAt = init?.queryClient?.getQueryState(CONVERSATIONS_QUERY_KEY)?.dataUpdatedAt;
 
   return {
     queryKey: conversationQueryKey(id),
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
       unwrap(await loadConversation({ ...deps, id, ...(signal !== undefined ? { signal } : {}) })),
     select: decodeConversation,
-    ...(found !== undefined ? { initialData: found } : {}),
-    ...(dataUpdatedAt !== undefined ? { initialDataUpdatedAt: dataUpdatedAt } : {}),
+    ...(found === undefined ? {} : { initialData: found, initialDataUpdatedAt: 0 }),
   };
 }

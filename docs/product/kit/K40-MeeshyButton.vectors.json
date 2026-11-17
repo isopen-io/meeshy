@@ -1,0 +1,65 @@
+{
+  "composant": "MeeshyButton",
+  "cle": "K40",
+  "note": "Vecteurs de parité (fiche K40 § 03, § 04, § 06). Hauteur, marges, glyphe, corps du libellé par taille ; formes round et hold ; parts de la paire.",
+  "tailles": [
+    {
+      "taille": 56,
+      "hauteur": 56,
+      "marge": 26,
+      "glyphe": 22,
+      "corps": 16,
+      "cible": 56
+    },
+    {
+      "taille": 50,
+      "hauteur": 50,
+      "marge": 22,
+      "glyphe": 22,
+      "corps": 15,
+      "cible": 50
+    },
+    {
+      "taille": 44,
+      "hauteur": 44,
+      "marge": 16,
+      "glyphe": 16,
+      "corps": 13.5,
+      "cible": 44
+    },
+    {
+      "taille": 36,
+      "hauteur": 36,
+      "marge": 12,
+      "glyphe": 16,
+      "corps": 12.5,
+      "cible": 44
+    }
+  ],
+  "formes": [
+    {
+      "forme": "round",
+      "diametre": 56,
+      "glyphe": 28
+    },
+    {
+      "forme": "hold",
+      "diametre": 96,
+      "glyphe": 36
+    }
+  ],
+  "genresDesFormes": [
+    "primary",
+    "accent",
+    "tinted"
+  ],
+  "pressionEchelle": 0.94,
+  "desactiveOpacite": 0.45,
+  "reductionMargeFin": 6,
+  "ecartGlyphe": 8,
+  "paire": {
+    "partPrincipal": 1.6,
+    "partSecondaire": 1.0,
+    "ecart": 8
+  }
+}

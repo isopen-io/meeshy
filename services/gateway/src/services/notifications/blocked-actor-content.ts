@@ -23,7 +23,7 @@ import type { NotificationType } from '@meeshy/shared/types/notification';
 import { isBlockedBetween } from '../../utils/blocking';
 import { livingAmong } from './fanout/entourage';
 
-const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
+export const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
   'friend_new_story',
   'friend_new_post',
   'friend_new_mood',

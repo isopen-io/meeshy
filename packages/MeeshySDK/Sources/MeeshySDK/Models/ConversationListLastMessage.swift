@@ -78,12 +78,23 @@ public enum ConversationListLastMessage {
     /// le ViewModel n'en tient qu'une copie antérieure. La graver par-dessus
     /// effaçait l'appel et la réaction du cache, donc de l'écran au
     /// rechargement suivant et après un démarrage à froid.
+    ///
+    /// Et même règle pour l'ENSEMBLE des lignes (#18933) : le ViewModel
+    /// RETIRE, le moteur AJOUTE. L'instantané est pris à la planification et
+    /// écrit après l'anti-rebond ; une ligne que le moteur a ajoutée entre-temps
+    /// (une conversation née pendant l'absence, réhydratée par `/sync`) n'y est
+    /// pas, et la fusion par l'instantané l'effaçait du cache. Une ligne du
+    /// cache absente de l'instantané reste donc, sauf si elle est dans
+    /// `retired` — les lignes que la liste a elle-même retirées, qui ne
+    /// reviennent pas non plus par un instantané plus ancien que leur retrait.
     public static func persisting(
         _ viewState: [MeeshyConversation],
-        over persisted: [MeeshyConversation]
+        over persisted: [MeeshyConversation],
+        retiring retired: Set<String> = []
     ) -> [MeeshyConversation] {
         let owned = Dictionary(persisted.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let merged = viewState.map { row -> MeeshyConversation in
+        let shown = Set(viewState.map(\.id))
+        let merged = viewState.filter { !retired.contains($0.id) }.map { row -> MeeshyConversation in
             guard let engineRow = owned[row.id] else { return row }
             var copy = row
             copy.applyLastMessage(LastMessageFacet(conversation: engineRow))
@@ -93,7 +104,8 @@ public enum ConversationListLastMessage {
             copy.listRankAt = engineRow.listRankAt
             return copy
         }
-        return sortedNewestFirst(merged)
+        let addedByTheEngine = persisted.filter { !shown.contains($0.id) && !retired.contains($0.id) }
+        return sortedNewestFirst(merged + addedByTheEngine)
     }
 
     /// Tri STABLE par rang (`listActivityAt`, #9026) décroissant : `sorted(by:)`

@@ -24,7 +24,6 @@ import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.model.call.WebRtcSdpRules
-import org.webrtc.AudioTrack
 import org.webrtc.DataChannel
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
@@ -113,7 +112,6 @@ class WebRtcEngine internal constructor(
 
     val localIceCandidates: SharedFlow<IceCandidate> = engineEvents.localIceCandidates
     val iceConnectionState: StateFlow<PeerConnection.IceConnectionState> = engineEvents.iceConnectionState
-    val remoteAudioTracks: SharedFlow<AudioTrack> = engineEvents.remoteTracks.audio
     val remoteVideoTracks: SharedFlow<VideoTrack> = engineEvents.remoteTracks.video
 
     /** Canal de données, renégociation, état de connexion complet. */

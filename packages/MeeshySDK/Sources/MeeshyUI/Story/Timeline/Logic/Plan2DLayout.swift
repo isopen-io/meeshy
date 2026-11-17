@@ -19,10 +19,9 @@ public nonisolated enum TrackBar: Equatable, Sendable {
     case ghost
 }
 
-/// Un losange AFFICHÉ (S4 : édité à l'Inspecteur existant, jamais dans le
-/// plan). Porte l'IDENTITÉ du `StoryKeyframe` d'origine — sans elle, un tap
-/// sur le losange ne pourrait router vers AUCUN `KeyframeInspector` (le bus
-/// de sélection route par id, `TimelineInspectorHost.resolveKeyframeSnapshot`).
+/// Un losange AFFICHÉ (S4 : jamais édité dans le plan). Porte l'IDENTITÉ du
+/// `StoryKeyframe` d'origine — sans elle, un tap sur le losange ne pourrait
+/// désigner AUCUN keyframe précis (`Plan2DView.onSelectKeyframe` rend un id).
 ///
 /// `time` est ABSOLU (temps de timeline), pas relatif à son clip comme
 /// `StoryKeyframe.time` : l'axe du plan est celui de la slide entière.
@@ -50,8 +49,8 @@ public nonisolated struct Plan2DTrack: Equatable, Identifiable, Sendable {
     /// `StoryComposerViewModel.syntheticTimelineClipIdPrefix`) est
     /// verrouillé : sa fenêtre début/durée est ignorée en lecture, la
     /// déplacer au doigt mentirait. Restauré par la
-    /// revue Opus, constat 3 — l'ancien conteneur le portait déjà via
-    /// `isImmovableBackground` (`StoryTimelineView.swift:631`). Verrouillé =
+    /// revue Opus, constat 3 — l'ancien conteneur mono-piste le portait déjà
+    /// via `isImmovableBackground`. Verrouillé =
     /// NI poignées de bord NI déplacement temporel (D2) — jamais un obstacle
     /// à la sélection, au mute ou au tap d'un keyframe.
     public let isLocked: Bool
@@ -288,15 +287,12 @@ public nonisolated enum Plan2DLayout {
     }
 
     /// Losanges AFFICHÉS d'un clip, triés par temps — identité comprise
-    /// (`Plan2DKeyframe.id`), pour que le tap (D2/D3) puisse router vers le
-    /// `KeyframeInspector` DU keyframe touché, pas un temps anonyme.
+    /// (`Plan2DKeyframe.id`), pour que le tap (D2/D3) désigne le keyframe
+    /// touché (`Plan2DView.onSelectKeyframe`), pas un temps anonyme.
     ///
     /// `StoryKeyframe.time` est RELATIF au début de son clip ; l'axe du plan,
     /// lui, est ABSOLU (`x(forTime:)` mappe un temps de timeline). Le début du
-    /// clip s'ajoute donc ICI — même projection que `KeyframeMarkerResolver`
-    /// (`absoluteTime = start + kf.time`) et que l'en-tête du
-    /// `KeyframeInspector` (`TimelineInspectorHost.resolveKeyframeSnapshot`).
-    /// Sans elle, un losange dérive du début de son clip : il se dessine hors
+    /// clip s'ajoute donc ICI (`absoluteTime = start + kf.time`). Sans elle, un losange dérive du début de son clip : il se dessine hors
     /// de sa propre barre et le tap tombe sur le mauvais keyframe.
     ///
     /// `window` ÉCRÊTE ensuite ce temps absolu à la barre RENDUE (revue Opus,
@@ -312,9 +308,8 @@ public nonisolated enum Plan2DLayout {
     /// QUELLE VALEUR FAIT FOI (tranché en revue DoD de D6c, constat 3) : le
     /// temps STOCKÉ. L'écrêtage est une affordance de DESSIN et de hit-test,
     /// jamais une vérité de modèle — `StoryKeyframe.time` ne bouge pas, et
-    /// l'en-tête du `KeyframeInspector`
-    /// (`TimelineInspectorHost.keyframeSnapshot`) continue délibérément
-    /// d'annoncer le temps NON écrêté. Le losange replié au bord dit « il y a
+    /// toute fiche qui annonce le temps d'un keyframe doit annoncer le temps
+    /// NON écrêté. Le losange replié au bord dit « il y a
     /// ça au-delà de la coupe », l'en-tête dit OÙ. Écrêter aussi l'en-tête
     /// ferait mentir la fiche sur une donnée intacte, et ré-étendre la barre
     /// démentirait aussitôt le chiffre affiché.

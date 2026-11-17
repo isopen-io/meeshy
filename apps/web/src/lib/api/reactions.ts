@@ -142,9 +142,9 @@ export async function performReaction(params: {
   /* `patchThreadMessages` (#6972, étape 1) — le SITE UNIQUE qui patche un fil
      (`api/messages.ts`) : la forme de la page n'est plus recopiée ici. */
   const applyDelta = (d: 1 | -1) =>
-    patchThreadMessages(deps.queryClient, conversationId, (messages) =>
-      applyReactionDelta(messages, { messageId, emoji, delta: d }),
-    );
+    patchThreadMessages(deps.queryClient, conversationId, (messages) => applyReactionDelta(messages, { messageId, emoji, delta: d }), {
+      relative: true,
+    });
 
   applyDelta(delta);
   if (plan === 'add') reactionStore.getState().add(messageId, emoji);

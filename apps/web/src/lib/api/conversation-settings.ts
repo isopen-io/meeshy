@@ -2,7 +2,7 @@ import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversati
 import type { ConversationWriteRole } from '@meeshy/shared/types/conversation';
 
 import { managementFailureOf, type MemberActionDeps, type MemberActionOutcome } from './conversation-member-actions';
-import { conversationQueryKey, patchConversation, patchConversationDetail } from './conversations';
+import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail } from './conversations';
 import type { ApiResult } from './http';
 import type { Conversation } from './types';
 
@@ -62,11 +62,10 @@ export async function updateConversationSettings(params: {
 }): Promise<MemberActionOutcome> {
   const { deps, conversationId, patch } = params;
   const fields = fieldsOf(patch);
-  let listBefore: Fields = {};
-  patchConversation(deps.queryClient, conversationId, (c) => {
-    listBefore = Object.fromEntries(fields.map((field) => [field, (c as unknown as Record<string, unknown>)[field]]));
-    return c;
-  });
+  /* Une LECTURE pure : un point d'écriture appelé pour lire serait journalisé,
+     puis rejoué sur la réponse d'une relecture en vol (#18914). */
+  const listed = findCachedConversation(deps.queryClient, conversationId) as unknown as Record<string, unknown> | undefined;
+  const listBefore: Fields = listed === undefined ? {} : Object.fromEntries(fields.map((field) => [field, listed[field]]));
   const detail = deps.queryClient.getQueryData<Conversation>(conversationQueryKey(conversationId)) as unknown as Record<string, unknown> | undefined;
   const detailBefore: Fields = Object.fromEntries(fields.map((field) => [field, detail?.[field]]));
 

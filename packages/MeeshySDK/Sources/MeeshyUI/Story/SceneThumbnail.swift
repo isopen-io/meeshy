@@ -123,7 +123,7 @@ public nonisolated final class SceneThumbnailStore: @unchecked Sendable {
 /// `StorySlideRenderer.renderComposite` est le rendu qui produit déjà la
 /// couverture du plateau et le ThumbHash : la vignette n'ouvre pas un second
 /// chemin de rendu à côté de lui — c'est le piège que l'issue nommait à propos
-/// de `SlideMiniPreview`. Les bitmaps lui arrivent RÉDUITS à la tuile par
+/// de l'ancienne mini-vue de slide. Les bitmaps lui arrivent RÉDUITS à la tuile par
 /// `SceneThumbnailCache` (#6922) : le filtre du fond s'applique à la vignette,
 /// jamais aux 1600 px de la photo.
 public enum SceneThumbnailRenderer {

@@ -115,7 +115,6 @@ import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.LanguageQuickOption
 import me.meeshy.ui.component.LanguageQuickStrip
-import me.meeshy.ui.component.audio.AudioTrackSurface
 import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette

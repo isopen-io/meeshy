@@ -23,9 +23,9 @@ import javax.inject.Singleton
 /**
  * Applique `message:edited` (le message ENTIER, modifié sur place par la passerelle : un texte
  * corrigé, une notice d'appel « en cours » devenue « manqué » ou « terminé ») au cache Room,
- * qu'un fil soit ouvert ou non. Le rafraîchissement par filigrane ne relit jamais un message
- * dont la date de création n'a pas bougé : sans ce branchement, la copie locale resterait
- * l'ancienne, fil ouvert comme fil rouvert.
+ * qu'un fil soit ouvert ou non. Une revalidation ne relit que la fenêtre récente (#18915) : au-delà
+ * d'elle, et entre deux revalidations, seul ce branchement porte la modification jusqu'à la ligne —
+ * sans lui, la copie locale resterait l'ancienne.
  */
 @Singleton
 class MessageEditBinding @Inject constructor(

@@ -4,8 +4,8 @@ import MeeshySDK
 // MARK: - Style SwiftUI du fond coloré (C11)
 //
 // Rendu SwiftUI UNIQUE de `StoryEffects.background` (hex OU
-// "gradient:HEX1:HEX2") — partagé par SlideMiniPreview, le letterbox du
-// composer et tout futur consommateur. Direction top-leading →
+// "gradient:HEX1:HEX2") — partagé par le letterbox du composer et tout
+// futur consommateur. Direction top-leading →
 // bottom-trailing, parité avec le canvas CALayer
 // (`StoryBackgroundLayer.GradientDirection.topLeftToBottomRight`).
 

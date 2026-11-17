@@ -1,0 +1,137 @@
+{
+  "composant": "MeeshyMotion",
+  "cle": "K26",
+  "note": "Vecteurs de parité lus par les trois suites. Durées en millisecondes, ressorts en (réponse, amorti) ; la raideur Android vaut (2π / réponse)² à une unité près. Fiche K26 § 4, § 05 bis et § 10.",
+  "jetons": [
+    {
+      "jeton": "morph",
+      "nature": "spring",
+      "duree": 420,
+      "reponse": 0.42,
+      "amorti": 0.7,
+      "retard": 0,
+      "haptique": "light",
+      "reduit": "fade",
+      "raideurAndroid": 224
+    },
+    {
+      "jeton": "travel",
+      "nature": "spring",
+      "duree": 560,
+      "reponse": 0.56,
+      "amorti": 0.82,
+      "retard": 0,
+      "haptique": "medium",
+      "reduit": "fade",
+      "raideurAndroid": 126
+    },
+    {
+      "jeton": "flip",
+      "nature": "spring",
+      "duree": 500,
+      "reponse": 0.5,
+      "amorti": 0.86,
+      "retard": 0,
+      "haptique": "rigid",
+      "reduit": "fade",
+      "raideurAndroid": 158
+    },
+    {
+      "jeton": "collapse",
+      "nature": "driven",
+      "duree": 0,
+      "plage": 220,
+      "reponse": null,
+      "amorti": null,
+      "retard": 0,
+      "haptique": "light",
+      "reduit": "fade"
+    },
+    {
+      "jeton": "rise",
+      "nature": "spring",
+      "duree": 360,
+      "reponse": 0.36,
+      "amorti": 0.86,
+      "retard": 80,
+      "haptique": "none",
+      "reduit": "fade",
+      "raideurAndroid": 305
+    },
+    {
+      "jeton": "float",
+      "nature": "loop",
+      "duree": 9000,
+      "reponse": null,
+      "amorti": null,
+      "retard": 0,
+      "haptique": "none",
+      "reduit": "stop"
+    },
+    {
+      "jeton": "pulse",
+      "nature": "loop",
+      "duree": 2200,
+      "reponse": null,
+      "amorti": null,
+      "retard": 0,
+      "haptique": "none",
+      "reduit": "stop"
+    }
+  ],
+  "fonduReduitMs": 160,
+  "plafondHorsBoucleMs": 600,
+  "cascade": [
+    {
+      "rang": -3,
+      "retardMs": 0
+    },
+    {
+      "rang": 0,
+      "retardMs": 0
+    },
+    {
+      "rang": 1,
+      "retardMs": 80
+    },
+    {
+      "rang": 2,
+      "retardMs": 160
+    },
+    {
+      "rang": 3,
+      "retardMs": 240
+    },
+    {
+      "rang": 9,
+      "retardMs": 240
+    }
+  ],
+  "avancement": [
+    {
+      "decalage": -5,
+      "plage": 220,
+      "avancement": 0
+    },
+    {
+      "decalage": 0,
+      "plage": 220,
+      "avancement": 0
+    },
+    {
+      "decalage": 110,
+      "plage": 220,
+      "avancement": 0.5
+    },
+    {
+      "decalage": 220,
+      "plage": 220,
+      "avancement": 1
+    },
+    {
+      "decalage": 400,
+      "plage": 220,
+      "avancement": 1
+    }
+  ]
+}

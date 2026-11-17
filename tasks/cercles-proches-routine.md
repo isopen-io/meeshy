@@ -1281,3 +1281,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   été annulé par le porteur au bout d'une minute (« canceled by @jcnm »), `ci.yml` en cours. `dev` est verrouillée : la
   routine ne relance rien et ne fusionne pas ; la PR attend le porteur. `:core:model` et les gardes shared sont prouvés en
   local ; `sdk-core` et `:core:network` ne le seront que par `android.yml`.
+
+## 2026-11-17 — réveil de 16 h : les onglets d'un même compte sérialisent leur partage de position (#18431)
+
+- Reprise : la PR #18762 (moitié Android de #18578) a été fusionnée le 2026-11-16 ; aucune PR cercles ouverte, `dev`
+  déverrouillée. Aucune branche vivante n'écrit `apps/web/src/lib/shared-locations/` : lot réservé avant toute écriture
+  (`claude/cercles-18431-onglets`).
+- Lot : #18431, web seul. Chaque opération du centre de partage passe par un verrou Web Locks par compte
+  (`navigator.locks`, exclusif, `sharedLocationAcrossTabs`), avec repli sur le verrou de l'onglet sans Web Locks. Un
+  « Arrêter » attend l'accusé d'un démarrage d'un autre onglet, puis relit la liste avant de retirer la personne. Le
+  relevé de « Partager » (qui peut ouvrir la demande de permission du navigateur) se prend HORS du verrou du compte : une
+  demande laissée ouverte ne retient pas les « Arrêter » des autres onglets.
+- Audit adversarial avant PR : non bloquant. Corrigé dans le lot : un `not-sharing` reçu en retard sur une mise à jour
+  vidait la liste qu'un autre onglet venait de démarrer (défaut déjà sur `dev`) ; il ne vide plus que si la liste relue
+  sous le verrou du compte est celle d'avant l'envoi. Consignés sans correctif : un onglet dont l'écriture a échoué
+  (quota) ne relit rien sous le verrou (déjà sur `dev`) ; comportement de Web Locks dans un onglet gelé et dans la
+  WebView Capacitor non vérifié.
+- Gates locaux : `bun test src/lib/shared-locations/` 125 verts (témoins rouges d'abord) ; fichiers de test qui citent le
+  partage 222 verts ; `tsc --noEmit` web vert.
+- Prochain lot recommandé : #18714 (liste périmée, deux appareils qui publient, permission iOS), puis #18580 ; #18351
+  attend la décision du porteur.

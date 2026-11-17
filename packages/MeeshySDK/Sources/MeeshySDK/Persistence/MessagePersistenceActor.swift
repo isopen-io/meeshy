@@ -117,11 +117,11 @@ public actor MessagePersistenceActor {
     /// `MessageStore.loadInitialSnapshot`) would render user A's content to
     /// user B after a logout+login on the same device — the cache `msg`
     /// namespace purged by `CacheCoordinator.reset()` is a SEPARATE store.
-    /// Atomic single transaction; child tables carry no FK constraints so order
-    /// is irrelevant. Supersedes `clearOutbox()` on the logout path. Wired from
-    /// `DependencyContainer.wireOutboxLogoutHook`.
+    /// Atomic single transaction, no FK constraints (order is irrelevant).
+    /// Supersedes `clearOutbox()`; wired from `DependencyContainer.wireOutboxLogoutHook`.
     public func clearAllMessagesForLogout() async throws {
         try await dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM \(ConversationContiguity.table)")
             try db.execute(sql: "DELETE FROM message_translations")
             try db.execute(sql: "DELETE FROM message_transcriptions")
             try db.execute(sql: "DELETE FROM message_audio_translations")

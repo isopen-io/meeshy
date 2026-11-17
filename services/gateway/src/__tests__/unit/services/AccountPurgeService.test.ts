@@ -30,6 +30,8 @@ const USER_ID = '507f1f77bcf86cd799439011';
 function fakePrisma(overrides: Record<string, any> = {}) {
   return {
     userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // Les jetons push (#18910) : un compte dont aucun appareil ne s'est inscrit.
+    pushToken: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
@@ -114,6 +116,27 @@ function packTables(db: ReturnType<typeof fakePackDb>) {
 const NO_FILES = { packFiles: fakeFileStore([]).store };
 
 describe('purgeAccountIsolatedData', () => {
+  it('efface les jetons push du compte et eux seuls : plus aucun appareil ne reçoit les bannières de ses conversations (#18910, serveur-transport-5)', async () => {
+    const OTHER_ID = '507f1f77bcf86cd799439012';
+    const rows = [
+      { id: 't1', userId: USER_ID, type: 'apns' },
+      { id: 't2', userId: USER_ID, type: 'fcm' },
+      { id: 't3', userId: OTHER_ID, type: 'fcm' },
+    ];
+    const pushToken = {
+      deleteMany: jest.fn<any>(async ({ where }: { where: Record<string, unknown> }) => {
+        const gone = rows.filter((row) => matchesMongoWhere(row, where));
+        gone.forEach((row) => rows.splice(rows.indexOf(row), 1));
+        return { count: gone.length };
+      }),
+    };
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ pushToken }), USER_ID, NO_FILES);
+
+    expect(rows.map((row) => row.id)).toEqual(['t3']);
+    expect(summary.pushTokensDeleted).toBe(2);
+  });
+
   it('efface la télémétrie et la note de chacun de ses appels, sur tous ses participants, sans supprimer les lignes (#11277)', async () => {
     const prisma = fakePrisma({
       participant: { findMany: jest.fn<any>().mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]) },
@@ -282,6 +305,7 @@ describe('purgeAccountIsolatedData', () => {
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(summary).toMatchObject({
       sessionsDeleted: 0,
+      pushTokensDeleted: 0,
       voiceProfileDeleted: 0,
       shareLinksDeleted: 0,
       notificationsDeleted: 0,

@@ -179,7 +179,8 @@ public extension APINotification {
             // Le corps est VOTRE commentaire ; le pied, le POST qui le porte —
             // jamais le commentaire une seconde fois (capture porteur).
             return (Self.firstNonEmpty(metadata?.commentPreview).map { "« \($0) »" }, nil, contentFooter)
-        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost:
+        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost,
+             .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote:
             // Une réaction n'apporte aucun texte neuf : le contenu visé est
             // le pied, le corps se tait.
             return (nil, nil, contentFooter)

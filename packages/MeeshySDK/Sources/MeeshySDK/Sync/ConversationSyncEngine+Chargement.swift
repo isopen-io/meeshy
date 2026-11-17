@@ -125,7 +125,7 @@ extension ConversationSyncEngine {
         // Figée AVANT la première écriture : `saveSorted(firstPage)` remplace le
         // cache par la seule page 1, et sans cette baseline les pages suivantes
         // n'auraient plus d'homologue local où retrouver leur frontière de lecture.
-        let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
+        let baseline = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
 
         // Fetch the first page to show something on screen as fast as
         // possible, then fan out to the remaining pages in parallel. On
@@ -377,7 +377,7 @@ extension ConversationSyncEngine {
 
     /// Plafond serveur de `GET /conversations` (`Math.min(limit, 100)` dans
     /// `routes/conversations/core.ts`) — jumeau de `DELTA_PAGE_LIMIT`
-    /// (`apps/web/hooks/queries/use-conversations-delta-sync.ts`).
+    /// (`apps/web/src/lib/api/conversations-delta.ts`).
     ///
     /// Le demander explicitement plutôt que `500` ne change RIEN au nombre de
     /// lignes rendues ; ça rend la troncature lisible, et ça rend utilisable le
@@ -385,11 +385,10 @@ extension ConversationSyncEngine {
     /// sa pagination — sous `limit=500`, ce repli n'aurait jamais pu déclencher.
     static let deltaPageLimit = 100
 
-    /// JUMEAU WEB — `apps/web/hooks/queries/use-conversations-delta-sync.ts` +
-    /// `apps/web/lib/conversations/delta-sync.ts` portent la même règle sur le
-    /// cache React Query : même endpoint (`GET /conversations?updatedSince=`),
-    /// même upsert par id, même retrait sur `isActive == false`, même repli sur
-    /// la vérité serveur quand le delta ne prouve plus sa complétude. Toute
+    /// JUMEAU WEB — `mergeConversationsDelta` (`apps/web/src/lib/api/conversations-delta.ts`)
+    /// porte la même règle sur le cache React Query : même endpoint, même upsert
+    /// par id, retrait par `meta.deletedConversationIds`, même repli sur la
+    /// vérité serveur quand le delta ne prouve plus sa complétude. Toute
     /// évolution de la règle touche les DEUX plateformes.
     ///
     /// TRONCATURE : `GET /conversations` plafonne à 100
@@ -467,7 +466,7 @@ extension ConversationSyncEngine {
         guard let creance = await creanceDeSync() else { return .indisponible(.creanceAbsente) }
 
         let userId = await currentUserId()
-        let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
+        let baseline = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
         let parId = Dictionary(baseline.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         var servies: [MeeshyConversation] = []
@@ -569,8 +568,8 @@ extension ConversationSyncEngine {
     /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
     /// `syncSinceLastCheckpoint` ci-dessus pour la règle de fusion elle-même.
     ///
-    /// `mergeConversationDelta` (`apps/web/lib/conversations/delta-sync.ts`) ne
-    /// porte que la RÈGLE 1 de `reconcileUnread` — conversation ouverte ⇒ 0.
+    /// Le web legacy ne portait que la RÈGLE 1 de `reconcileUnread` (ouverte ⇒ 0) ;
+    /// `mergeConversationsDelta` (`apps/web/src/lib/api/`) n'en porte aucune.
     /// La règle 2 (« lecture locale postérieure au dernier message serveur »)
     /// n'a pas de transposition sûre : elle s'appuie sur `userState.lastReadAt`,
     /// frontière LOCALE que le modèle web ne porte pas, et c'est le fait que
@@ -658,7 +657,7 @@ extension ConversationSyncEngine {
             let userId = await currentUserId()
             let deltaConversations = (await Self.mapConversationsOffMain(response.data, userId: userId))
 
-            let existing = await cache.conversations.load(for: "list").snapshot() ?? []
+            let existing = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
 
             // O(existing + deltas) merge by id, instead of an O(deltas × convs)
             // firstIndex / removeAll scan per delta — measurable on a foreground

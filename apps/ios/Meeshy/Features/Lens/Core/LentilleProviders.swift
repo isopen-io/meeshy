@@ -47,8 +47,8 @@ typealias ReadingModePreference = ReadingModeOrchestrator.ReadingModePreference
 ///
 /// **Domicile provisoire**, même réserve que `ReadingModePreference`
 /// ci-dessus. Le commentaire TS gelé note explicitement qu'« aucun champ
-/// d'appel n'existe aujourd'hui sur `CoreModels.swift` » (vérifié à nouveau
-/// ici, `apps/ios/Meeshy/Features/Lens` inclus) : ce type est donc
+/// d'appel n'existe aujourd'hui » sur les modèles de conversation du SDK
+/// (vérifié à nouveau ici, `apps/ios/Meeshy/Features/Lens` inclus) : ce type est donc
 /// posé ici par nécessité — le protocole `ConversationLiveCallProviding` ne
 /// peut pas exister sans lui — et non par choix de domicile définitif.
 nonisolated struct ConversationLiveCall: Codable, Equatable, Sendable {

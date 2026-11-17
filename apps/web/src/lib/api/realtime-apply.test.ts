@@ -319,7 +319,7 @@ describe('isConversationUpdated (#5793, revue-correction défaut 1) — décodag
 });
 
 describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QUATRIÈME famille du Prisme', () => {
-  test('clé `lastMessageId` ABSENTE : rien à toucher (renommage, réglage)', () => {
+  test('clé `lastMessageId` ABSENTE : le groupe d’aperçu et les non-lus ne bougent pas (le renommage a son témoin, #18914)', () => {
     const client = new QueryClient();
     seedConversations(client, [conv({ id: 'c-a', unreadCount: 3 })]);
 

@@ -80,6 +80,7 @@ function base() {
   ]);
   const prisma = {
     userSession: table([]),
+    pushToken: table([]),
     userVoiceModel: table([]),
     userRelation: table([]),
     pairInteractionDay: table([]),

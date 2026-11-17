@@ -1,0 +1,85 @@
+{
+  "composant": "MeeshyBadge",
+  "cle": "K41",
+  "note": "Vecteurs de parité (fiche K41 § 06, § 10). Loi du compte : portillon, plafond, vrai nombre dit. Hauteurs 18, 22, 28, 36.",
+  "compte": [
+    {
+      "compte": -2,
+      "cap": 99,
+      "texte": null,
+      "dit": null
+    },
+    {
+      "compte": 0,
+      "cap": 99,
+      "texte": null,
+      "dit": null
+    },
+    {
+      "compte": 1,
+      "cap": 99,
+      "texte": "1",
+      "dit": 1
+    },
+    {
+      "compte": 9,
+      "cap": 99,
+      "texte": "9",
+      "dit": 9
+    },
+    {
+      "compte": 99,
+      "cap": 99,
+      "texte": "99",
+      "dit": 99
+    },
+    {
+      "compte": 100,
+      "cap": 99,
+      "texte": "99+",
+      "dit": 100
+    },
+    {
+      "compte": 1204,
+      "cap": 99,
+      "texte": "99+",
+      "dit": 1204
+    },
+    {
+      "compte": 12,
+      "cap": 9,
+      "texte": "9+",
+      "dit": 12
+    }
+  ],
+  "tailles": [
+    {
+      "taille": 18,
+      "hauteur": 18,
+      "corps": 10.5,
+      "marge": 6
+    },
+    {
+      "taille": 22,
+      "hauteur": 22,
+      "corps": 11.5,
+      "marge": 8
+    },
+    {
+      "taille": 28,
+      "hauteur": 28,
+      "corps": 13,
+      "marge": 10
+    },
+    {
+      "taille": 36,
+      "hauteur": 36,
+      "corps": 14,
+      "marge": 14
+    }
+  ],
+  "teintePourcent": 16,
+  "perimeeOpacite": 0.62,
+  "cibleTactile": 44,
+  "rayonMultiLigne": 14
+}

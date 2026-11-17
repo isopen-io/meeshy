@@ -51,7 +51,7 @@ public struct RulerView: View, Equatable {
     }
 
     /// DragGesture has no `.onBegan` — synthesized from the first `.onChanged`
-    /// of the current drag, mirroring `PlayheadView.dragInFlight`.
+    /// of the current drag.
     @State private var dragInFlight: Bool = false
 
     /// Graduations candidates, de la plus fine à la plus grossière. Valeurs

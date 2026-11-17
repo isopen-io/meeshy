@@ -131,8 +131,9 @@ public class MessageMutationsRepository @Inject constructor(
             is OutboxEnqueueResult.QueueFull -> ChatMutationAdmission.REFUSED
         }
 
+    /** Le geste n'est pas parti : la pierre tombale tombe, et CE message se relit par son id (#18953), jamais tout le fil. */
     private suspend fun restore(conversationId: String, messageId: String) {
         messages.markUndeleted(messageId)
-        messages.refresh(conversationId)
+        messages.refreshMessage(conversationId, messageId)
     }
 }

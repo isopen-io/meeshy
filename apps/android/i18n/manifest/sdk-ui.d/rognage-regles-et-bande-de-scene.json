@@ -11,11 +11,6 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "media.trim.window",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
           "iosKey": "media.trim.of_total",
           "status": "adopted"
         },

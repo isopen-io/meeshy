@@ -5,12 +5,14 @@ import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import { fixtureHold } from './fixture-hold';
 import type { ApiResult, HttpTransport } from './http';
+import { writeLive, type LiveWriteOptions } from './live-cache-journal';
 import { canSendPlaintext, E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
+import { cachedOlderThreadPage, firstThreadPage } from './messages-revalidation';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
 import { seedMineFromPage, snapshotMine } from './reactions-mine';
@@ -158,17 +160,17 @@ export async function requestMessageRows(
  * la MÊME absence que `nextCursor` d'un fil épuisé.
  */
 export function messagesInfiniteOptions(deps: ConversationsDeps, conversationId: string) {
+  const load = async (before: MessagesPageParam, signal: AbortSignal | undefined): Promise<MessagesPage> =>
+    unwrap(await loadMessages({ ...deps, conversationId, ...(before != null ? { before } : {}), ...(signal !== undefined ? { signal } : {}) }));
+  const cachedOf = (client: QueryClient | undefined) => client?.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
   return {
     queryKey: messagesQueryKey(conversationId),
-    queryFn: async ({ pageParam, signal }: { readonly pageParam?: MessagesPageParam; readonly signal?: AbortSignal }) =>
-      unwrap(
-        await loadMessages({
-          ...deps,
-          conversationId,
-          ...(pageParam != null ? { before: pageParam } : {}),
-          ...(signal !== undefined ? { signal } : {}),
-        }),
-      ),
+    /* LA PAGE 1 SEULE à la relecture d'un fil déjà chargé, recollée au présent
+       tenu, les pages anciennes reprises du cache (#18918, `messages-revalidation.ts`). */
+    queryFn: async ({ pageParam, signal, client }: { readonly pageParam?: MessagesPageParam; readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
+      if (pageParam == null) return firstThreadPage({ client, conversationId, cached: cachedOf(client), served: await load(undefined, signal) });
+      return cachedOlderThreadPage({ client, conversationId, cached: cachedOf(client), cursor: pageParam }) ?? load(pageParam, signal);
+    },
     initialPageParam: undefined as MessagesPageParam,
     getNextPageParam: nextMessagesCursor,
   };
@@ -247,11 +249,14 @@ export function patchThreadMessages(
   queryClient: QueryClient,
   conversationId: string,
   updater: ThreadMessagesUpdater,
+  options: LiveWriteOptions = {},
 ): void {
-  queryClient.setQueriesData<MessagesInfiniteData>({ queryKey: messagesQueryKey(conversationId) }, (data) => {
-    if (data === undefined || !Array.isArray(data.pages)) return data;
-    return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
-  });
+  const patched = (data: MessagesInfiniteData | undefined): MessagesInfiniteData | undefined =>
+    data === undefined || !Array.isArray(data.pages) ? data : { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: messagesQueryKey(conversationId) })
+    .forEach((query) => writeLive(queryClient, query.queryKey, patched, options));
 }
 
 /**
@@ -259,7 +264,8 @@ export function patchThreadMessages(
  * fenêtres ancrées autour d'un message (`messages-window.ts`), qui vivent sous
  * le MÊME préfixe : une réaction, une traduction ou une consommation reçue
  * pendant qu'on lit un message ancien doit atteindre la rangée qu'on lit.
- * C'est pourquoi `patchThreadMessages` écrit par PRÉFIXE (`setQueriesData`).
+ * C'est pourquoi `patchThreadMessages` écrit par PRÉFIXE, chaque requête par le
+ * journal des écritures vives (`live-cache-journal.ts`, #18914).
  */
 function threadWindowsOf(queryClient: QueryClient, conversationId: string): readonly MessagesInfiniteData[] {
   return queryClient
@@ -338,21 +344,22 @@ export function upsertThreadMessage(
   /* LA FENÊTRE ANCRÉE (#7420) n'accueille que des REMPLACEMENTS : un message
      neuf est plus récent qu'elle, il appartient au présent — l'y poser
      ouvrirait un trou entre sa dernière page et lui. */
-  queryClient.setQueriesData<MessagesInfiniteData>(
-    { queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 },
-    (data) => {
-      if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
-      return {
-        ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          messages: page.messages.map((m) => (matches(m) ? mergedThreadRow(m, message) : m)),
-        })),
-      };
-    },
-  );
+  const replacedInWindow = (data: MessagesInfiniteData | undefined): MessagesInfiniteData | undefined => {
+    if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
+    return {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        messages: page.messages.map((m) => (matches(m) ? mergedThreadRow(m, message) : m)),
+      })),
+    };
+  };
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 })
+    .forEach((query) => writeLive(queryClient, query.queryKey, replacedInWindow));
 
-  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
+  writeLive<MessagesInfiniteData>(queryClient, messagesQueryKey(conversationId), (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
 
     const host = data.pages.findIndex((page) => page.messages.some(matches));

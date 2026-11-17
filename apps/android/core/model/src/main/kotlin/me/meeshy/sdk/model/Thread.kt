@@ -2,7 +2,7 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
 
-/** A message thread — parent message plus its replies — port of ThreadData (ThreadModels.swift). */
+/** A message thread — parent message plus its replies. */
 @Serializable
 data class ThreadData(
     val parent: ApiMessage,

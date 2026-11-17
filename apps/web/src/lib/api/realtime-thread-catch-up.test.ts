@@ -1,9 +1,10 @@
-import { InfiniteQueryObserver, QueryClient } from '@tanstack/react-query';
+import { InfiniteQueryObserver, type QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 
 import { createOutboxStore } from '@/lib/send/outbox-store';
+import { liveQueryClient } from '@/test-support/live-query-client';
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
 
 import { messagesQueryKey } from './messages';
@@ -14,8 +15,9 @@ import type { Message } from './types';
 
 /**
  * #9291 — « la notification arrive, le message n'est pas dans le fil ». Les
- * témoins jouent un VRAI `QueryClient` et un vrai observateur (le fil ouvert),
- * et une `queryFn` qui sert ce que le serveur tient au moment de l'appel.
+ * témoins jouent un VRAI `QueryClient` — celui de l'application, journal des
+ * écritures vives posé (#18914) — et un vrai observateur (le fil ouvert), et
+ * une `queryFn` qui sert ce que le serveur tient au moment de l'appel.
  */
 
 const older = localMessage({ id: 'm-0', senderId: 'u-other', createdAt: new Date('2026-10-04T06:00:00.000Z') });
@@ -67,7 +69,7 @@ const settle = async (client: QueryClient): Promise<void> => {
 
 describe('#9291 — un message:new reçu PENDANT une requête du fil survit à sa réponse', () => {
   test('la réponse partie avant le message ne l’efface pas du fil ouvert', async () => {
-    const client = new QueryClient();
+    const client = liveQueryClient();
     client.setQueryData(messagesQueryKey('c-a'), threadPages([older]));
     const inFlight = deferred();
     const server = {
@@ -87,7 +89,7 @@ describe('#9291 — un message:new reçu PENDANT une requête du fil survit à s
   });
 
   test('sans requête en vol, le temps réel ne déclenche AUCUNE relecture', async () => {
-    const client = new QueryClient();
+    const client = liveQueryClient();
     const server = { calls: 0, respond: (): Promise<MessagesPage> => Promise.resolve(pageOf([older])) };
     const { unsubscribe } = openThread(client, server);
     await settle(client);
@@ -104,7 +106,7 @@ describe('#9291 — un message:new reçu PENDANT une requête du fil survit à s
 
 describe('#9291 — catchUpThreadMessage : un signal personnel qui nomme un message absent relit le fil', () => {
   test('message absent du fil ouvert ⇒ le fil est relu et le message apparaît', async () => {
-    const client = new QueryClient();
+    const client = liveQueryClient();
     const served = { messages: [older] as readonly Message[] };
     const server = { calls: 0, respond: (): Promise<MessagesPage> => Promise.resolve(pageOf(served.messages)) };
     const { unsubscribe } = openThread(client, server);
@@ -119,7 +121,7 @@ describe('#9291 — catchUpThreadMessage : un signal personnel qui nomme un mess
   });
 
   test('message déjà dans le fil ⇒ aucune requête', async () => {
-    const client = new QueryClient();
+    const client = liveQueryClient();
     const server = { calls: 0, respond: (): Promise<MessagesPage> => Promise.resolve(pageOf([older, fresh])) };
     const { unsubscribe } = openThread(client, server);
     await settle(client);
@@ -133,7 +135,7 @@ describe('#9291 — catchUpThreadMessage : un signal personnel qui nomme un mess
   });
 
   test('fil jamais ouvert ⇒ rien n’est construit ni demandé', () => {
-    const client = new QueryClient();
+    const client = liveQueryClient();
     catchUpThreadMessage(client, { conversationId: 'c-jamais', messageId: 'm-1' });
     expect(client.getQueryData(messagesQueryKey('c-jamais'))).toBeUndefined();
   });
@@ -152,7 +154,7 @@ describe('#10573 — une traduction reçue PENDANT une requête du fil survit à
     threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1')?.translations.find((t) => t.targetLanguage === 'en')?.translatedContent;
 
   test('la réponse partie avant la traduction ne la retire pas du fil ouvert', async () => {
-    const client = new QueryClient();
+    const client = liveQueryClient();
     client.setQueryData(messagesQueryKey('c-a'), threadPages([older, fresh]));
     const inFlight = deferred();
     const server = {
@@ -171,7 +173,7 @@ describe('#10573 — une traduction reçue PENDANT une requête du fil survit à
   });
 
   test('sans requête en vol, la traduction ne déclenche AUCUNE relecture', async () => {
-    const client = new QueryClient();
+    const client = liveQueryClient();
     const server = { calls: 0, respond: (): Promise<MessagesPage> => Promise.resolve(pageOf([older, fresh])) };
     const { unsubscribe } = openThread(client, server);
     await settle(client);

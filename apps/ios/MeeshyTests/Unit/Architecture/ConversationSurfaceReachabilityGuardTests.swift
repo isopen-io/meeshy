@@ -480,7 +480,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
 ///
 /// Relevé sur `dev` 3ff99d3aa3 : la conversation se lit de CINQ façons, et le
 /// décompte d'un message éphémère n'existait que dans trois d'entre elles —
-/// Focal et Script (`FocalEphemeralBadge`), Bulle (`BubbleEphemeralBadge`).
+/// Focal, Script et Bulle, par deux badges distincts.
 /// **Rivière et Résumé n'affichaient rien** : un message qui allait disparaître
 /// dans trente secondes ne le disait pas à deux lecteurs sur cinq.
 ///

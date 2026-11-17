@@ -2,8 +2,7 @@ import CoreGraphics
 
 /// Disk-cache key scheme (`CacheCoordinator.thumbnails`) for a story/draft's
 /// locally-rendered composite cover. Shared between the app (publish-time cover,
-/// `StoryViewModel`) and the SDK (draft autosave hook,
-/// `StoryComposerView+SyncRestore`) — a pure naming/sizing convention, no product
+/// `StoryViewModel`) and the SDK (draft autosave, `StoryStoredDraft`) — a pure naming/sizing convention, no product
 /// decision, so it lives here rather than being duplicated on both sides of the
 /// SDK/app boundary.
 public nonisolated enum StoryCoverCacheKey {

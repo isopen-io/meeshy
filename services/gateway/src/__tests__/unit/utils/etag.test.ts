@@ -1,4 +1,4 @@
-import { computeETag, ifNoneMatchMatches, sendWithETag } from '../../../utils/etag';
+import { computeETag, ifNoneMatchMatches, sendWithETag, sendWithValidator } from '../../../utils/etag';
 
 describe('computeETag', () => {
   it('is deterministic for identical payloads', () => {
@@ -95,6 +95,49 @@ describe('sendWithETag', () => {
     const reply = makeReply();
     const handled = sendWithETag(makeRequest('"stale"'), reply as any, { data: [9] });
     expect(handled).toBe(false);
+    expect(reply._state.sent).toBe(false);
+  });
+});
+
+/**
+ * #19049 — la mesure de la part de 304 parmi les revalidations distingue une
+ * requête sans `If-None-Match` d'une revalidation ratée : sans cette
+ * distinction, les premières lectures noieraient le rapport.
+ */
+describe('sendWithValidator', () => {
+  function makeReply() {
+    const headers: Record<string, string> = {};
+    const state = { statusCode: 200, sent: false };
+    const reply = {
+      header(key: string, value: string) { headers[key] = value; return reply; },
+      code(c: number) { state.statusCode = c; return reply; },
+      send() { state.sent = true; return reply; },
+      _headers: headers,
+      _state: state,
+    };
+    return reply;
+  }
+  const request = (ifNoneMatch?: string) =>
+    ({ headers: ifNoneMatch === undefined ? {} : { 'if-none-match': ifNoneMatch } }) as any;
+
+  it('sans If-None-Match : `unconditional`, ETag et Cache-Control posés, rien d’envoyé', () => {
+    const reply = makeReply();
+    expect(sendWithValidator(request(), reply as any, 'W/"abc"')).toBe('unconditional');
+    expect(reply._headers['ETag']).toBe('W/"abc"');
+    expect(reply._headers['Cache-Control']).toBe('private, no-cache');
+    expect(reply._state.sent).toBe(false);
+  });
+
+  it('une revalidation qui correspond — faible contre faible : `not-modified`, un 304 sans corps', () => {
+    const reply = makeReply();
+    expect(sendWithValidator(request('W/"abc"'), reply as any, 'W/"abc"')).toBe('not-modified');
+    expect(reply._state.statusCode).toBe(304);
+    expect(reply._state.sent).toBe(true);
+  });
+
+  it('une revalidation périmée : `modified`, l’appelant sert le 200', () => {
+    const reply = makeReply();
+    expect(sendWithValidator(request('W/"old"'), reply as any, 'W/"abc"')).toBe('modified');
     expect(reply._state.sent).toBe(false);
   });
 });

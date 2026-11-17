@@ -117,7 +117,6 @@ extension AudioPlayerView {
     /// zero / negative width (pre-layout `GeometryReader` tick) so it never
     /// divides by zero. Pure; unit-tested.
     nonisolated public static func scrubFraction(locationX: CGFloat, width: CGFloat) -> Double {
-        guard width > 0 else { return 0 }
-        return Double(max(0, min(width, locationX)) / width)
+        MeeshyWaveBarsLaw.scrubFraction(locationX: Double(locationX), width: Double(width), isRightToLeft: false)
     }
 }

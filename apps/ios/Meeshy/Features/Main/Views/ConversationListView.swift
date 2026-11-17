@@ -572,9 +572,10 @@ struct ConversationListView: View {
             }
             .task {
                 async let conversations: Void = ConversationListVMOwner.loadAtLaunch(conversationViewModel)
-                async let communities: Void = loadUserCommunities()
+                async let communities: Void = MyCommunities.shared.load()
                 _ = await (conversations, communities)
             }
+            .onReceive(MyCommunities.shared.$communities) { applyCommunities($0) }
             .adaptiveOnChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     conversationViewModel.handleForegroundReturn()
@@ -660,7 +661,7 @@ struct ConversationListView: View {
                     async let convRefresh: Void = conversationViewModel.pullToRefresh()
                     async let storyRefresh: Void = storyViewModel.loadStories(forceNetwork: true)
                     async let statusRefresh: Void = statusViewModel.refresh()
-                    async let communitiesRefresh: Void = loadUserCommunities()
+                    async let communitiesRefresh: Void = MyCommunities.shared.refresh()
                     _ = await (convRefresh, storyRefresh, statusRefresh, communitiesRefresh)
                 },
                 coordinateSpaceName: "scroll",
@@ -910,18 +911,11 @@ struct ConversationListView: View {
         return true
     }
 
-    // MARK: - Load Communities
-    private func loadUserCommunities() async {
-        await ConversationListCommunitiesLoader.load(apply: applyCommunities)
-    }
+    // MARK: - Communities
 
-    /// Maps API payloads to the domain `MeeshyCommunity` type and updates
-    /// both the array and the id-keyed lookup the rows consume. Pulled out
-    /// so the cache-first switch in `loadUserCommunities` stays readable
-    /// and the same transform is reused across the fresh / stale / network
-    /// branches.
-    private func applyCommunities(_ apiCommunities: [APICommunity]) {
-        let mapped = apiCommunities.map { $0.toCommunity() }
+    /// La bande suit « mes communautés » (`MyCommunities`, #18935) : un geste
+    /// sur une fiche — rejoindre, quitter, créer — s'y voit au retour.
+    private func applyCommunities(_ mapped: [MeeshyCommunity]) {
         userCommunities = mapped
         userCommunityLookup = Dictionary(mapped.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }

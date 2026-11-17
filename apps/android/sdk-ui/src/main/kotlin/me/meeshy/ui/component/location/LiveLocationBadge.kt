@@ -46,7 +46,7 @@ import me.meeshy.ui.theme.hexColor
 
 /**
  * "Someone is sharing their live position" capsule — Android render of the iOS
- * `LiveLocationBadge` (`LiveLocationBadge.swift`): a pulsing green dot, an accent
+ * live-location badge: a pulsing green dot, an accent
  * location glyph, the sharer's name, a live countdown, and an optional Stop action.
  *
  * All countdown maths live in the pure [LiveLocationCountdown]; this composable only

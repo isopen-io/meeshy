@@ -57,6 +57,25 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
             }
             .store(in: &cancellables)
 
+        // Une notification arrivée LUE (réécrite après une édition) a été
+        // retirée de la liste par son `deleted` : la relecture la remet à sa
+        // place, sans bannière ni compte (#19104).
+        feed.notificationArrivedRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.scheduleRefresh()
+            }
+            .store(in: &cancellables)
+
+        // Au retour au premier plan et à la reconnexion, `notification:new` n'est pas
+        // rejoué : seule la resync de la liste servie dit qu'il y a du neuf (#18916).
+        feed.resynced
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.scheduleRefresh()
+            }
+            .store(in: &cancellables)
+
         feed.notificationMarkedRead
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notificationId in
@@ -107,6 +126,15 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
                 self?.markReadLocally(scope: .all)
             }
             .store(in: &cancellables)
+
+        // Une purge des lues faite ailleurs : TOUTES les lignes lues quittent
+        // la liste, pages chargées au-delà du cache comprises (#19104).
+        feed.readNotificationsPurged
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.notifications.removeAll { $0.isRead }
+            }
+            .store(in: &cancellables)
     }
 
     private func markReadLocally(scope: NotificationReadScope) {
@@ -149,10 +177,22 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
         case .fresh(let data, _), .stale(let data, _):
             showCachedPreview(data)
             await refreshFromAPI()
-        case .expired, .empty:
+        case .expired:
+            showCachedPreview(await feed.cachedFeedIgnoringExpiry())
+            isLoading = notifications.isEmpty
+            await refreshFromAPI()
+        case .empty:
             isLoading = notifications.isEmpty
             await refreshFromAPI()
         }
+    }
+
+    /// Le tirer-pour-rafraîchir va TOUJOURS au serveur : `loadInitial` court-
+    /// circuite le réseau sur un cache frais (ouverture de la cloche, voulu),
+    /// et le geste ne rafraîchissait donc rien pendant 2 minutes (#19104).
+    func refresh() async {
+        loadDidFail = false
+        await refreshFromAPI()
     }
 
     func select(_ category: NotificationCategory) async {
@@ -168,7 +208,9 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
             switch await feed.cachedFeed() {
             case .fresh(let data, _), .stale(let data, _):
                 showCachedPreview(data)
-            case .expired, .empty:
+            case .expired:
+                showCachedPreview(await feed.cachedFeedIgnoringExpiry())
+            case .empty:
                 break
             }
         }

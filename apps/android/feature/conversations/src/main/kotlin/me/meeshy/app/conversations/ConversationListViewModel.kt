@@ -39,6 +39,7 @@ import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
@@ -81,6 +82,8 @@ class ConversationListViewModel @Inject constructor(
     messageSearchSource: ListMessageSearchSource = NoListMessageSearch,
     entryRequests: ConversationListEntryRequests = ConversationListEntryRequests(),
     private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
+    /** #18930 — the realtime mood deltas the row moods follow. */
+    socialSocketManager: SocialSocketManager? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -158,6 +161,7 @@ class ConversationListViewModel @Inject constructor(
         storyRepository = storyRepository,
         statusBarCache = statusBarCache,
         sectionExpansion = sectionExpansion,
+        socialSocketManager = socialSocketManager,
     )
     private val sectionController = ConversationSectionController(
         viewModelScope, sectionExpansion, categoryRepository,

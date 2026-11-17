@@ -33,13 +33,7 @@ import XCTest
 final class P2PWebRTCClientBuildVideoTrackFailureRevertSourceTests: XCTestCase {
 
     private static let source: String = {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Services/
-            .deletingLastPathComponent()   // Unit/
-            .deletingLastPathComponent()   // MeeshyTests/
-            .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
-        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        (try? AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")) ?? ""
     }()
 
     /// Loud by construction: a missing start OR end marker fails the test via
@@ -64,7 +58,7 @@ final class P2PWebRTCClientBuildVideoTrackFailureRevertSourceTests: XCTestCase {
     }
 
     private func fetchFunctionBody() -> String? {
-        body(from: "private func buildLocalVideoTrackAndStartCapture() async throws {", to: "private func applyAudioCodecPreferences")
+        body(from: "func buildLocalVideoTrackAndStartCapture() async throws {", to: "func applyAudioCodecPreferences")
     }
 
     func test_buildLocalVideoTrackAndStartCapture_wrapsDeviceFormatAndStartCaptureInDoCatch() {

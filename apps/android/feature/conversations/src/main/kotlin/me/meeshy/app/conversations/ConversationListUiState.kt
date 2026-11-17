@@ -121,8 +121,9 @@ data class ConversationListUiState(
      * port of iOS `StatusViewModel.statuses` read by
      * `ConversationListView.conversationMoodStatus(for:)`. Empty until the status
      * bar has ever loaded; a decorative affordance, never primary content, so it
-     * is painted once from cache with no fetch of its own (mirrors
-     * `ContactsListViewModel`).
+     * is painted from cache with no fetch of its own (mirrors
+     * `ContactsListViewModel`), then kept live by the realtime mood deltas
+     * (`status:created/updated/deleted`, #18930) as iOS reads `StatusViewModel` live.
      */
     val moodStatuses: List<StatusEntry> = emptyList(),
 ) {

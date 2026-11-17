@@ -135,7 +135,7 @@ public extension UserNotificationPreferences {
             return reactionEnabled
         case .contactRequest, .friendRequest, .legacyFriendRequest:
             return contactRequestEnabled
-        case .contactAccepted, .friendAccepted, .legacyFriendAccepted, .contactJoined:
+        case .contactAccepted, .friendAccepted, .legacyFriendAccepted, .contactJoined, .relationAcquaintance:
             return contactRequestEnabled
         case .contactRecentlyActive:
             return contactActivityEnabled
@@ -169,7 +169,8 @@ public extension UserNotificationPreferences {
             return commentLikeEnabled
         case .storyNewComment, .friendStoryComment, .storyThreadReply:
             return postCommentEnabled
-        case .friendNewPost, .friendNewStory, .friendNewMood:
+        case .friendNewPost, .friendNewStory, .friendNewMood,
+             .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote:
             return friendContentEnabled
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged,
              .twoFactorEnabled, .twoFactorDisabled, .system, .maintenance, .updateAvailable:

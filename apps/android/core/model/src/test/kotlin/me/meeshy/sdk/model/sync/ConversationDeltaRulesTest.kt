@@ -119,6 +119,13 @@ class ConversationDeltaRulesTest {
     }
 
     @Test
+    fun `une ligne dont le dernier message a ete supprime pendant l'absence demande la route riche`() {
+        val merge = ConversationDeltaRules.merge(mapOf("c1" to cached()), listOf(row(lastMessageAt = "2026-09-30T08:00:00.000Z")))
+        assertThat(merge.needsRichRefresh).isTrue()
+        assertThat(merge.upserts.single().lastMessage?.content).isEqualTo("Bonjour")
+    }
+
+    @Test
     fun `une ligne a activite inchangee ne demande rien de plus`() {
         val merge = ConversationDeltaRules.merge(mapOf("c1" to cached()), listOf(row()))
         assertThat(merge.needsRichRefresh).isFalse()

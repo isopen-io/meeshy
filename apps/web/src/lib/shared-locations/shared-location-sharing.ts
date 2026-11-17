@@ -51,6 +51,11 @@ import {
  * (`rosterOps.withServed`) : un retrait fait ailleurs s'applique ici, un ajout fait ailleurs
  * n'est plus effacé par la liste périmée de cet onglet.
  *
+ * PLUSIEURS ONGLETS, UNE LISTE (#18431) : les onglets d'un même compte partagent la liste par
+ * `localStorage`. Chaque opération passe par `acrossTabs` (`navigator.locks`, un verrou par compte) :
+ * un « Arrêter » ne court jamais pendant qu'un démarrage d'un autre onglet attend son accusé, et
+ * relit la liste que ce démarrage vient d'adopter avant de retirer la personne.
+ *
  * Une liste REÇUE d'un autre appareil (adoptée par `sync()` quand ce navigateur ne partageait rien) ne
  * fait jamais partir la position d'ici : pas de suivi, pas même au rechargement (marque
  * `<clé>.received`), et une échéance s'y solde sans rien envoyer — la passerelle tient
@@ -99,6 +104,25 @@ export type SharedLocationSharingCenter = {
   abandon(): void;
 };
 
+/** Sérialise une opération avec celles des autres onglets du même compte ; sans verrou partagé, elle court seule. */
+export type SharedLocationAcrossTabs = <T>(run: () => Promise<T>) => Promise<T>;
+
+const ALONE: SharedLocationAcrossTabs = (run) => run();
+
+/** La part de `LockManager` (Web Locks) employée : un verrou EXCLUSIF par nom. */
+type SharedLocationLockManager = {
+  readonly request: <T>(name: string, options: { readonly mode: 'exclusive' }, callback: () => Promise<T>) => Promise<T>;
+};
+
+const isLockManager = (candidate: unknown): candidate is SharedLocationLockManager =>
+  typeof candidate === 'object' && candidate !== null && typeof (candidate as { readonly request?: unknown }).request === 'function';
+
+/** Le verrou `navigator.locks` du compte ; un navigateur sans Web Locks garde le verrou de l'onglet seul (comportement d'avant #18431). */
+export function sharedLocationAcrossTabs(locks: unknown, name: string): SharedLocationAcrossTabs {
+  if (!isLockManager(locks)) return ALONE;
+  return (run) => locks.request(name, { mode: 'exclusive' }, run);
+}
+
 /** Une échéance qui n'a pas pu se solder (hors ligne, refus) est rejouée à ce rythme, et à chaque socket accrochée. */
 export const SHARED_LOCATION_RETRY_MS = 30_000;
 /** Une seconde après l'échéance, pour que la personne soit bien sortie de la liste élaguée. */
@@ -143,6 +167,7 @@ export function createSharedLocationSharingCenter({
   owner,
   currentAccount,
   served = async () => null,
+  acrossTabs = ALONE,
 }: {
   readonly emitter: SharedLocationEmitter;
   readonly fixes: SharedLocationFixSource;
@@ -154,6 +179,8 @@ export function createSharedLocationSharingCenter({
   readonly currentAccount: () => string | null;
   /** Le partage que la passerelle sert au compte ; `null` quand la relecture n'a rien rendu (hors ligne, passerelle d'avant). */
   readonly served?: () => Promise<SharedLocationOwnSnapshot | null>;
+  /** Le verrou partagé avec les autres onglets du même compte (#18431). */
+  readonly acrossTabs?: SharedLocationAcrossTabs;
 }): SharedLocationSharingCenter {
   const withdrawalsKey = sharedLocationWithdrawalsKey(storageKey);
   const receivedKey = `${storageKey}.received`;
@@ -259,10 +286,19 @@ export function createSharedLocationSharingCenter({
       if (!isLive() || !rosterOps.hasRecipients(current) || rosterOps.hasPendingWithdrawals(current) || !shouldSendSharedLocation(fix, now(), lastSent)) return;
       lastSent = { fix, at: now() };
       const verdict = await emitter.update(fix);
-      if (isLive() && verdict.kind === 'refused' && verdict.outcome === 'not-sharing') wipe();
+      if (isLive() && verdict.kind === 'refused' && verdict.outcome === 'not-sharing') await wipeUnlessChangedElsewhere(current);
     } finally {
       gate.leave();
     }
+  };
+
+  /* « Pas de partage » répond à la liste d'AVANT l'envoi : un autre onglet a pu en démarrer une depuis, qu'on ne vide pas (#18431). */
+  const wipeUnlessChangedElsewhere = async (sentWith: SharedLocationRoster): Promise<void> => {
+    await acrossTabs(async () => {
+      if (!isLive()) return;
+      reread();
+      if (rosterOps.equals(roster(), sentWith)) wipe();
+    });
   };
 
   const startFollowing = (): void => {
@@ -351,33 +387,45 @@ export function createSharedLocationSharingCenter({
     return current.kind === 'fix' ? current.fix : null;
   };
 
-  const locked = async (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> => {
+  /* Le verrou de l'onglet seul : ce qui attend l'utilisateur (une demande de permission) s'y tient, jamais sous celui des autres onglets. */
+  const gated = async (run: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> => {
     await gate.enter();
     try {
-      if (!isLive()) return 'failed';
-      reread();
       store.setState({ busy: true });
-      return await operation();
+      return await run();
     } finally {
       store.setState({ busy: false });
       gate.leave();
     }
   };
 
+  /* Sous le verrou du compte, la liste gardée est relue : un autre onglet a pu la changer pendant l'attente (#18431). */
+  const acrossAccountTabs = (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> =>
+    acrossTabs(async () => {
+      if (!isLive()) return 'failed';
+      reread();
+      return operation();
+    });
+
+  const locked = (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> =>
+    gated(() => acrossAccountTabs(operation));
+
   const center: SharedLocationSharingCenter = {
     store,
     entry: (userId) => rosterOps.entry(rosterOps.pruned(roster(), now()), userId),
     showsRow: (userId, offered) => offered || center.entry(userId) !== null,
     share: ({ userId, precision, durationMinutes }) =>
-      locked(async () => {
+      gated(async () => {
+        if (!isLive()) return 'failed';
         const current = await fixes.currentFix();
         if (current.kind === 'denied') return 'location-denied';
         if (current.kind === 'unavailable') return 'location-unavailable';
-        if (!isLive()) return 'failed';
-        markReceived(false);
-        const previous = roster();
-        const next = rosterOps.adding(rosterOps.pruned(previous, now()), { userId, precision, durationMinutes, now: now() });
-        return publish(next, current.fix, previous);
+        return acrossAccountTabs(async () => {
+          markReceived(false);
+          const previous = roster();
+          const next = rosterOps.adding(rosterOps.pruned(previous, now()), { userId, precision, durationMinutes, now: now() });
+          return publish(next, current.fix, previous);
+        });
       }),
     stopSharing: (userId) =>
       locked(async () => {
