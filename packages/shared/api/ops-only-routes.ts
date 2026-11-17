@@ -113,6 +113,14 @@ export const OPS_ONLY_ROUTES: readonly OpsOnlyRoute[] = [
   },
   {
     method: 'GET',
+    path: '/api/v1/posts/:postId/og',
+    reason:
+      "`services/gateway/src/routes/links/unfurl.ts` (#3673) — aperçu que Traefik sert aux ROBOTS " +
+      "d'aperçu quand ils déplient `/post|reel|story|mood|feeds/post/<id>` : aucun écran d'app ne " +
+      "l'appelle, l'app lit le contenu par `GET /posts/:postId` pour sa carte vivante (#19331).",
+  },
+  {
+    method: 'GET',
     path: '/api/v1/@:username',
     reason:
       "`services/gateway/src/routes/users/profile-short-address.ts` (#18862) — l'adresse courte " +

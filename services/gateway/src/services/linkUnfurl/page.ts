@@ -114,9 +114,15 @@ export type LinkUnfurl = {
   readonly imageMeta?: UnfurlImageMeta | null;
   /** Absent : la grande carte. `summary` : une image carrée (un avatar). */
   readonly card?: 'summary' | 'summary_large_image';
+  /** Absent : `website`. Un contenu publié est un `article`, une vidéo un `video.other` (#3673). */
+  readonly ogType?: 'website' | 'article' | 'video.other';
+  /** La vidéo qu'un robot sait jouer (#3673) : un fichier H.264, jamais un original qu'il ne lirait pas. */
+  readonly video?: UnfurlVideo | null;
 };
 
 export type UnfurlImageMeta = { readonly type: string; readonly width: number; readonly height: number };
+
+export type UnfurlVideo = { readonly url: string; readonly type: string; readonly width: number | null; readonly height: number | null };
 
 const LINE_BREAKS = /[\t\n\r\f\v\u2028\u2029]+/g;
 const INVISIBLE_CONTROLS = /[\p{Cc}\u115F\u1160\u3164\uFFA0]/gu;
@@ -144,7 +150,7 @@ export function cleanUserText(text: string | null | undefined, max: number): str
 }
 
 /** Les langues de l'`Accept-Language`, de la plus à la moins demandée. */
-function acceptedLanguages(header: string | undefined): readonly string[] {
+export function acceptedLanguages(header: string | undefined): readonly string[] {
   return (header ?? '')
     .split(',')
     .map((entry, index) => {
@@ -242,10 +248,21 @@ export function renderLinkUnfurlPage(unfurl: LinkUnfurl): string {
         ['property', 'og:image:width', String(imageMeta.width)],
         ['property', 'og:image:height', String(imageMeta.height)]
       ];
+  const video = unfurl.video ?? null;
+  const videoTags: readonly MetaTag[] = video === null
+    ? []
+    : [
+        ['property', 'og:video', video.url],
+        ['property', 'og:video:secure_url', video.url],
+        ['property', 'og:video:type', video.type],
+        ...(video.width !== null && video.height !== null
+          ? [['property', 'og:video:width', String(video.width)], ['property', 'og:video:height', String(video.height)]] as const
+          : [])
+      ];
   const tags: readonly MetaTag[] = [
     ['name', 'description', unfurl.description],
     ['name', 'robots', 'noindex, nofollow'],
-    ['property', 'og:type', 'website'],
+    ['property', 'og:type', unfurl.ogType ?? 'website'],
     ['property', 'og:site_name', 'Meeshy'],
     ['property', 'og:locale', unfurl.locale],
     ['property', 'og:title', unfurl.title],
@@ -254,6 +271,7 @@ export function renderLinkUnfurlPage(unfurl: LinkUnfurl): string {
     ['property', 'og:image', unfurl.imageUrl],
     ...imageTags,
     ['property', 'og:image:alt', unfurl.imageAlt],
+    ...videoTags,
     ['name', 'twitter:card', unfurl.card ?? 'summary_large_image'],
     ['name', 'twitter:title', unfurl.title],
     ['name', 'twitter:description', unfurl.description],

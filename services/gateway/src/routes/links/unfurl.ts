@@ -13,6 +13,10 @@
  * générique. Les deux partagent la ligne de lien de partage lue, le plafond et
  * les en-têtes.
  *
+ * `GET /posts/:postId/og` (#3673) déplie un CONTENU — post, réel, story,
+ * humeur — par son adresse directe (`/post|reel|story|mood|feeds/post/<id>`) ;
+ * le lien suivi d'un contenu en compose le même aperçu, à son adresse suivie.
+ *
  * Pas de `sendSuccess` ici, et c'est le seul écart à la règle de réponse : un
  * robot d'aperçu lit du HTML, pas une enveloppe JSON.
  */
@@ -50,6 +54,12 @@ import {
   loadPersonUnfurlSource,
   type PersonUnfurlSource
 } from '../../services/linkUnfurl/person';
+import {
+  composeContentUnfurl,
+  isContentUnfurlId,
+  loadContentUnfurlSource,
+  type ContentUnfurlSource
+} from '../../services/linkUnfurl/content';
 
 export const LINK_UNFURL_RATE_LIMIT_MAX = 60;
 export const LINK_UNFURL_CACHE_TTL_MS = 5 * 60_000;
@@ -109,6 +119,25 @@ export function registerLinkUnfurlRoute(
     if (cached !== undefined) return cached;
     const row = await loadLinkUnfurlSource(prisma, identifier);
     rows.set(identifier, row);
+    return row;
+  };
+
+  const contentRows = new BoundedTtlCache<string, ContentUnfurlSource | null>({
+    maxSize: LINK_UNFURL_CACHE_MAX,
+    ttlMs: LINK_UNFURL_CACHE_TTL_MS
+  });
+
+  /** Un contenu lu pour un robot ; une lecture qui tombe vaut un contenu inconnu (le générique). */
+  const readContent = async (postId: string): Promise<ContentUnfurlSource | null> => {
+    if (!isContentUnfurlId(postId)) return null;
+    const cached = contentRows.get(postId);
+    if (cached !== undefined) return cached;
+    const row = await loadContentUnfurlSource(prisma, postId).catch((error: unknown) => {
+      logWarn(fastify.log, 'Content unfurl read failed — serving the generic preview', error);
+      return undefined;
+    });
+    if (row === undefined) return null;
+    contentRows.set(postId, row);
     return row;
   };
 
@@ -181,7 +210,7 @@ export function registerLinkUnfurlRoute(
    */
   fastify.get<{ Params: { token: string } }>('/tracking-links/:token/og', {
     schema: {
-      description: 'Aperçu d’un lien suivi pour les robots d’aperçu des messageries (#10192) : une cible web extérieure d’un lien actif renvoie le robot vers elle (302, aucun clic compté) ; une invitation Meeshy ouverte et publique rend son aperçu ; tout le reste rend l’aperçu générique de Meeshy, en 200.',
+      description: 'Aperçu d’un lien suivi pour les robots d’aperçu des messageries (#10192) : une cible web extérieure d’un lien actif renvoie le robot vers elle (302, aucun clic compté) ; une invitation Meeshy ouverte et publique rend son aperçu ; un contenu (post, réel, story, humeur) qu’un lecteur sans compte peut lire rend sa carte (#3673) ; tout le reste rend l’aperçu générique de Meeshy, en 200.',
       tags: ['tracking-links'],
       summary: 'Aperçu d’un lien suivi pour les robots',
       params: {
@@ -218,6 +247,20 @@ export function registerLinkUnfurlRoute(
           'referrer-policy': RESPONSE_HEADERS['referrer-policy']
         })
         .redirect(decision.location, 302);
+    }
+
+    if (decision.kind === 'content') {
+      const content = composeContentUnfurl({
+        source: await readContent(decision.postId),
+        acceptLanguage: request.headers['accept-language'],
+        origin,
+        now
+      });
+      return reply
+        .code(200)
+        .headers(RESPONSE_HEADERS)
+        .type('text/html; charset=utf-8')
+        .send(renderLinkUnfurlPage(atTrackingAddress(content, { origin, token })));
     }
 
     const source = decision.kind === 'invitation'
@@ -342,6 +385,42 @@ export function registerLinkUnfurlRoute(
     const unfurl = composePersonUnfurl({
       source,
       handle: username,
+      acceptLanguage: request.headers['accept-language'],
+      origin,
+      now: new Date()
+    });
+    return reply
+      .code(200)
+      .headers(RESPONSE_HEADERS)
+      .type('text/html; charset=utf-8')
+      .send(renderLinkUnfurlPage(unfurl));
+  });
+
+  /**
+   * `GET /posts/:postId/og` — la page que lisent les robots d'aperçu quand on colle
+   * `https://meeshy.me/post/<id>` (et `/reel/`, `/story/`, `/mood/`, `/feeds/post/`, #3673) :
+   * le type et l'auteur, le texte, le média — sous la loi de lecture anonyme
+   * (`services/linkUnfurl/content.ts`). Aucune vue n'est comptée : un robot n'est pas un lecteur.
+   */
+  fastify.get<{ Params: { postId: string } }>('/posts/:postId/og', {
+    schema: {
+      description: 'Aperçu d’un contenu (post, réel, story, humeur) pour les robots d’aperçu des messageries (#3673). Nomme le type et l’auteur, sert le texte (dans la langue du robot quand une traduction existe) et le média, si un lecteur sans compte peut lire ce contenu ; sinon l’aperçu générique de Meeshy, le même pour tous. Toujours 200.',
+      tags: ['posts'],
+      summary: 'Aperçu d’un contenu pour les robots',
+      params: {
+        type: 'object',
+        required: ['postId'],
+        properties: { postId: { type: 'string' } }
+      },
+      response: {
+        200: { description: 'Document HTML portant les balises Open Graph et Twitter Card', type: 'string' },
+        429: errorResponseSchema
+      }
+    },
+    config: { rateLimit: unfurlRateLimit('content-unfurl') }
+  }, async (request, reply: FastifyReply) => {
+    const unfurl = composeContentUnfurl({
+      source: await readContent(request.params.postId),
       acceptLanguage: request.headers['accept-language'],
       origin,
       now: new Date()

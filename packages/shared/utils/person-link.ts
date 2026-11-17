@@ -11,8 +11,9 @@
  */
 
 import { usernamePatternSource } from '../types/api-schemas/auth.js';
+import { MEESHY_WEB_HOSTS } from './content-link.js';
 
-export const PERSON_LINK_HOSTS: ReadonlySet<string> = new Set(['meeshy.me', 'www.meeshy.me', 'staging.meeshy.me']);
+export const PERSON_LINK_HOSTS: ReadonlySet<string> = MEESHY_WEB_HOSTS;
 
 const USERNAME = new RegExp(usernamePatternSource);
 const USERNAME_MAX = 64;

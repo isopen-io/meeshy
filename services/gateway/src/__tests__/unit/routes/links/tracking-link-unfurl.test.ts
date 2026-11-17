@@ -11,13 +11,16 @@
  *   lit l'aperçu que la cible publie elle-même — Meeshy ne la lit pas ;
  * - une invitation Meeshy (`/chat/<lien>`, `/join/<lien>`, ou le jeton d'un lien
  *   de partage) : l'aperçu de l'invitation, si le lien est ouvert et public ;
- * - toute autre adresse Meeshy (une conversation, un post), un lien mort,
- *   inconnu, ou une cible qui n'est pas une adresse web : le générique, sans
- *   rien de l'adresse.
+ * - un contenu (post, réel, story, humeur) : sa carte s'il est lisible sans
+ *   compte (`content-unfurl.test.ts`, #3673), sinon le générique — ici, un post
+ *   que la base ne connaît pas ;
+ * - toute autre adresse Meeshy (une conversation), un lien mort, inconnu, ou
+ *   une cible qui n'est pas une adresse web : le générique, sans rien de
+ *   l'adresse.
  *
- * Le double Prisma ne connaît QUE `trackingLink.findUnique` et
- * `conversationShareLink.findFirst` : toute autre lecture, et toute écriture
- * (un clic compté), LÈVE.
+ * Le double Prisma ne connaît QUE `trackingLink.findUnique`,
+ * `conversationShareLink.findFirst` et `post.findFirst` (qui ne connaît aucun
+ * post) : toute autre lecture, et toute écriture (un clic compté), LÈVE.
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
@@ -88,9 +91,11 @@ const monter = async (monde: Monde = {}) => {
     const cles = (args.where?.OR ?? []).flatMap((c) => Object.values(c));
     return ligne && (cles.includes(SHARE_ID) || cles.includes(TOKEN)) ? ligne : null;
   });
+  const postFindFirst = jest.fn(async () => null);
   const prisma = strict('prisma', {
     trackingLink: strict('trackingLink', { findUnique }),
     conversationShareLink: strict('conversationShareLink', { findFirst }),
+    post: strict('post', { findFirst: postFindFirst }),
   });
   const app = Fastify({ logger: false });
   await app.register(rateLimit, { global: false, skipOnError: true, keyGenerator: (request) => `global:${request.ip}` });
@@ -143,7 +148,7 @@ describe('Une cible qui n’est pas publique, ou un lien mort, rend le génériq
     ['cible illisible', { suivi: suivi({ originalUrl: 'pas une adresse' }) }],
     ['cible avec identifiants', { suivi: suivi({ originalUrl: 'https://alice:secret@exemple.org/' }) }],
     ['une conversation Meeshy', { suivi: suivi({ originalUrl: `${ORIGIN}/c/${CONVERSATION_ID}` }) }],
-    ['un post Meeshy', { suivi: suivi({ targetType: 'POST', originalUrl: `${ORIGIN}/feeds/post/${CONVERSATION_ID}` }) }],
+    ['un post Meeshy que la base ne connaît pas', { suivi: suivi({ targetType: 'POST', originalUrl: `${ORIGIN}/feeds/post/${CONVERSATION_ID}` }) }],
     ['un partage de contenu dont l’adresse n’est pas celle de l’application', { suivi: suivi({ targetType: 'STORY', originalUrl: `https://www.exemple.org/story/${CONVERSATION_ID}` }) }],
     ['une conversation Meeshy sous www.', { suivi: suivi({ originalUrl: `https://www.staging.meeshy.me/c/${CONVERSATION_ID}` }) }],
     ['une invitation fermée', { suivi: suivi({ originalUrl: `${ORIGIN}/chat/${SHARE_ID}` }), partage: partage({ isActive: false }) }],

@@ -19,6 +19,7 @@ import { creditEngagedReaderView } from './posts/postViewCredit';
 import { recordEngagementBatch, recordView, type EngagementSessionInput } from './posts/postReach';
 import { recordAnonymousView } from './posts/anonymousReach';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
+import { contentWebUrl, isContentKind } from '@meeshy/shared/utils/content-link';
 import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { isEphemeralPostType, type RepostPassage } from './posts/postVisibility';
@@ -1524,9 +1525,9 @@ export class PostService {
     // TrackingTargetType) so the redirect page + DeepLinkRouter open the right
     // surface — never blindly "POST". Stories get their dedicated viewer URL.
     const targetType = ({ POST: 'POST', REEL: 'REEL', STORY: 'STORY', STATUS: 'STATUS' } as const)[post.type];
-    // Real v1 page per type: /post, /reel, /story, /mood (fallback /feeds/post).
-    const webPath = ({ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' } as const)[post.type] ?? 'feeds/post';
-    const originalUrl = `${baseUrl}/${webPath}/${postId}`;
+    // Real v1 page per type: /post, /reel, /story, /mood — the table every reader of
+    // a content link parses (`@meeshy/shared/utils/content-link`, #19331).
+    const originalUrl = isContentKind(post.type) ? contentWebUrl(baseUrl, post.type, postId) : `${baseUrl}/feeds/post/${postId}`;
 
     try {
       const created = await this.prisma.$transaction(async (tx) => {

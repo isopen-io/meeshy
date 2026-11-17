@@ -15,19 +15,33 @@
  *   `/join/<lien>`), ou le jeton est celui d'un lien de partage : l'aperçu de
  *   l'invitation, sous la loi de `/chat/<lien>` (lien ouvert ET public, sinon
  *   générique — `page.ts`).
+ * - `content` — la cible est un CONTENU (post, réel, story, humeur) : par sa
+ *   cible typée (`targetType` + `targetId`, ce que frappe la feuille de partage),
+ *   ou par son adresse (`/post/<id>`, `/feeds/post/<id>`…, le lien qu'une
+ *   conversation a suivi dans un message). La page compose l'aperçu du contenu
+ *   sous la loi de lecture anonyme (`content.ts`, #3673) : un contenu qui ne lui
+ *   est pas servable rend le générique.
  * - `generic` — tout le reste : lien mort, inconnu, cible illisible ou qui n'est
  *   pas une adresse web, adresse web porteuse d'identifiants, et toute AUTRE
- *   adresse Meeshy (une conversation, un post, un profil), dont l'aperçu dirait
- *   ce qu'un lien ne doit pas dire — et toute adresse porteuse d'un lien à
- *   jeton d'e-mail, quel que soit son hôte (#10871).
+ *   adresse Meeshy (une conversation, un profil), dont l'aperçu dirait ce qu'un
+ *   lien ne doit pas dire — et toute adresse porteuse d'un lien à jeton
+ *   d'e-mail, quel que soit son hôte (#10871).
+ *
+ * Avant #3673, un contenu rendait lui aussi le générique : aucune loi ne disait
+ * alors ce qu'un lecteur sans compte avait le droit d'en lire. #9149 l'a posée,
+ * et la page ne nomme que ce qu'elle autorise.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { contentPathTarget, isContentKind } from '@meeshy/shared/utils/content-link';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { isServableTrackingTarget } from '../tracking-link-target';
 
 export type TrackingLinkUnfurlSource = {
   /** `EXTERNAL` seul désigne une adresse hors de Meeshy ; un partage de contenu (`POST`, `STORY`…) n'est jamais redirigé. */
   readonly targetType: string;
+  /** L'identifiant de la cible typée (un post pour `POST`/`REEL`/`STORY`/`STATUS`). Absent d'un ancien lien. */
+  readonly targetId?: string | null;
   readonly originalUrl: string;
   readonly isActive: boolean;
   readonly expiresAt: Date | null;
@@ -40,6 +54,7 @@ export type TrackingLinkUnfurlSource = {
 export type TrackingLinkUnfurlDecision =
   | { readonly kind: 'redirect'; readonly location: string }
   | { readonly kind: 'invitation'; readonly identifier: string }
+  | { readonly kind: 'content'; readonly postId: string }
   | { readonly kind: 'generic' };
 
 /** La forme que `GET /l/:token` accepte (`routes/tracking-links/tracking.ts`). */
@@ -59,7 +74,7 @@ export function isTrackingToken(token: string): boolean {
 export async function loadTrackingLinkUnfurlSource(prisma: PrismaClient, token: string): Promise<TrackingLinkUnfurlSource | null> {
   return prisma.trackingLink.findUnique({
     where: { token },
-    select: { token: true, targetType: true, originalUrl: true, isActive: true, expiresAt: true, createdBy: true, addressId: true }
+    select: { token: true, targetType: true, targetId: true, originalUrl: true, isActive: true, expiresAt: true, createdBy: true, addressId: true }
   });
 }
 
@@ -91,6 +106,9 @@ export function decideTrackingLinkUnfurl(params: {
   const target = parseWebUrl(tracking.originalUrl);
   if (target === null) return GENERIC;
   if (!isAppAddress(target, origin)) return tracking.targetType === 'EXTERNAL' ? { kind: 'redirect', location: target.href } : GENERIC;
+  if (isContentKind(tracking.targetType) && isValidObjectId(tracking.targetId)) return { kind: 'content', postId: tracking.targetId };
+  const content = contentPathTarget(target.pathname);
+  if (content !== null) return { kind: 'content', postId: content.postId };
   const invitation = INVITATION_PATH.exec(target.pathname)?.[1];
   return invitation === undefined ? GENERIC : { kind: 'invitation', identifier: invitation };
 }

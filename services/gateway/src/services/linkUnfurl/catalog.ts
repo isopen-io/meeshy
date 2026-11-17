@@ -11,6 +11,12 @@ export const UNFURL_LANGUAGES = ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'] as co
 
 export type UnfurlLanguage = (typeof UNFURL_LANGUAGES)[number];
 
+/** Les quatre types de contenu qu'une carte nomme (#3673) — `ContentKind` de `@meeshy/shared/utils/content-link`. */
+export type UnfurlContentKind = 'POST' | 'REEL' | 'STORY' | 'STATUS';
+
+/** La nature d'un média qu'une carte décrit quand le contenu n'a pas de texte. */
+export type UnfurlMediaNature = 'image' | 'video' | 'audio';
+
 export type UnfurlCopy = {
   readonly locale: string;
   readonly dir: 'ltr' | 'rtl';
@@ -26,6 +32,12 @@ export type UnfurlCopy = {
   /** « Amani Diallo (@amani) sur Meeshy » : la carte d'une fiche (#18865). */
   readonly personOnMeeshy: (person: string) => string;
   readonly openProfile: string;
+  /** « Réel de Amani Diallo » : la carte d'un contenu (#3673). */
+  readonly contentBy: Readonly<Record<UnfurlContentKind, (author: string) => string>>;
+  /** La description d'un contenu sans texte ni média qui se décrive. */
+  readonly contentPromise: string;
+  readonly openContent: string;
+  readonly mediaNature: Readonly<Record<UnfurlMediaNature, string>>;
 };
 
 const NBSP = '\u00A0';
@@ -45,6 +57,15 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     openMeeshy: 'Ouvrir Meeshy',
     personOnMeeshy: (person) => `${person} sur Meeshy`,
     openProfile: 'Ouvrir la fiche',
+    contentBy: {
+      POST: (author) => `Post de ${author}`,
+      REEL: (author) => `Réel de ${author}`,
+      STORY: (author) => `Story de ${author}`,
+      STATUS: (author) => `Humeur de ${author}`,
+    },
+    contentPromise: 'À voir sur Meeshy, dans ta langue.',
+    openContent: 'Voir sur Meeshy',
+    mediaNature: { image: 'Photo', video: 'Vidéo', audio: 'Audio' },
   },
   en: {
     locale: 'en_US',
@@ -60,6 +81,15 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     openMeeshy: 'Open Meeshy',
     personOnMeeshy: (person) => `${person} on Meeshy`,
     openProfile: 'Open the profile',
+    contentBy: {
+      POST: (author) => `Post by ${author}`,
+      REEL: (author) => `Reel by ${author}`,
+      STORY: (author) => `Story by ${author}`,
+      STATUS: (author) => `Mood by ${author}`,
+    },
+    contentPromise: 'See it on Meeshy, in your language.',
+    openContent: 'View on Meeshy',
+    mediaNature: { image: 'Photo', video: 'Video', audio: 'Audio' },
   },
   es: {
     locale: 'es_ES',
@@ -75,6 +105,15 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     openMeeshy: 'Abrir Meeshy',
     personOnMeeshy: (person) => `${person} en Meeshy`,
     openProfile: 'Abrir el perfil',
+    contentBy: {
+      POST: (author) => `Publicación de ${author}`,
+      REEL: (author) => `Reel de ${author}`,
+      STORY: (author) => `Historia de ${author}`,
+      STATUS: (author) => `Estado de ${author}`,
+    },
+    contentPromise: 'Míralo en Meeshy, en tu idioma.',
+    openContent: 'Ver en Meeshy',
+    mediaNature: { image: 'Foto', video: 'Vídeo', audio: 'Audio' },
   },
   pt: {
     locale: 'pt_BR',
@@ -90,6 +129,15 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     openMeeshy: 'Abrir o Meeshy',
     personOnMeeshy: (person) => `${person} no Meeshy`,
     openProfile: 'Abrir o perfil',
+    contentBy: {
+      POST: (author) => `Post de ${author}`,
+      REEL: (author) => `Reel de ${author}`,
+      STORY: (author) => `Story de ${author}`,
+      STATUS: (author) => `Humor de ${author}`,
+    },
+    contentPromise: 'Veja no Meeshy, no seu idioma.',
+    openContent: 'Ver no Meeshy',
+    mediaNature: { image: 'Foto', video: 'Vídeo', audio: 'Áudio' },
   },
   de: {
     locale: 'de_DE',
@@ -105,6 +153,15 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     openMeeshy: 'Meeshy öffnen',
     personOnMeeshy: (person) => `${person} auf Meeshy`,
     openProfile: 'Profil öffnen',
+    contentBy: {
+      POST: (author) => `Beitrag von ${author}`,
+      REEL: (author) => `Reel von ${author}`,
+      STORY: (author) => `Story von ${author}`,
+      STATUS: (author) => `Stimmung von ${author}`,
+    },
+    contentPromise: 'Auf Meeshy ansehen, in deiner Sprache.',
+    openContent: 'Auf Meeshy ansehen',
+    mediaNature: { image: 'Foto', video: 'Video', audio: 'Audio' },
   },
   it: {
     locale: 'it_IT',
@@ -120,6 +177,15 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     openMeeshy: 'Apri Meeshy',
     personOnMeeshy: (person) => `${person} su Meeshy`,
     openProfile: 'Apri il profilo',
+    contentBy: {
+      POST: (author) => `Post di ${author}`,
+      REEL: (author) => `Reel di ${author}`,
+      STORY: (author) => `Storia di ${author}`,
+      STATUS: (author) => `Umore di ${author}`,
+    },
+    contentPromise: 'Guardalo su Meeshy, nella tua lingua.',
+    openContent: 'Vedi su Meeshy',
+    mediaNature: { image: 'Foto', video: 'Video', audio: 'Audio' },
   },
   ar: {
     locale: 'ar_AR',
@@ -135,6 +201,15 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     openMeeshy: 'افتح Meeshy',
     personOnMeeshy: (person) => `${person} على Meeshy`,
     openProfile: 'افتح الملف الشخصي',
+    contentBy: {
+      POST: (author) => `منشور من ${author}`,
+      REEL: (author) => `ريل من ${author}`,
+      STORY: (author) => `قصة من ${author}`,
+      STATUS: (author) => `مزاج ${author}`,
+    },
+    contentPromise: 'شاهده على Meeshy بلغتك.',
+    openContent: 'اعرض على Meeshy',
+    mediaNature: { image: 'صورة', video: 'فيديو', audio: 'صوت' },
   },
 };
 

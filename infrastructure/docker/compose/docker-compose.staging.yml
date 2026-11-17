@@ -597,6 +597,18 @@ services:
       - "traefik.http.routers.frontend-staging-person-unfurl.service=gateway-staging"
       - "traefik.http.middlewares.person-unfurl-staging-path.replacepathregex.regex=^/(?:u/|@)([A-Za-z0-9_-]{1,64})/?$$"
       - "traefik.http.middlewares.person-unfurl-staging-path.replacepathregex.replacement=/api/v1/people/$$1/og"
+      # #3673 (parapluie #19331) — les mêmes robots qui déplient le lien d'un CONTENU, /post/<id>,
+      # /reel/<id>, /story/<id>, /mood/<id>, /feeds/post/<id> (et les formes anciennes /p/<id>, /s/<id>),
+      # reçoivent sa carte (GET /api/v1/posts/<id>/og) : type et auteur, texte, média, si un lecteur
+      # sans compte peut lire ce contenu ; sinon l'aperçu générique. Le motif n'admet qu'un ObjectId.
+      - "traefik.http.routers.frontend-staging-content-unfurl.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && PathRegexp(`^/(post|reel|story|mood|feeds/post|p|s)/[0-9a-fA-F]{24}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-staging-content-unfurl.priority=100"
+      - "traefik.http.routers.frontend-staging-content-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-staging-content-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-staging-content-unfurl.middlewares=content-unfurl-staging-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-staging-content-unfurl.service=gateway-staging"
+      - "traefik.http.middlewares.content-unfurl-staging-path.replacepathregex.regex=^/(?:post|reel|story|mood|feeds/post|p|s)/([0-9a-fA-F]{24})/?$$"
+      - "traefik.http.middlewares.content-unfurl-staging-path.replacepathregex.replacement=/api/v1/posts/$$1/og"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
 
   # #11264 — `meeshy-media-worker` : la MÊME image que la passerelle, un autre
