@@ -89,9 +89,10 @@ function Selectable(props: MeeshyAvatarGroupProps & { readonly recipe: ReturnTyp
   const keyDown = (event: KeyboardEvent<HTMLElement>, index: number): void => {
     if (multiple) return;
     const rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
-    const target = kitRadioKeyTarget({ key: event.key, from: index, lastIndex: recipe.visible - 1, isRtl: rtl });
+    const target = kitRadioKeyTarget({ key: event.key, from: index, lastIndex: recipe.visible - 1, isRtl: rtl, isSelectable: enabled });
     if (target === null) return;
     event.preventDefault();
+    if (target === index || !enabled(target)) return;
     focusKitRadio(event.currentTarget, target);
     toggle(target);
   };

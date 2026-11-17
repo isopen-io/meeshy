@@ -84,7 +84,7 @@ export const MeeshyReorderHandle = memo(function MeeshyReorderHandle({ label, ph
 /**
  * Une liste qu'on range : une poignée de 44 par rangée, le contenu de l'hôte tel quel. Le
  * glisser, « Monter » / « Descendre » (pour la voix) et le clavier (Espace saisit, les flèches
- * déplacent d'un rang, Espace pose, Échap rend l'ordre de départ) aboutissent au MÊME
+ * déplacent d'un rang, Espace pose, Échap ou le focus qui part ailleurs rend l'ordre de départ) aboutissent au MÊME
  * `onMove(from, to)`, une fois, au dépôt — jamais pendant le vol, jamais si rien ne change.
  */
 function MeeshyReorderListInner<T>(props: MeeshyReorderListProps<T>) {
@@ -224,6 +224,9 @@ function MeeshyReorderListInner<T>(props: MeeshyReorderListProps<T>) {
                   if (event.key === ' ') event.preventDefault();
                 }}
                 onClick={(event) => event.preventDefault()}
+                onBlur={(event) => {
+                  if (isMoving && drag.current === null && event.relatedTarget !== null) setMove(null);
+                }}
                 onPointerDown={(event) => pointerDown(event, originalIndex)}
                 onPointerMove={pointerMove}
                 onPointerUp={pointerEnd}

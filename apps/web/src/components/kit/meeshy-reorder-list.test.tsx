@@ -131,9 +131,10 @@ describe('MeeshyReorderList — sans le doigt', () => {
     document.body.appendChild(outside);
     try {
       const handle = container.querySelector('[data-kit-reorder-row="fr"] [data-kit-reorder-handle]') as HTMLButtonElement;
+      act(() => handle.focus());
       act(() => handle.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })));
       act(() => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
-      act(() => handle.dispatchEvent(new FocusEvent('blur', { relatedTarget: outside })));
+      act(() => outside.focus());
       const order = Array.from(container.querySelectorAll('[data-kit-reorder-row]')).map((node) => node.getAttribute('data-kit-reorder-row'));
       expect(order).toEqual(['fr', 'en', 'wo']);
       expect(container.querySelector('[data-kit-reorder-row="fr"]')?.getAttribute('data-phase')).toBe('rest');

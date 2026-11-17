@@ -137,7 +137,7 @@ function Line({ points, flags, pick, recipe }: { readonly points: readonly Meesh
           point={point}
           pick={pick}
           className="kit-chart__dot"
-          style={{ insetInlineStart: `${((coordinates[index]?.x ?? 0) / WIDTH) * 100}%`, insetBlockStart: `${((coordinates[index]?.y ?? 0) / recipe.height) * 100}%` }}
+          style={{ left: `${((coordinates[index]?.x ?? 0) / WIDTH) * 100}%`, top: `${((coordinates[index]?.y ?? 0) / recipe.height) * 100}%` }}
           extra={{ 'data-kit-chart-dot': '', ...flagAttrs(flags, point.id) }}
         />
       ))}
@@ -256,7 +256,7 @@ function Bubbles({ points, pick, background }: { readonly points: readonly Meesh
         const diameter = meeshyChartBubbleDiameter(Math.max(point.value, 0) / top);
         const at = point.position ?? { x: (index + 1) / (points.length + 1), y: 0.5 };
         return (
-          <Hit key={point.id} point={point} pick={pick} className="kit-chart__bubble" style={{ inlineSize: `${diameter / 16}rem`, blockSize: `${diameter / 16}rem`, insetInlineStart: `${at.x * 100}%`, insetBlockStart: `${at.y * 100}%` }} extra={{ 'data-kit-chart-bubble': '', 'data-diameter': String(diameter) }}>
+          <Hit key={point.id} point={point} pick={pick} className="kit-chart__bubble" style={{ inlineSize: `${diameter / 16}rem`, blockSize: `${diameter / 16}rem`, left: `${at.x * 100}%`, top: `${at.y * 100}%` }} extra={{ 'data-kit-chart-bubble': '', 'data-diameter': String(diameter) }}>
             <span aria-hidden="true">{point.label}</span>
           </Hit>
         );
@@ -289,8 +289,8 @@ export const MeeshyChart = memo(function MeeshyChart(props: MeeshyChartProps) {
   const classes = ['kit-chart', className].filter((part): part is string => part !== undefined).join(' ');
   const axis = recipe.hasAxis && axisLabels.length >= 2 ? (
     <div className="kit-chart__axis" data-kit-chart-axis="" aria-hidden="true">
-      {axisLabels.slice(0, 5).map((label) => (
-        <span key={label}>{label}</span>
+      {axisLabels.slice(0, 5).map((label, index) => (
+        <span key={index}>{label}</span>
       ))}
     </div>
   ) : null;

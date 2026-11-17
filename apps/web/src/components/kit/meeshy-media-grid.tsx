@@ -160,7 +160,8 @@ function useWidth(): readonly [React.RefObject<HTMLDivElement | null>, number] {
   return [ref, width];
 }
 
-function useReachEnd(onReachEnd: (() => void) | undefined): React.RefObject<HTMLSpanElement | null> {
+/** La fin de la grille : rappelée quand la sentinelle entre à l'écran, et RÉARMÉE à chaque arrivée de tuiles — une page qui ne remplit pas l'écran laisse la sentinelle visible, et un observateur ne rappelle que sur un changement. */
+function useReachEnd(onReachEnd: (() => void) | undefined, count: number): React.RefObject<HTMLSpanElement | null> {
   const sentinel = useRef<HTMLSpanElement | null>(null);
   const latest = useRef(onReachEnd);
   latest.current = onReachEnd;
@@ -173,7 +174,7 @@ function useReachEnd(onReachEnd: (() => void) | undefined): React.RefObject<HTML
     });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [active]);
+  }, [active, count]);
   return sentinel;
 }
 
@@ -187,7 +188,7 @@ export const MeeshyMediaGrid = memo(function MeeshyMediaGrid(props: MeeshyMediaG
   const { label, items, onOpen, layout = 'regular', shape, spacing, tint, onReachEnd, haptic, className, content, captionLeading, hoverActions } = props;
   const recipe = meeshyMediaGridRecipe({ layout, shape, columns: props.columns, spacing });
   const [ref, width] = useWidth();
-  const sentinel = useReachEnd(onReachEnd);
+  const sentinel = useReachEnd(onReachEnd, items.length);
   const shown = layout === 'row' ? items.slice(0, recipe.columns) : items;
   const columnWidth = Math.max((width - recipe.gap * (recipe.columns - 1)) / recipe.columns, 0);
   const tileSize = (aspect: number | undefined): MeeshyMediaTileSize => ({ width: columnWidth, height: columnWidth / (recipe.aspect ?? (aspect !== undefined && aspect > 0 ? aspect : 1)) });

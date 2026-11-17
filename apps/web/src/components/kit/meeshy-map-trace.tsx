@@ -91,7 +91,7 @@ export const MeeshyMapTrace = memo(function MeeshyMapTrace(props: MeeshyMapTrace
         {head === null ? null : <circle cx={head.x} cy={head.y} r={MEESHY_MAP_TRACE_MEASURE.headSize / 2} className="kit-trace__head" data-kit-trace-head="" />}
       </svg>
       {hasMid ? (
-        <span className="kit-trace__mid" data-kit-trace-mid="" style={{ insetInlineStart: path.midpoint.x, insetBlockStart: path.midpoint.y - MEESHY_MAP_TRACE_MEASURE.midGap }}>
+        <span className="kit-trace__mid" data-kit-trace-mid="" style={{ left: path.midpoint.x, top: path.midpoint.y - MEESHY_MAP_TRACE_MEASURE.midGap }}>
           {midLabel ?? <MeeshyBadge content={{ label: midCaption ?? '' }} leading={midGlyph === undefined ? undefined : { glyph: midGlyph }} surface="glass" size={36} scheme={onLightMap === true ? 'light' : 'dark'} />}
         </span>
       ) : null}
@@ -104,7 +104,7 @@ export const MeeshyMapTrace = memo(function MeeshyMapTrace(props: MeeshyMapTrace
             <span className="kit-trace__stop-title">{stop.title}</span>
           </>
         );
-        const style = { insetInlineStart: at.x, insetBlockStart: at.y + 12 };
+        const style = { left: at.x, top: at.y + 12 };
         return onStopPress === undefined ? (
           <span key={stop.id} className="kit-trace__stop" data-kit-trace-stop="" data-upcoming={upcoming ? '' : undefined} style={style}>
             {body}

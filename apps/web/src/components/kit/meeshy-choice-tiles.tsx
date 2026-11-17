@@ -189,9 +189,14 @@ export const MeeshyChoiceTiles = memo(function MeeshyChoiceTiles(props: MeeshyCh
     if (isMultiple) return;
     const from = items.findIndex((item) => item.id === event.currentTarget.getAttribute('data-kit-choice-id'));
     const dir = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
-    const target = kitRadioKeyTarget({ key: event.key, from, lastIndex: items.length - 1, isRtl: dir });
+    const isSelectable = (index: number): boolean => {
+      const state = items[index]?.state;
+      return state === undefined || state === 'enabled';
+    };
+    const target = kitRadioKeyTarget({ key: event.key, from, lastIndex: items.length - 1, isRtl: dir, isSelectable });
     if (target === null) return;
     event.preventDefault();
+    if (target === from || !isSelectable(target)) return;
     focusKitRadio(event.currentTarget, target);
     const next = items[target];
     if (next !== undefined) touch(next);
