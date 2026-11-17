@@ -6,9 +6,12 @@ import io.mockk.mockk
 import java.io.IOException
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
@@ -431,7 +434,10 @@ class MessageWindowRevalidationTest {
 
     /**
      * The sweep fails: nothing is written — no window, no `sync_meta` — so the thread stays stale with its gap still
-     * ahead of the next revalidation, and since nothing was written the stream does not emit again: no reread loop.
+     * ahead of the next revalidation, and since nothing was written the stream does not emit again: no reread loop. The
+     * stream stays open for a quiet spell AFTER the failure, so a loop — a write, an emission, a new request, a new
+     * failure — would show itself. The failure that reaches the screen names no internal identifier: the thread shows
+     * its own localized notice, never this text.
      */
     @Test
     fun `a thread whose gap cannot be read stays stale, unwritten, and asks no more`() =
@@ -446,21 +452,33 @@ class MessageWindowRevalidationTest {
                     throw IOException("offline")
             }
             val seen = mutableListOf<CacheResult<List<LocalMessage>>>()
+            val failures = mutableListOf<Throwable>()
 
             val settled = coroutineScope {
                 val outcome = CompletableDeferred<String>()
                 val opening = launch {
                     harness.repository(gateway)
-                        .messagesStream(CONVERSATION, onSyncError = { outcome.complete("failed: ${it::class.simpleName}") })
+                        .messagesStream(
+                            CONVERSATION,
+                            onSyncError = { failure ->
+                                failures += failure
+                                outcome.complete("failed: ${failure::class.simpleName}")
+                            },
+                        )
                         .collect { result ->
                             seen += result
                             if (result is CacheResult.Fresh) outcome.complete("fresh")
                         }
                 }
-                outcome.await().also { opening.cancel() }
+                outcome.await().also {
+                    withContext(Dispatchers.Default) { delay(QUIET_SPELL_MILLIS) }
+                    opening.cancel()
+                }
             }
 
             assertThat(settled).isEqualTo("failed: MessageSyncException")
+            assertThat(failures).hasSize(1)
+            assertThat(failures.single().message.orEmpty()).doesNotContain(CONVERSATION)
             assertThat(seen.map { it::class }).containsExactly(CacheResult.Stale::class)
             assertThat(harness.database.messageDao().find("m27")).isNull()
             assertThat(harness.database.syncMetaDao().lastSyncedAt(KEY)).isEqualTo(syncedBefore)
@@ -503,6 +521,9 @@ class MessageWindowRevalidationTest {
         const val KEY = "messages:$CONVERSATION"
         const val BASE_SECOND = 1_780_000_000L
         const val THREE_MINUTES = 180_000L
+
+        /** Real time the stream stays open after a failure: ample for an in-memory reread loop to show itself. */
+        const val QUIET_SPELL_MILLIS = 300L
         const val T1 = "2026-06-01T10:00:00Z"
         const val T2 = "2026-06-01T11:00:00Z"
         const val T3 = "2026-06-01T12:00:00Z"

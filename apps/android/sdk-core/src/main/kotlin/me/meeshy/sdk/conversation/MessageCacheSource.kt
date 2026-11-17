@@ -169,13 +169,14 @@ internal class MessageCacheSource(
     /**
      * The messages between [heldUpTo] and the window's oldest, read BEFORE anything is written (see [revalidate]).
      * Empty when the window reaches back to what was held; throws when the sweep fails, so nothing is written and
-     * the gap stays ahead of the next revalidation.
+     * the gap stays ahead of the next revalidation. The failure reaches the thread's state: its text names no internal
+     * identifier — the thread shows its own localized notice, never this text.
      */
     private suspend fun readGap(window: List<ApiMessage>, heldUpTo: Long?): List<ApiMessage> {
         val oldestServed = window.minOfOrNull { isoToEpochMillis(it.createdAt) } ?: return emptyList()
         val gapFrom = heldUpTo?.takeIf { it < oldestServed } ?: return emptyList()
         return tryAfterSweep(Instant.ofEpochMilli(gapFrom).toString())
-            ?: throw MessageSyncException("The gap before the recent window of messages:$conversationId could not be read")
+            ?: throw MessageSyncException("The messages missed before the recent window could not be read")
     }
 
     /**
