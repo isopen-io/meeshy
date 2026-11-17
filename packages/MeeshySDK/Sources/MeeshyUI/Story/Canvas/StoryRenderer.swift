@@ -308,7 +308,7 @@ public enum StoryRenderer {
         }
 
         // Le dessin persisté, au-dessus des objets. `suppressDrawingOverlay` est
-        // levé par le composer quand le `DrawingOverlayView` est actif : sinon
+        // levé par le composer quand sa surface de tracé live est active : sinon
         // deux dessins désalignés à l'écran.
         if let drawing = drawingOverlay(for: slide.effects, geometry: geometry, contentsScale: contentsScale,
                                         cache: cache, suppressed: suppressDrawingOverlay) {

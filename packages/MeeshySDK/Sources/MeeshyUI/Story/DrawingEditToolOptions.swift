@@ -3,8 +3,7 @@ import MeeshySDK
 
 // MARK: - StoryDrawingColors
 
-/// Palette de couleurs de dessin (9 teintes). Relocalisée depuis l'ancien
-/// `DrawingColorOption` (fichier `DrawingOverlayView` supprimé par la refonte).
+/// Palette de couleurs de dessin (9 teintes).
 public enum StoryDrawingColors {
     public static let palette: [String] = [
         "FFFFFF", "000000", "FF2E63", "08D9D6", "F8B500",

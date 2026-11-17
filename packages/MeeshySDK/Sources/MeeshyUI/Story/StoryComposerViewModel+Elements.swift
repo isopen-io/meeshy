@@ -109,12 +109,12 @@ extension StoryComposerViewModel {
     /// `loadedImages[bgMedia.id]`) first, then falls back to the legacy
     /// slide-level `slideImages` entry. `nil` for colour/gradient-only slides
     /// (the grid then shows its gradient placeholders). Mirrors how
-    /// `SlideMiniPreview` and the canvas resolve the background image — passing
+    /// `SceneThumbnailRenderer` and the canvas resolve the background image — passing
     /// only `slideImages[slide.id]` left every photo-backed slide's tiles blank
     /// because modern photos live in `mediaObjects`, not `slideImages`.
-    /// **`public` depuis #5041** : l'éditeur d'objet plein écran (app) monte la
-    /// même `StoryFilterGridView` que `EmbeddedSceneInspector` (SDK) et lui doit
-    /// le même aperçu. Servir `nil` depuis l'app aurait montré les tuiles en
+    /// **`public` depuis #5041** : les hôtes de l'app qui montent
+    /// `StoryFilterGridView` (`ComposerMediaControls`,
+    /// `MeeshyComposerHost+SceneColumns`) lui doivent le même aperçu. Servir `nil` depuis l'app aurait montré les tuiles en
     /// dégradé de repli — un aperçu qui ne ressemble pas à ce qui va changer.
     public var currentSlideBackgroundImage: UIImage? {
         if let bgId = currentSlide.effects.resolvedBackgroundMedia?.id,

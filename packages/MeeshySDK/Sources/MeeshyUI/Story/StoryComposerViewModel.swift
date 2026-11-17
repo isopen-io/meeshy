@@ -211,7 +211,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published public var activeBrushTool: StrokeTool = .pen
     @Published var activeBrushSmoothing: StrokeSmoothing = .raw
     /// Mode d'édition de dessin flottant — contrôleurs posés sur `.ultraThinMaterial`
-    /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.
+    /// au-dessus du canvas. Mirror de `textEditingMode`.
     /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
     /// `StoryComposerViewModel+DrawingEditing.swift`).
     /// `public` en LECTURE : le rail *leading* montre les contrôleurs de
@@ -229,7 +229,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var isDrawingImmersive = false
 
     /// Trait en cours de tracé (WYSIWYG, C4). Rendu live PAR-DESSUS `drawingStrokes` via
-    /// un `MeeshyStrokeCanvas` dédié dans `StoryComposerView`, avec notre moteur
+    /// un `MeeshyStrokeCanvas` dédié (`MeeshyDrawingSurface`), avec notre moteur
     /// largeur-variable — l'aperçu correspond EXACTEMENT au trait commité au lift-up.
     /// `nil` quand aucun geste n'est en cours (effacé au commit/annulation).
     @Published var activeStrokePreview: StoryDrawingStroke?
@@ -429,8 +429,8 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         loadedImagesVersion &+= 1
     }
 
-    /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
-    /// when the user transcribes a foreground video then taps « Terminer ».
+    /// Captions / transcription metadata for a foreground video. Its only
+    /// producer, the old in-app video editor, left the repository (#9124).
     /// Keyed by `StoryMediaObject.id` (same key space as `loadedVideoURLs`).
     ///
     /// **Why a sibling map and not a field on `StoryMediaObject`** — captions

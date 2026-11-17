@@ -82,7 +82,7 @@ public enum StorySlideRenderer {
             }
 
             // 2b. Background MEDIA object (story moderne) — rempli PLEIN CADRE, à
-            //     parité avec `StoryBackgroundLayer` (reader) et `SlideMiniPreview`.
+            //     parité avec `StoryBackgroundLayer` (reader).
             //     Le fond moderne n'est pas un `bgImage` legacy séparé mais un
             //     `StoryMediaObject(isBackground: true)` dans `mediaObjects` ; sans
             //     ce dessin il n'apparaissait que via la boucle foreground en petite
@@ -108,9 +108,8 @@ public enum StorySlideRenderer {
                 let poser: (UIImage) -> Void = { image in
                     if ajuste { drawAspectFit(image, in: rect) } else { drawAspectFill(image, in: rect, ctx: cgCtx) }
                 }
-                // Transform du fond (zoom/pan/rotation) — parité avec `SlideMiniPreview`
-                // (référence non-ambiguë : `.scaleEffect(scale)` + `.rotationEffect(rotation)`
-                // autour du centre, puis `.position(x·w, y·h)`) et le canvas. Sans ça un fond
+                // Transform du fond (zoom/pan/rotation) — parité avec le canvas
+                // (`scale` + `rotation` autour du centre, puis position `(x·w, y·h)`). Sans ça un fond
                 // zoomé/pané/pivoté par l'user apparaissait DROIT & full-bleed dans le
                 // cover/thumbHash (it.50). scale+rotation autour du centre (commutent, scale
                 // uniforme) ; pan en screen-space (centre → (x·w, y·h)). No-op aux défauts
@@ -252,8 +251,8 @@ public enum StorySlideRenderer {
 
     private static func drawTextObject(_ textObj: StoryTextObject, in size: CGSize, ctx: CGContext) {
         // `resolvedSize` (= fontSize) est en pixels DESIGN (référentiel 1080), donc
-        // projeté par `size.width / 1080` — parité avec le canvas réel (`StoryTextLayer`)
-        // et `SlideMiniPreview`. L'ancien diviseur `390` (largeur device) rendait le
+        // projeté par `size.width / 1080` — parité avec le canvas réel
+        // (`StoryTextLayer`). L'ancien diviseur `390` (largeur device) rendait le
         // texte ~2,77× trop gros dans le composite ThumbHash.
         // Le pinch écrit `text.scale` (StoryCanvasUIView.updateScale, 0.3…4.0). Comme sur le
         // canvas (#9139), il agrandit le CADRE entier — la mise en ligne se fait à la taille

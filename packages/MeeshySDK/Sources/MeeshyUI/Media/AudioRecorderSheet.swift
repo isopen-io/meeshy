@@ -7,8 +7,8 @@ import MeeshySDK
 
 /// LA feuille d'enregistrement audio, partagée par toutes les surfaces qui
 /// capturent de la voix pour une composition : stories, posts et réels
-/// (2026-08-13 — unification de `StoryVoiceRecorder` et de l'UI dupliquée
-/// d'`AudioPostComposerView`).
+/// (2026-08-13 — unification de l'enregistreur vocal des stories et de l'UI
+/// dupliquée d'`AudioPostComposerView`).
 ///
 /// Uses injected AudioRecordingProviding for actual recording logic.
 /// Tap-to-toggle record. Large controls at the bottom.
@@ -410,7 +410,7 @@ extension AudioRecorderSheet where Recorder == DefaultSDKAudioRecorder {
         // **Un init de convenance qui laisse tomber un paramètre le rend
         // inatteignable.** Le seul appelant de cette feuille passe par ici : un
         // `accessory` absent de CETTE signature n'existe pas, quoi qu'en dise
-        // l'init principal. Défaut déjà commis sur `StoryTextEditToolbar`.
+        // l'init principal. Défaut déjà commis sur l'ancienne barre de texte.
         self.init(recorder: DefaultSDKAudioRecorder(),
                   preferredLanguage: preferredLanguage,
                   showsLanguageStrip: showsLanguageStrip,
