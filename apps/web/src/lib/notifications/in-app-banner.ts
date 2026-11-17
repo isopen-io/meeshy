@@ -44,6 +44,11 @@ export const inAppBannerStore = createStore<BannerState>((set) => ({
   dismiss: () => set({ current: null }),
 }));
 
+/** La bannière appartient à l'identité qui l'a reçue : elle se vide quand celle-ci change (`identity-scoped-stores.ts`, #18907). */
+export function resetInAppBanner(): void {
+  inAppBannerStore.setState({ current: null });
+}
+
 /**
  * Le type que la passerelle sert pour la batterie d'un Proche (`BATTERY_NOTIFICATION_TYPE`), écrit en LITTÉRAL :
  * ce module est dans la première peinture, et le contrat de la batterie n'a rien à y faire. Un témoin tient les

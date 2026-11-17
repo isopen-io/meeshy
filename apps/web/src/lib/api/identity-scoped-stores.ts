@@ -4,6 +4,9 @@ import type { ConversationStoreState } from '../conversation-store';
 import type { EndToEndRegimeState } from '../end-to-end-regime-ledger';
 import type { OutboxState } from '../send/outbox-store';
 
+import { closeConversationPreview } from '../notifications/conversation-preview';
+import { resetInAppBanner } from '../notifications/in-app-banner';
+
 import { sessionIdentityKey, type SessionStoreApi } from './session';
 import type { TypingState } from './typing-store';
 import type { EngagementState } from './conversation-engagement';
@@ -21,6 +24,8 @@ import type { EngagementState } from './conversation-engagement';
  *    optimistes d'A, appliqués aux rangées de B ;
  *  - la FRAPPE en cours, reçue sur la connexion d'A ;
  *  - les POINTS d'engagement d'A par conversation (#8906), qui sont À LUI ;
+ *  - la BANNIÈRE in-app d'A et l'aperçu qu'elle a ouvert (#18907) : sous B, la toucher aurait ouvert la
+ *    conversation d'A et marqué lu avec le jeton de B ;
  *  - les conversations qu'A a VUES chiffrées de bout en bout (#12949) : le
  *    registre se lie au compte ouvert, dès la surveillance puis à chaque
  *    changement, et retrouve ce que CE compte a vu (il survit au rechargement).
@@ -41,6 +46,8 @@ export function resetIdentityScopedStores({ outbox, conversations, typing, engag
   conversations.setState({ overrides: {} });
   typing.setState({ byConversation: {} });
   engagement?.getState().clear();
+  resetInAppBanner();
+  closeConversationPreview();
 }
 
 export function watchIdentityScopedStores(stores: IdentityScopedStores): () => void {
