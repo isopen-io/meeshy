@@ -108,6 +108,22 @@ encodée en octets (`ED A0 80`) n'est pas de l'UTF-8 (`surrogate-encoded-in-utf8
 - **Kotlin** : kotlinx.serialization déséchappe `\ud800` en une `String` qui porte la demi-paire, puisque les chaînes JVM
   l'admettent. Android admet donc aujourd'hui ces clairs. C'est un écart attendu (#18944).
 
+**À l'écriture, l'encodeur TS LÈVE sur une demi-paire** (`encodeE2EEContent`, `encodeE2EESignal`) : il n'écrit pas ce
+qu'aucun appareil ne lirait. Aucun émetteur honnête n'en produit sur l'iPhone (une `String` Swift est toujours bien formée)
+ni sur Android (l'encodeur UTF-8 de la JVM la remplace par `?`). **Un texte web, si** : copier-coller, emoji tronqué au
+milieu de sa paire. Le web passe donc tout texte saisi par `wellFormedE2EEText` AVANT d'encoder : chaque demi-paire isolée
+devient U+FFFD, comme `String.prototype.toWellFormed`, et l'envoi part au lieu d'être perdu (audit de #19080, E7).
+
+## Les entiers : `sentAt` et l'intervalle sûr
+
+Le contrat TS lit un entier JSON comme `Number.isSafeInteger` (zod `.int()`) : `sentAt` (un `Int64` Swift, un `Long`
+Kotlin) se lit entre −(2^53 − 1) et 2^53 − 1. Au-delà, un nombre JavaScript ne représente plus chaque entier, et la lecture
+TS rend `unreadable` (`invalid-fields`). L'iPhone (`Int64`) et Android (`Long`) admettent aujourd'hui jusqu'à
+2^63 − 1 : un `sentAt` de 2^60 est lu sur mobile et illisible sur le web. Seul un émetteur hostile y arrive (un `sentAt`
+honnête vaut environ 1,79 × 10^12, loin de 2^53 ≈ 9,0 × 10^15) ; il ne gagne rien que Sesame ne lui donne déjà (sceller un
+clair différent par appareil). La borne du contrat est l'intervalle sûr : iOS et Android s'y alignent au rejeu (#18943,
+#18944).
+
 ## La profondeur d'imbrication (#19112)
 
 **Un clair a au plus 64 niveaux d'imbrication** (`E2EE_MAX_DEPTH`). Un contenu en a 1 (l'objet), un signal 2 au plus : aucun
@@ -185,6 +201,8 @@ Chaque banc lit les fichiers du dépôt par chemin relatif (aucune copie) et rej
   (`invalid-utf8`) ; kotlinx.serialization peut accepter un nombre entre guillemets (`sent-at-as-string`) ; un signal n'est
   vérifié que sur `s`, la conversation et l'auteur (`reaction-missing-emoji`, `receipt-unknown-value`…).
 - Android : `Double.toString` écrit `30.0` ; le jour où il émettra `read-progress`, il devra écrire `30`.
+- iOS et Android : un `sentAt` hors de l'intervalle sûr (au-delà de 2^53 − 1) est admis (`Int64`, `Long`) là où le contrat
+  le juge `invalid-fields` (§ « Les entiers »).
 - iOS : tant que la borne de profondeur n'est pas posée avant `JSONDecoder` (#19112), `depth-beyond-the-limit-is-unreadable`,
   `escaped-backslash-closes-the-string` et leurs jumeaux de signal sont admis, et les deux `future-version-beyond-the-limit-*`
   gardés.

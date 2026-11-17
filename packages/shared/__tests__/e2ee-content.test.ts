@@ -23,6 +23,7 @@ import {
   encodeE2EEContent,
   encodeE2EESignal,
   openE2EEPlaintext,
+  wellFormedE2EEText,
   padE2EEPlaintext,
   readE2EEContent,
   readE2EESignal,
@@ -339,6 +340,38 @@ describe('la profondeur d’un clair est bornée par le contrat, avant toute ana
     const deepThenInvalid = new Uint8Array([...utf8(nested(E2EE_MAX_DEPTH + 1)), 0xff]);
 
     expect(readE2EEContent(deepThenInvalid)).toEqual({ verdict: 'unreadable', reason: 'not-utf8' });
+  });
+});
+
+/**
+ * Audit de #19080, E7 — l'encodeur LÈVE sur une demi-paire de substitution
+ * (aucun appareil ne la lirait). Une chaîne Swift est toujours bien formée,
+ * l'encodeur de la JVM la remplace ; un texte web, lui, peut en porter une
+ * (copier-coller, troncature au milieu d'un emoji) : le web normalise par
+ * `wellFormedE2EEText` AVANT d'encoder, au lieu de perdre l'envoi.
+ */
+describe('un texte web se normalise avant d’être chiffré (E7)', () => {
+  const origin: E2EEEnvelopeOrigin = { conversationId: 'c1', senderUserId: 'u', senderDeviceId: 1 };
+
+  it.each([
+    ['une première moitié seule', 'a\uD800b', 'a\uFFFDb'],
+    ['une seconde moitié seule', '\uDC00', '\uFFFD'],
+    ['deux moitiés dans le mauvais ordre', '\uDE00\uD83D', '\uFFFD\uFFFD'],
+    ['un emoji tronqué en fin de texte', 'bonjour \uD83D', 'bonjour \uFFFD'],
+  ])('%s devient U+FFFD', (_label, text, expected) => {
+    expect(wellFormedE2EEText(text)).toBe(expected);
+  });
+
+  it('un texte bien formé, emoji compris, est rendu tel quel', () => {
+    expect(wellFormedE2EEText('Salut 😀 à tous')).toBe('Salut 😀 à tous');
+  });
+
+  it('normalisé, le texte s’encode et se lit, là où le texte brut faisait lever l’encodeur', () => {
+    const content = { v: 1, conversationId: 'c1', sentAt: 1, text: 'tronqué \uD83D' } as const;
+
+    expect(() => encodeE2EEContent(content)).toThrow();
+    const encoded = encodeE2EEContent({ ...content, text: wellFormedE2EEText(content.text) });
+    expect(openE2EEPlaintext(encoded, origin)).toMatchObject({ verdict: 'admitted-unauthored', content: { text: 'tronqué \uFFFD' } });
   });
 });
 

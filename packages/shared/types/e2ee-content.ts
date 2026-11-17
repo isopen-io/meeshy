@@ -421,6 +421,24 @@ const canonicalJson = (record: JsonRecord): string => {
   return `{${keys.map((key) => `${JSON.stringify(key)}:${JSON.stringify(record[key])}`).join(',')}}`;
 };
 
+/**
+ * Une paire complète, ou une demi-paire isolée. Sans assertion arrière : un
+ * moteur qui ne la connaît pas (Safari avant 16.4) refuserait tout le module.
+ */
+const PAIR_OR_SURROGATE = /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g;
+
+/**
+ * Le texte d'un client web rendu bien formé AVANT l'encodage (audit de #19080,
+ * E7) : chaque demi-paire isolée devient U+FFFD, comme
+ * `String.prototype.toWellFormed`. L'encodeur lève sur une demi-paire, qu'aucun
+ * appareil ne lirait ; une chaîne Swift n'en porte jamais et l'encodeur de la
+ * JVM la remplace, mais un texte web peut en porter une (copier-coller, emoji
+ * tronqué) : normalisé, il part au lieu d'être perdu.
+ */
+export function wellFormedE2EEText(text: string): string {
+  return text.replace(PAIR_OR_SURROGATE, (match) => (match.length === 2 ? match : '\uFFFD'));
+}
+
 /** Le JSON canonique d'un contenu (`E2EEContent.encoded`). Lève sur un contenu hors contrat ; une clé inconnue n'est jamais écrite. */
 export function encodeE2EEContent(content: E2EEContentV1): string {
   return canonicalJson(e2eeContentV1Schema.parse(content));
