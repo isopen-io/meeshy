@@ -312,6 +312,8 @@ export async function anonymizeUserIdentity(
       cityCircle: null,
       // #19201 — la couleur d'accent de la vitrine se voit des autres : elle part avec le compte.
       profileAccentColor: null,
+      // #19203 — le fantôme global de position est un réglage du compte : il part avec lui.
+      locationGhostAt: null,
       searchTokens: [],
       blockedUserIds: [],
       referralCode: null,
