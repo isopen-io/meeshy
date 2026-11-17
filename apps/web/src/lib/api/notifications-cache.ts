@@ -99,23 +99,37 @@ export function prependNotification(queryClient: QueryClient, notification: Noti
 }
 
 /**
- * Range une notification RÉÉCRITE à son rang `createdAt` dans la première page de chaque catégorie qui l'accepte
- * (#18907) : l'éditer ne la fait pas remonter en tête de la cloche. Plus ancienne que toute la première page, elle
- * appartient à une page non chargée — qui se relira, les listes étant marquées périmées — et n'est pas insérée.
+ * Range une notification RÉÉCRITE à son rang `createdAt`, dans la page chargée qui le contient, pour chaque catégorie
+ * qui l'accepte (#18907) : l'éditer ne la fait ni remonter en tête de la cloche, ni disparaître d'une page suivante
+ * déjà chargée. Plus ancienne que toutes les pages chargées alors qu'il en reste à lire, elle appartient à une page
+ * non chargée — qui se relira, les listes étant marquées périmées — et n'est pas insérée.
  */
 export function insertNotificationByCreatedAt(queryClient: QueryClient, notification: NotificationRecord): void {
   const rank = Date.parse(notification.state.createdAt);
   updateLists(queryClient, (data, category) => {
     if (!categoryAccepts(category, notification)) return data;
-    const [first, ...rest] = data.pages;
-    if (first === undefined || first.notifications.some((n) => n.id === notification.id)) return data;
-    const index = Number.isNaN(rank) ? 0 : first.notifications.findIndex((n) => Date.parse(n.state.createdAt) <= rank);
-    const reachesOlderPages = rest.length > 0 || first.hasMore;
-    if (index === -1 && reachesOlderPages) return data;
-    const at = index === -1 ? first.notifications.length : index;
-    const notifications = [...first.notifications.slice(0, at), notification, ...first.notifications.slice(at)];
-    return { ...data, pages: [{ ...first, notifications }, ...rest] };
+    if (data.pages.some((page) => page.notifications.some((n) => n.id === notification.id))) return data;
+    const slot = rankSlot(data.pages, rank);
+    if (slot === null) return data;
+    const pages = data.pages.map((page, p) =>
+      p === slot.page ? { ...page, notifications: [...page.notifications.slice(0, slot.index), notification, ...page.notifications.slice(slot.index)] } : page,
+    );
+    return { ...data, pages };
   });
+}
+
+type Page = NotificationsInfiniteData['pages'][number];
+
+function rankSlot(pages: readonly Page[], rank: number): { readonly page: number; readonly index: number } | null {
+  if (pages.length === 0) return null;
+  if (Number.isNaN(rank)) return { page: 0, index: 0 };
+  const slot = pages
+    .map((page, p) => ({ page: p, index: page.notifications.findIndex((n) => Date.parse(n.state.createdAt) <= rank) }))
+    .find(({ index }) => index !== -1);
+  if (slot !== undefined) return slot;
+  const last = pages.length - 1;
+  const lastPage = pages[last];
+  return lastPage === undefined || lastPage.hasMore ? null : { page: last, index: lastPage.notifications.length };
 }
 
 /** `ofType` : le type des lignes que `total` compte — `byType` compte, comme la passerelle, TOUTES les lignes d'un type, lues ou non. */

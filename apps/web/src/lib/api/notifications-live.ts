@@ -100,7 +100,7 @@ export function createNotificationLiveHandlers(deps: {
        (le geste optimiste de la cloche : la ligne, la pastille, la passerelle) au lieu de rester non lue sur tous les
        appareils jusqu'à la prochaine ouverture du fil. Onglet visible seulement ; jamais un appel. */
     if (notificationsApi !== undefined && !notification.state.isRead && !isCallLayerNotification(notification) && conversationOnScreen(notification, location)) {
-      void performMarkNotificationRead({ id: notification.id, deps: { ...notificationsApi, queryClient } });
+      void performMarkNotificationRead({ id: notification.id, deps: { ...notificationsApi, queryClient }, counted: true });
       return;
     }
     /* Une RÉÉCRITURE ne redescend pas : la bannière reprend sa place, remplacée en place par le texte édité,
