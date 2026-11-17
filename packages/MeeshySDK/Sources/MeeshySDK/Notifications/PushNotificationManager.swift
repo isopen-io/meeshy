@@ -243,27 +243,6 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         logger.error("APNs registration failed: \(error.localizedDescription)")
     }
 
-    /// Unregister the current device token from the backend (e.g. on logout).
-    public func unregisterDeviceToken() async {
-        guard let token = deviceToken else { return }
-
-        let body = UnregisterDeviceTokenRequest(token: token)
-        do {
-            let _: APIResponse<DiscardedResponseBody> = try await APIClient.shared.request(
-                UsersEndpoint.registerDeviceToken,
-                method: "DELETE",
-                body: try JSONEncoder().encode(body)
-            )
-            logger.info("Device token unregistered from backend")
-        } catch {
-            logger.error("Failed to unregister device token: \(error.localizedDescription)")
-        }
-
-        deviceToken = nil
-        keychainStore.delete(forKey: Self.persistedTokenKey, account: nil)
-        keychainStore.delete(forKey: Self.lastRegisteredTokenKey, account: nil)
-    }
-
     // MARK: - Notification Handling
 
     /// Parse and handle an incoming notification payload (from tap or silent push).
@@ -384,6 +363,11 @@ public final class PushNotificationManager: NSObject, ObservableObject {
             logger.info("Device token registered with backend (env=\(Self.apnsEnvironment))")
         } catch {
             logger.error("Failed to register device token: \(error.localizedDescription)")
+            // Un échec CÔTÉ CLIENT ne dit rien de ce que la passerelle a fait : le POST d'une session
+            // quittée a pu être traité après celui de la session ouverte (#18911, audit N1).
+            if generation != sessionGeneration {
+                await replayRegistrationUnderCurrentSession()
+            }
         }
     }
 

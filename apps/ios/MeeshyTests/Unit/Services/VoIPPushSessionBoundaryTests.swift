@@ -16,6 +16,7 @@ final class VoIPPushSessionBoundaryTests: XCTestCase {
         private var _events: [String] = []
         private var held: CheckedContinuation<Void, Never>?
         private var releasedEarly = false
+        private var failsFirst = false
 
         var registerCallCount: Int { lock.withLock { _count } }
         var events: [String] { lock.withLock { _events } }
@@ -35,8 +36,18 @@ final class VoIPPushSessionBoundaryTests: XCTestCase {
                     }
                     if resumeNow { continuation.resume() }
                 }
+                if lock.withLock({ failsFirst }) {
+                    lock.withLock { _events.append("fail:1") }
+                    throw URLError(.timedOut)
+                }
             }
             lock.withLock { _events.append("end:\(index)") }
+        }
+
+        /// Le premier POST échoue CÔTÉ CLIENT au moment où il est relâché ; la passerelle a pu le traiter.
+        func failFirst() {
+            lock.withLock { failsFirst = true }
+            releaseFirst()
         }
 
         func releaseFirst() {
@@ -128,6 +139,28 @@ final class VoIPPushSessionBoundaryTests: XCTestCase {
         let afterAccountAResponse = registrar.events.drop { $0 != "end:1" }
         XCTAssertTrue(afterAccountAResponse.contains { $0.hasPrefix("start:") },
                       "le POST de B a armé le cooldown, mais la passerelle a pu traiter celui de A après : le rejeu passe outre. Événements : \(registrar.events)")
+    }
+
+    /// Audit N1 (#18911) — la réponse de A ÉCHOUE côté client alors que la passerelle a pu
+    /// traiter son POST après celui de B. Un POST repart sous la session courante, malgré le
+    /// cooldown que B a armé, et le jeton de la session quittée n'est pas parqué pour une
+    /// reprise que ce cooldown avalerait.
+    func test_registerTokenWithBackend_staleRequestFailingClientSide_postsAgainUnderTheCurrentSession() async {
+        let registrar = HeldFirstVoIPRegistrar()
+        let (sut, _) = makeSUT(registrar: registrar)
+
+        let accountAPost = Task { await sut.debug_registerTokenWithBackend("voip-T") }
+        await waitUntil { registrar.registerCallCount == 1 }
+        await sut.unregisterAndClearToken()
+        sut.debug_setVoIPToken("voip-T")
+        await sut.debug_registerTokenWithBackend("voip-T")
+        registrar.failFirst()
+        await accountAPost.value
+
+        let afterAccountAFailure = registrar.events.drop { $0 != "fail:1" }
+        XCTAssertTrue(afterAccountAFailure.contains { $0.hasPrefix("start:") },
+                      "un POST part après l'échec de A, sous la session courante. Événements : \(registrar.events)")
+        XCTAssertNil(sut.debug_pendingTokenToRegister, "le jeton de la session quittée n'est pas parqué")
     }
 
     // MARK: - Audit du lot : rendre son jeton à une session rouverte, suivre le vol

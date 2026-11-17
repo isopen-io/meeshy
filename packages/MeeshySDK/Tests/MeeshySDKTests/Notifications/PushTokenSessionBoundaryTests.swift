@@ -102,6 +102,27 @@ final class PushTokenSessionBoundaryTests: XCTestCase {
         XCTAssertEqual(registrar.startedCount, 1, "sans session ouverte, rien à rejouer")
     }
 
+    /// Audit N1 (#18911) — la réponse de A ÉCHOUE côté client (délai dépassé, connexion
+    /// perdue à la suspension) alors que la passerelle a pu traiter son POST après celui de B :
+    /// un POST repart sous la session courante, malgré le cooldown que B vient d'armer.
+    func test_staleRequestFailingClientSide_afterTheEnteringAccountPosted_postsAgainUnderTheCurrentSession() async {
+        let registrar = HeldFirstRegistrar()
+        let (sut, defaults, suite, _) = makeSUT(registrar: registrar, authenticated: SessionFlag(true))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        sut.registerDeviceToken(Self.apnsToken)
+        await waitUntil { registrar.startedCount == 1 }
+        sut.resetSession()
+        sut.registerDeviceToken(Self.apnsToken)
+        await waitUntil { registrar.events.contains("end:2") }
+        registrar.failFirst()
+        await waitUntil { registrar.events.drop { $0 != "fail:1" }.contains { $0.hasPrefix("start:") } }
+
+        XCTAssertTrue(registrar.events.drop { $0 != "fail:1" }.contains { $0.hasPrefix("start:") },
+                      "un POST part après l'échec de A, sous la session courante. Événements : \(registrar.events)")
+        XCTAssertEqual(registrar.startedBodies.last?.token, Self.apnsTokenHex)
+    }
+
     // MARK: - Audit du lot : rendre ses jetons à une session rouverte, suivre le vol
 
     /// Le retrait différé d'une session précédente du même compte a pu effacer la
@@ -160,13 +181,15 @@ final class SessionFlag: @unchecked Sendable {
     init(_ value: Bool) { self.value = value }
 }
 
-/// Retient le PREMIER POST jusqu'à `releaseFirst()`, rend les suivants aussitôt.
+/// Retient le PREMIER POST jusqu'à `releaseFirst()` (ou le fait échouer par `failFirst()`),
+/// rend les suivants aussitôt.
 final class HeldFirstRegistrar: PushTokenRegistrationProviding, @unchecked Sendable {
     private let lock = NSLock()
     private var _events: [String] = []
     private var _bodies: [RegisterDeviceTokenRequest] = []
     private var held: CheckedContinuation<Void, Never>?
     private var releasedEarly = false
+    private var failsFirst = false
 
     var events: [String] { lock.withLock { _events } }
     var startedBodies: [RegisterDeviceTokenRequest] { lock.withLock { _bodies } }
@@ -187,8 +210,19 @@ final class HeldFirstRegistrar: PushTokenRegistrationProviding, @unchecked Senda
                 }
                 if resumeNow { continuation.resume() }
             }
+            if lock.withLock({ failsFirst }) {
+                lock.withLock { _events.append("fail:1") }
+                throw URLError(.timedOut)
+            }
         }
         lock.withLock { _events.append("end:\(index)") }
+    }
+
+    /// Le premier POST échoue CÔTÉ CLIENT (délai dépassé) au moment où il est relâché ; la
+    /// passerelle, elle, a pu le traiter.
+    func failFirst() {
+        lock.withLock { failsFirst = true }
+        releaseFirst()
     }
 
     func releaseFirst() {

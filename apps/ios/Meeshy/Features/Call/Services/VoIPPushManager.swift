@@ -580,13 +580,24 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             pendingTokenToRegister = nil
             logger.info("VoIP token registered with backend (env=\(PushNotificationManager.apnsEnvironment))")
         } catch {
-            // G4c — park the token so the next trigger (foreground
-            // forceReregister, socket reconnect, login) retries the POST.
-            // The cooldown is NOT armed on failure, so the retry is never
-            // swallowed by the idempotence guard.
-            pendingTokenToRegister = token
-            logger.error("Failed to register VoIP token — parked for retry: \(error.localizedDescription)")
+            await handleRegistrationFailure(error, token: token, generation: generation)
         }
+    }
+
+    /// G4c — un POST échoué sous la session qui l'a lancé est parqué pour le prochain
+    /// déclencheur (premier plan, reconnexion, connexion) : le cooldown n'est armé que par un
+    /// succès, donc la reprise n'est jamais avalée. Échoué après un changement de session, il ne
+    /// dit rien de ce que la passerelle a fait — son POST a pu être traité après celui de la
+    /// session ouverte : rien n'est parqué (la reprise tomberait sous le cooldown de la session
+    /// suivante), un POST repart sous la session courante (#18911, audit N1).
+    private func handleRegistrationFailure(_ error: Error, token: String, generation: UInt64) async {
+        guard generation == sessionGeneration else {
+            logger.error("Stale VoIP token registration failed — re-registering under the current session: \(error.localizedDescription)")
+            await replayRegistrationUnderCurrentSession()
+            return
+        }
+        pendingTokenToRegister = token
+        logger.error("Failed to register VoIP token — parked for retry: \(error.localizedDescription)")
     }
 }
 
