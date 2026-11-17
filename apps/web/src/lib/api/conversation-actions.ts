@@ -1,16 +1,15 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
-import type { ConversationStoreState, OverrideKey } from '@/lib/conversation-store';
+import type { ConversationStoreState, OverrideKey, PreferenceKey } from '@/lib/conversation-store';
 import { effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import type { RowFlagActionId } from '@/lib/view/row-actions';
 
-import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
-import { toDate } from './decode';
+import { conversationQueryKey, findCachedConversation, type ConversationsDeps } from './conversations';
 import { outcomeOf } from './outcome';
 import type { ConversationPreferencePatch } from './preferences';
 import { pushConversationFlags, pushRead, pushUnread } from './preference-ports';
-import { caughtUpConversation } from './receipts';
+import { beginRowGesture, confirmPreferences, confirmRead, confirmUnread, replayRowGestures, type RowGesture, type RowGestureQueue } from './row-gestures';
 import type { Conversation } from './types';
 
 /**
@@ -19,8 +18,9 @@ import type { Conversation } from './types';
  * instantané → override optimiste → appel → `completed` (le cache prend la
  * valeur CONFIRMÉE, l'override est retiré) / `failedPermanent` (4xx,
  * rollback : l'override est retiré, le cache reste intact) /
- * `failedTransient` (réseau, 5xx : l'override RESTE — l'outbox iOS rejoue,
- * sur le web c'est une issue compagnon « file de reprise hors ligne »).
+ * `failedTransient` (réseau, 5xx : l'override RESTE, et le geste entre dans la
+ * file de reprise du compte, rejouée au retour du réseau — `row-gestures.ts`,
+ * #18917, miroir de l'outbox iOS).
  *
  * `outcomeOf` et `patchConversation` vivent désormais dans `./outcome` et
  * `./conversations` (#5813, étape 0) — `send/perform-send.ts` (un envoi de
@@ -31,6 +31,8 @@ export type ConversationActionDeps = ConversationsDeps & {
   readonly queryClient: QueryClient;
   /** Reçoit l'issue du geste (voir {@link RowActionEvent}) ; absent, le geste reste muet. */
   readonly notify?: (event: RowActionEvent) => void;
+  /** La file de reprise du compte (#18917) ; absente (invité, témoin), une panne garde l'override sans rejeu. */
+  readonly gestures?: RowGestureQueue | null;
 };
 
 /**
@@ -49,12 +51,6 @@ function successDataOf(result: unknown): Record<string, unknown> | undefined {
   return r.ok === true && typeof r.data === 'object' && r.data !== null ? (r.data as Record<string, unknown>) : undefined;
 }
 
-function preferenceEntryOf(conversation: Conversation): Record<string, unknown> {
-  const raw = conversation.userPreferences;
-  const entry = Array.isArray(raw) ? raw[0] : undefined;
-  return typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {};
-}
-
 type ActionPlan = {
   readonly keys: readonly OverrideKey[];
   /** `null` en source `fixtures` : l'override optimiste reste, sans appel. */
@@ -63,6 +59,8 @@ type ActionPlan = {
   readonly applyConfirmed: (result: unknown) => void;
   /** L'état nouveau de la bascule, tel que {@link RowActionEvent} le porte. */
   readonly on: boolean;
+  /** Ce que la file de reprise rejouera si le réseau manque (#18917). */
+  readonly gesture: RowGesture;
 };
 
 function planOf(params: {
@@ -87,13 +85,9 @@ function planOf(params: {
     return {
       keys: [field],
       on: next,
+      gesture: { kind: 'flag', conversationId, field, value: next },
       request: gateway ? () => pushConversationFlags(transport, conversationId, { [field]: next }) : null,
-      applyConfirmed: (result) => {
-        const confirmed = successDataOf(result) ?? { [field]: next };
-        const apply = (c: Conversation): Conversation => ({ ...c, userPreferences: [{ ...preferenceEntryOf(c), ...confirmed }] });
-        patchConversation(queryClient, conversationId, apply);
-        patchConversationDetail(queryClient, conversationId, apply);
-      },
+      applyConfirmed: (result) => confirmPreferences(queryClient, conversationId, successDataOf(result) ?? { [field]: next }),
     };
   }
 
@@ -104,40 +98,20 @@ function planOf(params: {
     return {
       keys: ['unreadCount'],
       on: true,
+      gesture: { kind: 'read', conversationId, read: true },
       request: gateway ? () => pushRead(transport, conversationId) : null,
-      applyConfirmed: () => {
-        const readThrough = readThroughLastMessage(conversation);
-        patchConversation(queryClient, conversationId, readThrough);
-        patchConversationDetail(queryClient, conversationId, readThrough);
-      },
+      /* « Lu » confirmé (#7351) : le compte tombe à 0 ET le curseur avance sur le dernier message que la rangée montrait. */
+      applyConfirmed: () => confirmRead(queryClient, conversationId, conversation),
     };
   }
   store.markUnread(conversationId);
   return {
     keys: ['unreadCount'],
     on: false,
+    gesture: { kind: 'read', conversationId, read: false },
     request: gateway ? () => pushUnread(transport, conversationId) : null,
-    applyConfirmed: () =>
-      patchConversation(queryClient, conversationId, (c) => ({
-        ...c,
-        unreadCount: Math.max(1, c.unreadCount ?? 0),
-      })),
+    applyConfirmed: () => confirmUnread(queryClient, conversationId),
   };
-}
-
-/**
- * « Lu » confirmé (#7351, revue-correction) — `POST …/receipts { type: 'read' }`
- * lit TOUT jusqu'au dernier message que la rangée montrait : le compte tombe à
- * 0 ET le curseur avance sur ce message, dans la liste comme dans le détail
- * que le fil relit (`caughtUpConversation`, la forme de `markCaughtUp`). Le
- * compte seul laissait un curseur ancien — qui prime sur le compte — rendre
- * non lus au fil rouvert les messages qu'on venait de marquer lus.
- */
-function readThroughLastMessage(row: Conversation): (conversation: Conversation) => Conversation {
-  const last = row.lastMessage;
-  if (last === undefined) return (conversation) => ({ ...conversation, unreadCount: 0 });
-  const cursor = { messageId: last.id, messageCreatedAt: toDate(last.createdAt), readAt: new Date() };
-  return (conversation) => caughtUpConversation(conversation, cursor);
 }
 
 /**
@@ -163,15 +137,21 @@ export async function performRowAction(params: {
 
   if (plan.request === null) return; // source fixtures : l'override reste, jamais d'appel.
 
+  /* Un geste neuf remplace celui de la même clé en file : son rejeu ne le défera pas. */
+  const park = beginRowGesture(deps.gestures, plan.gesture);
   let result: unknown;
   try {
     result = await plan.request();
   } catch {
-    return; // panne réseau — TRANSIENT : l'override RESTE.
+    park(); // panne réseau — l'override RESTE, le geste attend le réseau.
+    return;
   }
 
   const outcome = outcomeOf(result);
-  if (outcome === 'transient') return;
+  if (outcome === 'transient') {
+    park();
+    return;
+  }
   if (outcome === 'permanent') {
     deps.store.getState().clearOverride(conversationId, plan.keys);
     deps.notify?.({ kind: 'refused', action });
@@ -179,6 +159,13 @@ export async function performRowAction(params: {
   }
   plan.applyConfirmed(result);
   deps.store.getState().clearOverride(conversationId, plan.keys);
+  await replayParked(deps);
+}
+
+/** La passerelle vient de répondre : les gestes restés en file partent à sa suite (#18917). */
+function replayParked(deps: ConversationActionDeps): Promise<void> {
+  const gestures = deps.gestures;
+  return gestures == null ? Promise.resolve() : replayRowGestures({ ...deps, gestures });
 }
 
 /**
@@ -194,24 +181,27 @@ export async function performPreferenceAction(params: {
   readonly deps: ConversationActionDeps;
 }): Promise<void> {
   const { conversationId, patch, deps } = params;
-  const keys = Object.keys(patch) as (keyof ConversationPreferencePatch)[];
+  const keys = Object.keys(patch) as PreferenceKey[];
   deps.store.getState().setPreference(conversationId, patch);
   if (deps.source !== 'gateway') return;
 
+  const gestures: readonly RowGesture[] = keys.map((field) => ({ kind: 'preference', conversationId, field, value: patch[field] ?? null }));
+  const parks = gestures.map((gesture) => beginRowGesture(deps.gestures, gesture));
+  const park = (): void => parks.forEach((parkOne) => parkOne());
   let result: unknown;
   try {
     result = await pushConversationFlags(deps.transport, conversationId, patch);
   } catch {
+    park();
     return;
   }
 
   const outcome = outcomeOf(result);
-  if (outcome === 'transient') return;
-  if (outcome === 'success') {
-    const confirmed = { ...patch, ...successDataOf(result) };
-    const apply = (c: Conversation): Conversation => ({ ...c, userPreferences: [{ ...preferenceEntryOf(c), ...confirmed }] });
-    patchConversation(deps.queryClient, conversationId, apply);
-    patchConversationDetail(deps.queryClient, conversationId, apply);
+  if (outcome === 'transient') {
+    park();
+    return;
   }
+  if (outcome === 'success') confirmPreferences(deps.queryClient, conversationId, { ...patch, ...successDataOf(result) });
   deps.store.getState().clearOverride(conversationId, keys);
+  if (outcome === 'success') await replayParked(deps);
 }

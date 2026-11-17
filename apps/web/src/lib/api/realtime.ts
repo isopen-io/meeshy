@@ -1,3 +1,5 @@
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
+
 import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
 import { setCallEngineWake } from '@/lib/calls/call-transport';
 import { callsAvailable } from '@/lib/calls/calls-availability';
@@ -20,6 +22,7 @@ import { bindProfileDecorSync } from '../profile-decor/equip';
 import { bindStickerLibrarySync } from '../stickers/library-sync';
 import { bindGameStateSync } from './game-state-live';
 import { bindPreferencesLiveLazily } from './preferences-live';
+import { appRowGestures, replayAppRowGestures } from './app-row-gestures';
 import { bindCommunityLiveLazily } from './community-live-binding';
 import { bindPresenceLive } from './presence-live';
 import { presenceStore } from './presence-store';
@@ -134,7 +137,10 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
   /* `user:preferences-updated` (#10663, #18914) : le fond, l'accent, l'épingle, la sourdine, l'archive, le nom personnel,
      la catégorie, le favori, l'historique vidé et les réglages d'application changés ailleurs, sans fil ouvert. */
-  const unpreferences = bindPreferencesLiveLazily({ socket: next.socket, queryClient: appQueryClient, conversations: conversationStore });
+  const unpreferences = bindPreferencesLiveLazily({ socket: next.socket, queryClient: appQueryClient, conversations: conversationStore, gestures: appRowGestures });
+  /* Les gestes de rangée faits sans réseau (#18917) : leurs overrides se revoient dès l'ouverture, ils partent à chaque (ré)authentification. */
+  appRowGestures();
+  next.socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, replayAppRowGestures);
   /* `community:updated` (#18435) et `community:member-*` (#18766) : un renommage, une entrée, un départ ou un rôle se voient chez chaque membre. */
   const uncommunity = bindCommunityLiveLazily({ socket: next.socket, queryClient: appQueryClient, viewerId: currentViewerId });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
@@ -151,6 +157,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unstickers();
     ungame();
     unpreferences();
+    next.socket.off<unknown>(SERVER_EVENTS.AUTHENTICATED, replayAppRowGestures);
     uncommunity();
     unpresence();
     unrevoke();

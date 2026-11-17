@@ -11,6 +11,7 @@ import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
 import { requestFullThreadRead } from './messages-revalidation';
+import { supersedeRowGestures, type RowGestureQueue } from './row-gestures';
 import { preferenceEntryOf } from './preferences';
 import type { Conversation } from './types';
 
@@ -121,6 +122,8 @@ const patchBoth = (queryClient: QueryClient, conversationId: string, edit: (conv
 export function createPreferencesSync(params: {
   readonly queryClient: QueryClient;
   readonly conversations: StoreApi<ConversationStoreState>;
+  /** La file de reprise des gestes de rangée du compte (#18917) : une valeur servie ici est plus récente qu'un geste en file. */
+  readonly gestures?: () => RowGestureQueue | null;
 }) {
   const { queryClient, conversations } = params;
   const versions = new Map<string, number>();
@@ -153,6 +156,8 @@ export function createPreferencesSync(params: {
     if (Object.keys(fields).length > 0) patchBoth(queryClient, conversationId, (conversation) => withPreferenceFields(conversation, fields));
     const settled = confirmedOverrides(conversations.getState().overrides[conversationId], fields);
     if (settled.length > 0) conversations.getState().clearOverride(conversationId, settled);
+    const queue = params.gestures?.() ?? null;
+    if (queue !== null) supersedeRowGestures({ queue, store: conversations, conversationId, keys: [...FLAG_KEYS, ...PREFERENCE_KEYS].filter((key) => key in fields) });
     applyHistoryClear(conversationId, served);
   };
 }
@@ -161,6 +166,7 @@ export function bindPreferencesLive(params: {
   readonly socket: SocketClient;
   readonly queryClient: QueryClient;
   readonly conversations: StoreApi<ConversationStoreState>;
+  readonly gestures?: () => RowGestureQueue | null;
 }): () => void {
   const handler = createPreferencesSync(params);
   params.socket.on<unknown>(SERVER_EVENTS.USER_PREFERENCES_UPDATED, handler);

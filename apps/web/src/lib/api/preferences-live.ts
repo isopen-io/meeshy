@@ -4,6 +4,8 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient } from '@/lib/net/socket';
 
+import type { RowGestureQueue } from './row-gestures';
+
 /**
  * L'ÉCOUTE DES PRÉFÉRENCES, MONTÉE AVEC LA CONNEXION (#10663, #18914) —
  * `user:preferences-updated` d'un autre appareil repeint la liste des
@@ -20,6 +22,8 @@ export function bindPreferencesLiveLazily(params: {
   readonly socket: SocketClient;
   readonly queryClient: QueryClient;
   readonly conversations: StoreApi<ConversationStoreState>;
+  /** La file de reprise des gestes de rangée du compte (#18917). */
+  readonly gestures?: () => RowGestureQueue | null;
 }): () => void {
   let live = true;
   let stop: (() => void) | null = null;

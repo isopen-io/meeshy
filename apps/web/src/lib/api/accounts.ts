@@ -258,6 +258,8 @@ export function purgeAccountLocalData({
     `meeshy.studio.audience.${userId}`,
     `meeshy.call-journal.${scope}`,
     anonymousSessionsKey(userId),
+    /* Ses gestes de rangée en attente (#18917) — `rowGesturesStorageKey`. */
+    `meeshy.row-gestures.${scope}`,
   ]);
   keys
     .filter((key) => exact.has(key) || prefixes.some((prefix) => key.startsWith(prefix)))
