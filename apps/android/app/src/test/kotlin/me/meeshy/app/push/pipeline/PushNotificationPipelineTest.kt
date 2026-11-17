@@ -169,19 +169,21 @@ class PushNotificationPipelineTest {
     }
 
     @Test
-    fun `le push est groupe par conversation avec un recapitulatif et le badge`() = runTest {
+    fun `le push est groupe par conversation avec un recapitulatif et le nombre de sa banniere`() = runTest {
         pipeline(environment = FakeEnvironment(unread = 5)).renderNow(message())
 
         val notifications = active()
         val summary = notifications.single { it.notification.isSummary() }
         assertThat(summary.id).isEqualTo(PushGrouping.summaryNotificationId("conversation:c1"))
         assertThat(child().group).isEqualTo("conversation:c1")
-        assertThat(child().number).isEqualTo(5)
+        assertThat(child().number).isEqualTo(1)
     }
 
     @Test
-    fun `le badge de la charge l emporte sur le compte local`() = runTest {
-        pipeline(environment = FakeEnvironment(unread = 5)).renderNow(message("n1", "unreadCount" to "2"))
+    fun `les messages successifs d une conversation allongent le nombre de la meme banniere, quel que soit le total du serveur`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(message("n1", "unreadCount" to "9"))
+        pipeline.renderNow(message("n2", "unreadCount" to "2"))
 
         assertThat(child().number).isEqualTo(2)
     }

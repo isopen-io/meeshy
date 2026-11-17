@@ -1,5 +1,6 @@
 package me.meeshy.app.push.pipeline
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import androidx.core.app.NotificationCompat
@@ -111,7 +112,8 @@ class PushNotificationPipeline @Inject constructor(
         val ephemeral = (payload.ephemeralDuration ?: 0) > 0
         val notificationId = MessageNotificationId.of(payload.type, payload.conversationId, payload.notificationId, ephemeral)
         val groupKey = PushGrouping.groupKey(payload, preferences)
-        val badge = PushBadgePolicy.badge(payload, preferences, localUnread(payload.unreadCount))
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val badge = PushBadgePolicy.bannerCount(preferences, previous = postedBanner(manager, notificationId)?.number)
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_meeshy)
@@ -127,11 +129,10 @@ class PushNotificationPipeline @Inject constructor(
         val request = EnrichmentRequest(push, preferences, channelId, groupKey, badge, passive, deadline, notificationId)
         enrich(builder, request)
 
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         payload.replacesNotificationId?.let { manager.cancel(MessageNotificationId.forNotification(it)) }
         manager.notify(notificationId, builder.build())
         interactions.emit(PushInteraction.Displayed(payload.notificationId))
-        groupKey?.let { summaryNotifier.post(it, channelId, badge) }
+        groupKey?.let { summaryNotifier.post(it, channelId) }
         return true
     }
 
@@ -180,8 +181,10 @@ class PushNotificationPipeline @Inject constructor(
         return persisted ?: preferencesStore.preferences.value
     }
 
-    private suspend fun localUnread(fromPayload: Int?): Int? =
-        if (fromPayload != null) null else environment.localUnreadConversations()
+    private fun postedBanner(manager: NotificationManager, notificationId: Int): Notification? =
+        runCatching { manager.activeNotifications }.getOrNull()
+            ?.firstOrNull { it.id == notificationId && it.tag == null }
+            ?.notification
 
     private fun firstDelivery(notificationId: String?): Boolean {
         if (notificationId == null) return true
