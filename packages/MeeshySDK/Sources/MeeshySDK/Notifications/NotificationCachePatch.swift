@@ -62,9 +62,16 @@ public enum NotificationCachePatch {
     /// RÉÉCRITE après une édition garde sa place au lieu de passer en tête
     /// (#19104). Les dates sont les chaînes ISO 8601 du fil (même format,
     /// donc l'ordre des chaînes est celui des dates).
+    ///
+    /// Une ligne NOUVELLE plus ancienne que toute la fenêtre n'y entre pas : la
+    /// ranger en queue décalerait la pagination par offset (`loadMore` sauterait
+    /// une ligne du serveur). Elle reviendra avec la page qui la porte.
     public static func upsertingByCreatedAt(_ items: [APINotification], _ row: APINotification) -> [APINotification] {
         let others = items.filter { $0.id != row.id }
-        let slot = others.firstIndex { $0.state.createdAt <= row.state.createdAt } ?? others.count
+        guard let slot = others.firstIndex(where: { $0.state.createdAt <= row.state.createdAt }) else {
+            let wasInTheWindow = others.count != items.count
+            return wasInTheWindow || others.isEmpty ? others + [row] : items
+        }
         return Array(others[..<slot]) + [row] + Array(others[slot...])
     }
 
