@@ -1310,3 +1310,35 @@ socket jusqu'au client.
 4. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
 5. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
 6. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 39 — 2026-11-17
+
+- **Base** : `origin/dev` @ `e6f09991`. Le lot du cycle 38 (#18772) était déjà fusionné, et aucune PR de la routine n'était ouverte.
+- **Branche** : `claude/determined-volta-e6lw66`.
+- **Objectif** : #19254. Le webhook de traduction vocale ne porte que l'identifiant et l'état du job, jamais son contenu.
+- **Mesure de rétrocompatibilité** : aucun récepteur de ce webhook n'existe dans le dépôt, et aucun client n'envoie de `webhookUrl` (mesure du cycle 38). La forme reste compatible : `event`, `job.id`, `job.status` et `metadata` sont gardés, `job_id` est ajouté à la racine.
+- **Livré** (seul le traducteur change) :
+  - fonction pure `webhook_payload(job)` (`translation_pipeline_service.py`), qui rend `{event, job: {id, status}, job_id, metadata}` ;
+  - ne partent plus : `result` (textes traduits, transcription, audio), `user_id`, `error`, `error_code` et `target_languages` ;
+  - `to_dict()` est inchangé, et la route d'état garde la vue complète.
+- **Tests** : `tests/test_job_webhook_payload.py` (5 témoins).
+  - **Rouge** sur la base : `2 failed, 3 passed`.
+  - **Vert** : relancé par moi, `38 passed` avec le garde webhook.
+  - **Suites voisines** (garde webhook, `_qa`, test_26, garde audio) : `172 passed` avant, `177 passed` après.
+  - **Mutations QA** : remettre `result`, ou ajouter `user`/`err` à la racine, fait échouer 2 témoins.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, toutes antérieures au lot.
+  - #19292 : l'identifiant de job porte `user_id[:8]`, qui part au webhook.
+  - #19293 : la route d'état du traducteur, `GET`/`DELETE /voice/job/{id}`, n'a aucune authentification (défense en profondeur ; réseau interne).
+  - #19294 : `callbackMetadata` n'est jamais transmise, donc `metadata` arrive toujours vide.
+  - #19295 : un job annulé est annoncé `translation_failed`.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #19292, qui est petit (vérifier d'abord que personne ne parse l'identifiant de job), puis #19293 avec l'agent `auditeur-adversarial`.
+2. #19253 (passerelle), #19294 et #19255.
+3. #18727, puis #18773.
+4. #18668 et #18692, les messages d'exception bruts, puis #18729 et #18774.
+5. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
+6. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
+7. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
