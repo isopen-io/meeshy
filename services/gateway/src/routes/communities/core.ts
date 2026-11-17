@@ -29,11 +29,7 @@ import { CerclesAchievements } from '../../services/achievements/CerclesAchievem
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
-import {
-  conversationAdmitsNewMembers,
-  EXTERNAL_CONVERSATION_ERROR_CODES,
-  EXTERNAL_SINGLE_MEMBER_MESSAGE,
-} from '@meeshy/shared/types/external-conversation';
+import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -712,6 +708,7 @@ const community = await fastify.prisma.community.findFirst({
         select: {
           id: true,
           type: true,
+          encryptionMode: true,
           communityId: true,
           participants: { select: { userId: true, role: true, isActive: true } }
         }
@@ -744,10 +741,12 @@ const community = await fastify.prisma.community.findFirst({
         return refuserCommeIntrouvable(reply);
       }
 
-      // #17117 — une conversation externe n'a qu'un membre Meeshy : un salon
-      // donnerait des droits sur elle aux administrateurs de la communauté.
-      if (!conversationAdmitsNewMembers(conversation.type)) {
-        return sendConflict(reply, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
+      // #17117 — une conversation externe n'a qu'un membre Meeshy, et #16188 —
+      // un tête-à-tête chiffré de bout en bout reste à deux : un salon donnerait
+      // des droits sur elle aux administrateurs de la communauté.
+      const closedToNewMembers = newMemberRefusal(conversation);
+      if (closedToNewMembers) {
+        return sendConflict(reply, closedToNewMembers.message, { code: closedToNewMembers.code });
       }
 
       // Administrer la conversation ne donne pas le droit de la SOUSTRAIRE à

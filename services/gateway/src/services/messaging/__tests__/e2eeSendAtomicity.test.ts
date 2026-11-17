@@ -120,6 +120,76 @@ describe('GW-05 — un message chiffré ne naît jamais sans ses enveloppes', ()
     ]);
   });
 
+  // #12548 — le renvoi CONCURRENT (réessai réseau, repli socket après un REST
+  // lent) arrive pendant que la première écriture attend ses enveloppes. Avant,
+  // la ligne déjà écrite le faisait répondre « doublon réussi », puis la
+  // première échouait et l'effaçait : un message annoncé envoyé qui n'existait plus.
+  describe('un renvoi concurrent, pendant que la première écriture est en vol', () => {
+    const heldEnvelopeWrite = (outcome: 'fails' | 'succeeds') => {
+      let release: () => void = () => undefined;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      const state = { writes: 0 };
+      const envelopeCreateMany = async (args: unknown, write: (args: unknown) => Promise<unknown>) => {
+        state.writes += 1;
+        if (state.writes > 1) return write(args);
+        await held;
+        if (outcome === 'fails') throw new Error('mongo: write concern timeout');
+        return write(args);
+      };
+      return { envelopeCreateMany, release: () => release(), firstWriteInFlight: () => state.writes === 1 };
+    };
+
+    const until = async (condition: () => boolean): Promise<void> => {
+      const turns = Array.from({ length: 200 });
+      for (const _turn of turns) {
+        if (condition()) return;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      throw new Error('la première écriture n’a jamais atteint ses enveloppes');
+    };
+
+    it('ne se déclare jamais réussi quand la première échoue : aucune ligne, aucune enveloppe, et le renvoi suivant aboutit', async () => {
+      const writer = heldEnvelopeWrite('fails');
+      const h = createSendHarness({ encryptionMode: 'e2ee', envelopeCreateMany: writer.envelopeCreateMany });
+
+      const first = h.service.handleMessage(libsignalSend(cid(4)), ALICE_PARTICIPANT);
+      await until(writer.firstWriteInFlight);
+      const concurrent = await h.service.handleMessage(libsignalSend(cid(4)), ALICE_PARTICIPANT);
+      writer.release();
+      const firstResponse = await first;
+
+      expect(concurrent.success).toBe(false);
+      expect(firstResponse.success).toBe(false);
+      expect(h.messages).toHaveLength(0);
+      expect(h.store.collections.MessageEnvelope.rows).toHaveLength(0);
+
+      const later = await h.service.handleMessage(libsignalSend(cid(4)), ALICE_PARTICIPANT);
+      expect(later.success).toBe(true);
+      expect(h.store.collections.MessageEnvelope.rows).toHaveLength(1);
+    });
+
+    it('quand la première aboutit, il n’écrit ni seconde ligne ni seconde enveloppe, et un renvoi ultérieur est une déduplication', async () => {
+      const writer = heldEnvelopeWrite('succeeds');
+      const h = createSendHarness({ encryptionMode: 'e2ee', envelopeCreateMany: writer.envelopeCreateMany });
+
+      const first = h.service.handleMessage(libsignalSend(cid(5)), ALICE_PARTICIPANT);
+      await until(writer.firstWriteInFlight);
+      const concurrent = await h.service.handleMessage(libsignalSend(cid(5)), ALICE_PARTICIPANT);
+      writer.release();
+      const firstResponse = await first;
+      const later = await h.service.handleMessage(libsignalSend(cid(5)), ALICE_PARTICIPANT);
+
+      expect(concurrent.success).toBe(false);
+      expect(firstResponse.success).toBe(true);
+      expect(later.success).toBe(true);
+      expect(h.messages).toHaveLength(1);
+      expect(h.store.collections.MessageEnvelope.rows).toEqual([
+        expect.objectContaining({ messageId: h.messages[0].id, recipientUserId: BOB }),
+      ]);
+      expect(h.emitted).toHaveLength(1);
+    });
+  });
+
   it('un renvoi d’un envoi DÉJÀ abouti reste une déduplication : ni seconde ligne, ni seconde enveloppe', async () => {
     const h = createSendHarness({ encryptionMode: 'e2ee' });
 

@@ -205,6 +205,75 @@ const contentVerdicts = [
     version: 2,
   },
   {
+    name: 'future-version-padding-then-newline',
+    description: 'Le remplissage suivi d’un blanc JSON qui n’est pas une espace (ici `\\n`) : le JSON reste valide (JSONDecoder admet tout blanc JSON en fin), la version future se garde, et son JSON gardé est le clair privé de TOUS ses blancs de fin, par un parcours linéaire (WEBX-06 : l’expression `/ +$/` était quadratique sur ce cas, 0,8 s pour 48 Ko).',
+    plaintext: { text: `{"conversationId":"${CONV}","sentAt":${T},"text":"x","v":2}`, recipients: 1, tail: '\n' },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'future-version',
+    version: 2,
+  },
+  {
+    name: 'padding-then-newline-still-reads',
+    description: 'Un contenu v1 dont le remplissage est suivi d’un `\\n` se lit comme sur l’iPhone : un blanc JSON en fin ne rend rien illisible.',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"x","v":1}`, recipients: 1, tail: '\r\n\t' },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'admitted',
+    expected: { v: 1, text: 'x', conversationId: CONV, sentAt: T, authorUserId: ALICE, authorDeviceId: 3 },
+  },
+  {
+    name: 'lone-high-surrogate-escape',
+    description: 'Une demi-paire de substitution échappée (`\\ud800` sans sa seconde moitié) ne forme aucun point de code : l’encodeur refuse de l’écrire, le lecteur la juge illisible — jamais un texte à demi-paire (WEBX-06).',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"a\\ud800b","v":1}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+  },
+  {
+    name: 'lone-low-surrogate-escape',
+    description: 'Une seconde moitié seule (`\\udc00`) n’est pas davantage un point de code.',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"\\udc00","v":1}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+  },
+  {
+    name: 'reversed-surrogate-escapes',
+    description: 'Deux moitiés dans le mauvais ordre (`\\ude00\\ud83d`) sont deux demi-paires isolées.',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"\\ude00\\ud83d","v":1}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+  },
+  {
+    name: 'lone-surrogate-in-an-ignored-key',
+    description: 'Une demi-paire est refusée où qu’elle soit, même sous une clé que la version 1 ignore : le clair n’est pas un JSON qu’un appareil lit (voir README : l’iPhone sous iOS 17 et plus ne la verrait pas).',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","note":"\\ud800","sentAt":${T},"text":"x","v":1}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+  },
+  {
+    name: 'escaped-surrogate-pair-reads',
+    description: 'Une paire ÉCHAPPÉE complète (`\\ud83d\\ude00`) est un point de code : elle se lit, comme l’emoji brut.',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"\\ud83d\\ude00","v":1}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'admitted',
+    expected: { v: 1, text: '😀', conversationId: CONV, sentAt: T, authorUserId: ALICE, authorDeviceId: 3 },
+  },
+  {
+    name: 'surrogate-encoded-in-utf8',
+    description: 'Une demi-paire encodée en octets (`ED A0 80`) n’est pas de l’UTF-8 : illisible, sans caractère de remplacement.',
+    plaintext: {
+      bytes: Buffer.concat([utf8(`{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"`), Buffer.from([0xed, 0xa0, 0x80]), utf8('","v":1}')]),
+    },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+  },
+  {
     name: 'missing-version',
     description: 'Un objet sans `v` n’est pas un contenu.',
     plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"x"}` },
@@ -544,6 +613,23 @@ const signalVerdicts = [
     version: 3,
   },
   {
+    name: 'future-version-padding-then-newline',
+    description: 'Un signal d’une version future dont le remplissage est suivi d’un `\\n` : gardé, son JSON privé de tous ses blancs de fin, en temps linéaire (WEBX-06).',
+    plaintext: { text: `{${TYPING},"s":2,"sentAt":${T}}`, recipients: 2, tail: '\n' },
+    envelope: FROM_ALICE,
+    payload: 'signal',
+    verdict: 'future-version',
+    version: 2,
+  },
+  {
+    name: 'lone-surrogate-escape-is-an-unreadable-message',
+    description: 'Une réaction dont l’emoji est une demi-paire échappée n’est pas un JSON qu’un appareil lit : comme tout JSON illisible, la sonde la range parmi les messages, illisible (voir README : sous iOS 17 et plus, l’iPhone la classe signal avant de la juger illisible).',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","emoji":"\\ud83d","kind":"reaction","removed":false,"s":1,"sentAt":${T},"target":"${M1}"}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+  },
+  {
     name: 'version-zero',
     description: '`s` vaut 0 : un signal (entier), mais d’aucune version.',
     plaintext: { text: `{${TYPING},"s":0,"sentAt":${T}}` },
@@ -702,7 +788,8 @@ const derive = (c) => {
 
 const deriveVerdict = (c) => {
   const bytes = c.plaintext.bytes ?? utf8(c.plaintext.text);
-  const plaintext = c.plaintext.recipients ? pad(bytes, c.plaintext.recipients) : bytes;
+  const padded = c.plaintext.recipients ? pad(bytes, c.plaintext.recipients) : bytes;
+  const plaintext = c.plaintext.tail ? Buffer.concat([padded, utf8(c.plaintext.tail)]) : padded;
   const out = {
     name: c.name,
     description: c.description,

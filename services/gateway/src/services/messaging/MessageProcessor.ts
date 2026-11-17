@@ -12,6 +12,7 @@ import { declaredReplyProtection } from './replyProtectionContagion';
 import { assertPlaintextAdmitted, E2EE_CONTENT_PLACEHOLDER, type EncryptionRegime } from './e2eePlaintextAdmission';
 import { admitSendUnderRegime } from './e2eeSendAdmission';
 import { createMessageWithEnvelopes } from './e2eeEnvelopePersistence';
+import { E2EE_ROW_ORIGINAL_LANGUAGE } from './e2eeRelayPayload';
 import { atRestModeOf, sealsAtRest, sealTextAtRest } from './atRestWrite';
 import { isSealedAtRest, isServerAtRestMode, revealAtRestWithQuote, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
 import { HYBRID_DEVICE_LAYER_METADATA_KEY, LIBSIGNAL_PROTOCOL, type E2EEDeviceLayerRequest, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
@@ -412,7 +413,8 @@ export class MessageProcessor {
       conversationId: data.conversationId,
       senderId: data.senderId,
       content: encryptionContext.isEncrypted ? (relay && !deviceLayer ? E2EE_CONTENT_PLACEHOLDER : '') : processedContent.trim(),
-      originalLanguage: data.originalLanguage,
+      // GW-12 (#18906) — en e2ee, la langue déclarée ne s'écrit pas : la ligne porte une constante.
+      originalLanguage: endToEnd ? E2EE_ROW_ORIGINAL_LANGUAGE : data.originalLanguage,
       messageType: data.messageType || 'text',
       messageSource: data.messageSource || 'user',
       replyToId: data.replyToId,
