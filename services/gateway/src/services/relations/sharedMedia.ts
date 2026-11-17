@@ -60,12 +60,26 @@ const KIND_WHERE: Readonly<Record<SharedAttachmentKind, Record<string, unknown>>
   image: { mimeType: { startsWith: 'image/' } },
   video: { mimeType: { startsWith: 'video/' } },
   audio: { mimeType: { startsWith: 'audio/' } },
+  // `file` est le REPLI, exactement comme en mémoire (`sharedMediaKindOf` rend
+  // `found ?? 'file'`) — et le repli doit donc nommer l'absence du champ.
+  //
+  // `MessageAttachment.mimeType` est un `String?`, et sur le connecteur MongoDB
+  // un champ absent ne matche ni `null` ni `NOT null` : la seule négation
+  // écartait donc la pièce sans type des QUATRE genres à la fois — `startsWith`
+  // l'excluant des trois premiers et `NOT` du quatrième. Invisible sous tout
+  // filtre, pendant que la mémoire la déclarait `file`. Le symptôme n'était pas
+  // une erreur mais une ABSENCE (#19285, garde #8309).
   file: {
-    NOT: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }, { mimeType: { startsWith: 'audio/' } }],
+    OR: [
+      {
+        NOT: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }, { mimeType: { startsWith: 'audio/' } }],
+      },
+      { mimeType: { isSet: false } },
+    ],
   },
 };
 
-const kindWhere = (kind: SharedAttachmentKind | undefined): Record<string, unknown> => (kind ? KIND_WHERE[kind] : {});
+export const kindWhere = (kind: SharedAttachmentKind | undefined): Record<string, unknown> => (kind ? KIND_WHERE[kind] : {});
 
 const SHARED_MEDIA_SELECT = {
   id: true,

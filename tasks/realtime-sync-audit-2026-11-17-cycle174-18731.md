@@ -189,3 +189,92 @@ un sous-ensemble plus petit.
   la portée : un processus qui meurt entre les deux laisse désormais le GEL
   écrit et le curseur en retard, là où l'ancien ordre laissait un curseur en
   avance sans entrées. Le second trou mentait, le premier se tait.
+
+
+---
+
+## Après la fusion : TROIS cliquets d'inventaire, et ce qu'ils ont appris
+
+La PR #19260 a été fusionnée dans `dev` avec une sélection de gates choisie par
+PROXIMITÉ du code modifié (`unit/services`, `socketio`, `unit/utils`). La suite
+ENTIÈRE, jouée après coup, a rendu trois rouges que cette sélection ne pouvait
+pas atteindre — tous des cliquets qui ne gardent AUCUN module :
+
+| cliquet | verdict | où il vit |
+|---|---|---|
+| `orphaned-sender-repair-surface-guard` | déclaré 10, trouvé 11 | `unit/routes/` |
+| `personal-history-hiding-surface-guard` | 4 lectures, 0 application | `unit/routes/` |
+| `gateway-test-file-size-budget` | `…surface-guard.test.ts : 0 → 1015` | `src/__tests__/` |
+
+Le troisième est le plus instructif, et il est de ma main deux fois : **ma
+justification de 18 lignes pour réparer le second cliquet a fait franchir au
+fichier le plafond de 1 000 lignes** (997 → 1015 ; prédicat `>=`, mesuré). J'ai
+cassé un budget en documentant la réparation d'un inventaire. La règle du dépôt
+tranche — on n'ajoute pas à un fichier au bord du plafond — donc le raisonnement
+vit dans l'ADR, le journal et la leçon, et l'inline n'en garde qu'UNE ligne qui
+y renvoie. Fichier à 999.
+
+Leçon : `tasks/lessons/2026-11-17-un-cliquet-d-inventaire-vit-la-ou-le-changement-n-est-pas.md`.
+
+### Le second cliquet posait une QUESTION, pas un compteur
+
+`personal-history-hiding` CLASSE ses surfaces (`applies` / `exempt` + raison)
+pour forcer : *cette lecture doit-elle masquer ce que le lecteur a effacé ?*
+
+Réponse instruite — **non** : le masquage dit ce qu'un lecteur a le droit de
+VOIR, le préfixe de livraison dit ce qui a ATTEINT son appareil. Appliquer le
+filtre serait faux dans le sens le plus coûteux : un message JAMAIS REMIS, puis
+masqué par un effacement d'historique, sortirait de la fenêtre et laisserait le
+curseur **sauter par-dessus lui**, rouvrant le trou que ce lot ferme. Le coût
+assumé est l'inverse et il est écrit : un tel message devient un trou PERMANENT
+qui gèle le curseur — réponse plus PAUVRE, jamais FAUSSE.
+
+### Trois mesures qui allaient être fausses, et ce qui les a sauvées
+
+Toutes les trois par un artefact d'ENVIRONNEMENT, pas par le code :
+
+1. **le gate web `check-calls-controls`** échouait sur n'importe quel arbre —
+   `apps/web/dist/` n'existe pas dans le conteneur. J'ai failli publier « rouge
+   sur `dev` aussi, donc pas à moi » sur la foi de deux runs qui ne pouvaient
+   que rougir. Le workflow nomme lui-même le piège : « un gate qui tourne sans
+   `dist` rendrait un rouge de plomberie qui ne mesure rien ». Après build :
+   **254 invariants, EXIT=0** ;
+2. **`npx jest | tail -15`** a rapporté `exited with code 0` sur un run à 19
+   témoins ROUGES — le code de sortie d'un pipeline est celui de sa DERNIÈRE
+   commande. Le dépôt l'écrit déjà ; je l'ai quand même fait ;
+3. **`tsc` EXIT=2 sur l'arbre fusionné** (`SERVER_EVENTS.PROFILE_UPDATED`
+   inconnu) — le gateway compile contre le DIST de `packages/shared`, antérieur
+   à la fusion. Après `prisma generate` + rebuild : **EXIT=0**.
+
+> La question à poser avant de croire une mesure n'est pas « qu'a-t-elle
+> rendu ? » mais **« pouvait-elle rendre autre chose ? »**. Les trois disaient
+> ROUGE pour une raison qui n'avait aucun rapport avec ce qu'on leur demandait,
+> et la première allait devenir une affirmation publique sur `dev`.
+
+### Mesure finale, arbre FUSIONNÉ (`dev` = 677bfcc6d5)
+
+- suite gateway ENTIÈRE : **2 797 suites vertes / 2 805**, **42 811 témoins
+  verts** / 42 831 ;
+- `tsc --noEmit` **EXIT=0** (code de sortie, jamais à travers un pipe) ;
+- 6 suites rouges = la famille codec du conteneur (`heif`, `avif`, `ExifStrip`),
+  préexistantes, vérifiées par `git stash` ;
+- 2 suites rouges = **celles de `dev`**, reproduites à l'identique sur
+  `origin/dev` NU : `negated-filter-on-absent-field-guard`
+  (`sharedMedia.ts#mimeType`, lot #19200) et `claude-md-paths-exist-guard`
+  (`packages/MeeshySDK/CLAUDE.md`, dette 6 pour 5). Ouvertes en **#19285**.
+  Personne ne les voyait : les six derniers runs `ci.yml` de `dev` ont tous
+  conclu `cancelled` (#18760).
+
+### Et un angle mort trouvé dans MA propre garde
+
+`deliveredAt: { not: null }` est un scalaire OPTIONNEL lu sous négation —
+exactement ce que `negated-filter-on-absent-field-guard` encadre. Elle ne l'a pas
+relevé, **et pas parce que le site serait justifié** : son motif
+(`/NOT:\s*\[?\s*\{\s*(\w+)\b/`) ne voit que la forme BLOC `NOT: { … }`,
+jamais la forme CHAMP `{ champ: { not: … } }`, la plus courante. Ouvert en
+**#19286**.
+
+Le site est juste sur le fond (`$ne: null` écarte l'absent comme le nul, et c'est
+l'intention : on ne retient que les livraisons PROUVÉES) — mais la garde aurait
+dû me faire ÉCRIRE cette intention, et elle n'en a pas eu l'occasion. **Un vert
+obtenu parce que l'instrument ne regarde pas n'est pas un vert.**
