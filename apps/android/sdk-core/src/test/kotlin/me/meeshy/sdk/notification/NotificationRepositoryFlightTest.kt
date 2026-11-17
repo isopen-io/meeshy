@@ -78,6 +78,49 @@ class NotificationRepositoryFlightTest {
         assertThat(repo.unreadCountStream.value).isEqualTo(0)
     }
 
+    /**
+     * #19048 — the count the page's OWN response computed beside it (`unreadCount` at its root) is the one the arrival
+     * corrects. The separate count, computed by the server after the arrival, already held it: corrected again, the badge
+     * showed one more than there is, until the next `notification:counts`.
+     */
+    @Test
+    fun `a notification arriving between the count and the page counts once`() = runTest {
+        val page = HeldPage()
+        val api: NotificationApi = mockk(relaxed = true) {
+            coEvery { list(any(), any(), any(), any()) } coAnswers {
+                page.asked.complete(Unit)
+                ApiResponse(success = true, data = page.release.await(), unreadCount = 1)
+            }
+            coEvery { unreadCount() } returns UnreadCountResponse(success = true, count = 2)
+        }
+        val repo = NotificationRepository(api)
+        repo.replaceAll(items = listOf(row("n1")))
+        repo.setUnreadCount(1)
+
+        val resync = async { repo.resync() }
+        page.asked.await()
+        repo.prependLive(row("n2"))
+        page.release.complete(listOf(row("n1")))
+        resync.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All).orEmpty().map { it.id }).containsExactly("n2", "n1").inOrder()
+        assertThat(repo.unreadCountStream.value).isEqualTo(2)
+    }
+
+    /** The page's own count is the server's word on what it served: a quiet re-read poses it as it is. */
+    @Test
+    fun `a quiet re-read poses the count its page carries`() = runTest {
+        val api: NotificationApi = mockk(relaxed = true) {
+            coEvery { list(any(), any(), any(), any()) } returns ApiResponse(success = true, data = listOf(row("n1")), unreadCount = 4)
+            coEvery { unreadCount() } returns UnreadCountResponse(success = true, count = 9)
+        }
+        val repo = NotificationRepository(api)
+
+        repo.resync()
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(4)
+    }
+
     /** `notification:counts` during the flight (#18908): the server's newer count stays over the one the page serves. */
     @Test
     fun `a count the server pushes while the re-read waits for its page stays over the one it serves`() = runTest {

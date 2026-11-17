@@ -66,6 +66,11 @@ object NotificationFlightLanding {
      * not serve counts one more; a read posed on a row it served unread, one less (a rolled-back read, one more); a
      * removed row it served unread, one less. A count the server pushed during the flight (`notification:counts`) is
      * newer than the served one: the landing keeps the live count (`null`).
+     *
+     * ONE rule for the count during a flight (#19141 D4, #19048): [servedUnread] is the count the PAGE's own response
+     * computed beside it, so an arrival the page does not serve is one the count does not hold either. A count from
+     * another request cannot be ordered against an arrival — computed after it, it already holds it, and this correction
+     * would count it twice — so the caller passes it only as a fallback, when the page carries none.
      */
     fun land(
         page: List<ApiNotification>,

@@ -691,28 +691,36 @@ class NotificationRepository @Inject constructor(
     }
 
     /**
-     * Le compteur est demandé EN MÊME TEMPS que la liste et posé AVANT elle : écrire le cache
-     * relance `transformLatest` de [notificationsStream], qui annule le bloc en cours — un
-     * `unreadCount()` demandé après la liste était annulé 3 ms après l'envoi (#13354).
+     * Le compteur est obtenu AVANT que la liste ne s'écrive : écrire le cache relance `transformLatest` de
+     * [notificationsStream], qui annule le bloc en cours — un `unreadCount()` demandé après la liste était annulé 3 ms
+     * après l'envoi (#13354).
      *
      * #18915 (AND-05) — la relecture ouvre son journal AVANT ses requêtes : ce qui arrive ou se lit
      * pendant son vol ([prependLive], [rewriteAll]) y est inscrit, et la page atterrit par-dessus
      * ([landPage]) au lieu d'écraser la liste et le compteur.
+     *
+     * LA RÈGLE DU COMPTEUR PENDANT UN VOL (#19141 D4, #19048) — une seule : le compteur posé est celui que la réponse de
+     * la page a calculé AVEC elle (`unreadCount` à la racine de `GET /notifications`), corrigé du journal par
+     * [NotificationFlightLanding.land] (une arrivée que la page ne sert pas, une lecture, un retrait) ; un
+     * `notification:counts` reçu pendant le vol fait foi, et le compteur vivant reste. Le compte d'une AUTRE requête
+     * (`unread-count`, lancée en même temps) ne s'ordonne pas par rapport à une arrivée : calculé après elle, il la
+     * contient déjà, et la correction la comptait deux fois. Il n'est plus qu'un repli, pour une passerelle qui ne sert pas
+     * le compte de sa page, et pour le compteur qu'une relecture dont la page échoue peut encore poser ([landCount]) ; il
+     * est abandonné dès que la page porte le sien.
      */
     private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}) = coroutineScope {
         val flight = openFlight()
         try {
             val count = async { unreadCount() }
-            val page = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }
-            val countResult = count.await()
-            val servedUnread = when (countResult) {
-                is NetworkResult.Success -> countResult.data
-                is NetworkResult.Failure -> null
-            }
+            var pageUnread: Int? = null
+            val page = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null).also { pageUnread = it.unreadCount } }
             when (page) {
-                is NetworkResult.Success -> landPage(flight, page.data.data, page.data.pagination, servedUnread)
+                is NetworkResult.Success -> {
+                    val servedUnread = pageUnread?.also { count.cancel() } ?: count.await().getOrNull()
+                    landPage(flight, page.data.data, page.data.pagination, servedUnread)
+                }
                 is NetworkResult.Failure -> {
-                    servedUnread?.let { landCount(flight, it) }
+                    count.await().getOrNull()?.let { landCount(flight, it) }
                     onError(Exception(page.error.message))
                 }
             }
