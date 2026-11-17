@@ -41,14 +41,16 @@ export type PairAccessAmongParams = {
   readonly consentOf?: (otherId: string) => RelationConsent;
 };
 
-export type PairPerson = { readonly age: DeclaredAgeClass; readonly role: string | null };
+export type PairPerson = { readonly age: DeclaredAgeClass; readonly role: string | null; readonly deactivated: boolean };
 
 export async function peopleOf(prisma: PairAccessDb, ids: readonly string[], now: Date): Promise<ReadonlyMap<string, PairPerson>> {
   const rows = await prisma.user.findMany({
     where: { id: { in: [...ids] } },
     select: { id: true, birthDate: true, role: true, ...ACCOUNT_STATE_SELECT },
   });
-  return new Map(rows.map((row) => [row.id, { age: declaredAgeClass(row.birthDate ?? null, now), role: lawRoleOf(row) }]));
+  return new Map(
+    rows.map((row) => [row.id, { age: declaredAgeClass(row.birthDate ?? null, now), role: lawRoleOf(row), deactivated: row.deactivatedAt != null }]),
+  );
 }
 
 export async function coMembersAmong(prisma: PairAccessDb, subjectId: string, ids: readonly string[]): Promise<ReadonlySet<string>> {
