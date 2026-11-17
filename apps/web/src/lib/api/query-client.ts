@@ -136,13 +136,6 @@ export type AppQueryClient = QueryClient & {
    * n'a aucune raison de se vider à l'écran avant de partir.
    */
   discardPersisted: () => void;
-  /**
-   * LE JOURNAL DES ÉCRITURES VIVES EST POSÉ (#18914, `live-cache-journal.ts`).
-   * Il se pose AVEC le client mais dans son propre petit morceau : rien de lui
-   * n'est payé avant le premier pixel. Un témoin qui mesure ce que le journal
-   * garantit attend cette promesse.
-   */
-  liveJournal: Promise<void>;
 };
 
 /**
@@ -249,15 +242,6 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   }) as AppQueryClient;
   /* L'état du jeu ne recule jamais (#10898, #10900) : une écriture plus ancienne que celle en cache est ignorée. */
   client.setQueryDefaults(ENGAGEMENT_PROGRESS_QUERY_KEY, { structuralSharing: keepNewerGameState });
-  /* Une écriture temps réel survit à une relecture partie avant elle (#18914) : rejouée sur sa réponse. Le journal
-     se pose AVEC le client, dans son propre petit morceau — le socle est à son plafond (budgets.json ›
-     first_paint.kb), motif `endToEndCacheWatch`. Aucune requête de la liste, d'une fiche ou d'un fil ne le précède :
-     toutes naissent dans des modules qui importent le journal STATIQUEMENT (`conversations.ts`, `messages.ts`),
-     donc évalués après lui, et sa pose passe avant leur premier rendu. */
-  client.liveJournal = import('./live-cache-journal').then(
-    ({ installLiveCacheJournal }) => installLiveCacheJournal(client),
-    () => undefined,
-  );
 
   /** Hydrate depuis une entrée SÉRIALISÉE si elle porte le `buster` attendu —
    * `false` sinon (absente, périmée, corrompue) : rien n'est alors restauré. */
@@ -485,13 +469,18 @@ export const appQueryClient: AppQueryClient = createAppQueryClient({
   session: sessionStore,
 });
 
-/* Ce que le cache a servi chiffré de bout en bout — conversation ou fil —, le
-   compte l'a vu : il ne se rouvre plus au clair (#12949, #12986). Demandé AVEC
-   le client, dans son propre petit morceau (le socle est à son plafond), et non
-   plus avec le temps réel chargé après la première peinture ; à sa pose, il relit
-   tout le cache déjà là. Ce qu'un compte a vu reste de toute façon retenu d'une
-   session à l'autre par le registre. */
-export const endToEndCacheWatch: Promise<void> = import('./end-to-end-cache-watch').then(
-  ({ watchEndToEndConversations }) => void watchEndToEndConversations(appQueryClient, endToEndRegimeLedger),
+/* LES CROCHETS DU CACHE, demandés AVEC le client dans UN seul petit morceau
+   (le socle est à son plafond, `app-cache-hooks.ts`) :
+    - ce que le cache a servi chiffré de bout en bout — conversation ou fil —, le
+      compte l'a vu : il ne se rouvre plus au clair (#12949, #12986). Posée avec
+      le client et non plus avec le temps réel chargé après la première peinture,
+      la surveillance relit à sa pose tout le cache déjà là ; ce qu'un compte a vu
+      reste de toute façon retenu d'une session à l'autre par le registre ;
+    - une écriture temps réel survit à une relecture partie avant elle (#18914) :
+      le journal la rejoue sur sa réponse. Aucune requête de la liste, d'une fiche
+      ou d'un fil ne le précède : elles naissent dans des modules chargés à la
+      demande, après cette demande. */
+export const appCacheHooks: Promise<void> = import('./app-cache-hooks').then(
+  ({ installAppCacheHooks }) => installAppCacheHooks(appQueryClient, endToEndRegimeLedger),
   () => undefined,
 );

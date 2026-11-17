@@ -44,7 +44,7 @@ const NO_FLAGS: ConversationFlags = { isPinned: false, isMuted: false, isArchive
 
 /** L'entrée UNIQUE du tableau `userPreferences`, ou `undefined` si la forme
  * n'y correspond pas — le narrowing s'arrête ici, jamais plus loin. */
-const preferenceEntryOf = (conversation: Conversation): Record<string, unknown> | undefined => {
+export const preferenceEntryOf = (conversation: Conversation): Record<string, unknown> | undefined => {
   const raw = conversation.userPreferences;
   if (!Array.isArray(raw)) return undefined;
   const [entry] = raw;
@@ -77,12 +77,6 @@ export function customNameOf(conversation: Conversation): string | undefined {
   const entry = preferenceEntryOf(conversation);
   const value = entry?.['customName'];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-/** La conversation portant `fields` dans son entrée UNIQUE de préférences
- * (#18914) — les autres clés de l'entrée restent telles qu'elles étaient. */
-export function withPreferenceFields(conversation: Conversation, fields: Readonly<Record<string, unknown>>): Conversation {
-  return { ...conversation, userPreferences: [{ ...preferenceEntryOf(conversation), ...fields }] };
 }
 
 /** Le FAVORI du lecteur (#10593) — l'emoji qu'il a posé sur la conversation,

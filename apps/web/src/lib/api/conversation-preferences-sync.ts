@@ -9,7 +9,7 @@ import type { SocketClient } from '@/lib/net/socket';
 import { patchConversation, patchConversationDetail } from './conversations';
 import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
 import { messagesQueryKey } from './messages';
-import { withPreferenceFields } from './preferences';
+import { preferenceEntryOf } from './preferences';
 import type { Conversation } from './types';
 
 /**
@@ -91,6 +91,13 @@ function confirmedOverrides(override: ConversationOverride | undefined, fields: 
   );
   return [...flags, ...preferences];
 }
+
+/** La conversation portant `fields` dans son entrée UNIQUE de préférences —
+ * les autres clés de l'entrée restent telles qu'elles étaient. */
+const withPreferenceFields = (conversation: Conversation, fields: Payload): Conversation => ({
+  ...conversation,
+  userPreferences: [{ ...preferenceEntryOf(conversation), ...fields }],
+});
 
 const patchBoth = (queryClient: QueryClient, conversationId: string, edit: (conversation: Conversation) => Conversation): void => {
   patchConversation(queryClient, conversationId, edit);

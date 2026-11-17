@@ -417,17 +417,15 @@ function persist(storage: SessionStorage, session: PersistedSession): void {
  * dans un onglet persiste un jeton RÉCENT, que l'autre onglet, resté sur
  * l'ancienne session, remplaçait par le sien — révoqué ou échu, il la
  * déconnectait au rechargement. L'édition reste tenue en mémoire ; elle n'est
- * persistée que si l'entrée persistée est la MÊME session : même compte, même
- * jeton, même identifiant de session. Absente ou corrompue, l'entrée n'est pas
- * recréée : un autre onglet l'a fermée.
+ * persistée que si l'entrée persistée est la MÊME session : même jeton, même
+ * identifiant de session — et donc le même compte, qu'un jeton désigne. Absente,
+ * corrompue ou d'invité, l'entrée n'est pas réécrite : un autre onglet l'a
+ * fermée ou remplacée.
  */
-const isSameSession = (persisted: PersistedAccount, held: PersistedAccount): boolean =>
-  persisted.user.id === held.user.id && persisted.token === held.token && persisted.sessionToken === held.sessionToken;
-
-function persistHeld(storage: SessionStorage, session: PersistedAccount): void {
+function persistHeld(storage: SessionStorage, held: AuthenticatedSession, user: SessionUser): void {
   const persisted = readPersisted(storage);
-  if (persisted === 'absent' || persisted === 'corrupted' || persisted.kind === 'guest' || !isSameSession(persisted, session)) return;
-  persist(storage, session);
+  if (typeof persisted !== 'object' || persisted.kind === 'guest' || persisted.token !== held.token || persisted.sessionToken !== held.sessionToken) return;
+  persist(storage, { user, token: held.token, sessionToken: held.sessionToken, expiresAt: held.expiresAt });
 }
 
 function purge(storage: SessionStorage): void {
@@ -556,14 +554,14 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       const current = get().session;
       if (current.status !== 'authenticated') return;
       const user = pickSessionUser(withProfileFields(current.user, fields));
-      persistHeld(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      persistHeld(storage, current, user);
       set({ session: { ...current, user } });
     },
     noteEmailProven: () => {
       const current = get().session;
       if (current.status !== 'authenticated' || current.user.emailUnproven !== true) return;
       const { emailUnproven: _proven, ...user } = current.user;
-      persistHeld(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      persistHeld(storage, current, user);
       set({ session: { ...current, user } });
     },
     restoreSession: () => {
