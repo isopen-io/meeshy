@@ -87,7 +87,7 @@ extension CacheCoordinator {
             comments, statuses, communities, stats, profileStats, participantProfiles, engagementProgress, drafts,
             callTranscripts, callNetworkJournals, friends, friendRequests, blockedUsers, relationLinks, sessions, userSearch,
             phonebook, affiliates, callHistory, timeline,
-            affiliateTokens, shareLinks, trackingLinks, communityLinks,
+            affiliateTokens, shareLinks, trackingLinks, communityLinks, profileAddresses,
             categories, userTags, userPreferences, conversationPreferences
         ]
     }

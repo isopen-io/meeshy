@@ -39,6 +39,8 @@ public actor CacheCoordinator {
     public let shareLinks: GRDBCacheStore<String, MyShareLink>
     public let trackingLinks: GRDBCacheStore<String, TrackingLink>
     public let communityLinks: GRDBCacheStore<String, CommunityLink>
+    /// Mes adresses (#18871) : la face Liens se peint depuis elles avant le réseau. Chiffré : elles disent où me trouver.
+    public let profileAddresses: GRDBCacheStore<String, ProfileAddress>
     /// User communities list (the ones the current user is a member of).
     /// Single key "list" stores the full ordered set; the conversation list
     /// pulls from here cache-first so the Communities section renders
@@ -172,6 +174,7 @@ public actor CacheCoordinator {
         self.shareLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "slinks")
         self.trackingLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "tlinks")
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
+        self.profileAddresses = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "paddr", encrypted: true)
         self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
         self.drafts = GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")
         self.callTranscripts = GRDBCacheStore(policy: .callTranscripts, db: db, namespace: "calltx", encrypted: true)
