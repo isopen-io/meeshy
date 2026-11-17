@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.flowOf
 import me.meeshy.core.e2ee.render.EndToEndPlaintextOverlay
 import me.meeshy.core.e2ee.content.E2eeContent
 import me.meeshy.core.e2ee.store.E2eePlaintextEntry
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
@@ -150,6 +151,30 @@ class ServedPlaintextErasureTest {
         source(harness, pageServing(sealed("m9", "me", cid = "cid_9")), erasures).revalidate()
 
         assertThat(erasures.keys()).isEmpty()
+    }
+
+    /**
+     * #18915 (F8) — re-reading ONE message by its id is the way back of the gestures the server refused for good: what it
+     * serves there is ingested like a page, so a sealed view-once message it serves as opened by me leaves the vault too.
+     */
+    @Test
+    fun `a sealed message re-read by its id and served as an opened view-once records its erasure`() = runHarnessTest { harness ->
+        harness.seedSynced(sealed("m1", "alice").copy(isViewOnce = true))
+        val erasures = ledger(harness)
+        val api = mockk<MessageApi>().also { api ->
+            coEvery { api.listAround("c1", "m1", 1) } returns
+                ApiResponse(success = true, data = listOf(sealed("m1", "alice").copy(isViewOnce = true, consumedByMe = true)))
+        }
+        val repository = MessageRepository(
+            api, mockk(relaxed = true), harness.database, harness.database.messageDao(), harness.database.syncMetaDao(),
+            harness.outbox, harness.clock, regime = EndToEndRegimeKeeper(EndToEndRegimeLedger.None, harness.database),
+            erasures = erasures,
+        )
+
+        val merged = repository.refreshMessage("c1", "m1")
+
+        assertThat(merged).isTrue()
+        assertThat(erasures.keys()).containsExactly("m1")
     }
 
     @Test

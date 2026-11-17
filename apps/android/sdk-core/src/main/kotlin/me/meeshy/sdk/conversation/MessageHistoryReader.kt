@@ -169,6 +169,10 @@ internal class MessageHistoryReader(
      * returns whether the row was merged; a failure or a revoked account changes nothing. A [limit] above one
      * reads the WINDOW around the message (the voice note whose transcription `transcription:ready` never brought,
      * with its neighbours' translations) and merges all of it through the same ingestion.
+     *
+     * That ingestion is a page's own ([ingestion], #18915): it is also the way back of a gesture the server refused
+     * for good, so the regime ledger learns from what it serves, the events that arrived before the row replay, and a
+     * sealed message served gone (deleted, expired, a view-once I opened) records its erasure here as on a page.
      */
     suspend fun refreshMessage(conversationId: String, messageId: String, limit: Int = 1): Boolean {
         val ticket = fence?.currentTicket()
@@ -180,7 +184,7 @@ internal class MessageHistoryReader(
         val target = page.firstOrNull { it.id == messageId } ?: return false
         val served = if (limit > 1) page else listOf(target)
         val now = clock.nowMillis()
-        fence.commitOrWrite(ticket) { MessageIngestPipeline(database).ingest(served, now) } ?: return false
+        fence.commitOrWrite(ticket) { ingestion().ingest(served, now) } ?: return false
         return true
     }
 
