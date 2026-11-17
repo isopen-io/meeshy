@@ -398,7 +398,15 @@
     "PUT /api/v1/me/terms",
     "PUT /api/v1/messages/:messageId",
     "PUT /api/v1/user-preferences/communities/:communityId",
-    "GET /api/v1/users/:id/in-common"
+    "GET /api/v1/users/:id/in-common",
+    "GET /api/v1/invitations/email",
+    "GET /api/v1/users/me/profile-link/stats",
+    "POST /api/v1/contact-exchange/:token/accept",
+    "POST /api/v1/invitations/email/:id/resend",
+    "POST /api/v1/invitations/email/opt-out",
+    "POST /api/v1/me/contact-exchange",
+    "POST /api/v1/relations/:userId/location/request",
+    "PUT /api/v1/me/location/ghost"
    ]
   },
   {

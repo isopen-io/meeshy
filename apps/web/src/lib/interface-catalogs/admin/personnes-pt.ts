@@ -152,6 +152,7 @@ const f = {
   'admin.people.pref.notification.contactActivityEnabled': 'Um contato que volta ao Meeshy',
   'admin.people.pref.notification.deviceBatteryEnabled': 'Bateria fraca de alguém próximo',
   'admin.people.pref.notification.deviceUnreachableEnabled': 'Celular inacessível dos meus próximos',
+  'admin.people.pref.notification.locationShareEnabled': 'Localizações compartilhadas dos meus próximos',
   'admin.people.pref.notification.gameEnabled': 'Notificação do jogo Meeshy',
   'admin.people.pref.notification.gamePhotoEnabled': 'Momentos para eternizar (push do jogo)',
   'admin.people.pref.notification.bringEnabled': 'Receber Brings (som forçado)',

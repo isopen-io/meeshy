@@ -381,6 +381,8 @@ export async function updateUsername(fastify: FastifyInstance) {
           customDestinationLanguage: true,
           avatar: true,
           banner: true,
+          // #19201 — l'instantané de `profile:updated` porte l'accent : le lire, sinon il partirait `null`.
+          profileAccentColor: true,
           updatedAt: true
         }
       });
