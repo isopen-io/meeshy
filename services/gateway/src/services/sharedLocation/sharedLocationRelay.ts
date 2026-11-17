@@ -80,11 +80,21 @@ export type SharedLocationDb = PairAccessDb;
 
 export type SharedLocationIo = ServerEmitIO;
 
+/** « Prévenir » (#19204) : à qui, de qui, pour combien de temps — jamais une position. */
+export type SharedLocationStartedNotice = {
+  readonly emitterId: string;
+  readonly readerId: string;
+  readonly durationMinutes: number;
+  readonly expiresAt: string;
+};
+
 export type SharedLocationRelayDeps = {
   readonly prisma: SharedLocationDb;
   readonly cache: SharedLocationCache;
   readonly io: SharedLocationIo | undefined;
   readonly now: () => number;
+  /** Porte `location_share_started` (#19204) ; absente, personne n'est prévenu. Un échec n'arrête jamais le partage. */
+  readonly notifyStarted?: (notices: readonly SharedLocationStartedNotice[]) => Promise<void>;
 };
 
 /**
@@ -397,9 +407,11 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     expiresAt: new Date(term).toISOString(),
   };
 
+  let previous: SharedLocationState | null;
   try {
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
     if (!(await accountStates(deps.prisma, [emitterId])).usable.has(emitterId)) return STOPPED;
+    previous = await readSharedLocation(deps.cache, emitterId, now);
     await storeSharedLocation(deps.cache, emitterId, state, now);
     const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
     if (!claim.claimed) {
@@ -416,6 +428,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     await drainRetiring(deps, emitterId, after.served);
     if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) {
       await noteServedEnds(deps, emitterId, state, after.served);
+      if (parsed.data.notifyRecipients === true) await notifyNewcomers(deps, emitterId, { state, previous, served: after.served, durationMinutes: parsed.data.durationMinutes });
       return ack;
     }
     await reconcile(deps, emitterId, after.served);
@@ -485,6 +498,24 @@ async function noteServedEnds(deps: SharedLocationRelayDeps, emitterId: string, 
     return precision ? [{ userId: readerId.toLowerCase(), endsAt: deadlineOf(state, readerId), precision }] : [];
   });
   await noteSharedLocationServed(deps.cache, emitterId, ends, deps.now()).catch(() => undefined);
+}
+
+/**
+ * Prévient (#19204) chaque destinataire SERVI qui n'était pas un destinataire vivant du partage
+ * remplacé : remplacer pour ajouter une personne ne réveille pas les autres. Jamais bloquant.
+ */
+async function notifyNewcomers(
+  deps: SharedLocationRelayDeps,
+  emitterId: string,
+  params: { readonly state: SharedLocationState; readonly previous: SharedLocationState | null; readonly served: readonly string[]; readonly durationMinutes: number },
+): Promise<void> {
+  if (!deps.notifyStarted) return;
+  const before = new Set((params.previous ? liveRecipients(params.previous, deps.now()) : []).map((recipient) => recipient.userId.toLowerCase()));
+  const notices = params.served
+    .filter((readerId) => !before.has(readerId.toLowerCase()))
+    .map((readerId) => ({ emitterId, readerId, durationMinutes: params.durationMinutes, expiresAt: deadlineOf(params.state, readerId) }));
+  if (notices.length === 0) return;
+  await deps.notifyStarted(notices).catch(() => undefined);
 }
 
 /** L'accès de chaque sens d'une paire, pour les seuls émetteurs qui ont un partage en cours. */

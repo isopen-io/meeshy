@@ -7,6 +7,8 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
+import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import { sharedLocationNoticesOf } from './sharedLocationNotices';
 import type { LocationGhostState } from '@meeshy/shared/types/shared-location';
 import { writeLocationGhost } from './locationGhost';
 import { exportSharedLocationEnds, type SharedLocationEnd } from './sharedLocationEnds';
@@ -47,8 +49,11 @@ const lazyCache: SharedLocationRelayDeps['cache'] = {
   unmarkSeen: (key, members) => kv().unmarkSeen(key, members),
 };
 
+/** Le service de notification est résolu à l'usage : le registre peut se remplir après le câblage des sockets. */
+export const noticesParams = (prisma: PrismaClient) => ({ prisma, notifications: getSharedNotificationService() ?? null });
+
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {
-  return { prisma: params.prisma, cache: lazyCache, io: params.io, now: () => Date.now() };
+  return { prisma: params.prisma, cache: lazyCache, io: params.io, now: () => Date.now(), notifyStarted: (notices) => sharedLocationNoticesOf(noticesParams(params.prisma)).started(notices) };
 }
 
 type RefreshParams = { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined; readonly report: (error: unknown) => void };

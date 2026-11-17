@@ -782,6 +782,8 @@ export type NotificationMetadata =
   | RelationAcquaintanceNotificationMetadata
   | DeviceBatteryNotificationMetadata
   | DeviceUnreachableNotificationMetadata
+  | LocationShareStartedNotificationMetadata
+  | LocationShareRequestedNotificationMetadata
   | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata
