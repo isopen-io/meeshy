@@ -1525,8 +1525,7 @@ export class PostService {
     // TrackingTargetType) so the redirect page + DeepLinkRouter open the right
     // surface — never blindly "POST". Stories get their dedicated viewer URL.
     const targetType = ({ POST: 'POST', REEL: 'REEL', STORY: 'STORY', STATUS: 'STATUS' } as const)[post.type];
-    // Real v1 page per type: /post, /reel, /story, /mood — the table every reader of
-    // a content link parses (`@meeshy/shared/utils/content-link`, #19331).
+    // Real v1 page per type (`@meeshy/shared/utils/content-link`, read by every client, #19331).
     const originalUrl = isContentKind(post.type) ? contentWebUrl(baseUrl, post.type, postId) : `${baseUrl}/feeds/post/${postId}`;
 
     try {
