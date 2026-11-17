@@ -1,0 +1,692 @@
+{
+  "_doc": "Le signal chiffré d’une conversation e2ee, E2EESignal v1 (#13142, #18940). Voir ../e2ee-content/README.md.",
+  "contract": "meeshy-e2ee-signal",
+  "version": 1,
+  "cases": [
+    {
+      "name": "reaction",
+      "description": "Le signal « reaction », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "reaction",
+        "target": "64f0c0ffee00000000000f01",
+        "emoji": "👍",
+        "removed": false,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"emoji\":\"👍\",\"kind\":\"reaction\",\"removed\":false,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJlbW9qaSI6IvCfkY0iLCJraW5kIjoicmVhY3Rpb24iLCJyZW1vdmVkIjpmYWxzZSwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBmMDEifQ==",
+      "canonicalLength": 220,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJlbW9qaSI6IvCfkY0iLCJraW5kIjoicmVhY3Rpb24iLCJyZW1vdmVkIjpmYWxzZSwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBmMDEifSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "reaction-removed",
+      "description": "Le signal « reaction », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "reaction",
+        "target": "64f0c0ffee00000000000f01",
+        "emoji": "❤️",
+        "removed": true,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"emoji\":\"❤️\",\"kind\":\"reaction\",\"removed\":true,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJlbW9qaSI6IuKdpO+4jyIsImtpbmQiOiJyZWFjdGlvbiIsInJlbW92ZWQiOnRydWUsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0=",
+      "canonicalLength": 221,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 2,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJlbW9qaSI6IuKdpO+4jyIsImtpbmQiOiJyZWFjdGlvbiIsInJlbW92ZWQiOnRydWUsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "typing-on",
+      "description": "Le signal « typing », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "typing",
+        "active": true,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000}",
+      "canonicalBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9",
+      "canonicalLength": 165,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 3,
+        "length": 256,
+        "base64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "typing-off",
+      "description": "Le signal « typing », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "typing",
+        "active": false,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"active\":false,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000}",
+      "canonicalBase64": "eyJhY3RpdmUiOmZhbHNlLCJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoidHlwaW5nIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwfQ==",
+      "canonicalLength": 166,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 256,
+        "base64": "eyJhY3RpdmUiOmZhbHNlLCJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoidHlwaW5nIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "receipt-read",
+      "description": "Le signal « receipt », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "receipt",
+        "receipt": "read",
+        "targets": [
+          "64f0c0ffee00000000000f01",
+          "64f0c0ffee00000000000f02"
+        ],
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"receipt\",\"receipt\":\"read\",\"s\":1,\"sentAt\":1790000000000,\"targets\":[\"64f0c0ffee00000000000f01\",\"64f0c0ffee00000000000f02\"]}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVjZWlwdCIsInJlY2VpcHQiOiJyZWFkIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXRzIjpbIjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSIsIjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMiJdfQ==",
+      "canonicalLength": 235,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 2,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVjZWlwdCIsInJlY2VpcHQiOiJyZWFkIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXRzIjpbIjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSIsIjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMiJdfSAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "receipt-delivered",
+      "description": "Le signal « receipt », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "receipt",
+        "receipt": "delivered",
+        "targets": [
+          "64f0c0ffee00000000000f01"
+        ],
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"receipt\",\"receipt\":\"delivered\",\"s\":1,\"sentAt\":1790000000000,\"targets\":[\"64f0c0ffee00000000000f01\"]}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVjZWlwdCIsInJlY2VpcHQiOiJkZWxpdmVyZWQiLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldHMiOlsiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIl19",
+      "canonicalLength": 213,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 3,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVjZWlwdCIsInJlY2VpcHQiOiJkZWxpdmVyZWQiLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldHMiOlsiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIl19ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "read-progress-of-an-attachment",
+      "description": "Le signal « read-progress », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "read-progress",
+        "target": "64f0c0ffee00000000000f01",
+        "attachmentId": "64f0c0ffee00000000000a01",
+        "position": 12.5,
+        "completed": false,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"attachmentId\":\"64f0c0ffee00000000000a01\",\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"completed\":false,\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"read-progress\",\"position\":12.5,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "canonicalBase64": "eyJhdHRhY2htZW50SWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBhMDEiLCJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29tcGxldGVkIjpmYWxzZSwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVhZC1wcm9ncmVzcyIsInBvc2l0aW9uIjoxMi41LCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSJ9",
+      "canonicalLength": 270,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 1024,
+        "base64": "eyJhdHRhY2htZW50SWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBhMDEiLCJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29tcGxldGVkIjpmYWxzZSwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVhZC1wcm9ncmVzcyIsInBvc2l0aW9uIjoxMi41LCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSJ9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "read-progress-integral-position",
+      "description": "Une position entière s’écrit sans « .0 » (JSONEncoder ôte le suffixe d’un Double entier).",
+      "object": {
+        "s": 1,
+        "kind": "read-progress",
+        "target": "64f0c0ffee00000000000f01",
+        "position": 30,
+        "completed": true,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"completed\":true,\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"read-progress\",\"position\":30,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29tcGxldGVkIjp0cnVlLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJyZWFkLXByb2dyZXNzIiwicG9zaXRpb24iOjMwLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSJ9",
+      "canonicalLength": 225,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 2,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29tcGxldGVkIjp0cnVlLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJyZWFkLXByb2dyZXNzIiwicG9zaXRpb24iOjMwLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSJ9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "edit-with-language",
+      "description": "Le signal « edit », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "edit",
+        "target": "64f0c0ffee00000000000f01",
+        "text": "corrigé",
+        "language": "fr",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"edit\",\"language\":\"fr\",\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\",\"text\":\"corrigé\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoiZWRpdCIsImxhbmd1YWdlIjoiZnIiLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSIsInRleHQiOiJjb3JyaWfDqSJ9",
+      "canonicalLength": 219,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 3,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoiZWRpdCIsImxhbmd1YWdlIjoiZnIiLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSIsInRleHQiOiJjb3JyaWfDqSJ9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "edit-without-language",
+      "description": "Le signal « edit », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "edit",
+        "target": "64f0c0ffee00000000000f01",
+        "text": "fixed / done",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"edit\",\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\",\"text\":\"fixed / done\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoiZWRpdCIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIiwidGV4dCI6ImZpeGVkIC8gZG9uZSJ9",
+      "canonicalLength": 207,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoiZWRpdCIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIiwidGV4dCI6ImZpeGVkIC8gZG9uZSJ9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "delete-for-everyone",
+      "description": "Le signal « delete-for-everyone », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "delete-for-everyone",
+        "target": "64f0c0ffee00000000000f01",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"delete-for-everyone\",\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoiZGVsZXRlLWZvci1ldmVyeW9uZSIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0=",
+      "canonicalLength": 200,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 2,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoiZGVsZXRlLWZvci1ldmVyeW9uZSIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "view-once-opened",
+      "description": "Le signal « view-once-opened », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "view-once-opened",
+        "target": "64f0c0ffee00000000000f01",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"view-once-opened\",\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoidmlldy1vbmNlLW9wZW5lZCIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0=",
+      "canonicalLength": 197,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 3,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoidmlldy1vbmNlLW9wZW5lZCIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "pin",
+      "description": "Le signal « pin », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "pin",
+        "target": "64f0c0ffee00000000000f01",
+        "pinned": true,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"pin\",\"pinned\":true,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicGluIiwicGlubmVkIjp0cnVlLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSJ9",
+      "canonicalLength": 198,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicGluIiwicGlubmVkIjp0cnVlLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSJ9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "unpin",
+      "description": "Le signal « pin », signé de son auteur.",
+      "object": {
+        "s": 1,
+        "kind": "pin",
+        "target": "64f0c0ffee00000000000f01",
+        "pinned": false,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"pin\",\"pinned\":false,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicGluIiwicGlubmVkIjpmYWxzZSwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBmMDEifQ==",
+      "canonicalLength": 199,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 2,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicGluIiwicGlubmVkIjpmYWxzZSwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBmMDEifSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    }
+  ],
+  "verdicts": [
+    {
+      "name": "unknown-kind",
+      "description": "Une action d’une version ultérieure : reconnue comme signal, rangée, jamais appliquée à moitié (E2EESignalAction.unknown).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicG9sbC12b3RlIiwib3B0aW9uIjoyLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"poll-vote\",\"option\":2,\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "admitted-unknown-kind",
+      "kind": "poll-vote"
+    },
+    {
+      "name": "unknown-kind-foreign-conversation",
+      "description": "Une action inconnue reste confrontée à sa conversation et à son auteur.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDIiLCJraW5kIjoicG9sbC12b3RlIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c02\",\"kind\":\"poll-vote\",\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "misattributed-conversation"
+    },
+    {
+      "name": "future-version-same-shape",
+      "description": "Un signal d’une version future : verdict « version future », gardé pour être relu après la mise à jour.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoyLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":2,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "future-version",
+      "version": 2
+    },
+    {
+      "name": "future-version-new-shape",
+      "description": "La version `s` se lit avant toute autre clé.",
+      "plaintextBase64": "eyJvcCI6IngiLCJzIjozfQ==",
+      "plaintextJson": "{\"op\":\"x\",\"s\":3}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "future-version",
+      "version": 3
+    },
+    {
+      "name": "version-zero",
+      "description": "`s` vaut 0 : un signal (entier), mais d’aucune version.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjowLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":0,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "version-fractional-is-a-message",
+      "description": "`s` vaut 1.5 : la sonde le range parmi les messages, et il n’a pas de `v` — illisible.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoxLjUsInNlbnRBdCI6MTc5MDAwMDAwMDAwMH0=",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1.5,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "author-absent",
+      "description": "Un signal sans auteur n’est celui de personne (pas de version antérieure sans auteur).",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImNvbnZlcnNhdGlvbklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwYzAxIiwia2luZCI6InR5cGluZyIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMH0=",
+      "plaintextJson": "{\"active\":true,\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "misattributed-author"
+    },
+    {
+      "name": "author-partial",
+      "description": "Un auteur à moitié n’est l’auteur de personne.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvclVzZXJJZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwYWFhYSIsImNvbnZlcnNhdGlvbklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwYzAxIiwia2luZCI6InR5cGluZyIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMH0=",
+      "plaintextJson": "{\"active\":true,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "misattributed-author"
+    },
+    {
+      "name": "author-other-device",
+      "description": "Le serveur présente sous l’appareil 3 un signal signé par l’appareil 4.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjo0LCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":4,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "misattributed-author"
+    },
+    {
+      "name": "conversation-foreign",
+      "description": "Un signal écrit pour une autre conversation.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMiIsImtpbmQiOiJ0eXBpbmciLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c02\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "misattributed-conversation"
+    },
+    {
+      "name": "conversation-missing",
+      "description": "La conversation est REQUISE dans un signal (E2EESignal.swift:106) : sans elle, illisible.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJraW5kIjoidHlwaW5nIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwfQ==",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "sent-at-missing",
+      "description": "`sentAt` est requis.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoxfQ==",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "kind-missing",
+      "description": "`kind` est requis.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMH0=",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "reaction-missing-emoji",
+      "description": "Une action connue à laquelle il manque une clé requise est illisible.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVhY3Rpb24iLCJyZW1vdmVkIjpmYWxzZSwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBmMDEifQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"reaction\",\"removed\":false,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "receipt-unknown-value",
+      "description": "`receipt` vaut \"delivered\" ou \"read\" (E2EEReceiptKind).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVjZWlwdCIsInJlY2VpcHQiOiJzZWVuIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXRzIjpbIjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSJdfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"receipt\",\"receipt\":\"seen\",\"s\":1,\"sentAt\":1790000000000,\"targets\":[\"64f0c0ffee00000000000f01\"]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "typing-active-not-a-boolean",
+      "description": "Aucune coercition : \"yes\" n’est pas un booléen.",
+      "plaintextBase64": "eyJhY3RpdmUiOiJ5ZXMiLCJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoidHlwaW5nIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwfQ==",
+      "plaintextJson": "{\"active\":\"yes\",\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "read-progress-position-as-string",
+      "description": "`position` est un nombre JSON.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29tcGxldGVkIjpmYWxzZSwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVhZC1wcm9ncmVzcyIsInBvc2l0aW9uIjoiMTIuNSIsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0=",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"completed\":false,\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"read-progress\",\"position\":\"12.5\",\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "targets-not-strings",
+      "description": "`targets` est un tableau d’identifiants serveur (chaînes).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJraW5kIjoicmVjZWlwdCIsInJlY2VpcHQiOiJyZWFkIiwicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXRzIjpbMV19",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"receipt\",\"receipt\":\"read\",\"s\":1,\"sentAt\":1790000000000,\"targets\":[1]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "truncated-json",
+      "description": "Un signal tronqué : la sonde ne lit rien, le range parmi les messages, illisible.",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXA=",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typ",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "null-optional-is-absent",
+      "description": "Une clé facultative à null se lit absente.",
+      "plaintextBase64": "eyJhdHRhY2htZW50SWQiOm51bGwsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb21wbGV0ZWQiOnRydWUsImNvbnZlcnNhdGlvbklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwYzAxIiwia2luZCI6InJlYWQtcHJvZ3Jlc3MiLCJwb3NpdGlvbiI6MywicyI6MSwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0YXJnZXQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBmMDEifSAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"attachmentId\":null,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"completed\":true,\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"read-progress\",\"position\":3,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "admitted",
+      "expected": {
+        "s": 1,
+        "kind": "read-progress",
+        "target": "64f0c0ffee00000000000f01",
+        "position": 3,
+        "completed": true,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "unknown-keys-are-ignored",
+      "description": "Une clé inconnue à côté d’une action connue est ignorée.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJlbW9qaSI6IvCfmYgiLCJleHRyYSI6dHJ1ZSwia2luZCI6InJlYWN0aW9uIiwicmVtb3ZlZCI6ZmFsc2UsInMiOjEsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGFyZ2V0IjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0=",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"emoji\":\"🙈\",\"extra\":true,\"kind\":\"reaction\",\"removed\":false,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "admitted",
+      "expected": {
+        "s": 1,
+        "kind": "reaction",
+        "target": "64f0c0ffee00000000000f01",
+        "emoji": "🙈",
+        "removed": false,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    }
+  ]
+}
