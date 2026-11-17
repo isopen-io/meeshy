@@ -33,7 +33,13 @@ import type { SessionProfileFields, SessionStoreApi, SessionUser } from './sessi
  *    avant l'écriture du `PATCH`, elle défaisait l'optimiste. Une relecture
  *    encore en vol quand le geste confirme est ANNULÉE juste avant
  *    (`profile-actions.ts`) : partie pendant le `PATCH`, elle arrivait après
- *    lui et passait cette garde ;
+ *    lui et passait cette garde. Elle est RETENUE, pas jetée (#19133) : si le
+ *    geste confirme, sa réponse la remplace ; s'il échoue (téléversement
+ *    refusé, `PATCH` refusé, geste annulé), la dernière réponse retenue est
+ *    projetée à la fin de l'échec — sur la session, la ligne du compte et le
+ *    cache que le retour arrière venait de remettre à l'instantané. Sans
+ *    cela, une langue changée ailleurs attendait la relecture suivante
+ *    (reconnexion, ou trente minutes) ;
  *  - un profil plus ANCIEN que le plus récent que la session a pris (sa date
  *    `updatedAt`, servie par `GET /me` et par les `PATCH`) : la copie du
  *    service worker, ou celle du cache d'authentification de la passerelle
@@ -67,6 +73,11 @@ const alreadyHeld = (user: SessionUser, fields: SessionProfileFields): boolean =
   SESSION_PROFILE_KEYS.every((key) => (user[key] ?? null) === (fields[key] ?? null));
 
 const editsInFlight = new WeakMap<QueryClient, number>();
+/** La dernière réponse RÉSEAU de `GET /me` arrivée pendant une édition tenue. */
+const withheld = new WeakMap<QueryClient, MyProfile>();
+/** La projection de `followServedProfile` pour ce client, que la fin d'une
+ * édition échouée rejoue sur la réponse retenue. */
+const projections = new WeakMap<QueryClient, (profile: MyProfile) => void>();
 /** Le profil le plus récent que la session a pris, PAR COMPTE : le client de
  * requêtes survit à un changement de compte, la date d'un autre compte ne dit
  * rien de celui-ci. */
@@ -84,19 +95,36 @@ const olderThanTaken = (queryClient: QueryClient, profile: MyProfile): boolean =
 };
 
 /** La session vient de prendre ce profil (la confirmation d'un geste, ou une
- * relecture projetée) : aucun profil servi plus ancien ne la fera reculer. */
+ * relecture projetée) : aucun profil servi plus ancien ne la fera reculer —
+ * ni une copie datée d'avant lui, ni une relecture retenue pendant l'édition
+ * qu'il confirme. */
 export function noteProfileTaken(queryClient: QueryClient, profile: MyProfile): void {
+  withheld.delete(queryClient);
   const at = servedAt(profile);
   const taken = newestTaken.get(queryClient);
   if (at === undefined || (taken !== undefined && taken.userId === profile.id && at <= taken.at)) return;
   newestTaken.set(queryClient, { userId: profile.id, at });
 }
 
+/** La dernière édition tenue vient de finir sans confirmer : la réponse
+ * retenue pendant elle est la donnée serveur la plus récente. */
+function releaseWithheld(queryClient: QueryClient): void {
+  const profile = withheld.get(queryClient);
+  withheld.delete(queryClient);
+  const project = projections.get(queryClient);
+  if (profile !== undefined && project !== undefined) project(profile);
+}
+
 /** Une édition de profil commence : rend sa fin. Tant qu'il en reste une en
- * vol, aucune réponse de `GET /me` ne touche la session. */
+ * vol, aucune réponse de `GET /me` ne touche la session ; la dernière arrivée
+ * est retenue jusqu'à la fin de la dernière édition. */
 export function holdProfileEdit(queryClient: QueryClient): () => void {
   editsInFlight.set(queryClient, (editsInFlight.get(queryClient) ?? 0) + 1);
-  return () => editsInFlight.set(queryClient, Math.max(0, (editsInFlight.get(queryClient) ?? 0) - 1));
+  return () => {
+    const left = Math.max(0, (editsInFlight.get(queryClient) ?? 0) - 1);
+    editsInFlight.set(queryClient, left);
+    if (left === 0) releaseWithheld(queryClient);
+  };
 }
 
 export function followServedProfile(params: {
@@ -105,18 +133,32 @@ export function followServedProfile(params: {
   readonly accounts: Pick<AccountVault, 'refreshUser'>;
 }): () => void {
   const { queryClient, session, accounts } = params;
-  return queryClient.getQueryCache().subscribe((event) => {
-    if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual === true) return;
-    if (!isMyProfileKey(event.query.queryKey) || (editsInFlight.get(queryClient) ?? 0) > 0) return;
-    const profile = queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY);
+  const project = (profile: MyProfile): void => {
     const current = session.getState().session;
-    if (profile === undefined || current.status !== 'authenticated' || current.user.id !== profile.id) return;
+    if (current.status !== 'authenticated' || current.user.id !== profile.id) return;
     if (olderThanTaken(queryClient, profile)) return;
     noteProfileTaken(queryClient, profile);
+    if (queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY) !== profile) queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profile);
     const fields = sessionFieldsOfProfile(profile);
     if (alreadyHeld(current.user, fields)) return;
     session.getState().updateUser(fields);
     const next = session.getState().session;
     if (next.status === 'authenticated') accounts.refreshUser(next.user);
+  };
+  projections.set(queryClient, project);
+  const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual === true) return;
+    if (!isMyProfileKey(event.query.queryKey)) return;
+    const profile = queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY);
+    if (profile === undefined) return;
+    if ((editsInFlight.get(queryClient) ?? 0) > 0) {
+      withheld.set(queryClient, profile);
+      return;
+    }
+    project(profile);
   });
+  return () => {
+    unsubscribe();
+    if (projections.get(queryClient) === project) projections.delete(queryClient);
+  };
 }

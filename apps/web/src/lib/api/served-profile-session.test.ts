@@ -357,6 +357,76 @@ describe('la session suit le profil SERVI par GET /me (WEB-01)', () => {
     stop();
   });
 
+  test('une relecture servie pendant un téléversement de photo qui ÉCHOUE rejoint la session dès la fin de l’échec (#19133)', async () => {
+    const session = signedIn();
+    const { queryClient, accounts, stop } = following({ session });
+    const { transport, take } = heldGateway();
+    const deps = { source: 'gateway' as const, transport, queryClient, session, accounts, isOnline: () => true, recompress: async (file: Blob) => file };
+
+    const update = performImageUpdate({ kind: 'avatar', file: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }), deps });
+    for (const _ of [1, 2, 3, 4, 5]) await tick();
+    const reread = readMe(queryClient, transport);
+    await tick();
+    take('GET', meEndpoints.root).release(servedUser(wireUser({ systemLanguage: 'en', regionalLanguage: 'es' })));
+    await reread;
+    await tick();
+    expect(readerOf(session)[0]).toBe('fr');
+
+    take('POST', attachmentsEndpoints.upload).release({ status: 500, body: { success: false, error: 'Stockage indisponible' } });
+    expect((await update).status).toBe('refused');
+
+    expect(readerOf(session).slice(0, 2)).toEqual(['en', 'es']);
+    expect(accounts.list()[0]?.user.systemLanguage).toBe('en');
+    stop();
+  });
+
+  test('une relecture servie pendant une édition REFUSÉE l’emporte sur l’instantané que le retour arrière restaurait (#19133)', async () => {
+    const session = signedIn();
+    const { queryClient, accounts, stop } = following({ session });
+    const { transport, take } = heldGateway();
+    const deps = { source: 'gateway' as const, transport, queryClient, session, accounts, isOnline: () => true };
+    queryClient.setQueryData(MY_PROFILE_QUERY_KEY, { ...wireUser(), email: null, phone: null });
+
+    const edit = performProfileEdit({ patch: { displayName: 'Ada (refusé)' }, deps });
+    await tick();
+    await queryClient.invalidateQueries({ queryKey: MY_PROFILE_QUERY_KEY });
+    const reread = readMe(queryClient, transport);
+    await tick();
+    take('GET', meEndpoints.root).release(servedUser(wireUser({ systemLanguage: 'en', regionalLanguage: 'es' })));
+    await reread;
+    await tick();
+    take('PATCH', usersEndpoints.me).release({ status: 400, body: { success: false, error: 'Nom refusé' } });
+    expect((await edit).status).toBe('refused');
+
+    expect(readerOf(session).slice(0, 2)).toEqual(['en', 'es']);
+    expect(sessionUser(session)?.displayName).toBe('Ada L.');
+    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.systemLanguage).toBe('en');
+    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.displayName).toBe('Ada L.');
+    stop();
+  });
+
+  test('une édition réussie ne rejoue pas, à sa fin, une relecture plus ancienne retenue pendant elle (#19133)', async () => {
+    const session = signedIn();
+    const { queryClient, accounts, stop } = following({ session });
+    const { transport, take } = heldGateway();
+    const deps = { source: 'gateway' as const, transport, queryClient, session, accounts, isOnline: () => true };
+
+    const edit = performProfileEdit({ patch: { systemLanguage: 'en' }, deps });
+    await tick();
+    const reread = readMe(queryClient, transport);
+    await tick();
+    take('GET', meEndpoints.root).release(servedUser(wireUser({ displayName: 'Ada (ancienne relecture)' })));
+    await reread;
+    await tick();
+    take('PATCH', usersEndpoints.me).release(servedUser(wireUser({ systemLanguage: 'en' })));
+    expect(await edit).toEqual({ status: 'saved' });
+
+    expect(readerOf(session)[0]).toBe('en');
+    expect(sessionUser(session)?.displayName).toBe('Ada L.');
+    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.systemLanguage).toBe('en');
+    stop();
+  });
+
   test('l’abonnement retiré, la session ne suit plus', async () => {
     const session = signedIn();
     const { queryClient, stop } = following({ session });
