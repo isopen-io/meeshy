@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import MeeshyE2EE
+@testable import MeeshySDK
 
 /// **Les vecteurs COMMUNS de ce que libsignal chiffre** (#18943, contrat #18940).
 ///
@@ -8,10 +9,11 @@ import Testing
 /// `e2ee-signal/` (signaux v1) fixent, à l'octet près, ce que l'iPhone, Android
 /// et le web écrivent et acceptent. Ce banc les lit par chemin relatif (aucune
 /// copie) et rejoue, pour chaque cas, l'encodage canonique, le remplissage et
-/// l'ouverture par la chaîne même de `E2EEEnvelopeOpener` : la sonde
-/// (`E2EEPayloadKind.of`), le lecteur (`decoded(from:)`, version d'abord), puis
-/// la conversation avant l'auteur (`belongs`, `isAuthored`). Un écart qui tombe
-/// se corrige dans le SDK, jamais dans le fichier : le fichier est le contrat.
+/// l'OUVERTURE par l'ouvreur RÉEL (R-7) : chaque clair est scellé tel quel par
+/// l'appareil auteur des vecteurs (`64f0…aaaa`, appareil 3), relayé, puis ouvert
+/// par le `E2EEEnvelopeOpener` d'un lecteur — sonde, lecteur, place et auteur,
+/// garde de ce qu'il ne lit pas, exactement comme en production. Un écart qui
+/// tombe se corrige dans le SDK, jamais dans le fichier : le fichier est le contrat.
 @Suite("Vecteurs communs du contenu et des signaux chiffrés")
 struct E2EEContentVectorTests {
 
@@ -45,78 +47,114 @@ struct E2EEContentVectorTests {
         return try JSONSerialization.data(withJSONObject: present)
     }
 
-    // MARK: - L'ouverture, telle que l'iPhone la juge
-
-    private struct Opening: Equatable, CustomStringConvertible {
-        var payload: String
-        var verdict: String
-        var version: Int? = nil
-        var kind: String? = nil
-
-        var description: String { "\(payload)/\(verdict)/\(version.map(String.init) ?? "-")/\(kind ?? "-")" }
-    }
-
-    private enum Admitted: Equatable {
-        case content(E2EEContent)
-        case signal(E2EESignal)
-    }
-
-    private struct Envelope {
-        let conversationId: String
-        let senderUserId: String
-        let senderDeviceId: UInt32
-    }
-
-    private func envelope(_ entry: [String: Any]) throws -> Envelope {
+    private func conversation(of entry: [String: Any]) throws -> String {
         let served = try #require(entry["envelope"] as? [String: Any])
-        let conversationId = try #require(served["conversationId"] as? String)
-        let senderUserId = try #require(served["senderUserId"] as? String)
-        let senderDeviceId = try #require(served["senderDeviceId"] as? Int)
-        return Envelope(conversationId: conversationId, senderUserId: senderUserId, senderDeviceId: UInt32(senderDeviceId))
+        return try #require(served["conversationId"] as? String)
     }
 
-    private func open(_ plaintext: Data, under envelope: Envelope) -> (Opening, Admitted?) {
-        guard E2EEPayloadKind.of(plaintext) == .signal else { return openContent(plaintext, under: envelope) }
-        let signal: E2EESignal
-        do {
-            signal = try E2EESignal.decoded(from: plaintext)
-        } catch E2EESignalError.unsupportedVersion(let version) {
-            return (Opening(payload: "signal", verdict: "future-version", version: version), nil)
-        } catch {
-            return (Opening(payload: "signal", verdict: "unreadable"), nil)
+    // MARK: - Le banc : l'auteur des vecteurs, un lecteur, l'ouvreur réel
+
+    private struct Bench {
+        static let authorId = "64f0c0ffee0000000000aaaa"
+        static let readerId = "64f0c0ffee0000000000dddd"
+
+        let server: FakeE2EEServer
+        let author: E2EETestPeer
+        let reader: E2EETestPeer
+
+        /// L'auteur est l'appareil 3 de `64f0…aaaa`, celui que les vecteurs
+        /// nomment : ses deux premiers appareils, non approuvés, ne reçoivent rien.
+        static func make() async throws -> Bench {
+            let server = FakeE2EEServer()
+            for _ in 1...2 { _ = try await E2EETestPeer.enroll(authorId, on: server) }
+            let author = try await E2EETestPeer.enroll(authorId, on: server)
+            let reader = try await E2EETestPeer.enroll(readerId, on: server)
+            try #require(author.device.deviceId == 3, "les vecteurs nomment l'appareil 3")
+            return Bench(server: server, author: author, reader: reader)
         }
-        guard signal.belongs(to: envelope.conversationId) else { return (Opening(payload: "signal", verdict: "misattributed-conversation"), nil) }
-        guard signal.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId) else {
-            return (Opening(payload: "signal", verdict: "misattributed-author"), nil)
+
+        /// Le clair, scellé tel quel pour le lecteur, relayé dans la conversation
+        /// de l'enveloppe des vecteurs, puis ouvert par l'ouvreur du lecteur.
+        func open(_ plaintext: Data, in conversationId: String, as messageId: String) async throws -> E2EEOpenOutcome {
+            let sealed = try await author.sealer.seal(plaintext: plaintext, to: reader.userId)
+            try server.relay(sealed, from: author.userId, conversationId: conversationId, participants: [author.userId, reader.userId], messageId: messageId)
+            let envelope = try #require(server.pending(userId: reader.userId, deviceId: reader.device.deviceId).last)
+            return reader.opener.open(envelope)
         }
-        if case .unknown(let kind) = signal.action {
-            return (Opening(payload: "signal", verdict: "admitted-unknown-kind", kind: kind), .signal(signal))
+
+        func kept(_ messageId: String) throws -> E2EEKeptPlaintext? {
+            guard case .awaitsUpgrade(let kept)? = try reader.plaintexts.entry(for: messageId) else { return nil }
+            return kept
         }
-        return (Opening(payload: "signal", verdict: "admitted"), .signal(signal))
     }
 
-    private func openContent(_ plaintext: Data, under envelope: Envelope) -> (Opening, Admitted?) {
-        let content: E2EEContent
-        do {
-            content = try E2EEContent.decoded(from: plaintext)
-        } catch E2EEContentError.unsupportedVersion(let version) {
-            return (Opening(payload: "message", verdict: "future-version", version: version), nil)
-        } catch {
-            return (Opening(payload: "message", verdict: "unreadable"), nil)
+    // MARK: - Ce que l'iPhone fait de chaque verdict
+
+    /// Un contenu admis s'ouvre ; un signal admis se range ; une version future
+    /// se GARDE, privée de ses blancs de fin ; un contenu illisible se garde
+    /// aussi, sans version (une version qui saurait le lire le relira) ; un
+    /// signal illisible et tout clair mal placé se jugent.
+    private enum Handling: Equatable, CustomStringConvertible {
+        case opened(E2EEContent)
+        case signal(E2EESignal)
+        case unknownSignal(kind: String)
+        case kept(version: Int?, isSignal: Bool, json: String?)
+        case judged
+        case other(String)
+
+        var description: String {
+            switch self {
+            case .opened(let content): "ouvert \(content.text ?? "-")"
+            case .signal(let signal): "signal \(signal.action)"
+            case .unknownSignal(let kind): "signal inconnu \(kind)"
+            case .kept(let version, let isSignal, let json): "gardé v\(version.map(String.init) ?? "-") signal=\(isSignal) \(json ?? "")"
+            case .judged: "jugé"
+            case .other(let what): what
+            }
         }
-        guard content.belongs(to: envelope.conversationId) else { return (Opening(payload: "message", verdict: "misattributed-conversation"), nil) }
-        guard content.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId) else {
-            return (Opening(payload: "message", verdict: "misattributed-author"), nil)
-        }
-        let unauthored = content.authorUserId == nil && content.authorDeviceId == nil
-        return (Opening(payload: "message", verdict: unauthored ? "admitted-unauthored" : "admitted"), .content(content))
     }
 
-    private func admission(of object: Any?, payload: String) throws -> Admitted? {
-        guard let object else { return nil }
-        let data = try json(object)
-        if payload == "signal" { return .signal(try JSONDecoder().decode(E2EESignal.self, from: data)) }
-        return .content(try JSONDecoder().decode(E2EEContent.self, from: data))
+    private func handling(of outcome: E2EEOpenOutcome, as messageId: String, on bench: Bench) throws -> Handling {
+        switch outcome {
+        case .opened(let message):
+            return .opened(message.content)
+        case .signal(let received):
+            if case .unknown(let kind) = received.signal.action { return .unknownSignal(kind: kind) }
+            return .signal(received.signal)
+        case .awaitingUpgrade:
+            guard let kept = try bench.kept(messageId) else { return .other("gardé sans entrée au coffre") }
+            let json = kept.version == nil ? nil : String(decoding: kept.bytes, as: UTF8.self)
+            return .kept(version: kept.version, isSignal: kept.isSignal, json: json)
+        case .undecryptable:
+            return .judged
+        case .notForThisDevice, .deferred:
+            return .other("\(outcome)")
+        }
+    }
+
+    private func expectedHandling(of entry: [String: Any]) throws -> Handling {
+        let isSignal = try #require(entry["payload"] as? String) == "signal"
+        switch try #require(entry["verdict"] as? String) {
+        case "admitted", "admitted-unauthored":
+            let expected = try json(entry["expected"])
+            guard isSignal else {
+                let content = try JSONDecoder().decode(E2EEContent.self, from: expected)
+                return .opened(content)
+            }
+            let signal = try JSONDecoder().decode(E2EESignal.self, from: expected)
+            return .signal(signal)
+        case "admitted-unknown-kind":
+            let kind = try #require(entry["kind"] as? String)
+            return .unknownSignal(kind: kind)
+        case "future-version":
+            let version = try #require(entry["version"] as? Int)
+            let kept = try #require(entry["plaintextJson"] as? String)
+            return .kept(version: version, isSignal: isSignal, json: kept)
+        case "unreadable":
+            return isSignal ? .judged : .kept(version: nil, isSignal: false, json: nil)
+        default:
+            return .judged
+        }
     }
 
     // MARK: - Le contrat
@@ -133,7 +171,8 @@ struct E2EEContentVectorTests {
 
     // MARK: - Contenu
 
-    @Test func eachContentCase_encodesToItsCanonicalBytes_padsAndOpensAdmitted() throws {
+    @Test func eachContentCase_encodesToItsCanonicalBytes_padsAndOpensAdmitted() async throws {
+        let bench = try await Bench.make()
         for entry in try entries(file(Self.contentDirectory, "content.vectors.json"), "cases") {
             let name = entry["name"] as? String ?? "?"
             let content = try JSONDecoder().decode(E2EEContent.self, from: json(entry["object"]))
@@ -144,20 +183,20 @@ struct E2EEContentVectorTests {
             #expect(canonical.count == entry["canonicalLength"] as? Int, "longueur canonique : \(name)")
             try expectPadding(of: canonical, entry, name: name)
             let padded = try bytes((entry["padded"] as? [String: Any])?["base64"])
-            let served = try envelope(entry)
-            let (opening, admitted) = open(padded, under: served)
-            #expect(opening == Opening(payload: "message", verdict: "admitted"), "ouverture : \(name)")
-            #expect(admitted == .content(content), "contenu ouvert : \(name)")
+            let outcome = try await bench.open(padded, in: conversation(of: entry), as: "case-\(name)")
+            let seen = try handling(of: outcome, as: "case-\(name)", on: bench)
+            #expect(seen == .opened(content), "ouverture : \(name) — \(seen)")
         }
     }
 
-    @Test func eachContentVerdict_isTheIPhonesVerdict() throws {
-        try expectVerdicts(file(Self.contentDirectory, "content.vectors.json"))
+    @Test func eachContentVerdict_isWhatTheIPhonesOpenerDoes() async throws {
+        try await expectVerdicts(file(Self.contentDirectory, "content.vectors.json"))
     }
 
     // MARK: - Signaux
 
-    @Test func eachSignalCase_encodesToItsCanonicalBytes_padsAndOpensAdmitted() throws {
+    @Test func eachSignalCase_encodesToItsCanonicalBytes_padsAndOpensAdmitted() async throws {
+        let bench = try await Bench.make()
         for entry in try entries(file(Self.signalDirectory, "signal.vectors.json"), "cases") {
             let name = entry["name"] as? String ?? "?"
             let signal = try JSONDecoder().decode(E2EESignal.self, from: json(entry["object"]))
@@ -167,16 +206,14 @@ struct E2EEContentVectorTests {
             #expect(encoded == canonical, "encodage canonique : \(name) — \(String(decoding: encoded, as: UTF8.self))")
             try expectPadding(of: canonical, entry, name: name)
             let padded = try bytes((entry["padded"] as? [String: Any])?["base64"])
-            let served = try envelope(entry)
-            let (opening, admitted) = open(padded, under: served)
-            #expect(opening.payload == "signal", "sonde : \(name)")
-            #expect(opening.verdict == "admitted", "ouverture : \(name) — \(opening)")
-            #expect(admitted == .signal(signal), "signal ouvert : \(name)")
+            let outcome = try await bench.open(padded, in: conversation(of: entry), as: "case-\(name)")
+            let seen = try handling(of: outcome, as: "case-\(name)", on: bench)
+            #expect(seen == .signal(signal), "ouverture : \(name) — \(seen)")
         }
     }
 
-    @Test func eachSignalVerdict_isTheIPhonesVerdict() throws {
-        try expectVerdicts(file(Self.signalDirectory, "signal.vectors.json"))
+    @Test func eachSignalVerdict_isWhatTheIPhonesOpenerDoes() async throws {
+        try await expectVerdicts(file(Self.signalDirectory, "signal.vectors.json"))
     }
 
     // MARK: - Remplissage
@@ -219,21 +256,21 @@ struct E2EEContentVectorTests {
         #expect(written.count == padded["length"] as? Int, "palier : \(name)")
     }
 
-    private func expectVerdicts(_ vectors: [String: Any]) throws {
+    /// Chaque verdict, à travers l'ouvreur réel : la sonde dit le `payload` du
+    /// contrat, et l'ouvreur fait ce que l'iPhone doit faire de ce verdict.
+    private func expectVerdicts(_ vectors: [String: Any]) async throws {
+        let bench = try await Bench.make()
         for entry in try entries(vectors, "verdicts") {
             let name = entry["name"] as? String ?? "?"
-            let payload = try #require(entry["payload"] as? String)
-            let verdict = try #require(entry["verdict"] as? String)
-            let wanted = Opening(payload: payload, verdict: verdict, version: entry["version"] as? Int, kind: entry["kind"] as? String)
             let plaintext = try bytes(entry["plaintextBase64"])
-            let served = try envelope(entry)
+            let payload = try #require(entry["payload"] as? String)
+            let messageId = "verdict-\(name)"
 
-            let (opening, admitted) = open(plaintext, under: served)
-
-            #expect(opening == wanted, "\(name) : rendu \(opening), attendu \(wanted)")
-            if let expected = try admission(of: entry["expected"], payload: payload) {
-                #expect(admitted == expected, "\(name) : clair ouvert")
-            }
+            #expect(E2EEPayloadKind.of(plaintext) == (payload == "signal" ? .signal : .message), "sonde : \(name)")
+            let outcome = try await bench.open(plaintext, in: conversation(of: entry), as: messageId)
+            let seen = try handling(of: outcome, as: messageId, on: bench)
+            let wanted = try expectedHandling(of: entry)
+            #expect(seen == wanted, "\(name) : rendu \(seen), attendu \(wanted)")
         }
     }
 }
