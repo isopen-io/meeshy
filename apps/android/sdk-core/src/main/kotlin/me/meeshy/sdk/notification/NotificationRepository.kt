@@ -83,7 +83,7 @@ class NotificationRepository @Inject constructor(
     private val hydration = Mutex()
     @Volatile private var hydrated = false
 
-    /** Change à chaque [clear] : une écriture différée d'un compte qui part ne se pose jamais sur le suivant. */
+    /** Change à chaque [clear] : une écriture différée ou une relecture d'un compte qui part ne se pose jamais sur le suivant. */
     @Volatile private var epoch = 0L
     private val persistScope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var lastPersisted: PersistedNotifications? = null
@@ -96,10 +96,16 @@ class NotificationRepository @Inject constructor(
      * de sa requête : chaque arrivée en direct et chaque lecture posée sur la liste « all » pendant qu'elle attend s'y
      * inscrit, et la page construite avant elles atterrit par-dessus ([NotificationFlightLanding]). Tout passe sous
      * [flightLock] : une arrivée ne se glisse jamais entre la lecture du journal et l'écriture de la page.
+     *
+     * Une relecture appartient au compte sous lequel elle est partie ([Flight.epoch]) : [clear] ferme tous les vols, et
+     * ce qu'une relecture du compte parti rapporte (page, compteur) n'atterrit jamais chez le suivant.
      */
     private val flightLock = Any()
     private var flights: Map<Long, NotificationFlightChanges> = emptyMap()
     private var flightCount = 0L
+
+    /** Une relecture en vol : la clé de son journal dans [flights], et la génération de compte ([epoch]) où elle est partie. */
+    private class Flight(val id: Long, val epoch: Long)
 
     init {
         if (store !== NoNotificationCacheStore) startPersisting()
@@ -639,7 +645,7 @@ class NotificationRepository @Inject constructor(
             when (page) {
                 is NetworkResult.Success -> landPage(flight, page.data.data, page.data.pagination, servedUnread)
                 is NetworkResult.Failure -> {
-                    servedUnread?.let { _unreadCount.value = it }
+                    servedUnread?.let { landCount(flight, it) }
                     onError(Exception(page.error.message))
                 }
             }
@@ -648,25 +654,27 @@ class NotificationRepository @Inject constructor(
         }
     }
 
-    private fun openFlight(): Long = synchronized(flightLock) {
+    private fun openFlight(): Flight = synchronized(flightLock) {
         flightCount += 1
         flights = flights + (flightCount to NotificationFlightChanges.NONE)
-        flightCount
+        Flight(flightCount, epoch)
     }
 
-    private fun closeFlight(flight: Long) {
-        synchronized(flightLock) { flights = flights - flight }
+    private fun closeFlight(flight: Flight) {
+        synchronized(flightLock) { flights = flights - flight.id }
     }
 
     /**
      * The page lands over the journal of its flight in ONE critical section: an arrival or a read
      * can never slip between reading the journal and writing the list. The count goes first (see
-     * [revalidateNotifications]).
+     * [revalidateNotifications]). A page of the account that left ([clear] since the flight opened)
+     * lands nothing.
      */
-    private fun landPage(flight: Long, items: List<ApiNotification>, pagination: Pagination?, servedUnread: Int?) {
+    private fun landPage(flight: Flight, items: List<ApiNotification>, pagination: Pagination?, servedUnread: Int?) {
         synchronized(flightLock) {
-            val changes = flights[flight] ?: NotificationFlightChanges.NONE
-            flights = flights - flight
+            if (flight.epoch != epoch) return
+            val changes = flights[flight.id] ?: NotificationFlightChanges.NONE
+            flights = flights - flight.id
             val landing = NotificationFlightLanding.land(items, servedUnread, _notificationsCache.value, changes)
             landing.unreadCount?.let { _unreadCount.value = it }
             _hasMore.value = pagination?.hasMore ?: false
@@ -674,6 +682,11 @@ class NotificationRepository @Inject constructor(
             _notificationsCache.value = landing.items
             _notificationsSyncedAt.value = clock.nowMillis()
         }
+    }
+
+    /** The count a failed re-read still obtained — posed only while its account is the one signed in. */
+    private fun landCount(flight: Flight, servedUnread: Int) {
+        synchronized(flightLock) { if (flight.epoch == epoch) _unreadCount.value = servedUnread }
     }
 
     /**
@@ -699,15 +712,18 @@ class NotificationRepository @Inject constructor(
      * account's cached notifications or unread count.
      */
     fun clear() {
-        _notificationsCache.value = null
-        _notificationsSyncedAt.value = null
-        _unreadCount.value = 0
-        _hasMore.value = false
-        _nextCursor.value = null
-        scopedLists.clear()
-        epoch += 1
-        lastPersisted = null
-        hydrated = false
+        synchronized(flightLock) {
+            _notificationsCache.value = null
+            _notificationsSyncedAt.value = null
+            _unreadCount.value = 0
+            _hasMore.value = false
+            _nextCursor.value = null
+            scopedLists.clear()
+            epoch += 1
+            flights = emptyMap()
+            lastPersisted = null
+            hydrated = false
+        }
         if (store !== NoNotificationCacheStore) {
             pendingDiskClear = persistScope.launch {
                 try {

@@ -3,6 +3,7 @@ package me.meeshy.sdk.notification
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
+import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
@@ -74,5 +75,46 @@ class NotificationRepositoryFlightTest {
         val landed = repo.cachedItems(NotificationScope.All).orEmpty()
         assertThat(landed.map { it.id to it.state.isRead }).containsExactly("n1" to true, "n0" to true).inOrder()
         assertThat(repo.unreadCountStream.value).isEqualTo(0)
+    }
+
+    // — the account that left (#18915, F6): the repository is a singleton that outlives it —
+
+    /**
+     * A re-read A started before signing out lands after [NotificationRepository.clear], over the list B already holds:
+     * neither A's page nor A's count may land there — B's own re-read brings B's.
+     */
+    @Test
+    fun `a re-read of the account that left lands nothing over the next account's list`() = runTest {
+        val page = HeldPage()
+        val repo = NotificationRepository(api(page, unread = 5))
+        repo.replaceAll(items = listOf(row("a1")))
+        repo.setUnreadCount(1)
+
+        val resyncOfA = async { repo.resync() }
+        page.asked.await()
+        repo.clear()
+        repo.replaceAll(items = listOf(row("b1", read = true)))
+        page.release.complete(listOf(row("a1"), row("a2")))
+        resyncOfA.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All).orEmpty().map { it.id }).containsExactly("b1")
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+    }
+
+    @Test
+    fun `a failed re-read of the account that left leaves the next account's count alone`() = runTest {
+        val page = HeldPage()
+        val repo = NotificationRepository(api(page, unread = 7))
+        repo.replaceAll(items = listOf(row("a1")))
+        repo.setUnreadCount(1)
+
+        val resyncOfA = async { repo.resync() }
+        page.asked.await()
+        repo.clear()
+        repo.setUnreadCount(2)
+        page.release.completeExceptionally(IOException("offline"))
+        resyncOfA.await()
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(2)
     }
 }
