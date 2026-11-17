@@ -42,14 +42,18 @@ nonisolated enum ProfileLinksCopy {
     static var addressesUnavailable: String {
         String(localized: "profile.links.addresses.unavailable", defaultValue: "Mes adresses ne se chargent pas", bundle: .main)
     }
+    static var addressHidden: String {
+        String(localized: "profile.links.addresses.hidden", defaultValue: "Masquée de ma vitrine", bundle: .main)
+    }
     static var retry: String { String(localized: "profile.links.retry", defaultValue: "Réessayer", bundle: .main) }
     static var addressRefused: String {
         String(localized: "profile.links.addresses.refused", defaultValue: "Le changement n'a pas pu s'enregistrer", bundle: .main)
     }
 
-    /// « Musique, soundcloud.com/aissa, Ami » : le cercle n'est lu que par le propriétaire.
+    /// « Musique, soundcloud.com/aissa, Ami » : le cercle n'est lu que par le propriétaire ; masquée, elle le dit.
     static func addressLabel(_ address: ProfileAddress) -> String {
-        [address.title, address.displayURL, address.circle.map(CircleLevelNames.title(of:))]
+        [address.title, address.displayURL, address.circle.map(CircleLevelNames.title(of:)),
+         address.isShown ? nil : addressHidden]
             .compactMap { $0 }
             .joined(separator: ", ")
     }

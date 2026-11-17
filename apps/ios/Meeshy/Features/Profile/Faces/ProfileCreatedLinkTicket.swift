@@ -39,20 +39,29 @@ struct ProfileCreatedLinkTicket: View {
         return ticket.isActive ? nil : ProfileLinksCopy.paused
     }
 
+    private var figureText: String { ticket.figure.value.formatted(.number.locale(locale)) }
+
+    /// Ce que VoiceOver lit d'un billet : le chiffre avec ce qu'il compte, jamais un nombre nu.
+    private var spokenLabel: String {
+        [ticket.title, ticket.code, "\(figureText) \(ProfileLinksCopy.figureCaption(ticket.figure))", status]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+    }
+
     var body: some View {
         MeeshyTicket(
             title: ticket.title,
             code: ticket.code,
             tint: Self.tint(of: ticket.family),
             systemImage: ProfileLinksCopy.familyGlyph(ticket.family),
-            figure: ticket.figure.value.formatted(.number.locale(locale)),
+            figure: figureText,
             figureCaption: ProfileLinksCopy.figureCaption(ticket.figure),
             size: .row,
             kind: status == nil ? .normal : .struck,
             isFlipped: false,
             isSelected: false,
             isDragging: false,
-            label: nil,
+            label: spokenLabel,
             statusLabel: status,
             flipLabels: nil,
             onPress: { open() },

@@ -61,7 +61,8 @@ struct ProfileAddressesRail: View {
         MeeshyTicket(title: address.title, code: address.displayURL, tint: accent,
                      systemImage: ProfileLinksCopy.glyph(of: address.glyph), size: .compact,
                      kind: address.isShown ? .normal : .struck,
-                     label: ProfileLinksCopy.addressLabel(address), onPress: onManage)
+                     label: ProfileLinksCopy.addressLabel(address),
+                     statusLabel: address.isShown ? nil : ProfileLinksCopy.addressHidden, onPress: onManage)
     }
 
     private var addTicket: some View {
