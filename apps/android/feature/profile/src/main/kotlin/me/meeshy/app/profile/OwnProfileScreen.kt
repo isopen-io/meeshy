@@ -109,6 +109,7 @@ fun OwnProfileScreen(
     val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
     val onEvent = viewModel::onEvent
     var isSharing by rememberSaveable { mutableStateOf(false) }
+    var isPreviewing by rememberSaveable { mutableStateOf(false) }
     var pickingSlot by rememberSaveable { mutableStateOf<OwnProfileLanguageSlot?>(null) }
     var fullscreen by remember { mutableStateOf<ProfileFullscreenImage?>(null) }
     val mediaBaseUrl = LocalMediaBaseUrl.current
@@ -140,6 +141,7 @@ fun OwnProfileScreen(
                     state = state,
                     isUploading = uploadState.uploading != null,
                     onShare = { isSharing = true },
+                    onPreviewAs = { isPreviewing = true },
                     onEvent = onEvent,
                 )
             },
@@ -176,6 +178,7 @@ fun OwnProfileScreen(
     fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
     val share = state.user?.let(ProfileShareBuilder::build)
     if (isSharing && share != null) ProfileShareSheet(share = share, onDismiss = { isSharing = false })
+    if (isPreviewing) VitrineAsCircleSheet(onDismiss = { isPreviewing = false })
 }
 
 
@@ -336,6 +339,7 @@ private fun OwnProfileTrailing(
     state: OwnProfileUiState,
     isUploading: Boolean,
     onShare: () -> Unit,
+    onPreviewAs: () -> Unit,
     onEvent: (OwnProfileUiEvent) -> Unit,
 ) {
     if (state.isSaving || isUploading) {
@@ -345,6 +349,13 @@ private fun OwnProfileTrailing(
             modifier = Modifier.padding(horizontal = MeeshySpacing.md).size(20.dp),
         )
         return
+    }
+    if (!state.isEditing && state.user != null) {
+        CollapsibleHeaderActionButton(
+            icon = MeeshyIcons.Eye,
+            contentDescription = stringResource(R.string.vitrine_as_title),
+            onClick = onPreviewAs,
+        )
     }
     if (!state.isEditing && state.user?.let(ProfileShareBuilder::build) != null) {
         CollapsibleHeaderActionButton(
