@@ -107,26 +107,6 @@ public nonisolated struct StoryRecentCameraRollProvider: Sendable {
     }
 }
 
-/// Quelle amorce « pellicule » la page blanche propose. Trois états, décidés
-/// sur le seul état que le SDK connaît : une vignette a-t-elle été résolue, et
-/// l'app a-t-elle injecté un fournisseur.
-public nonisolated enum StoryGalleryStarter: Equatable {
-    /// Accès déjà accordé et pellicule non vide : vignette de la dernière photo
-    /// (1 tap = insertion) + chevron vers le `PhotosPicker`.
-    case recentAssetThumbnail
-    /// Capsule « Galerie » générique dont le tap DEMANDE l'accès en lecture.
-    case accessRequestCapsule
-    /// Aucun fournisseur injecté : capsule « Galerie » qui ouvre directement le
-    /// `PhotosPicker` système (il ne consomme aucune permission).
-    case systemPickerCapsule
-}
-
-/// Ce que le tap sur la capsule « Galerie » produit une fois l'accès arbitré.
-public nonisolated enum StoryGalleryAccessOutcome: Equatable {
-    case insertRecentAsset(StoryRecentCameraRollAsset)
-    case presentSystemPicker
-}
-
 public struct StoryRecentCameraRollAssetKey: EnvironmentKey {
     public static let defaultValue: StoryRecentCameraRollProvider? = nil
 }
@@ -170,8 +150,8 @@ public nonisolated enum StoryPastedItem: @unchecked Sendable {
     /// strictement rien produire. Il était annoncé comme « appartenant à l'outil
     /// texte » — une destination qu'aucun geste n'ouvrait depuis le collage.
     ///
-    /// Où il va est décidé par `StoryPastePolicy` : au-delà de dix mots il
-    /// DÉCRIT la slide, en deçà il devient un objet de scène.
+    /// Où il va est décidé par l'app au moment de la pose : au contenu d'un
+    /// post, à la légende d'une story ou d'un réel, jamais en objet de scène.
     case text(String)
 }
 

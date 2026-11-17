@@ -1,0 +1,161 @@
+/* LA CARTE DE GROUPE (K43, #18876) — une surface arrondie qui rogne son contenu, cinq
+   emplacements, des filets tracés par elle. Aucune ombre portée, aucun flou : le verre
+   ne vient que de K01 (`MeeshyGlass`). Chaque valeur chiffrée vient de
+   `meeshy-group-card-recipe.ts`, qui la pose en propriétés `--kit-group-*`. */
+@layer components {
+  .kit-group {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    border: var(--kit-group-border) solid var(--color-ios-hairline);
+    border-radius: var(--kit-group-radius);
+    color: var(--color-ios-ink);
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .kit-group[data-border-style='dashed'] {
+    border-style: dashed;
+  }
+
+  .kit-group[data-fill='raised'] {
+    background-color: var(--color-ios-card);
+  }
+
+  .kit-group[data-fill='ground'] {
+    background-color: var(--color-ios-surface);
+  }
+
+  .kit-group[data-fill='accent'] {
+    background-color: color-mix(in srgb, var(--kit-group-tint) 14%, var(--color-ios-card));
+  }
+
+  .kit-group[data-fill='danger'] {
+    background-color: color-mix(in srgb, var(--color-error) 10%, var(--color-ios-card));
+  }
+
+  .kit-group[data-fill='solid'] {
+    background-color: var(--kit-group-tint);
+    color: #111;
+  }
+
+  .kit-group[data-border='accent'] {
+    border-color: var(--kit-group-tint);
+  }
+
+  .kit-group[data-border='danger'] {
+    border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
+  }
+
+  .kit-group[data-highlighted] {
+    outline: var(--kit-group-halo) solid color-mix(in srgb, var(--kit-group-tint) 30%, transparent);
+  }
+
+  .kit-group[data-tail='trailing'] {
+    border-end-end-radius: var(--kit-group-tail);
+  }
+
+  .kit-group[data-tail='leading'] {
+    border-end-start-radius: var(--kit-group-tail);
+  }
+
+  .kit-group[data-pressed] {
+    transform: scale(0.985);
+  }
+
+  .kit-group__hit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .kit-group__hit:focus-visible {
+    outline: 2px solid var(--kit-group-tint);
+    outline-offset: -2px;
+    border-radius: var(--kit-group-radius);
+  }
+
+  .kit-group__hit ~ * {
+    position: relative;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .kit-group__hit ~ * :is(a, button, input, select, textarea, [role='button'], [role='switch'], [tabindex]) {
+    pointer-events: auto;
+  }
+
+  .kit-group__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-block-size: var(--kit-group-header-h);
+    padding-inline: var(--kit-group-header-inset);
+  }
+
+  .kit-group__media {
+    display: block;
+    overflow: hidden;
+  }
+
+  .kit-group__emblem {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    margin-block: calc(-1 * var(--kit-group-emblem-cutout));
+    padding-inline: var(--kit-group-header-inset);
+  }
+
+  .kit-group__content {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    opacity: var(--kit-group-opacity);
+  }
+
+  .kit-group__divider {
+    display: block;
+    flex: none;
+    block-size: 1px;
+    margin-inline: var(--kit-group-inset);
+    background-color: var(--color-ios-hairline);
+  }
+
+  .kit-group[data-rule='danger'] .kit-group__divider {
+    background-color: color-mix(in srgb, var(--color-error) 30%, transparent);
+  }
+
+  .kit-group__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kit-group-footer-gap);
+    padding: var(--kit-group-footer-pad);
+  }
+
+  .kit-group__overline {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  .kit-group__header-trailing {
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-group[data-pressed] {
+      transform: none;
+    }
+  }
+}

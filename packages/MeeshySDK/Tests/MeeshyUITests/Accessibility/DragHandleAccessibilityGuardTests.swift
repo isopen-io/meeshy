@@ -5,9 +5,6 @@ final class DragHandleAccessibilityGuardTests: XCTestCase {
     private static let dragFiles = [
         "Sources/MeeshyUI/Media/AudioEditorWaveform.swift",
         "Sources/MeeshyUI/Story/Timeline/Views/Track/ClipTrimHandles.swift",
-        "Sources/MeeshyUI/Story/Timeline/Views/Track/VideoClipBar.swift",
-        "Sources/MeeshyUI/Story/Timeline/Views/Track/AudioClipBar.swift",
-        "Sources/MeeshyUI/Story/Timeline/Views/Track/TextClipBar.swift",
         "Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift",
         "Sources/MeeshyUI/Story/Timeline/Views/Overlay/KeyframeMarkerView.swift",
     ]

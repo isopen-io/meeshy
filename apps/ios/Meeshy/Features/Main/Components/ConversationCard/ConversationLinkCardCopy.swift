@@ -45,10 +45,6 @@ enum ConversationLinkCardCopy {
     static var expiredTitle: String {
         String(localized: "conversationCard.expired", defaultValue: "Lien expiré", bundle: .main)
     }
-    static var expiredHint: String {
-        String(localized: "conversationCard.expired.hint",
-               defaultValue: "Ce lien d'invitation n'est plus actif.", bundle: .main)
-    }
     static var privateTitle: String {
         String(localized: "conversationCard.private", defaultValue: "Conversation privée", bundle: .main)
     }

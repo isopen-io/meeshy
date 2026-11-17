@@ -448,13 +448,6 @@ nonisolated enum ComposerDescriptionCopy {
         String(localized: "common.done", defaultValue: "Terminé", bundle: .main)
     }
 
-    /// Ce que l'icône de la rangée haute OUVRE — l'indice VoiceOver du geste,
-    /// distinct de l'indice du calque en place (« Touchez pour modifier »),
-    /// parce que le geste n'est pas le même : ici on ouvre une couche.
-    static var openLayer: String {
-        String(localized: "composer.description.a11y.open",
-               defaultValue: "Écrire la légende", bundle: .main)
-    }
 }
 
 /// La hauteur RENDUE de la zone de saisie de description (#4361), remontée au

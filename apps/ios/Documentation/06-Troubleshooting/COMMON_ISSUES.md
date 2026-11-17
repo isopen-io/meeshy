@@ -275,12 +275,7 @@ print("Image URL: \(imageURL)")
 </dict>
 ```
 
-3. **Vérifier Kingfisher cache:**
-```swift
-// Clear cache pour tester
-ImageCache.default.clearMemoryCache()
-ImageCache.default.clearDiskCache()
-```
+3. **Vérifier le cache d'images :** il vit dans `CacheCoordinator.shared.images` (SDK, `DiskCacheStore`).
 
 4. **Test d'URL directe:**
 ```swift

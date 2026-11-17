@@ -18,7 +18,7 @@ export type MeeshyButtonScheme = 'dark' | 'light';
 export type MeeshyButtonHoldState = 'idle' | 'held' | 'live' | 'refused';
 
 export type MeeshyButtonBackground = 'brand' | 'accent' | 'tint16' | 'glass' | 'err13' | 'none';
-export type MeeshyButtonInk = 'onBrand' | 'onSolid' | 'accent' | 'accentDeep' | 'onMedia' | 'themeInk' | 'err' | 'errDeep';
+export type MeeshyButtonInk = 'onBrand' | 'onSolid' | 'accent' | 'accentDeep' | 'onMedia' | 'themeInk' | 'neutral' | 'err' | 'errDeep';
 export type MeeshyButtonShade = 'rest' | 'pressed' | 'hovered';
 
 export const MEESHY_BUTTON_KINDS: readonly MeeshyButtonKind[] = ['primary', 'accent', 'tinted', 'glass', 'outline', 'danger', 'text'];
@@ -55,7 +55,7 @@ const LOOK: Readonly<Record<MeeshyButtonKind, Look>> = {
   glass: { background: 'glass', dark: 'onMedia', light: 'themeInk', border: 0 },
   outline: { background: 'none', dark: 'themeInk', light: 'themeInk', border: MEESHY_BUTTON_MEASURE.outlineWidth },
   danger: { background: 'err13', dark: 'err', light: 'errDeep', border: 0 },
-  text: { background: 'none', dark: 'themeInk', light: 'themeInk', border: 0 },
+  text: { background: 'none', dark: 'neutral', light: 'neutral', border: 0 },
 };
 
 const PHARE_KINDS: ReadonlySet<MeeshyButtonKind> = new Set<MeeshyButtonKind>(['primary', 'accent', 'tinted']);
@@ -172,7 +172,7 @@ const rem = (px: number): string => `${px / REM}rem`;
 
 const BACKGROUND_TOKEN: Readonly<Record<MeeshyButtonBackground, string>> = {
   brand: 'var(--color-ios-brand)',
-  accent: 'var(--accent, var(--color-ios-brand))',
+  accent: 'var(--kit-button-tint, var(--accent, var(--color-ios-brand)))',
   tint16: 'color-mix(in srgb, var(--kit-button-tint, var(--accent, var(--color-ios-brand))) 16%, transparent)',
   glass: 'transparent',
   err13: 'color-mix(in srgb, var(--color-error) 13%, transparent)',
@@ -186,6 +186,7 @@ const INK_TOKEN: Readonly<Record<MeeshyButtonInk, string>> = {
   accentDeep: 'color-mix(in srgb, var(--kit-button-tint, var(--accent, var(--color-ios-brand))) 55%, var(--ios-indigo-950))',
   onMedia: 'var(--color-on-media)',
   themeInk: 'var(--color-ios-ink)',
+  neutral: 'var(--kit-button-tint, var(--color-ios-ink))',
   err: 'var(--color-error)',
   errDeep: 'var(--ios-error-ink)',
 };

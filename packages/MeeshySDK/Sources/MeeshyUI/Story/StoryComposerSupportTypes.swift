@@ -62,28 +62,3 @@ struct StoryComposerDraft: Codable {
     static let userDefaultsKey = "storyComposerDraft"
 }
 
-// MARK: - Audio Editor Item Wrapper
-
-struct AudioEditorItemWrapper: Identifiable {
-    let id = UUID()
-    let url: URL
-    /// Language tagged at record time (recorder strip); seeds the editor's
-    /// transcription language. `nil` for file imports → editor default.
-    var language: String? = nil
-}
-
-/// Le fournisseur de caméra rendu PRÉSENTABLE (S5).
-///
-/// `fullScreenCover(isPresented:)` présente dès que le drapeau passe à `true` —
-/// fournisseur injecté ou non — et un corps `if let provider` non satisfait donne
-/// alors un plein écran opaque au corps VIDE : aucun bouton de fermeture, et pas
-/// de swipe-down puisque le composer est lui-même en `fullScreenCover`. Le
-/// `item:` déplace la garantie du call site vers le TYPE.
-nonisolated struct PresentedCameraCapture: Identifiable {
-    /// Identité STABLE, et non un `UUID()` : le binding est recalculé à chaque
-    /// passe de rendu du composer, et `fullScreenCover(item:)` re-présente dès
-    /// que l'identité change — la caméra se rouvrirait en boucle.
-    let id = "story.composer.camera"
-    let provider: StoryCameraCaptureProvider
-}
-

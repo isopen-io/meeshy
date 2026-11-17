@@ -1,0 +1,239 @@
+/* LES CHIFFRES (K34, #18876) — une valeur en grand, son unité dessous, jamais coupée :
+   elle rétrécit jusqu'à 60 %. Chiffres tabulaires : un chiffre qui change ne pousse pas
+   ses voisins. Seules la transformation et l'opacité s'animent (le roulement). Chaque
+   valeur chiffrée vient de `meeshy-figures-recipe.ts`, qui la pose en `--kit-figure-*`. */
+@layer components {
+  .kit-figure {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-inline-size: 0;
+    color: var(--color-ios-ink);
+  }
+
+  .kit-figure__line {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    min-block-size: calc(var(--kit-figure-value) * 1.1);
+  }
+
+  .kit-figure__value {
+    display: inline-flex;
+    min-inline-size: 0;
+    overflow: hidden;
+    font-size: var(--kit-figure-value);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  .kit-figure[data-state='empty'] .kit-figure__value,
+  .kit-figure[data-ghost] .kit-figure__value {
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-figure[data-emphasized] .kit-figure__value {
+    color: var(--kit-figure-tint, var(--accent, var(--color-ios-brand)));
+  }
+
+  .kit-figure__digit {
+    display: inline-block;
+  }
+
+  .kit-figure__digit[data-rolling] {
+    animation: kit-figure-roll var(--motion-rise-duration, 360ms) var(--motion-rise, ease-out);
+  }
+
+  .kit-figure__unit {
+    margin-block-start: var(--kit-figure-unit-gap);
+    color: var(--color-ios-ink-2);
+    font-size: var(--kit-figure-unit);
+    line-height: 1.2;
+  }
+
+  .kit-figure__trend {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 3px;
+    min-block-size: var(--kit-figure-trend-h);
+    margin-block-start: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-figure__trend svg {
+    inline-size: var(--kit-figure-trend-glyph);
+    block-size: var(--kit-figure-trend-glyph);
+  }
+
+  .kit-figure__trend[data-direction='up'] {
+    color: var(--color-success);
+  }
+
+  .kit-figure__trend[data-direction='down'] {
+    color: var(--color-error);
+  }
+
+  .kit-figure-band {
+    display: flex;
+    align-items: stretch;
+    gap: var(--kit-figure-rule-gap);
+    min-inline-size: 0;
+  }
+
+  .kit-figure-band[data-stacked] {
+    flex-direction: column;
+  }
+
+  .kit-figure-band__press {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: stretch;
+    gap: var(--kit-figure-rule-gap);
+    min-block-size: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .kit-figure-band__rule {
+    flex: none;
+    inline-size: var(--kit-figure-rule);
+    background-color: var(--color-ios-hairline);
+  }
+
+  .kit-figure-band[data-stacked] .kit-figure-band__rule {
+    inline-size: auto;
+    block-size: var(--kit-figure-rule);
+  }
+
+  .kit-spark {
+    flex: none;
+    inline-size: 4.5rem;
+    block-size: 1.75rem;
+    color: var(--kit-figure-tint, var(--accent, var(--color-ios-brand)));
+    direction: ltr;
+  }
+
+  .kit-spark__line {
+    stroke: currentColor;
+  }
+
+  .kit-spark__area,
+  .kit-spark__dot {
+    fill: currentColor;
+  }
+
+  .kit-share {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-inline-size: 0;
+  }
+
+  .kit-share__leading {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--kit-share-badge);
+    block-size: var(--kit-share-badge);
+  }
+
+  .kit-share__body {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 6px;
+    min-inline-size: 0;
+  }
+
+  .kit-share__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .kit-share__title {
+    overflow: hidden;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kit-share__value {
+    font-size: var(--kit-share-value);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kit-share .kit-meter__fill {
+    min-inline-size: var(--kit-share-min-bar);
+  }
+
+  .kit-figure-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    padding: 12px;
+    border: 1px solid var(--color-ios-hairline);
+    border-radius: 16px;
+    background-color: var(--color-ios-card);
+    color: var(--color-ios-ink);
+    font: inherit;
+    text-align: start;
+  }
+
+  button.kit-figure-tile {
+    cursor: pointer;
+  }
+
+  .kit-figure-tile__glyph {
+    display: inline-grid;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    color: var(--kit-figure-tint, var(--accent, var(--color-ios-brand)));
+  }
+
+  @keyframes kit-figure-roll {
+    from {
+      opacity: 0;
+      transform: translateY(40%);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .kit-figure__accessory {
+    display: inline-flex;
+    flex: none;
+    align-items: flex-end;
+  }
+
+  .kit-figure-tile__footer {
+    color: var(--color-ios-ink-2);
+    font-size: 0.75rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-figure__digit[data-rolling] {
+      animation: none;
+    }
+  }
+}

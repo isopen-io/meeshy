@@ -139,6 +139,10 @@ export function MeeshyButton({
     if (isHold) hold.up();
   };
 
+  const onContextMenu = (event: MouseEvent<HTMLButtonElement>): void => {
+    if (isHold) event.preventDefault();
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
     if (!isHold || event.key !== HOLD_KEY || event.repeat || !recipe.isActionEnabled) return;
     event.preventDefault();
@@ -180,6 +184,7 @@ export function MeeshyButton({
       onPointerUp={release}
       onPointerCancel={release}
       onPointerLeave={() => (isPressed ? release() : undefined)}
+      onContextMenu={onContextMenu}
       onKeyDown={onKeyDown}
       onKeyUp={onKeyUp}
     >
@@ -203,17 +208,17 @@ export function MeeshyButton({
         </span>
       ) : null}
       {reasonId === null ? null : (
-        <span id={reasonId} className="kit-button__reason">
+        <span id={reasonId} className="kit-button__reason" aria-hidden="true">
           {disabledReason}
         </span>
       )}
       {busyId === null ? null : (
-        <span id={busyId} className="kit-button__sr">
+        <span id={busyId} className="kit-button__sr" aria-hidden="true">
           {pendingLabel}
         </span>
       )}
       {deferredId === null ? null : (
-        <span id={deferredId} className="kit-button__sr">
+        <span id={deferredId} className="kit-button__sr" aria-hidden="true">
           {deferredLabel}
         </span>
       )}
