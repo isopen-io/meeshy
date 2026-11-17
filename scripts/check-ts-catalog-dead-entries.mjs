@@ -576,6 +576,11 @@ const PENDING_CLIENT_ENTRIES = {
   // les lots clients de la spécification (§ 10 : web lot 6, iOS lots 3-4, Android lot 5), portés par #18906.
   'e2Ee.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le lot web de la confirmation par code' },
   'e2Ee.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot web' },
+  // « Mes adresses » (serveur-mes-adresses, chantier #18857) : la passerelle sert la lecture, l'écriture et l'ordre des
+  // adresses personnelles avant la face Liens web (#18880), qui les appellera.
+  'users.meAddresses': { issue: 18880, reason: 'GET|POST /users/me/addresses — lire et créer mes adresses, face Liens web' },
+  'users.meAddressesById': { issue: 18880, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens web' },
+  'users.meAddressesOrder': { issue: 18880, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens web' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et
