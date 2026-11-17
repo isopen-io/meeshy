@@ -5,6 +5,7 @@ import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/messa
 import type { TranscriptionReadyEventData } from '@meeshy/shared/types/socketio-events/audio';
 import type { AttachmentReactionUpdateEventData } from '@meeshy/shared/types/socketio-events/reaction';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
+import type { MessageHiddenForMeEventData } from '@meeshy/shared/types/socketio-events/message';
 
 import { conversationStore } from '@/lib/conversation-store';
 import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
@@ -29,6 +30,7 @@ import {
 } from './realtime-apply';
 import { applyAttachmentReactionUpdate } from './realtime-attachment-reactions';
 import { applyConversationGone } from './realtime-conversation-gone';
+import { applyMessageHiddenForMe } from './realtime-message-hidden';
 import { applyMessageDeleted } from './realtime-message-mutations';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import { applyTranscriptionReady } from './realtime-transcription-ready';
@@ -371,6 +373,75 @@ describe('WEB-04 — une écriture temps réel survit à une relecture EN VOL', 
 
     expect(servedRow(queryClient, 'm-x')).toBeUndefined();
     expect(servedRow(queryClient, 'm-0')).toBeDefined();
+    stop();
+  });
+});
+
+/**
+ * **LE JOURNAL EST TENU PAR LA REQUÊTE EN VOL, PAS PAR LA DONNÉE PRÉSENTE**
+ * (#19118, réserve C7 de l'audit de #19081). `writeLive` sortait sans rien
+ * noter quand le cache était vide : un message, un masquage reçus pendant
+ * l'ouverture À FROID d'un fil ou de la liste n'apparaissaient qu'à la
+ * relecture suivante — et TanStack ne relance pas une première lecture.
+ */
+describe('une écriture vive pendant la PREMIÈRE lecture est rejouée sur sa réponse (#19118)', () => {
+  test('message:new pendant le premier chargement d’un fil : le message est présent à la fin du chargement', async () => {
+    const queryClient = liveQueryClient();
+    const inFlight = deferred<MessagesPage>();
+    const { stop } = openThread(queryClient, () => inFlight.promise);
+
+    applyMessageNew(queryClient, createOutboxStore(), socketMessage('m-recu'));
+    inFlight.resolve(pageOf([localMessage({ id: 'm-ancien', senderId: 'u-other' })]));
+    await settle(queryClient);
+
+    expect(threadOf(queryClient, 'c-a')?.messages.map((m) => m.id)).toEqual(['m-ancien', 'm-recu']);
+    stop();
+  });
+
+  test('un message reçu pendant l’ouverture à froid de la LISTE devient son aperçu à la fin du chargement', async () => {
+    const queryClient = liveQueryClient();
+    const inFlight = deferred<ConversationsPage>();
+    const { stop } = openList(queryClient, () => inFlight.promise);
+
+    applyMessageNew(queryClient, createOutboxStore(), socketMessage('m-recu'));
+    inFlight.resolve(listPage([row()]));
+    await settle(queryClient);
+
+    expect(findCachedConversation(queryClient, 'c-a')?.lastMessage?.id).toBe('m-recu');
+    stop();
+  });
+
+  test('un message masqué pour moi pendant le premier chargement d’un fil n’y apparaît pas', async () => {
+    const queryClient = liveQueryClient();
+    const inFlight = deferred<MessagesPage>();
+    const { stop } = openThread(queryClient, () => inFlight.promise);
+    const hidden = localMessage({ id: 'm-masque', senderId: 'u-other' });
+
+    const hiddenForMe: MessageHiddenForMeEventData = { userId: 'u-viewer', messages: [{ messageId: 'm-masque', conversationId: 'c-a' }], hiddenAt: '2026-11-17T10:00:00.000Z' };
+    applyMessageHiddenForMe(queryClient, hiddenForMe, 'u-viewer');
+    inFlight.resolve(pageOf([localMessage({ id: 'm-ancien', senderId: 'u-other' }), hidden]));
+    await settle(queryClient);
+
+    expect(threadOf(queryClient, 'c-a')?.messages.map((m) => m.id)).toEqual(['m-ancien']);
+    stop();
+  });
+
+  test('une lecture à froid qui ÉCHOUE oublie ce qu’elle portait : la suivante, partie après, ne le rejoue pas en double', async () => {
+    const queryClient = liveQueryClient({ defaultOptions: { queries: { retry: false } } });
+    const failing = deferred<MessagesPage>();
+    const calls = { count: 0 };
+    const { observer, stop } = openThread(queryClient, () => {
+      calls.count += 1;
+      return calls.count === 1 ? failing.promise : Promise.resolve(pageOf([localMessage({ id: 'm-recu', senderId: 'u-other' })]));
+    });
+
+    applyMessageNew(queryClient, createOutboxStore(), socketMessage('m-recu'));
+    failing.resolve(Promise.reject(new Error('réseau')) as unknown as MessagesPage);
+    await settle(queryClient);
+    await observer.refetch();
+    await settle(queryClient);
+
+    expect(threadOf(queryClient, 'c-a')?.messages.map((m) => m.id)).toEqual(['m-recu']);
     stop();
   });
 });

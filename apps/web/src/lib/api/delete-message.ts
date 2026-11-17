@@ -161,14 +161,19 @@ function removeRows(queryClient: QueryClient, queryKey: QueryKey, ids: ReadonlyS
       ),
     ),
   );
-  if (removed.length === 0) return removed;
   /* Par le journal (#18914) : une relecture du fil partie avant le geste — ou
-     avant `message:hidden-for-me` d'un autre appareil — ne rend pas la rangée. */
+     avant `message:hidden-for-me` d'un autre appareil — ne rend pas la rangée.
+     Une lecture EN VOL le note même quand le cache ne porte pas encore la
+     rangée (#19118) : la première lecture d'un fil ouvert à froid la servirait. */
   const without = (data: PagedMessages | undefined): PagedMessages | undefined =>
     data === undefined || !Array.isArray(data.pages)
       ? data
       : { ...data, pages: data.pages.map((page) => ({ ...page, messages: page.messages.filter((m) => !ids.has(m.id)) })) };
-  queryClient.getQueryCache().findAll({ queryKey }).forEach((query) => writeLive(queryClient, query.queryKey, without));
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey })
+    .filter((query) => removed.length > 0 || query.state.fetchStatus !== 'idle')
+    .forEach((query) => writeLive(queryClient, query.queryKey, without));
   return removed;
 }
 

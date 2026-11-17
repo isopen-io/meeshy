@@ -1,6 +1,7 @@
 import {
   partialMatchKey,
   replaceEqualDeep,
+  type Query,
   type QueryClient,
   type QueryFunction,
   type QueryFunctionContext,
@@ -22,16 +23,20 @@ import {
  * faite pendant une relecture est notée, puis REJOUÉE sur sa réponse dans
  * `structuralSharing` : TanStack l'appelle de façon synchrone, avant de
  * notifier le moindre observateur, qui ne voit donc jamais l'état d'avant
- * revenir. Le journal suit la donnée (clé : l'objet en cache) et repart de
- * zéro à chaque relecture qui commence ou échoue.
+ * revenir. Le journal suit la REQUÊTE EN VOL (#19118) — pas la donnée
+ * présente : une écriture faite pendant la PREMIÈRE lecture d'un fil ou de la
+ * liste, cache vide, n'a rien à écrire, mais elle est notée et rejouée sur la
+ * réponse ; sans cela, un message reçu pendant l'ouverture à froid n'apparaissait
+ * qu'à la relecture suivante. Le journal repart de zéro à chaque lecture qui
+ * commence ou échoue, et sa réponse le consomme.
  *
  * `structuralSharing` reçoit TOUTE donnée qui entre dans une requête — la
  * réponse d'une relecture comme une écriture locale. Seule la réponse rejoue
  * le journal : la rejouer après une écriture locale la déferait. La réponse
- * se reconnaît à l'objet exact que rend la relecture, marqué au passage par le
- * crochet `persister` de TanStack, qui enveloppe l'appel de la `queryFn` —
- * toutes les pages d'une requête infinie comprises. Toute autre écriture PORTE
- * le journal jusqu'à la donnée qu'elle produit.
+ * se reconnaît à l'objet exact que rend la relecture, marqué au passage — avec
+ * la requête qui l'a demandée — par le crochet `persister` de TanStack, qui
+ * enveloppe l'appel de la `queryFn`, toutes les pages d'une requête infinie
+ * comprises. Une autre écriture laisse le journal à sa requête.
  *
  * Ce crochet a un effet de bord, neutralisé dans le même appel : sans mode
  * réseau fixé, TanStack passe toute requête qui porte un `persister` en
@@ -59,8 +64,10 @@ export type LiveWriteOptions = {
 
 type Replay = (data: unknown) => unknown;
 
+/** Le journal de chaque requête en vol — la requête est la clé, sa donnée peut ne pas exister encore. */
 const journals = new WeakMap<object, readonly Replay[]>();
-const servedResponses = new WeakSet<object>();
+/** La réponse d'une lecture, et la requête qui l'a demandée. */
+const servedBy = new WeakMap<object, object>();
 const installed = new WeakSet<QueryClient>();
 
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
@@ -69,16 +76,17 @@ const replayed = (writes: readonly Replay[], response: unknown): unknown =>
   writes.reduce((data, write) => write(data) ?? data, response);
 
 function shareWithLiveWrites(previous: unknown, next: unknown): unknown {
-  const writes = isObject(previous) ? journals.get(previous) : undefined;
-  if (isObject(next) && servedResponses.delete(next)) return replaceEqualDeep(previous, writes === undefined ? next : replayed(writes, next));
-  const shared = replaceEqualDeep(previous, next);
-  if (writes !== undefined && isObject(shared)) journals.set(shared, writes);
-  return shared;
+  const query = isObject(next) ? servedBy.get(next) : undefined;
+  if (query === undefined) return replaceEqualDeep(previous, next);
+  servedBy.delete(next as object);
+  const writes = journals.get(query);
+  journals.delete(query);
+  return replaceEqualDeep(previous, writes === undefined ? next : replayed(writes, next));
 }
 
-async function markServed(queryFn: QueryFunction<unknown, QueryKey, never>, context: QueryFunctionContext<QueryKey>): Promise<unknown> {
+async function markServed(queryFn: QueryFunction<unknown, QueryKey, never>, context: QueryFunctionContext<QueryKey>, query: Query): Promise<unknown> {
   const response = await queryFn(context);
-  if (isObject(response)) servedResponses.add(response);
+  if (isObject(response)) servedBy.set(response, query);
   return response;
 }
 
@@ -87,14 +95,15 @@ export function installLiveCacheJournal(queryClient: QueryClient): void {
   installed.add(queryClient);
   queryClient.setQueryDefaults(LIVE_CACHE_ROOT, { structuralSharing: shareWithLiveWrites, persister: markServed, networkMode: 'online' });
   queryClient.getQueryCache().subscribe((event) => {
-    if (event.type !== 'updated' || !isObject(event.query.state.data)) return;
-    if (event.action.type === 'fetch' || event.action.type === 'error') journals.delete(event.query.state.data);
+    if (event.type !== 'updated') return;
+    if (event.action.type === 'fetch' || event.action.type === 'error') journals.delete(event.query);
   });
 }
 
 /**
  * Écrit `updater` dans `queryKey` sans rajeunir la donnée ; pendant une
- * relecture d'une clé de la racine, le note pour le rejouer sur sa réponse.
+ * lecture d'une clé de la racine — la première comprise, cache vide —, le
+ * note pour le rejouer sur sa réponse.
  */
 export function writeLive<T>(
   queryClient: QueryClient,
@@ -103,11 +112,9 @@ export function writeLive<T>(
   options: LiveWriteOptions = {},
 ): void {
   const query = queryClient.getQueryCache().find<T>({ queryKey, exact: true });
-  if (query === undefined || query.state.data === undefined) return;
-  queryClient.setQueryData<T>(queryKey, updater, { updatedAt: query.state.dataUpdatedAt });
-  const written = query.state.data;
+  if (query === undefined) return;
+  if (query.state.data !== undefined) queryClient.setQueryData<T>(queryKey, updater, { updatedAt: query.state.dataUpdatedAt });
   const journaled = installed.has(queryClient) && options.relative !== true && query.state.fetchStatus !== 'idle' && partialMatchKey(queryKey, LIVE_CACHE_ROOT);
-  if (!journaled || !isObject(written)) return;
   /* Le journal d'une requête ne reçoit jamais que SA donnée : `T`. */
-  journals.set(written, [...(journals.get(written) ?? []), (data) => updater(data as T)]);
+  if (journaled) journals.set(query, [...(journals.get(query) ?? []), (data) => updater(data as T)]);
 }
