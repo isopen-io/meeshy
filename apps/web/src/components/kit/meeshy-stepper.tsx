@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent, typ
 
 import { impact } from '@/lib/view/haptics';
 
-import { focusKitRadio } from './kit-radio-focus';
+import { focusKitRadio, kitRadioKeyTarget } from './kit-radio-focus';
 import {
   MEESHY_STEPPER_HOLD,
   meeshyStepperHoldInterval,
@@ -66,7 +66,7 @@ const PLUS = glyph('M3.5 8h9M8 3.5v9');
 
 type Bound = 'min' | 'max' | null;
 
-/** L'appui long : un pas à l'appui, puis la répétition après le délai ; aucune minuterie ne survit au relâcher, à la butée, ni au démontage. */
+/** L'appui long : un pas à l'appui, puis la répétition après le délai ; aucune minuterie ne survit au relâcher, à la butée, à l'onglet caché, ni au démontage. Chaque geste repart de la valeur REÇUE : un hôte qui refuse un pas n'est jamais dépassé. */
 function useStepper(props: MeeshyStepperProps) {
   const { value, range, onChange, repeatsOnHold = true, isEnabled = true } = props;
   const current = useRef(value);
@@ -85,6 +85,14 @@ function useStepper(props: MeeshyStepperProps) {
     timer.current = null;
   }, []);
   useEffect(() => stop, [stop]);
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') stop();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [stop]);
 
   const move = useCallback(
     (delta: number): boolean => {
@@ -121,6 +129,7 @@ function useStepper(props: MeeshyStepperProps) {
     (delta: number) => {
       if (!isEnabled || range === undefined || onChange === undefined) return;
       stop();
+      current.current = latest.current.value;
       if (move(delta) && repeatsOnHold) tick(delta, 0);
     },
     [isEnabled, range, onChange, move, stop, tick, repeatsOnHold],
@@ -149,6 +158,7 @@ function useStepper(props: MeeshyStepperProps) {
     if (intent === null) return;
     event.preventDefault();
     stop();
+    current.current = latest.current.value;
     if (intent.kind === 'step') {
       move(intent.delta);
       return;
@@ -225,17 +235,6 @@ function Buttons(props: MeeshyStepperProps & { readonly canDecrement: boolean; r
   );
 }
 
-/** Le clavier d'un groupe radio : flèches pour le voisin (la gauche avance en RTL), Début et Fin pour les extrémités. */
-const trackKeyTarget = ({ key, from, lastIndex, isRtl }: { readonly key: string; readonly from: number; readonly lastIndex: number; readonly isRtl: boolean }): number | null => {
-  const forward = isRtl ? 'ArrowLeft' : 'ArrowRight';
-  const backward = isRtl ? 'ArrowRight' : 'ArrowLeft';
-  if (key === forward || key === 'ArrowDown') return Math.min(from + 1, lastIndex);
-  if (key === backward || key === 'ArrowUp') return Math.max(from - 1, 0);
-  if (key === 'Home') return 0;
-  if (key === 'End') return lastIndex;
-  return null;
-};
-
 function Track({ value, label, stops, onChange, describeStop = defaultDescribeStop, isEnabled = true, fill }: MeeshyStepperProps & { readonly stops: readonly MeeshyStepperStop[]; readonly fill: number }) {
   const lastIndex = stops.length - 1;
   const isStop = Number.isInteger(value) && value >= 0 && value <= lastIndex;
@@ -244,7 +243,7 @@ function Track({ value, label, stops, onChange, describeStop = defaultDescribeSt
     if (isEnabled && index !== value && index >= 0 && index <= lastIndex) onChange?.(index);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    const target = trackKeyTarget({ key: event.key, from: isStop ? value : -1, lastIndex, isRtl: isRightToLeft() });
+    const target = kitRadioKeyTarget({ key: event.key, from: isStop ? value : -1, lastIndex, isRtl: isRightToLeft() });
     if (target === null) return;
     event.preventDefault();
     focusKitRadio(event.currentTarget, target);

@@ -125,6 +125,7 @@ function useScrub(props: MeeshyWavePlayerProps) {
         ? {}
         : {
             onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+              if (event.button !== 0) return;
               event.currentTarget.setPointerCapture?.(event.pointerId);
               set({ isActive: true, fraction: aim(event) });
               latest.current.onScrubbingChange?.(true);

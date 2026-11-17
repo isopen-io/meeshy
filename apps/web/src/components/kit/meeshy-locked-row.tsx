@@ -62,7 +62,8 @@ function Lock({ size }: { readonly size: number }) {
  * L'ouverture, une fois : quand l'hôte passe `isUnlocking` à vrai (la porte vient de
  * s'ouvrir pour de bon), le tic de succès part, l'ouverture se joue, puis `onUnlocked`
  * part UNE fois. Un second rendu à valeur égale ne rejoue rien ; une rangée qui disparaît
- * avant la fin n'appelle rien (la minuterie est rendue au démontage).
+ * avant la fin n'appelle rien (la minuterie est rendue au démontage). Hors ouverture, la
+ * région polie se vide et le compte repart : une seconde ouverture se joue et se dit.
  */
 function useUnlocking(props: MeeshyLockedRowProps, recipe: MeeshyLockedRowRecipe): string {
   const { isUnlocking, title, words, haptic = 'onUnlock' } = props;
@@ -72,7 +73,12 @@ function useUnlocking(props: MeeshyLockedRowProps, recipe: MeeshyLockedRowRecipe
   latest.current = props.onUnlocked;
   const unlockMs = recipe.unlockMs;
   useEffect(() => {
-    if (isUnlocking !== true || fired.current) return undefined;
+    if (isUnlocking !== true) {
+      fired.current = false;
+      setSaid('');
+      return undefined;
+    }
+    if (fired.current) return undefined;
     setSaid(`${title}, ${words.unlocked}`);
     if (haptic !== 'none') success();
     const timer = setTimeout(() => {

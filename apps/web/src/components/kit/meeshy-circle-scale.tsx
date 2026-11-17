@@ -2,7 +2,7 @@ import '@/styles/kit-circle-scale.css';
 import '@/styles/kit-motion.css';
 import { memo, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 
-import { focusKitRadio } from './kit-radio-focus';
+import { focusKitRadio, kitRadioKeyTarget } from './kit-radio-focus';
 import {
   meeshyCircleScaleRecipe,
   meeshyCircleScaleRingDiameter,
@@ -114,17 +114,15 @@ function Dots(props: MeeshyCircleScaleProps & { readonly ranks: readonly MeeshyC
   const { levels, ranks, current, counts, onSelect, showsTitles = true, countLabel, isEnabled = true } = props;
   const shownCounts = counts !== undefined && counts.length === levels.length ? counts : undefined;
   const isRtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+  const pick = (rank: number): void => {
+    if (rank !== current) onSelect?.(rank);
+  };
   const move = (event: KeyboardEvent<HTMLElement>): void => {
-    const forward = isRtl ? 'ArrowLeft' : 'ArrowRight';
-    const backward = isRtl ? 'ArrowRight' : 'ArrowLeft';
-    const from = current ?? -1;
-    const isNext = event.key === forward || event.key === 'ArrowDown';
-    const isPrevious = event.key === backward || event.key === 'ArrowUp';
-    if (!isNext && !isPrevious) return;
-    const target = isNext ? Math.min(from + 1, levels.length - 1) : Math.max(from - 1, 0);
+    const target = kitRadioKeyTarget({ key: event.key, from: current ?? -1, lastIndex: levels.length - 1, isRtl });
+    if (target === null) return;
     event.preventDefault();
     focusKitRadio(event.currentTarget, target);
-    onSelect?.(target);
+    pick(target);
   };
   return (
     <div className="kit-scale__dots">
@@ -139,7 +137,7 @@ function Dots(props: MeeshyCircleScaleProps & { readonly ranks: readonly MeeshyC
           isChecked={rank.isCurrent}
           isFirstStop={current === null && rank.level === 0}
           showsTitle={showsTitles && props.size !== 'compact'}
-          onPick={(picked) => onSelect?.(picked)}
+          onPick={pick}
           onKeyDown={move}
           countLabel={countLabel}
           isEnabled={isEnabled}
