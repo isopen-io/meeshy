@@ -115,6 +115,40 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertFalse(label.contains("0"), label)
     }
 
+    func test_activityPhase_emptyCacheWhileLoading_isTheSkeleton() {
+        XCTAssertEqual(ProfileActivityBand.phase(stats: nil, isLoading: true, isOffline: false), .skeleton)
+        XCTAssertEqual(ProfileActivityBand.phase(stats: nil, isLoading: true, isOffline: true), .skeleton)
+    }
+
+    func test_activityPhase_withAValue_showsTheFigures_evenOfflineOrAfterAFailure() {
+        let stats = UserStats(totalMessages: 12, totalConversations: 3, totalTranslations: 40)
+        XCTAssertEqual(ProfileActivityBand.phase(stats: stats, isLoading: false, isOffline: true), .figures,
+                       "un échec garde ce qui est affiché : le cache reste peint")
+        XCTAssertEqual(ProfileActivityBand.phase(stats: stats, isLoading: true, isOffline: false), .figures)
+    }
+
+    func test_activityPhase_nothingServedAndLoadingOver_isUnavailable_neverZeros() {
+        XCTAssertEqual(ProfileActivityBand.phase(stats: nil, isLoading: false, isOffline: false),
+                       .unavailable(offline: false))
+        XCTAssertEqual(ProfileActivityBand.phase(stats: nil, isLoading: false, isOffline: true),
+                       .unavailable(offline: true), "hors ligne se dit hors ligne, pas « erreur »")
+    }
+
+    func test_activityFigures_afterAFailureOnAnEmptyCache_haveNoValue_neverAnInventedZero() {
+        let figures = ProfileActivityBand.figures(of: nil, isLoading: false)
+        XCTAssertEqual(figures.map(\.value), [nil, nil, nil])
+    }
+
+    func test_activityUnavailableTitles_sayOfflineOrUnavailable_andTheBlockOffersRetry() throws {
+        XCTAssertNotEqual(ProfileActivityBand.unavailableTitle(offline: true),
+                          ProfileActivityBand.unavailableTitle(offline: false))
+        let band = try code("Meeshy/Features/Profile/Views/ProfileActivityBand.swift")
+        XCTAssertTrue(band.contains("MeeshyStateBlock("), "l'état indisponible est le bloc d'état K38")
+        XCTAssertTrue(band.contains("ProfilePublicationsCopy.retry"), "Réessayer, le même mot que Publications")
+        let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(profile.contains("onRetry: retryStats"), "Réessayer relance le chargement de Mon activité")
+    }
+
     func test_activityValues_withServedStats_areTheCardsOfMyActivity() {
         let stats = UserStats(totalMessages: 12, totalConversations: 3, totalTranslations: 40)
 

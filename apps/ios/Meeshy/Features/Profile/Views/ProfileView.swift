@@ -31,6 +31,8 @@ struct ProfileView: View {
     @State private var stats: UserStats?
     /// Vrai jusqu'à la réponse du cache ou du serveur : la bande « Mon activité » montre son squelette sur un cache vide.
     @State private var statsLoading = true
+    /// Vrai quand le dernier chargement de Mon activité a échoué hors ligne.
+    @State private var statsOffline = false
     @State private var showSystemLanguagePicker = false
     @State private var showRegionalLanguagePicker = false
     @State private var showCustomLanguagePicker = false
@@ -179,9 +181,18 @@ struct ProfileView: View {
         Task { await authManager.refreshCurrentUserProfile() }
         if let fresh = try? await StatsService.shared.fetchStats() {
             stats = fresh
+            statsOffline = false
             await bestEffort("profileView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([fresh], for: userId) }
+        } else {
+            statsOffline = NetworkMonitor.shared.isOffline
         }
         statsLoading = false
+    }
+
+    /// Réessayer depuis l'état indisponible de Mon activité : le squelette revient pendant la relance.
+    private func retryStats() {
+        statsLoading = true
+        Task { await loadStats() }
     }
 
     // MARK: - Header
@@ -556,7 +567,8 @@ struct ProfileView: View {
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActivityBand.title)
-            ProfileActivityBand(stats: stats, isLoading: statsLoading, accentHex: accentColor, onOpen: openActivity)
+            ProfileActivityBand(stats: stats, isLoading: statsLoading, isOffline: statsOffline, accentColor: accentColor,
+                                onOpen: openActivity, onRetry: retryStats)
             progressionEntry
             ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
         }
