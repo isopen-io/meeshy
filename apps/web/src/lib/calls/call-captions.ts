@@ -51,8 +51,6 @@ export type CallCaption = {
 
 export const CAPTIONS_OVERLAY_LINES = 2;
 
-export const TRANSCRIPT_CHANNEL = 'transcription';
-
 export function nextCaptionsMode(mode: CaptionsMode): CaptionsMode {
   if (mode === 'off') return 'translated';
   if (mode === 'translated') return 'original';

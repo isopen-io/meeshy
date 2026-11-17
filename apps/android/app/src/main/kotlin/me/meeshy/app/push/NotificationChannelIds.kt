@@ -90,7 +90,6 @@ object NotificationChannelIds {
     const val CHANNEL_EPHEMERAL: String = NotificationChannelPlan.EPHEMERAL
     const val CHANNEL_FRIENDS: String = NotificationChannelPlan.FRIENDS
     const val CHANNEL_CALLS_MISSED: String = NotificationChannelPlan.CALLS_MISSED
-    const val CHANNEL_INVITATIONS: String = NotificationChannelPlan.INVITATIONS
 
     /**
      * Le canal d'un push : sa catégorie `MEESHY_*` (dérivée du type de la passerelle ; un message à

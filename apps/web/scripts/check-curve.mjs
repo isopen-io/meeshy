@@ -52,15 +52,12 @@ const UPSTREAM_FOCAL_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Focal/Core/FocalMe
 const DOWNSTREAM_FOCAL = `${ROOT}apps/web/src/lib/reading-mode/metrics.ts`;
 
 /**
- * PARTIE 3 — la PERSPECTIVE du Fil (#5566, correction de revue : « Focal » et
- * « Script » rendaient des pixels identiques). `src/lib/reading-mode/perspective.ts`
- * dérive le variant `thread` de `focus-curve.ts`, exactement comme `lens/law.ts`
- * dérive le variant `list` ci-dessus. `THREAD_FOCUS_BAND_HYSTERESIS` (#5648)
- * y est ajoutée : son aval n'est PAS `perspective.ts` (gelé, sans appelant de
- * production) mais `reading-mode/election.ts` — la source amont reste
- * `focus-curve.ts`, seul l'aval change.
+ * PARTIE 3 — L'HYSTÉRÉSIS de la bande de focus du Fil (#5648) :
+ * `THREAD_FOCUS_BAND_HYSTERESIS` dérive de `focus-curve.ts` et vit dans
+ * `reading-mode/election.ts`. (La courbe continue du variant `thread`, que le
+ * web dérivait dans `reading-mode/perspective.ts`, est retirée du web comme
+ * d'iOS : l'élection d'une rangée l'a remplacée.)
  */
-const DOWNSTREAM_THREAD = `${ROOT}apps/web/src/lib/reading-mode/perspective.ts`;
 const DOWNSTREAM_ELECTION = `${ROOT}apps/web/src/lib/reading-mode/election.ts`;
 
 /**
@@ -77,7 +74,6 @@ const derived = readFileSync(DOWNSTREAM, 'utf8');
 const swift = readFileSync(UPSTREAM_SWIFT, 'utf8');
 const focalSwift = readFileSync(UPSTREAM_FOCAL_SWIFT, 'utf8');
 const focalDerived = readFileSync(DOWNSTREAM_FOCAL, 'utf8');
-const threadDerived = readFileSync(DOWNSTREAM_THREAD, 'utf8');
 const electionDerived = readFileSync(DOWNSTREAM_ELECTION, 'utf8');
 const perspectiveSwift = readFileSync(UPSTREAM_PERSPECTIVE_SWIFT, 'utf8');
 
@@ -290,49 +286,8 @@ for (const [swiftName, downstreamName, what] of SCENE_MS_MAPPINGS) {
  */
 
 /**
- * PARTIE 3 — les constantes du variant `thread` vivent dans un objet
- * littéral distinct de `list` : on isole d'abord sa portion de texte, sans
- * quoi `maxDistance` attraperait celle du variant `list`, déclarée juste
- * après dans la source amont.
- */
-const threadPortion = /thread:\s*\{[^}]*\}/.exec(source)?.[0] ?? '';
-const upstreamThreadValue = (name) => count(threadPortion, name);
-
-const THREAD_MAPPINGS = [
-  ['maxDistance', 'THREAD_MAX_DISTANCE', 'distance de saturation du fil'],
-  ['scaleDecay', 'THREAD_SCALE_DECAY', "amplitude de l'échelle du fil"],
-  ['alphaDecay', 'THREAD_ALPHA_DECAY', 'amplitude du fondu du fil'],
-];
-
-for (const [upstreamName, downstreamName, what] of THREAD_MAPPINGS) {
-  const expectedThread = upstreamThreadValue(upstreamName);
-  const actualThread = count(threadDerived, downstreamName);
-  if (expectedThread === null) failures.push(`${what} : « ${upstreamName} » introuvable dans le variant thread de focus-curve.ts`);
-  else if (actualThread === null) failures.push(`${what} : « ${downstreamName} » introuvable dans reading-mode/perspective.ts`);
-  else if (expectedThread !== actualThread) failures.push(`${what} : amont ${expectedThread}, dérivée ${actualThread}`);
-}
-
-/** La bande de focus du fil vit HORS du bloc `thread` (export top-level). */
-{
-  const expectedOffset = count(source, 'THREAD_FOCUS_BAND_OFFSET');
-  const actualOffset = count(threadDerived, 'THREAD_FOCUS_BAND_OFFSET');
-  if (expectedOffset === null) failures.push('bande de focus du fil : « THREAD_FOCUS_BAND_OFFSET » introuvable dans focus-curve.ts');
-  else if (actualOffset === null) failures.push('bande de focus du fil : « THREAD_FOCUS_BAND_OFFSET » introuvable dans reading-mode/perspective.ts');
-  else if (expectedOffset !== actualOffset) failures.push(`bande de focus du fil : amont ${expectedOffset}, dérivée ${actualOffset}`);
-}
-
-/**
- * LES VALEURS du variant `thread` sont vérifiées par
- * `src/lib/reading-mode/perspective.test.ts` — même partition des
- * responsabilités que la PARTIE 1 : ce script compare des CONSTANTES, le test
- * bun compare des SORTIES.
- */
-
-/**
- * `THREAD_FOCUS_BAND_HYSTERESIS` (#5648) — l'AMONT reste `focus-curve.ts`
- * (comme `THREAD_FOCUS_BAND_OFFSET` juste au-dessus), mais son AVAL a changé
- * de fichier : `perspective.ts` est GELÉ (sans appelant de production
- * depuis #5648), l'hystérésis vit désormais dans `reading-mode/election.ts`.
+ * `THREAD_FOCUS_BAND_HYSTERESIS` (#5648) — l'AMONT est `focus-curve.ts`,
+ * l'AVAL `reading-mode/election.ts`.
  */
 {
   const expectedHysteresis = count(source, 'THREAD_FOCUS_BAND_HYSTERESIS');
@@ -848,8 +803,7 @@ console.log(
     ' les valeurs sont gardées par law.test.ts).' +
     `\n  La rangée plate du Fil est conforme à FocalMetrics.swift` +
     ` (${FOCAL_MAPPINGS.length + 1 + SCENE_MS_MAPPINGS.length} cotes).` +
-    `\n  La perspective du Fil est conforme au variant thread de focus-curve.ts` +
-    ` (${THREAD_MAPPINGS.length + 2} constantes ; les valeurs sont gardées par perspective.test.ts).` +
+    `\n  L'hystérésis de la bande de focus du Fil est conforme à focus-curve.ts (1 constante).` +
     `\n  L'élection du Fil est conforme à FocalScrollPerspective.swift` +
     ` (${PERSPECTIVE_MAPPINGS.length + CHIP_FILL_CASES.length} cotes ; les valeurs sont gardées par election.test.ts).` +
     `\n  La protection du Fil est conforme à BubbleBlurRevealLifecycle.swift` +

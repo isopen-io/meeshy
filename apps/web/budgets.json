@@ -1,9 +1,9 @@
 {
-  "role": "Les PLAFONDS de la v4. Les valeurs MESUREES vivent dans budgets-measured.json — ce fichier-ci n'en porte aucune, exactement comme apps/web/budgets.json dont il reprend la discipline.",
+  "role": "Les PLAFONDS de poids de l'application web (gzip -9) : scripts/measure-weight.mjs MESURE le build et compare à ces plafonds ; aucune mesure n'est écrite ici.",
   "read_by": [
     "apps/web/scripts/measure-weight.mjs"
   ],
-  "note": "Le modele de cout a CHANGE entre la v3 et la v4, et c'est la seule raison pour laquelle ces plafonds ne sont pas ceux du § 8.3. La v3 sert un DOCUMENT par ecran : le lecteur paie ~8 Ko a chaque ecran, a chaque session. La v4 sert UNE application : le lecteur paie une fois, puis plus rien tant que le hash ne bouge pas (service worker, variante A). Un plafond exprime par ECRAN n'a donc pas de sujet ici — celui qui compte est la PREMIERE PEINTURE, payee une fois.",
+  "note": "L'application est servie en UNE fois : le lecteur paie la premiere peinture, puis plus rien tant que le hash ne bouge pas (service worker, variante A). Un plafond exprime par ECRAN n'a donc pas de sujet ici — celui qui compte est la PREMIERE PEINTURE, payee une fois. (Le legacy Next.js, retire le 2026-09-24 avec #7668, servait un DOCUMENT par ecran, ~8 Ko a chaque ecran et a chaque session.)",
   "first_paint": {
     "subject": "document + feuille + modules que le document reference lui-meme, gzip -9. Les chunks d'ecran charges a la demande n'y sont pas : c'est ce que le decoupage par route achete.",
     "kb": {
@@ -1472,9 +1472,9 @@
       "pattern": "^assets/libsignal(-bridge-[A-Za-z0-9_-]+\\.js|_wasm_bg-[A-Za-z0-9_-]+\\.wasm)$",
       "dynamic_only": true,
       "kb": {
-        "value": 230,
-        "status": "MESUREE PAR #17114, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-11-09 (`bun run build` puis `node scripts/measure-weight.mjs`) : 228,72 Ko gzip -9 = le pont libsignal (la facade et la colle wasm-bindgen) + le binaire WASM de libsignal-protocol 0.106.2 (666 Ko bruts, opt-level z, LTO). Arrondi au Ko SUPERIEUR (229) + 1 Ko de marge, meme discipline que first_paint.kb. Telecharge a la PREMIERE operation chiffree seulement (import() differe de `loadLibsignalBridge()`), jamais dans la premiere peinture ; le WASM n'est pas non plus precache par le service worker (`globPatterns` ne nomme pas `wasm`)."
+        "value": 234,
+        "status": "DECISION PAR DEFAUT #18997 (2026-11-17), MESUREE PAR #18992 -- A CONFIRMER PAR LE PORTEUR",
+        "source": "PONT v2 (#18992, #18993, #18994, #18995) -- mesure de measure-weight.mjs le 2026-11-17 (`bun run build` puis `node scripts/measure-weight.mjs`) : 232,53 Ko gzip -9 = la facade (bail de session, erreurs typees et leur conduite) et la colle wasm-bindgen + le binaire WASM (690 719 o bruts, 231 893 o gzip -9) qui ajoute la signature et la verification XEdDSA d'un message arbitraire (preuve de liaison de l'enrolement), la registrationId distante d'une session, l'en-tete d'un premier message, les codes d'erreur et l'injection idempotente des cles de base. Le `code` des erreurs passe par un constructeur `Error` declare dans le pont et non par js-sys : mesure, `js_sys::Error` + `Reflect` coutaient 2,4 Ko gzip pour deux appels. Arrondi au Ko SUPERIEUR (233) + 1 Ko de marge, meme discipline que first_paint.kb. Le prototype de la contre-analyse mesurait 230,9 Ko (d'ou les 232 de la decision #18997) sans la facade du bail. Reste PARESSEUX : telecharge a la PREMIERE operation chiffree seulement (import() differe de `loadLibsignalBridge()`), jamais dans la premiere peinture ; le WASM n'est pas precache par le service worker (`globPatterns` ne nomme pas `wasm`). Rearbitrage vers ~240 si l'approbation par code (L9) fait entrer l'empreinte et l'accord X25519 (+6,3 Ko mesures par la contre-analyse). AVANT -- Mesure de measure-weight.mjs le 2026-11-09 : 228,72 Ko gzip -9 (pont v1, libsignal-protocol 0.106.2, 666 Ko bruts), plafond 230 (#17114, non arbitre)."
       }
     }
   },

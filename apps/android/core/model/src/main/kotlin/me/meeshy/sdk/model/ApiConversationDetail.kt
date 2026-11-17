@@ -3,35 +3,6 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Nested user inside a conversation participant — port of APIConversationUserNested (ConversationModels.swift). */
-@Serializable
-data class ApiConversationUserNested(
-    val id: String? = null,
-    val username: String? = null,
-    val displayName: String? = null,
-    val firstName: String? = null,
-    val lastName: String? = null,
-    val avatar: String? = null,
-    val isOnline: Boolean? = null,
-    val lastActiveAt: String? = null,
-)
-
-/** A user embedded in a conversation API response — port of APIConversationUser (ConversationModels.swift). */
-@Serializable
-data class ApiConversationUser(
-    val id: String,
-    val userId: String? = null,
-    val username: String? = null,
-    val displayName: String? = null,
-    val firstName: String? = null,
-    val lastName: String? = null,
-    val avatar: String? = null,
-    val isOnline: Boolean? = null,
-    val lastActiveAt: String? = null,
-    val type: String? = null,
-    val user: ApiConversationUserNested? = null,
-)
-
 /** Count of attachments on a message — port of APIMessageCount (ConversationModels.swift). */
 @Serializable
 data class ApiMessageCount(

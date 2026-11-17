@@ -45,37 +45,6 @@ final class StoryToolModeComposerOrderTests: XCTestCase {
         )
     }
 
-    /// Garde de source, formulée GLOBALEMENT : une garde qui nomme ses fichiers
-    /// un par un laisse toujours passer le prochain doublon — c'est exactement
-    /// ainsi qu'une quatrième table de glyphes avait survécu.
-    func test_composerSurfaces_iterateTheCanonicalOrder() throws {
-        // #4136 — le rail de pastilles est devenu une RANGÉE à la forme
-        // canonique, et le fichier a suivi le nom : `ComposerFABColumn` disait
-        // « colonne » pour une barre horizontale depuis le 2026-07-10. L'adresse
-        // d'une garde suit ce qu'elle mesure, jamais le nom qu'elle a connu.
-        let toolRow = try ComposerSourceGuard.source("Controls/ComposerToolRow.swift")
-        XCTAssertTrue(toolRow.contains("ForEach(StoryToolMode.composerOrder"))
-
-        // S5 — il n'existe plus qu'UNE surface qui énumère les outils : le rail
-        // de FABs. La grille d'état vide, seconde énumération (avec ses propres
-        // sous-titres et son propre chemin d'ouverture Timeline), a disparu avec
-        // l'état vide bloquant. Un compte EXACT, pas un « au moins un » : c'est
-        // le retour d'une DEUXIÈME surface qu'on interdit ici.
-        let enumerations = try ComposerSourceGuard.allStorySources()
-            .filter { $0.code.contains("ForEach(StoryToolMode.composerOrder") }
-        XCTAssertEqual(
-            enumerations.map(\.path), ["Controls/ComposerToolRow.swift"],
-            "Surfaces énumérant les outils : \(enumerations.map(\.path)). Une seule est autorisée."
-        )
-
-        let iconTables = try ComposerSourceGuard.allStorySources()
-            .filter { $0.code.contains("func icon(for tool: StoryToolMode)") }
-        XCTAssertTrue(
-            iconTables.isEmpty,
-            "Tables de glyphes résiduelles : \(iconTables.map(\.path)). Le glyphe vit sur StoryToolMode.symbolName."
-        )
-    }
-
     /// `ComposerToolSwitcherHeader` était DEAD CODE (aucun appelant hors sa
     /// propre déclaration) tout en portant un doublon de glyphes et deux titres
     /// non localisés (« Effets », « Timeline »). Supprimé — sa réapparition

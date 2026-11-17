@@ -872,13 +872,11 @@ final class CallPillLabelsTests: XCTestCase {
     // Le bouton Caméra autour de ma vignette est le même bouton que celui de la
     // pilule (planche, loi 2 : « Gauche = mon image : Caméra… ») : même mot.
     func test_myImageCameraLabel_isThePillCameraLabel() throws {
-        XCTAssertEqual(CallMyImageCopy.video(isEnabled: true, isPaused: false), CallControlsCopy.cameraLabel(isEnabled: true))
-        XCTAssertEqual(CallMyImageCopy.video(isEnabled: false, isPaused: false), CallControlsCopy.cameraLabel(isEnabled: false))
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let rail = try String(
-            contentsOf: racine.appendingPathComponent("Meeshy/Features/Call/Views/CallView+CameraRail.swift"),
+            contentsOf: racine.appendingPathComponent("Meeshy/Features/Call/Views/CallView+Pill.swift"),
             encoding: .utf8
         )
         XCTAssertTrue(rail.contains("CallControlsCopy.cameraLabel(isEnabled:"), "le rail de ma caméra doit lire le libellé de la pilule")

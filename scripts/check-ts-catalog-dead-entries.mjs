@@ -70,14 +70,14 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `GET /api/v1/l/:token` — atteinte par NAVIGATION DIRECTE du navigateur
   // (lien partagé), jamais par un appel `fetch` typé. Chemin `/l/${token}`
   // écrit à la main dans plusieurs sites de composition de lien partageable :
-  // `apps/web/lib/utils/link-parser.ts:116-117`,
-  // `apps/web/components/chat/message-with-links.tsx`.
+  // `legacy-web-final:apps/web/lib/utils/link-parser.ts:116-117`,
+  // `legacy-web-final:apps/web/components/chat/message-with-links.tsx`.
   'l.byToken',
   // `GET /api/v1/u/:username` — navigation directe via des liens `<Link
   // href={\`/u/${username}\`}>` écrits à la main dans des dizaines de sites
   // (profils, mentions), jamais via `API_ENDPOINTS.u.byUsername`. Exemples :
-  // `apps/web/components/common/bubble-message/MessageNameDate.tsx`,
-  // `apps/web/components/v2/MessageBubble.tsx`.
+  // `legacy-web-final:apps/web/components/common/bubble-message/MessageNameDate.tsx`,
+  // `legacy-web-final:apps/web/components/v2/MessageBubble.tsx`.
   'u.byUsername',
   // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée en production par le
   // SDK iOS (`ShareLinkService` → `GuestSessionsEndpoint.me`), hors du périmètre
@@ -572,6 +572,10 @@ const PENDING_CLIENT_ENTRIES = {
   // sonde silencieuse — le web n'en est pas un), et le web lit l'état d'une personne par le rattrapage et le direct.
   'me.deviceAlive': { issue: 18737, reason: 'POST /me/device/alive — la réponse du téléphone à la sonde silencieuse, appelée par iOS et Android seulement' },
   'relations.byUserIdPhoneReachability': { issue: 18737, reason: 'GET /relations/:userId/phone-reachability — l’état d’une personne, lu par iOS et Android ; le web suit le rattrapage et `phone:*`' },
+  // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
+  // les lots clients de la spécification (§ 10 : web lot 6, iOS lots 3-4, Android lot 5), portés par #18906.
+  'e2Ee.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le lot web de la confirmation par code' },
+  'e2Ee.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot web' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

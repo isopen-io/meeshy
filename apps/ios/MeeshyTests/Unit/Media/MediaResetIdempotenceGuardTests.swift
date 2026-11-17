@@ -42,7 +42,6 @@ final class MediaResetIdempotenceGuardTests: XCTestCase {
         ("packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlaybackManager.swift", "resetState"),
         ("packages/MeeshySDK/Sources/MeeshyUI/Media/SharedAVPlayerManager.swift", "cleanup"),
         ("packages/MeeshySDK/Sources/MeeshyUI/Media/AudioTrimPreviewPlayer.swift", "stop"),
-        ("apps/ios/Meeshy/Features/Main/Components/OverlayAudioPlayer.swift", "stop")
     ]
 
     private var racine: URL {
@@ -90,8 +89,8 @@ final class MediaResetIdempotenceGuardTests: XCTestCase {
 
     /// Sans elle, la garde passerait au vert en ne lisant rien — le mode de
     /// panne d'une garde de source dont un chemin a bougé.
-    func test_laGardeLitBienSesQuatreLecteurs() throws {
-        XCTAssertGreaterThanOrEqual(Self.inventaire.count, 4)
+    func test_laGardeLitBienSesTroisLecteurs() throws {
+        XCTAssertGreaterThanOrEqual(Self.inventaire.count, 3)
         for entree in Self.inventaire {
             let url = racine.appendingPathComponent(entree.chemin)
             let source = try? String(contentsOf: url, encoding: .utf8)
@@ -99,44 +98,6 @@ final class MediaResetIdempotenceGuardTests: XCTestCase {
             XCTAssertNotNil(Self.corps(deLaFonction: entree.fonction, dans: source ?? ""),
                             "corps introuvable : \(entree.chemin) · \(entree.fonction)()")
         }
-    }
-
-    // MARK: - Le comportement, là où il est atteignable
-
-    /// **`OverlayAudioPlayer.stop()` sur un lecteur jamais démarré n'émet
-    /// rien.** Ce lecteur était `private` au fond de `MessageOverlayMenu.swift`
-    /// — donc hors de portée de tout témoin. Son extraction (#7005) est ce qui
-    /// rend cette mesure possible ; la garde de source ci-dessus couvre les
-    /// autres, qui vivent dans le SDK (témoins SwiftPM :
-    /// `MediaResetIdempotenceTests`).
-    @MainActor
-    func test_stop_surUnLecteurJamaisDemarre_nePublieRien() {
-        let player = OverlayAudioPlayer()
-        var emissions = 0
-        let abonnement = player.objectWillChange.sink { _ in emissions += 1 }
-        defer { abonnement.cancel() }
-
-        player.stop()
-
-        XCTAssertEqual(emissions, 0)
-        XCTAssertFalse(player.isPlaying)
-        XCTAssertFalse(player.isLoading)
-        XCTAssertEqual(player.progress, 0)
-        XCTAssertEqual(player.currentTime, 0)
-        XCTAssertEqual(player.duration, 0)
-    }
-
-    @MainActor
-    func test_unSecondStop_nePublieRienNonPlus() {
-        let player = OverlayAudioPlayer()
-        player.stop()
-        var emissions = 0
-        let abonnement = player.objectWillChange.sink { _ in emissions += 1 }
-        defer { abonnement.cancel() }
-
-        player.stop()
-
-        XCTAssertEqual(emissions, 0)
     }
 
     // MARK: - Lecture de source

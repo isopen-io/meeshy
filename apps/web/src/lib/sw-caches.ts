@@ -7,7 +7,7 @@ import { SW_RECENT_MEDIA_CACHE } from './media/recent-media-cache-name';
  * rend AUSSI ce qu'un autre script y a écrit. Toute purge de l'application doit
  * donc nommer ce qu'elle POSSÈDE, et rien d'autre — c'est la frontière de
  * propriété que le legacy documentait déjà (`LEGACY_CACHE_NAMESPACE`,
- * `apps/web/utils/service-worker.ts`).
+ * `legacy-web-final:apps/web/utils/service-worker.ts`).
  *
  * Trois lecteurs partagent ce module, plutôt que trois copies du littéral :
  *  - `vite.config.ts` (§ VitePWA `runtimeCaching`), qui CRÉE ces seaux ;
@@ -38,12 +38,14 @@ export const SW_RUNTIME_CACHES = {
 export const SW_RUNTIME_CACHE_NAMES: readonly string[] = Object.values(SW_RUNTIME_CACHES);
 
 /**
- * LE SEAU DE `/config.js` (#10208) — la configuration du DÉPLOIEMENT, pas une
- * donnée de lecteur : hors de `SW_RUNTIME_CACHES`, donc ni la fin d'un compte
- * ni une mise à jour ne le purgent. Le purger ne ferait que priver le prochain
- * démarrage hors ligne de l'origine déclarée.
+ * L'ANCIEN SEAU DE `/config.js` (#10208), RETIRÉ (#18988). Il gardait un
+ * SCRIPT que tout code de l'origine pouvait réécrire et que la page exécutait
+ * à chaque chargement (contre-analyse du 2026-11-17, WEBX-01). La
+ * configuration est désormais une DONNÉE lue par une requête synchrone
+ * (`lib/api/runtime-config.ts`) qu'aucun seau ne garde : ce nom ne sert plus
+ * qu'à la purge de `public/sw-retired-caches.js`, qui en porte le JUMEAU.
  */
-export const SW_DEPLOYMENT_CONFIG_CACHE = 'deployment-config';
+export const SW_RETIRED_DEPLOYMENT_CONFIG_CACHE = 'deployment-config';
 
 /**
  * LE SEAU DES FICHIERS DE PACKS (#10149) — vignettes, contrats et chaînes

@@ -5,13 +5,6 @@ import Foundation
 /// entendre ce verbe-là).
 nonisolated enum ComposerRailCopy {
 
-    /// Ce que VoiceOver DIT d'une pastille — une phrase, jamais un chiffre nu.
-    /// « 3 » annoncé seul ne dit pas ce qu'il compte ; le libellé de la porte
-    /// dit déjà le verbe, la valeur dit la quantité POSÉE.
-    static func badgeValue(_ count: Int) -> String {
-        String(format: String(localized: "composer.rail.badge.a11y", bundle: .main), count)
-    }
-
     static var railLabel: String {
         String(localized: "composer.rail.leading.label",
                defaultValue: "Ajouter à la scène", bundle: .main)

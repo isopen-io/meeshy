@@ -58,3 +58,15 @@ export function kitMount(): {
 
   return { mount, render, act };
 }
+
+/**
+ * Ce qu'un lecteur d'écran trouve en parcourant un nœud : son texte, moins les
+ * sous-arbres `aria-hidden`. Un `aria-label` posé sur un `<span>` ou un `<div>` sans
+ * rôle n'y entre pas : ARIA l'interdit sur un élément générique, et VoiceOver comme
+ * NVDA l'ignorent.
+ */
+export function spokenText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+  if (!(node instanceof Element) || node.getAttribute('aria-hidden') === 'true') return '';
+  return Array.from(node.childNodes, spokenText).join('');
+}

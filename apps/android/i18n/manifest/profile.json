@@ -88,12 +88,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "a11y.back",
-          "androidName": "profile_back",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "profile.bio",
           "androidName": "profile_bio_label",
           "status": "adopted"
@@ -117,10 +111,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "profile_change_avatar",
-          "status": "android-only"
-        },
-        {
           "androidName": "profile_change_banner",
           "status": "android-only"
         },
@@ -136,34 +126,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "participantProfile.country",
-          "androidName": "profile_detail_country",
-          "status": "adopted"
-        },
-        {
-          "androidName": "profile_detail_regional_language",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.language.primary",
-          "androidName": "profile_detail_system_language",
-          "status": "adopted"
-        },
-        {
-          "androidName": "profile_detail_timezone",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
           "iosKey": "profile.display_name",
           "androidName": "profile_display_name_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "preview.e2ee.a11y",
-          "androidName": "profile_e2ee",
           "status": "adopted"
         },
         {
@@ -202,23 +166,9 @@
         },
         {
           "catalog": "app",
-          "iosKey": "settings.security.not_set",
-          "androidName": "profile_language_unset",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "profile.last_name",
           "androidName": "profile_last_name_label",
           "status": "adopted"
-        },
-        {
-          "androidName": "profile_last_seen",
-          "status": "android-only"
-        },
-        {
-          "androidName": "profile_member_since",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -338,12 +288,6 @@
           "catalog": "ui",
           "iosKey": "profile.toast.userUnblocked",
           "androidName": "profile_toast_user_unblocked",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "a11y.message.unknown_sender",
-          "androidName": "profile_unknown",
           "status": "adopted"
         },
         {

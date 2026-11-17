@@ -30,8 +30,6 @@ export const globalSearchQuerySchema = z.object({
   cursor: z.string().min(1).max(200).optional(),
 });
 
-export type GlobalSearchQuery = z.infer<typeof globalSearchQuerySchema>;
-
 /** Les formats qu'on cherche — le statut (humeur d'une heure) n'en fait pas partie. */
 export const GLOBAL_SEARCH_POST_TYPES = ['POST', 'REEL', 'STORY'] as const;
 
@@ -47,8 +45,6 @@ const postTypesSchema = z
   .transform((types) => [...new Set(types)]);
 
 export const postSearchQuerySchema = globalSearchQuerySchema.extend({ types: postTypesSchema });
-
-export type PostSearchQuery = z.infer<typeof postSearchQuerySchema>;
 
 export const messageSearchSenderSchema = z.object({
   id: z.string(),

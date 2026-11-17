@@ -71,34 +71,6 @@ public nonisolated struct ComposerFormatWording: Equatable, Sendable {
         }
     }
 
-    @MainActor public var draftResumeTitle: String {
-        switch noun {
-        case .story:
-            return String(localized: "story.draft.resume.title",
-                          defaultValue: "Reprendre votre story ?", bundle: .module)
-        case .post:
-            return String(localized: "story.draft.resume.title.post",
-                          defaultValue: "Reprendre votre post ?", bundle: .module)
-        case .reel:
-            return String(localized: "story.draft.resume.title.reel",
-                          defaultValue: "Reprendre votre réel ?", bundle: .module)
-        }
-    }
-
-    @MainActor public func draftResumeAccessibility(slideCount: Int) -> String {
-        switch noun {
-        case .story:
-            return String(localized: "story.draft.resume.a11y",
-                          defaultValue: "Brouillon de story, \(slideCount) slide(s)", bundle: .module)
-        case .post:
-            return String(localized: "story.draft.resume.a11y.post",
-                          defaultValue: "Brouillon de post, \(slideCount) slide(s)", bundle: .module)
-        case .reel:
-            return String(localized: "story.draft.resume.a11y.reel",
-                          defaultValue: "Brouillon de réel, \(slideCount) slide(s)", bundle: .module)
-        }
-    }
-
     /// « Mes sons » vide : un son se capte depuis toute publication qui porte
     /// un audio original, story, post ou réel (`PostService.createPost`).
     @MainActor public var soundLibraryEmptyMine: String {

@@ -11,7 +11,8 @@ import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
 import { assertPlaintextAdmitted, E2EE_CONTENT_PLACEHOLDER, type EncryptionRegime } from './e2eePlaintextAdmission';
 import { admitSendUnderRegime } from './e2eeSendAdmission';
-import { persistAdmittedEnvelopes } from './e2eeEnvelopePersistence';
+import { createMessageWithEnvelopes } from './e2eeEnvelopePersistence';
+import { E2EE_ROW_ORIGINAL_LANGUAGE } from './e2eeRelayPayload';
 import { atRestModeOf, sealsAtRest, sealTextAtRest } from './atRestWrite';
 import { isSealedAtRest, isServerAtRestMode, revealAtRestWithQuote, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
 import { HYBRID_DEVICE_LAYER_METADATA_KEY, LIBSIGNAL_PROTOCOL, type E2EEDeviceLayerRequest, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
@@ -292,7 +293,7 @@ export class MessageProcessor {
     sticker?: unknown;
     /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
     attachmentReplyTo?: unknown;
-    /** Envoi libsignal par appareil (#3706) : admis par `admitSendUnderRegime`, rangé par `persistAdmittedEnvelopes`. */
+    /** Envoi libsignal par appareil (#3706) : admis par `admitSendUnderRegime`, rangé avec sa ligne par `createMessageWithEnvelopes`. */
     e2eeRelay?: E2EERelayRequest;
     /** Couche appareil d'un envoi hybride (#14369) : admise comme `e2eeRelay`, à côté du clair scellé au repos. */
     deviceLayerRelay?: E2EEDeviceLayerRequest;
@@ -412,7 +413,8 @@ export class MessageProcessor {
       conversationId: data.conversationId,
       senderId: data.senderId,
       content: encryptionContext.isEncrypted ? (relay && !deviceLayer ? E2EE_CONTENT_PLACEHOLDER : '') : processedContent.trim(),
-      originalLanguage: data.originalLanguage,
+      // GW-12 (#18906) — en e2ee, la langue déclarée ne s'écrit pas : la ligne porte une constante.
+      originalLanguage: endToEnd ? E2EE_ROW_ORIGINAL_LANGUAGE : data.originalLanguage,
       messageType: data.messageType || 'text',
       messageSource: data.messageSource || 'user',
       replyToId: data.replyToId,
@@ -469,10 +471,9 @@ export class MessageProcessor {
 
     let message: Message;
     let isDuplicate = false;
-    try {
-      message = await performanceLogger.withTiming(
-        'messaging.prismaMessageCreate',
-        () => this.prisma.message.create({
+    // GW-05 (#18906) — un envoi relayé écrit sa ligne ET ses enveloppes dans UNE
+    // transaction : la déduplication ci-dessous ne voit jamais l'une sans les autres.
+    const writeMessageRow = (db: Pick<Prisma.TransactionClient, 'message'>) => db.message.create({
           data: messageData,
           include: {
             sender: {
@@ -519,7 +520,11 @@ export class MessageProcessor {
               }
             }
           }
-        }),
+        });
+    try {
+      message = await performanceLogger.withTiming(
+        'messaging.prismaMessageCreate',
+        () => (relay ? createMessageWithEnvelopes(this.prisma, { writeMessage: writeMessageRow, relay }) : writeMessageRow(this.prisma)),
         corr
       );
     } catch (e) {
@@ -576,8 +581,6 @@ export class MessageProcessor {
     }
 
     const corrWithMsg = { ...corr, messageId: message.id };
-
-    if (relay) await persistAdmittedEnvelopes(this.prisma, { message, relay });
 
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await performanceLogger.withTiming(

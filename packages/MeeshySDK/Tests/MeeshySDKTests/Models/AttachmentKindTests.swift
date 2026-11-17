@@ -140,4 +140,39 @@ struct AttachmentKindTests {
         #expect(!AttachmentKind.pdf.hasTimebasedTrack)
         #expect(!AttachmentKind.other.hasTimebasedTrack)
     }
+
+    // MARK: - Présentation (témoin repris d'AttachmentDisplayTests, retiré avec AttachmentDisplay)
+
+    @Test("each kind exposes a non-empty symbol, hex tint and short label")
+    func every_kind_has_a_complete_presentation() {
+        for kind in AttachmentKind.allCases {
+            #expect(!kind.sfSymbolName.isEmpty, "sfSymbolName for \(kind)")
+            #expect(!kind.hexTintColor.isEmpty, "hexTintColor for \(kind)")
+            #expect(!kind.shortLabel.isEmpty, "shortLabel for \(kind)")
+        }
+    }
+
+    @Test("pinned symbols, tints and labels")
+    func pinned_presentation() {
+        #expect(AttachmentKind.image.sfSymbolName == "camera.fill")
+        #expect(AttachmentKind.image.hexTintColor == "4ECDC4")
+        #expect(AttachmentKind.video.sfSymbolName == "video.fill")
+        #expect(AttachmentKind.video.hexTintColor == "FF6B6B")
+        #expect(AttachmentKind.audio.sfSymbolName == "waveform")
+        #expect(AttachmentKind.audio.hexTintColor == "9B59B6")
+        #expect(AttachmentKind.pdf.sfSymbolName == "doc.fill")
+        #expect(AttachmentKind.pdf.shortLabel == "PDF")
+        #expect(AttachmentKind.spreadsheet.sfSymbolName == "tablecells.fill")
+        #expect(AttachmentKind.spreadsheet.shortLabel == "Excel")
+        #expect(AttachmentKind.document.sfSymbolName == "doc.text.fill")
+        #expect(AttachmentKind.document.shortLabel == "Word")
+        #expect(AttachmentKind.presentation.sfSymbolName == "chart.bar.doc.horizontal.fill")
+        #expect(AttachmentKind.presentation.shortLabel == "PowerPoint")
+        #expect(AttachmentKind.archive.sfSymbolName == "doc.zipper")
+        #expect(AttachmentKind.code.sfSymbolName == "curlybraces")
+        #expect(AttachmentKind.other.sfSymbolName == "paperclip")
+        #expect(AttachmentKind(mimeType: "image/png").sfSymbolName == "camera.fill")
+        #expect(AttachmentKind(mimeType: "application/pdf").sfSymbolName == "doc.fill")
+        #expect(AttachmentKind(mimeType: "application/octet-stream").sfSymbolName == "paperclip")
+    }
 }

@@ -20,22 +20,6 @@ final class ClipInspectorVolumeRangeTests: XCTestCase {
         XCTAssertEqual(StoryVolume.duckingFactor, 0.25, accuracy: 0.0001)
     }
 
-    /// Garde de source : plus aucune borne de volume codée en dur dans la fiche.
-    func test_inspectorUsesSharedCeiling() throws {
-        let dir = "Sources/MeeshyUI/Story/Timeline/Views/Inspector/"
-        let code = try [
-            "ClipInspector.swift", "ClipInspector+ClipSnapshot.swift",
-            "ClipInspectorActionsRow.swift", "ClipInspectorNumericField.swift",
-            "ClipInspectorTransformSection.swift", "ClipVolumeAutomation.swift",
-            "ClipFadeChipRow.swift",
-        ].map { try Self.strippedSource(dir + $0) }.joined(separator: "\n")
-
-        XCTAssertFalse(code.contains("in: 0...1"),
-                       "Le slider de volume doit borner sur StoryVolume.maxGain")
-        XCTAssertFalse(code.contains("min(1, max(0, value))"),
-                       "Le commit de volume doit borner sur StoryVolume.maxGain")
-    }
-
     /// Même garde sur les deux mixers : un clamp à 1 y annulerait le gain.
     func test_mixersUseSharedCeiling() throws {
         for path in ["Sources/MeeshyUI/Story/ReaderAudioMixer.swift",

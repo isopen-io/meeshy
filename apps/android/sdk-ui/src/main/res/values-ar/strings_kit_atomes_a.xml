@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atomes du kit K40 bouton, K45 médaillon, K55 touche de raccourci (lot #18883). -->
+    <string name="kit_button_busy">قيد التنفيذ</string>
+    <string name="kit_button_deferred">سيُرسل عند عودة الشبكة</string>
+    <string name="kit_medallion_locked">مقفل</string>
+    <string name="kit_key_spoken_prefix">اختصار</string>
+    <string name="kit_key_command">Command</string>
+    <string name="kit_key_control">Control</string>
+    <string name="kit_key_shift">Shift</string>
+    <string name="kit_key_option">Option</string>
+    <string name="kit_key_alt">Alt</string>
+    <string name="kit_key_enter">إدخال</string>
+    <string name="kit_key_escape">Esc</string>
+    <string name="kit_key_space">مسافة</string>
+    <string name="kit_key_tab">Tab</string>
+    <string name="kit_key_delete">حذف</string>
+    <string name="kit_key_up">السهم لأعلى</string>
+    <string name="kit_key_down">السهم لأسفل</string>
+    <string name="kit_key_left">السهم لليسار</string>
+    <string name="kit_key_right">السهم لليمين</string>
+</resources>

@@ -2,16 +2,6 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-final class MockPostSearch: PostSearchProviding, @unchecked Sendable {
-    var result: GlobalSearchLeg<GlobalSearchPostResult> = .served([])
-    private(set) var callCount = 0
-
-    func searchPosts(query: String, reader: MeeshyUser?) async -> GlobalSearchLeg<GlobalSearchPostResult> {
-        callCount += 1
-        return result
-    }
-}
-
 final class PostSearchServiceTests: XCTestCase {
 
     private func page(_ items: String) -> PaginatedAPIResponse<[APIPost]> {

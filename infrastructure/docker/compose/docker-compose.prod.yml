@@ -602,7 +602,10 @@ services:
       - "traefik.http.routers.frontend.rule=Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.frontend.middlewares=compress@file"
+      # #18986 — HSTS, `nosniff`, anti-cadrage et `Referrer-Policy` sur l'origine
+      # qui tiendra les clés E2EE du navigateur ; la CSP, elle, voyage avec
+      # l'image (`apps/web/nginx.conf`).
+      - "traefik.http.routers.frontend.middlewares=secure-headers@file,compress@file"
       - "traefik.http.services.frontend.loadbalancer.server.port=3400"
       - "traefik.http.routers.frontend.priority=1"
 

@@ -19,18 +19,6 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Outils du document", bundle: .main)
     }
 
-    /// **Ce que la rangée basse annonce depuis qu'elle n'a plus d'outils** (#5082).
-    ///
-    /// Les outils sont passés en colonne sous l'avatar ; la rangée ne porte plus
-    /// que la puce de lieu et la capsule de langue — d'où l'on publie, dans
-    /// quelle langue. Deux éléments s'annonçaient « Outils du document » le
-    /// temps d'une mesure : celui qui les porte, et celui qui ne les portait
-    /// plus. **Une étiquette qui survit à son contenu désigne le mauvais.**
-    static var publicationAccessories: String {
-        String(localized: "composer.document.a11y.publicationAccessories",
-               defaultValue: "Lieu et langue de la publication", bundle: .main)
-    }
-
     /// Le libellé du ruban de vignettes (B, #3883) — clé neuve, sur le patron
     /// de `toolRow` : `composer.a11y.removeAttachment` sert déjà le BOUTON de
     /// retrait de chaque vignette, mais aucune clé ne nommait le conteneur.
@@ -67,31 +55,6 @@ nonisolated enum ComposerDocumentCopy {
     static var background: String {
         String(localized: "composer.document.a11y.background",
                defaultValue: "Couleur de fond", bundle: .main)
-    }
-
-    /// **Le mot PEINT sur la tuile, distinct de celui que lit VoiceOver
-    /// (#4071).**
-    ///
-    /// « Couleur de fond » occupe à lui seul près du double d'une tuile
-    /// voisine, et la rangée n'a pas cette place : mesuré au simulateur, il
-    /// repoussait trois entrées hors champ à taille nominale. « Fond » est le
-    /// mot du document — la vue `1b` étiquette ce plan « fond · plan bg », et
-    /// la rangée de la scène le nomme déjà ainsi.
-    ///
-    /// La forme longue ne DISPARAÎT pas : elle reste l'étiquette
-    /// d'accessibilité, là où la place ne coûte rien et où le contexte manque
-    /// le plus. Raccourcir les deux aurait échangé un défaut de disposition
-    /// contre un défaut d'accessibilité.
-    ///
-    /// **La clé est de la famille `composer.attach.*`, et pas d'une famille
-    /// neuve.** La bascule de fond est une tuile de CETTE rangée : lui ouvrir
-    /// `composer.document.tool.*` aurait recréé la famille parallèle que
-    /// `test_lesLibellesDOutils_reutilisentLaFamilleDattacheDejaTraduite`
-    /// existe pour interdire — six libellés dupliqués, deux traductions à
-    /// faire diverger.
-    static var backgroundShort: String {
-        String(localized: "composer.attach.background",
-               defaultValue: "Fond", bundle: .main)
     }
 
     /// **Clé neuve (T2.2), sur le patron de `toolRow` juste au-dessus.** Ne

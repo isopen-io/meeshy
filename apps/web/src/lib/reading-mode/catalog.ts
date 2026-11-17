@@ -43,11 +43,6 @@ const SUBTITLE_KEYS = {
   bubbles: 'readingMode.bubbles.subtitle',
 } as const satisfies Readonly<Record<ConversationReadingMode, InterfaceCatalogKey>>;
 
-/** Le titre d'un mode dans la langue d'interface — « Focal », « Résumé »… */
-export function readingModeTitle(mode: ConversationReadingMode, language: InterfaceLanguage = currentInterfaceLanguage()): string {
-  return translate(language, TITLE_KEYS[mode]);
-}
-
 /**
  * Le Résumé Vivant EST rendu par la v3.1 depuis #5695
  * (`THREAD_RENDERABLE_MODES` de `decision.ts` le porte) : la ligne passe

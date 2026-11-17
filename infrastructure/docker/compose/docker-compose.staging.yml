@@ -718,7 +718,9 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy-staging-edge"
       - "traefik.http.routers.frontend-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.frontend-staging.middlewares=compress@file"
+      # #18986 — mêmes en-têtes de transport que la production (HSTS, `nosniff`,
+      # anti-cadrage, `Referrer-Policy`) ; la CSP voyage avec l'image.
+      - "traefik.http.routers.frontend-staging.middlewares=secure-headers@file,compress@file"
       - "traefik.http.routers.frontend-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend-staging.loadbalancer.server.port=3400"

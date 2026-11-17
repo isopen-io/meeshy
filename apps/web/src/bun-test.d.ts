@@ -112,6 +112,14 @@ declare const __BENCH__: number;
 declare const __SHELL__: boolean;
 
 /**
+ * `__RUNTIME_CONFIG__` — `true` quand le bundle lit `/config.json` au
+ * démarrage (#18988) : le web nu. `false` dans la coque (son origine est
+ * celle de son build) et sous `bun test` (`bunfig.toml`), où aucun témoin ne
+ * doit partir sur le réseau en important `src/lib/api/config.ts`.
+ */
+declare const __RUNTIME_CONFIG__: boolean;
+
+/**
  * `__FIXTURES__` — `false` sous `VITE_DATA_SOURCE=gateway`, `true` partout
  * ailleurs (revue #5815). Même mécanique que `__SHELL__` : un littéral posé
  * par `vite.config.ts`, fourni sous `bun test` par `bunfig.toml`.

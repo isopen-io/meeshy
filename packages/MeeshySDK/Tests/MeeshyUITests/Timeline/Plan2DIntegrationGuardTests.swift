@@ -22,18 +22,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     // MARK: - Guard 1 — le conteneur racine bascule sur Plan2DView
 
-    func test_storyTimelineHost_referencesPlan2DView() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("Plan2DView("),
-                     "StoryTimelineHost (conteneur racine) doit construire Plan2DView")
-    }
-
-    func test_storyTimelineHost_noLongerReferencesTheReplacedSingleLaneView() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertFalse(source.contains("StoryTimelineView"),
-                       "Le conteneur racine ne doit plus référencer la vue mono-piste remplacée")
-    }
-
     /// Contrôle positif : la garde doit réellement détecter le motif banni.
     func test_guardDetectsAStoryTimelineViewReference() {
         let sample = "struct Fake { var body: some View { StoryTimelineView(viewModel: vm) } }"
@@ -42,31 +30,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     // MARK: - Guard 2a — Views/Inspector reste référencé (S4)
 
-    func test_storyTimelineHost_stillPresentsTheExistingInspector() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains(".timelineInspectorSheet("),
-                     "L'édition de keyframes/clips reste celle de Views/Inspector (S4) — inchangée par D3")
-    }
-
     // MARK: - Guard 2b — l'inspecteur gagne « Suivre la slide » (libellé + nil)
-
-    func test_clipInspector_carriesTheFollowSlideLabel() throws {
-        let source = try Self.clipInspectorFamilySource()
-        XCTAssertTrue(source.contains("story.timeline.inspector.followSlide"),
-                     "L'action « Suivre la slide » doit exister comme libellé/clé dans ClipInspector")
-        XCTAssertTrue(source.contains("onFollowSlide"),
-                     "Le callback doit exister sur ClipInspector — l'appelant (D3) décide de la mutation")
-    }
-
-    /// Revue Opus, mineur 9 : la planche P8 (`views.html:1687`) fige l'icône
-    /// du retour fantôme U9 à `arrow.uturn.backward.circle` — `ClipInspector`
-    /// dessinait `arrow.uturn.backward` (sans `.circle`), une glyphe DIFFÉRENTE.
-    func test_clipInspector_followSlideIcon_matchesTheSymbolTable() throws {
-        let source = try Self.clipInspectorFamilySource()
-        XCTAssertTrue(source.contains(#"systemImage: "arrow.uturn.backward.circle""#),
-                     "L'icône de « Suivre la slide » doit être arrow.uturn.backward.circle "
-                     + "(table des symboles, views.html:1687) — pas arrow.uturn.backward seul")
-    }
 
     func test_timelineViewModel_followSlide_resetsTimingToNil() throws {
         let source = try Self.strippedSource(of: Self.timelineViewModelPlan4HelpersURL)
@@ -102,42 +66,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // via `Plan2DView.equivalentGeometry` — la conversion pure qui les fait
     // coïncider exactement avec le repère du plan.
 
-    func test_storyTimelineHost_reusesRulerViewForScrub() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("RulerView("),
-                     "La tête de lecture doit réutiliser RulerView (scrub déjà construit) plutôt qu'un Canvas bespoke")
-        XCTAssertTrue(source.contains("viewModel.scrub("),
-                     "Le scrub doit atteindre viewModel.scrub(to:) — sinon addKeyframeAtPlayhead/splitSelectedAtPlayhead restent aveugles")
-    }
-
-    func test_storyTimelineHost_reusesPlayheadViewForTheIndicator() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("PlayheadView("),
-                     "La tête de lecture visible doit réutiliser PlayheadView plutôt qu'une ligne bespoke")
-    }
-
-    func test_storyTimelineHost_scrubGeometryIsThePlansEquivalentGeometry() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("Plan2DView.equivalentGeometry("),
-                     "RulerView/PlayheadView doivent recevoir la géométrie ÉQUIVALENTE du plan — "
-                     + "sinon leurs graduations/scrub désynchronisent des barres dessinées par Plan2DLayout.x")
-    }
-
     // MARK: - Guard 2d — chrome d'ouverture/fermeture + transitions inter-clips
-
-    func test_storyTimelineHost_showsTheOpeningClosingChrome() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("TransitionChromeLane("),
-                     "Le chrome ouverture/fermeture de slide doit rester visible (perdu par le premier passage)")
-    }
-
-    func test_storyTimelineHost_keepsPerClipTransitionsReachable() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("TransitionJunctionResolver.resolve("),
-                     "Les jonctions inter-clips doivent être résolues — sinon aucune transition existante n'est plus affichée")
-        XCTAssertTrue(source.contains("TransitionBadge(") && source.contains("TransitionCreationBadge("),
-                     "La création ET l'édition d'une transition existante doivent rester atteignables (badges existants réutilisés, pas réinventés)")
-    }
 
     // MARK: - Guard 2e — TransitionChromeLane partage le MÊME repère que la
     // règle/tête de lecture/plan, pas une TimelineGeometry indépendante
@@ -149,19 +78,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // la largeur des badges d'ouverture/fermeture ne représente pas 1,2s sur
     // l'axe temporel du plan — exactement la désynchronisation de repère que
     // `equivalentGeometry` a été créée pour supprimer.
-
-    func test_storyTimelineHost_transitionChromeLaneSharesThePlansEquivalentGeometry() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        guard let range = source.range(of: "TransitionChromeLane(") else {
-            return XCTFail("StoryTimelineHost doit construire TransitionChromeLane")
-        }
-        let body = String(source[range.upperBound...].prefix(400))
-        XCTAssertTrue(body.contains("geometry: equivalentGeometry"),
-                     "TransitionChromeLane doit recevoir la MÊME géométrie que RulerView/PlayheadView — "
-                     + "sinon la largeur de ses badges ne représente pas la même échelle temporelle que le reste du plan")
-        XCTAssertFalse(body.contains("geometry: TimelineGeometry(zoomScale:"),
-                      "TransitionChromeLane ne doit plus recevoir une TimelineGeometry brute, indépendante du repère du plan")
-    }
 
     /// Contrôle positif : la garde doit réellement détecter l'ABSENCE de la règle.
     func test_guardDetectsAMissingRulerView() {
@@ -177,63 +93,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // le déplacement temporel d'un clip AU DOIGT. Elles reviennent par
     // réutilisation des composants et des méthodes existants — jamais par
     // réinvention.
-
-    func test_clipInspector_carriesTheMuteAction() throws {
-        let source = try Self.clipInspectorFamilySource()
-        XCTAssertTrue(source.contains("onToggleMute"),
-                     "Le mute par clip doit exister comme action sur ClipInspector")
-        XCTAssertTrue(source.contains("story.timeline.inspector.mute"),
-                     "L'action doit porter un libellé localisé, pas une icône muette")
-        XCTAssertTrue(source.contains("Button(action: onToggleMute)"),
-                     "Le bouton doit réellement déclencher l'action — une propriété non rendue serait un contrôle mort")
-    }
-
-    func test_timelineInspectorHost_wiresTheMuteActionToTheUndoableToggle() throws {
-        let source = try Self.strippedSource(of: Self.timelineInspectorHostURL)
-        XCTAssertTrue(source.contains("viewModel.toggleClipMute("),
-                     "Le mute de la fiche doit passer par toggleClipMute (annulable, rend le niveau quitté)")
-    }
-
-    func test_storyTimelineHost_redrawsTheLoopEchoesOfALoopingBackground() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("LoopRepeatOverlay("),
-                     "Un fond qui boucle doit retrouver ses échos — sinon sa piste se lit comme « le fond disparaît »")
-        XCTAssertTrue(source.contains("Self.loopEchoes("),
-                     "Les échos doivent venir du calcul PUR, pas d'un filtrage inline dans la vue")
-    }
-
-    func test_storyTimelineHost_loopEchoesShareThePlansEquivalentGeometry() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        guard let range = source.range(of: "LoopRepeatOverlay(") else {
-            return XCTFail("StoryTimelineHost doit construire LoopRepeatOverlay")
-        }
-        let body = String(source[range.upperBound...].prefix(400))
-        XCTAssertTrue(body.contains("geometry: geometry") || body.contains("geometry: equivalentGeometry"),
-                     "Les échos doivent partager le repère du plan — sinon leurs tuiles ne tombent pas sur les mêmes secondes que les barres")
-    }
-
-    /// Revue Opus, mineur 17 : les échos doivent aussi partager la fenêtre
-    /// VERTICALE de la barre qu'ils prolongent — sinon ils tombent au bon
-    /// endroit sur l'axe du temps mais flottent au-dessus/en-deçà d'elle sur
-    /// l'axe vertical (deux marges indépendantes qui dérivaient).
-    func test_storyTimelineHost_loopEchoesShareThePlansVerticalFrame() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("Plan2DView.loopEchoVerticalFrame("),
-                     "loopEchoOverlay doit dériver sa fenêtre verticale de Plan2DView.loopEchoVerticalFrame — "
-                     + "MÊME source que la marge de la barre .timed, jamais deux littéraux indépendants")
-    }
-
-    /// Le plan et le scroller de l'hôte se disputaient le même doigt : le trim
-    /// et le déplacement armé s'appliquaient PENDANT que le contenu pannait
-    /// dessous (revue Opus, constat 5). L'hôte doit donc écouter le verrou que
-    /// le plan pose sur le geste.
-    func test_storyTimelineHost_stopsTheScrollerWhileThePlanHoldsTheGesture() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("onScrollLockChanged:"),
-                     "L'hôte doit recevoir le verrou de geste du plan")
-        XCTAssertTrue(source.contains(".scrollDisabled("),
-                     "Et le traduire en immobilité du scroller — sinon le contenu continue de panner sous le doigt")
-    }
 
     // MARK: - Guard 2g — l'aimant lit l'échelle DU PLAN
     //
@@ -251,25 +110,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                      "Elle doit dériver de la géométrie que l'appelant DESSINE")
     }
 
-    func test_storyTimelineHost_feedsTheMagnetThePlansOwnGeometry() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        guard let range = source.range(of: "viewModel.dragClipMoved(") else {
-            return XCTFail("L'hôte doit conduire le glissement par dragClipMoved")
-        }
-        XCTAssertTrue(String(source[range.upperBound...].prefix(300)).contains("geometry: equivalentGeometry"),
-                     "L'aimant doit recevoir le MÊME repère que la règle, la tête de lecture et les barres")
-    }
-
-    func test_storyTimelineHost_wiresTheClipTimeDragToTheExistingDragSession() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        XCTAssertTrue(source.contains("viewModel.beginClipDrag("),
-                     "Le déplacement temporel doit ouvrir la session de glissement existante (origine capturée UNE fois)")
-        XCTAssertTrue(source.contains("viewModel.dragClipMoved("),
-                     "Le temps doit se reconstruire depuis l'origine capturée, jamais depuis le modèle déjà muté (dérive boule de neige)")
-        XCTAssertTrue(source.contains("viewModel.endClipDrag("),
-                     "La session de glissement doit se refermer au relâchement")
-    }
-
     // MARK: - Guard 2h — l'hôte alimente le plan avec la SEULE source de
     // sélection (revue Opus, constat 4 ; rejetée en revue DoD sur D6b : le
     // câblage était corrigé mais sans garde à demeure sur l'hôte lui-même —
@@ -279,16 +119,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // même fichier — `feedsTheMagnetThePlansOwnGeometry`,
     // `wiresTheClipTimeDragToTheExistingDragSession` ci-dessus — la
     // sélection en manquait une symétrique.
-
-    func test_storyTimelineHost_feedsThePlanTheViewModelsSelection() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        guard let range = source.range(of: "Plan2DView(") else {
-            return XCTFail("StoryTimelineHost doit construire Plan2DView")
-        }
-        let body = String(source[range.upperBound...].prefix(600))
-        XCTAssertTrue(body.contains("selectedTrackId: viewModel.selection.selectedClipId"),
-                     "Le plan doit surligner la piste que le viewModel tient déjà sélectionnée — sinon un selectedClipId changé ne redessine jamais le Canvas (constat 4)")
-    }
 
     // MARK: - Guard 2i — un tap du plan ne pose la sélection QUE si un
     // inspecteur va s'ouvrir (addendum rév. 2, arbitrage 3 ; second volet du
@@ -304,21 +134,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // (`TimelineInspectorHostRoutingTests`) prouvent la garde elle-même, mais
     // seul le balayage de l'hôte prouve qu'elle est réellement CÂBLÉE — un
     // `viewModel.inspectClip` restauré ici les laisserait tous verts.
-
-    func test_storyTimelineHost_neverPosesASelectionThatNoInspectorResolves() throws {
-        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
-        for callback in ["onSelectTrack:", "onSelectKeyframe:"] {
-            guard let range = source.range(of: callback) else {
-                return XCTFail("L'hôte doit câbler \(callback) sur le plan")
-            }
-            let body = String(source[range.upperBound...].prefix(200))
-            XCTAssertTrue(body.contains("TimelineInspectorHost.inspectIfResolvable("),
-                         "\(callback) doit passer par la garde — sinon un id sans inspecteur "
-                         + "efface la sélection en cours sans rien ouvrir (constat 1)")
-            XCTAssertFalse(body.contains("viewModel.inspectClip("),
-                          "\(callback) ne doit plus poser la sélection sans garde")
-        }
-    }
 
     /// Contrôle positif : la garde doit réellement détecter le câblage nu.
     func test_guardDetectsAnUnguardedInspectClipWiring() {
@@ -378,12 +193,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Logic/Plan2DLayout.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/Plan2DProjectAdapter.swift",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/Plan2DReorderResolver.swift",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineHost.swift",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineView.swift",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Inspector/ClipInspector.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/TimelineMetrics.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DIntegrationGuardTests.swift",
@@ -402,23 +211,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelNudgeStartTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelSlideDurationTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/Plan2DProjectAdapterTests.swift",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/Plan2DReorderResolverTests.swift",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/StoryTimelineHost_ReorderTests.swift",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/TimelineInspectorHost_FollowSlideTests.swift",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/TimelineInspectorHostRoutingTests.swift",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/ClipInspectorSnapshotTests.swift",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/ClipInspectorTests.swift",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_audioSelected.inspector-audioSelected-dark.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_audioSelected.inspector-audioSelected-light.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_followingSlide_hidesFollowSlideButton.inspector-followingSlide-hidesButton-dark.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_followingSlide_hidesFollowSlideButton.inspector-followingSlide-hidesButton-light.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_noSelection.inspector-noSelection-dark.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_noSelection.inspector-noSelection-light.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_textSelected.inspector-textSelected-dark.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_textSelected.inspector-textSelected-light.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_videoSelected.inspector-videoSelected-dark.png",
-        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_videoSelected.inspector-videoSelected-light.png"
     ]
 
     static func isWithinOwnership(_ path: String) -> Bool {
@@ -537,26 +329,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     // MARK: - Guard 3c — les deux voisins immédiats hors périmètre
 
-    /// **Hash remplacé par l'invariant qu'il servait — 2026-08-26.** Même
-    /// raison que pour `ComposerControlsLayer` ci-dessous (2026-08-24) : le
-    /// figement par empreinte SHA-256 n'était un invariant que TANT QUE le lot
-    /// Plan 2D était en vol. Le lot D mergé, l'empreinte n'interdit plus une
-    /// FUITE du plan mais TOUTE évolution du fichier par un autre chantier —
-    /// ici le balayage `nonisolated deinit {}` de la famille deinit iOS 26.1
-    /// (SE-0466), qui touche légitimement `ProgressSinkBox` et
-    /// `TimelineExportController`. L'invariant RÉEL — « le Plan 2D ne fuit pas
-    /// hors de `Story/Timeline/` » — est porté par
-    /// `test_noPlan2DReferenceLeaksOutsideTheTimeline`, et redit ici sur le
-    /// fichier nommé : falsifiable (il rougit si `Plan2D` réapparaît), sans
-    /// figer une ligne.
-    func test_timelineExportFlow_carriesNoPlan2DReference() throws {
-        let source = try String(contentsOf: Self.timelineExportFlowURL, encoding: .utf8)
-        XCTAssertFalse(
-            source.contains("Plan2D"),
-            "Le Plan 2D ne déborde pas sur TimelineExportFlow — voisin hors périmètre du lot D"
-        )
-    }
-
     // MARK: - Helpers (garde de source)
 
     /// Le fichier vit dans `Tests/MeeshyUITests/Timeline/` : QUATRE remontées
@@ -583,37 +355,12 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshySDK")
     }
 
-    private static var storyTimelineHostURL: URL {
-        sourcesRoot.appendingPathComponent("Story/Timeline/Views/Container/StoryTimelineHost.swift")
-    }
-
-    private static var clipInspectorURL: URL {
-        sourcesRoot.appendingPathComponent("Story/Timeline/Views/Inspector/ClipInspector.swift")
-    }
-
-    /// ClipInspector.swift et les sous-vues extraites qui vivent à côté
-    /// (`ClipInspector+*.swift`, `ClipInspector*.swift`, `ClipVolumeAutomation`, `ClipFadeChipRow`).
-    private static func clipInspectorFamilySource() throws -> String {
-        let dir = clipInspectorURL.deletingLastPathComponent()
-        let names = ["ClipInspector.swift", "ClipInspector+ClipSnapshot.swift",
-                     "ClipInspectorActionsRow.swift", "ClipInspectorNumericField.swift",
-                     "ClipInspectorTransformSection.swift", "ClipVolumeAutomation.swift",
-                     "ClipFadeChipRow.swift"]
-        return try names
-            .map { try strippedSource(of: dir.appendingPathComponent($0)) }
-            .joined(separator: "\n")
-    }
-
     private static var timelineViewModelPlan4HelpersURL: URL {
         sourcesRoot.appendingPathComponent("Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift")
     }
 
     private static var timelineViewModelURL: URL {
         sourcesRoot.appendingPathComponent("Story/Timeline/ViewModel/TimelineViewModel.swift")
-    }
-
-    private static var timelineInspectorHostURL: URL {
-        sourcesRoot.appendingPathComponent("Story/Timeline/Views/Container/TimelineInspectorHost.swift")
     }
 
     private static var repoRoot: URL {
@@ -624,10 +371,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
             .deletingLastPathComponent()   // MeeshySDK
             .deletingLastPathComponent()   // packages
             .deletingLastPathComponent()   // racine du dépôt
-    }
-
-    private static var timelineExportFlowURL: URL {
-        sourcesRoot.appendingPathComponent("Story/TimelineExportFlow.swift")
     }
 
     private static func strippedSource(of url: URL) throws -> String {

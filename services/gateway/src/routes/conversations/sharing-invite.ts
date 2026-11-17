@@ -3,11 +3,7 @@ import { decideDirectOpening, requestRecipientFields } from '../../services/mess
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import {
-  conversationAdmitsNewMembers,
-  EXTERNAL_CONVERSATION_ERROR_CODES,
-  EXTERNAL_SINGLE_MEMBER_MESSAGE,
-} from '@meeshy/shared/types/external-conversation';
+import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -157,9 +153,11 @@ export function registerInviteRoute(
         return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
       }
 
-      // #17117 — une conversation externe n'a qu'un membre Meeshy, son ouvreur.
-      if (!conversationAdmitsNewMembers(conversation.type)) {
-        return sendError(reply, 409, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
+      // #17117 — une conversation externe n'a qu'un membre Meeshy, son ouvreur ;
+      // #16188 — un tête-à-tête chiffré de bout en bout reste à deux.
+      const closedToNewMembers = newMemberRefusal(conversation);
+      if (closedToNewMembers) {
+        return sendError(reply, 409, closedToNewMembers.message, { code: closedToNewMembers.code });
       }
 
       // #4557 — **MODERATOR, le même plancher que `POST …/participants`.**

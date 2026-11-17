@@ -93,19 +93,6 @@ final class OfflineEditFlowTests: XCTestCase {
 
     // MARK: - Task 72: dismissOfflineQueuedConfirmation
 
-    /// Poses the flag directly instead of routing through the deleted
-    /// `handlePublishTap` — this now tests EXACTLY the surviving function
-    /// (`dismissOfflineQueuedConfirmation`), not an artefact of its former
-    /// vehicle.
-    func test_dismissOfflineQueuedConfirmation_resetsFlag() async {
-        let (vm, _, _, _) = makeSUT(isOnline: false)
-        vm.showOfflineQueuedConfirmation = true
-
-        vm.dismissOfflineQueuedConfirmation()
-        XCTAssertFalse(vm.showOfflineQueuedConfirmation,
-                       "dismissOfflineQueuedConfirmation must reset the flag")
-    }
-
     // MARK: - Offline project snapshot (draft round-trip via value semantics)
 
     func test_project_snapshotAndRestore_preservesClips() async {

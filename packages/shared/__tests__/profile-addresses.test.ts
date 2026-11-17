@@ -7,6 +7,7 @@ import {
   normalizeAddressUrl,
   servedAddresses,
   addressesSeenAs,
+  addressOpensTo,
   type AddressColumns,
 } from '../utils/profile-addresses';
 import { RELATION_LEVELS } from '../types/relation';
@@ -131,5 +132,18 @@ describe('addressesSeenAs : « Voir comme » rend ce que lirait un lecteur du ce
     const vues = addressesSeenAs(own, 'FRIEND');
     expect(vues.map((v) => v.id)).toEqual(['p', 'a']);
     expect(vues.every((v) => !('circle' in v))).toBe(true);
+  });
+});
+
+describe('addressOpensTo : la loi que la fiche et le lien de suivi d’une adresse partagent', () => {
+  it('cercle Ami : ouvert à Ami et au-dessus, fermé en dessous', () => {
+    expect(addressOpensTo('FRIEND', { isSelf: false, viewerLevel: 'FRIEND' })).toBe(true);
+    expect(addressOpensTo('FRIEND', { isSelf: false, viewerLevel: 'BLOOD' })).toBe(true);
+    expect(addressOpensTo('FRIEND', { isSelf: false, viewerLevel: 'ACQUAINTANCE' })).toBe(false);
+  });
+
+  it('un cercle illisible ne s’ouvre qu’au propriétaire', () => {
+    expect(addressOpensTo('EVERYONE', { isSelf: false, viewerLevel: 'BLOOD' })).toBe(false);
+    expect(addressOpensTo('EVERYONE', { isSelf: true, viewerLevel: 'PUBLIC' })).toBe(true);
   });
 });
