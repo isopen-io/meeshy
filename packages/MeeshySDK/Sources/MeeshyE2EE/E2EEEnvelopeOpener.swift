@@ -81,6 +81,10 @@ public protocol E2EEEnvelopeOpening: Sendable {
 
 public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
     public static let pageSize = 100
+    /// Le plus de pages qu'un rattrapage relit (IOSX-05, #18948) : 5 000
+    /// enveloppes, bien au-delà de 30 jours d'absence ordinaire ; le reste
+    /// attend le rattrapage suivant.
+    public static let maxCatchUpPages = 50
 
     private let local: E2EELocalDevice
     private let cipher: any E2EESessionCipherProviding
@@ -247,16 +251,24 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         return outcome
     }
 
+    /// Le rattrapage se termine TOUJOURS (IOSX-05, #18948) : il s'arrête sur
+    /// un curseur déjà servi (une passerelle fautive qui rend la même page
+    /// sans fin), au-delà de `maxCatchUpPages`, et à l'annulation de sa tâche
+    /// — la fermeture de la session ne l'attend jamais.
     public func catchUp() async throws -> [E2EEOpenOutcome] {
         var cursor: String?
+        var served: Set<String> = []
         var outcomes: [E2EEOpenOutcome] = []
-        repeat {
+        for _ in 0..<Self.maxCatchUpPages {
+            try Task.checkCancellation()
             let page = try await directory.envelopes(after: cursor, limit: Self.pageSize)
             let opened = page.envelopes.map { ($0, open($0)) }
             await acknowledge(opened)
             outcomes += opened.map(\.1)
-            cursor = page.envelopes.isEmpty ? nil : page.nextCursor
-        } while cursor != nil
+            guard !page.envelopes.isEmpty, let next = page.nextCursor, served.insert(next).inserted else { return outcomes }
+            cursor = next
+        }
+        logger.warning("e2ee catch-up stopped at its page budget pages=\(Self.maxCatchUpPages, privacy: .public); the rest waits for the next one")
         return outcomes
     }
 
