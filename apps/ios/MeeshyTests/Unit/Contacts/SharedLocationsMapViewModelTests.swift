@@ -68,11 +68,12 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         longitude: Double = 2.35,
         precision: SharedLocationPrecision = .city,
         radius: Double = 8000,
+        circle: RelationLevel? = nil,
         at offset: TimeInterval = 0
     ) -> SharedLocationChanged {
         SharedLocationChanged(
             userId: userId, latitude: latitude, longitude: longitude, precision: precision, radiusMeters: radius,
-            updatedAt: t0.addingTimeInterval(offset), expiresAt: t0.addingTimeInterval(offset + 3600)
+            circle: circle, updatedAt: t0.addingTimeInterval(offset), expiresAt: t0.addingTimeInterval(offset + 3600)
         )
     }
 
@@ -118,6 +119,43 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         rig.live.clear("alice")
 
         XCTAssertEqual(rig.sut.pins.map(\.id), ["bob"])
+    }
+
+    // MARK: - Le cercle (#17013)
+
+    func test_threeCircles_threeMarkers_distinctToTheEyeAndToVoiceOver() {
+        let rig = makeRig()
+
+        rig.live.receive(served("a", circle: .friend))
+        rig.live.receive(served("b", circle: .close))
+        rig.live.receive(served("c", circle: .blood))
+
+        let byId = Dictionary(uniqueKeysWithValues: rig.sut.pins.map { ($0.id, $0) })
+        XCTAssertEqual(byId["a"]?.circleIcon, "🤝")
+        XCTAssertEqual(byId["b"]?.circleIcon, "🔥")
+        XCTAssertEqual(byId["c"]?.circleIcon, "🩸")
+        XCTAssertEqual(Set(rig.sut.pins.map(\.accessibilityLabel)).count, 3)
+        XCTAssertTrue(byId["b"]?.accessibilityLabel.contains(CircleLevelNames.title(of: .close)) == true)
+    }
+
+    func test_noServedCircle_keepsANeutralMarker_neverAGuess() {
+        let rig = makeRig()
+
+        rig.live.receive(served("alice"))
+
+        XCTAssertNil(rig.sut.pins.first?.circle)
+        XCTAssertNil(rig.sut.pins.first?.circleIcon)
+        XCTAssertFalse(rig.sut.pins.first?.accessibilityLabel.contains(CircleLevelNames.title(of: .friend)) ?? true)
+    }
+
+    func test_aRaisedCircle_changesTheMarkerWithoutANewPosition() {
+        let rig = makeRig()
+        rig.live.receive(served(circle: .friend))
+
+        rig.live.receive(served(circle: .blood))
+
+        XCTAssertEqual(rig.sut.pins.first?.circle, .blood)
+        XCTAssertTrue(rig.spy.requested.isEmpty)
     }
 
     // MARK: - Qui, et sa présence

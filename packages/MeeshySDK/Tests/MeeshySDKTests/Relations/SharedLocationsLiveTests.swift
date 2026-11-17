@@ -41,12 +41,13 @@ final class SharedLocationsLiveTests: XCTestCase {
         longitude: Double = 2.35,
         precision: SharedLocationPrecision = .city,
         radius: Double = 8000,
+        circle: RelationLevel? = nil,
         at offset: TimeInterval = 0,
         lifetime: TimeInterval = 3600
     ) -> SharedLocationChanged {
         SharedLocationChanged(
             userId: userId, latitude: latitude, longitude: longitude, precision: precision, radiusMeters: radius,
-            updatedAt: t0.addingTimeInterval(offset), expiresAt: t0.addingTimeInterval(offset + lifetime)
+            circle: circle, updatedAt: t0.addingTimeInterval(offset), expiresAt: t0.addingTimeInterval(offset + lifetime)
         )
     }
 
@@ -64,6 +65,15 @@ final class SharedLocationsLiveTests: XCTestCase {
         XCTAssertEqual(entry?.latitude, 48.85)
         XCTAssertEqual(entry?.radiusMeters, 8000)
         XCTAssertEqual(entry?.deadline, t0.addingTimeInterval(3600))
+    }
+
+    func test_aCircleRedit_atTheSameInstant_changesTheMarkerWithoutANewPosition() {
+        let rig = makeRig()
+        rig.sut.receive(served(circle: .friend))
+
+        rig.sut.receive(served(circle: .close))
+
+        XCTAssertEqual(rig.sut.byUser["alice"]?.circle, .close)
     }
 
     func test_aRaisedPrecision_makesThePositionFinerWithoutReloading() {

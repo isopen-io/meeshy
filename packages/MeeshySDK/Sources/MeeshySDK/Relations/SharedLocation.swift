@@ -27,21 +27,28 @@ public enum SharedLocationPrecision: String, Sendable, Equatable, CaseIterable {
 
 /// `location:share-changed` — la position d'UNE personne, déjà tronquée pour MOI.
 public struct SharedLocationChanged: Decodable, Sendable, Equatable {
+    /// `SHARED_LOCATION_CIRCLES` (#17013, #17966) : un partage temporaire s'ouvre dès Ami, donc rien en dessous.
+    public static let servedCircles: Set<RelationLevel> = [.friend, .close, .blood]
+
     public let userId: String
     public let latitude: Double
     public let longitude: Double
     public let precision: SharedLocationPrecision
     public let radiusMeters: Double
+    /// Le cercle d'où vient la personne, tel que la loi d'accès l'a jugé POUR MOI. `nil` (serveur antérieur, valeur
+    /// inconnue) : le marqueur reste neutre — aucun client ne le recalcule.
+    public let circle: RelationLevel?
     public let updatedAt: Date
     public let expiresAt: Date
 
     public init(userId: String, latitude: Double, longitude: Double, precision: SharedLocationPrecision,
-                radiusMeters: Double, updatedAt: Date, expiresAt: Date) {
+                radiusMeters: Double, circle: RelationLevel? = nil, updatedAt: Date, expiresAt: Date) {
         self.userId = userId
         self.latitude = latitude
         self.longitude = longitude
         self.precision = precision
         self.radiusMeters = min(SharedLocationContract.maxRadiusMeters, max(SharedLocationContract.exactMinRadiusMeters, radiusMeters))
+        self.circle = circle.flatMap { Self.servedCircles.contains($0) ? $0 : nil }
         self.updatedAt = updatedAt
         self.expiresAt = expiresAt
     }
@@ -51,7 +58,7 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         min(SharedLocationContract.maxLifetime, max(0, expiresAt.timeIntervalSince(updatedAt)))
     }
 
-    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt }
+    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, circle, updatedAt, expiresAt }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -75,8 +82,9 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
               let expiresAt = WireDate.date(from: try c.decode(String.self, forKey: .expiresAt)) else {
             throw DecodingError.dataCorruptedError(forKey: .updatedAt, in: c, debugDescription: "instant illisible")
         }
+        let circle = (try? c.decodeIfPresent(String.self, forKey: .circle)).flatMap(RelationLevel.init(rawValue:))
         self.init(userId: userId, latitude: latitude, longitude: longitude, precision: precision,
-                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt)
+                  radiusMeters: radius, circle: circle, updatedAt: updatedAt, expiresAt: expiresAt)
     }
 }
 
