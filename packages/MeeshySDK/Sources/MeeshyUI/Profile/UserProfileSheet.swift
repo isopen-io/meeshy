@@ -134,8 +134,9 @@ public struct UserProfileSheet: View {
         DynamicColorGenerator.profileAccentHex(userId: displayUser.userId, name: displayUser.resolvedDisplayName)
     }
 
+    /// Introuvable, privé ou il m'a bloqué (loi 9) : le décor et la présence se taisent, la fiche rend « Personne ici ».
     var isBlockedByTarget: Bool {
-        loader.isBlockedByTarget
+        loader.isUnavailable
     }
 
     var displayUser: ProfileSheetUser {
@@ -163,13 +164,26 @@ public struct UserProfileSheet: View {
 
     public var body: some View {
         ZStack {
-            if isBlockedByTarget {
-                Color.clear.onAppear { onDismiss?(); dismiss() }
-            } else if isBlocked {
+            switch phase {
+            case .unavailable:
+                unavailableLayout
+            case .blockedByMe:
                 blockedLayout
-            } else {
+            case .skeleton, .failed, .shown:
                 collapsibleLayout
             }
+        }
+        .confirmationDialog(
+            String(localized: "profile.action.report", defaultValue: "Signaler", bundle: .module),
+            isPresented: $showReportSheet,
+            titleVisibility: .visible
+        ) {
+            ForEach(ProfileReportReason.allCases, id: \.self) { reason in
+                Button(reason.label, role: .destructive) {
+                    submitReport(reportType: reason.rawValue)
+                }
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         }
         .fullScreenCover(item: $fullscreenImage) { image in
             FullscreenImageView(imageURL: image.url, fallbackText: image.fallbackText, accentColor: resolvedAccent)
@@ -195,23 +209,6 @@ public struct UserProfileSheet: View {
         loaded.flatMap(event.repainted)
     }
 
-    /// Layout shown when the current user blocked the target — no tabs, just
-    /// the (greyed) header + the unblock card, preserving prior behavior.
-    @ViewBuilder
-    private var blockedLayout: some View {
-        VStack(spacing: 0) {
-            bannerSection
-            identitySection(offset: 0)
-                .padding(.top, -40)
-            blockedByMeCard
-                .padding(.horizontal, MeeshySpacing.xl)
-                .padding(.top, MeeshySpacing.lg)
-            Spacer()
-        }
-        .background(theme.backgroundPrimary)
-        .ignoresSafeArea(edges: .top)
-    }
-
     /// The redesigned single-scroll layout: a big collapsible header scrolls
     /// away, a compact identity bar fades in, and the face selector floats at the bottom (loi 5).
     @ViewBuilder
@@ -220,6 +217,11 @@ public struct UserProfileSheet: View {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 ScrollOffsetReader(relay: scrollRelay) { offset in
                     bigCollapsibleHeader(offset: offset)
+                }
+
+                if case .shown(let fallback?) = phase {
+                    ProfileCacheFallbackBanner(fallback: fallback, onRetry: { retryFromState() })
+                        .padding(.top, MeeshySpacing.lg)
                 }
 
                 faceContent
@@ -270,13 +272,12 @@ public struct UserProfileSheet: View {
     /// La face lue — chacune dans son extension. Le squelette seulement sur cache vide (loi 8).
     @ViewBuilder
     var faceContent: some View {
-        if effectiveIsLoading {
-            loadingPlaceholder
-                .padding(.horizontal, MeeshySpacing.xl)
-        } else if loader.profileLoadFailed {
-            profileLoadFailedState
-                .padding(.horizontal, MeeshySpacing.xl)
-        } else {
+        switch phase {
+        case .skeleton:
+            ProfileSkeletonFace()
+        case .failed(let failure):
+            ProfileFailedState(failure: failure, onRetry: { retryFromState() })
+        case .shown, .unavailable, .blockedByMe:
             switch RelationFace.shown(face, isCurrentUser: isCurrentUser) {
             case .vitrine:
                 vitrineFace
@@ -289,7 +290,7 @@ public struct UserProfileSheet: View {
     }
 
     var showsFaceSelector: Bool {
-        RelationFace.showsSelector(isCurrentUser: isCurrentUser, isBlocked: isBlocked, loadFailed: loader.profileLoadFailed)
+        RelationFace.showsSelector(isCurrentUser: isCurrentUser, isBlocked: isBlocked, loadFailed: !phase.showsFaceSelector)
     }
 
     /// « Écrire » à droite du sélecteur, sur la Vitrine seulement (brief § 1).
@@ -303,40 +304,8 @@ public struct UserProfileSheet: View {
         RelationFace.writesARequest(linked: relationLinked, connection: connectionStatus)
     }
 
-    // MARK: - Profil non chargé (#8025)
-
-    /// Le profil n'a pas pu se charger et le cache n'a rien à montrer : la
-    /// fiche le dit et propose de réessayer, au lieu d'onglets vides.
-    private var profileLoadFailedState: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            Image(systemName: "wifi.exclamationmark")
-                .font(MeeshyFont.relative(28, weight: .light))
-                .foregroundStyle(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-            Button {
-                HapticFeedback.light()
-                Task { await retryProfile() }
-            } label: {
-                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .frame(minHeight: MeeshyControlSize.tapTarget)
-                    .background(Capsule().fill(Color(hex: resolvedAccent)))
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.xl)
-    }
-
-    private func retryProfile() async {
+    /// « Réessayer » (#8025) : le chargeur rejoue l'ouverture, puis les conversations en commun si elles manquent.
+    func retryProfile() async {
         await loader.retry(userId: user.userId, username: user.username, using: profileLoading)
         resolveConnectionStatus()
         if internalConversations.isEmpty {
@@ -357,7 +326,7 @@ public struct UserProfileSheet: View {
         user.userId ?? loader.profile?.id
     }
 
-    private func loadConversationsIfNeeded() async {
+    func loadConversationsIfNeeded() async {
         guard let userId = resolvedUserId else { return }
         internalIsLoadingConversations = true
         internalConversations = (try? await profileLoading.sharedConversations(with: userId, currentUserId: currentUserId)) ?? internalConversations
@@ -622,60 +591,6 @@ public struct UserProfileSheet: View {
                 )
             }
         }
-    }
-
-    // MARK: - Loading Placeholder
-
-    var loadingPlaceholder: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                .frame(height: 60)
-                .shimmer()
-
-            HStack(spacing: MeeshySpacing.sm) {
-                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                    .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                    .frame(width: 80, height: 30)
-                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                    .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                    .frame(width: 80, height: 30)
-            }
-            .shimmer()
-        }
-    }
-
-    // MARK: - Blocked By Me
-
-    private var blockedByMeCard: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .module))
-                .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
-                .foregroundStyle(theme.textSecondary)
-
-            Button {
-                HapticFeedback.medium()
-                Task { await unblockUser() }
-            } label: {
-                Text(String(localized: "profile.blocked.unblock", defaultValue: "Débloquer", bundle: .module))
-                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, MeeshySpacing.xxl)
-                    .padding(.vertical, MeeshySpacing.smPlus)
-                    .background(
-                        LinearGradient(
-                            colors: [MeeshyColors.success, MeeshyColors.successDeep],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
-                    .clipShape(Capsule())
-            }
-            .pressable()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(MeeshySpacing.xl)
-        .background(theme.surfaceGradient(tint: MeeshyColors.blockedNeutralHex))
-        .glassCard(cornerRadius: MeeshyRadius.lg)
     }
 
     // MARK: - Helpers

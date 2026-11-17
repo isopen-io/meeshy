@@ -23,18 +23,6 @@ extension UserProfileSheet {
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .task(id: pendingRequestId) { await loadPendingRequest() }
-        .confirmationDialog(
-            String(localized: "profile.action.report", defaultValue: "Signaler", bundle: .module),
-            isPresented: $showReportSheet,
-            titleVisibility: .visible
-        ) {
-            ForEach(ProfileReportReason.allCases, id: \.self) { reason in
-                Button(reason.label, role: .destructive) {
-                    submitReport(reportType: reason.rawValue)
-                }
-            }
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
-        }
         .sheet(isPresented: $sharesProfile) {
             if let link = ProfileLink(username: displayUser.username) {
                 ProfileActivitySheet(items: [link.url])
@@ -166,7 +154,7 @@ extension UserProfileSheet {
                              onBlock: { Task { await blockUser() } }, onReport: { showReportSheet = true })
     }
 
-    private func submitReport(reportType: String) {
+    func submitReport(reportType: String) {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
         HapticFeedback.medium()
         Task {
