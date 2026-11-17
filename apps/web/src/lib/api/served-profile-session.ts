@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { ownProfileSnapshotIsStale, type OwnProfileSnapshot, type ProfileUpdatedEventData } from '@meeshy/shared/types/own-profile-sync';
+import { ownProfileSnapshotIsStale, type OwnProfileSnapshot, type ProfileUpdatedEventData } from '@meeshy/shared/types/own-profile-sync-order';
 
 import type { AccountVault } from './accounts';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
@@ -54,7 +54,7 @@ import type { SessionProfileFields, SessionStoreApi, SessionUser } from './sessi
  * **`profile:updated` (#18924) passe par la MÊME projection.** La passerelle
  * pousse sur `user:<moi>`, appareil émetteur compris, l'INSTANTANÉ des neuf
  * champs que mes appareils affichent et la date de l'écriture
- * (`@meeshy/shared/types/own-profile-sync`) : la session le prend sans relire
+ * (`@meeshy/shared/types/own-profile-sync-order`, le contrat sans `zod`) : la session le prend sans relire
  * `GET /me`, et le cache `['me', 'profile']` aussi, composé sur ce qu'il tient
  * AU MOMENT où il le prend — jamais un profil partiel inventé quand il est
  * vide. Mêmes gardes : même compte, retenu pendant une édition en vol, jamais
