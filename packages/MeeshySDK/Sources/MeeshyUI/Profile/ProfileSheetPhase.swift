@@ -88,3 +88,16 @@ public nonisolated enum ProfileSheetPhase: Sendable, Equatable {
         return false
     }
 }
+
+/// Ce qu'une conversation en commun permet depuis la fiche (planche `Etat-Bloque`) : l'ouvrir, l'ouvrir en lecture seule
+/// quand je l'ai bloqué (le fil remplace la saisie par « Débloquer »), ou rien quand il est introuvable ou m'a bloqué.
+nonisolated enum ProfileSharedConversationAccess: Sendable, Equatable {
+    case open
+    case readOnly
+    case closed
+
+    static func resolve(isBlockedByMe: Bool, isUnavailable: Bool) -> ProfileSharedConversationAccess {
+        if isUnavailable { return .closed }
+        return isBlockedByMe ? .readOnly : .open
+    }
+}

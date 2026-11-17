@@ -96,3 +96,21 @@ final class ProfileSheetPhaseTests: XCTestCase {
         XCTAssertFalse(posts.contains(".shimmer()"), "le squelette est celui du kit")
     }
 }
+
+/// #18873 — planche `Etat-Bloque` : nos conversations restent, en lecture seule, quand je l'ai bloqué ; il m'a bloqué
+/// ou le profil est introuvable, elles ferment.
+final class ProfileSharedConversationAccessTests: XCTestCase {
+
+    func test_resolve_sansBlocage_ouvreLaConversation() {
+        XCTAssertEqual(ProfileSharedConversationAccess.resolve(isBlockedByMe: false, isUnavailable: false), .open)
+    }
+
+    func test_resolve_jeLAiBloque_ouvreEnLectureSeule() {
+        XCTAssertEqual(ProfileSharedConversationAccess.resolve(isBlockedByMe: true, isUnavailable: false), .readOnly)
+    }
+
+    func test_resolve_introuvableOuIlMABloque_ferme_memeSiJeLAiBloque() {
+        XCTAssertEqual(ProfileSharedConversationAccess.resolve(isBlockedByMe: false, isUnavailable: true), .closed)
+        XCTAssertEqual(ProfileSharedConversationAccess.resolve(isBlockedByMe: true, isUnavailable: true), .closed)
+    }
+}

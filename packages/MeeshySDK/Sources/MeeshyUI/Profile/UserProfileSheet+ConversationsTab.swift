@@ -39,38 +39,8 @@ extension UserProfileSheet {
                 }
 
                 ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
-                    Button {
-                        guard !isInteractionDisabled else { return }
-                        HapticFeedback.light()
-                        guard let onNavigateToConversation else { return openSharedConversation(conv) }
-                        onNavigateToConversation(conv)
-                    } label: {
-                        HStack(spacing: MeeshySpacing.md) {
-                            MeeshyAvatar(
-                                name: conv.name,
-                                context: .conversationList,
-                                accentColor: conv.accentColor,
-                                avatarURL: conv.avatar ?? conv.participantAvatarURL
-                            )
-
-                            Text(conv.name)
-                                .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
-                                .foregroundStyle(theme.textPrimary)
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            Image(systemName: "chevron.forward")
-                                .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
-                                .foregroundStyle(theme.textMuted)
-                        }
-                        .padding(.horizontal, MeeshySpacing.xl)
-                        .padding(.vertical, MeeshySpacing.smPlus)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .rectangle))
-                    .staggeredAppear(index: index)
-                    .opacity(isInteractionDisabled ? 0.35 : 1)
+                    sharedConversationRow(conv, access: sharedConversationAccess)
+                        .staggeredAppear(index: index)
 
                     if index < effectiveConversations.count - 1 {
                         Divider()
@@ -80,6 +50,51 @@ extension UserProfileSheet {
                 }
             }
         }
+    }
+
+    var sharedConversationAccess: ProfileSharedConversationAccess {
+        ProfileSharedConversationAccess.resolve(isBlockedByMe: isBlocked, isUnavailable: isBlockedByTarget)
+    }
+
+    /// Une conversation en commun ; je l'ai bloqué, elle s'ouvre en lecture seule et le dit (planche `Etat-Bloque`).
+    private func sharedConversationRow(_ conv: MeeshyConversation, access: ProfileSharedConversationAccess) -> some View {
+        Button {
+            guard access != .closed else { return }
+            HapticFeedback.light()
+            guard let onNavigateToConversation else { return openSharedConversation(conv) }
+            onNavigateToConversation(conv)
+        } label: {
+            HStack(spacing: MeeshySpacing.md) {
+                MeeshyAvatar(
+                    name: conv.name,
+                    context: .conversationList,
+                    accentColor: conv.accentColor,
+                    avatarURL: conv.avatar ?? conv.participantAvatarURL
+                )
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(conv.name)
+                        .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
+                        .foregroundStyle(theme.textPrimary)
+                        .lineLimit(1)
+                    if access == .readOnly {
+                        Label(ProfileStatesCopy.readOnly, systemImage: "lock")
+                            .meeshyScaledFont(MeeshyFont.captionSize)
+                            .foregroundStyle(theme.textMuted)
+                    }
+                }
+                Spacer()
+                Image(systemName: "chevron.forward")
+                    .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
+                    .foregroundStyle(theme.textMuted)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.vertical, MeeshySpacing.smPlus)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .rectangle))
+        .disabled(access == .closed)
+        .opacity(access == .closed ? 0.35 : 1)
     }
 
     /// La sortie du vide : écrire le premier message, sur la fiche d'un autre qu'aucun blocage ne ferme.

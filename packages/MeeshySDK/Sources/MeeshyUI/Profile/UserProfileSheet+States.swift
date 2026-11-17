@@ -248,4 +248,8 @@ enum ProfileStatesCopy {
     static var remainsTitle: String {
         String(localized: "profile.state.blocked.remains", defaultValue: "Ce qui reste", bundle: .module)
     }
+
+    static var readOnly: String {
+        String(localized: "profile.state.blocked.readOnly", defaultValue: "Lecture seule", bundle: .module)
+    }
 }
