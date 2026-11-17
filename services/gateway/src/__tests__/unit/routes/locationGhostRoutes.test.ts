@@ -6,7 +6,18 @@
  *
  * @jest-environment node
  */
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+
+let mockStoreDown = false;
+jest.mock('../../../services/sharedLocation/sharedLocationLazyCache', () => {
+  const { sharedLocationKvEnMemoire } = jest.requireActual<typeof import('../../helpers/shared-location-kv')>('../../helpers/shared-location-kv');
+  const memory = sharedLocationKvEnMemoire();
+  return {
+    lazySharedLocationCache: new Proxy(memory, {
+      get: (target, prop) => (mockStoreDown ? async () => { throw new Error('shared location store unavailable'); } : Reflect.get(target, prop)),
+    }),
+  };
+});
 import Fastify, { type FastifyInstance } from 'fastify';
 import locationGhostMeRoutes from '../../../routes/me/location-ghost';
 import bloodLocationMeRoutes from '../../../routes/me/blood-location';
@@ -37,6 +48,7 @@ beforeEach(() => {
   delete process.env.BLOOD_LOCATION_ALLOWLIST;
 });
 afterEach(async () => {
+  mockStoreDown = false;
   await fastify?.close();
   fastify = undefined;
   process.env = { ...saved };
@@ -87,6 +99,19 @@ describe('PUT /me/location/ghost — le fantôme pour tous, drapeau Sang éteint
 
     expect(response.statusCode).toBe(400);
     expect(await ghostOf(world, MOI)).toBeNull();
+  });
+
+  it('le magasin du partage injoignable : la sortie est refusée et le compte reste en fantôme (fail-closed)', async () => {
+    const world = bloodLocationWorld();
+    fastify = await app(world, MOI);
+    await fastify.inject({ method: 'PUT', url: '/me/location/ghost', payload: { ghost: true } });
+    mockStoreDown = true;
+
+    const response = await fastify.inject({ method: 'PUT', url: '/me/location/ghost', payload: { ghost: false } });
+
+    mockStoreDown = false;
+    expect(response.statusCode).toBe(500);
+    expect(await ghostOf(world, MOI)).toBeInstanceOf(Date);
   });
 
   it('blood-settings reste derrière le drapeau : 404 drapeau éteint, rétrocompatible', async () => {
