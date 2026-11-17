@@ -120,7 +120,7 @@ describe('wakeE2EEDevices — un réveil silencieux, jamais un appel', () => {
     mockApnsSend.mockResolvedValue({ sent: [{ device: 'x' }], failed: [] });
     mockPrisma.pushToken.update.mockResolvedValue({});
     mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
-    mockPrisma.userSession.findMany.mockResolvedValue([]);
+    mockPrisma.userSession.findMany.mockResolvedValue([{ id: 'live-session' }]);
     mockPrisma.pushToken.findMany.mockImplementation(async (args: { where: { type: { in: string[] } } }) =>
       bobTokens.filter((candidate) => args.where.type.in.includes(candidate.type)));
   });

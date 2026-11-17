@@ -34,7 +34,7 @@ export class DeviceWorkLanes {
     return this.lanes.size;
   }
 
-  enqueue(name: string, work: () => Promise<void>): void {
+  schedule(name: string, work: () => Promise<void>): void {
     const lane = this.lanes.get(name) ?? { tail: Promise.resolve(), pending: 0 };
     if (lane.pending >= this.options.maxPending) {
       this.options.onDrop(name);

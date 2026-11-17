@@ -32,8 +32,8 @@ describe('DeviceWorkLanes — une file par compte, bornée (#18910)', () => {
     const { subject } = lanes();
     const slow = deferred();
     const done: string[] = [];
-    subject.enqueue('user:a', () => slow.promise.then(() => { done.push('a'); }));
-    subject.enqueue('user:b', async () => { done.push('b'); });
+    subject.schedule('user:a', () => slow.promise.then(() => { done.push('a'); }));
+    subject.schedule('user:b', async () => { done.push('b'); });
 
     await new Promise((resolve) => setImmediate(resolve));
 
@@ -55,7 +55,7 @@ describe('DeviceWorkLanes — une file par compte, bornée (#18910)', () => {
       order.push(name);
       inFlight -= 1;
     };
-    ['revoke', 'replace', 'third'].forEach((name) => subject.enqueue('bulk', step(name)));
+    ['revoke', 'replace', 'third'].forEach((name) => subject.schedule('bulk', step(name)));
 
     await subject.drain();
 
@@ -67,9 +67,9 @@ describe('DeviceWorkLanes — une file par compte, bornée (#18910)', () => {
     const { subject, dropped } = lanes(2);
     const gate = deferred();
     const run = jest.fn(async () => undefined);
-    subject.enqueue('bulk', () => gate.promise);
-    subject.enqueue('bulk', run);
-    subject.enqueue('bulk', run);
+    subject.schedule('bulk', () => gate.promise);
+    subject.schedule('bulk', run);
+    subject.schedule('bulk', run);
 
     expect(dropped).toEqual(['bulk']);
     gate.release();
@@ -80,8 +80,8 @@ describe('DeviceWorkLanes — une file par compte, bornée (#18910)', () => {
   it('une étape qui échoue est signalée et n’arrête pas sa file', async () => {
     const { subject, failed } = lanes();
     const after = jest.fn(async () => undefined);
-    subject.enqueue('user:a', async () => { throw new Error('apns down'); });
-    subject.enqueue('user:a', after);
+    subject.schedule('user:a', async () => { throw new Error('apns down'); });
+    subject.schedule('user:a', after);
 
     await subject.drain();
 
@@ -91,7 +91,7 @@ describe('DeviceWorkLanes — une file par compte, bornée (#18910)', () => {
 
   it('une file vidée est oubliée : aucun compte ne reste en mémoire après son dernier envoi', async () => {
     const { subject } = lanes();
-    subject.enqueue('user:a', async () => undefined);
+    subject.schedule('user:a', async () => undefined);
     await subject.drain();
 
     expect(subject.size).toBe(0);

@@ -3587,7 +3587,7 @@ export class NotificationService {
     onError: (lane, error) => notificationLogger.error('device push queue step failed', { lane, error }) });
 
   private queueDeviceWork(work: () => Promise<void>, lane = BULK_DEVICE_LANE): void {
-    this.deviceLanes.enqueue(lane, work);
+    this.deviceLanes.schedule(lane, work);
   }
 
   /**
