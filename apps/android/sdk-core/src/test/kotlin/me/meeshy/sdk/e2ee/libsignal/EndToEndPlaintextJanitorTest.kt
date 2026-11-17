@@ -53,8 +53,8 @@ class EndToEndPlaintextJanitorTest {
         createdAt = "2026-11-01T09:00:00Z",
     )
 
-    private fun opened(id: String, conversationId: String = "c1", sentAt: Long) = E2eeOpenOutcome.Opened(
-        id, conversationId, "alice", 1, E2eeContent.compose("salut", "fr", null, conversationId, null, sentAt),
+    private fun opened(id: String, conversationId: String = "c1", sentAt: Long = 1L, servedAt: Long? = null) = E2eeOpenOutcome.Opened(
+        id, conversationId, "alice", 1, E2eeContent.compose("salut", "fr", null, conversationId, null, sentAt), servedAt,
     )
 
     @Test
@@ -123,15 +123,29 @@ class EndToEndPlaintextJanitorTest {
     }
 
     @Test
-    fun `an envelope of a deleted conversation leaves the vault only if composed before the deletion`() = runHarnessTest { harness ->
+    fun `an envelope of a deleted conversation leaves the vault only if the gateway received it before the deletion`() = runHarnessTest { harness ->
         val rig = Rig(harness)
         harness.clock.now = 5_000L
         rig.ledger.recordConversation("c1")
 
-        rig.janitor.reconsider(opened("m1", sentAt = 4_000L))
-        rig.janitor.reconsider(opened("m2", sentAt = 6_000L))
+        rig.janitor.reconsider(opened("m1", servedAt = 4_000L))
+        rig.janitor.reconsider(opened("m2", servedAt = 6_000L))
 
         assertThat(rig.vault.erased).containsExactly("me" to "m1")
+    }
+
+    /** #14672 — l'horloge de l'émetteur, écrite par lui dans le chiffré, ne décide jamais de l'effacement. */
+    @Test
+    fun `the sender clock written in the ciphertext never decides a conversation erasure`() = runHarnessTest { harness ->
+        val rig = Rig(harness)
+        harness.clock.now = 5_000L
+        rig.ledger.recordConversation("c1")
+
+        rig.janitor.reconsider(opened("ahead", sentAt = 9_000_000L, servedAt = 4_000L))
+        rig.janitor.reconsider(opened("lagging", sentAt = 1L, servedAt = 6_000L))
+        rig.janitor.reconsider(opened("unknown", sentAt = 1L, servedAt = null))
+
+        assertThat(rig.vault.erased).containsExactly("me" to "ahead")
     }
 
     @Test

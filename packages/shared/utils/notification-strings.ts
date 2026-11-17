@@ -56,6 +56,8 @@ export const NOTIFICATION_STRING_KEYS = [
   'content.storyReply.yours', 'content.storyReply.other',
   'content.action.openMap', 'content.action.join', 'message.action.reply',
   'login.newDevice.title',
+  'e2ee.deviceVerification.title', 'e2ee.deviceVerification.body',
+  'e2ee.deviceVerification.groupedTitle', 'e2ee.deviceVerification.groupedBody',
   'push.private',
   'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
   'engagement.achievementUnlocked',

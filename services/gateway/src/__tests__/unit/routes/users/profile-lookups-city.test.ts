@@ -46,6 +46,7 @@ function prismaDouble({ niveau, avecValeurs, cityCircle = 'FRIEND' }: Cas) {
   return {
     userPreferences: { findMany: jest.fn<any>(async () => []) },
     userPreference: { findMany: jest.fn<any>(async () => []) },
+    profileAddress: { findMany: async () => [] },
     user: {
       findFirst: jest.fn<any>(async (args?: any) =>
         args?.where?.blockedUserIds || args?.where?.OR

@@ -6,6 +6,7 @@ import androidx.compose.runtime.Immutable
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.sdk.model.BubbleStickerSpec
+import me.meeshy.sdk.model.EndToEndSeal
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.reading.river.RiverBubble
@@ -74,6 +75,8 @@ internal data class RiverBubbleContent(
     val forwardAttribution: ForwardAttribution,
     val blurReveal: BubbleBlurRevealSpec?,
     val protection: RiverProtection,
+    /** Pourquoi un message chiffré reste scellé sur cet appareil (#18983) : la Rivière le dit comme le fil. */
+    val endToEndSeal: EndToEndSeal = EndToEndSeal.PENDING,
     val isPending: Boolean,
     /** L'échéance d'un message éphémère (epoch ms) : passée, la bulle se retire comme dans le fil. */
     val expiresAtMs: Long? = null,
@@ -176,6 +179,7 @@ internal object RiverRenderingBuilder {
             forwardAttribution = source.forwardAttribution,
             blurReveal = source.blurReveal,
             protection = protection(source),
+            endToEndSeal = source.endToEndSeal,
             isPending = source.isPending,
             expiresAtMs = isoToEpochMillisOrNull(source.expiresAtIso),
             sticker = source.drawnSticker?.takeIf { protection(source) == RiverProtection.NONE },
