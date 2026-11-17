@@ -64,6 +64,7 @@ import {
   type PreferenceCategory,
   type PreferenceDocument
 } from '../me/preferences/preference-registry';
+import { mergeCategoriesAtomically } from '../me/preferences/preference-atomic-merge';
 
 type Deps = {
   userAuditService: UserAuditService;
@@ -295,14 +296,10 @@ export function registerUserMemberPreferencesRoutes(fastify: FastifyInstance, de
       }
 
       const base = (await resolveCompleteCategories(fastify.prisma, userId, [category]))[category] ?? {};
-      const stored = { ...base, ...submitted };
-
-      const updated = await fastify.prisma.userPreferences.upsert({
-        where: { userId },
-        create: { userId, [category]: stored },
-        update: { [category]: stored },
-        select: { id: true, [category]: true }
-      });
+      // #18910 — fusion DANS la base : la base relue (défauts, lignes héritées) ne comble que les clés absentes, la
+      // valeur vivante gagne sur elle, le corps sur tout — une écriture concurrente du compte ne s'efface plus.
+      const updated = await mergeCategoriesAtomically(
+        fastify.prisma, userId, [{ category, defaults: base, submitted }], { id: true, [category]: true });
 
       await applyCategoryWriteEffects(fastify, userId, [category]);
 

@@ -1,4 +1,5 @@
-import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { mergePreferenceKeysAtomically } from '../routes/me/preferences/preference-atomic-merge';
 import {
   ApplicationPreferenceSchema,
   APPLICATION_PREFERENCE_DEFAULTS,
@@ -44,7 +45,7 @@ export type AutoTranslatePreferenceSource = {
 };
 
 /** Le strict nécessaire du client Prisma — jamais l'instance entière. */
-export type AutoTranslatePreferenceStore = Pick<PrismaClient, 'userPreferences'>;
+export type AutoTranslatePreferenceStore = Pick<PrismaClient, 'userPreferences' | '$runCommandRaw'>;
 
 const autoTranslatePreferenceShape = ApplicationPreferenceSchema.pick({ autoTranslateEnabled: true });
 
@@ -75,29 +76,6 @@ export async function loadAutoTranslateEnabled(
 }
 
 /**
- * Le document `application` avec cette seule clé changée — **les voisines
- * intactes**.
- *
- * `application` porte une vingtaine de clés (thème, police, animations,
- * accessibilité). Un `upsert` qui poserait `{ autoTranslateEnabled }` NU les
- * effacerait toutes, et le seul symptôme visible serait un thème qui se remet
- * à « auto » — un défaut qu'on n'attribue jamais à la route qui l'a causé.
- *
- * Un document qui n'est pas un objet (`null`, une valeur scalaire héritée) n'a
- * aucune voisine à préserver : il est REMPLACÉ.
- */
-export function mergeAutoTranslatePreference(
-  document: unknown,
-  autoTranslateEnabled: boolean
-): Prisma.InputJsonObject {
-  const voisines: Prisma.JsonObject =
-    typeof document === 'object' && document !== null && !Array.isArray(document)
-      ? (document as Prisma.JsonObject)
-      : {};
-  return { ...voisines, autoTranslateEnabled };
-}
-
-/**
  * Écrit la préférence et rend ce que le magasin PORTE désormais — jamais la
  * valeur qu'on croit y avoir mise (elle est relue par le résolveur ci-dessus,
  * la seule loi de lecture du dépôt).
@@ -108,32 +86,15 @@ export function mergeAutoTranslatePreference(
  * appelant d'ici n'écrit. La DIFFUSION, elle, reste au site d'appel : elle a
  * besoin de l'instance Fastify, que ce module n'a pas — et ne doit pas avoir.
  *
- * Lire-fusionner-écrire n'est PAS atomique : deux écritures concurrentes sur
- * deux clés DIFFÉRENTES du même document peuvent en perdre une. Le `PATCH` des
- * catégories JSON fusionne désormais DANS la base
- * (`routes/me/preferences/preference-atomic-merge`, #18910) ; cet écrivain-ci
- * garde la lecture-puis-écriture, et une bascule de `application` faite au
- * même instant par `PATCH /me/preferences` peut encore s'y perdre. Dit ici
- * pour que le prochain lecteur n'ait pas à l'instruire une seconde fois.
+ * La clé se pose DANS la base, sur la valeur vivante (`mergePreferenceKeysAtomically`, #18910) : une bascule
+ * voisine de `application` faite au même instant par `PATCH /me/preferences` ne se perd plus.
  */
 export async function writeAutoTranslateEnabled(
   prisma: AutoTranslatePreferenceStore,
   userId: string,
   autoTranslateEnabled: boolean
 ): Promise<boolean> {
-  const existante = await prisma.userPreferences.findUnique({
-    where: { userId },
-    select: AUTO_TRANSLATE_PREFERENCE_DOCUMENT_SELECT,
-  });
-
-  const application = mergeAutoTranslatePreference(existante?.application, autoTranslateEnabled);
-
-  const row = await prisma.userPreferences.upsert({
-    where: { userId },
-    create: { userId, application },
-    update: { application },
-    select: AUTO_TRANSLATE_PREFERENCE_DOCUMENT_SELECT,
-  });
-
-  return resolveAutoTranslateEnabled({ userPreferences: row });
+  const row = await mergePreferenceKeysAtomically(
+    prisma, userId, 'application', { autoTranslateEnabled }, AUTO_TRANSLATE_PREFERENCE_DOCUMENT_SELECT);
+  return resolveAutoTranslateEnabled({ userPreferences: { application: row.application } });
 }

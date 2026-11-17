@@ -23,6 +23,8 @@ import type { PreferenceCategory, PreferenceDocument } from './preference-regist
  *
  * Réservé aux catégories SANS rangement propre (`storage`) : `privacy` fusionne
  * encore des lignes héritées que seul un `readStored` côté serveur sait lire.
+ * Un écrivain qui les a lues (l'admin) les passe en `defaults` : elles ne
+ * comblent alors que les clés absentes, la valeur VIVANTE gagne sur elles.
  */
 
 export type AtomicCategoryMerge = {
@@ -66,8 +68,10 @@ type WriteOutcome = { readonly n?: number; readonly writeErrors?: readonly unkno
  * mise à jour qui ne touche aucune ligne, ou qui rend une erreur d'écriture,
  * LÈVE : le client reçoit un 500 et retente, jamais un 200 sur une valeur perdue.
  */
+export type AtomicMergePrisma = Pick<PrismaClient, 'userPreferences' | '$runCommandRaw'>;
+
 export async function mergeCategoriesAtomically(
-  prisma: PrismaClient,
+  prisma: AtomicMergePrisma,
   userId: string,
   merges: readonly AtomicCategoryMerge[],
   select: Readonly<Record<string, boolean>>
@@ -84,4 +88,18 @@ export async function mergeCategoriesAtomically(
   // Prisma type une ligne sous un `select` dynamique par `never` : la forme
   // est celle que `select` vient de demander, `id` compris.
   return row as unknown as PreferenceRow;
+}
+
+/**
+ * Les autres écrivains d'une colonne de préférences (traduction automatique, clonage vocal) : ces clés-là, et
+ * rien d'autre, posées dans la base sur la valeur vivante — jamais « lire, fusionner, réécrire » (#18910, audit).
+ */
+export function mergePreferenceKeysAtomically(
+  prisma: AtomicMergePrisma,
+  userId: string,
+  category: PreferenceCategory,
+  keys: PreferenceDocument,
+  select: Readonly<Record<string, boolean>> = { id: true },
+): Promise<PreferenceRow> {
+  return mergeCategoriesAtomically(prisma, userId, [{ category, defaults: {}, submitted: keys }], select);
 }
