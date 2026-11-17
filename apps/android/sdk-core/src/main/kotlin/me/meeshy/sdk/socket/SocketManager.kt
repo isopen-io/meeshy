@@ -155,7 +155,6 @@ class SocketManager internal constructor(
 
     private val _connected = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
     private val _disconnected = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
-    private val _sessionRevoked = MutableSharedFlow<String?>(replay = 0, extraBufferCapacity = 1)
     private val _didReconnect = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
     private val _connectionRTT = MutableStateFlow<Double?>(null)
     private val _socketErrors = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
@@ -170,9 +169,6 @@ class SocketManager internal constructor(
 
     /** Dernier aller-retour mesuré par le battement (ms), `null` tant qu'aucun accusé n'est arrivé. */
     val connectionRTT: StateFlow<Double?> = _connectionRTT.asStateFlow()
-
-    /** `auth:session-revoked` : la passerelle a fermé CETTE session (motif éventuel). */
-    val sessionRevoked: SharedFlow<String?> = _sessionRevoked.asSharedFlow()
 
     /** Événement `error` du serveur : exposé, jamais cause de déconnexion. */
     val socketErrors: SharedFlow<String> = _socketErrors.asSharedFlow()
@@ -264,7 +260,6 @@ class SocketManager internal constructor(
             // Une socket déjà remplacée ou fermée ne parle plus au nom de la session : sa révocation tardive n'est pas livrée.
             if (_socket !== socket) return@on
             Timber.w("Socket: session revoked")
-            _sessionRevoked.tryEmit(reasonOf(args))
             _sessionRevocations.tryEmit(SocketSessionRevocation(args.firstOrNull()?.toString().orEmpty(), presented))
         }
         socket.on(EVENT_ERROR) { args ->
@@ -416,9 +411,6 @@ class SocketManager internal constructor(
             }
         }
     }
-
-    private fun reasonOf(args: Array<Any>): String? =
-        (args.firstOrNull() as? JSONObject)?.optString("reason")?.takeIf { it.isNotBlank() }
 
     /**
      * Ferme la socket, retire ses écouteurs et OUBLIE le registre : la session est finie.
