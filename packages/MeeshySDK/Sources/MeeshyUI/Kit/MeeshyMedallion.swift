@@ -172,7 +172,7 @@ private struct MeeshyMedallionAccessibility: ViewModifier {
 }
 
 /// Le contour d'une forme du médaillon : disque, carré arrondi, festons, organique.
-private struct MeeshyMedallionOutline: Shape {
+nonisolated private struct MeeshyMedallionOutline: Shape {
     let shape: MeeshyMedallionShape
     let cornerRadius: CGFloat
 
