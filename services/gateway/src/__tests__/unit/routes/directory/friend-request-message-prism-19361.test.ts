@@ -64,6 +64,9 @@ async function monter(lecteur: Record<string, unknown>) {
         return { id: AUTRE, deactivatedAt: null, blockedUserIds: [] };
       }),
     },
+    // #19362 — le réglage « accepter les demandes » de la cible, lu à l'envoi.
+    userPreferences: { findMany: jest.fn(async () => []) },
+    userPreference: { findMany: jest.fn(async () => []) },
     friendRequest: {
       findMany: jest.fn<any>(async () => [ligne(RECUE, AUTRE, MOI), ligne(ENVOYEE, MOI, TIERS)]),
       create: jest.fn<any>(async (args: any) => ({ ...ligne(RECUE, MOI, AUTRE), ...args.data, messageTranslations: null })),

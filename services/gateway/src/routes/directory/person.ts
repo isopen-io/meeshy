@@ -22,6 +22,8 @@ import { profileSeenAs, readProfileCircleView, readProfileSeenAs } from '../../s
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response.js';
 import { linkCardIsClosed } from './person-link-gate';
+import { niveauEffectif } from '../../services/friendship';
+import { targetAcceptsRequests } from '../../services/relations/contactRequestsGate';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPerson' });
 
@@ -117,6 +119,14 @@ type RelationServie = {
   readonly isSelf: boolean;
   readonly blockedByViewer: boolean;
   readonly relationRequestId: string | null;
+  /**
+   * #19362 — la cible accepte-t-elle une demande de CE lecteur ? La loi de l'envoi
+   * (`contactRequestsOpen`) sur le niveau effectif de la paire : un lecteur sans lien
+   * lit `false` quand le réglage est fermé, un lecteur déjà lié lit `true`. Servi à
+   * un lecteur inscrit autre que la cible, jamais quand il l'a bloquée ; la valeur
+   * du réglage, elle, ne part jamais.
+   */
+  readonly acceptsRequests?: boolean;
 };
 
 const etatJsonSchema = {
@@ -181,8 +191,18 @@ async function relationAvec(
   })();
 
   const enAttente = fil === 'pending_sent' || fil === 'pending_received';
+  const servie: RelationServie = { relation: fil, isSelf: false, blockedByViewer, relationRequestId: enAttente && lien ? lien.id : null };
+  if (blockedByViewer) return servie;
 
-  return { relation: fil, isSelf: false, blockedByViewer, relationRequestId: enAttente && lien ? lien.id : null };
+  // L'annonce n'est qu'un indice : sur un incident, elle se tait (le client garde
+  // son défaut ouvert) et la fiche part quand même — l'envoi, lui, reste gardé.
+  try {
+    const currentLevel = await niveauEffectif(fastify.prisma, viewerId, cibleId);
+    return { ...servie, acceptsRequests: await targetAcceptsRequests(fastify.prisma, { targetId: cibleId, currentLevel }) };
+  } catch (error) {
+    logger.warn('acceptsRequests non résolu — champ omis', { error });
+    return servie;
+  }
 }
 
 /**
@@ -340,6 +360,8 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
                 // `nullable` parce que `null` est une RÉPONSE ici — « aucune
                 // demande à envoyer » — et non l'absence d'un champ.
                 relationRequestId: { type: 'string', nullable: true },
+                // #19362 — « accepter les demandes de connexion », pour CE lecteur.
+                acceptsRequests: { type: 'boolean' },
                 // #18861 : la fiche par cercle (`?expand=circle`) et le cercle de « Voir comme » (`?as=`).
                 circle: circleJsonSchema,
                 viewAs: { type: 'string' },
@@ -490,7 +512,7 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
 function epinglesServis(demande: ReadonlySet<Expansion>): readonly string[] {
   const epingles = ['id'];
   if (demande.has('stats')) epingles.push('stats');
-  if (demande.has('relation')) epingles.push('relation', 'isSelf', 'blockedByViewer', 'relationRequestId');
+  if (demande.has('relation')) epingles.push('relation', 'isSelf', 'blockedByViewer', 'relationRequestId', 'acceptsRequests');
   if (demande.has('circle')) epingles.push('circle');
   epingles.push('viewAs');
   return epingles;

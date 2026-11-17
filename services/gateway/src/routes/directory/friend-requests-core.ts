@@ -12,6 +12,8 @@ import {
 } from '../../utils/cursor-pagination';
 import { parseRequestLevel } from '@meeshy/shared/types/relation';
 import { hasStandingRequest, judgeRelationRequest } from '../../services/relations/relationRequestGate';
+import { targetAcceptsRequests } from '../../services/relations/contactRequestsGate';
+import { CONTACT_REQUESTS_CLOSED } from '@meeshy/shared/utils/relation-request';
 import {
   INCLUDE_PARTIES,
   clauseHorsBlocage,
@@ -118,6 +120,12 @@ export async function envoyerDemande(
   const jugement = await judgeRelationRequest(fastify.prisma, {
     requesterId: emetteurId, otherId: receveurId, targetLevel: niveau, now: new Date(),
   });
+  // #19362 — « accepter les demandes de connexion » fermé retient une NOUVELLE
+  // demande (aucun lien d'au moins Connaissance) ; il prime sur le jugement de
+  // cran, si bien qu'une cible fermée se lit toujours par le même code.
+  if (!(await targetAcceptsRequests(fastify.prisma, { targetId: receveurId, currentLevel: jugement.currentLevel }))) {
+    return { refus: { code: 409, message: 'Cette personne n\'accepte pas de nouvelles demandes', codeMetier: CONTACT_REQUESTS_CLOSED } };
+  }
   if (jugement.allowed === false) {
     return { refus: { code: 409, message: 'Cette demande n\'est pas possible maintenant', codeMetier: jugement.code } };
   }
