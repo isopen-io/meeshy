@@ -78,7 +78,6 @@ MeeshySDK/                      -> Target core (logique mtier)
     StoryItem.swift            -> StoryItem, StorySlide.swift, StoryGroup.swift, StoryEffects.swift
     UserModels.swift           -> UpdateProfileRequest/Response, changement e-mail/telephone
     APINotification.swift      -> APINotification ; NotificationContext.swift, MeeshyNotificationType.swift
-    SampleData.swift           -> Donnes de dmo
   Cache/
     CachePolicy.swift          -> TTL, staleTTL, maxItemCount, StorageLocation, predefined policies
     CacheIdentifiable.swift    -> Protocol for cached models (requires `id: String`)
