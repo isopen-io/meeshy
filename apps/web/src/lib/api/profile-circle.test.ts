@@ -103,3 +103,24 @@ describe('la fiche par cercle du LECTEUR RÉEL', () => {
     expect(mine).not.toContain('people-view-as');
   });
 });
+
+describe('« Notre cercle » lit ce que la passerelle sert', () => {
+  test('les deux accords et ce qui manque pour monter sont décodés, pas jetés', () => {
+    const view = decodeProfileCircleView({
+      ...served,
+      level: 'ACQUAINTANCE',
+      grantedByViewer: 'FRIEND',
+      grantedByTarget: 'ACQUAINTANCE',
+      missing: { level: 'FRIEND', byViewer: false, byTarget: true },
+    });
+    expect(view?.grantedByViewer).toBe('FRIEND');
+    expect(view?.grantedByTarget).toBe('ACQUAINTANCE');
+    expect(view?.missing).toEqual({ level: 'FRIEND', byViewer: false, byTarget: true });
+  });
+
+  test('un accord ou un manque illisible est écarté, jamais inventé', () => {
+    const view = decodeProfileCircleView({ ...served, grantedByViewer: 'ROYAL', missing: { level: 'PUBLIC', byViewer: true, byTarget: true } });
+    expect(view?.grantedByViewer).toBeUndefined();
+    expect(view?.missing ?? null).toBeNull();
+  });
+});

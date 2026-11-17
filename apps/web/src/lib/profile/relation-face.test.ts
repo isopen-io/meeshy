@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { resolveProfileCircleView } from '@meeshy/shared/utils/profile-circle-view';
 
-import { circleLadderOf, PROFILE_FACES, relationActionsOf, requestedFaceOf, resolveProfileFace } from './relation-face';
+import { circleLadderOf, faceSearch, PROFILE_FACES, relationActionsOf, requestedFaceOf, resolveProfileFace } from './relation-face';
 
 const viewAt = (granted: RelationLevel, overrides: { readonly target?: RelationLevel; readonly blocked?: boolean } = {}) =>
   resolveProfileCircleView({
@@ -20,10 +20,14 @@ const viewAt = (granted: RelationLevel, overrides: { readonly target?: RelationL
 const stateOf = (view: ReturnType<typeof viewAt> | null, id: string) => relationActionsOf(view)?.find((item) => item.id === id);
 
 describe('la fiche d un autre : les actions selon le cercle commun', () => {
-  test('un Proche ouvre le talkie et Ensemble, et Bring reste verrouillé tant que son cercle est plus haut', () => {
-    const view = viewAt('CLOSE');
-    expect(stateOf(view, 'talkie')?.state).toBe('open');
-    expect(stateOf(view, 'together')?.state).toBe('open');
+  test('un Proche ouvre le talkie, Ensemble et Bring ; un Ami n a que Bring, le talkie restant verrouillé dès Proche', () => {
+    const close = viewAt('CLOSE');
+    expect(stateOf(close, 'talkie')?.state).toBe('open');
+    expect(stateOf(close, 'together')?.state).toBe('open');
+    expect(stateOf(close, 'bring')?.state).toBe('open');
+    const friend = viewAt('FRIEND');
+    expect(stateOf(friend, 'bring')?.state).toBe('open');
+    expect(stateOf(friend, 'talkie')).toEqual({ id: 'talkie', group: 'speak', state: 'locked', circle: 'CLOSE' });
   });
 
   test('un Public ne reçoit AUCUNE action de proximité ouverte, et chacune dit le cercle qui l ouvre', () => {
@@ -71,6 +75,10 @@ describe('Notre cercle', () => {
   test('sur soi-même ou sans verdict, rien à dire', () => {
     expect(circleLadderOf(null)).toBeNull();
   });
+
+  test('vers une cible bloquée ou partie, aucun accord n est servi : rien à dire, jamais « au plus près »', () => {
+    expect(circleLadderOf(viewAt('CLOSE', { blocked: true }))).toBeNull();
+  });
 });
 
 describe('les faces', () => {
@@ -89,5 +97,15 @@ describe('les liens déjà partagés', () => {
     expect(requestedFaceOf(new URLSearchParams('tab=details'))).toBe('actions');
     expect(requestedFaceOf(new URLSearchParams('tab=details&face=liens'))).toBe('liens');
     expect(requestedFaceOf(new URLSearchParams('tab=posts'))).toBeNull();
+  });
+
+  test('quitter la face Actions ouverte par un ancien ?tab=details la quitte vraiment', () => {
+    const toVitrine = faceSearch({ search: new URLSearchParams('tab=details'), face: 'vitrine', fallback: 'vitrine' });
+    expect(requestedFaceOf(toVitrine)).toBeNull();
+    expect(toVitrine.toString()).toBe('');
+    const toLiens = faceSearch({ search: new URLSearchParams('tab=details&x=1'), face: 'liens', fallback: 'vitrine' });
+    expect(requestedFaceOf(toLiens)).toBe('liens');
+    expect(toLiens.get('x')).toBe('1');
+    expect(faceSearch({ search: new URLSearchParams('tab=posts'), face: 'actions', fallback: 'vitrine' }).get('tab')).toBe('posts');
   });
 });
