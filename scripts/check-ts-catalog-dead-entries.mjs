@@ -534,6 +534,12 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Les entrées d'un lien de communauté (#19429, besoin #19290, chantier #18857) : iOS les lira d'abord
+  // (fiche `Lien-Communaute`) ; le web et Android avec leur fiche de lien.
+  'communities.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
+  'communities.byIdJoinRequests': { issue: 19429, reason: 'GET /communities/:id/join-requests — « En attente de validation »' },
+  'communities.byIdJoinRequestsByRequestIdAccept': { issue: 19429, reason: 'POST …/join-requests/:requestId/accept — le bouton Accepter' },
+  'communities.byIdJoinRequestsByRequestIdReject': { issue: 19429, reason: 'POST …/join-requests/:requestId/reject — le bouton Refuser' },
   // Stories « à la une » servies par la passerelle (#19394, chantier #18857) : les clients liront le rail
   // « À la une » de la Vitrine (K20) et l'auteur composera ses albums.
   'users.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche, chaque story sous sa propre audience' },

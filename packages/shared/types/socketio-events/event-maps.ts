@@ -282,6 +282,7 @@ import type {
   ParticipantRoleUpdatedEventData,
 } from './participant.js';
 import type {
+  CommunityJoinRequestedEventData,
   CommunityMemberJoinedEventData,
   CommunityMemberLeftEventData,
   CommunityMemberRoleUpdatedEventData,
@@ -518,6 +519,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMUNITY_MEMBER_JOINED]: (data: CommunityMemberJoinedEventData) => void;
   [SERVER_EVENTS.COMMUNITY_MEMBER_LEFT]: (data: CommunityMemberLeftEventData) => void;
   [SERVER_EVENTS.COMMUNITY_MEMBER_ROLE_UPDATED]: (data: CommunityMemberRoleUpdatedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED]: (data: CommunityJoinRequestedEventData) => void;
 
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;

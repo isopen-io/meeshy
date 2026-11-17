@@ -13,6 +13,7 @@ import Foundation
 
 public enum UsersEndpoint: MeeshyEndpoint, Sendable {
     case byId(id: String)
+    case byIdHighlights(id: String)
     case byIdInCommon(id: String)
     case byUserIdAffiliateToken(userId: String)
     case byUserIdBlock(userId: String)
@@ -40,6 +41,9 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
     case meDashboardStats
     case meDevices
     case meDevicesByDeviceId(deviceId: String)
+    case meHighlights
+    case meHighlightsById(id: String)
+    case meHighlightsOrder
     case mePassword
     case mePushToTalkToken
     case meReferralCode
@@ -58,6 +62,7 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
     public var path: String {
         switch self {
         case .byId(let id): return "/api/v1/users/\(id)"
+        case .byIdHighlights(let id): return "/api/v1/users/\(id)/highlights"
         case .byIdInCommon(let id): return "/api/v1/users/\(id)/in-common"
         case .byUserIdAffiliateToken(let userId): return "/api/v1/users/\(userId)/affiliate-token"
         case .byUserIdBlock(let userId): return "/api/v1/users/\(userId)/block"
@@ -85,6 +90,9 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
         case .meDashboardStats: return "/api/v1/users/me/dashboard-stats"
         case .meDevices: return "/api/v1/users/me/devices"
         case .meDevicesByDeviceId(let deviceId): return "/api/v1/users/me/devices/\(deviceId)"
+        case .meHighlights: return "/api/v1/users/me/highlights"
+        case .meHighlightsById(let id): return "/api/v1/users/me/highlights/\(id)"
+        case .meHighlightsOrder: return "/api/v1/users/me/highlights/order"
         case .mePassword: return "/api/v1/users/me/password"
         case .mePushToTalkToken: return "/api/v1/users/me/push-to-talk-token"
         case .meReferralCode: return "/api/v1/users/me/referral-code"

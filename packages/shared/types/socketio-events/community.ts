@@ -53,8 +53,12 @@ export interface CommunityUpdatedEventData {
  */
 export type CommunityMemberRole = 'admin' | 'moderator' | 'member';
 
-/** Comment la personne est entrée : d'elle-même, ou par un tiers (invitation, ajout). */
-export type CommunityMemberJoinVia = 'self' | 'invited';
+/**
+ * Comment la personne est entrée : d'elle-même, par un tiers (invitation,
+ * ajout), ou par le lien de la communauté (#19429 — additif : un ancien
+ * décodeur qui ne connaît pas `link` le lit comme une entrée d'elle-même).
+ */
+export type CommunityMemberJoinVia = 'self' | 'invited' | 'link';
 
 /** Comment la personne est sortie : d'elle-même, ou retirée par un administrateur. */
 export type CommunityMemberLeftReason = 'left' | 'removed';
@@ -81,5 +85,24 @@ export interface CommunityMemberRoleUpdatedEventData {
   readonly userId: string;
   readonly role: CommunityMemberRole;
   readonly memberCount: number;
+  readonly at: string;
+}
+
+/**
+ * `community:join-requested` (#19429) — une personne demande à entrer dans une
+ * communauté qui valide chaque entrée. Diffusé sur la room personnelle
+ * `user:<id>` des administrateurs, des modérateurs et du créateur SEULEMENT :
+ * jamais un membre simple, jamais la personne qui demande.
+ *
+ * La charge ne nomme la personne que par son identifiant : le profil et le
+ * pays se relisent par `GET /communities/:id/join-requests`, qui repasse par
+ * les gardes de la passerelle. `pendingCount` compte les demandes en attente
+ * après l'écriture ; `at` est une chaîne ISO.
+ */
+export interface CommunityJoinRequestedEventData {
+  readonly communityId: string;
+  readonly requestId: string;
+  readonly userId: string;
+  readonly pendingCount: number;
   readonly at: string;
 }

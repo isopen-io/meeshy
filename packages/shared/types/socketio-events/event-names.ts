@@ -628,6 +628,8 @@ export const SERVER_EVENTS = {
   COMMUNITY_MEMBER_JOINED: 'community:member-joined',
   COMMUNITY_MEMBER_LEFT: 'community:member-left',
   COMMUNITY_MEMBER_ROLE_UPDATED: 'community:member-role-updated',
+  // Une demande d'entrée dans une communauté qui valide chaque entrée (#19429), vers ses admins et modérateurs
+  COMMUNITY_JOIN_REQUESTED: 'community:join-requested',
 
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',

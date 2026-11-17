@@ -18,7 +18,8 @@ import {
   sendForbidden,
   sendNotFound,
   sendConflict,
-  sendInternalError
+  sendInternalError,
+  sendBadRequest
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
@@ -30,6 +31,9 @@ import { viewerFromRequest } from '../users/presence-gate';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
+import { JoinCommunitySchema } from './join-body';
+import { clickGeo } from '../tracking-links/click-geo';
+import { scheduleCommunityJoinRequestedFrom } from '../../services/community-join-request-broadcast';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembershipRoutes' });
 
@@ -130,7 +134,7 @@ export async function registerMembershipRoutes(
   fastify.post('/communities/:id/join', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Join a public community. The authenticated user is added as a member with the "member" role. Private communities cannot be joined directly - use an invite instead.',
+      description: 'Join a public community. The authenticated user is added as a member with the "member" role. Private communities cannot be joined directly - use an invite instead. Optional body `{ via: "link" }` records an entry through the community link (#19429). A community that validates each entry (`requiresJoinApproval`) answers 202 with a pending request instead.',
       tags: ['communities'],
       summary: 'Join a public community',
       params: {
@@ -151,6 +155,24 @@ export async function registerMembershipRoutes(
             success: { type: 'boolean', example: true },
             data: communityMemberSchema
           }
+        },
+        202: {
+          description: 'The community validates each entry: a join request is pending (#19429)',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                status: { type: 'string', enum: ['pending'] },
+                requestId: { type: 'string' }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid join body',
+          ...errorResponseSchema
         },
         401: {
           description: 'User not authenticated',
@@ -183,16 +205,48 @@ export async function registerMembershipRoutes(
         return sendUnauthorized(reply, 'User must be authenticated');
       }
 
+      // #19429 — corps FACULTATIF : un ancien client n'en envoie aucun et entre « de lui-même ».
+      const parsedBody = JoinCommunitySchema.safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return sendBadRequest(reply, 'Invalid join request', { code: 'INVALID_JOIN_REQUEST' });
+      }
+      const via = parsedBody.data.via ?? 'self';
+      // Le pays seul, depuis l'en-tête du CDN — jamais la ville (même source que les liens de suivi).
+      const joinCountry = clickGeo(request).country ?? null;
+
       const userId = authContext.userId;
 
       const community = await fastify.prisma.community.findFirst({
         // #8876 — on ne rejoint pas une communauté désactivée par l'administration.
         where: { id, isActive: true },
-        select: { id: true, isPrivate: true, createdBy: true }
+        select: { id: true, isPrivate: true, createdBy: true, requiresJoinApproval: true }
       });
 
       if (!community) {
         return sendNotFound(reply, 'Community not found');
+      }
+
+      // « Valider chaque entrée » (#19429) : une DEMANDE, jamais une adhésion directe.
+      if (community.requiresJoinApproval) {
+        const activeMember = await fastify.prisma.communityMember.findFirst({
+          where: { communityId: id, userId, isActive: true },
+          select: { id: true }
+        });
+        if (activeMember) {
+          return sendConflict(reply, 'You are already a member of this community');
+        }
+        const pending = await fastify.prisma.communityJoinRequest.findFirst({
+          where: { communityId: id, userId, status: 'pending' },
+          select: { id: true }
+        });
+        const joinRequest = pending ?? await fastify.prisma.communityJoinRequest.create({
+          data: { communityId: id, userId, status: 'pending', via, country: joinCountry },
+          select: { id: true }
+        });
+        if (!pending) {
+          scheduleCommunityJoinRequestedFrom(fastify, { communityId: id, requestId: joinRequest.id, userId });
+        }
+        return sendSuccess(reply, { status: 'pending', requestId: joinRequest.id }, { statusCode: 202 });
       }
 
       if (community.isPrivate) {
@@ -216,7 +270,7 @@ export async function registerMembershipRoutes(
       const member = existingMember
         ? await fastify.prisma.communityMember.update({
             where: { id: existingMember.id },
-            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string },
+            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string, joinedVia: via, joinCountry },
             include: {
               user: {
                 select: {
@@ -233,7 +287,9 @@ export async function registerMembershipRoutes(
             data: {
               communityId: id,
               userId,
-              role: CommunityRole.MEMBER as string
+              role: CommunityRole.MEMBER as string,
+              joinedVia: via,
+              joinCountry
             },
             include: {
               user: {
@@ -263,7 +319,7 @@ export async function registerMembershipRoutes(
         .recordActivity(userId, 'social.community_joined', { targetId: id, targetOwnerId: community.createdBy })
         .catch((err: unknown) => logger.warn('engagement social.community_joined failed', { err }));
 
-      scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'joined', communityId: id, userId, role: 'member', via: 'self' });
+      scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'joined', communityId: id, userId, role: 'member', via });
 
       // Pas de gate ici : le membre rendu est l'APPELANT lui-même, et une
       // préférence de visibilité ne se cache pas à celui qui l'a posée.
@@ -506,7 +562,7 @@ export async function registerMembershipRoutes(
       const member = existingMember
         ? await fastify.prisma.communityMember.update({
             where: { id: existingMember.id },
-            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string },
+            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string, joinedVia: 'invited', joinCountry: null },
             include: {
               user: {
                 select: {
@@ -524,7 +580,8 @@ export async function registerMembershipRoutes(
             data: {
               communityId: id,
               userId: inviteeId,
-              role: CommunityRole.MEMBER as string
+              role: CommunityRole.MEMBER as string,
+              joinedVia: 'invited'
             },
             include: {
               user: {

@@ -500,6 +500,7 @@ model User {
 
   createdCommunities      Community[]              @relation("CommunityCreator")
   communityMemberships    CommunityMember[]
+  communityJoinRequests   CommunityJoinRequest[]
   conversationPreferences ConversationPreference[]
   createdShareLinks       ConversationShareLink[]  @relation("ShareLinkCreator")
   receivedFriendRequests  FriendRequest[]          @relation("FriendRequestReceiver")
@@ -2447,8 +2448,11 @@ model Community {
   createdBy   String    @db.ObjectId
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  /// « Valider chaque entrée » (#19429) : rejoindre crée une DEMANDE qu'un administrateur ou un modérateur accepte ou refuse. Absent = entrée directe.
+  requiresJoinApproval Boolean? @default(false)
 
   members             CommunityMember[]
+  joinRequests        CommunityJoinRequest[]
   creator             User                       @relation("CommunityCreator", fields: [createdBy], references: [id])
   sharedConversations ConversationShare[]        @relation("CommunityShares")
   Conversation        Conversation[]
@@ -2468,9 +2472,37 @@ model CommunityMember {
   isActive    Boolean   @default(true)
   /// When the member left the community (null if still active)
   leftAt      DateTime?
+  /// Comment la personne est entrée (#19429) : self, invited, link. Absent sur les lignes d'avant.
+  joinedVia   String?
+  /// Pays de l'arrivant à l'entrée, code ISO 3166-1 alpha-2 — jamais la ville (#19429).
+  joinCountry String?
 
   user      User      @relation(fields: [userId], references: [id])
   community Community @relation(fields: [communityId], references: [id])
+
+  @@index([communityId, isActive, joinedAt])
+}
+
+/// Demande d'entrée dans une communauté qui valide chaque entrée (#19429).
+model CommunityJoinRequest {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  communityId String    @db.ObjectId
+  userId      String    @db.ObjectId
+  /// pending, accepted, rejected
+  status      String    @default("pending")
+  /// Comment la demande est arrivée : self ou link
+  via         String?
+  /// Code ISO 3166-1 alpha-2 de l'arrivant, jamais la ville
+  country     String?
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+  decidedBy   String?   @db.ObjectId
+
+  user      User      @relation(fields: [userId], references: [id])
+  community Community @relation(fields: [communityId], references: [id])
+
+  @@index([communityId, status, createdAt])
+  @@index([userId, communityId])
 }
 
 /// Statistiques d'utilisation d'un utilisateur

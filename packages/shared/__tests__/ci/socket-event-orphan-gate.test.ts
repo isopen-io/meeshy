@@ -58,6 +58,7 @@ const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['user:blocked-by-me', "ÉMIS — `emitBlockedByMe` vers la SEULE room de l'acteur après `PUT /directory/blocks/:id` et son alias (#19366). Lecteurs : les clients du profil (#18857) ; d'ici là chacun relit `GET /directory/blocks`."],
   ['user:unblocked-by-me', "ÉMIS — `emitBlockedByMe` vers la SEULE room de l'acteur après `DELETE /directory/blocks/:id` et son alias (#19366). Lecteurs : les clients du profil (#18857)."],
   ['user:profile-changed', "ÉMIS — `emitProfileChanged` (`services/notifications/profile-changed.ts`) vers les liés Connaissance+ et les partenaires de conversation, hors blocage, quand bio, ville, langues, voix, décor ou adresses changent (#19384). Lecteurs : les clients du profil (#18857), qui revalident `GET /directory/people/:handle` avec `If-None-Match`."],
+  ['community:join-requested', "ÉMIS — `scheduleCommunityJoinRequestedFrom` (`services/community-join-request-broadcast.ts`) vers les administrateurs, modérateurs et créateur d'une communauté qui valide chaque entrée (#19429). Lecteurs : les clients de la fiche d'un lien de communauté (#19290) ; d'ici là chacun relit `GET /communities/:id/join-requests`."],
   ['e2ee:own-device-retired', 'ÉMIS — `own-device-announcements.ts` au retrait d\'une génération (#19156). Lecteurs : lots clients 4, 5 et 6.'],
 ]);
 

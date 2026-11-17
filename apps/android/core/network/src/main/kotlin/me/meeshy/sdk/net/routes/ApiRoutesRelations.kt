@@ -29,4 +29,5 @@ public object ApiRoutesRelations {
     public const val NOW_PLAYING: String = "relations/now-playing"
     public const val PHONE_REACHABILITY: String = "relations/phone-reachability"
     public const val ROOT: String = "relations"
+    public const val SUMMARY: String = "relations/summary"
 }
