@@ -282,6 +282,26 @@ describe('MeeshyWavePlayer — revue : le glissement se voit et se termine', () 
   });
 });
 
+describe('MeeshyWavePlayer — revue : seul le bouton principal glisse', () => {
+  const props = { label: 'Voix de Léo', samples: SAMPLES, duration: 8, words: WORDS } as const;
+
+  test('un clic droit sur l’onde n’ouvre aucun glissement et ne déplace pas la lecture', () => {
+    const states: boolean[] = [];
+    const scrubs: number[] = [];
+    const container = mount(<MeeshyWavePlayer {...props} progress={0.1} isPlaying={false} onToggle={() => {}} onScrub={(fraction) => scrubs.push(fraction)} onScrubbingChange={(value) => states.push(value)} />);
+    const zone = wave(container);
+    zone.getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, right: 200, bottom: 44, height: 44, x: 0, y: 0, toJSON: () => ({}) });
+    zone.setPointerCapture = () => {};
+    act(() => {
+      zone.dispatchEvent(Object.assign(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 2 }), { clientX: 150 }));
+      zone.dispatchEvent(Object.assign(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, button: 2 }), { clientX: 150 }));
+    });
+    expect(states).toEqual([]);
+    expect(scrubs).toEqual([]);
+    expect(container.querySelector('[data-kit-wave-marker]')).toBeNull();
+  });
+});
+
 describe('MeeshyWaveBars — l’onde seule', () => {
   test('rend des barres, jamais de disque ni de durée', () => {
     const container = mount(<MeeshyWaveBars samples={SAMPLES} progress={0.5} isLive={false} />);

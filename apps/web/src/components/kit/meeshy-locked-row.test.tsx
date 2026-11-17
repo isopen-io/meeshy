@@ -159,6 +159,25 @@ describe('MeeshyLockedRow — le composant', () => {
       expect(unlocked).toBe(0);
     });
 
+    test('une seconde ouverture (isUnlocking repasse à faux puis à vrai) prévient l’hôte de nouveau', () => {
+      let unlocked = 0;
+      const row = (isUnlocking: boolean) => <MeeshyLockedRow title="Présence" requirement="dès Ami" words={WORDS} isUnlocking={isUnlocking} onUnlocked={() => (unlocked += 1)} />;
+      mount(row(true));
+      act(() => jest.advanceTimersByTime(420));
+      expect(unlocked).toBe(1);
+      render(row(false));
+      render(row(true));
+      act(() => jest.advanceTimersByTime(420));
+      expect(unlocked).toBe(2);
+    });
+
+    test('hors ouverture, la région polie se vide : la seconde ouverture se redit', () => {
+      const container = mount(<MeeshyLockedRow title="Présence" requirement="dès Ami" words={WORDS} isUnlocking />);
+      expect(container.querySelector('[role="status"]')?.textContent).toBe('Présence, déverrouillé');
+      render(<MeeshyLockedRow title="Présence" requirement="dès Ami" words={WORDS} isUnlocking={false} />);
+      expect(container.querySelector('[role="status"]')?.textContent).toBe('');
+    });
+
     test('l’ouverture est dite une fois, poliment : « Présence, déverrouillé »', () => {
       const container = mount(<MeeshyLockedRow title="Présence" requirement="dès Ami" words={WORDS} />);
       expect(container.querySelector('[role="status"]')?.textContent).toBe('');

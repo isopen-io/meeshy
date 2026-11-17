@@ -179,3 +179,33 @@ describe('MeeshyCircleScale — pureté', () => {
     expect(component).not.toMatch(/0\.52|0\.32|0\.18/);
   });
 });
+
+describe('MeeshyCircleScale — revue : un geste qui ne change rien ne part pas', () => {
+  test('à l’extrémité, la flèche ne rappelle pas l’hôte avec le rang déjà choisi', () => {
+    const picked: number[] = [];
+    const container = mount(<MeeshyCircleScale levels={LEVELS} current={5} onSelect={(rank) => picked.push(rank)} />);
+    const checked = container.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]');
+    act(() => {
+      checked?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(picked).toEqual([]);
+  });
+
+  test('toucher le rang déjà coché ne rappelle pas l’hôte', () => {
+    const picked: number[] = [];
+    const container = mount(<MeeshyCircleScale levels={LEVELS} current={3} onSelect={(rank) => picked.push(rank)} />);
+    act(() => container.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.click());
+    expect(picked).toEqual([]);
+  });
+
+  test('Début et Fin vont aux extrémités, comme la piste du pas-à-pas', () => {
+    const picked: number[] = [];
+    const container = mount(<MeeshyCircleScale levels={LEVELS} current={3} onSelect={(rank) => picked.push(rank)} />);
+    const checked = container.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]');
+    act(() => {
+      checked?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+      checked?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+    });
+    expect(picked).toEqual([5, 0]);
+  });
+});

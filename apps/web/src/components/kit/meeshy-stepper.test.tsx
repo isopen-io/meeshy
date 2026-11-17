@@ -147,6 +147,27 @@ describe('MeeshyStepper — boutons', () => {
     expect(container.querySelector('[role="status"]')?.textContent).toContain('maximum atteint');
   });
 
+  test('un hôte qui refuse la valeur : le pas suivant repart de la valeur reçue, jamais d’une valeur fantôme', () => {
+    const changes: number[] = [];
+    const container = mount(<MeeshyStepper {...props} value={7} onChange={(value) => changes.push(value)} />);
+    press(buttons(container).plus);
+    release(buttons(container).plus);
+    press(buttons(container).plus);
+    release(buttons(container).plus);
+    expect(changes).toEqual([8, 8]);
+  });
+
+  test('un hôte qui refuse la valeur : la touche suivante repart de la valeur reçue', () => {
+    const changes: number[] = [];
+    const container = mount(<MeeshyStepper {...props} value={7} onChange={(value) => changes.push(value)} />);
+    const group = container.querySelector<HTMLElement>('[role="group"]') as HTMLElement;
+    act(() => {
+      group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    });
+    expect(changes).toEqual([8, 8]);
+  });
+
   test('désactivé : rien ne part', () => {
     const changes: number[] = [];
     const container = mount(<MeeshyStepper {...props} value={7} isEnabled={false} onChange={(value) => changes.push(value)} />);
@@ -181,22 +202,40 @@ describe('MeeshyStepper — boutons', () => {
       expect(value).toBe(13);
     });
 
-    test('la répétition s’arrête à la borne', () => {
-      const changes: number[] = [];
-      const container = mount(<MeeshyStepper {...props} range={{ min: 1, max: 12 }} value={10} onChange={(next) => changes.push(next)} />);
-      act(() => {
-        buttons(container).plus.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
-      });
-      act(() => jest.advanceTimersByTime(400));
-      expect(changes.length).toBeGreaterThan(0);
-    });
-
     test('repeatsOnHold faux : un appui, un pas', () => {
       let value = 10;
       const container = mount(<MeeshyStepper {...props} value={value} repeatsOnHold={false} onChange={(next) => (value = next)} />);
       press(buttons(container).plus);
       act(() => jest.advanceTimersByTime(3000));
       expect(value).toBe(11);
+    });
+
+    test('la répétition s’arrête net à la borne : aucun pas au-delà, aucune minuterie après', () => {
+      let value = 10;
+      const container = mount(<MeeshyStepper {...props} range={{ min: 1, max: 12 }} value={value} onChange={(next) => (value = next)} />);
+      press(buttons(container).plus);
+      act(() => jest.advanceTimersByTime(400));
+      expect(value).toBe(12);
+      act(() => jest.advanceTimersByTime(5000));
+      expect(value).toBe(12);
+    });
+
+    test('un onglet qui passe en arrière-plan coupe la répétition', () => {
+      let calls = 0;
+      const container = mount(<MeeshyStepper {...props} value={10} onChange={() => (calls += 1)} />);
+      press(buttons(container).plus);
+      const visibility = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState');
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+      try {
+        act(() => {
+          document.dispatchEvent(new Event('visibilitychange'));
+        });
+        act(() => jest.advanceTimersByTime(5000));
+      } finally {
+        Reflect.deleteProperty(document, 'visibilityState');
+        if (visibility !== undefined && Object.getOwnPropertyDescriptor(document, 'visibilityState') !== undefined) Object.defineProperty(document, 'visibilityState', visibility);
+      }
+      expect(calls).toBe(1);
     });
 
     test('quitter l’écran coupe la répétition', () => {
