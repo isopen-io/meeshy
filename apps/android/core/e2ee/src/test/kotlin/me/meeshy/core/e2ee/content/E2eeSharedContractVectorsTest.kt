@@ -108,6 +108,9 @@ class E2eeSharedContractVectorsTest {
             case.present("version")?.let { version ->
                 assertWithMessage(name).that((opening as E2eeOpening.FutureVersion).version).isEqualTo(version.jsonPrimitive.long)
             }
+            if (opening is E2eeOpening.FutureVersion) {
+                case.present("plaintextJson")?.let { json -> assertWithMessage("$name json").that(opening.json).isEqualTo(json.jsonPrimitive.content) }
+            }
             case.present("kind")?.let { kind ->
                 val action = (opening as E2eeOpening.Signal).signal.action
                 assertWithMessage(name).that(action).isEqualTo(E2eeSignalAction.Unknown(kind.jsonPrimitive.content))

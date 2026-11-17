@@ -10,6 +10,7 @@ import me.meeshy.core.e2ee.content.E2eePayloadKind
 import me.meeshy.core.e2ee.content.E2eePlaintextReader
 import me.meeshy.core.e2ee.content.E2eeSignal
 import me.meeshy.core.e2ee.content.E2eeSignalAction
+import me.meeshy.core.e2ee.content.withoutTrailingWhitespace
 import me.meeshy.core.e2ee.device.E2eeDirectoryClient
 import me.meeshy.core.e2ee.session.E2eeCipherFormatException
 import me.meeshy.core.e2ee.session.E2eeCiphertext
@@ -295,9 +296,5 @@ private fun E2eeServedEnvelope.servedAtMillis(): Long? = try {
     null
 }
 
-/** Le clair sans son remplissage (des espaces `0x20` après le JSON, par construction), décodé en UTF-8. */
-private fun ByteArray.unpadded(): String {
-    var end = size
-    while (end > 0 && this[end - 1] == 0x20.toByte()) end--
-    return copyOfRange(0, end).toString(Charsets.UTF_8)
-}
+/** Le clair sans son remplissage ni aucun blanc JSON de fin, décodé en UTF-8 (déjà validé par la lecture stricte). */
+private fun ByteArray.unpadded(): String = withoutTrailingWhitespace(toString(Charsets.UTF_8))

@@ -188,7 +188,7 @@ public object E2eePlaintextReader {
     /** La version se juge AVANT toute autre clé : une version future garde son JSON quelle que soit sa forme. */
     private fun versionVerdict(payload: E2eePayloadKind, value: JsonElement?, current: Long, text: String): E2eeOpening? {
         val version = value.safeInteger() ?: return E2eeOpening.Unreadable(payload, E2eeUnreadableReason.INVALID_VERSION)
-        if (version > current) return E2eeOpening.FutureVersion(payload, version, text.trimEnd(' '))
+        if (version > current) return E2eeOpening.FutureVersion(payload, version, withoutTrailingWhitespace(text))
         return if (version == current) null else E2eeOpening.Unreadable(payload, E2eeUnreadableReason.INVALID_VERSION)
     }
 }
@@ -234,6 +234,12 @@ internal class Fields(private val fields: Map<String, JsonElement>) {
         const val NO_DEVICE: Int = -1
     }
 }
+
+/**
+ * Le JSON sans ce qui le suit : le remplissage (des espaces) et tout autre blanc JSON (RFC 8259 § 2) qu'un émetteur y
+ * aurait ajouté, par un parcours LINÉAIRE depuis la fin (WEBX-06 : une expression ancrée sur la fin était quadratique).
+ */
+internal fun withoutTrailingWhitespace(text: String): String = text.trimEnd(' ', '\t', '\n', '\r')
 
 private val JSON_NUMBER = Regex("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?")
 private const val MAX_SAFE_INTEGER: Long = 9_007_199_254_740_991L
