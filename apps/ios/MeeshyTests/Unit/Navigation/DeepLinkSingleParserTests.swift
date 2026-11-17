@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// **Un lien Meeshy se lit à un seul endroit** (#7815).
@@ -19,7 +20,7 @@ final class DeepLinkSingleParserTests: XCTestCase {
         "https://meeshy.me/feeds/post/p1", "https://meeshy.me/feeds/p/p2",
         "https://meeshy.me/post/p3", "https://meeshy.me/p/p4",
         "https://meeshy.me/story/s1", "https://meeshy.me/stories/s2", "https://meeshy.me/s/s3",
-        "https://meeshy.me/reel/r1", "https://meeshy.me/reels?seed=r2",
+        "https://meeshy.me/reel/r1", "https://meeshy.me/reels?seed=r2", "https://meeshy.me/mood/m1",
         "https://meeshy.me/communities/cm1", "https://meeshy.me/hashtag/voyage",
         "https://www.meeshy.me/story/s4", "https://app.meeshy.me/c/conv3",
         "meeshy://me", "meeshy://links", "meeshy://u/carol", "meeshy://users/dan",
@@ -70,5 +71,19 @@ final class DeepLinkSingleParserTests: XCTestCase {
     /// `/l/<token>` : le système le résout, il ne le pose pas tel quel.
     func test_lienDeSuivi_estRevendiquePourResolution() {
         XCTAssertTrue(makeRouter().handle(url: URL(string: "https://meeshy.me/l/abc123")!))
+    }
+
+    /// #19332 — `/mood/<id>`, l'adresse d'une humeur, s'ouvre DANS l'app, à la
+    /// place que le lien suivi d'un STATUS lui donne déjà : le détail du post.
+    func test_parse_moodAddress_opensLikeATrackedStatusTarget() throws {
+        let mood = try XCTUnwrap(URL(string: "https://meeshy.me/mood/66f0c0ffee0000000000c0de"))
+        let trackedStatus = DeepLinkRouter.trackedDestination(
+            for: ResolvedTrackedLink(kind: "tracking", targetType: "STATUS", targetId: "66f0c0ffee0000000000c0de"),
+            token: "Ab3xYz"
+        )
+
+        XCTAssertEqual(DeepLinkParser.parse(mood), .postDetail(postId: "66f0c0ffee0000000000c0de"))
+        XCTAssertEqual(DeepLinkRouter.link(for: DeepLinkParser.parse(mood)), trackedStatus)
+        XCTAssertTrue(InAppLinks.opensInApp(mood), "une humeur touchée dans l'app ne part plus dans Safari")
     }
 }

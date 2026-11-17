@@ -3,8 +3,8 @@ import MeeshySDK
 import MeeshyUI
 
 extension BubbleContent {
-    /// Le texte d'un message et ce que son PREMIER lien porte (aperçu, façade
-    /// vidéo, carte de conversation) — résolus une seule fois. Partagé par la
+    /// Le texte d'un message et ce que ses liens portent (aperçu, façade vidéo,
+    /// carte de conversation, carte de contenu) — résolus une seule fois. Partagé par la
     /// bulle et la Rivière (#8139) : deux résolutions de la carte finiraient
     /// par diverger au premier format de lien ajouté.
     ///
@@ -71,23 +71,31 @@ extension BubbleContent {
         isEmojiOnly: Bool,
         emojiFontSize: CGFloat?
     ) -> Text {
-        // Précalcul unique du lien (NSDataDetector) — réutilisé par
+        // Précalcul unique des liens (NSDataDetector) — réutilisé par
         // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
-        let firstLinkURL = LinkPreviewFetcher.firstURL(in: raw)
+        let links = LinkPreviewFetcher.urls(in: raw)
+        let firstLinkURL = links.first
         // Outbound-link tracking: resolve the embed façade destination ONCE here
         // (firstLinkURL → token → /l/<token>) so the leaf views stay primitive.
         let embedTrackedURL: URL? = firstLinkURL
             .flatMap { trackedLinks[$0] }
             .flatMap { TrackedLink.redirectURL(token: $0) }
+        let embeddedVideo = firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) }
+        let conversationCardTarget = firstLinkURL.flatMap { ConversationLinkTarget.target(for: $0) }
+        // #19332 — précédence : vidéo > conversation > CONTENU > aperçu
+        // générique ; la carte va au premier lien de contenu, pas forcément
+        // au premier lien.
+        let precedesContent = embeddedVideo != nil || conversationCardTarget != nil
         return Text(
             raw: raw,
             isEmojiOnly: isEmojiOnly,
             emojiFontSize: emojiFontSize,
             firstLinkURL: firstLinkURL,
-            embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
+            embeddedVideo: embeddedVideo,
             trackedLinks: trackedLinks,
             embedTrackedURL: embedTrackedURL,
-            conversationCardTarget: firstLinkURL.flatMap { ConversationLinkTarget.target(for: $0) }
+            conversationCardTarget: conversationCardTarget,
+            contentLink: precedesContent ? nil : ContentLinkMatch.first(among: links)
         )
     }
 

@@ -9,6 +9,7 @@ import MeeshyUI
 /// par `BubbleContentBuilder`, plus de `NSDataDetector` ici) :
 /// - une vidéo intégrable → sa façade de lecteur ;
 /// - une conversation Meeshy → la carte qui fait rejoindre, quitter ou ouvrir ;
+/// - un post, un réel, une story ou une humeur Meeshy → sa carte vivante (#19332) ;
 /// - toute autre URL → l'aperçu OpenGraph.
 struct BubbleLinkEmbed: View {
     let text: BubbleContent.Text
@@ -32,6 +33,9 @@ struct BubbleLinkEmbed: View {
                 if let target = text.conversationCardTarget {
                     ConversationLinkCard(target: target, urlString: url, fallbackAccent: accentColor, isDark: isDark)
                         .id(target)
+                } else if let content = text.contentLink {
+                    ContentLinkCard(match: content, accentColor: accentColor, isDark: isDark)
+                        .id(content)
                 } else {
                     LinkPreviewCard(urlString: url, accentColor: accentColor, isDark: isDark)
                 }

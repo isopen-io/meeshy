@@ -113,6 +113,11 @@ nonisolated struct BubbleContent: Equatable {
         /// — ni aperçu, ni carte, ni lecteur, ni lien suivi —, le texte se
         /// rend tel qu'il a été écrit.
         var linksAreInert: Bool = false
+        /// Le premier lien de CONTENU Meeshy du texte (#19332) — un post, un
+        /// réel, une story ou une humeur —, précalculé une fois par le builder,
+        /// seulement quand ni une vidéo ni une conversation ne le précèdent.
+        /// Non-nil → la bulle rend la carte vivante du contenu.
+        var contentLink: ContentLinkMatch? = nil
     }
 
     struct Translation: Equatable {

@@ -709,12 +709,11 @@ struct PostDetailView: View {
                 PostDetailSecondaryTranslationPanel(content: content, code: code)
             }
 
-            // Embed vidéo (YouTube) détecté dans le contenu du post.
-            if let embeddedVideo {
-                VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.top, MeeshySpacing.sm)
-            }
+            // Embed vidéo (YouTube), sinon carte vivante du contenu Meeshy
+            // cité (#19332) — la même ligne que dans le fil.
+            FeedPostEmbedRow(content: effectiveContent, accentHex: accentColor, trackedLinks: post.trackedLinkMap, postId: post.id)
+                .equatable()
+                .padding(.horizontal, MeeshySpacing.lg)
             } // if !post.isStory
 
             // « Avec … » + marqueur personnel — indépendant de `isStory` : NOTE

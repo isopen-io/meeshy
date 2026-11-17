@@ -156,6 +156,7 @@ enum DeepLinkParser {
     /// - `/feeds/post/{id}` or `/feeds/p/{id}`   -> post detail
     /// - `/post/{id}` or `/p/{id}`               -> post detail (short)
     /// - `/story/{id}`, `/stories/{id}`, `/s/{id}` -> story detail
+    /// - `/mood/{id}`                            -> post detail (a mood)
     /// - `/share?text=...&url=...`               -> share content
     /// - `/auth/magic-link?token=...`            -> passwordless auth (https ONLY)
     ///
@@ -301,6 +302,9 @@ enum DeepLinkParser {
         // partage de réel ; `/reels?seed=<id>`, la porte du Flux web.
         case "reel": return id.map { .reel(postId: $0) }
         case "reels": return reelsSeed(components: components, url: url).map { .reel(postId: $0) }
+        // Humeur — `/mood/<id>` (#19332), l'adresse que le partage suivi grave
+        // pour un STATUS : le détail du post, comme sa cible typée suivie.
+        case "mood": return id.map { .postDetail(postId: $0) }
         // Communauté — `/communities/<id>` ; `/communities/new` est l'écran de
         // création du web, pas une communauté.
         case "community", "communities": return id.flatMap(communityIdentifier).map { .community(id: $0) }
