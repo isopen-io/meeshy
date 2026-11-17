@@ -763,6 +763,10 @@ class MessageWindowRevalidationTest {
      * stream emit, which cancelled the revalidation inside `transformLatest` and restarted it from zero — and the restart
      * swept from the newest socket message, above the gap, which stayed for good. It now runs once, out of reach of those
      * emissions, from the contiguity watermark.
+     *
+     * The stream combines two Room queries (the rows, the sync instant): right after the landing it may pair the new
+     * instant with the rows of the frame before, so the witness waits for the landed thread instead of taking the first
+     * fresh frame, and reads Room itself. Red, the revalidation never lands: the thread never shows them all.
      */
     @Test
     fun `five socket messages during a revalidation with a gap leave it to land in one pass, the gap filled`() =
@@ -784,11 +788,14 @@ class MessageWindowRevalidationTest {
                 }
             }
 
-            val opened = harness.repository(gateway).messagesStream(CONVERSATION).first { it is CacheResult.Fresh }
+            val everything = (listOf(start) + missed + socket).map { it.id }
 
+            harness.repository(gateway).messagesStream(CONVERSATION)
+                .first { it is CacheResult.Fresh && it.shownIds() == everything }
+
+            assertThat(harness.ids()).containsExactlyElementsIn(everything).inOrder()
             assertThat(history.validators).hasSize(1)
             assertThat(history.listAfterCalls).containsExactly(minute(0))
-            assertThat(opened.shownIds()).containsExactlyElementsIn((listOf(start) + missed + socket).map { it.id }).inOrder()
         }
 
     private fun sealed(id: String, at: String) = message(id, at, content = "[Encrypted]").copy(isEncrypted = true, encryptionMode = "e2ee")
