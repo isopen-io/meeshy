@@ -250,29 +250,43 @@ describe('l’ouverture rend le verdict d’iOS, et une version future ne se per
  * WEBX-06 (contre-analyse web du 2026-11-17, #18906) : le JSON d'une version
  * future se gardait sans son remplissage par `/ +$/`, qui tentait chaque départ
  * dans la suite d'espaces et échouait au `\n` final — 0,8 s pour 48 Ko, sous le
- * verrou du coffre de l'appareil. Le meilleur de cinq ouvertures borne le temps
- * sans dépendre d'un ramasse-miettes ou d'un premier passage du compilateur.
+ * verrou du coffre de l'appareil.
+ *
+ * La propriété est RELATIVE, et le témoin la mesure telle quelle (#19241) : un
+ * remplissage seize fois plus long coûte au plus seize fois plus quand
+ * l'ouverture est linéaire, deux cent cinquante-six fois plus quand elle est
+ * quadratique (mesuré : 5,6 ms puis 1 404 ms sous l'ancienne expression). Une
+ * borne en millisecondes mesurait la machine : sous l'instrumentation de
+ * couverture d'une machine partagée, l'ouverture linéaire la franchissait. Les
+ * deux tailles s'ouvrent en ALTERNANCE, après un premier passage, au meilleur de
+ * sept : la charge et l'instrumentation les ralentissent ensemble, et le rapport
+ * se borne à soixante-quatre, entre les deux régimes.
  */
 describe('l’ouverture reste linéaire, quel que soit ce qui suit le remplissage (WEBX-06)', () => {
   const origin: E2EEEnvelopeOrigin = { conversationId: 'c1', senderUserId: 'u', senderDeviceId: 1 };
-  const fastestOf = (times: number, run: () => void): number =>
-    Math.min(
-      ...Array.from({ length: times }, () => {
-        const start = performance.now();
-        run();
-        return performance.now() - start;
-      }),
-    );
+  const padded = (json: string, kib: number): Uint8Array => utf8(`${json}${' '.repeat(kib * 1024)}\n`);
+  const elapsed = (run: () => void): number => {
+    const start = performance.now();
+    run();
+    return performance.now() - start;
+  };
+  const growthOf = (times: number, short: () => void, long: () => void): number => {
+    short();
+    long();
+    const samples = Array.from({ length: times }, () => ({ short: elapsed(short), long: elapsed(long) }));
+    return Math.min(...samples.map((sample) => sample.long)) / Math.min(...samples.map((sample) => sample.short));
+  };
 
   it.each([
     ['un message', '{"conversationId":"c1","sentAt":1,"v":2}'],
     ['un signal', '{"active":true,"conversationId":"c1","kind":"typing","s":2,"sentAt":1}'],
-  ])('%s d’une version future, suivi de 64 Kio d’espaces puis d’un \\n, s’ouvre en moins de 5 ms et garde son seul JSON', (_label, json) => {
-    const plaintext = utf8(`${json}${' '.repeat(64 * 1024)}\n`);
+  ])('%s d’une version future, suivi de 64 Kio d’espaces puis d’un \\n, garde son seul JSON, et seize fois plus de remplissage ne coûte pas soixante-quatre fois plus', (_label, json) => {
+    const short = padded(json, 4);
+    const long = padded(json, 64);
 
-    expect(openE2EEPlaintext(plaintext, origin)).toMatchObject({ verdict: 'future-version', version: 2, json });
-    expect(fastestOf(5, () => openE2EEPlaintext(plaintext, origin))).toBeLessThan(5);
-  });
+    expect(openE2EEPlaintext(long, origin)).toMatchObject({ verdict: 'future-version', version: 2, json });
+    expect(growthOf(7, () => openE2EEPlaintext(short, origin), () => openE2EEPlaintext(long, origin))).toBeLessThan(64);
+  }, 30_000);
 });
 
 /**
