@@ -367,7 +367,8 @@ class MessageRepository internal constructor(
      * - answered WITHOUT it ⇒ the server no longer knows it: the deletion is confirmed, its end-to-end plaintext erased —
      *   never a row revived out of the window for good, its plaintext kept in the vault;
      * - a read that proves nothing (offline, refused) ⇒ a refusal that already said the target is gone ([refusedAsGone]:
-     *   404, 410) keeps it deleted, its plaintext kept until a read proves its absence; any other refusal gives it back.
+     *   404, 410 answered by the gateway) is the proof: the deletion is confirmed, its plaintext erased (audit A6); any
+     *   other refusal gives it back.
      *
      * Audit A1 — the settlement starts once the outbox row is EXHAUSTED and nothing else ever lifts the tombstone (a served
      * copy never does once the deletion left the queue): interrupted midway (the worker stopped, the drainer cancelled),
@@ -389,7 +390,7 @@ class MessageRepository internal constructor(
         when (read) {
             is MessageReadBack.Served -> if (read.message.deletedAt == null) markUndeleted(messageId, snapshot = read.message)
             MessageReadBack.Absent -> confirmDeletion(messageId)
-            MessageReadBack.Unknown -> if (!refusedAsGone) markUndeleted(messageId)
+            MessageReadBack.Unknown -> if (refusedAsGone) confirmDeletion(messageId) else markUndeleted(messageId)
         }
     }
 

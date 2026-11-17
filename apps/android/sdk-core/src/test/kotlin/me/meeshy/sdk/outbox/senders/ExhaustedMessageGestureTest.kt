@@ -312,9 +312,12 @@ class ExhaustedMessageGestureTest {
             assertThat(deletedWhileAsked).isTrue()
         }
 
-    /** A 404 or a 410 already said the target is gone: a read back that proves nothing does not bring it back. */
+    /**
+     * A 404 or a 410 answered by the gateway already said the target is gone: a read back that proves nothing neither
+     * brings it back nor leaves its plaintext in the vault — the gateway's word is the proof (audit A6).
+     */
     @Test
-    fun `a deletion refused in 404 whose read back fails stays deleted, its plaintext kept until a read proves it gone`() =
+    fun `a deletion refused in 404 whose read back fails stays deleted, and its plaintext erasure is recorded`() =
         runHarnessTest { harness ->
             harness.seedSynced(sealed("m1", T1))
             val erasures = harness.erasures()
@@ -326,7 +329,7 @@ class ExhaustedMessageGestureTest {
                 .onExhausted(harness.exhausted(OutboxLanes.forMessage(CONVERSATION), reason = "Refused: HTTP 404 MESSAGE_NOT_FOUND"))
 
             assertThat(harness.cachedMessage("m1").deletedAt).isNotNull()
-            assertThat(erasures.keys()).isEmpty()
+            assertThat(erasures.keys()).containsExactly("m1")
         }
 
     /**
