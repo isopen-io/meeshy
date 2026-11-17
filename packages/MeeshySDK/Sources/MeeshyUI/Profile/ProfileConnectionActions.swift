@@ -26,6 +26,10 @@ struct ProfileConnectionActions {
         }
     }
 
+    func pendingRequest(_ requestId: String) async -> FriendRequest? {
+        await social.pendingFriendRequest(requestId)
+    }
+
     func discardRequest(_ requestId: String) async {
         try? await social.deleteFriendRequest(requestId)
     }

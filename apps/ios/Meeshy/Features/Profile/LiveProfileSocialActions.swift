@@ -13,6 +13,13 @@ final class LiveProfileSocialActions: ProfileSocialActionsProviding {
         try await FriendService.shared.deleteRequest(requestId: requestId)
     }
 
+    func pendingFriendRequest(_ requestId: String) async -> FriendRequest? {
+        let store = CacheCoordinator.shared.friendRequests
+        let received = await store.loadIgnoringExpiry(for: FriendshipCache.PersistenceKeys.receivedRequests)?.items ?? []
+        let sent = await store.loadIgnoringExpiry(for: FriendshipCache.PersistenceKeys.sentRequests)?.items ?? []
+        return (received + sent).first { $0.id == requestId }
+    }
+
     func respondToFriendRequest(_ requestId: String, accepted: Bool) async throws {
         _ = try await FriendService.shared.respond(requestId: requestId, accepted: accepted)
     }

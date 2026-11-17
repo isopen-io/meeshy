@@ -21,6 +21,7 @@ extension UserProfileSheet {
             safetySection
         }
         .padding(.horizontal, MeeshySpacing.xl)
+        .task(id: pendingRequestId) { await loadPendingRequest() }
         .confirmationDialog(
             String(localized: "profile.action.report", defaultValue: "Signaler", bundle: .module),
             isPresented: $showReportSheet,
@@ -90,61 +91,42 @@ extension UserProfileSheet {
     private var circleSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: String(localized: "profile.relation.section.circle", defaultValue: "Notre cercle", bundle: .module))
-            connectionContextBanner
             connectionControls
         }
     }
 
+    var requestStage: ProfileRequestStage {
+        ProfileRequestStage.resolve(connection: connectionStatus, request: pendingRequest, justAccepted: justAccepted)
+    }
+
     @ViewBuilder
     private var connectionControls: some View {
-        switch connectionStatus {
-        case .none:
-            ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName,
+        let name = displayUser.resolvedDisplayName
+        switch requestStage {
+        case .open:
+            ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
                                 linked: $relationLinked) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     ProfileFriendRequestCard(tint: accentTint) { note in Task { await sendConnectionRequest(message: note) } }
                     ProfileLockedCapabilities(level: .public, tint: accentTint)
                 }
             }
-        case .pendingSent:
-            connectionButton(.cancel) { Task { await cancelRequest() } }
-            connectionButton(.resend) { Task { await resendRequest() } }
-        case .pendingReceived:
-            connectionButton(.accept) { Task { await acceptRequest() } }
-            connectionButton(.decline) { Task { await declineRequest() } }
+        case .sent(let sentAt):
+            ProfileSentRequestCard(name: name, sentAt: sentAt, tint: accentTint,
+                                   onResend: { Task { await resendRequest() } },
+                                   onCancel: { Task { await cancelRequest() } })
+        case .received(let note):
+            ProfileReceivedRequestCard(name: name, note: note, tint: accentTint,
+                                       onAccept: { Task { await acceptRequest() } },
+                                       onDecline: { Task { await declineRequest() } })
+        case .accepted:
+            ProfileAcceptedRequestCard(name: name, isOnline: resolvedPresence == .online, tint: accentTint,
+                                       onWrite: { openConversation() })
+            ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
+                                linked: $relationLinked) { EmptyView() }
         case .connected:
-            ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName,
+            ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
                                 linked: $relationLinked) { ProfileConnectedBadge() }
-        }
-    }
-
-    private func connectionButton(_ step: ProfileConnectionStep, action: @escaping () -> Void) -> some View {
-        MeeshyButton(
-            step.title,
-            systemImage: step.systemImage,
-            kind: step.isPrimary ? .primary : .outline,
-            width: .fill,
-            tint: step.isPrimary ? accentTint : nil,
-            action: action
-        )
-    }
-
-    /// Le contexte au-dessus des boutons de demande, pour qu'accepter ou annuler se comprenne même quand la
-    /// notification d'origine est partie — « connexion de quoi ? ».
-    @ViewBuilder
-    var connectionContextBanner: some View {
-        let name = displayUser.resolvedDisplayName
-        switch connectionStatus {
-        case .pendingReceived:
-            MeeshyNote(String(localized: "profile.connection.context.received",
-                              defaultValue: "\(name) souhaite entrer en contact avec vous.", bundle: .module),
-                       lead: .systemImage("person.crop.circle.badge.questionmark"))
-        case .pendingSent:
-            MeeshyNote(String(localized: "profile.connection.context.sent",
-                              defaultValue: "Demande envoyée à \(name) · en attente", bundle: .module),
-                       lead: .systemImage("paperplane.circle"))
-        case .none, .connected:
-            EmptyView()
         }
     }
 
@@ -213,35 +195,6 @@ extension UserProfileSheet {
                 isSuccess: sent
             )
         }
-    }
-}
-
-/// Une étape d'une demande déjà partie ou reçue (planche `Etat-Demande`) : un libellé, un glyphe, primaire ou non.
-nonisolated enum ProfileConnectionStep: CaseIterable, Sendable {
-    case cancel, resend, accept, decline
-
-    var title: String {
-        switch self {
-        case .cancel: return String(localized: "profile.action.cancelRequest", defaultValue: "Annuler la demande", bundle: .module)
-        case .resend: return String(localized: "profile.action.resendRequest", defaultValue: "Renvoyer la demande", bundle: .module)
-        case .accept: return String(localized: "profile.action.acceptConnection", defaultValue: "Accepter la connexion", bundle: .module)
-        case .decline: return String(localized: "profile.action.declineConnection", defaultValue: "Refuser la connexion", bundle: .module)
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .cancel: return "xmark"
-        case .resend: return "arrow.clockwise"
-        case .accept: return "checkmark"
-        case .decline: return "xmark"
-        }
-    }
-
-    /// Accepter est le geste qui avance ; annuler, renvoyer et refuser restent secondaires. Demander vit dans
-    /// `ProfileFriendRequestCard`.
-    var isPrimary: Bool {
-        self == .accept
     }
 }
 

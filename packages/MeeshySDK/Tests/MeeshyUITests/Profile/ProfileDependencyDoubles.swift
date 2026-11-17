@@ -37,6 +37,7 @@ final class StubProfileSocialActions: ProfileSocialActionsProviding {
     var unblockResult: Result<Void, Error> = .success(())
     var reportResult: Result<Void, Error> = .success(())
     var postsResult: Result<[APIPost], Error> = .success([])
+    var pendingRequests: [String: FriendRequest] = [:]
 
     private(set) var sendCalls: [String] = []
     private(set) var deleteCalls: [String] = []
@@ -56,6 +57,10 @@ final class StubProfileSocialActions: ProfileSocialActionsProviding {
     func deleteFriendRequest(_ requestId: String) async throws {
         deleteCalls.append(requestId)
         try deleteResult.get()
+    }
+
+    func pendingFriendRequest(_ requestId: String) async -> FriendRequest? {
+        pendingRequests[requestId]
     }
 
     func respondToFriendRequest(_ requestId: String, accepted: Bool) async throws {

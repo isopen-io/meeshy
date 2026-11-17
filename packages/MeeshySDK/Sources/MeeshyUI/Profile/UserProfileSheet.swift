@@ -36,7 +36,11 @@ public struct UserProfileSheet: View {
 
     @State var isBlocked: Bool = false
     @State var connectionStatus: ConnectionStatus = .none
-    @State private var pendingRequestId: String?
+    @State var pendingRequestId: String?
+    /// La demande en attente telle que le cache la garde : sa date (« envoyée il y a 2 j ») et le mot de l'émetteur.
+    @State var pendingRequest: FriendRequest?
+    /// Acceptée sur cette fiche : « Vous êtes amis » reste à l'écran le temps qu'on la lise (planche `Etat-Demande`).
+    @State var justAccepted = false
 
     public let dependencies: UserProfileDependencies
 
@@ -415,6 +419,13 @@ public struct UserProfileSheet: View {
         postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulée", bundle: .module), isSuccess: true)
     }
 
+    func loadPendingRequest() async {
+        guard let requestId = pendingRequestId else { return }
+        let request = await connectionActions.pendingRequest(requestId)
+        guard requestId == pendingRequestId else { return }
+        pendingRequest = request
+    }
+
     func resendRequest() async {
         if let requestId = pendingRequestId {
             await connectionActions.discardRequest(requestId)
@@ -425,11 +436,13 @@ public struct UserProfileSheet: View {
     func acceptRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
         let accepted = await connectionActions.acceptRequest(requestId: requestId, senderId: userId) {
+            justAccepted = true
             connectionStatus = .connected
             pendingRequestId = nil
             HapticFeedback.success()
         }
         guard accepted else {
+            justAccepted = false
             resolveConnectionStatus()
             HapticFeedback.error()
             postToast(String(localized: "profile.toast.acceptFailed", defaultValue: "Impossible d'accepter", bundle: .module), isSuccess: false)
