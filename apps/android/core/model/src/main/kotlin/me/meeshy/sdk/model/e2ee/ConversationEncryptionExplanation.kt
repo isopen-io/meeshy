@@ -54,7 +54,6 @@ class ConversationEncryptionExplanation private constructor(
 
         private fun endToEnd(isDirect: Boolean): List<Section> = listOf(
             Section(Topic.WHO_READS, listOf(Fact.ONLY_PARTICIPANTS_READ)),
-            Section(Topic.AVAILABLE, listOf(Fact.TRANSLATED_ON_DEVICE)),
             Section(
                 Topic.ABSENT,
                 listOf(

@@ -5,6 +5,7 @@ import me.meeshy.core.e2ee.content.E2eeContent
 import me.meeshy.core.e2ee.store.E2eePlaintextEntry
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.EndToEndRegime
+import me.meeshy.sdk.model.EndToEndSeal
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
@@ -21,7 +22,9 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
  * Un message ouvert garde `encryptionMode = "e2ee"` : toutes les gardes qui lisent le régime (traduction serveur,
  * transfert, gestes en clair) continuent de le traiter comme chiffré de bout en bout. Seul `isEncrypted` tombe, pour que
  * la bulle rende le texte au lieu du sceau. Un message que l'appareil n'a pas pu ouvrir, ou qui n'est pas à sa place,
- * reste scellé.
+ * reste scellé, et dit POURQUOI ([EndToEndSeal], #18983) : en attente, illisible, à lire après une mise à jour (#18980),
+ * ou écrit sur un autre de mes appareils. Un message que son auteur authentifié a supprimé pour tous (#18981) se rend
+ * supprimé, sans plus aucun clair au coffre.
  */
 public object EndToEndPlaintextOverlay {
 
@@ -40,7 +43,8 @@ public object EndToEndPlaintextOverlay {
         readerUserId: String,
     ): ApiMessage {
         if (!isCandidate(message) || message.deletedAt != null) return message
-        val readable = keysOf(message, readerUserId).firstNotNullOfOrNull { entries[it] } as? E2eePlaintextEntry.Readable ?: return message
+        val entry = keysOf(message, readerUserId).firstNotNullOfOrNull { entries[it] }
+        val readable = entry as? E2eePlaintextEntry.Readable ?: return sealed(message, entry, conversationId, readerUserId)
         if (!isInPlace(readable.content, readable.senderUserId, message, conversationId)) return message
         val text = readable.content.text ?: return message
         return message.copy(
@@ -76,6 +80,21 @@ public object EndToEndPlaintextOverlay {
         if (written != null && served != null && written != served) return false
         return cited(content.replyTo) == cited(message.replyToId)
     }
+
+    /** Le message que l'appareil ne montre pas, avec la raison ; une suppression pour tous rangée à SA place se rend supprimée. */
+    private fun sealed(message: ApiMessage, entry: E2eePlaintextEntry?, conversationId: String, readerUserId: String): ApiMessage =
+        when (entry) {
+            is E2eePlaintextEntry.DeletedForEveryone ->
+                if (entry.conversationId == conversationId && message.conversationId == conversationId) message.copy(deletedAt = message.createdAt ?: DELETED_AT_UNKNOWN)
+                else message
+            is E2eePlaintextEntry.FutureVersion -> message.copy(endToEndSeal = EndToEndSeal.UPDATE_REQUIRED)
+            E2eePlaintextEntry.Undecryptable -> message.copy(endToEndSeal = EndToEndSeal.UNREADABLE)
+            is E2eePlaintextEntry.Readable -> message
+            null -> message.copy(endToEndSeal = if (isMine(message, readerUserId)) EndToEndSeal.OTHER_DEVICE else EndToEndSeal.PENDING)
+        }
+
+    /** L'instant d'une suppression pour tous n'est pas servi : la bulle n'a besoin que de savoir qu'elle a eu lieu. */
+    private const val DELETED_AT_UNKNOWN = "1970-01-01T00:00:00.000Z"
 
     private fun isMine(message: ApiMessage, readerUserId: String): Boolean =
         readerUserId.isNotEmpty() && announcedAuthor(message) == readerUserId
