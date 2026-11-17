@@ -94,7 +94,7 @@ extension UserProfileSheet {
                     }
 
                     if displayUser.hasE2EE {
-                        e2eeBadge
+                        ProfileE2EEBadge()
                     }
 
                     if let completionRate = displayUser.profileCompletionRate {

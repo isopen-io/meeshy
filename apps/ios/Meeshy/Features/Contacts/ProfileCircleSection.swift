@@ -15,7 +15,7 @@ struct ProfileCircleSection: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     init(userId: String, displayName: String, linked: Binding<Bool>, sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
-        _viewModel = StateObject(wrappedValue: ProfileCircleViewModel(userId: userId))
+        _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
         _sharing = ObservedObject(wrappedValue: sharing)
         self.displayName = displayName
         _linked = linked
@@ -156,7 +156,7 @@ struct ProfileCircleSection: View {
                 }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             } message: {
-                Text(confirmationBody(lowering, from: level))
+                Text(lowering.confirmationBody(name: displayName, from: level))
             }
         }
     }
@@ -189,18 +189,6 @@ struct ProfileCircleSection: View {
         switch lowering {
         case .demote: return "arrow.down.circle.fill"
         case .unlink: return "person.crop.circle.badge.xmark"
-        }
-    }
-
-    private func confirmationBody(_ lowering: ProfileCircleLowering, from level: RelationLevel) -> String {
-        switch lowering {
-        case .demote(let target):
-            return String(
-                format: String(localized: "circles.demote.confirm.body", defaultValue: "%1$@ passera de %2$@ à %3$@. Vous perdrez ce que %2$@ partage. %1$@ n'en sera pas averti(e) et ne pourra pas vous redemander de remonter avant 30 jours.", bundle: .main),
-                displayName, CircleLevelNames.title(of: level), CircleLevelNames.title(of: target)
-            )
-        case .unlink:
-            return String(format: String(localized: "circles.unlink.confirm.body", defaultValue: "Vous ne serez plus liés : plus aucun cercle commun. %@ n'en sera pas averti(e) et ne pourra pas vous redemander de lien avant 30 jours.", bundle: .main), displayName)
         }
     }
 

@@ -180,11 +180,23 @@ extension UserProfileSheet {
                 }
             }
             .font(.system(size: 14, weight: .medium))
+
+            relationPillSlot
+                .padding(.top, MeeshySpacing.xs)
         }
         .padding(.top, MeeshySpacing.xs)
         // Gate the expanded identity from VoiceOver once the compact pinned bar
         // becomes the primary (mostly collapsed) — avoids a duplicate name/@user.
         .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
+    }
+
+    /// La pilule de relation de l'app (loi 3) : le cercle commun, et le chemin vers « Notre cercle ».
+    @ViewBuilder
+    var relationPillSlot: some View {
+        if RelationFace.showsRelationPill(isCurrentUser: isCurrentUser, isBlocked: isBlocked || isBlockedByTarget),
+           let relationPill, let userId = resolvedUserId, !userId.isEmpty {
+            relationPill.build(userId, displayUser.resolvedDisplayName)
+        }
     }
 
     /// Une photo à ouvrir en plein écran — sans elle, toucher l'avatar à initiales n'ouvre rien (#10093).

@@ -52,6 +52,30 @@ public extension EnvironmentValues {
     }
 }
 
+// MARK: - La pilule de relation sous le nom (#18870, loi 3)
+
+/// Ce que l'app fournit : la pilule qui dit le cercle COMMUN (« 🔥 Proche ▾ ») et mène à « Notre cercle ». Vide tant
+/// qu'aucun lien n'est servi : la fiche n'invente aucun niveau.
+public struct ProfileRelationPill {
+    public let build: (_ userId: String, _ displayName: String) -> AnyView
+
+    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView) {
+        self.build = build
+    }
+}
+
+private struct ProfileRelationPillKey: EnvironmentKey {
+    static let defaultValue: ProfileRelationPill? = nil
+}
+
+public extension EnvironmentValues {
+    /// La pilule de relation sous le nom d'une fiche ; `nil` : rien sous le nom.
+    var profileRelationPill: ProfileRelationPill? {
+        get { self[ProfileRelationPillKey.self] }
+        set { self[ProfileRelationPillKey.self] = newValue }
+    }
+}
+
 /// « Connectés » : une demande acceptée, sans rien dire du cercle. L'app le reprend tant qu'aucun lien n'est servi.
 public struct ProfileConnectedBadge: View {
     public init() {}

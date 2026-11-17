@@ -14,7 +14,7 @@
     "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintBorder": 91,
     "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintPattern": 145,
     "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Ornaments.swift::CallFrameRenderer.paintOrnament": 265,
-    "apps/ios/Meeshy/Features/Call/Services/VoIPPushManager.swift::VoIPPushManager.pushRegistry#2": 139,
+    "apps/ios/Meeshy/Features/Call/Services/VoIPPushManager.swift::VoIPPushManager.pushRegistry#2": 131,
     "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift::P2PWebRTCClient.buildLocalVideoTrackAndStartCapture": 135,
     "apps/ios/Meeshy/Features/Call/Services/WebRTCService.swift::WebRTCService.adjustBitrate": 86,
     "apps/ios/Meeshy/Features/Call/Views/CallView+Connected.swift::CallView.connectedView": 82,
@@ -324,6 +324,6 @@
     "MeeshyUI::StoryCanvasUIView": 6542,
     "MeeshyUI::StoryComposerViewModel": 4357,
     "MeeshyUI::TimelineViewModel": 1502,
-    "MeeshyUI::UserProfileSheet": 1569
+    "MeeshyUI::UserProfileSheet": 1560
   }
 }

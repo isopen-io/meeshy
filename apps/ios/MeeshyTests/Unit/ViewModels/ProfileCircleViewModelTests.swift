@@ -85,6 +85,36 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertNil(rig.sut.shownLevel, "aucun lien servi : le profil garde son badge d'avant")
     }
 
+    func test_ourCircle_isNil_withoutAServedLink() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("b", .close)])
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.ourCircle, "« Notre cercle » ne s'ouvre pas sur un lien qui n'est pas servi")
+    }
+
+    func test_ourCircle_readsBothSides_fromTheServedLink() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([RelationLink(userId: "a", effectiveLevel: .close, grantedByMe: .blood)])
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.sut.ourCircle?.common, .close)
+        XCTAssertEqual(rig.sut.ourCircle?.mine, .blood)
+        XCTAssertEqual(rig.sut.ourCircle?.missing, .theirGrant(.blood))
+    }
+
+    func test_models_shareOneModelPerPerson_whileAViewHoldsIt() {
+        let first = makeRig(userId: "shared-a").sut
+        let held = ProfileCircleModels.model(for: "shared-a") { first }
+        let again = ProfileCircleModels.model(for: "SHARED-A") { self.makeRig(userId: "shared-a").sut }
+        let other = ProfileCircleModels.model(for: "shared-b") { self.makeRig(userId: "shared-b").sut }
+
+        XCTAssertTrue(held === again, "la pilule et la face Actions lisent le même lien")
+        XCTAssertFalse(held === other)
+    }
+
     func test_aLinkBelowAcquaintance_isNotShown() async {
         let rig = makeRig()
         rig.relations.linksResult = .success([link("a", .community)])
@@ -565,5 +595,84 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertEqual(Set(titles).count, 3)
         titles.forEach { XCTAssertTrue($0.contains("Ada")) }
         XCTAssertTrue(ProfileCircleLowering.unlink.confirmationTitle(name: "Ada").contains("Ada"))
+    }
+}
+
+/// « Notre cercle » (#18870, planche `Autre-Cercle`) : le niveau accordé de chaque côté tel que le lien le laisse LIRE,
+/// ce que le cercle commun ouvre, ce que le cran suivant ajouterait, et ce qui manque pour y monter. Rien n'est inventé :
+/// l'accord de l'autre n'est jamais servi, il se DÉDUIT du minimum.
+final class OurCircleSummaryTests: XCTestCase {
+
+    private func link(common: RelationLevel, mine: RelationLevel) -> RelationLink {
+        RelationLink(userId: "leo", effectiveLevel: common, grantedByMe: mine)
+    }
+
+    func test_theirGrant_isExact_whenIGrantMoreThanTheCommonCircle() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .blood), pending: nil)
+        XCTAssertEqual(summary.mine, .blood)
+        XCTAssertEqual(summary.theirs, .exactly(.close), "le minimum est son accord : il se lit sans rien révéler de plus")
+    }
+
+    func test_theirGrant_isOnlyAtLeast_whenMyGrantIsTheCommonCircle() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .close), pending: nil)
+        XCTAssertEqual(summary.theirs, .atLeast(.close), "son accord peut être plus haut : la fiche ne l'invente pas")
+    }
+
+    func test_missing_namesTheirGrant_whenOnlyTheirSideHoldsTheCommonCircleDown() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .blood), pending: nil)
+        XCTAssertEqual(summary.next, .blood)
+        XCTAssertEqual(summary.missing, .theirGrant(.blood))
+    }
+
+    func test_missing_asksBothSides_whenMyGrantIsTheCommonCircle() {
+        let summary = OurCircleSummary.make(link(common: .friend, mine: .friend), pending: nil)
+        XCTAssertEqual(summary.missing, .bothChoose(.close))
+    }
+
+    func test_missing_saysTheRequestIsSent_whenARaiseIsPending() {
+        let summary = OurCircleSummary.make(link(common: .friend, mine: .friend), pending: .close)
+        XCTAssertEqual(summary.missing, .pending(.close))
+    }
+
+    func test_atTheTop_nothingIsMissing_andNothingMoreOpens() {
+        let summary = OurCircleSummary.make(link(common: .blood, mine: .blood), pending: nil)
+        XCTAssertNil(summary.next)
+        XCTAssertNil(summary.missing)
+        XCTAssertTrue(summary.nextOpens.isEmpty)
+    }
+
+    func test_opened_followsTheAccessLaw_neverAFeatureAboveTheCommonCircle() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .blood), pending: nil)
+        XCTAssertFalse(summary.opened.isEmpty)
+        XCTAssertTrue(summary.opened.allSatisfy { $0.feature.minimumLevel <= .close })
+        XCTAssertTrue(summary.opened.contains(.talkie))
+        XCTAssertFalse(summary.opened.contains(.liveLocation))
+    }
+
+    func test_nextOpens_isExactlyWhatTheNextCircleAdds() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .blood), pending: nil)
+        XCTAssertFalse(summary.nextOpens.isEmpty)
+        XCTAssertTrue(summary.nextOpens.allSatisfy { $0.feature.minimumLevel == .blood })
+        XCTAssertTrue(summary.nextOpens.contains(.liveLocation))
+        XCTAssertTrue(Set(summary.opened).isDisjoint(with: summary.nextOpens))
+    }
+
+    func test_opened_listsTheCommonCircleFirst() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .close), pending: nil)
+        let levels = summary.opened.map(\.feature.minimumLevel)
+        XCTAssertEqual(levels, levels.sorted(by: >), "ce que Proche ouvre d'abord, puis ce qu'Ami ouvrait déjà")
+    }
+
+    func test_everyFeature_hasATitleAndAGlyph() {
+        for feature in OurCircleFeature.allCases {
+            XCTAssertFalse(feature.title.isEmpty, "\(feature)")
+            XCTAssertFalse(feature.systemImage.isEmpty, "\(feature)")
+        }
+    }
+
+    func test_since_readsTheServedInstant_andStaysNilWithoutIt() {
+        let dated = RelationLink(userId: "leo", effectiveLevel: .close, grantedByMe: .close, since: "2026-03-19T10:00:00.000Z")
+        XCTAssertNotNil(OurCircleSummary.make(dated, pending: nil).since)
+        XCTAssertNil(OurCircleSummary.make(link(common: .close, mine: .close), pending: nil).since)
     }
 }

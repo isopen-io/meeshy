@@ -532,16 +532,19 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked in
                 ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
             })
+            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName in
+                ProfileSlot.view(.pill, userId: userId, displayName: displayName)
+            })
             .environment(\.profileLoading, LiveProfileLoading())
             .environment(\.avatarListeningSource, ListeningCenter.shared.source)
     }
 }
 
 /// Les emplacements opaques de la fiche de profil, effacés en UN seul point : le jeu sur la bannière et le cercle à la
-/// place de « Connectés » (#13940). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
+/// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case banner, relation
+    case banner, relation, pill
 
     static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) -> AnyView {
         AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked))
@@ -560,6 +563,9 @@ private struct ProfileSlotContent: View {
             GameBannerBadge(userId: userId)
         case .relation:
             ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked)
+                .id(userId)
+        case .pill:
+            ProfileRelationPillView(userId: userId, displayName: displayName)
                 .id(userId)
         }
     }

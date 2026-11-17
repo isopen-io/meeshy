@@ -42,6 +42,12 @@ public nonisolated enum RelationFace: String, CaseIterable, Hashable, Sendable {
         !isCurrentUser && !isBlocked && !loadFailed
     }
 
+    /// La pilule de relation, sous le nom (loi 3) : sur la fiche d'un AUTRE qu'on n'a pas bloqué. Ma propre fiche n'a
+    /// pas de cercle commun ; une fiche bloquée ne dit rien du lien.
+    public static func showsRelationPill(isCurrentUser: Bool, isBlocked: Bool) -> Bool {
+        !isCurrentUser && !isBlocked
+    }
+
     /// Ma propre fiche ouverte en feuille ne montre que sa Vitrine.
     public static func shown(_ face: RelationFace, isCurrentUser: Bool) -> RelationFace {
         isCurrentUser ? .vitrine : face

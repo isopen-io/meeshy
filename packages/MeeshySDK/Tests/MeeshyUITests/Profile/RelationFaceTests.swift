@@ -25,6 +25,12 @@ final class RelationFaceTests: XCTestCase {
         XCTAssertEqual(RelationFace.shown(.actions, isCurrentUser: false), .actions)
     }
 
+    func test_relationPill_sitsUnderTheName_ofAnotherOnly_neverWhenBlocked() {
+        XCTAssertTrue(RelationFace.showsRelationPill(isCurrentUser: false, isBlocked: false))
+        XCTAssertFalse(RelationFace.showsRelationPill(isCurrentUser: true, isBlocked: false))
+        XCTAssertFalse(RelationFace.showsRelationPill(isCurrentUser: false, isBlocked: true))
+    }
+
     func test_writeShortcut_sitsBesideTheSelector_onTheVitrineOnly() {
         XCTAssertTrue(RelationFace.vitrine.offersWriteShortcut(isInteractionDisabled: false))
         XCTAssertFalse(RelationFace.links.offersWriteShortcut(isInteractionDisabled: false))

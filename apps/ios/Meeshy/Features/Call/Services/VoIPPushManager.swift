@@ -272,13 +272,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         let isCallPayload = (payloadType == "call" || payloadType == "voip_call") && hasCallId
 
         guard isCallPayload else {
-            let phantomUUID = UUID()
-            let update = CXCallUpdate()
-            update.localizedCallerName = ""
-            update.hasVideo = false
-            MainActor.assumeIsolated {
-                CallManager.shared.incomingRing.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: nil)
-            }
+            Self.reportPhantomCall(callId: nil)
             logger.error("VoIP push without valid call payload — reporting phantom call (type=\(payloadType ?? "nil"))")
             completion()
             return
@@ -308,13 +302,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         }
         if alreadyReported {
             logger.info("VoIP push duplicate detected (callId=\(callId)) — phantom-acking")
-            let phantomUUID = UUID()
-            let update = CXCallUpdate()
-            update.localizedCallerName = ""
-            update.hasVideo = false
-            MainActor.assumeIsolated {
-                CallManager.shared.incomingRing.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)
-            }
+            Self.reportPhantomCall(callId: callId)
             completion()
             return
         }
@@ -387,6 +375,17 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         }
 
         completion()
+    }
+
+    /// PushKit exige un appel signalé par push reçu : un push invalide ou en double se signale en appel fantôme, aussitôt
+    /// terminé. Toujours sur `.main` (configuré dans `register()`).
+    nonisolated private static func reportPhantomCall(callId: String?) {
+        let update = CXCallUpdate()
+        update.localizedCallerName = ""
+        update.hasVideo = false
+        MainActor.assumeIsolated {
+            CallManager.shared.incomingRing.reportPhantomVoIPCall(uuid: UUID(), update: update, callId: callId)
+        }
     }
 
     // MARK: - Payload Parsers

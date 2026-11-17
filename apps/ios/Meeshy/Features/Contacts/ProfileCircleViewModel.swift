@@ -137,6 +137,12 @@ final class ProfileCircleViewModel: ObservableObject {
         return below == .public ? .unlink : .demote(below)
     }
 
+    /// « Notre cercle » (#18870) : seulement pour un lien montré, rien n'est fabriqué sans lui.
+    var ourCircle: OurCircleSummary? {
+        guard shownLevel != nil, let link else { return nil }
+        return OurCircleSummary.make(link, pending: pendingLevel)
+    }
+
     var summary: String? {
         link.flatMap { CircleProgressSummary.make($0, now: now()).text(levelTitle: CircleLevelNames.title(of:)) }
     }
@@ -303,6 +309,19 @@ extension ProfileCircleLowering {
         }
     }
 
+    /// Ce que la baisse change, dit avant de la confirmer : silencieuse pour l'autre (RG-07), 30 jours avant sa demande.
+    func confirmationBody(name: String, from level: RelationLevel) -> String {
+        switch self {
+        case .demote(let target):
+            return String(
+                format: String(localized: "circles.demote.confirm.body", defaultValue: "%1$@ passera de %2$@ à %3$@. Vous perdrez ce que %2$@ partage. %1$@ n'en sera pas averti(e) et ne pourra pas vous redemander de remonter avant 30 jours.", bundle: .main),
+                name, CircleLevelNames.title(of: level), CircleLevelNames.title(of: target)
+            )
+        case .unlink:
+            return String(format: String(localized: "circles.unlink.confirm.body", defaultValue: "Vous ne serez plus liés : plus aucun cercle commun. %@ n'en sera pas averti(e) et ne pourra pas vous redemander de lien avant 30 jours.", bundle: .main), name)
+        }
+    }
+
     func confirmationTitle(name: String) -> String {
         switch self {
         case .demote(.close):
@@ -314,5 +333,31 @@ extension ProfileCircleLowering {
         case .unlink:
             return String(format: String(localized: "circles.unlink.confirm.title", defaultValue: "Annuler le lien avec %@ ?", bundle: .main), name)
         }
+    }
+}
+
+/// UN modèle de cercle par personne tant qu'une vue le tient (#18870) : la pilule sous le nom, « Notre cercle » et la
+/// face Actions lisent le même lien — une baisse faite dans la feuille se voit aussitôt sur la fiche, jamais deux vérités.
+/// Faible : la fiche fermée, le modèle s'en va.
+@MainActor
+enum ProfileCircleModels {
+    private final class WeakModel {
+        weak var model: ProfileCircleViewModel?
+        init(_ model: ProfileCircleViewModel) { self.model = model }
+    }
+
+    private static var models: [String: WeakModel] = [:]
+
+    static func model(for userId: String, make: () -> ProfileCircleViewModel) -> ProfileCircleViewModel {
+        let key = userId.lowercased()
+        if let held = models[key]?.model { return held }
+        models = models.filter { $0.value.model != nil }
+        let created = make()
+        models[key] = WeakModel(created)
+        return created
+    }
+
+    static func model(for userId: String) -> ProfileCircleViewModel {
+        model(for: userId) { ProfileCircleViewModel(userId: userId) }
     }
 }
