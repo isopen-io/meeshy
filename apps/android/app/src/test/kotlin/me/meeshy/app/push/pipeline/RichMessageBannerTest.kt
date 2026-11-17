@@ -179,6 +179,37 @@ class RichMessageBannerTest {
         coVerify(exactly = 1) { fetcher.fetch(avatar, any(), any(), any(), any()) }
     }
 
+    private fun children(): List<Notification> = manager.activeNotifications
+        .filter { (it.notification.flags and Notification.FLAG_GROUP_SUMMARY) == 0 }
+        .map { it.notification }
+
+    private fun Notification.texts(): List<String> =
+        NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(this)?.messages.orEmpty().map { it.text.toString() }
+
+    @Test
+    fun `l expiration d un message ephemere ne retire pas la banniere des messages ordinaires de la conversation`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "body" to "Salut"))
+        pipeline.renderNow(push("notificationId" to "n2", "body" to "Ceci s'efface", "ephemeralDuration" to "30"))
+
+        val ordinary = children().single { "Salut" in it.texts() }
+        assertThat(ordinary.timeoutAfter).isEqualTo(0L)
+        assertThat(ordinary.texts()).doesNotContain("Ceci s'efface")
+        assertThat(children().single { "Ceci s'efface" in it.texts() }.timeoutAfter).isEqualTo(30_000L)
+    }
+
+    @Test
+    fun `le message ordinaire qui suit un ephemere ne recopie pas son texte`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "body" to "Salut"))
+        pipeline.renderNow(push("notificationId" to "n2", "body" to "Ceci s'efface", "ephemeralDuration" to "30"))
+        pipeline.renderNow(push("notificationId" to "n3", "body" to "Tu es là ?"))
+
+        val ordinary = children().single { "Tu es là ?" in it.texts() }
+        assertThat(ordinary.texts()).containsExactly("Salut", "Tu es là ?").inOrder()
+        assertThat(ordinary.timeoutAfter).isEqualTo(0L)
+    }
+
     @Test
     fun `les boutons portent le compte connecte au rendu`() = runTest {
         pipeline().renderNow(push())
