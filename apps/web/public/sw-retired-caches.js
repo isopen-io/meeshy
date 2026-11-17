@@ -15,9 +15,9 @@
  *
  *  - L'ANCIEN SEAU DE `/config.js` (#18988). Il gardait un SCRIPT que tout
  *    code de l'origine pouvait réécrire et que la page exécutait à chaque
- *    chargement ; la configuration est désormais une DONNÉE lue par `fetch`
- *    (`src/lib/api/runtime-config.ts`) qu'aucun seau ne garde. Ce qu'un
- *    script a pu y déposer disparaît avec lui.
+ *    chargement ; la configuration est désormais une DONNÉE lue par une
+ *    requête synchrone (`src/lib/api/runtime-config.ts`) qu'aucun seau ne
+ *    garde. Ce qu'un script a pu y déposer disparaît avec lui.
  *
  * POURQUOI À L'ACTIVATION. C'est le moment où ce worker devient celui de
  * l'origine. L'opération est idempotente : après la première activation, plus

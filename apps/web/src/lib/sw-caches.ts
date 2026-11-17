@@ -41,7 +41,7 @@ export const SW_RUNTIME_CACHE_NAMES: readonly string[] = Object.values(SW_RUNTIM
  * L'ANCIEN SEAU DE `/config.js` (#10208), RETIRÉ (#18988). Il gardait un
  * SCRIPT que tout code de l'origine pouvait réécrire et que la page exécutait
  * à chaque chargement (contre-analyse du 2026-11-17, WEBX-01). La
- * configuration est désormais une DONNÉE lue par `fetch`
+ * configuration est désormais une DONNÉE lue par une requête synchrone
  * (`lib/api/runtime-config.ts`) qu'aucun seau ne garde : ce nom ne sert plus
  * qu'à la purge de `public/sw-retired-caches.js`, qui en porte le JUMEAU.
  */

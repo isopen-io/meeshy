@@ -119,8 +119,8 @@ describe('sw-retired-caches.js — les réponses e2ee déjà rangées quittent l
 /**
  * LE SEAU DE L'ANCIEN `/config.js` DISPARAÎT (#18988) — un script que tout
  * code de l'origine pouvait réécrire, et que la page exécutait à chaque
- * chargement. La configuration est désormais une DONNÉE lue par `fetch`
- * (`src/lib/api/runtime-config.ts`) que plus aucun seau ne garde ; ce qu'un
+ * chargement. La configuration est désormais une DONNÉE lue par une requête
+ * synchrone (`src/lib/api/runtime-config.ts`) que plus aucun seau ne garde ; ce qu'un
  * script a pu déposer dans l'ancien seau ne doit pas lui survivre.
  */
 describe('sw-retired-caches.js — le seau de l’ancien `/config.js` est effacé à l’activation', () => {

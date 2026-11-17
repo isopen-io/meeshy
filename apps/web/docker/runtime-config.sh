@@ -3,7 +3,7 @@
 #
 # Une seule image sert le staging, la production et tout déploiement sur site :
 # l'origine de la passerelle ne se fige plus au build. Ce script écrit
-# `config.json` — une DONNÉE, lue par `fetch` et décodée
+# `config.json` — une DONNÉE, lue par une requête synchrone et décodée
 # (`src/lib/api/runtime-config.ts`, #18988) — depuis l'environnement, puis
 # lance la commande du conteneur.
 #
