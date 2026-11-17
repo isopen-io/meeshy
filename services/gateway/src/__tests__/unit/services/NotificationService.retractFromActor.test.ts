@@ -93,7 +93,7 @@ describe('NotificationService.retractNotificationsFromActor — le blocage (#189
       );
       return {
         cursor: {
-          firstBatch: found.map((row) => ({
+          firstBatch: found.slice(0, command.batchSize ?? found.length).map((row) => ({
             _id: { $oid: row.id },
             type: row.type,
             delivery: { pushSent: true },
@@ -145,6 +145,22 @@ describe('NotificationService.retractNotificationsFromActor — le blocage (#189
 
     expect(idsOf(C)).toEqual(['64e000000000000000000007']);
     expect(rows.some((row) => row.id === '64e000000000000000000008')).toBe(true);
+  });
+
+  it('une personne très active : tout part, au-delà d’un seul lot de lecture', async () => {
+    const many = Array.from({ length: 2500 }, (_, index) => ({
+      id: `64f${String(index).padStart(21, '0')}`,
+      userId: A,
+      type: 'new_message',
+      actorId: B,
+      isRead: true,
+    }));
+    rows = [...rows, ...many];
+
+    const removed = await service.retractNotificationsFromActor(A, B);
+
+    expect(removed).toBe(2503);
+    expect(rows.some((row) => row.userId === A && row.actorId === B)).toBe(false);
   });
 
   it('un identifiant qui n’est pas un ObjectId ne lit rien', async () => {
