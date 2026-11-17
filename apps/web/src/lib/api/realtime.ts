@@ -113,7 +113,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unbridgeCalls = null;
     return;
   }
-  const unbridge = callsAvailable() ? bridgeCallEvents(next.socket) : () => undefined;
+  const unbridge = callsAvailable() ? bridgeCallEvents(next.socket, { queryClient: appQueryClient }) : () => undefined;
   /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible.
      Un onglet réveillé d'un long sommeil rouvre sa connexion et relit la liste (#10573). */
   const unwatch =
