@@ -21,9 +21,19 @@ export type Harness = ReturnType<typeof createSendHarness>;
 
 export function createSendHarness(options: {
   readonly encryptionMode: string;
-  /** Remplace l'écriture des enveloppes ; `write` est la vraie, sur le magasin factice. */
+  /**
+   * Remplace l'écriture des enveloppes ; `write` est la vraie — dans le tampon
+   * de la transaction quand elle passe par le client transactionnel, sur le
+   * magasin quand elle passe par le client extérieur.
+   */
   readonly envelopeCreateMany?: (args: unknown, write: (args: unknown) => Promise<unknown>) => Promise<unknown>;
   readonly messageDelete?: (args: unknown) => Promise<unknown>;
+  /**
+   * La validation échoue APRÈS le rappel (audit de #19080, E2) : élection du
+   * jeu de réplicas, conflit d'écriture détecté à la validation (P2034), délai
+   * de transaction dépassé (P2028). Rend l'erreur à lever, ou `null`.
+   */
+  readonly commitFailure?: () => Error | null;
 }) {
   resetParticipantLookupCache();
   const store = createFakeE2EEStore();
@@ -51,6 +61,8 @@ export function createSendHarness(options: {
 
   const envelopeDelegate = store.prisma.messageEnvelope;
   const envelopeCreateMany = options.envelopeCreateMany;
+  const throughOverride = (write: (args: unknown) => Promise<unknown>) => (args: unknown) =>
+    (envelopeCreateMany ? envelopeCreateMany(args, write) : write(args));
   const base: Record<string, Record<string, unknown>> = {
     conversation: {
       findUnique: async () => ({ id: CONVERSATION, type: 'direct', encryptionMode: options.encryptionMode, encryptionEnabledAt: new Date('2026-01-01'), encryptionEpoch: 0 }),
@@ -65,9 +77,7 @@ export function createSendHarness(options: {
     e2EEDevice: store.prisma.e2EEDevice,
     messageEnvelope: {
       ...envelopeDelegate,
-      createMany: envelopeCreateMany
-        ? (args: unknown) => envelopeCreateMany(args, envelopeDelegate.createMany as (args: unknown) => Promise<unknown>)
-        : envelopeDelegate.createMany,
+      createMany: throughOverride(envelopeDelegate.createMany as (args: unknown) => Promise<unknown>),
     },
     friendRequest: { findFirst: async () => null },
     postMention: { findUnique: async () => null },
@@ -77,11 +87,14 @@ export function createSendHarness(options: {
     user: { findUnique: async () => null, findMany: async () => [] },
   };
   // Une transaction du jeu de réplicas (isolation par instantané) : les lignes
-  // qu'elle écrit restent INVISIBLES aux autres requêtes jusqu'à sa validation ;
-  // une insertion concurrente sur la même clé unique échoue en conflit
-  // d'écriture (P2034, comme MongoDB) ; un abandon défait ses lignes et leurs
-  // enveloppes.
-  type Staging = { readonly rows: Record<string, unknown>[] };
+  // ET les enveloppes qu'elle écrit restent dans SON tampon, invisibles aux
+  // autres requêtes, et ne rejoignent le magasin qu'à sa validation ; une
+  // insertion concurrente sur la même clé unique échoue en conflit d'écriture
+  // (P2034, comme MongoDB). Un abandon — rappel qui lève, ou validation qui
+  // échoue après lui — ne défait QUE son tampon : ce que le client extérieur a
+  // écrit pendant le rappel reste, comme en base réelle (banc strict de
+  // l'audit de #19080, E2).
+  type Staging = { readonly rows: Record<string, unknown>[]; readonly envelopes: Record<string, unknown>[] };
   const openTransactions = new Set<Staging>();
   const live = (clientMessageId: unknown) => (row: Record<string, unknown>) =>
     clientMessageId !== undefined && row.clientMessageId === clientMessageId && row.deletedAt === null;
@@ -111,25 +124,38 @@ export function createSendHarness(options: {
       visibleTo(staging).find((m) => where.clientMessageId !== undefined && m.clientMessageId === where.clientMessageId) ?? null,
     findUnique: async () => null,
   });
+  const stagedEnvelopeDelegate = (staging: Staging) => ({
+    ...envelopeDelegate,
+    createMany: throughOverride(async (args: unknown) => {
+      const { data } = args as { data: Record<string, unknown>[] };
+      data.forEach((row) => staging.envelopes.push({ id: (nextId++).toString(16).padStart(24, '0'), createdAt: new Date(), ...row }));
+      return { count: data.length };
+    }),
+    findMany: async (args: { where: { messageId?: string } }) => [
+      ...((await (envelopeDelegate.findMany as (args: unknown) => Promise<Record<string, unknown>[]>)(args)) ?? []),
+      ...staging.envelopes.filter((row) => args.where.messageId === undefined || row.messageId === args.where.messageId),
+    ],
+  });
   const transaction = async (run: (tx: unknown) => Promise<unknown>): Promise<unknown> => {
-    const staging: Staging = { rows: [] };
+    const staging: Staging = { rows: [], envelopes: [] };
     openTransactions.add(staging);
     try {
       const result = await run(clientFor(staging));
+      const failure = options.commitFailure?.() ?? null;
+      if (failure) throw failure;
       messages.push(...staging.rows);
+      staging.envelopes.forEach((row) => store.collections.MessageEnvelope.insert(row));
       return result;
-    } catch (error) {
-      const aborted = new Set(staging.rows.map((row) => row.id));
-      const envelopeRows = store.collections.MessageEnvelope.rows;
-      const kept = envelopeRows.filter((row) => !aborted.has(row.messageId));
-      envelopeRows.splice(0, envelopeRows.length, ...kept);
-      throw error;
     } finally {
       openTransactions.delete(staging);
     }
   };
   const clientFor = (staging: Staging | null): Record<string, unknown> => {
-    const delegates: Record<string, Record<string, unknown>> = { ...base, message: messageDelegate(staging) };
+    const delegates: Record<string, Record<string, unknown>> = {
+      ...base,
+      message: messageDelegate(staging),
+      ...(staging ? { messageEnvelope: stagedEnvelopeDelegate(staging) } : {}),
+    };
     return new Proxy(delegates, {
       get: (target, key) => {
         if (key === '$transaction') return transaction;

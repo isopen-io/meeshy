@@ -12,7 +12,12 @@
  * émission. Il est inversé ici.
  *
  * Banc : le vrai `MessagingService` sur un double Prisma (`e2ee-send-harness.ts`),
- * dont `$transaction` défait ce que son rappel a écrit quand il lève.
+ * STRICT depuis l'audit de #19080 (E2) : la transaction tient ses lignes ET ses
+ * enveloppes dans un tampon versé au magasin à la validation, cette validation
+ * peut échouer APRÈS le rappel, et un abandon ne défait que le tampon. Une
+ * enveloppe écrite hors de la transaction (mutant M1-b) ou une distribution
+ * faite avant la validation (mutant M1-c) restent donc visibles : les témoins
+ * ci-dessous rougissent sur l'une comme sur l'autre.
  */
 import { describe, it, expect, afterEach } from '@jest/globals';
 import type { MessageRequest } from '@meeshy/shared/types';
@@ -187,6 +192,44 @@ describe('GW-05 — un message chiffré ne naît jamais sans ses enveloppes', ()
         expect.objectContaining({ messageId: h.messages[0].id, recipientUserId: BOB }),
       ]);
       expect(h.emitted).toHaveLength(1);
+    });
+  });
+
+  describe('la validation de la transaction échoue APRÈS le rappel (audit de #19080, E2)', () => {
+    const writeConflict = () => Object.assign(new Error('Transaction failed due to a write conflict or a deadlock'), { code: 'P2034' });
+    const transactionTimeout = () => Object.assign(new Error('Transaction already closed: the timeout was reached'), { code: 'P2028' });
+
+    it.each([
+      ['un conflit d’écriture à la validation (P2034)', writeConflict],
+      ['un délai de transaction dépassé (P2028)', transactionTimeout],
+      ['une élection du jeu de réplicas', replicaSetElection],
+    ])('%s : rien ne reste et rien ne part — ni ligne, ni enveloppe, ni émission', async (_label, failure) => {
+      const h = createSendHarness({ encryptionMode: 'e2ee', commitFailure: failure });
+
+      const response = await h.service.handleMessage(libsignalSend(cid(9)), ALICE_PARTICIPANT);
+
+      expect(response.success).toBe(false);
+      expect(h.messages).toHaveLength(0);
+      expect(h.store.collections.MessageEnvelope.rows).toHaveLength(0);
+      expect(h.emitted).toHaveLength(0);
+    });
+
+    it('le renvoi après une validation manquée range son enveloppe et la distribue, une fois', async () => {
+      const outcomes = [writeConflict(), null];
+      const h = createSendHarness({ encryptionMode: 'e2ee', commitFailure: () => outcomes.shift() ?? null });
+
+      const first = await h.service.handleMessage(libsignalSend(cid(10)), ALICE_PARTICIPANT);
+      const retry = await h.service.handleMessage(libsignalSend(cid(10)), ALICE_PARTICIPANT);
+
+      expect(first.success).toBe(false);
+      expect(retry.success).toBe(true);
+      expect(h.messages).toHaveLength(1);
+      expect(h.store.collections.MessageEnvelope.rows).toEqual([
+        expect.objectContaining({ messageId: h.messages[0].id, recipientUserId: BOB, recipientDeviceId: 1 }),
+      ]);
+      expect(h.emitted).toEqual([
+        expect.objectContaining({ room: ROOMS.device(BOB, 1, 222), event: SERVER_EVENTS.E2EE_ENVELOPE }),
+      ]);
     });
   });
 
