@@ -596,6 +596,13 @@ describe('anonymizeUserIdentity', () => {
     expect(data).toMatchObject({ profileAccentColor: null });
   });
 
+  it('efface le fantôme global de position (#19203) : son réglage part avec le compte', async () => {
+    const prisma = fakeUserPrisma();
+    await anonymizeUserIdentity(prisma, USER_ID);
+    const [{ data }] = (prisma.user.updateMany as jest.Mock<any>).mock.calls[0] as [{ data: any }];
+    expect(data).toMatchObject({ locationGhostAt: null });
+  });
+
   it('retire le contour d’avatar et la bannière de design ÉQUIPÉS (#10632) : un compte supprimé ne garde aucun décor de profil', async () => {
     const prisma = fakeUserPrisma();
     await anonymizeUserIdentity(prisma, USER_ID);
