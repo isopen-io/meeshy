@@ -50,6 +50,9 @@ extension EnvironmentValues {
     /// (#11232, F3) : une carte de lien interrogerait un site tiers (OpenGraph)
     /// ou le serveur (`ConversationCardService.refresh`) avec une URL que seul
     /// l'appareil a lue. Posée par l'aperçu d'appui long, par message.
+    /// SECOND verrou seulement : la loi vit dans la valeur (`BubbleContent.text(raw:of:)`
+    /// ne rend aucun lien à intégrer pour un tel message, #12768), qu'aucun hôte
+    /// ne peut oublier de poser — ce que l'environnement, vrai par défaut, permettait.
     var mountsLinkEmbeds: Bool {
         get { self[MountsLinkEmbedsKey.self] }
         set { self[MountsLinkEmbedsKey.self] = newValue }

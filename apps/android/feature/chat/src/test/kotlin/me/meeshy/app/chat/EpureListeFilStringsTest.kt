@@ -239,6 +239,6 @@ class EpureListeFilStringsTest {
             assertWithMessage("$folder alone").that(strings.getValue("chat_menu_e2ee_signals_notice_alone")).startsWith(prefix)
         }
         assertThat(all("values-fr")["chat_menu_e2ee_signals_notice"])
-            .isEqualTo("Réagir, épingler et supprimer pour tous : depuis l’application Meeshy sur iPhone.")
+            .isEqualTo("Réagir, épingler et supprimer pour tous : pas encore sur cet appareil.")
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -81,6 +82,8 @@ fun ChatScreen(
     ChatShellEffects(viewModel, remember(viewModel) { ChatLifecycleHooks() }, leave)
     ChatWindowCaptureShield(remember(state.messages) { ChatCaptureShield.shields(state.messages.map { it.exitOffer }) })
     EncryptionSwitchAnnouncementEffect(remember(viewModel) { viewModel.controllers.find<EncryptionSwitchAnnouncementController>() })
+    val endToEndSendRefusals by viewModel.endToEndSendRefusals.collectAsStateWithLifecycle()
+    EndToEndSendRefusalEffect(endToEndSendRefusals)
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
     val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 
@@ -299,5 +302,20 @@ private fun EncryptionSwitchAnnouncementEffect(announcer: EncryptionSwitchAnnoun
     val notice = stringResource(R.string.conversation_encryption_switched_enabled)
     LaunchedEffect(announcer, notice) {
         announcer?.announcements?.collect { Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
+    }
+}
+
+/**
+ * #18975 — un envoi chiffré qui n'a pas pu partir se dit, traduit, UNE fois : ni une recomposition ni l'écran recréé
+ * (rotation, retour au fil) ne rejouent l'avis (audit de #19077, P10). Son texte est déjà revenu dans le composeur.
+ */
+@Composable
+internal fun EndToEndSendRefusalEffect(refusals: Int) {
+    val context = LocalContext.current
+    val notice = stringResource(R.string.chat_e2ee_send_not_sent)
+    var announced by rememberSaveable { mutableIntStateOf(refusals) }
+    LaunchedEffect(refusals) {
+        if (refusals > announced) Toast.makeText(context, notice, Toast.LENGTH_LONG).show()
+        announced = refusals
     }
 }

@@ -11,6 +11,7 @@ import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
 import { cityAsReaderOf } from '../users/profile-city';
+import { addressesSeenAs, type ServedAddress } from '@meeshy/shared/utils/profile-addresses';
 import { profileViewerId } from '../users/profile-block-gate';
 import { getOptionalAuth } from '../users/presence-gate';
 import { parseFieldList, parseTokenSet, restrictFields } from '../../utils/sparse-fieldset';
@@ -19,7 +20,8 @@ import { isRelationLevel, type RelationLevel } from '@meeshy/shared/types/relati
 import { PROFILE_CAPABILITIES, type ProfileCircleView } from '@meeshy/shared/utils/profile-circle-view';
 import { profileSeenAs, readProfileCircleView, readProfileSeenAs } from '../../services/relations/profileCircleView';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
-import { sendBadRequest, sendForbidden } from '../../utils/response.js';
+import { sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response.js';
+import { linkCardIsClosed } from './person-link-gate';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPerson' });
 
@@ -283,6 +285,7 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
           fields: { type: 'string', description: 'Comma-separated subset of the default projection' },
           expand: { type: 'string', description: 'Comma-separated: stats, presence, relation, circle' },
           as: { type: 'string', description: 'Owner only: the profile as a reader of this circle sees it (Voir comme)' },
+          via: { type: 'string', description: 'link: the card of a profile link pasted in a conversation (#18865). Unknown, deactivated, hidden from search or blocked ⇒ the same 404 as an unknown username.' },
         },
       },
       response: {
@@ -352,7 +355,7 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { handle: string } }>, reply: FastifyReply) => {
     try {
       const { handle } = request.params;
-      const { fields, expand, as } = request.query as { fields?: string; expand?: string; as?: string };
+      const { fields, expand, as, via } = request.query as { fields?: string; expand?: string; as?: string; via?: string };
 
       if (as !== undefined && !isRelationLevel(as)) return sendBadRequest(reply, 'Unknown circle');
       const voirComme: RelationLevel | undefined = isRelationLevel(as) ? as : undefined;
@@ -364,6 +367,10 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
       // Prisma autant que la réponse (#4356). Une projection qui n'arriverait
       // qu'après le chargement n'aurait allégé que le fil.
       const champs = parseFieldList(fields);
+
+      if (via === 'link' && viewerId && (await linkCardIsClosed(fastify.prisma, handle, viewerId))) {
+        return sendNotFound(reply, 'User not found');
+      }
 
       const profil = await servirProfilPublic(fastify, request, reply, handle, champs);
       if (!profil) return reply;
@@ -391,6 +398,9 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
         delete base.cityCircle;
         const villeVue = cityAsReaderOf({ id: String(profil.id), city: profil.city as string | undefined, cityCircle: profil.cityCircle as string | null | undefined }, voirComme);
         if (villeVue !== null) base.city = villeVue;
+        delete base.addresses;
+        const adressesVues = addressesSeenAs((profil.addresses as ServedAddress[] | undefined) ?? [], voirComme);
+        if (adressesVues.length > 0) base.addresses = adressesVues;
       }
 
       // La présence est RETIRÉE par défaut, jamais ajoutée par ce paramètre :
