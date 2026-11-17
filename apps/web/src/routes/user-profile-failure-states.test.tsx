@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { kitMount } from '@/test-support/kit-mount';
 import { PROFILE_FAILURES, type ProfileFailure } from '@/lib/profile/failure';
 
-import { ProfileFailureNotice } from './user-profile-states';
+import { ProfileFailureNotice, ProfileOfflineBanner } from './user-profile-states';
 
 const { mount, act } = kitMount();
 
@@ -49,5 +49,21 @@ describe('les états d’échec du profil sont des blocs d’état du kit (#1888
     const text = noticeOf('refused').textContent ?? '';
     expect(text).toContain('Ce profil n’est pas accessible');
     expect(text.toLowerCase()).not.toContain('introuvable');
+  });
+});
+
+describe('hors ligne sur un cache : le bandeau dit ce qu’on voit et son âge (#18882)', () => {
+  test('avec une date de mise à jour, « dernière version connue » et son âge', () => {
+    const now = Date.parse('2026-11-17T12:00:00Z');
+    const el = mount(<ProfileOfflineBanner language="fr" updatedAt={now - 18 * 60_000} now={now} />);
+    const text = el.textContent ?? '';
+    expect(text).toContain('dernière version connue');
+    expect(text).toContain('18 min');
+    expect(text).not.toContain('à la reconnexion');
+  });
+
+  test('sans date, le bandeau garde sa phrase d’attente', () => {
+    const el = mount(<ProfileOfflineBanner language="fr" />);
+    expect(el.textContent ?? '').toContain('à la reconnexion');
   });
 });

@@ -259,7 +259,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
       <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
         {person !== undefined ? (
           <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
-            {online ? null : <ProfileOfflineBanner language={language} />}
+            {online ? null : <ProfileOfflineBanner language={language} updatedAt={view.dataUpdatedAt} />}
             <ProfileHero
               profile={person}
               name={name}

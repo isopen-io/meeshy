@@ -3,11 +3,14 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import {   SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
+import { MeeshyStateBlock, type MeeshyStateBlockKind } from '@/components/kit/meeshy-state-block';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { navigate } from '@/lib/router';
+import { shortRelativeTime } from '@/lib/relative-time';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { failureMayRetry, type ProfileFailure } from '@/lib/profile/failure';
 import type { ProfilePostsFilter, ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
-import { BRAND, BRAND_FILL, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-style';
+import { BRAND, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-style';
 
 /**
  * **LES ÉTATS DU PROFIL PUBLIC** (#7152) — extrait de `user-profile-sections.tsx`, qui
@@ -18,48 +21,13 @@ import { BRAND, BRAND_FILL, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-
  * Ce qui se peint QUAND IL N'Y A RIEN À PEINDRE vit ensemble.
  */
 
-export function ProfileNotice({
-  glyph,
-  tone,
-  title,
-  detail,
-  alert,
-  action,
-}: {
-  readonly glyph: 'lock' | 'warningCircle';
-  readonly tone: string;
-  readonly title: string;
-  readonly detail: string;
-  readonly alert: boolean;
-  readonly action?: { readonly label: string; readonly onAction: () => void };
-}) {
-  return (
-    <div {...(alert ? { role: 'alert' } : {})} className="grid flex-1 content-center justify-items-center gap-3 px-8 text-center">
-      <span style={{ color: tone }}>
-        <Glyph name={glyph} size={28} />
-      </span>
-      <p className="text-body font-semibold" style={{ color: INK }}>
-        {title}
-      </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {detail}
-      </p>
-      {action === undefined ? null : (
-        <button
-          type="button"
-          data-profile-retry
-          onClick={action.onAction}
-          className={`grid place-items-center rounded-chip px-5 text-body font-semibold ${FOCUS}`}
-          style={{ minHeight: 44, color: 'var(--color-ios-on-brand)', backgroundColor: BRAND_FILL, outlineColor: BRAND }}
-        >
-          {action.label}
-        </button>
-      )}
-    </div>
-  );
-}
-
-export function ProfileOfflineBanner({ language }: { readonly language: InterfaceLanguage }) {
+/** Sur un cache (#18882), le bandeau dit ce qu'on voit — la dernière version connue — et son âge ;
+ * sans cache, il dit qu'on attend le réseau. */
+export function ProfileOfflineBanner({ language, updatedAt, now = Date.now() }: { readonly language: InterfaceLanguage; readonly updatedAt?: number | undefined; readonly now?: number }) {
+  const body =
+    updatedAt === undefined || updatedAt <= 0
+      ? translate(language, 'userProfile.offline.body')
+      : translate(language, 'userProfile.offline.stale', { time: shortRelativeTime(new Date(updatedAt), new Date(now), language) });
   return (
     <div role="status" data-profile-offline className="flex items-start gap-3 rounded-card px-3.5 py-3" style={SECTION_CARD_STYLE}>
       <span aria-hidden="true" className="pt-0.5" style={{ color: 'var(--color-warning)' }}>
@@ -70,7 +38,7 @@ export function ProfileOfflineBanner({ language }: { readonly language: Interfac
           {translate(language, 'profile.offline.title')}
         </span>
         <span className="text-caption" style={{ color: INK_2 }}>
-          {translate(language, 'userProfile.offline.body')}
+          {body}
         </span>
       </span>
     </div>
@@ -240,36 +208,38 @@ export function ProfilePostsMore({
 
 /** Le rendu d'un échec, par sa NATURE — la loi vit dans `lib/profile/failure.ts`,
  * pure, parce que « 403 et 404 rendent le même texte » ne se mesure qu'en
- * comparant deux chaînes. */
+ * comparant deux chaînes. Le dessin est le bloc d'état du kit (K38, #18882) :
+ * un refus mène à « Chercher quelqu'un » (rejouer un refus ne mène nulle part),
+ * une erreur et un débit à « Réessayer », le hors-ligne sans cache à rien. */
 const FAILURE_NOTICE = {
-  refused: { glyph: 'lock', tone: 'var(--color-ios-ink-3)', alert: false, title: 'userProfile.refused.title', body: 'userProfile.refused.body' },
-  throttled: { glyph: 'warningCircle', tone: 'var(--color-warning)', alert: true, title: 'userProfile.throttled.title', body: 'userProfile.throttled.body' },
-  offline: { glyph: 'warningCircle', tone: 'var(--color-warning)', alert: false, title: 'profile.offline.title', body: 'userProfile.offline.body' },
-  error: { glyph: 'warningCircle', tone: 'var(--color-error)', alert: true, title: 'userProfile.error.title', body: 'userProfile.error.body' },
-} as const satisfies Readonly<
-  Record<ProfileFailure, { readonly glyph: 'lock' | 'warningCircle'; readonly tone: string; readonly alert: boolean; readonly title: InterfaceCatalogKey; readonly body: InterfaceCatalogKey }>
->;
+  refused: { kind: 'denied', title: 'userProfile.refused.title', body: 'userProfile.refused.body' },
+  throttled: { kind: 'error', title: 'userProfile.throttled.title', body: 'userProfile.throttled.body' },
+  offline: { kind: 'offline', title: 'profile.offline.title', body: 'userProfile.offline.body' },
+  error: { kind: 'error', title: 'userProfile.error.title', body: 'userProfile.error.body' },
+} as const satisfies Readonly<Record<ProfileFailure, { readonly kind: MeeshyStateBlockKind; readonly title: InterfaceCatalogKey; readonly body: InterfaceCatalogKey }>>;
+
+const goSearch = (): void => navigate('/discover');
 
 export function ProfileFailureNotice({
   language,
   failure,
   onRetry,
+  onSearch = goSearch,
 }: {
   readonly language: InterfaceLanguage;
   readonly failure: ProfileFailure;
   readonly onRetry: () => void;
+  readonly onSearch?: () => void;
 }) {
   const notice = FAILURE_NOTICE[failure];
+  const primary = failureMayRetry(failure)
+    ? { title: translate(language, 'profile.retry'), perform: onRetry }
+    : failure === 'refused'
+      ? { title: translate(language, 'userProfile.refused.search'), perform: onSearch }
+      : undefined;
   return (
-    <div data-profile-failure={failure}>
-    <ProfileNotice
-      glyph={notice.glyph}
-      tone={notice.tone}
-      alert={notice.alert}
-      title={translate(language, notice.title)}
-      detail={translate(language, notice.body)}
-      {...(failureMayRetry(failure) ? { action: { label: translate(language, 'profile.retry'), onAction: onRetry } } : {})}
-    />
+    <div data-profile-failure={failure} className="grid flex-1 content-center px-4">
+      <MeeshyStateBlock kind={notice.kind} title={translate(language, notice.title)} message={translate(language, notice.body)} art="glyph" primary={primary} />
     </div>
   );
 }
