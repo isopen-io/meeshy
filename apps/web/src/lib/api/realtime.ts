@@ -170,6 +170,7 @@ const liveConnection = keepRealtimeConnection<RealtimeConnection>({
       outbox: outboxStore,
       viewerId: currentViewerId,
       onClearSession: endWithReason,
+      notificationsApi: apiDeps,
       onAccountDeleted: retireDeletedAccountLater,
       account,
       onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
@@ -215,6 +216,7 @@ function syncConnection(): void {
           outbox: outboxStore,
           viewerId: currentViewerId,
           onClearSession: () => undefined,
+          notificationsApi: apiDeps,
         },
       );
       bridgeCalls(connection);

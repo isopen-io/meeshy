@@ -7,7 +7,7 @@ import { presenceStore } from '@/lib/api/presence-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallDetail } from '@/lib/calls/call-detail';
 
-import { CallDetailCard, CallDetailHeader, CallDetailSkeleton, CallDetailState } from './call-detail-parts';
+import { CallDetailCard, CallDetailHeader, CallDetailSkeleton, CallDetailState, CallJoinPrompt } from './call-detail-parts';
 import { KeypadCallFailed, KeypadField, KeypadHeader, KeypadPad, KeypadResult, KeypadStatusView } from './calls-keypad-parts';
 
 /**
@@ -198,11 +198,18 @@ describe('la fiche d’un appel', () => {
     expect(html).toContain('Manqué');
   });
 
-  test('introuvable, erreur réessayable, hors ligne, connexion, squelette', () => {
+  test('introuvable, erreur réessayable, hors ligne, squelette', () => {
     expect(renderToStaticMarkup(<CallDetailState language="fr" kind="not-found" />)).toContain('Appel introuvable');
     expect(renderToStaticMarkup(<CallDetailState language="fr" kind="error" onRetry={noop} />)).toContain('data-call-detail-retry');
     expect(renderToStaticMarkup(<CallDetailState language="fr" kind="offline" />)).toContain('data-call-detail-state="offline"');
-    expect(renderToStaticMarkup(<CallDetailState language="fr" kind="joining" />)).toContain('role="status"');
     expect(renderToStaticMarkup(<CallDetailSkeleton language="fr" />)).toContain('aria-busy="true"');
+  });
+
+  test('un appel vivant atteint par son adresse DEMANDE avant de rejoindre, et se nomme avec la personne', () => {
+    const html = renderToStaticMarkup(<CallJoinPrompt language="fr" name="Kwame Mensah" media="video" onJoin={noop} onCancel={noop} />);
+    expect(html).toContain('role="group"');
+    expect(html).toContain('aria-label="Rejoindre l’appel avec Kwame Mensah"');
+    expect(html).toContain('data-call-join-prompt-action="join"');
+    expect(html).toContain('data-call-join-prompt-action="cancel"');
   });
 });

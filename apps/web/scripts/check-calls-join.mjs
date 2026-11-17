@@ -20,8 +20,10 @@
  *  5. `/call/<id>` d'un appel FINI rend sa fiche (nom, direction, Type, Date,
  *     Durée), sans aucun numéro (D-129), et son rappel ouvre l'écran d'appel ;
  *     un identifiant inconnu se dit introuvable ;
- *  6. `/call/<id>` d'un appel VIVANT ouvre le fil de sa conversation et
- *     l'écran d'appel par-dessus ;
+ *  6. `/call/<id>` d'un appel VIVANT ne rejoint RIEN à l'ouverture — ni
+ *     caméra, ni micro, ni écran d'appel (#18907 : l'adresse se forge, le
+ *     geste non) ; il DEMANDE « Rejoindre l'appel avec … » (44 de haut, AA),
+ *     et le toucher « Rejoindre » ouvre le fil et l'écran d'appel par-dessus ;
  *  7. un appel vivant côté serveur fait paraître « Reprendre l'appel » (lisible
  *     AA, 44 de haut, non recouvert) et la pastille « Rejoindre » de l'en-tête
  *     du fil ; chacune rejoint l'appel ;
@@ -184,10 +186,43 @@ try {
       );
 
       // ------------------------------------------------ 6. le lien profond d'un appel vivant
+      await page.addInitScript(() => {
+        const devices = navigator.mediaDevices;
+        if (devices === undefined) return;
+        const original = devices.getUserMedia.bind(devices);
+        Object.defineProperty(window, '__meeshyMediaRequests', { value: [], writable: false });
+        devices.getUserMedia = (constraints) => {
+          window.__meeshyMediaRequests.push(constraints);
+          return original(constraints);
+        };
+      });
       await page.goto(`${BASE}/call/${LIVE_CALL}`, { waitUntil: 'load' });
+      const prompt = await page.waitForSelector('[data-call-join-prompt]', { timeout: 5000 }).then(() => true, () => false);
+      check(prompt, `${label} : /call/<vivant> DEMANDE avant de rejoindre`);
+      check(
+        (await page.getAttribute('[data-call-join-prompt]', 'aria-label').catch(() => null)) === 'Rejoindre l’appel avec Kwame Mensah',
+        `${label} : l'invite se nomme avec la personne (${await page.getAttribute('[data-call-join-prompt]', 'aria-label').catch(() => null)})`,
+      );
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const untouched = await page.evaluate(() => ({
+        path: location.pathname,
+        screen: document.querySelector('[data-call-screen]') !== null,
+        media: (window.__meeshyMediaRequests ?? []).length,
+      }));
+      check(
+        untouched.path === `/call/${LIVE_CALL}` && !untouched.screen && untouched.media === 0,
+        `${label} : sans toucher, ni caméra, ni micro, ni écran d'appel (${JSON.stringify(untouched)})`,
+      );
+      const promptH = await heights(page, '[data-call-join-prompt-action]');
+      check(promptH.length === 2 && promptH.every((h) => h >= TAP_FLOOR), `${label} : « Annuler » et « Rejoindre » font au moins ${TAP_FLOOR} (${JSON.stringify(promptH)})`);
+      inks['invite question'] = await contrastOf(page, '[data-call-join-prompt-question]');
+      inks['invite rejoindre'] = await contrastOf(page, '[data-call-join-prompt-action="join"]');
+      inks['invite annuler'] = await contrastOf(page, '[data-call-join-prompt-action="cancel"]');
+      await capture(page, `rejoindre-lien-${slug}`);
+      await page.click('[data-call-join-prompt-action="join"]');
       const joinedUrl = await page.waitForURL('**/c/c-kwame', { timeout: 5000 }).then(() => true, () => false);
       const joined = await callScreenFor(page);
-      check(joinedUrl && joined.name === 'Appel avec Kwame Mensah', `${label} : /call/<vivant> ouvre le fil de Kwame et l'écran d'appel (${JSON.stringify(joined)})`);
+      check(joinedUrl && joined.name === 'Appel avec Kwame Mensah', `${label} : le toucher « Rejoindre » ouvre le fil de Kwame et l'écran d'appel (${JSON.stringify(joined)})`);
 
       const faibles = Object.entries(inks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
       check(faibles.length === 0, `${label} : chaque texte du pavé et de la fiche tient AA — ${JSON.stringify(inks)}`);

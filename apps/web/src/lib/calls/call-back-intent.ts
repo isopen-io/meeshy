@@ -7,11 +7,19 @@ export const CALL_BACK_PARAM = 'rappeler';
 export const CALL_BACK_NAME_PARAM = 'appelant';
 export const CALL_BACK_GROUP_PARAM = 'groupe';
 
+/**
+ * `origin` dit d'où vient l'intention : le MESSAGE du worker (ou le pont de la
+ * coque) est une voie de confiance ; l'ADRESSE d'un onglet neuf se compose à la
+ * main (#18907) — elle ne porte ni nom ni groupe, et ne compose jamais seule.
+ */
+export type CallBackIntentOrigin = 'url' | 'message';
+
 export type CallBackIntent = {
   readonly conversationId: string;
   readonly media: CallMedia;
   readonly title: string;
   readonly isGroup: boolean;
+  readonly origin: CallBackIntentOrigin;
 };
 
 export type CallBackIntentEnvironment = {
@@ -56,16 +64,10 @@ const conversationOfPath = (path: string): string | null => {
 };
 
 export function callBackIntentFromSearch(path: string, search: string): CallBackIntent | null {
-  const params = new URLSearchParams(search);
-  const media = mediaOf(params.get(CALL_BACK_PARAM));
+  const media = mediaOf(new URLSearchParams(search).get(CALL_BACK_PARAM));
   const conversationId = conversationOfPath(path);
   if (media === null || conversationId === null) return null;
-  return {
-    conversationId,
-    media,
-    title: (params.get(CALL_BACK_NAME_PARAM) ?? '').trim(),
-    isGroup: params.get(CALL_BACK_GROUP_PARAM) === '1',
-  };
+  return { conversationId, media, title: '', isGroup: false, origin: 'url' };
 }
 
 export function callBackIntentFromMessage(message: unknown): CallBackIntent | null {
@@ -80,6 +82,7 @@ export function callBackIntentFromMessage(message: unknown): CallBackIntent | nu
     media: medium,
     title: typeof title === 'string' ? title.trim() : '',
     isGroup: isGroup === true,
+    origin: 'message',
   };
 }
 
@@ -95,7 +98,7 @@ export function listenCallBackIntents(env: CallBackIntentEnvironment): void {
   const deliver = (intent: CallBackIntent): void => {
     void env.ready().then(() => {
       const request = requestOf(intent);
-      if (!env.mayPlayAudio()) return env.confirm(request);
+      if (intent.origin === 'url' || !env.mayPlayAudio()) return env.confirm(request);
       env.start(request);
     });
   };
@@ -112,6 +115,11 @@ export function listenCallBackIntents(env: CallBackIntentEnvironment): void {
 
 type CallBackActions = Pick<CallBackIntentEnvironment, 'ready' | 'start' | 'confirm'>;
 
+/** Le nom, l'avatar et le groupe d'un rappel viennent de la conversation connue ; ce que la demande porte ne sert que faute de mieux. */
+export function identifyCallBack(request: StartCallRequest, known: { readonly title: string; readonly avatar: string | null; readonly isGroup: boolean }): StartCallRequest {
+  return { ...request, title: request.title === '' ? known.title : request.title, avatar: known.avatar, isGroup: request.isGroup || known.isGroup };
+}
+
 async function callBackActions(): Promise<CallBackActions> {
   const [{ callActions }, { callIdentityOf }, { whenCallTransportReady }, { callBackPromptStore }] = await Promise.all([
     import('./call-actions'),
@@ -119,14 +127,11 @@ async function callBackActions(): Promise<CallBackActions> {
     import('./call-transport'),
     import('./call-back-prompt'),
   ]);
-  const identified = (request: StartCallRequest): StartCallRequest => {
-    const known = callIdentityOf(request.conversationId);
-    return { ...request, title: request.title === '' ? known.title : request.title, avatar: known.avatar };
-  };
+  const identified = (request: StartCallRequest): StartCallRequest => identifyCallBack(request, callIdentityOf(request.conversationId));
   return {
     ready: whenCallTransportReady,
     start: (request) => callActions.start(identified(request)),
-    confirm: (request) => callBackPromptStore.setState({ request: identified(request) }),
+    confirm: (request) => callBackPromptStore.setState({ request }),
   };
 }
 

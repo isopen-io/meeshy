@@ -26,12 +26,30 @@ import type { NotificationRecord } from './record';
 
 const CALL_LAYER_TYPES = new Set(['incoming_call', 'incoming_call_alert', 'call', 'CALL_INCOMING', 'call_ended']);
 
-export function shouldShowBanner(notification: NotificationRecord, { pathname }: { readonly pathname: string }): boolean {
-  if (notification.state.isRead || CALL_LAYER_TYPES.has(notification.type)) return false;
+/** Les types que la couche d'appel présente elle-même : ni bannière, ni lecture automatique (#18907). */
+export const isCallLayerNotification = (notification: NotificationRecord): boolean => CALL_LAYER_TYPES.has(notification.type);
+
+/** La conversation de la notification est à l'écran : son fil ouvert, ou son aperçu tiré depuis la bannière (#8821). */
+export function conversationOnScreen(notification: NotificationRecord, { pathname }: { readonly pathname: string }): boolean {
   const conversationId = notification.context.conversationId;
-  if (conversationId === undefined) return true;
-  if (conversationPreviewStore.getState().conversationId === conversationId) return false;
-  return pathname !== `/c/${encodeURIComponent(conversationId)}`;
+  if (conversationId === undefined) return false;
+  return conversationPreviewStore.getState().conversationId === conversationId || pathname === `/c/${encodeURIComponent(conversationId)}`;
+}
+
+export function shouldShowBanner(notification: NotificationRecord, location: { readonly pathname: string }): boolean {
+  if (notification.state.isRead || isCallLayerNotification(notification)) return false;
+  return !conversationOnScreen(notification, location);
+}
+
+/**
+ * Une notification arrivée sur la conversation OUVERTE s'y lit à l'arrivée (#18907) — sauf celles qu'une autre
+ * surface présente : la couche d'appel, et la pastille de la batterie ou du téléphone injoignable d'un Proche, que
+ * personne n'aurait vue si elle était lue en silence.
+ */
+export function readsOnArrival(notification: NotificationRecord, location: { readonly pathname: string }): boolean {
+  if (notification.state.isRead || isCallLayerNotification(notification)) return false;
+  if (notification.type === IN_APP_BATTERY_TYPE || notification.type === IN_APP_PHONE_REACHABILITY_TYPE) return false;
+  return conversationOnScreen(notification, location);
 }
 
 type BannerState = {
@@ -43,6 +61,17 @@ export const inAppBannerStore = createStore<BannerState>((set) => ({
   current: null,
   dismiss: () => set({ current: null }),
 }));
+
+/** Une notification retirée (message supprimé pour tous, réaction retirée) emporte SA bannière — jamais celle d'une autre (#18907). */
+export function retractInAppBanner(id: string): void {
+  if (inAppBannerStore.getState().current?.id !== id) return;
+  inAppBannerStore.setState({ current: null });
+}
+
+/** La bannière appartient à l'identité qui l'a reçue : elle se vide quand celle-ci change (`identity-scoped-stores.ts`, #18907). */
+export function resetInAppBanner(): void {
+  inAppBannerStore.setState({ current: null });
+}
 
 /**
  * Le type que la passerelle sert pour la batterie d'un Proche (`BATTERY_NOTIFICATION_TYPE`), écrit en LITTÉRAL :

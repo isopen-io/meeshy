@@ -20,7 +20,6 @@ const itCallJoin = {
   'callJoin.detail.loading': 'Caricamento della chiamata',
   'callJoin.detail.notFound.title': 'Chiamata non trovata',
   'callJoin.detail.notFound.body': 'Questa chiamata non esiste più o non ti è accessibile.',
-  'callJoin.detail.joining': 'Connessione alla chiamata…',
   'keypad.title': 'Tastierino',
   'keypad.open': 'Componi un numero',
   'keypad.input.placeholder': 'Numero o nome',

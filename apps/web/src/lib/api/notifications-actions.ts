@@ -39,14 +39,23 @@ import {
 
 export type NotificationActionDeps = NotificationsDeps & { readonly queryClient: QueryClient };
 
-export async function performMarkNotificationRead(params: { readonly id: string; readonly deps: NotificationActionDeps }): Promise<boolean> {
+/**
+ * `counted` : l'appelant SAIT que le compte local tient cette notification pour non lue — la connexion qui vient de
+ * l'ajouter à l'arrivée (#18907). Sans liste en cache (cloche jamais ouverte), la ligne est introuvable, mais la
+ * pastille l'a comptée : sans ce drapeau elle resterait à +1 jusqu'à l'écho `notification:counts`.
+ */
+export async function performMarkNotificationRead(params: {
+  readonly id: string;
+  readonly deps: NotificationActionDeps;
+  readonly counted?: boolean;
+}): Promise<boolean> {
   const { id, deps } = params;
   const known = findNotification(deps.queryClient, id);
   if (known?.state.isRead === true) return true;
 
   const snapshot = snapshotNotifications(deps.queryClient);
   markNotificationsRead(deps.queryClient, (n) => n.id === id);
-  if (known !== undefined) adjustNotificationCounts(deps.queryClient, { unread: -1 });
+  if (known !== undefined || params.counted === true) adjustNotificationCounts(deps.queryClient, { unread: -1 });
 
   const result = await postNotificationRead(deps, id);
   if (!result.ok) restoreNotifications(deps.queryClient, snapshot);
