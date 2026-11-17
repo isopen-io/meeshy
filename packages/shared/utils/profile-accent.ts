@@ -4,7 +4,7 @@
  * Une liste FERMÉE, celle des pastilles de la planche (`Moi-Edition`) : jamais du texte libre,
  * jamais un hex quelconque. `null` veut dire « automatique » — le client calcule l'accent comme
  * il le fait aujourd'hui. Chaque teinte porte son ENCRE pour une surface claire et pour une
- * surface sombre (contraste 4.5:1 mesuré par le témoin), de sorte qu'aucun client n'ait à
+ * surface sombre (contraste 4.5:1 mesuré par le témoin sur la page ET la carte du design system), de sorte qu'aucun client n'ait à
  * deviner comment écrire lisiblement dans la couleur choisie.
  *
  * Le cercle est PUBLIC (Sys-Matrice « Couleur d'accent choisie ») : aucune loi d'accès à
@@ -20,13 +20,13 @@ export type ProfileAccentTone = {
 };
 
 export const PROFILE_ACCENT_COLORS: readonly ProfileAccentTone[] = [
-  { key: 'violet', hex: '#A855F7', inkOnLight: '#994DE1', inkOnDark: '#A855F7' },
-  { key: 'turquoise', hex: '#4ECDC4', inkOnLight: '#31817B', inkOnDark: '#4ECDC4' },
-  { key: 'coral', hex: '#FF6B6B', inkOnLight: '#BF5050', inkOnDark: '#FF6B6B' },
-  { key: 'amber', hex: '#F8B500', inkOnLight: '#976E00', inkOnDark: '#F8B500' },
-  { key: 'blue', hex: '#3498DB', inkOnLight: '#2A7AAF', inkOnDark: '#3498DB' },
-  { key: 'green', hex: '#2ECC71', inkOnLight: '#1E8549', inkOnDark: '#2ECC71' },
-  { key: 'raspberry', hex: '#FF2E63', inkOnLight: '#DE2856', inkOnDark: '#FF2E63' },
+  { key: 'violet', hex: '#A855F7', inkOnLight: '#944BD9', inkOnDark: '#A855F7' },
+  { key: 'turquoise', hex: '#4ECDC4', inkOnLight: '#2F7C77', inkOnDark: '#4ECDC4' },
+  { key: 'coral', hex: '#FF6B6B', inkOnLight: '#BA4E4E', inkOnDark: '#FF6B6B' },
+  { key: 'amber', hex: '#F8B500', inkOnLight: '#916A00', inkOnDark: '#F8B500' },
+  { key: 'blue', hex: '#3498DB', inkOnLight: '#2876AA', inkOnDark: '#3498DB' },
+  { key: 'green', hex: '#2ECC71', inkOnLight: '#1D8147', inkOnDark: '#2ECC71' },
+  { key: 'raspberry', hex: '#FF2E63', inkOnLight: '#D62753', inkOnDark: '#FF2E63' },
 ];
 
 export const PROFILE_ACCENT_HEXES: readonly string[] = PROFILE_ACCENT_COLORS.map((tone) => tone.hex);
