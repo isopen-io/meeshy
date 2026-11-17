@@ -73,6 +73,7 @@ export interface SocketIOUser {
   readonly displayName?: string;
   readonly avatar?: string;
   readonly banner?: string;  // Profile banner/cover image
+  readonly profileAccentColor?: string | null;  // #19201 : accent de la vitrine, null = automatique
   readonly bio?: string;
   readonly role: string;
   readonly permissions?: UserPermissions;

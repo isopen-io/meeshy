@@ -298,6 +298,8 @@ export async function anonymizeUserIdentity(
       // #18862 — la ville DÉCLARÉE est une donnée personnelle : elle part avec le compte, et son réglage aussi.
       city: null,
       cityCircle: null,
+      // #19201 — la couleur d'accent de la vitrine se voit des autres : elle part avec le compte.
+      profileAccentColor: null,
       searchTokens: [],
       blockedUserIds: [],
       referralCode: null,

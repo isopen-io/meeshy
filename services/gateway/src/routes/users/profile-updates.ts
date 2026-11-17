@@ -4,6 +4,8 @@
  * budget de taille) — la façade de ré-export vit là-bas.
  */
 import { normalizeCityInput } from '@meeshy/shared/utils/profile-city';
+import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
+import { announceProfileAccentChange } from './profile-accent';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
@@ -184,6 +186,8 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // (`null` = elle seule). Le cercle est une valeur de l'échelle, déjà validée par Zod.
       if (body.city !== undefined) updateData.city = normalizeCityInput(body.city);
       if (body.cityCircle !== undefined) updateData.cityCircle = body.cityCircle;
+      // #19201 : la couleur d'accent de la vitrine, déjà canonisée par Zod (liste fermée, `null` = automatique).
+      if (body.profileAccentColor !== undefined) updateData.profileAccentColor = body.profileAccentColor;
 
       // UNE lecture de la ligne avant l'écriture, ouverte seulement quand un
       // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les
@@ -359,6 +363,10 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         // Invalider ce cache pour que « X écrit… » reflète le nouveau nom sans
         // attendre l'expiration du TTL. Jumeau du refresh de langue ci-dessus.
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
+      }
+
+      if (body.profileAccentColor !== undefined) {
+        announceProfileAccentChange(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
       }
 
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(

@@ -626,6 +626,8 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               // #18862 — la ville déclarée et le cercle qui la lit.
               city: true,
               cityCircle: true,
+              // #19201 — la couleur d'accent choisie pour la vitrine.
+              profileAccentColor: true,
               avatar: true,
               banner: true,
               systemLanguage: true,
