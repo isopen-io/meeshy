@@ -99,6 +99,10 @@ class NotificationRepository @Inject constructor(
      *
      * Une relecture appartient au compte sous lequel elle est partie ([Flight.epoch]) : [clear] ferme tous les vols, et
      * ce qu'une relecture du compte parti rapporte (page, compteur) n'atterrit jamais chez le suivant.
+     *
+     * Et TOUTE écriture de la liste « all » passe sous ce même verrou, composée depuis la liste VIVANTE : un écrivain qui
+     * lisait hors de la section des autres effaçait, en écrivant, ce qu'un autre avait posé entre sa lecture et son
+     * écriture (une suppression reçue du socket pendant qu'une lecture se posait, une arrivée pendant la page suivante).
      */
     private val flightLock = Any()
     private var flights: Map<Long, NotificationFlightChanges> = emptyMap()
@@ -212,10 +216,12 @@ class NotificationRepository @Inject constructor(
             scopedLists[scope] = items
             return
         }
-        _hasMore.value = hasMore
-        _nextCursor.value = nextCursor
-        _notificationsCache.value = items
-        _notificationsSyncedAt.value = clock.nowMillis()
+        synchronized(flightLock) {
+            _hasMore.value = hasMore
+            _nextCursor.value = nextCursor
+            _notificationsCache.value = items
+            _notificationsSyncedAt.value = clock.nowMillis()
+        }
     }
 
     /**
@@ -248,11 +254,13 @@ class NotificationRepository @Inject constructor(
      * no-op, so the echo case never double-decrements [unreadCountStream].
      */
     fun applyRead(notificationId: String) {
-        val current = _notificationsCache.value ?: return
-        val wasUnread = current.firstOrNull { it.id == notificationId }?.state?.isRead == false
-        if (!wasUnread) return
-        rewriteAll { list -> NotificationCachePatch.markingRead(list, notificationId) }
-        _unreadCount.update { (it - 1).coerceAtLeast(0) }
+        synchronized(flightLock) {
+            val current = _notificationsCache.value ?: return
+            val wasUnread = current.firstOrNull { it.id == notificationId }?.state?.isRead == false
+            if (!wasUnread) return
+            rewriteAll { list -> NotificationCachePatch.markingRead(list, notificationId) }
+            _unreadCount.update { (it - 1).coerceAtLeast(0) }
+        }
     }
 
     /**
@@ -267,15 +275,17 @@ class NotificationRepository @Inject constructor(
      * web's `handleNotificationReadBulk`.
      */
     fun applyReadBulk(scope: NotificationReadBulkScope) {
-        val current = _notificationsCache.value ?: return
-        val touched = current.any { !it.state.isRead && notificationMatchesReadBulkScope(scope, it) }
-        if (!touched) return
-        rewriteAll { list ->
-            list.map {
-                if (!it.state.isRead && notificationMatchesReadBulkScope(scope, it)) {
-                    it.copy(state = it.state.copy(isRead = true))
-                } else {
-                    it
+        synchronized(flightLock) {
+            val current = _notificationsCache.value ?: return
+            val touched = current.any { !it.state.isRead && notificationMatchesReadBulkScope(scope, it) }
+            if (!touched) return
+            rewriteAll { list ->
+                list.map {
+                    if (!it.state.isRead && notificationMatchesReadBulkScope(scope, it)) {
+                        it.copy(state = it.state.copy(isRead = true))
+                    } else {
+                        it
+                    }
                 }
             }
         }
@@ -288,10 +298,12 @@ class NotificationRepository @Inject constructor(
      * is a no-op.
      */
     fun applyDeleted(notificationId: String) {
-        val current = _notificationsCache.value ?: return
-        val existing = current.firstOrNull { it.id == notificationId } ?: return
-        _notificationsCache.value = current.filterNot { it.id == notificationId }
-        if (!existing.state.isRead) _unreadCount.update { (it - 1).coerceAtLeast(0) }
+        synchronized(flightLock) {
+            val current = _notificationsCache.value ?: return
+            val existing = current.firstOrNull { it.id == notificationId } ?: return
+            _notificationsCache.value = current.filterNot { it.id == notificationId }
+            if (!existing.state.isRead) _unreadCount.update { (it - 1).coerceAtLeast(0) }
+        }
     }
 
     /**
@@ -301,10 +313,12 @@ class NotificationRepository @Inject constructor(
      * was already read (`deleteMany({ isRead: true })`), so it was never counted in `unread`.
      */
     fun applyDeletedBulk(scope: NotificationDeletedBulkScope) {
-        val current = _notificationsCache.value ?: return
-        val touched = current.any { notificationMatchesDeletedBulkScope(scope, it) }
-        if (!touched) return
-        _notificationsCache.value = current.filterNot { notificationMatchesDeletedBulkScope(scope, it) }
+        synchronized(flightLock) {
+            val current = _notificationsCache.value ?: return
+            val touched = current.any { notificationMatchesDeletedBulkScope(scope, it) }
+            if (!touched) return
+            _notificationsCache.value = current.filterNot { notificationMatchesDeletedBulkScope(scope, it) }
+        }
     }
 
     /**
@@ -395,18 +409,33 @@ class NotificationRepository @Inject constructor(
         // curseur est propre par construction, et au rang le doublon est le
         // SIGNAL (le `filterNot` d'avant supprimait la ligne perdue avec lui).
         val ancre = _nextCursor.value
+        val opened = epoch
         return when (
             val result = pagedApiCall {
                 notificationApi.list(if (ancre === null) current.size else null, PAGE_SIZE, null, ancre)
             }
         ) {
             is NetworkResult.Success -> {
-                _notificationsCache.value = current + result.data.data
-                _hasMore.value = result.data.pagination?.hasMore ?: false
-                _nextCursor.value = result.data.pagination?.nextCursor
+                appendPage(opened, result.data.data, result.data.pagination)
                 NetworkResult.Success(Unit)
             }
             is NetworkResult.Failure -> result
+        }
+    }
+
+    /**
+     * #18915 — the next page lands at the tail of the LIVE list, in [flightLock]'s section: never on the snapshot read
+     * before its request, which would erase what arrived, was read or was deleted meanwhile. The next page of the
+     * account that left ([clear] since its request, [opened] being the account generation it was asked under) continues
+     * a list that is gone: it lands nothing.
+     */
+    private fun appendPage(opened: Long, items: List<ApiNotification>, pagination: Pagination?) {
+        synchronized(flightLock) {
+            val live = _notificationsCache.value ?: return
+            if (opened != epoch) return
+            _notificationsCache.value = live + items
+            _hasMore.value = pagination?.hasMore ?: false
+            _nextCursor.value = pagination?.nextCursor
         }
     }
 
@@ -475,25 +504,31 @@ class NotificationRepository @Inject constructor(
      * snapshot.
      */
     suspend fun delete(notificationId: String): NetworkResult<Unit> {
-        val previous = _notificationsCache.value
-        val removedIndex = previous?.indexOfFirst { it.id == notificationId } ?: -1
-        val removed = previous?.getOrNull(removedIndex)
+        val (removedIndex, removed) = synchronized(flightLock) {
+            val previous = _notificationsCache.value
+            val index = previous?.indexOfFirst { it.id == notificationId } ?: -1
+            _notificationsCache.value = previous?.filterNot { it.id == notificationId }
+            index to previous?.getOrNull(index)
+        }
         val wasUnread = removed?.state?.isRead == false
-        _notificationsCache.value = previous?.filterNot { it.id == notificationId }
         if (wasUnread) _unreadCount.update { (it - 1).coerceAtLeast(0) }
 
         val result = apiCall { notificationApi.delete(notificationId) }
         if (result is NetworkResult.Failure) {
-            if (removed != null) {
-                _notificationsCache.update { current ->
-                    val list = current.orEmpty()
-                    if (list.any { it.id == notificationId }) list
-                    else list.toMutableList().apply { add(removedIndex.coerceIn(0, size), removed) }
-                }
-            }
+            if (removed != null) restoreAt(removedIndex, removed)
             if (wasUnread) _unreadCount.update { it + 1 }
         }
         return result
+    }
+
+    /** [delete]'s rollback: [row] back at [index] of the LIVE list, unless something already put it back. */
+    private fun restoreAt(index: Int, row: ApiNotification) {
+        synchronized(flightLock) {
+            val list = _notificationsCache.value.orEmpty()
+            if (list.none { it.id == row.id }) {
+                _notificationsCache.value = list.toMutableList().apply { add(index.coerceIn(0, size), row) }
+            }
+        }
     }
 
     /**
@@ -753,15 +788,17 @@ class NotificationRepository @Inject constructor(
             } catch (_: Exception) {
                 null
             }
-            if (loaded != null && _notificationsCache.value == null) {
-                lastPersisted = loaded
-                _hasMore.value = loaded.hasMore
-                _nextCursor.value = loaded.nextCursor
-                if (_unreadCount.value == 0) _unreadCount.value = loaded.unreadCount
-                _notificationsSyncedAt.value = loaded.syncedAt
-                _notificationsCache.value = loaded.items
+            synchronized(flightLock) {
+                if (loaded != null && _notificationsCache.value == null) {
+                    lastPersisted = loaded
+                    _hasMore.value = loaded.hasMore
+                    _nextCursor.value = loaded.nextCursor
+                    if (_unreadCount.value == 0) _unreadCount.value = loaded.unreadCount
+                    _notificationsSyncedAt.value = loaded.syncedAt
+                    _notificationsCache.value = loaded.items
+                }
+                hydrated = true
             }
-            hydrated = true
         }
     }
 
