@@ -76,6 +76,9 @@ import { meAddressRoutes } from './me-addresses';
 // « En commun » : communautés, amis et médias partagés, gardés par le cercle (#19200)
 import { getUserInCommon } from './in-common';
 
+// Les visites de mon lien de profil, lues par le propriétaire seul (#19206)
+import { profileLinkStatsRoutes } from './profile-link-stats';
+
 /**
  * Main user routes registration
  * Aggregates all user-related routes from modular files
@@ -93,6 +96,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   await getUserByUsername(fastify);
   await userShortAddressAlias(fastify);
   await meAddressRoutes(fastify);
+  await profileLinkStatsRoutes(fastify);
   await getUserById(fastify);
   await getUserByEmail(fastify);
   await getUserByIdDedicated(fastify);

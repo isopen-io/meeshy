@@ -65,6 +65,10 @@ export enum NotificationTypeEnum {
   DEVICE_BATTERY = 'device_battery',
   /** Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737). */
   DEVICE_UNREACHABLE = 'device_unreachable',
+  /** Un lien me partage sa position et a choisi de me prévenir (#19204) : un nom et une durée, jamais une position. */
+  LOCATION_SHARE_STARTED = 'location_share_started',
+  /** Un destinataire me demande de prolonger ou de refaire mon partage de position (#19204). */
+  LOCATION_SHARE_REQUESTED = 'location_share_requested',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -675,6 +679,27 @@ export interface DeviceUnreachableNotificationMetadata extends BaseNotificationM
   readonly cause?: 'battery' | 'network';
 }
 
+/**
+ * Metadata pour location_share_started (#19204). `userId` est l'ÉMETTEUR : le toucher ouvre sa
+ * carte. Seule la durée choisie se range : ni position, ni précision, ni autre destinataire.
+ * La ligne expire au terme du partage.
+ */
+export interface LocationShareStartedNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly durationMinutes: number;
+}
+
+/**
+ * Metadata pour location_share_requested (#19204). `userId` est le DEMANDEUR : le toucher ouvre
+ * le partage vers lui. Aucune position ne voyage : il n'en a pas, il en demande une.
+ */
+export interface LocationShareRequestedNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly requestKind: 'extend' | 'reask';
+}
+
 /** Le contenu qu'un retrait par la modération a visé (#11149). */
 export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
 
@@ -757,6 +782,8 @@ export type NotificationMetadata =
   | RelationAcquaintanceNotificationMetadata
   | DeviceBatteryNotificationMetadata
   | DeviceUnreachableNotificationMetadata
+  | LocationShareStartedNotificationMetadata
+  | LocationShareRequestedNotificationMetadata
   | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata

@@ -13,4 +13,6 @@ package me.meeshy.sdk.net.routes
 
 public object ApiRoutesInvitations {
     public const val EMAIL: String = "invitations/email"
+    public const val EMAIL_BY_ID_RESEND: String = "invitations/email/{id}/resend"
+    public const val EMAIL_OPT_OUT: String = "invitations/email/opt-out"
 }
