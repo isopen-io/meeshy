@@ -46,13 +46,21 @@ private struct ProfilePostsFallback: View {
             } else if posts.isEmpty {
                 ProfilePostsEmpty(authorName: authorName)
             } else {
-                VStack(spacing: MeeshySpacing.md) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.sm), count: 2),
+                          spacing: MeeshySpacing.sm) {
                     ForEach(posts, id: \.id) { post in
-                        ProfilePostRow(post: post, accentColor: accentColor)
-                            .equatable()
-                            .padding(.horizontal, MeeshySpacing.xl)
+                        MeeshyMediaTile(item: ProfilePostsFallbackTile.item(for: post), shape: .square,
+                                        tint: Color(hex: accentColor), content: { size in
+                            CachedAsyncImage(url: ProfilePostsFallbackTile.thumbnail(of: post), targetSize: size,
+                                             showsStatusOverlays: false) {
+                                Color(hex: accentColor).opacity(MeeshyOpacity.light)
+                            }
+                            .scaledToFill()
+                        })
+                        .aspectRatio(1, contentMode: .fit)
                     }
                 }
+                .padding(.horizontal, MeeshySpacing.xl)
             }
         }
         .task {
@@ -67,42 +75,26 @@ private struct ProfilePostsFallback: View {
     }
 }
 
-private struct ProfilePostRow: View, Equatable {
-    let post: APIPost
-    let accentColor: String
+/// Une publication du repli en VALEUR pour une tuile du kit (K49) : son image quand elle en a une, sinon son texte.
+/// Le repli ne mène nulle part : la tuile n'est pas un bouton.
+enum ProfilePostsFallbackTile {
 
-    static func == (lhs: ProfilePostRow, rhs: ProfilePostRow) -> Bool {
-        lhs.post.id == rhs.post.id && lhs.accentColor == rhs.accentColor
+    static func thumbnail(of post: APIPost) -> String? {
+        let visual = post.media?.first { $0.mediaType == .image || $0.mediaType == .video }
+        guard let visual else { return nil }
+        if let thumbnail = visual.thumbnailUrl, !thumbnail.isEmpty { return thumbnail }
+        guard visual.mediaType == .image, let url = visual.fileUrl, !url.isEmpty else { return nil }
+        return url
     }
 
-    @ResolvedThemePalette private var theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            if let content = post.content, !content.isEmpty {
-                Text(content)
-                    .meeshyScaledFont(MeeshyFont.labelSize)
-                    .foregroundStyle(theme.textPrimary)
-                    .lineLimit(4)
-                    .multilineTextAlignment(.leading)
-            } else {
-                Text(String(localized: "profile.posts.noText", defaultValue: "Publication sans texte", bundle: .module))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundStyle(theme.textMuted)
-                    .italic()
-            }
-
-            HStack(spacing: MeeshySpacing.md) {
-                Label("\(post.likeCount ?? 0)", systemImage: "heart")
-                Label("\(post.commentCount ?? 0)", systemImage: "bubble.right")
-            }
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(MeeshySpacing.mdPlus)
-        .background(theme.surfaceGradient(tint: accentColor))
-        .glassCard(cornerRadius: MeeshyRadius.md)
+    static func item(for post: APIPost) -> MeeshyMediaGridItem {
+        let text = (post.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasPicture = thumbnail(of: post) != nil
+        let label = text.isEmpty
+            ? String(localized: "profile.posts.noText", defaultValue: "Publication sans texte", bundle: .module)
+            : String(text.prefix(80))
+        return MeeshyMediaGridItem(id: post.id, kind: hasPicture ? .media : .text, label: label,
+                                   text: hasPicture || text.isEmpty ? nil : text)
     }
 }
 

@@ -47,13 +47,16 @@ extension UserProfileSheet {
 
     // MARK: - Publications (l'ancien onglet Publications)
 
+    @ViewBuilder
     private var publicationsSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(
-                title: String(localized: "profile.relation.section.posts", defaultValue: "Publications", bundle: .module)
-            )
-            .padding(.horizontal, MeeshySpacing.xl)
-            postsTab
+        if postsContent != nil && !isCurrentUser {
+            postsTab.environment(\.meeshyProfileAccent, resolvedAccent)
+        } else {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                MeeshySectionHeader(title: String(localized: "profile.relation.section.posts", defaultValue: "Publications", bundle: .module))
+                    .padding(.horizontal, MeeshySpacing.xl)
+                postsTab
+            }
         }
     }
 
