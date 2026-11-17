@@ -20,7 +20,7 @@ import type { Attachment } from './types';
  * champ `files` par fichier (`part.type === 'file'`), et un champ
  * `metadata_<i>` (JSON, `i` = rang du fichier dans l'ordre d'ajout) — ce lot
  * n'y pose que `duration` (ms), pour un vocal (`upload.ts:146`,
- * `UploadProcessor.ts:744-745`). Miroir `apps/web/services/attachmentService.ts:53-76`.
+ * `UploadProcessor.ts:744-745`). Miroir `legacy-web-final:apps/web/services/attachmentService.ts:53-76`.
  *
  * `uploadMultiple` AVALE les échecs PAR FICHIER (`UploadProcessor.ts:744-751`)
  * — un fichier au MIME refusé (#5615) disparaît de la réponse SOUS

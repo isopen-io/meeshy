@@ -60,8 +60,6 @@ export function loadSignInLinkCatalog(language: InterfaceLanguage): Promise<Sign
   return request;
 }
 
-export const isSignInLinkCatalogLoaded = (language: InterfaceLanguage): boolean => loaded.has(language);
-
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 export function translateSignInLink<K extends SignInLinkCatalogKey>(language: InterfaceLanguage, key: K, ...params: TranslateSignInLinkArgs<K>): string;
