@@ -170,4 +170,35 @@ class UserProfileSheetViewModelTest {
         assertThat(vm.state.value.isOffline).isFalse()
         assertThat(vm.state.value.showsOfflineCapsule).isFalse()
     }
+
+    @Test
+    fun `avant toute ouverture la feuille peint le squelette et jamais Personne ici`() = runTest(dispatcher) {
+        val vm = viewModel(ProfileLoadState(profile = bob))
+        assertThat(vm.state.value.content).isEqualTo(ProfileSheetContent.Skeleton)
+    }
+
+    @Test
+    fun `une panne hors ligne se rejoue d'elle-meme au retour du reseau, comme le message le promet`() = runTest(dispatcher) {
+        val network = me.meeshy.sdk.network.InMemoryNetworkMonitor(initialOnline = false)
+        val vm = viewModel(ProfileLoadState(profileLoadFailed = true), network = network)
+        vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
+        advanceUntilIdle()
+        assertThat(vm.state.value.content).isEqualTo(ProfileSheetContent.Failed)
+        every { loader.open(any(), any(), any()) } returns flowOf(ProfileLoadState(profile = bob))
+        network.simulateOnline()
+        advanceUntilIdle()
+        io.mockk.verify { loader.open(bob.id, "bob", true) }
+        assertThat(vm.state.value.content).isEqualTo(ProfileSheetContent.Loaded)
+    }
+
+    @Test
+    fun `le retour du reseau ne recharge pas une fiche peinte ni un refus`() = runTest(dispatcher) {
+        val network = me.meeshy.sdk.network.InMemoryNetworkMonitor(initialOnline = false)
+        val painted = viewModel(ProfileLoadState(profile = bob), network = network)
+        painted.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
+        advanceUntilIdle()
+        network.simulateOnline()
+        advanceUntilIdle()
+        io.mockk.verify(exactly = 1) { loader.open(any(), any(), any()) }
+    }
 }

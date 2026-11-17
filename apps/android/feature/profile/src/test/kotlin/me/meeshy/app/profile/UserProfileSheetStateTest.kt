@@ -97,6 +97,21 @@ class UserProfileSheetStateTest {
     }
 
     @Test
+    fun `un profil introuvable a cache vide dit Personne ici comme un profil prive, sans reessayer`() {
+        val missing = after(
+            ProfileLoadEvent.CacheRead(profile = null, stats = null),
+            ProfileLoadEvent.ProfileFailed(ProfileFailure.Http(404)),
+        )
+        val hidden = after(
+            ProfileLoadEvent.CacheRead(profile = null, stats = null),
+            ProfileLoadEvent.ProfileFailed(ProfileFailure.Forbidden),
+        )
+        assertThat(shown(missing).content).isEqualTo(ProfileSheetContent.Nobody)
+        assertThat(shown(missing).canRetry).isFalse()
+        assertThat(shown(missing).content).isEqualTo(shown(hidden).content)
+    }
+
+    @Test
     fun `hors ligne sur une fiche peinte la capsule de cache est montree`() {
         val load = after(ProfileLoadEvent.CacheRead(profile = bob, stats = null))
         assertThat(shown(load).copy(isOffline = true).showsOfflineCapsule).isTrue()

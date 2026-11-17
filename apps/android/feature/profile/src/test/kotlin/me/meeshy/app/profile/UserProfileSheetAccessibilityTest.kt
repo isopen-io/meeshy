@@ -119,4 +119,14 @@ class UserProfileSheetAccessibilityTest {
         compose.onNodeWithText(context.getString(R.string.profile_state_offline_title)).assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.profile_state_error_title)).assertDoesNotExist()
     }
+
+    @Test
+    fun `Personne ici ne prete pas le nom de la personne au titre de volet`() {
+        body(UserProfileSheetUiState(user = bob, isBlockedByTarget = true))
+
+        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Bob")).assertDoesNotExist()
+        compose.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, context.getString(R.string.profile_state_nobody_title)),
+        ).assertExists()
+    }
 }
