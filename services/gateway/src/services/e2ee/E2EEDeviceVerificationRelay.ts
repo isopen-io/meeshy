@@ -160,6 +160,14 @@ function servedOf(row: StoredRow): ServedDeviceVerification | null {
   };
 }
 
+const rateLimited = (retryAfter: number): DeviceVerificationRefusedError =>
+  new DeviceVerificationRefusedError(
+    DEVICE_VERIFICATION_ERROR_CODES.RATE_LIMITED,
+    429,
+    'Trop de messages de comparaison depuis cet appareil. Patientez avant de réessayer.',
+    retryAfter,
+  );
+
 export class E2EEDeviceVerificationRelay {
   private readonly prisma: VerificationRelayPrisma;
   private readonly counters: SlidingWindowCounter;
@@ -197,8 +205,8 @@ export class E2EEDeviceVerificationRelay {
         'Le message ne décrit pas cet appareil tel que l’annuaire le tient',
       );
     }
-    await this.spend({ userId, ...refOf(sender) }, message);
     const recipients = await this.recipientsOf(userId, sender, to);
+    await this.spend({ userId, ...refOf(sender) }, message);
     const at = this.now();
     const stored = await this.store({ userId, sender, recipients, message, at });
     const substituted = await this.substitute({ userId, sender, recipients, message, at });
@@ -275,16 +283,14 @@ export class E2EEDeviceVerificationRelay {
       ...(message.type === 'request' ? [{ key: `${key}:requests`, max: DEVICE_VERIFICATION_RATES.requestsPerHour }] : []),
       { key: `${key}:messages`, max: DEVICE_VERIFICATION_RATES.messagesPerHour },
     ];
+    // Toutes les fenêtres sont lues AVANT d'en débiter une : un dépôt refusé ne compte nulle part,
+    // et ne crée aucune clé (pas même celle de sa transaction).
+    const verdicts = await Promise.all(windows.map((window) => this.counters.peek(window.key, { max: window.max, windowMs: HOUR_MS, now: at })));
+    const refused = verdicts.find((verdict) => !verdict.allowed);
+    if (refused) throw rateLimited(refused.retryAfter);
     for (const window of windows) {
       const verdict = await this.counters.hit(window.key, { max: window.max, windowMs: HOUR_MS, now: at });
-      if (!verdict.allowed) {
-        throw new DeviceVerificationRefusedError(
-          DEVICE_VERIFICATION_ERROR_CODES.RATE_LIMITED,
-          429,
-          'Trop de messages de comparaison depuis cet appareil. Patientez avant de réessayer.',
-          verdict.retryAfter,
-        );
-      }
+      if (!verdict.allowed) throw rateLimited(verdict.retryAfter);
     }
   }
 

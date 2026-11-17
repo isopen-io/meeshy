@@ -29,6 +29,6 @@ export function listenE2EEDeviceChannels(
       const user = userId ? params.connectedUsers.get(userId) : undefined;
       return userId && user ? { userId, isAnonymous: user.isAnonymous } : null;
     },
-    withinRate: (userId) => getSocketRateLimiter().checkLimit(userId, E2EE_VERIFICATION_SOCKET_RATE_LIMIT),
+    withinRate: (sessionKey) => getSocketRateLimiter().checkLimit(sessionKey, E2EE_VERIFICATION_SOCKET_RATE_LIMIT),
   });
 }

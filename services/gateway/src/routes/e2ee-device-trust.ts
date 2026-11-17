@@ -57,15 +57,22 @@ const guarded = (handler: Handler) => async (request: FastifyRequest, reply: Fas
 const invalid = (reply: FastifyReply) => sendBadRequest(reply, 'Requête de confirmation invalide', { code: DEVICE_VERIFICATION_ERROR_CODES.INVALID });
 
 /**
- * Les dépôts : 60 par minute et par compte, AVANT toute lecture de l'annuaire. Les débits par
- * génération du relais (4 demandes, 30 messages par heure) bornent ce qui est déposé.
+ * Les dépôts : 60 par minute et par SESSION, avant toute lecture de l'annuaire. Par session, pas
+ * par compte : une session qui n'a aucun appareil chiffré (un mot de passe volé) ne doit pas
+ * pouvoir épuiser la cadence du vrai nouvel appareil du même compte. Les débits par génération du
+ * relais (4 demandes, 30 messages par heure) bornent ce qui est déposé.
  */
+const cadenceKeyOf = (request: FastifyRequest): string => {
+  const context = (request as UnifiedAuthRequest).authContext;
+  return context?.userId && context.sessionId ? `${context.userId}:${context.sessionId}` : `ip:${request.ip}`;
+};
+
 const sendRateLimit = {
   max: 60,
   timeWindow: '1 minute',
   hook: 'preHandler' as const,
   skipOnError: false,
-  keyGenerator: (request: FastifyRequest) => `e2ee:verifications:${(request as UnifiedAuthRequest).authContext?.userId ?? `ip:${request.ip}`}`,
+  keyGenerator: (request: FastifyRequest) => `e2ee:verifications:${cadenceKeyOf(request)}`,
   errorResponseBuilder: () => ({ success: false, error: 'Trop de messages de comparaison. Patientez avant de réessayer.', statusCode: 429 }),
 };
 

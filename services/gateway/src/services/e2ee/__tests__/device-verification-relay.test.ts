@@ -358,7 +358,7 @@ describe('le relais de la confirmation d’un appareil par code (#19156)', () =>
       expect(overflow.status).toBe(429);
     });
 
-    it('l’appareil d’un intrus n’épuise pas le quota du vrai nouvel appareil, et seize appareils peuvent tous demander', async () => {
+    it('les débits du relais sont par génération : une génération qui a épuisé ses demandes ne retient pas les quinze autres', async () => {
       const { store, relay } = relayWith();
       const devices = Array.from({ length: 16 }, (_, index) => seed(store, { deviceId: index + 1 }));
       const intruder = devices[15] as Seeded;

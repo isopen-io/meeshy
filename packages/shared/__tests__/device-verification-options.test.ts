@@ -78,6 +78,13 @@ describe('la construction du carré (§ 4.9)', () => {
     expect(plain.permutation).toBe(5);
   });
 
+  it('251 et 239 sont les derniers octets ACCEPTÉS : la borne ne glisse pas d’un cran', () => {
+    const symbols = [10, 20, 30, 40, 50, 60, 1];
+    const atBounds = squareOptions(symbols, CODE_SQUARE, byteStream(Uint8Array.of(251, 1, 2, 3, 239)));
+    expect(atBounds.alternatives).toEqual({ 0: 9, 1: 22, 3: 43, 5: 0 });
+    expect(atBounds.permutation).toBe(23);
+  });
+
   it('l’autre symbole n’est jamais le vrai, et la permutation n° k est la k-ième dans l’ordre lexicographique', () => {
     expect(SQUARE_PERMUTATIONS.length).toBe(24);
     expect(SQUARE_PERMUTATIONS[0]).toEqual([0, 1, 2, 3]);

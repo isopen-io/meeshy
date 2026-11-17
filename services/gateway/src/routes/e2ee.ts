@@ -152,7 +152,9 @@ export const enrolmentHook = (params: {
   readonly io: () => Parameters<typeof joinSessionSocketsToDeviceRoom>[0];
   readonly announcements: Pick<OwnDeviceAnnouncements, 'enrolled'>;
 }): NonNullable<E2EERouteDeps['onEnrolled']> => async (enrolled) => {
-  await joinSessionSocketsToDeviceRoom(params.io(), enrolled);
+  // La jonction de room est un confort de livraison ; l'annonce est une alerte de sécurité :
+  // une panne de l'adaptateur ne la retient pas.
+  await joinSessionSocketsToDeviceRoom(params.io(), enrolled).catch((error: unknown) => logger.warn('e2ee device room not joined at enrolment', { error }));
   if (!enrolled.created && !enrolled.returning) return;
   const { userId, deviceId, registrationId, returning } = enrolled;
   await params.announcements.enrolled({ userId, deviceId, registrationId, returning });

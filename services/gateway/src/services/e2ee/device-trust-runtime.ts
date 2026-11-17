@@ -38,9 +38,10 @@ export function deviceTrustRuntime(prisma: PrismaClient): DeviceTrustRuntime {
     prisma,
     counters,
     // Le fournisseur (APNs, FCM) ne retient jamais la réponse d'un enrôlement ni d'un dépôt : le push part détaché.
+    // Jamais vers un jeton VoIP : sur iOS, un push VoIP doit ouvrir CallKit, une annonce n'est pas un appel.
     push: async ({ userId, payload }) => {
       getPushNotificationService(prisma)
-        .sendToUser({ userId, payload })
+        .sendToUser({ userId, payload, types: ['apns', 'fcm'] })
         .catch((error: unknown) => logger.warn('e2ee device verification push failed', { error }));
     },
   });

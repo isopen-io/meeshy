@@ -117,8 +117,11 @@ export function createOwnDeviceAnnouncements(deps: OwnDeviceAnnouncementsDeps): 
   const now = deps.now ?? (() => new Date());
   const io = deps.io ?? currentE2EEIO;
 
-  const countAnnouncement = async (userId: string): Promise<number> =>
-    (await deps.counters.hit(`announce:${userId}`, { max: Number.MAX_SAFE_INTEGER, windowMs: HOUR_MS, now: now().getTime() })).count;
+  const announceWindow = (userId: string) => [`announce:${userId}`, { max: Number.MAX_SAFE_INTEGER, windowMs: HOUR_MS, now: now().getTime() }] as const;
+  /** Un enrôlement compte une annonce de plus. */
+  const countAnnouncement = async (userId: string): Promise<number> => (await deps.counters.hit(...announceWindow(userId))).count;
+  /** Une demande lit le compte sans l'augmenter : seuls les enrôlements sont des annonces. */
+  const announcedSoFar = async (userId: string): Promise<number> => (await deps.counters.peek(...announceWindow(userId))).count;
 
   /** Un push au plus par génération et par 10 min : la `request` qui suit l'enrôlement ne repousse pas. */
   const mayPushFor = async (generation: DeviceGeneration): Promise<boolean> =>
@@ -161,7 +164,7 @@ export function createOwnDeviceAnnouncements(deps: OwnDeviceAnnouncementsDeps): 
 
     async requested(sender) {
       if (!(await mayPushFor(sender))) return;
-      await sendPush(sender, await countAnnouncement(sender.userId));
+      await sendPush(sender, await announcedSoFar(sender.userId));
     },
   };
 }

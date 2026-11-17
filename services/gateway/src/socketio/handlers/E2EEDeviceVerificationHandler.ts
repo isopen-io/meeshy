@@ -18,16 +18,18 @@ const logger = enhancedLogger.child({ module: 'E2EEDeviceVerificationHandler' })
 export type VerificationSocketCaller = { readonly userId: string; readonly isAnonymous: boolean } | null;
 
 /**
- * La cadence de la socket, par compte, AVANT toute lecture de l'annuaire : les débits par
- * génération du relais (4 demandes, 30 messages par heure) bornent ce qui est déposé, celui-ci
- * borne ce qui est seulement tenté.
+ * La cadence de la socket, par SESSION (`userId:sessionId`), avant toute lecture de l'annuaire :
+ * une session sans appareil chiffré ne prive pas le vrai nouvel appareil du même compte. Les
+ * débits par génération du relais (4 demandes, 30 messages par heure) bornent ce qui est déposé,
+ * celui-ci borne ce qui est seulement tenté.
  */
 export const E2EE_VERIFICATION_SOCKET_RATE_LIMIT = { maxRequests: 60, windowMs: 60_000, keyPrefix: 'socket:e2ee:verification' } as const;
 
 export type E2EEDeviceVerificationHandlerDeps = {
   readonly relay: Pick<E2EEDeviceVerificationRelay, 'send'>;
   readonly callerOf: (socketId: string) => VerificationSocketCaller;
-  readonly withinRate?: (userId: string) => Promise<boolean>;
+  /** Reçoit la clé de cadence de la session : `userId:sessionId`. */
+  readonly withinRate?: (sessionKey: string) => Promise<boolean>;
 };
 
 type VerificationSocket = {
@@ -53,7 +55,7 @@ export async function handleE2EEDeviceVerification(
   const caller = deps.callerOf(socket.id);
   const sessionId = sessionOf(socket);
   if (!caller || caller.isAnonymous || !sessionId) return refused('Un compte inscrit et une session d’appareil sont requis', E2EE_ERROR_CODES.DEVICE_NOT_BOUND);
-  if (deps.withinRate && !(await deps.withinRate(caller.userId))) {
+  if (deps.withinRate && !(await deps.withinRate(`${caller.userId}:${sessionId}`))) {
     return refused('Trop de messages de comparaison. Patientez avant de réessayer.', DEVICE_VERIFICATION_ERROR_CODES.RATE_LIMITED);
   }
   try {

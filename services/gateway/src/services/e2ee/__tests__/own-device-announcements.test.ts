@@ -236,6 +236,52 @@ describe('l’annonce de mes appareils chiffrés (#19156)', () => {
     expect(pushes).toHaveLength(2);
   });
 
+  it('une demande ne compte pas comme une annonce : elle ne fait ni regrouper un push, ni grossir le compte servi', async () => {
+    const store = createFakeE2EEStore();
+    [2, 3, 4].forEach((deviceId) =>
+      store.collections.E2EEDevice.insert({ userId: ALICE, deviceId, registrationId: 20 + deviceId, sessionId: `s${deviceId}`, identityKey: 'k', platform: 'ios', capabilities: [DEVICE_TRUST_CAPABILITY] }),
+    );
+    const clock = { now: new Date('2026-11-17T10:00:00Z') };
+    const pushes: { payload: PushNotificationPayload }[] = [];
+    const { io, emitted } = fakeIo();
+    const announcements = createOwnDeviceAnnouncements({
+      prisma: { ...store.prisma, user: { findUnique: async () => null } } as never,
+      counters: createMemorySlidingWindow(),
+      now: () => clock.now,
+      io: () => io,
+      push: async (sent) => {
+        pushes.push(sent);
+      },
+    });
+    const generation = (deviceId: number) => ({ userId: ALICE, deviceId, registrationId: 20 + deviceId });
+    const later = (minutes: number) => {
+      clock.now = new Date(clock.now.getTime() + minutes * 60_000);
+    };
+
+    await announcements.enrolled({ ...generation(2), returning: false });
+    await announcements.enrolled({ ...generation(3), returning: false });
+    later(11);
+    await announcements.requested(generation(2));
+    later(11);
+    await announcements.requested(generation(2));
+    await announcements.enrolled({ ...generation(4), returning: false });
+
+    expect(pushes.map((sent) => sent.payload.collapseId)).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    expect(emitted.map((entry) => (entry.payload as { announcedInLastHour: number }).announcedInLastHour).at(-1)).toBe(3);
+  });
+
+  it('une socket introuvable (adaptateur en panne) ne retient pas l’annonce d’un enrôlement', async () => {
+    const store = createFakeE2EEStore();
+    store.collections.E2EEDevice.insert({ userId: ALICE, deviceId: 2, registrationId: 22, sessionId: 's', identityKey: 'k', platform: 'ios', capabilities: [DEVICE_TRUST_CAPABILITY] });
+    const enrolled: unknown[] = [];
+    const broken = { in: () => ({ fetchSockets: async () => Promise.reject(new Error('adapter down')) }) };
+    const hook = enrolmentHook({ io: () => broken as never, announcements: { enrolled: async (generation) => { enrolled.push(generation); } } });
+
+    await hook({ userId: ALICE, deviceId: 2, registrationId: 22, sessionId: 's', created: true, returning: false } as never);
+
+    expect(enrolled).toEqual([{ userId: ALICE, deviceId: 2, registrationId: 22, returning: false }]);
+  });
+
   it('un retrait s’annonce `e2ee:own-device-retired` à mes autres appareils capables, et à eux seuls', async () => {
     const store = createFakeE2EEStore();
     const device = (deviceId: number, capabilities: string[], userId = ALICE) =>
