@@ -90,7 +90,7 @@ struct MeeshyMeterTests {
     func spoken_value() {
         let locale = Locale(identifier: "fr")
         #expect(MeeshyMeterRecipe.spokenValue(spoken: "23 sur 50", fraction: 0.46, locale: locale) == "23 sur 50")
-        #expect(MeeshyMeterRecipe.spokenValue(spoken: nil, fraction: 0.46, locale: locale)
+        #expect(MeeshyMeterRecipe.spokenValue(spoken: nil, fraction: 0.46, locale: locale)?
             .replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ") == "46 %")
         #expect(MeeshyMeterRecipe.spokenValue(spoken: "", fraction: 0.5, locale: locale) != "")
     }
