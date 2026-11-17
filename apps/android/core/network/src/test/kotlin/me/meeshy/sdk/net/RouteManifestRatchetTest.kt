@@ -140,8 +140,8 @@ class RouteManifestRatchetTest {
          * vérification d'appareil E2EE servie par la passerelle) ; #19189 les portera.
          * 138 : plus les cinq routes « Mes adresses » sous `/users/me/addresses` (lecture, création, modification,
          * suppression, ordre — lot `serveur-mes-adresses` de #18857) ; la face Liens Android (#18889) les portera.
-         * 139 : plus `GET /users/:id/in-common` (ce que le lecteur partage avec la personne : lot serveur du profil
-         * de #18857) ; la fiche relation Android (#18888) la portera.
+         * 139 : plus `GET /users/:id/in-common` (#19231 : nos communautés, nos amis et nos médias en commun sur la
+         * fiche d'un autre) ; la fiche Android du chantier #18857 la portera.
          */
         const val TO_PORT_CEILING = 139
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
