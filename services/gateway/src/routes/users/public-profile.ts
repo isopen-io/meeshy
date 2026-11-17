@@ -6,6 +6,7 @@ import { gateProfilePresence } from './presence-gate';
 import { servedProfileDecor, servedProfileDecorJsonSchema } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { withServedCity } from './profile-city';
+import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
 import { withServedAddresses } from './profile-addresses';
 import { isFieldServed } from '../../utils/sparse-fieldset';
 import { targetHasBlockedViewer } from './profile-block-gate';
@@ -121,6 +122,8 @@ export const publicProfileSchema = {
     // (`withServedCity`) ; `cityCircle` (le réglage) ne part qu'à lui-même.
     city: { type: 'string' },
     cityCircle: { type: 'string', nullable: true },
+    // #19201 : la couleur d'accent de la vitrine (cercle Public) ; `null` = accent calculé.
+    profileAccentColor: { type: 'string', nullable: true },
     // #18863 : les adresses personnelles servies au cercle choisi par chacune (`withServedAddresses`) ;
     // absent quand rien n'est servi. `circle` ne part qu'à leur propriétaire.
     addresses: {
@@ -190,6 +193,8 @@ export const publicUserSelect = {
   // selon le cercle choisi, et le réglage ne part qu'à son propriétaire.
   city: true,
   cityCircle: true,
+  // #19201 : servie normalisée par `buildPublicProfile` (hors liste ⇒ `null`).
+  profileAccentColor: true,
   // #10632 : chargés, jamais servis tels quels — `buildPublicProfile` les
   // compose en `profileDecor` et RETIRE les colonnes brutes.
   equippedAvatarRing: true,
@@ -235,6 +240,7 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
     timezone: ['timezone'],
     city: ['city', 'cityCircle'],
     cityCircle: ['cityCircle'],
+    profileAccentColor: ['profileAccentColor'],
     addresses: [],
     profileDecor: ['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame'],
   },
@@ -252,7 +258,7 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
  * garde inopérante au typage.
  */
 export function buildPublicProfile<
-  T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null; equippedBannerFrame?: string | null },
+  T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null; equippedBannerFrame?: string | null; profileAccentColor?: string | null },
 >(user: T) {
   // `autoTranslateEnabled: true` était écrit EN DUR — un champ de contrat qui
   // ne disait rien de vrai, et qu'un client pouvait croire refléter la
@@ -262,6 +268,7 @@ export function buildPublicProfile<
   const { equippedAvatarRing, equippedBanner, equippedBannerFrame, ...visible } = user;
   return {
     ...withVoiceFields(visible),
+    ...('profileAccentColor' in visible ? { profileAccentColor: servedProfileAccentColor(visible.profileAccentColor) } : {}),
     isAnonymous: false,
     isMeeshyer: true,
     profileDecor: servedProfileDecor(startupPackIndex(), { equippedAvatarRing, equippedBanner, equippedBannerFrame }),

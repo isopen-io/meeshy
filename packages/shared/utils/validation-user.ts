@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isProfileImageReference } from './profile-image-reference.js';
 import { CITY_MAX_LENGTH, isPlainCityText } from './profile-city.js';
 import { RELATION_LEVELS } from '../types/relation.js';
+import { profileAccentColorInput } from './profile-accent.js';
 import { usernameMaxLength, usernameMinLength } from '../types/api-schemas/identity-bounds.js';
 import { customDestinationLanguageCode, supportedLanguageCode, USERNAME_PATTERN, usernameTooLong, usernameTooShort } from './validation-primitives.js';
 
@@ -204,6 +205,8 @@ export const updateUserProfileSchema = z.object({
   // #18862 : la ville DÉCLARÉE et le cercle qui la lit. Vide / null = effacement.
   city: z.union([z.string().max(CITY_MAX_LENGTH).refine(isPlainCityText, { message: 'La ville ne peut contenir ni balise ni caractère de contrôle' }), z.null()]).optional(),
   cityCircle: z.union([z.enum(RELATION_LEVELS), z.null()]).optional(),
+  // #19201 : la couleur d'accent de la vitrine — une teinte de la liste fermée, `null` = automatique.
+  profileAccentColor: profileAccentColorInput.optional(),
 }).strict();
 
 export { isProfileImageReference };
