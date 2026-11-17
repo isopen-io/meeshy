@@ -101,6 +101,14 @@ export function parseBbox(raw: unknown): SharedLocationBbox | undefined | null {
 }
 
 /**
+ * Le point Sang de la carte (#19202) : le drapeau de la position du Sang pour le lecteur ET le
+ * plancher de version des routes de cercles. Sous le plancher, le champ manque ; la carte reste servie.
+ */
+export function relativesMapAdmitsBlood(readerId: string, headers: Parameters<typeof readRestVersionClaim>[0]): boolean {
+  return bloodLocationEnabledFor(readerId) && upgradeRequirementFor(readRestVersionClaim(headers)) === null;
+}
+
+/**
  * Le RATTRAPAGE du partage temporaire de position (#14109, #16980) :
  * `GET /relations/locations?bbox=` rend les partages en cours qui me sont destinés,
  * chacun à la précision que son émetteur m'a donnée, filtrés par l'emprise de la carte
@@ -140,7 +148,7 @@ export function registerRelationLocations(fastify: FastifyInstance): void {
           snapshot: () => sharedLocationSnapshotFor(relay, readerId, { bbox }),
           blood: () => bloodLocationMapFor(bloodLocationDepsOf({ prisma: fastify.prisma, io: undefined }), readerId),
           ended: () => sharedLocationEndedFor(relay, readerId),
-          bloodEnabled: bloodLocationEnabledFor(readerId) && upgradeRequirementFor(readRestVersionClaim(request.headers)) === null,
+          bloodEnabled: relativesMapAdmitsBlood(readerId, request.headers),
         },
         { bbox, include: parseSharedLocationIncludes(query?.include) },
       );
