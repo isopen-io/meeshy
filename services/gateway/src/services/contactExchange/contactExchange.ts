@@ -57,6 +57,8 @@ export type ContactExchangeDeps = {
   readonly acceptsRequests: (readerId: string) => Promise<boolean>;
   /** Envoie la demande de l'émetteur au lecteur par le cœur des demandes ; `false` quand elle ne part pas. */
   readonly befriend: (pair: { readonly issuerId: string; readonly readerId: string }) => Promise<boolean>;
+  /** Une panne d'un effet secondaire (la demande) : signalée, jamais propagée — le jeton est déjà consommé. */
+  readonly report?: (error: unknown) => void;
 };
 
 type Refusal = { readonly success: false; readonly error: string; readonly code: ContactExchangeErrorCode };
@@ -128,7 +130,12 @@ async function claimIssuer(deps: ContactExchangeDeps, token: string) {
 
 async function sendFriendRequest(deps: ContactExchangeDeps, issuerId: string, readerId: string): Promise<boolean> {
   if (!(await deps.acceptsRequests(readerId))) return false;
-  return deps.befriend({ issuerId, readerId });
+  try {
+    return await deps.befriend({ issuerId, readerId });
+  } catch (error) {
+    deps.report?.(error);
+    return false;
+  }
 }
 
 function acknowledge(deps: ContactExchangeDeps, issuerId: string, event: ContactExchangeReceivedEventData): void {

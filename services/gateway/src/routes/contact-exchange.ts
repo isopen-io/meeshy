@@ -109,6 +109,7 @@ function contactExchangeDepsOf(fastify: FastifyInstance, request: FastifyRequest
     acceptsRequests: (readerId) => readerAcceptsRequests(fastify, readerId),
     befriend: async ({ issuerId, readerId }) =>
       'valeur' in (await envoyerDemande(fastify, withoutReaderMutationId(request), { emetteurId: issuerId, receveurId: readerId })),
+    report: (error) => logError(fastify.log, 'Contact exchange friend request error:', error),
   };
 }
 
