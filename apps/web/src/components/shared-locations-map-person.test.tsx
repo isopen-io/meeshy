@@ -52,11 +52,12 @@ const served = (overrides: Partial<SharedLocation> = {}): SharedLocation => ({
   ...overrides,
 });
 
-const deps = (() => {
-  const transport = (async () => ({ ok: true, data: { items: [] } })) as unknown as HttpTransport;
-  transport.request = (async (_: HttpRequest) => ({ ok: true, data: { items: [] } })) as HttpTransport['request'];
+/** Le rattrapage sert ce que le serveur a : un rattrapage vide effacerait, à juste titre, ce que le magasin tenait déjà. */
+const depsServing = (items: readonly SharedLocation[]) => {
+  const transport = (async () => ({ ok: true, data: { items } })) as unknown as HttpTransport;
+  transport.request = (async (_: HttpRequest) => ({ ok: true, data: { items } })) as HttpTransport['request'];
   return { source: 'gateway' as const, transport };
-})();
+};
 
 const named = () =>
   appQueryClient.setQueryData(['conversations'], {
@@ -68,7 +69,7 @@ const open = async (props: { readonly focusUserId?: string; readonly locations: 
   const store = createSharedLocationsStore();
   props.locations.forEach((location) => store.getState().receive(location));
   return mount(
-    <SharedLocationsMap language="fr" store={store} deps={deps} watch={() => () => undefined} {...(props.focusUserId === undefined ? {} : { focusUserId: props.focusUserId })} />,
+    <SharedLocationsMap language="fr" store={store} deps={depsServing(props.locations)} watch={() => () => undefined} {...(props.focusUserId === undefined ? {} : { focusUserId: props.focusUserId })} />,
   );
 };
 

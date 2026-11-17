@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { useStore } from 'zustand/react';
+import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
 import { MeeshyAvatarMorph, useMeeshyAvatarMorph } from '@/components/kit/meeshy-avatar-morph';
 import { MeeshyPersonRow } from '@/components/kit/meeshy-person-row';
@@ -31,6 +32,7 @@ export const ProfileSeeOnMapRow = memo(function ProfileSeeOnMapRow({
   name,
   avatar,
   accent,
+  presence,
   store = sharedLocationsStore,
   now = Date.now,
 }: {
@@ -39,6 +41,8 @@ export const ProfileSeeOnMapRow = memo(function ProfileSeeOnMapRow({
   readonly name: string;
   readonly avatar: string | null | undefined;
   readonly accent: string;
+  /** Servie par la fiche ou absente : jamais déduite d'ici. */
+  readonly presence?: UserPresenceStatus | undefined;
   readonly store?: SharedLocationsStoreApi;
   readonly now?: () => number;
 }) {
@@ -57,7 +61,7 @@ export const ProfileSeeOnMapRow = memo(function ProfileSeeOnMapRow({
         label={translateCircles(language, 'positions.seeOnMap.a11y', { name })}
         avatar={
           <MeeshyAvatarMorph id={personId} size={40}>
-            <Avatar initials={initialsOf(name)} color={accent} size={40} name={name} redundant {...(avatar == null ? {} : { src: avatar })} />
+            <Avatar initials={initialsOf(name)} color={accent} size={40} name={name} redundant {...(presence === undefined ? {} : { presence })} {...(avatar == null ? {} : { src: avatar })} />
           </MeeshyAvatarMorph>
         }
         onPress={() => void morph.travel(personId, () => navigate(mapHrefOf(personId)))}

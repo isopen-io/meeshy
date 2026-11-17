@@ -6,8 +6,9 @@ import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 import { apiDeps } from '@/lib/api/deps';
 import { publicProfileQueryOptions, type PublicProfileView } from '@/lib/api/public-profile';
 import { appQueryClient } from '@/lib/api/query-client';
-import { sharedLocationsQueryOptions, type SharedLocationDeps } from '@/lib/api/shared-locations';
+import { sharedLocationsQueryOptions, type SharedLocation, type SharedLocationDeps } from '@/lib/api/shared-locations';
 import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
+import { translateCircles } from '@/lib/i18n-circles-catalog';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { bboxQuery, fitView, panView, viewBbox, zoomView, type GeoBbox, type MapSize, type MapView } from '@/lib/map/slippy';
@@ -16,6 +17,7 @@ import { knownPersonByIdInConversations, servedPresenceByIdInConversations } fro
 import { bindSharedLocationsLive, sharedLocationsStore, type SharedLocationsStoreApi } from '@/lib/shared-locations/shared-locations-live';
 import { initialsOf } from '@/lib/view/conversation';
 
+import { SharedLocationCard } from './shared-location-card';
 import { SharedLocationsMapView, type SharedLocationPerson } from './shared-locations-map-view';
 
 /**
@@ -86,6 +88,10 @@ function useCalm<T extends string | number>(value: T, ms: number): T {
   return calm;
 }
 
+/** Le zoom suit la précision accordée : l'endroit exact se voit de près, une ville de plus haut. */
+const FOCUS_ZOOM = { exact: 15, neighborhood: 13, city: 10 } as const satisfies Readonly<Record<SharedLocation['precision'], number>>;
+const focusOn = (location: SharedLocation): Pick<MapView, 'center' | 'zoom'> => ({ center: { latitude: location.latitude, longitude: location.longitude }, zoom: FOCUS_ZOOM[location.precision] });
+
 const timeFormatter = (language: InterfaceLanguage) => {
   const format = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' });
   return (iso: string): string => format.format(new Date(iso));
@@ -97,12 +103,15 @@ export function SharedLocationsMap({
   deps = apiDeps,
   watch = watchRealtime,
   initialView,
+  focusUserId,
 }: {
   readonly language: InterfaceLanguage;
   readonly store?: SharedLocationsStoreApi;
   readonly deps?: SharedLocationDeps;
   readonly watch?: WatchRealtime;
   readonly initialView?: Pick<MapView, 'center' | 'zoom'>;
+  /** La personne sur qui la carte s'ouvre (« Voir sur la carte » de sa fiche) : centrée, choisie, sa feuille ouverte. */
+  readonly focusUserId?: string;
 }) {
   const ready = useCirclesCatalog(language);
   const online = useOnline();
@@ -111,14 +120,17 @@ export function SharedLocationsMap({
   const size: MapSize = { width: Math.min(measured ?? DEFAULT_SIZE.width, 720), height: DEFAULT_SIZE.height };
   const byUser = useStore(store, (state) => state.byUser);
   const locations = useMemo(() => Object.values(byUser), [byUser]);
-  const [view, setView] = useState<Pick<MapView, 'center' | 'zoom'>>(() => initialView ?? (locations.length === 0 ? DEFAULT_VIEW : fitView(locations, size)));
+  const focused = focusUserId === undefined ? undefined : byUser[focusUserId];
+  const [view, setView] = useState<Pick<MapView, 'center' | 'zoom'>>(() => initialView ?? (focused !== undefined ? focusOn(focused) : locations.length === 0 ? DEFAULT_VIEW : fitView(locations, size)));
   const placed = useRef(initialView !== undefined || locations.length > 0);
+  const [selected, setSelected] = useState<string | null>(focusUserId ?? null);
+  const [cardOpen, setCardOpen] = useState(focusUserId !== undefined);
   const [caughtUp, setCaughtUp] = useState(false);
 
   useEffect(() => {
     if (placed.current || locations.length === 0) return;
     placed.current = true;
-    setView(fitView(locations, size));
+    setView(focused !== undefined ? focusOn(focused) : fitView(locations, size));
   }, [locations, size.width, size.height]);
 
   useEffect(() => watch((socket) => bindSharedLocationsLive({ socket, store })), [watch, store]);
@@ -170,7 +182,21 @@ export function SharedLocationsMap({
         onRetry={() => void caught.refetch()}
         onZoom={(delta) => setView((current) => zoomView({ ...current, ...size }, delta))}
         onPan={(dx, dy) => setView((current) => panView({ ...current, ...size }, dx, dy))}
+        selectedUserId={selected}
+        onSelect={(userId) => {
+          setSelected(userId);
+          setCardOpen(true);
+        }}
       />
+      {selected !== null && cardOpen && (status === 'ready' || byUser[selected] !== undefined) ? (
+        <SharedLocationCard
+          language={language}
+          userId={selected}
+          name={personOf(selected).name ?? translateCircles(language, 'positions.someone')}
+          location={byUser[selected]}
+          onClose={() => setCardOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

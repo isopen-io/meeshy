@@ -7,6 +7,7 @@ import { useStore } from 'zustand/react';
 import './styles/app.css';
 import './styles/sealed-exit.css';
 
+import { MeeshyAvatarMorphScope } from '@/components/kit/meeshy-avatar-morph';
 import { ScreenWait } from '@/components/screen-wait';
 import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
@@ -164,7 +165,9 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={appQueryClient}>
       <InterfaceLanguageRoot>
-        <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<ScreenWait />} />
+        <MeeshyAvatarMorphScope>
+          <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<ScreenWait />} />
+        </MeeshyAvatarMorphScope>
       </InterfaceLanguageRoot>
     </QueryClientProvider>
   </StrictMode>,

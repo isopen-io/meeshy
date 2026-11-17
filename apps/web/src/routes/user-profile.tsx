@@ -324,7 +324,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                       <ProfileSelfSection language={language} />
                     ) : (
                       <>
-                        {signedIn ? <ProfileSeeOnMapRow language={language} personId={person.id} name={name} avatar={person.avatar} accent={accent} /> : null}
+                        {signedIn ? <ProfileSeeOnMapRow language={language} personId={person.id} name={name} avatar={person.avatar} accent={accent} presence={presence?.status} /> : null}
                         {items === null ? null : (
                           <>
                             {items.filter((item) => item.id === 'write').map((item) => (
