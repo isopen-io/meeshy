@@ -6,6 +6,7 @@ import io.mockk.mockk
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.ApiResponse
@@ -143,6 +144,36 @@ class NotificationRepositoryFlightTest {
         repo.clear()
         release.complete(Unit)
         deleting.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All)).isNull()
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+    }
+
+    /**
+     * The first frame reads A's list from the disk; A signs out while that read waits. Landing after
+     * [NotificationRepository.clear], it used to pose A's list and A's count for B — and to mark the repository hydrated,
+     * so B never read its own disk. Nothing of it lands.
+     */
+    @Test
+    fun `a disk read of the account that left lands nothing after clear`() = runTest {
+        val reading = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val store = object : NotificationCacheStore {
+            override suspend fun read(): PersistedNotifications? {
+                reading.complete(Unit)
+                release.await()
+                return PersistedNotifications(listOf(row("a1")), nextCursor = null, hasMore = false, unreadCount = 3, syncedAt = null)
+            }
+
+            override suspend fun write(snapshot: PersistedNotifications, stillValid: () -> Boolean) = Unit
+        }
+        val repo = NotificationRepository(mockk(relaxed = true), store = store)
+
+        val opening = async { repo.notificationsStream().first() }
+        reading.await()
+        repo.clear()
+        release.complete(Unit)
+        opening.await()
 
         assertThat(repo.cachedItems(NotificationScope.All)).isNull()
         assertThat(repo.unreadCountStream.value).isEqualTo(0)

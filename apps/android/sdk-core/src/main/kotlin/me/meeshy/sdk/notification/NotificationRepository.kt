@@ -785,12 +785,15 @@ class NotificationRepository @Inject constructor(
 
     /**
      * Relit une fois la portée « all » du disque dans le cache en mémoire, AVANT la première émission : le premier cadre
-     * porte les lignes en cache. Sans effet si une liste est déjà là (révalidation arrivée la première).
+     * porte les lignes en cache. Sans effet si une liste est déjà là (révalidation arrivée la première). Une lecture du
+     * disque d'un compte parti pendant qu'elle attendait ([clear] depuis) ne pose rien et ne marque rien comme relu : la
+     * prochaine émission relit le disque du compte suivant (#18915).
      */
     private suspend fun hydrateOnce() {
         if (hydrated) return
         hydration.withLock {
             if (hydrated) return
+            val opened = epoch
             pendingDiskClear?.join()
             val loaded = try {
                 store.read()?.withinRetention()
@@ -800,6 +803,7 @@ class NotificationRepository @Inject constructor(
                 null
             }
             synchronized(flightLock) {
+                if (opened != epoch) return
                 if (loaded != null && _notificationsCache.value == null) {
                     lastPersisted = loaded
                     _hasMore.value = loaded.hasMore
