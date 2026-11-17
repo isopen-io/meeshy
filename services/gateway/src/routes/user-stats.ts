@@ -231,11 +231,23 @@ export const COMPTEURS_PRIVES = [
   'friendRequestsReceived',
 ] as const satisfies ReadonlyArray<keyof UserStats>;
 
+/**
+ * « En chiffres » (#19371) : la part des compteurs intimes qu'un Proche reçoit,
+ * sous la préférence du sujet (`profileFiguresOpen`). Les deux autres restent à
+ * soi et à l'administration.
+ */
+export const COMPTEURS_DES_CHIFFRES = [
+  'totalMessages',
+  'totalTranslations',
+] as const satisfies ReadonlyArray<(typeof COMPTEURS_PRIVES)[number]>;
+
 export type StatsAudience = {
   /** Le lecteur est le sujet des statistiques. */
   readonly estSoi: boolean;
   /** Le lecteur a `canViewUsers` — ADMIN, BIGBOSS. */
   readonly estAdministration: boolean;
+  /** #19371 — la loi ouvre « En chiffres » à ce lecteur. Absent = fermé. */
+  readonly chiffres?: boolean;
 };
 
 /**
@@ -253,10 +265,20 @@ export type StatsAudience = {
  */
 export function servedUserStats(stats: UserStats, audience: StatsAudience): Partial<UserStats> {
   if (audience.estSoi || audience.estAdministration) return stats;
+  const ouverts: ReadonlySet<string> = new Set(audience.chiffres === true ? COMPTEURS_DES_CHIFFRES : []);
+  const fermes: ReadonlySet<string> = new Set(COMPTEURS_PRIVES.filter((cle) => !ouverts.has(cle)));
   const publics: Record<string, unknown> = { ...stats };
-  for (const cle of COMPTEURS_PRIVES) delete publics[cle];
+  for (const cle of fermes) delete publics[cle];
+  // #19371 — À CÔTÉ du champ gardé : le `current` d'un succès est le compte
+  // EXACT de sa métrique. Un succès dont la métrique est fermée ne part pas.
+  publics.achievements = stats.achievements.filter((succes) => !fermes.has(metriqueDuSucces(succes.id)));
   return publics as Partial<UserStats>;
 }
+
+const metriqueDuSucces = (id: string): string =>
+  Object.prototype.hasOwnProperty.call(ACHIEVEMENT_THRESHOLDS, id)
+    ? ACHIEVEMENT_THRESHOLDS[id as AchievementKey].field
+    : '';
 
 export async function userStatsRoutes(fastify: FastifyInstance) {
 

@@ -135,3 +135,53 @@ describe('Le PROPRIÉTAIRE voit tout', () => {
     await app.close();
   });
 });
+
+/**
+ * #19371 — un PROCHE reçoit « En chiffres » (messages, traductions) sur cette
+ * route comme sur `?expand=stats` : même loi, même préférence du sujet. Les
+ * fils et les demandes reçues restent à soi.
+ */
+describe('Un PROCHE reçoit « En chiffres » (#19371)', () => {
+  const LOW = PROPRIETAIRE < TIERS ? PROPRIETAIRE : TIERS;
+  const HIGH = PROPRIETAIRE < TIERS ? TIERS : PROPRIETAIRE;
+  const avecLien = (niveau: string, privacy?: Record<string, boolean>) => ({
+    ...buildApp(),
+    user: {
+      ...buildApp().user,
+      findMany: jest.fn<any>(async (args: any) =>
+        (args?.where?.blockedUserIds ? [] : args?.where?.id?.in ?? []).map((id: string) => ({
+          id, role: 'USER', birthDate: null, isActive: true, deletedAt: null, deactivatedAt: null,
+        })),
+      ),
+      findUnique: jest.fn<any>(async () => ({ blockedUserIds: [], createdAt: new Date('2026-01-01T00:00:00Z') })),
+    },
+    userRelation: {
+      findUnique: jest.fn<any>(async () => ({ id: 'r1', userLowId: LOW, userHighId: HIGH, grantedByLow: niveau, grantedByHigh: niveau, transitions: [] })),
+      findMany: jest.fn<any>(async () => []),
+    },
+    friendRequest: { count: jest.fn<any>(async () => 3), findFirst: jest.fn<any>(async () => null), findMany: jest.fn<any>(async () => []) },
+    communityMember: { findMany: jest.fn<any>(async () => []) },
+    userPreferences: { findMany: jest.fn<any>(async () => (privacy ? [{ userId: PROPRIETAIRE, privacy }] : [])) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
+  });
+
+  it('sert messages et traductions au Proche, jamais les fils ni les demandes reçues', async () => {
+    const app = await monter(avecLien('CLOSE'), TIERS);
+    const data = (await lire(app)).json().data ?? {};
+    await app.close();
+    expect(data.totalMessages).toBe(69);
+    expect('totalTranslations' in data).toBe(true);
+    expect(['totalConversations', 'friendRequestsReceived'].filter((c) => c in data)).toEqual([]);
+  });
+
+  it("ne sert rien à l'Ami, ni au Proche d'une personne qui a coupé sa préférence", async () => {
+    const ami = await monter(avecLien('FRIEND'), TIERS);
+    const dataAmi = (await lire(ami)).json().data ?? {};
+    await ami.close();
+    const coupe = await monter(avecLien('CLOSE', { showProfileFigures: false }), TIERS);
+    const dataCoupe = (await lire(coupe)).json().data ?? {};
+    await coupe.close();
+    expect(PRIVES.filter((c) => c in dataAmi)).toEqual([]);
+    expect(PRIVES.filter((c) => c in dataCoupe)).toEqual([]);
+  });
+});

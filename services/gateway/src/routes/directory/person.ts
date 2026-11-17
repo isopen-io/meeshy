@@ -9,6 +9,7 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
+import { profileFiguresOpen } from '../../services/relations/profileFigures';
 import { contentCountReaderFor } from '../../services/posts/authorContentCounts';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
 import { cityAsReaderOf } from '../users/profile-city';
@@ -348,8 +349,8 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
                       },
                     },
                     // Les quatre INTIMES — servis à soi et à l'administration
-                    // seulement (`servedUserStats`). Déclarés parce qu'ils
-                    // partent dans ce cas ; absents de la charge sinon.
+                    // (`servedUserStats`) ; messages et traductions aussi au
+                    // Proche que la loi ouvre (#19371). Absents de la charge sinon.
                     totalMessages: { type: 'number' },
                     totalConversations: { type: 'number' },
                     totalTranslations: { type: 'number' },
@@ -443,17 +444,27 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
         Object.assign(base, await relationAvec(fastify, lecteurReel, cibleId));
       }
 
+      const cercleLu = demande.has('circle') && !vue && viewerId
+        ? await readProfileCircleView(fastify.prisma, { viewerId, targetId: cibleId })
+        : undefined;
       if (demande.has('circle')) {
-        const cercle = vue ?? (viewerId ? await readProfileCircleView(fastify.prisma, { viewerId, targetId: cibleId }) : undefined);
+        const cercle = vue ?? cercleLu;
         if (cercle) base.circle = cercle;
       }
 
       if (demande.has('stats')) {
+        const estSoi = lecteurReel === cibleId;
+        const estAdministration =
+          !vue &&
+          permissionsService.hasPermission((acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum, 'canViewUsers');
+        // #19371 : « En chiffres » part vers le cercle que la loi ouvre (le cercle de « Voir comme » compris).
         const audience = {
-          estSoi: lecteurReel === cibleId,
-          estAdministration:
-            !vue &&
-            permissionsService.hasPermission((acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum, 'canViewUsers'),
+          estSoi,
+          estAdministration,
+          chiffres:
+            !estSoi &&
+            !estAdministration &&
+            (await profileFiguresOpen(fastify.prisma, { subjectId: cibleId, viewerId: lecteurReel, view: vue ?? cercleLu })),
         };
         // #19368 : les compteurs de publications se comptent pour CE lecteur (ou le cercle de « Voir comme »).
         const lecteurDesCompteurs = contentCountReaderFor({

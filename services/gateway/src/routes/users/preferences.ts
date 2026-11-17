@@ -25,6 +25,7 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
+import { profileFiguresOpen } from '../../services/relations/profileFigures';
 import { contentCountReaderFor } from '../../services/posts/authorContentCounts';
 import { keepDiscoverable } from '../../services/profile-discoverability';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
@@ -464,12 +465,20 @@ export async function getUserStats(fastify: FastifyInstance) {
       // monde sur cette route depuis sa création, et le succès « Traducteur »
       // (100 traductions) ne pouvait donc jamais s'y débloquer.
       const acteur = (request as unknown as UnifiedAuthRequest).authContext;
+      const estSoi = acteur?.userId === user.id;
+      const estAdministration = permissionsService.hasPermission(
+        (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
+        'canViewUsers'
+      );
+      // #19371 : « En chiffres » au Proche — même loi que `?expand=stats`.
+      const lecteurInscrit = acteur?.registeredUser?.id;
       const audience = {
-        estSoi: acteur?.userId === user.id,
-        estAdministration: permissionsService.hasPermission(
-          (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
-          'canViewUsers'
-        ),
+        estSoi,
+        estAdministration,
+        chiffres:
+          !estSoi &&
+          !estAdministration &&
+          (await profileFiguresOpen(fastify.prisma, { subjectId: user.id, viewerId: lecteurInscrit })),
       };
       // #19368 : les compteurs de publications se comptent pour CE lecteur — même loi que `?expand=stats`.
       const stats = await computeUserStats(
