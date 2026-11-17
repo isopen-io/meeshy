@@ -188,4 +188,23 @@ final class LiveCallJoinerTests: XCTestCase {
         XCTAssertEqual(spy.rejoins.first?.remoteUserId, "u-alice")
         XCTAssertTrue(spy.markedGroups.isEmpty)
     }
+
+    /// #19238 — un duo devenu groupe par invitation reste « direct » sur la
+    /// ligne : la session servie, qui compte plus d'un autre membre encore
+    /// dedans, dit que l'appel se rejoint par le maillage.
+    func test_join_directConversationWhoseCallHoldsTwoOthers_joinsThroughTheMesh() async throws {
+        let spy = CallSpy()
+        let stub = ActiveCallStub()
+        stub.result = .success(ActiveCallSession(
+            id: "call-1", conversationId: "conv-1", mode: "p2p", status: "active",
+            participants: [ActiveCallParticipant(userId: "u-alice"), ActiveCallParticipant(userId: "u-me"), ActiveCallParticipant(userId: "u-grace")]
+        ))
+        let request = try XCTUnwrap(LiveCallJoinRequest(conversation: conversation(call: call()), currentUserId: "u-me"))
+
+        await LiveCallJoiner(context: spy.context, activeCallService: stub).join(request)
+
+        XCTAssertEqual(spy.markedGroups.map(\.conversationId), ["conv-1"])
+        XCTAssertEqual(spy.rejoins.first?.remoteUserId, "conv-1")
+    }
 }
+
