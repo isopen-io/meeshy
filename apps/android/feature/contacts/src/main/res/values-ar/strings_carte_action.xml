@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La carte comme action (#18890) : mots de la carte des positions partagées. -->
+<resources>
+    <string name="location_map_close">إغلاق الخريطة</string>
+    <string name="location_map_layers">تغيير خلفية الخريطة</string>
+    <string name="location_map_recenter">إعادة توسيط الخريطة</string>
+    <string name="location_map_view_exact">عرض دقيق</string>
+    <string name="location_map_view_neighborhood">عرض الحي</string>
+    <string name="location_map_view_city">عرض المدينة</string>
+    <string name="location_map_remaining_minutes">متبقي %1$d د</string>
+    <string name="location_map_remaining_hours">متبقي %1$d س %2$02d</string>
+    <string name="location_map_shared_for_hour">مشاركة لمدة ساعة</string>
+    <string name="location_map_shared_for_hours">مشاركة لمدة 8 ساعات</string>
+    <string name="location_map_fresh_live">موقع مباشر · تم التحديث قبل %1$d ث</string>
+    <string name="location_map_fresh_stale">تم التحديث قبل %1$d د</string>
+    <string name="location_map_directions">المسار</string>
+    <string name="location_map_write">مراسلة</string>
+    <string name="location_map_call">اتصال</string>
+    <string name="location_map_share_mine">مشاركة موقعي</string>
+    <string name="location_map_not_sharing">%1$s لا يشارك موقعه</string>
+    <string name="location_map_not_sharing_message">سترى الموقع هنا فور مشاركته معك.</string>
+    <string name="location_map_nearby_open">خريطة المقربين</string>
+    <string name="location_map_nearby_title">من حولك</string>
+    <string name="location_map_nearby_empty">لا أحد يشارك موقعه معك</string>
+    <string name="location_map_nearby_empty_message">تظهر هنا المواقع التي يشاركها المقربون بالدقة التي يختارونها.</string>
+</resources>

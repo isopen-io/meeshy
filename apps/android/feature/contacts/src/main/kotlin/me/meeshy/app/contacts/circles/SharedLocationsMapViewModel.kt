@@ -58,6 +58,9 @@ class SharedLocationsMapViewModel internal constructor(
         }
     }
 
+    /** Quand le serveur a servi cette position pour la dernière fois ; `null` : inconnue, la feuille n'affirme aucune fraîcheur. */
+    fun updatedAtMillis(userId: String): Long? = live.byUser.value[userId]?.updatedAtMillis
+
     /** À l'apparition : le monde fait foi, une fin survenue carte fermée s'efface partout. */
     fun appeared() {
         viewModelScope.launch { live.catchUp(null) }

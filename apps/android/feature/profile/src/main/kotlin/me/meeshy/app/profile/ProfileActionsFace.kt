@@ -89,6 +89,7 @@ internal fun ProfileActionsFace(
             displayName = input.displayName,
             offered = access.offers(ProfileRelationAction.LOCATION),
         )
+        ProfileWhereMapAction(userId = input.userId, displayName = input.displayName, callbacks = callbacks)
         PhoneSections(input)
         CardSection(input, onOpenCircle, onShareProfile)
         NotOpenSection(locked)

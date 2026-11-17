@@ -61,6 +61,16 @@ class SharedLocationsMapViewModelTest {
     }
 
     @Test
+    fun `la mise a jour servie d'une personne se lit sans reseau, inconnue elle reste absente`() = scope.runTest {
+        val live = FakeLive(mapOf("u2" to entry()))
+        val vm = SharedLocationsMapViewModel(live, { emptyMap() }, 300L)
+        advanceUntilIdle()
+
+        assertThat(vm.updatedAtMillis("u2")).isEqualTo(1L)
+        assertThat(vm.updatedAtMillis("u9")).isNull()
+    }
+
+    @Test
     fun `une montee de precision servie affine l'epingle sans recharger, une fin la retire`() = scope.runTest {
         val live = FakeLive(mapOf("u2" to entry()))
         val vm = SharedLocationsMapViewModel(live, { emptyMap() }, 300L)
