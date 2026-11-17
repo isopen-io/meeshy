@@ -149,9 +149,9 @@ private fun WaveDisc(values: MeeshyWavePlayerValues, accent: Color, label: Strin
             .clickable(interactionSource = interaction, indication = null, enabled = values.acceptsToggle, role = Role.Button, onClick = onToggle),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(glyph, contentDescription = null, tint = Color(0xFF0B0B12), modifier = Modifier.size(values.glyphSizeDp.dp))
+        Icon(glyph, contentDescription = null, tint = MeeshyPalette.Indigo950, modifier = Modifier.size(values.glyphSizeDp.dp))
         if (values.showsRing) {
-            CircularProgressIndicator(modifier = Modifier.size(values.discDiameterDp.dp), color = Color(0xFF0B0B12), strokeWidth = 2.dp)
+            CircularProgressIndicator(modifier = Modifier.size(values.discDiameterDp.dp), color = MeeshyPalette.Indigo950, strokeWidth = 2.dp)
         }
     }
 }

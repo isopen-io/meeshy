@@ -56,7 +56,7 @@ import me.meeshy.ui.theme.MeeshyMotionToken
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
-private val InkOnFull = Color(0xFF0B0B12)
+private val InkOnFull = MeeshyPalette.Indigo950
 private const val PILL_BORDER_ALPHA = 0.62f
 private const val HALO_GAP_DP = 3
 private const val DASH_ON_DP = 6f

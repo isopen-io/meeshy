@@ -47,11 +47,12 @@ import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.accessibility.decorative
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
 private const val TRACE_MILLIS = 600
 private const val HALO_ALPHA = 0.12f
-private val InkOnAccent = Color(0xFF0B0B12)
+private val InkOnAccent = MeeshyPalette.Indigo950
 
 /** Les repères d'une piste de crans : un disque par arrêt, le choisi cerclé et nimbé, la colonne entière est la cible. */
 @Composable
