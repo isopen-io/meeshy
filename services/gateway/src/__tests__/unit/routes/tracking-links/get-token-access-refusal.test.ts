@@ -160,3 +160,22 @@ describe('GET /tracking-links/:token — les deux refus restent DISCERNABLES', (
     expect(sansSession.corps.code).not.toBe(nonCreateur.corps.code);
   });
 });
+
+const LIEN_ADRESSE = { ...TRACKING_LINK, addressId: '65a0000000000000000000a1' };
+
+describe('GET /tracking-links/:token — le lien d’une ADRESSE de fiche est introuvable à tout autre que son propriétaire (#19196)', () => {
+  it('sans session : 404, comme un jeton inconnu', async () => {
+    const { statut, corps } = await appeler(SANS_JETON, { trackingLink: { findUnique: jest.fn(async () => LIEN_ADRESSE) } });
+
+    expect(statut).toBe(404);
+    expect(JSON.stringify(corps)).not.toContain('example.com');
+  });
+
+  it('autre utilisateur : 404, comme un jeton inconnu', async () => {
+    const prisma = { ...prismaAutreUtilisateur(), trackingLink: { findUnique: jest.fn(async () => LIEN_ADRESSE) } };
+    const { statut, corps } = await appeler(JETON_VIVANT_AUTRE_UTILISATEUR, prisma);
+
+    expect(statut).toBe(404);
+    expect(JSON.stringify(corps)).not.toContain('example.com');
+  });
+});
