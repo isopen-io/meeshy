@@ -67,20 +67,4 @@ final class KeyframeKeyboardShortcutTests: XCTestCase {
         XCTAssertNil(clip?.keyframes?.first,
                      "Without selection, K shortcut must not create a keyframe")
     }
-
-    func test_kShortcut_runtimeDispatch_requiresUIWindow() throws {
-        // Honest debt marker (was previously "covered by Phase 4 XCUITest
-        // suite" — false, no such suite exists in this project). A repo-wide
-        // search found no `.keyboardShortcut`/`UIKeyCommand` binding for "K"
-        // anywhere in `packages/MeeshySDK/Sources` or `apps/ios/Meeshy` — the
-        // interaction today is a plain tap Button in `ClipInspector.swift`.
-        // There is no source-level wiring to structurally source-guard, and
-        // no XCUITest target to exercise the real key dispatch. Tracked as
-        // real, open debt rather than a false completeness claim.
-        try XCTSkipIf(true,
-            "No 'K' keyboard-shortcut wiring exists anywhere in the SDK or app (verified via repo-wide " +
-            "grep for .keyboardShortcut/UIKeyCommand/keyCommand) — the interaction is currently a plain " +
-            "tap Button in ClipInspector.swift, not a keyboard shortcut. This is open debt: implement the " +
-            "binding (and re-enable this test against it) or confirm the feature was descoped.")
-    }
 }

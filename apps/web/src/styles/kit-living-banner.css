@@ -1,0 +1,177 @@
+/* LA BANNIÈRE VIVANTE (K27, #18876) — un décor : dégradé tiré d'une teinte, deux orbes sur
+   leur propre calque, un fondu vers le fond. Le flottement et la parallaxe ne passent que
+   par `transform` ; aucun flou n'est recalculé par image (les orbes sont des dégradés
+   radiaux). La teinte change sans re-rendu (`color-mix` sur `--kit-banner-tint`). Chaque
+   valeur chiffrée vient de `meeshy-living-banner-recipe.ts` (`--kit-banner-*`). */
+@layer components {
+  .kit-banner {
+    --kit-banner-ground: var(--color-ios-surface);
+
+    position: relative;
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: var(--kit-banner-h);
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .kit-banner__decor {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .kit-banner__gradient {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(
+      var(--kit-banner-angle),
+      color-mix(in oklab, var(--kit-banner-tint) var(--kit-banner-s1), var(--kit-banner-ground)),
+      color-mix(in oklab, var(--kit-banner-tint) var(--kit-banner-s2), var(--kit-banner-ground)),
+      var(--kit-banner-ground)
+    );
+  }
+
+  .kit-banner[data-fade='veil'] .kit-banner__gradient {
+    mask-image: linear-gradient(to bottom, #000 40%, transparent);
+  }
+
+  .kit-banner__orb {
+    position: absolute;
+    transition: transform 120ms linear;
+    will-change: transform;
+  }
+
+  .kit-banner__orb[data-orb='near'] {
+    inset-block-start: -20%;
+    inset-inline-end: -10%;
+    inline-size: var(--kit-banner-near-d);
+    block-size: var(--kit-banner-near-d);
+    opacity: var(--kit-banner-near-o);
+    transform: translateX(var(--kit-banner-near-x));
+  }
+
+  .kit-banner__orb[data-orb='far'] {
+    inset-block-end: 10%;
+    inset-inline-start: -8%;
+    inline-size: var(--kit-banner-far-d);
+    block-size: var(--kit-banner-far-d);
+    opacity: var(--kit-banner-far-o);
+    transform: translateX(var(--kit-banner-far-x));
+  }
+
+  .kit-banner__orb-body {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: 50%;
+  }
+
+  .kit-banner__orb[data-orb='near'] .kit-banner__orb-body {
+    background-image: radial-gradient(circle, var(--kit-banner-tint), transparent 70%);
+  }
+
+  .kit-banner__orb[data-orb='far'] .kit-banner__orb-body {
+    background-image: radial-gradient(circle, var(--kit-banner-far-color), transparent 70%);
+  }
+
+  .kit-banner[data-floats] .kit-banner__orb-body {
+    animation: kit-banner-float var(--motion-float-duration) var(--motion-float) infinite alternate;
+    animation-play-state: var(--motion-float-play);
+  }
+
+  .kit-banner[data-floats] .kit-banner__orb[data-orb='far'] .kit-banner__orb-body {
+    animation-delay: -4.5s;
+    animation-direction: alternate-reverse;
+  }
+
+  .kit-banner[data-visible='false'] .kit-banner__orb-body {
+    animation-play-state: paused;
+  }
+
+  .kit-banner__image {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    animation: kit-banner-arrive var(--motion-rise-duration) var(--motion-rise) both;
+  }
+
+  .kit-banner__veil {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(to bottom, color-mix(in srgb, #000 calc(var(--kit-banner-veil) * 100%), transparent), transparent 70%);
+  }
+
+  .kit-banner__fade {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: var(--kit-banner-fade);
+    background-image: linear-gradient(to bottom, transparent, var(--kit-banner-ground));
+  }
+
+  .kit-banner[data-muted] .kit-banner__orb-body {
+    animation: none;
+  }
+
+  .kit-banner__slot {
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .kit-banner__slot[data-slot='top-leading'] {
+    inset-block-start: max(var(--safe-top, 0px), 0.75rem);
+    inset-inline-start: 1rem;
+  }
+
+  .kit-banner__slot[data-slot='top-trailing'] {
+    inset-block-start: max(var(--safe-top, 0px), 0.75rem);
+    inset-inline-end: 1rem;
+  }
+
+  .kit-banner__slot[data-slot='bottom'] {
+    inset-block-end: 4.75rem;
+    inset-inline-end: 1rem;
+  }
+
+  @keyframes kit-banner-float {
+    from {
+      transform: translate(0, 0) scale(1);
+    }
+
+    to {
+      transform: translate(18px, 14px) scale(1.12);
+    }
+  }
+
+  @keyframes kit-banner-arrive {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-banner__orb-body,
+    .kit-banner[data-floats] .kit-banner__orb-body {
+      animation: none;
+    }
+
+    .kit-banner__orb {
+      transition: none;
+    }
+
+    .kit-banner__image {
+      animation-duration: var(--motion-reduced-duration);
+    }
+  }
+}

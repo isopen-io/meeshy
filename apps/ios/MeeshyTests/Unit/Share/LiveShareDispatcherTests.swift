@@ -201,13 +201,6 @@ final class LiveShareDispatcherTests: XCTestCase {
 
     // MARK: - Un refus de transfert se dit dans la langue du lecteur (#12978)
 
-    private final class RefusingForward: MessageForwardServiceProviding {
-        let outcome: ForwardOutcome
-        init(_ outcome: ForwardOutcome) { self.outcome = outcome }
-        func forward(message: Message, sourceConversationId: String?, to targetConversationId: String, chosenDurationSeconds: Int?, forwardedAttachmentIds: [String]?) async -> ForwardOutcome { outcome }
-        func forward(message: Message, sourceConversationId: String?, to target: ShareRecipient, chosenDurationSeconds: Int?, forwardedAttachmentIds: [String]?) async -> ForwardOutcome { outcome }
-    }
-
     func test_aServerRefusalOfAText_isSaidByTheCatalog_whateverTheErrorType() async {
         let refusals: [any Error] = [
             MeeshyError.server(statusCode: 400, message: "Un message à vue unique ne peut pas être transféré"),

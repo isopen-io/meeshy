@@ -47,19 +47,6 @@ struct ComposerRailDoorLongPressHandler {
     let choose: (ComposerMediaIntake) -> Void
 }
 
-/// Une action nommée d'une entrée du rail, offerte à VoiceOver.
-struct ComposerRailNamedAction: Identifiable {
-    let id: String
-    let label: String
-    let perform: () -> Void
-}
-
-/// L'appui long d'UNE entrée du rail : le geste, et ses actions nommées.
-struct ComposerRailEntryLongPress {
-    let begin: () -> Void
-    let actions: [ComposerRailNamedAction]
-}
-
 /// **Un appui long n'est pas suivi d'un toucher** (#10306). Le bouton de la
 /// porte rappelle son action à la levée du doigt, appui long compris : sans
 /// cette mémoire, le choix des sources et la photothèque s'ouvriraient l'un

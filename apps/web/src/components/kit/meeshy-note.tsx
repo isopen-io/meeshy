@@ -1,6 +1,6 @@
 import '@/styles/kit-note.css';
 import '@/styles/kit-motion.css';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   meeshyNoteRecipe,
@@ -64,6 +64,22 @@ const withEmphasis = (text: string, emphasis: string | undefined): ReactNode => 
   );
 };
 
+/**
+ * L'annonce d'arrivée : la région existe vide, puis reçoit la phrase quand la note
+ * PASSE à un sens annoncé (à son arrivée, ou d'info à warn). Une phrase qui change
+ * sans changer de sens n'est pas réécrite ; un retour au calme vide la région.
+ */
+const useArrivalAnnouncement = (announces: boolean, spoken: string): string => {
+  const [said, setSaid] = useState('');
+  const wasAnnouncing = useRef(false);
+  useEffect(() => {
+    if (announces && !wasAnnouncing.current) setSaid(spoken);
+    if (!announces) setSaid('');
+    wasAnnouncing.current = announces;
+  }, [announces, spoken]);
+  return said;
+};
+
 function Lead({ kind, lead, isPulsing, glyph }: { readonly kind: MeeshyNoteKind; readonly lead: MeeshyNoteLeadKind; readonly isPulsing: boolean; readonly glyph: ReactNode }) {
   if (lead === 'none') return null;
   const isDot = lead === 'dot' || lead === 'pulse';
@@ -77,13 +93,17 @@ function Lead({ kind, lead, isPulsing, glyph }: { readonly kind: MeeshyNoteKind;
 /**
  * Une note : tête, phrase et seconde ligne se lisent en UN élément ; l'action de fin
  * reste un bouton à part. Seul `warn` est dit à son arrivée, une fois, poliment, sans
- * voler le focus ; les autres sens ne sont jamais annoncés. Le sens est toujours
- * doublé par un glyphe et par les mots.
+ * voler le focus, par une région à part qui ne relit ni l'action ni les phrases
+ * suivantes ; les autres sens ne sont jamais annoncés. `label` remplace la phrase à
+ * la voix (texte réservé, jamais un `aria-label` sur un div sans rôle). Le sens est
+ * toujours doublé par un glyphe et par les mots.
  */
 export function MeeshyNote({ text, emphasis, form, kind, lead, detail, isStale, tint, announces, action, alignment = 'leading', label, size, isList, className }: MeeshyNoteProps) {
   if (text === '') throw new Error('MeeshyNote : la phrase est obligatoire et déjà traduite.');
   const recipe = meeshyNoteRecipe({ form, kind, lead: leadKindOf(lead), size, isList, isStale, hasDetail: detail !== undefined && detail !== '', hasAction: action !== undefined && action !== null, reduceMotion: prefersReducedMotion(), announces, tint });
   const glyph = typeof lead === 'object' ? lead.glyph : undefined;
+  const hasLabel = label !== undefined && label !== '';
+  const said = useArrivalAnnouncement(recipe.announces, hasLabel ? label : text);
   return (
     <div
       className={className === undefined ? 'kit-note' : `kit-note ${className}`}
@@ -93,17 +113,19 @@ export function MeeshyNote({ text, emphasis, form, kind, lead, detail, isStale, 
       data-kind={recipe.kind}
       data-alignment={alignment}
       {...(recipe.animatesHeight ? { 'data-enters': '' } : {})}
-      {...(recipe.announces ? { role: 'status', 'aria-live': 'polite' as const } : {})}
-      aria-label={label}
     >
       <div className="kit-note__body" data-kit-note-body="">
         <Lead kind={recipe.kind} lead={recipe.lead} isPulsing={recipe.isPulsing} glyph={glyph} />
-        <div className="kit-note__text">
+        <div className="kit-note__text" {...(hasLabel ? { 'aria-hidden': 'true' as const } : {})}>
           <span className="kit-note__phrase">{withEmphasis(text, emphasis)}</span>
           {recipe.showsDetail ? <span className="kit-note__detail">{detail}</span> : null}
         </div>
+        {hasLabel ? <span className="sr-only">{label}</span> : null}
       </div>
       {action === undefined || action === null ? null : <div className="kit-note__action">{action}</div>}
+      <span className="sr-only" role="status" aria-live="polite" data-kit-note-announce="">
+        {said}
+      </span>
     </div>
   );
 }
@@ -122,8 +144,8 @@ export function MeeshyNoteList({ items, kind, size = 'regular', label }: MeeshyN
   const recipe = meeshyNoteRecipe({ form: 'line', kind, size, isList: true });
   return (
     <div className="kit-note-list" role="list" aria-label={label} data-count={String(items.length)} style={meeshyNoteStyle(recipe, undefined)}>
-      {items.map((item) => (
-        <div key={item.text} className="kit-note-list__item" role="listitem">
+      {items.map((item, index) => (
+        <div key={`${index}-${item.text}`} className="kit-note-list__item" role="listitem">
           <Lead kind={recipe.kind} lead="glyph" isPulsing={false} glyph={item.glyph} />
           <span className="kit-note__phrase">{item.text}</span>
         </div>

@@ -9,7 +9,6 @@ final class CatalogCompletenessGuardTests: XCTestCase {
     private static let languages = ["fr", "en", "de", "es", "pt-BR", "it", "ar"]
 
     private static let ownedMeeshyUIFiles = [
-        "packages/MeeshySDK/Sources/MeeshyUI/Primitives/ErrorBannerView.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/PostVisibility.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerPickerView+Emoji.swift"
     ]

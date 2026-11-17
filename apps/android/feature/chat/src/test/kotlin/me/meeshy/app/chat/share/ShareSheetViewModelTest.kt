@@ -16,7 +16,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import me.meeshy.app.chat.studioCanEdit
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.DirectConversationResolution
@@ -410,14 +409,6 @@ class ShareSheetViewModelTest {
                 },
             )
         }
-    }
-
-    @Test
-    fun a_document_in_the_selection_keeps_the_studio_offer_away_but_photos_and_videos_keep_it() {
-        assertThat(studioCanEdit(listOf(file("a.jpg", "image/jpeg"), file("b.mp4", "video/mp4")))).isTrue()
-        assertThat(studioCanEdit(listOf(file("a.jpg", "image/jpeg"), file("c.pdf", "application/pdf")))).isFalse()
-        assertThat(studioCanEdit(listOf(file("c.pdf", "application/pdf")))).isFalse()
-        assertThat(studioCanEdit(emptyList())).isFalse()
     }
 
     @Test

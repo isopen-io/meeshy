@@ -9,6 +9,11 @@
  * Et fermer le fil efface l'adresse de l'ami : le numéro ne survit pas à la
  * conversation (sortie du dernier membre, suppression).
  *
+ * #16188 (constat GW-10 de #18906) — un tête-à-tête CHIFFRÉ DE BOUT EN BOUT
+ * reste à deux par la même loi (`newMemberRefusal`) : `409
+ * E2EE_DIRECT_STAYS_A_PAIR` à l'ajout et à l'invitation, rien d'écrit ; un
+ * tête-à-tête en clair reste ouvert.
+ *
  * @jest-environment node
  */
 
@@ -41,6 +46,7 @@ jest.mock('../../../../services/PresenceVisibilityService', () => ({
 
 import Fastify, { type FastifyRequest } from 'fastify';
 import { EXTERNAL_CONVERSATION_ERROR_CODES, EXTERNAL_CONVERSATION_TYPE } from '@meeshy/shared/types/external-conversation';
+import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 import { registerParticipantWriteRoutes } from '../../../../routes/conversations/participants-writes';
 import { registerSharingRoutes } from '../../../../routes/conversations/sharing';
 import { registerLinkAdmissionRoutes } from '../../../../routes/conversations/link-admission';
@@ -62,10 +68,10 @@ beforeEach(() => {
 
 // ─── POST /conversations/:id/participants ────────────────────────────────────
 
-async function addParticipant(type: string) {
+async function addParticipant(type: string, encryptionMode: string | null = null) {
   const prisma: any = {
     conversation: {
-      findUnique: jest.fn<any>(async () => ({ isActive: true, closedAt: null, communityId: null, type })),
+      findUnique: jest.fn<any>(async () => ({ isActive: true, closedAt: null, communityId: null, type, encryptionMode })),
       update: jest.fn<any>().mockResolvedValue(undefined),
     },
     participant: {
@@ -126,12 +132,12 @@ describe('#17117 — POST /conversations/:id/participants', () => {
 
 // ─── POST /conversations/:id/invite ──────────────────────────────────────────
 
-async function invite(type: string) {
+async function invite(type: string, encryptionMode: string | null = null) {
   let handler: any;
   const prisma: any = {
     conversation: {
       findUnique: jest.fn<any>().mockResolvedValue({
-        id: CONV_ID, title: null, type, isActive: true, closedAt: null, communityId: null,
+        id: CONV_ID, title: null, type, encryptionMode, isActive: true, closedAt: null, communityId: null,
         participants: [{ id: 'p-opener', userId: OPENER, role: 'creator', displayName: 'Alice', user: { id: OPENER, username: 'alice', role: 'USER' } }],
       }),
       update: jest.fn<any>().mockResolvedValue(undefined),
@@ -183,6 +189,40 @@ describe('#17117 — POST /conversations/:id/invite', () => {
 
     expect(status).toBe(200);
     expect(prisma.participant.create).toHaveBeenCalled();
+  });
+});
+
+// ─── #16188 — un tête-à-tête chiffré de bout en bout reste à deux ────────────
+
+describe('#16188 — un tête-à-tête chiffré de bout en bout reste à deux', () => {
+  const STAYS_A_PAIR = E2EE_ERROR_CODES.DIRECT_STAYS_A_PAIR;
+
+  it('POST …/participants : son créateur n’y ajoute personne — 409 lisible, rien d’écrit', async () => {
+    const { res, prisma } = await addParticipant('direct', 'e2ee');
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: STAYS_A_PAIR, error: expect.stringMatching(/end-to-end encrypted/) });
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('POST …/invite : son créateur n’y invite personne — 409 lisible, rien d’écrit', async () => {
+    const { status, body, prisma } = await invite('direct', 'e2ee');
+
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ success: false, code: STAYS_A_PAIR });
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('un tête-à-tête en clair reste ouvert (contrôle) : la loi ne vise que le chiffrement de bout en bout', async () => {
+    const added = await addParticipant('direct', null);
+    const invited = await invite('direct', null);
+
+    expect(added.res.json()?.code).not.toBe(STAYS_A_PAIR);
+    expect(added.prisma.participant.create).toHaveBeenCalled();
+    expect(invited.body?.code).not.toBe(STAYS_A_PAIR);
   });
 });
 
