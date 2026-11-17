@@ -44,7 +44,7 @@ import { refreshParticipantNameSnapshots } from '../../services/participantNameS
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
-import { announceOwnProfileUpdated, identityImageChanged, OWN_PROFILE_SELECT, ownProfileSnapshotChanged, publicNameChanged } from './own-profile-sync';
+import { announceOwnProfileUpdated, identityImageChanged, OWN_PROFILE_SELECT, ownProfileFieldChanged, ownProfileSnapshotChanged, publicNameChanged } from './own-profile-sync';
 
 /**
  * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
@@ -300,6 +300,47 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         announceOwnProfileUpdated(fastify, updatedUser);
       }
 
+      // Realtime propagation to conversation partners (tasks/socketio-events-cleanup.md #6).
+      // Only public-facing fields matter to other users' cached profile view.
+      //
+      // Les quatre composants du nom voyagent en GROUPE, pas en delta. Le nom
+      // rendu par un client est `displayName > « Prénom Nom » > username` : un
+      // delta partiel (« firstName vaut désormais Bob ») est IRRECOMPOSABLE chez
+      // le destinataire, qui ne stocke que le nom déjà composé — il lui manque
+      // toujours les autres composants. Envoyer les quatre ensemble laisse chaque
+      // client appliquer SON résolveur (`getUserDisplayName` web,
+      // `APIConversationUser.name` iOS) au lieu d'en fabriquer une quatrième
+      // copie côté serveur.
+      //
+      // Seul un nom qui A CHANGÉ part (#19298) : l'iOS publié renvoie les trois
+      // noms inchangés à chaque enregistrement. Un REJEU repart, lui, sans
+      // comparer — la ligne lue avant lui est déjà l'écrite, et la reprise doit
+      // refaire cette propagation, qui converge (état absolu). Elle part ICI,
+      // avant les écritures voisines qui peuvent lever : une reprise sans
+      // rejeu, qui ne change plus rien, ne diffuserait plus.
+      if (touchesName && (replayed || publicNameChanged(current, updatedUser))) {
+        const publicChanges = {
+          displayName: updatedUser.displayName,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          username: updatedUser.username,
+        };
+        await refreshParticipantNameSnapshots(fastify.prisma, userId!, publicChanges)
+          .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] participant name refresh failed', err));
+        fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
+          .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] emitUserUpdated failed', err));
+
+        // Le nom résolu pour l'indicateur de frappe (`displayName` > « Prénom Nom »
+        // > `username`) dérive de ces trois champs, mis en cache par StatusHandler.
+        // Invalider ce cache pour que « X écrit… » reflète le nouveau nom sans
+        // attendre l'expiration du TTL. Jumeau du refresh de langue plus bas.
+        fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
+      }
+
+      if (touchesAccent && (replayed || ownProfileFieldChanged(current, updatedUser, 'profileAccentColor'))) {
+        announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
+      }
+
       // `autoTranslateEnabled` — ACCEPTÉE par les deux schémas du corps (AJV
       // `updateUserRequestSchema`, Zod `updateUserProfileSchema`) et JETÉE
       // jusqu'à #3736 : `updateData` ci-dessus ne compose que des colonnes de
@@ -351,40 +392,6 @@ export async function updateUserProfile(fastify: FastifyInstance) {
           customDestinationLanguage: updatedUser.customDestinationLanguage,
           deviceLocale: updatedUser.deviceLocale,
         });
-      }
-
-      // Realtime propagation to conversation partners (tasks/socketio-events-cleanup.md #6).
-      // Only public-facing fields matter to other users' cached profile view.
-      //
-      // Les quatre composants du nom voyagent en GROUPE, pas en delta. Le nom
-      // rendu par un client est `displayName > « Prénom Nom » > username` : un
-      // delta partiel (« firstName vaut désormais Bob ») est IRRECOMPOSABLE chez
-      // le destinataire, qui ne stocke que le nom déjà composé — il lui manque
-      // toujours les autres composants. Envoyer les quatre ensemble laisse chaque
-      // client appliquer SON résolveur (`getUserDisplayName` web,
-      // `APIConversationUser.name` iOS) au lieu d'en fabriquer une quatrième
-      // copie côté serveur.
-      if (touchesName && publicNameChanged(current, updatedUser)) {
-        const publicChanges = {
-          displayName: updatedUser.displayName,
-          firstName: updatedUser.firstName,
-          lastName: updatedUser.lastName,
-          username: updatedUser.username,
-        };
-        await refreshParticipantNameSnapshots(fastify.prisma, userId!, publicChanges)
-          .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] participant name refresh failed', err));
-        fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
-          .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] emitUserUpdated failed', err));
-
-        // Le nom résolu pour l'indicateur de frappe (`displayName` > « Prénom Nom »
-        // > `username`) dérive de ces trois champs, mis en cache par StatusHandler.
-        // Invalider ce cache pour que « X écrit… » reflète le nouveau nom sans
-        // attendre l'expiration du TTL. Jumeau du refresh de langue ci-dessus.
-        fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
-      }
-
-      if (body.profileAccentColor !== undefined) {
-        announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
       }
 
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(

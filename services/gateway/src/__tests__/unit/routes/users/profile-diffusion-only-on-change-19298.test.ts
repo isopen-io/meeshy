@@ -164,3 +164,77 @@ describe('PATCH /users/me/avatar et /banner — comparent à la valeur stockée 
     await app.close();
   });
 });
+
+describe('PATCH /users/me — l’accent ne part aux partenaires que s’il a changé (#19298, #19201)', () => {
+  it('un accent identique à celui stocké ne diffuse rien', async () => {
+    const prisma = makePrisma({ profileAccentColor: '#4ECDC4' });
+    prisma.user.findUnique.mockResolvedValue({ ...stored, profileAccentColor: '#4ECDC4' });
+    const { app, emitUserUpdated } = await build(prisma, updateUserProfile);
+    const res = await app.inject({ method: 'PATCH', url: '/users/me', payload: { profileAccentColor: '#4ECDC4' } });
+    expect(res.statusCode).toBe(200);
+    expect(emitUserUpdated).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('un nouvel accent diffuse', async () => {
+    const prisma = makePrisma({ profileAccentColor: '#FF6B6B' });
+    prisma.user.findUnique.mockResolvedValue({ ...stored, profileAccentColor: '#4ECDC4' });
+    const { app, emitUserUpdated } = await build(prisma, updateUserProfile);
+    const res = await app.inject({ method: 'PATCH', url: '/users/me', payload: { profileAccentColor: '#FF6B6B' } });
+    expect(res.statusCode).toBe(200);
+    expect(emitUserUpdated).toHaveBeenCalledWith({ userId: USER_ID, changes: { profileAccentColor: '#FF6B6B' } });
+    await app.close();
+  });
+});
+
+describe('PATCH /users/me — une écriture voisine en échec ne prive pas les partenaires du nouveau nom (#19298)', () => {
+  it('le nom écrit part aux partenaires avant l’écriture voisine qui lève : la reprise, qui ne change plus rien, n’aurait plus rien diffusé', async () => {
+    const prisma = makePrisma({ displayName: 'Alicia' });
+    prisma.userVoiceModel.updateMany.mockRejectedValue(new Error('mongo down'));
+    const { app, emitUserUpdated } = await build(prisma, updateUserProfile);
+    const res = await app.inject({ method: 'PATCH', url: '/users/me', payload: { displayName: 'Alicia', voicePublic: true } });
+    expect(res.statusCode).toBe(500);
+    expect(emitUserUpdated).toHaveBeenCalledTimes(1);
+    expect(emitUserUpdated.mock.calls[0][0]).toMatchObject({ changes: { displayName: 'Alicia' } });
+    expect(prisma.participant.updateMany).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('une reprise rejouée (même clientMutationId) rediffuse l’état absolu du nom aux partenaires', async () => {
+    const { MutationLogDuplicate } = jest.requireActual('../../../../services/MutationLogService') as typeof import('../../../../services/MutationLogService');
+    const prisma = makePrisma();
+    prisma.user.findUnique.mockResolvedValue({ ...stored, displayName: 'Alicia' });
+    const { app, emitUserUpdated } = await buildWithMutationLog(prisma, async () => {
+      throw new MutationLogDuplicate(USER_ID, 'updateProfile');
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      headers: { 'x-client-mutation-id': '0123456789abcdef0123456789abcdef' },
+      payload: { displayName: 'Alicia' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(emitUserUpdated).toHaveBeenCalledTimes(1);
+    expect(emitUserUpdated.mock.calls[0][0]).toMatchObject({ changes: { displayName: 'Alicia' } });
+    await app.close();
+  });
+});
+
+async function buildWithMutationLog(prisma: ReturnType<typeof makePrisma>, recordOrReturn: () => Promise<unknown>) {
+  const emitUserUpdated = jest.fn<any>().mockResolvedValue(undefined);
+  const app = Fastify({ logger: false });
+  app.decorate('prisma', prisma as any);
+  app.decorate('mutationLogService', { recordOrReturn } as any);
+  app.decorateRequest('clientMutationId', undefined);
+  app.addHook('onRequest', async (req: FastifyRequest) => {
+    (req as any).clientMutationId = req.headers['x-client-mutation-id'];
+  });
+  app.decorate('authenticate', async (req: FastifyRequest) => {
+    (req as any).authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER', username: 'alice' } };
+  });
+  app.decorate('notificationService', { emitUserUpdated } as any);
+  app.decorate('socketIOHandler', { getManager: () => ({ refreshUserTypingIdentity: jest.fn(), refreshUserResolvedLanguages: jest.fn() }) } as any);
+  await updateUserProfile(app as unknown as FastifyInstance);
+  await app.ready();
+  return { app, emitUserUpdated };
+}

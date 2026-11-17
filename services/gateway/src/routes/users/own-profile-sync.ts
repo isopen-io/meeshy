@@ -71,8 +71,7 @@ type OwnProfileColumns = { readonly [Field in OwnProfileField]?: string | null }
  * changement : rien ne part.
  */
 export function ownProfileSnapshotChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns): boolean {
-  if (!before) return false;
-  return OWN_PROFILE_FIELDS.some((field) => (before[field] ?? null) !== (after[field] ?? null));
+  return OWN_PROFILE_FIELDS.some((field) => ownProfileFieldChanged(before, after, field));
 }
 
 const PUBLIC_NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] as const satisfies readonly OwnProfileField[];
@@ -83,8 +82,13 @@ const PUBLIC_NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] 
  * (#19298) : sans ligne lue avant, rien ne prouve un changement.
  */
 export function publicNameChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns): boolean {
+  return PUBLIC_NAME_FIELDS.some((field) => ownProfileFieldChanged(before, after, field));
+}
+
+/** Un champ de l'instantané a-t-il CHANGÉ ? Même règle : sans ligne lue avant, rien ne prouve un changement. */
+export function ownProfileFieldChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns, field: OwnProfileField): boolean {
   if (!before) return false;
-  return PUBLIC_NAME_FIELDS.some((field) => (before[field] ?? null) !== (after[field] ?? null));
+  return (before[field] ?? null) !== (after[field] ?? null);
 }
 
 /** Une image d'identité (avatar, bannière) a-t-elle CHANGÉ par rapport à la valeur stockée ? */
