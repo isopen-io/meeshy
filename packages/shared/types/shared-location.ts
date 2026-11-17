@@ -26,7 +26,13 @@
  *    Un serveur d'avant #18205 refuse la clé (`INVALID`) : le client renvoie alors la liste
  *    sans échéances ;
  * 6. `GET /relations/locations` rattrape, à la connexion, les partages servis au lecteur ;
- * 7. PLUSIEURS APPAREILS d'un même compte (#18389) : la passerelle ne connaît qu'UN partage
+ * 7. LA LISTE SEULE (#19284, #18580) : un retrait ou une échéance republie la liste SANS
+ *    `position`. La passerelle reprend la position COMPLÈTE du partage en cours, avec son
+ *    heure (le point n'est pas rafraîchi) et la maille retenue de chaque destinataire
+ *    restant : l'appareil qui retire n'envoie jamais la sienne. Une liste seule n'ajoute
+ *    personne (`INVALID`) ; sans partage en cours, `NOT_SHARING`. Une passerelle d'avant
+ *    refuse une charge sans position (`INVALID`) : le client renvoie alors sa position ;
+ * 8. PLUSIEURS APPAREILS d'un même compte (#18389) : la passerelle ne connaît qu'UN partage
  *    par compte, et c'est lui qui fait foi. Après chaque démarrage ou arrêt accepté, elle
  *    annonce `location:share-own-changed` à tous les appareils du compte ; chacun relit
  *    `GET /relations/locations/mine` ({@link SharedLocationOwnSnapshot}) et se recale, en
@@ -74,7 +80,8 @@ export const sharedLocationStartPayloadSchema = z
       .max(SHARED_LOCATION_RECIPIENTS_MAX)
       .refine((list) => new Set(list.map((r) => r.userId.toLowerCase())).size === list.length),
     durationMinutes: z.union([z.literal(SHARED_LOCATION_DURATIONS_MINUTES[0]), z.literal(SHARED_LOCATION_DURATIONS_MINUTES[1])]),
-    position: sharedLocationPositionSchema,
+    /** Absente : « liste seule » (#19284) — la passerelle reprend la position du partage en cours. */
+    position: sharedLocationPositionSchema.optional(),
   })
   .strict();
 export type SharedLocationStartPayload = z.infer<typeof sharedLocationStartPayloadSchema>;

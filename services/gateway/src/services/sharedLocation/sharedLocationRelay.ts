@@ -352,12 +352,44 @@ async function drainRetiring(deps: SharedLocationRelayDeps, emitterId: string, a
   }
 }
 
+type SharedLocationBasis = Pick<SharedLocationState, 'recipients' | 'position' | 'updatedAt'>;
+
+const NOT_SHARING = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
+const LIST_ONLY_ADDS = failed(SHARED_LOCATION_ERROR_CODES.INVALID, 'Une liste sans position n\'ajoute personne');
+
+/**
+ * La LISTE SEULE (#19284, #18580) : sans position, la passerelle reprend celle du partage en
+ * cours, avec son heure — le point n'est pas rafraîchi — et la maille retenue de chaque
+ * destinataire qui garde sa précision. Elle ne fait que retirer : une personne absente des
+ * destinataires encore servis (jamais choisie, ou échue) est refusée, puisqu'ajouter est un
+ * geste qui envoie sa position. Sans partage en cours, rien à reprendre.
+ */
+async function listOnlyBasis(
+  deps: SharedLocationRelayDeps,
+  emitterId: string,
+  recipients: SharedLocationState['recipients'],
+  now: number,
+): Promise<SharedLocationBasis | typeof NOT_SHARING | typeof LIST_ONLY_ADDS> {
+  const current = await readSharedLocation(deps.cache, emitterId, now);
+  if (!current) return NOT_SHARING;
+  const live = new Map(liveRecipients(current, now).map((recipient) => [recipient.userId.toLowerCase(), recipient]));
+  if (recipients.some((recipient) => !live.has(recipient.userId))) return LIST_ONLY_ADDS;
+  return {
+    recipients: recipients.map((recipient) => {
+      const kept = live.get(recipient.userId);
+      return kept?.cell !== undefined && kept.precision === recipient.precision ? { ...recipient, cell: kept.cell } : recipient;
+    }),
+    position: current.position,
+    updatedAt: current.updatedAt,
+  };
+}
+
 /**
  * Démarre (ou remplace) le partage. La prise du pointeur est ATOMIQUE et conditionnée à la
  * génération lue : un arrêt survenu pendant le démarrage l'emporte. La session remplacée
  * est retirée en prévenant ceux qu'elle servait. Une fois la prise faite, le partage EST
  * courant : un échec de l'éventail ne le dément pas (le rattrapage et la position suivante
- * serviront), et l'accusé le dit.
+ * serviront), et l'accusé le dit. Sans position, c'est une liste seule ({@link listOnlyBasis}).
  */
 export async function startSharedLocation(deps: SharedLocationRelayDeps, emitterId: string, payload: unknown): Promise<SharedLocationAck> {
   const parsed = sharedLocationStartPayloadSchema.safeParse(payload);
@@ -365,23 +397,22 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
 
   const now = deps.now();
   const term = now + parsed.data.durationMinutes * 60_000;
-  const state: SharedLocationState = {
-    sessionId: randomUUID(),
-    recipients: parsed.data.recipients
-      .filter((recipient) => recipient.userId.toLowerCase() !== emitterId.toLowerCase())
-      .map((recipient) => ({
-        userId: recipient.userId.toLowerCase(),
-        precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION,
-        ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
-      })),
-    position: parsed.data.position,
-    updatedAt: new Date(now).toISOString(),
-    expiresAt: new Date(term).toISOString(),
-  };
+  const recipients: SharedLocationState['recipients'] = parsed.data.recipients
+    .filter((recipient) => recipient.userId.toLowerCase() !== emitterId.toLowerCase())
+    .map((recipient) => ({
+      userId: recipient.userId.toLowerCase(),
+      precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION,
+      ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
+    }));
+  const position = parsed.data.position;
 
+  let state: SharedLocationState;
   try {
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
     if (!(await usableAccounts(deps.prisma, [emitterId])).has(emitterId)) return STOPPED;
+    const basis = position ? { recipients, position, updatedAt: new Date(now).toISOString() } : await listOnlyBasis(deps, emitterId, recipients, now);
+    if ('success' in basis) return basis;
+    state = { sessionId: randomUUID(), ...basis, expiresAt: new Date(term).toISOString() };
     await storeSharedLocation(deps.cache, emitterId, state, now);
     const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
     if (!claim.claimed) {
@@ -419,7 +450,7 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
   let state: SharedLocationState;
   try {
     current = await readSharedLocation(deps.cache, emitterId, now);
-    if (!current) return failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
+    if (!current) return NOT_SHARING;
     state = { ...current, recipients: withHeldCells(current, parsed.data), position: parsed.data, updatedAt: new Date(now).toISOString() };
     if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
   } catch {
