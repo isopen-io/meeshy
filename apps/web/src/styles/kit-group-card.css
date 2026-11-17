@@ -142,6 +142,12 @@
     padding: var(--kit-group-footer-pad);
   }
 
+  .kit-group__header-trailing {
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .kit-group[data-pressed] {
       transform: none;

@@ -260,6 +260,12 @@
     }
   }
 
+  .kit-ticket__status {
+    display: inline-flex;
+    margin-inline-start: 6px;
+    vertical-align: middle;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .kit-ticket,
     .kit-ticket__faces {

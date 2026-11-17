@@ -262,6 +262,17 @@
     background-color: var(--color-ios-fill);
   }
 
+  .kit-person__action-glyph {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .kit-person__action-title {
+    font-size: 0.6875rem;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .kit-person-swipe {
       transition: none;

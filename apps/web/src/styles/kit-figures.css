@@ -220,6 +220,17 @@
     }
   }
 
+  .kit-figure__accessory {
+    display: inline-flex;
+    flex: none;
+    align-items: flex-end;
+  }
+
+  .kit-figure-tile__footer {
+    color: var(--color-ios-ink-2);
+    font-size: 0.75rem;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .kit-figure__digit[data-rolling] {
       animation: none;
