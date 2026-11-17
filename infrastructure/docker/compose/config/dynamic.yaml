@@ -92,7 +92,10 @@ http:
     # compose, et le témoin la lit.
     # Leur prévol laisse passer la requête réelle jusqu'au 503 : tous les en-têtes
     # (`*`, `Authorization` nommé — le joker ne le couvre pas), les verbes de la
-    # passerelle ; sans `accessControlMaxAge`, rien n'est gardé en cache.
+    # passerelle. Sans `accessControlMaxAge`, le navigateur garde ce prévol son
+    # délai PAR DÉFAUT, 5 s (Fetch : une réponse sans `Access-Control-Max-Age`
+    # vaut 5 secondes) — jamais les 24 h de `cors-prod` : la passerelle revenue
+    # retrouve en quelques secondes ses propres prévols.
     gateway-unavailable-cors-prod:
       headers:
         accessControlAllowOriginList:
