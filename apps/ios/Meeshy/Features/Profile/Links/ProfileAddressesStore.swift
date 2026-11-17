@@ -24,11 +24,16 @@ final class ProfileAddressesStore: ObservableObject {
 
     private let service: ProfileAddressProviding
     private let cache: ProfileAddressCaching
+    private let owner: () -> String?
+    /// Le compte dont les adresses sont en mémoire : un autre compte ne voit jamais celles du précédent.
+    private var loadedOwner: String?
 
     init(service: ProfileAddressProviding = ProfileAddressService.shared,
-         cache: ProfileAddressCaching = ProfileAddressLiveCache()) {
+         cache: ProfileAddressCaching = ProfileAddressLiveCache(),
+         owner: @escaping () -> String? = { AuthManager.shared.currentUser?.id }) {
         self.service = service
         self.cache = cache
+        self.owner = owner
     }
 
     var totalClicks: Int { addresses.compactMap(\.clicks).reduce(0, +) }
@@ -36,6 +41,7 @@ final class ProfileAddressesStore: ObservableObject {
     var canAdd: Bool { addresses.count < ProfileAddressRules.maxCount }
 
     func load() async {
+        forgetAnotherAccount()
         switch await cache.load() {
         case .fresh(let cached, _):
             show(cached)
@@ -105,6 +111,15 @@ final class ProfileAddressesStore: ObservableObject {
             refusal = ProfileLinksCopy.addressRefused
             return false
         }
+    }
+
+    private func forgetAnotherAccount() {
+        let current = owner()
+        guard current != loadedOwner else { return }
+        loadedOwner = current
+        addresses = []
+        phase = .loading
+        refusal = nil
     }
 
     private func show(_ list: [ProfileAddress]) {

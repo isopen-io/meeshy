@@ -549,12 +549,14 @@ private actor AddressServiceDouble: ProfileAddressProviding {
     private(set) var updates: [(id: String, draft: ProfileAddressDraft)] = []
     private(set) var reorders: [[String]] = []
     private(set) var removed: [String] = []
-    private let refuses: Bool
+    private var refuses: Bool
 
     init(listed: [ProfileAddress] = [], refuses: Bool = false) {
         self.listed = listed
         self.refuses = refuses
     }
+
+    func refuse() { refuses = true }
 
     func list() async throws -> [ProfileAddress] {
         if refuses { throw URLError(.notConnectedToInternet) }
@@ -708,6 +710,21 @@ final class ProfileLinksFaceTests: XCTestCase {
         let reorders = await service.reorders
         XCTAssertEqual(reorders, [["c", "a", "b"]])
         XCTAssertEqual(store.addresses.map(\.id), ["c", "a", "b"])
+    }
+
+    func test_addresses_switchingAccountClearsWhatWasInMemory() async {
+        var account = "aissa"
+        let service = AddressServiceDouble(listed: [address("site")])
+        let store = ProfileAddressesStore(service: service, cache: AddressCacheDouble(result: .empty), owner: { account })
+        await store.load()
+        XCTAssertEqual(store.addresses.map(\.id), ["site"])
+
+        await service.refuse()
+        account = "leo"
+        await store.load()
+
+        XCTAssertTrue(store.addresses.isEmpty, "rien du compte précédent ne reste affiché")
+        XCTAssertEqual(store.phase, .failed)
     }
 
     func test_addresses_theClicksAddUp_andTwelveIsTheCeiling() async {
