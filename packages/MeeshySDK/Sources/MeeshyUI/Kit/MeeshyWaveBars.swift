@@ -49,17 +49,22 @@ public struct MeeshyWaveBars: View {
 
     private func canvas(color: Color, phase: Double?) -> some View {
         Canvas { context, size in
-            let bars = MeeshyWaveBarsLaw.resample(samples: samples, width: size.width)
+            let width = Double(size.width)
+            let bandHeight = Double(size.height)
+            let bars = MeeshyWaveBarsLaw.resample(samples: samples, width: width)
             let filled = MeeshyWaveBarsLaw.filledBars(count: bars.count, progress: progress)
-            let slot = size.width / Double(bars.count)
+            let slot = width / Double(bars.count)
             for (index, level) in bars.enumerated() {
                 let beat = phase.map { Self.beat(index: index, time: $0) } ?? 1
-                let barHeight = MeeshyWaveBarsLaw.height(normalized: level, maxHeight: size.height) * beat
+                let barHeight = max(MeeshyWaveBarsLaw.height(normalized: level, maxHeight: bandHeight) * beat,
+                                    MeeshyWaveBarsLaw.minimumBarHeight)
                 let rect = CGRect(x: slot * Double(index) + (slot - MeeshyWaveBarsLaw.barWidth) / 2,
-                                  y: (size.height - barHeight) / 2,
-                                  width: MeeshyWaveBarsLaw.barWidth, height: max(barHeight, MeeshyWaveBarsLaw.minimumBarHeight))
+                                  y: (bandHeight - barHeight) / 2,
+                                  width: MeeshyWaveBarsLaw.barWidth,
+                                  height: barHeight)
                 let opacity = index < filled ? 1 : MeeshyWaveBarsLaw.upcomingOpacity
-                context.fill(Path(roundedRect: rect, cornerRadius: MeeshyWaveBarsLaw.barWidth / 2), with: .color(color.opacity(opacity)))
+                context.fill(Path(roundedRect: rect, cornerRadius: CGFloat(MeeshyWaveBarsLaw.barWidth / 2)),
+                             with: .color(color.opacity(opacity)))
             }
         }
     }
