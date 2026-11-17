@@ -111,8 +111,10 @@ encodée en octets (`ED A0 80`) n'est pas de l'UTF-8 (`surrogate-encoded-in-utf8
 **À l'écriture, l'encodeur TS LÈVE sur une demi-paire** (`encodeE2EEContent`, `encodeE2EESignal`) : il n'écrit pas ce
 qu'aucun appareil ne lirait. Aucun émetteur honnête n'en produit sur l'iPhone (une `String` Swift est toujours bien formée)
 ni sur Android (l'encodeur UTF-8 de la JVM la remplace par `?`). **Un texte web, si** : copier-coller, emoji tronqué au
-milieu de sa paire. Le web passe donc tout texte saisi par `wellFormedE2EEText` AVANT d'encoder : chaque demi-paire isolée
-devient U+FFFD, comme `String.prototype.toWellFormed`, et l'envoi part au lieu d'être perdu (audit de #19080, E7).
+milieu de sa paire. Le web DOIT donc passer tout texte saisi par `wellFormedE2EEText` AVANT d'encoder : chaque demi-paire
+isolée devient U+FFFD, comme `String.prototype.toWellFormed`, et l'envoi part au lieu d'être perdu (audit de #19080, E7).
+**Aujourd'hui, aucun appelant** : le web n'envoie pas encore de message chiffré. Son premier envoi chiffré l'appelle, témoin
+à l'appui (#19162).
 
 ## Les entiers : `sentAt` et l'intervalle sûr
 
