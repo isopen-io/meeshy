@@ -20,9 +20,35 @@
  *
  * ## Fuseau et pays d'inscription
  *
- * Ils ne sont pas des capacités mais des CHAMPS de la fiche : leur plancher est
- * celui d'une feature existante (`PROFILE_FIELD_FEATURE`), pour ne créer aucune
- * feature de la loi — donc aucun miroir Swift ou Kotlin de plus à tenir.
+ * Ils ne sont pas des capacités mais des CHAMPS de la fiche, et leur valeur part
+ * avec la présence SERVIE (`profileFieldServed`) : le pays avec « en ligne », le
+ * fuseau — l'heure locale — avec la présence détaillée. Ce n'est pas un second
+ * verdict de cercle : c'est `resolvePresenceVisibility`, qui lit aussi les
+ * préférences de la cible (`showOnlineStatus`, `showLastSeen`) et sa
+ * désactivation. Le plancher que la fiche ANNONCE reste celui de ces deux
+ * features (`profileFieldOpen`), pour ne créer aucune feature de la loi — donc
+ * aucun miroir Swift ou Kotlin de plus à tenir.
+ *
+ * ## Une cible bloquée ou désactivée
+ *
+ * Aucun accord ne part (`grantedByViewer`, `grantedByTarget`, `missing` ABSENTS) et
+ * toutes les capacités sont fermées : la paire n'a plus de relation à montrer, et
+ * dire ce que chacun avait accordé apprendrait ce que le blocage ou le départ tait.
+ *
+ * ## « Voir comme »
+ *
+ * Le lecteur synthétique est un lecteur ORDINAIRE du cercle demandé ; le
+ * propriétaire, lui, est RÉEL — son âge déclaré et son rôle pour la loi d'accès
+ * (`resolveProfileCircleViewAs`), ses préférences de présence et sa désactivation
+ * pour la loi des valeurs (`resolveProfilePresenceAs`, c'est-à-dire
+ * `resolvePresenceVisibility`). Le propriétaire voit donc ce qu'un vrai lecteur de
+ * ce cercle reçoit, jamais ce que le seul cercle ouvrirait.
+ *
+ * Ce fichier interroge `presence.online` / `presence.detailed` pour ANNONCER un
+ * état (`open` / `locked`) ; il est inscrit à ce titre dans la garde
+ * `presence-visibility-viewer-aware-guard.test.ts`. Aucun champ servi n'en dépend,
+ * et ses tables ne s'exportent pas : un nom de feature de présence remis à un
+ * autre fichier y échapperait au balayage.
  */
 
 import {
@@ -32,15 +58,16 @@ import {
 } from './relation-levels.js';
 import { resolveRelationAccess, type RelationAgeClass } from './relation-access.js';
 import { grantReaches, relationRungAfter, type RelationLevel, type RelationRequestLevel } from '../types/relation.js';
-import { PRESENCE_DETAILED_FEATURE, PRESENCE_ONLINE_FEATURE } from './presence-visibility.js';
+import { resolvePresenceVisibility, type PresenceVisibility } from './presence-visibility.js';
 
 /**
  * Les capacités que la fiche annonce, dans l'ordre où elle les montre, et la
  * feature de la loi dont chacune est le verdict. Le nom est celui du client.
+ * NON exportée : elle porte `presence.online` / `presence.detailed` en valeur.
  */
-export const PROFILE_CAPABILITY_FEATURE = {
-  presence: PRESENCE_ONLINE_FEATURE,
-  presenceDetailed: PRESENCE_DETAILED_FEATURE,
+const PROFILE_CAPABILITY_FEATURE = {
+  presence: 'presence.online',
+  presenceDetailed: 'presence.detailed',
   game: 'game.basic',
   gameSparks: 'game.sparksGlory',
   directMessage: 'dm.direct',
@@ -64,13 +91,8 @@ export type ProfileCapabilityKey = keyof typeof PROFILE_CAPABILITY_FEATURE;
 
 export const PROFILE_CAPABILITIES = Object.keys(PROFILE_CAPABILITY_FEATURE) as readonly ProfileCapabilityKey[];
 
-/** Les champs de fiche gardés par un cercle : la feature dont le plancher les ouvre. */
-export const PROFILE_FIELD_FEATURE = {
-  country: PRESENCE_ONLINE_FEATURE,
-  timezone: PRESENCE_DETAILED_FEATURE,
-} as const satisfies Readonly<Record<string, RelationFeature>>;
-
-export type ProfileGatedField = keyof typeof PROFILE_FIELD_FEATURE;
+/** Les champs de fiche gardés par la présence : le pays avec « en ligne », le fuseau avec la présence détaillée. */
+export type ProfileGatedField = 'country' | 'timezone';
 
 export type ProfileCapabilityState = {
   readonly state: 'open' | 'locked';
@@ -91,10 +113,11 @@ export type ProfileCircleView = {
   readonly isSelf: boolean;
   /** Le niveau commun tel que la loi le juge : le plus bas des deux accords, relevé par la communauté ou l'équipe. */
   readonly level: RelationLevel;
-  readonly grantedByViewer: RelationLevel;
-  readonly grantedByTarget: RelationLevel;
+  /** Absents, avec `missing`, vers une cible bloquée ou désactivée : aucun accord ne part. */
+  readonly grantedByViewer?: RelationLevel;
+  readonly grantedByTarget?: RelationLevel;
   readonly sharesCommunity: boolean;
-  readonly missing: ProfileCircleMissing | null;
+  readonly missing?: ProfileCircleMissing | null;
   /** Une clé absente = l'action ne s'adresse pas à soi-même. */
   readonly capabilities: Readonly<Partial<Record<ProfileCapabilityKey, ProfileCapabilityState>>>;
 };
@@ -106,6 +129,8 @@ export type ProfileCircleViewInput = {
   readonly grantedByTarget: RelationLevel;
   readonly sharesCommunity: boolean;
   readonly blockedEitherWay?: boolean;
+  /** La cible a désactivé son compte : la fiche ne montre plus aucune relation. */
+  readonly targetDeactivated?: boolean;
   readonly viewerMinor: RelationAgeClass;
   readonly targetMinor: RelationAgeClass;
   readonly viewerRole?: string | null;
@@ -143,9 +168,19 @@ const missingFor = (input: ProfileCircleViewInput, level: RelationLevel, isSelf:
   return { level: next, byViewer: !grantReaches(input.grantedByViewer, next), byTarget: !grantReaches(input.grantedByTarget, next) };
 };
 
+const CLOSED_VIEW: ProfileCircleView = {
+  isSelf: false,
+  level: 'PUBLIC',
+  sharesCommunity: false,
+  capabilities: Object.fromEntries(
+    PROFILE_CAPABILITIES.map((key) => [key, stateOf(false, PROFILE_CAPABILITY_FEATURE[key])] as const),
+  ) as ProfileCircleView['capabilities'],
+};
+
 export const resolveProfileCircleView = (input: ProfileCircleViewInput): ProfileCircleView => {
   const isSelf = Boolean(input.viewerId) && input.viewerId === input.targetId;
-  const level = verdictOf(input, PRESENCE_ONLINE_FEATURE).effectiveLevel;
+  if (!isSelf && (input.blockedEitherWay || input.targetDeactivated)) return CLOSED_VIEW;
+  const level = verdictOf(input, 'presence.online').effectiveLevel;
   const capabilities = Object.fromEntries(
     PROFILE_CAPABILITIES.flatMap((key) => {
       const feature = PROFILE_CAPABILITY_FEATURE[key];
@@ -165,20 +200,42 @@ export const resolveProfileCircleView = (input: ProfileCircleViewInput): Profile
   };
 };
 
-/** Un champ gardé par un cercle est-il ouvert à ce lecteur ? */
+/**
+ * Un champ gardé part-il vers ce lecteur ? La réponse est la présence SERVIE
+ * (`resolvePresenceVisibility`) : le pays avec « en ligne », le fuseau avec la
+ * présence détaillée. Une cible qui cache sa présence, ou un compte désactivé,
+ * ne laisse donc partir ni l'un ni l'autre, quel que soit le cercle.
+ */
+export const profileFieldServed = (visibility: PresenceVisibility, field: ProfileGatedField): boolean =>
+  field === 'country' ? visibility.showOnline : visibility.showLastSeenTimestamp;
+
+/**
+ * Ce que le CERCLE ouvre, sans les préférences de la cible : l'annonce de la fiche
+ * et « Voir comme ». Jamais la porte d'une valeur servie à un lecteur réel —
+ * celle-là est {@link profileFieldServed}.
+ */
 export const profileFieldOpen = (view: ProfileCircleView, field: ProfileGatedField): boolean => {
   const capability = field === 'country' ? view.capabilities.presence : view.capabilities.presenceDetailed;
   return capability?.state === 'open';
 };
 
 const SYNTHETIC_VIEWER = 'viewer-as-circle';
+const SYNTHETIC_VIEWER_ROLE = 'USER';
+
+/** Le propriétaire RÉEL, tel que la loi d'accès le lit : son âge déclaré et son rôle. */
+export type ProfileOwnerFacts = {
+  readonly targetMinor?: RelationAgeClass;
+  readonly targetRole?: string | null;
+};
 
 /**
- * « Voir comme » : la fiche telle que la voit un lecteur ordinaire du cercle
- * `level`, résolue par la MÊME loi que pour un lecteur réel — un lecteur
- * synthétique, aux deux accords égaux, sans rôle ni âge connu.
+ * « Voir comme » : la fiche telle que la voit un lecteur ORDINAIRE du cercle
+ * `level` (aux deux accords égaux, sans rôle ni âge connu), face au propriétaire
+ * RÉEL — son âge et son rôle —, résolue par la MÊME loi que pour un lecteur réel.
  */
-export const resolveProfileCircleViewAs = (params: { readonly level: RelationLevel; readonly targetId: string }): ProfileCircleView =>
+export const resolveProfileCircleViewAs = (
+  params: { readonly level: RelationLevel; readonly targetId: string } & ProfileOwnerFacts,
+): ProfileCircleView =>
   resolveProfileCircleView({
     viewerId: SYNTHETIC_VIEWER,
     targetId: params.targetId,
@@ -186,7 +243,33 @@ export const resolveProfileCircleViewAs = (params: { readonly level: RelationLev
     grantedByTarget: params.level,
     sharesCommunity: false,
     viewerMinor: 'unknown',
-    targetMinor: 'unknown',
-    viewerRole: 'USER',
-    targetRole: 'USER',
+    targetMinor: params.targetMinor ?? 'unknown',
+    viewerRole: SYNTHETIC_VIEWER_ROLE,
+    targetRole: params.targetRole ?? null,
+  });
+
+/**
+ * « Voir comme », côté VALEURS : la présence que recevrait ce lecteur ordinaire du
+ * cercle `level`, par `resolvePresenceVisibility` — la loi qui décide aussi pour un
+ * lecteur réel —, sous les préférences et la désactivation RÉELLES du propriétaire.
+ * Pays et fuseau en découlent (`profileFieldServed`).
+ */
+export const resolveProfilePresenceAs = (
+  params: { readonly level: RelationLevel } & ProfileOwnerFacts & {
+    readonly targetShowOnlineStatus: boolean;
+    readonly targetShowLastSeen: boolean;
+    readonly targetIsDeactivated: boolean;
+  },
+): PresenceVisibility =>
+  resolvePresenceVisibility({
+    isSelf: false,
+    viewerRole: SYNTHETIC_VIEWER_ROLE,
+    targetRole: params.targetRole ?? null,
+    viewerMinor: 'unknown',
+    targetMinor: params.targetMinor ?? 'unknown',
+    relationLevel: params.level,
+    targetShowOnlineStatus: params.targetShowOnlineStatus,
+    targetShowLastSeen: params.targetShowLastSeen,
+    targetIsDeactivated: params.targetIsDeactivated,
+    isBlockedEitherWay: false,
   });
