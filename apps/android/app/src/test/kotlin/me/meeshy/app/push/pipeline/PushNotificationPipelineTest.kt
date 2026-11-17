@@ -169,19 +169,105 @@ class PushNotificationPipelineTest {
     }
 
     @Test
-    fun `le push est groupe par conversation avec un recapitulatif et le badge`() = runTest {
+    fun `le push est groupe par conversation avec un recapitulatif et le nombre de sa banniere`() = runTest {
         pipeline(environment = FakeEnvironment(unread = 5)).renderNow(message())
 
         val notifications = active()
         val summary = notifications.single { it.notification.isSummary() }
         assertThat(summary.id).isEqualTo(PushGrouping.summaryNotificationId("conversation:c1"))
         assertThat(child().group).isEqualTo("conversation:c1")
-        assertThat(child().number).isEqualTo(5)
+        assertThat(child().number).isEqualTo(1)
     }
 
     @Test
-    fun `le badge de la charge l emporte sur le compte local`() = runTest {
-        pipeline(environment = FakeEnvironment(unread = 5)).renderNow(message("n1", "unreadCount" to "2"))
+    fun `les messages successifs d une conversation allongent le nombre de la meme banniere, quel que soit le total du serveur`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(message("n1", "unreadCount" to "9"))
+        pipeline.renderNow(message("n2", "unreadCount" to "2"))
+
+        assertThat(child().number).isEqualTo(2)
+    }
+
+    private fun inConversation(conversationId: String, id: String, unread: String) = push(
+        "type" to "new_message",
+        "notificationId" to id,
+        "conversationId" to conversationId,
+        "title" to "Alice",
+        "body" to "Salut",
+        "unreadCount" to unread,
+    )
+
+    private fun banners(): List<Notification> = active().map { it.notification }.filter { !it.isSummary() }
+
+    @Test
+    fun `la pastille de l icone compte les messages de chaque banniere et non le total de conversations non lues`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(inConversation("c1", "n1", unread = "1"))
+        pipeline.renderNow(inConversation("c2", "n2", unread = "2"))
+        pipeline.renderNow(inConversation("c3", "n3", unread = "3"))
+
+        assertThat(banners().sumOf { it.number }).isEqualTo(3)
+        assertThat(active().filter { it.notification.isSummary() }.map { it.notification.number }).containsExactly(0, 0, 0)
+    }
+
+    @Test
+    fun `un nouveau message d une conversation ne change pas le nombre des bannieres des autres`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(inConversation("c1", "n1", unread = "1"))
+        pipeline.renderNow(inConversation("c2", "n2", unread = "2"))
+        pipeline.renderNow(inConversation("c3", "n3", unread = "3"))
+        val before = active().filter { !it.notification.isSummary() }.associate { it.id to it.notification.number }
+
+        pipeline.renderNow(inConversation("c1", "n4", unread = "3"))
+
+        val after = active().filter { !it.notification.isSummary() }.associate { it.id to it.notification.number }
+        assertThat(after.getValue("c1".hashCode())).isEqualTo(2)
+        assertThat(after - "c1".hashCode()).isEqualTo(before - "c1".hashCode())
+    }
+
+    @Test
+    fun `pastilles coupees le nombre de chaque banniere et de chaque resume reste nul`() = runTest {
+        val pipeline = pipeline(preferences = UserNotificationPreferences(notificationBadgeEnabled = false))
+        pipeline.renderNow(inConversation("c1", "n1", unread = "4"))
+        pipeline.renderNow(inConversation("c1", "n2", unread = "5"))
+        pipeline.renderNow(inConversation("c2", "n3", unread = "6"))
+
+        assertThat(active().map { it.notification.number }).containsExactly(0, 0, 0, 0)
+    }
+
+    private fun correction(id: String, text: String) =
+        message(id, "body" to text, "reproduced" to "true", "replacesNotificationId" to id)
+
+    @Test
+    fun `la correction d un message affiche est rendue sur la banniere en place, sans sonner`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(message("X", "body" to "Petit mot reçu"))
+
+        val posted = pipeline.renderNow(correction("X", "Message texte"))
+
+        assertThat(posted).isTrue()
+        assertThat(child().extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString()).isEqualTo("Message texte")
+        assertThat(child().flags and Notification.FLAG_ONLY_ALERT_ONCE).isNotEqualTo(0)
+    }
+
+    @Test
+    fun `la correction d un message dont la banniere n est plus la ne sonne pas une seconde fois`() = runTest {
+        manager.cancelAll()
+
+        val posted = pipeline().renderNow(correction("X", "Message texte"))
+
+        assertThat(posted).isFalse()
+        assertThat(active()).isEmpty()
+    }
+
+    @Test
+    fun `une correction ne compte pas un message de plus sur la banniere`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(message("n1"))
+        pipeline.renderNow(message("n2"))
+        assertThat(child().number).isEqualTo(2)
+
+        pipeline.renderNow(correction("n2", "Salut, corrigé"))
 
         assertThat(child().number).isEqualTo(2)
     }

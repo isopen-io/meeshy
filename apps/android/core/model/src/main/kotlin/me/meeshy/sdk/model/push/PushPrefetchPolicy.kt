@@ -41,11 +41,15 @@ public object PushPrefetchPolicy {
 
     public fun announcesMessageArrival(type: String?): Boolean = type?.trim() in MESSAGE_ARRIVAL_TYPES
 
-    public fun plan(payload: PushPayload): PushPrefetchPlan {
+    /**
+     * [conversationLocked] : une conversation verrouillée par code ne rapatrie pas son message (iOS
+     * `NSEPreparationStep.plan` retire `syncMessage` et `prePersistMessage`) ; l'accusé de remise part toujours.
+     */
+    public fun plan(payload: PushPayload, conversationLocked: Boolean = false): PushPrefetchPlan {
         val type = payload.type?.trim()?.takeIf { it.isNotEmpty() } ?: return PushPrefetchPlan()
         val ref = refOf(payload)
         return PushPrefetchPlan(
-            message = ref.takeIf { type in MESSAGE_ARRIVAL_TYPES },
+            message = ref.takeIf { type in MESSAGE_ARRIVAL_TYPES && !conversationLocked },
             postId = payload.postId?.takeIf { type in SOCIAL_POST_TYPES },
             deliveryReceipt = ref.takeIf { type in MESSAGE_ARRIVAL_TYPES || type in CONVERSATION_JOINED_TYPES },
         )

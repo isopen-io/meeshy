@@ -21,6 +21,7 @@ class PushProtectedPlaceholderTest {
             "notification.ephemeral_message" to R.string.push_placeholder_ephemeral,
             "notification.hidden_message" to R.string.push_placeholder_hidden,
             "notification.encrypted_message" to R.string.push_placeholder_encrypted,
+            "notification.locked_conversation" to R.string.push_placeholder_locked,
         ).forEach { (key, res) -> assertThat(PushProtectedPlaceholder.text(context, key)).isEqualTo(context.getString(res)) }
     }
 
