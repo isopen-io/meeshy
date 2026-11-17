@@ -58,6 +58,16 @@ compilateur.
 **5. La diffusion est un canal LATÉRAL** : rien dans `announceOwnProfileUpdated`
 ne lève, et une écriture faite ne se rapporte jamais comme un échec.
 
+Sur `PATCH /users/me`, elle part JUSTE APRÈS l'écriture du profil, avant les
+écritures voisines (préférence de traduction automatique, profil vocal), et
+seulement si le journal de mutation dit que l'écriture vient d'avoir lieu
+(`withMutationVerdict`, `replayed` faux — la règle de `utils/withMutationLog.ts`).
+Une voisine qui lève répond 500 sur une ligne DÉJÀ écrite : diffusée après
+elles, l'annonce était perdue, et la reprise du client — qui ne change plus rien
+(§ 4) — ne la rattrapait jamais. Le reste de la suite (écritures voisines,
+`user:updated` vers les partenaires) se rejoue sur un rejeu, par décision : c'est
+ce qu'une reprise doit refaire.
+
 ### Ce que les clients font
 
 Chacun écoute `profile:updated`, valide la charge à sa frontière, écarte un

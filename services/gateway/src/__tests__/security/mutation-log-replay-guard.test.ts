@@ -44,7 +44,6 @@ const INVENTORY: Readonly<Record<string, Declaration>> = {
   'routes/directory/blocks.ts': { calls: 2, replay: `${NO_EFFECT} : seule l'invalidation du cache de blocage repart` },
   'routes/me/preferences/preference-router-factory.ts': { calls: 2, replay: ECHO },
   'routes/me/preferences/unified-routes.ts': { calls: 1, replay: ECHO },
-  'routes/users/profile-updates.ts': { calls: 1, replay: `${ECHO} ; les crédits de profil sont protégés (un par compte)` },
 };
 
 const callers = (): Readonly<Record<string, number>> =>
@@ -93,6 +92,19 @@ describe('les appelants de withMutationLog déclarent ce que leur rejeu refait (
     expect(reponse).toMatch(/withMutationVerdict\(/);
     expect(INVENTORY['routes/directory/friend-requests-core.ts']).toBeUndefined();
     expect(INVENTORY['routes/directory/friend-request-answer.ts']).toBeUndefined();
+  });
+
+  /**
+   * #18924 — `PATCH /users/me` lit le verdict : `profile:updated` ne part que
+   * d'une écriture qui vient d'avoir lieu. Le reste de sa suite se rejoue sur
+   * un rejeu, par décision écrite sur place (une reprise après un 500 doit la
+   * refaire). Témoin de comportement : `own-profile-sync-18924.test.ts`.
+   */
+  it('la mise à jour du profil lit le verdict — elle n’est plus dans l’inventaire', () => {
+    const profile = stripComments(readFileSync(join(SRC_DIR, 'routes/users/profile-updates.ts'), 'utf8'));
+
+    expect(profile).toMatch(/withMutationVerdict\(/);
+    expect(INVENTORY['routes/users/profile-updates.ts']).toBeUndefined();
   });
 
   it('chaque entrée dit ce que son rejeu refait', () => {

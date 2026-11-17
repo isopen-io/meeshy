@@ -24,7 +24,7 @@ import { formatUserResponse } from '../auth/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationVerdict } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { changedNameViolations, sendLengthFloorRefusal, sendZodRefusal, type NameField } from '../../utils/identity-name-floor';
 import { sendSuccess, sendInternalError, sendUnauthorized, sendBadRequest } from '../../utils/response';
@@ -241,7 +241,14 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
       }
 
-      const updatedUser = await withMutationLog({
+      // Le VERDICT (`replayed`), pas seulement la ligne : `profile:updated`
+      // ci-dessous ne part que d'une écriture qui vient d'avoir lieu (règle de
+      // `utils/withMutationLog.ts`). Le reste de la suite se REJOUE sur un rejeu,
+      // et c'est voulu : les écritures voisines et la propagation aux partenaires
+      // sont ce qu'une reprise après un 500 doit refaire — elles convergent,
+      // `user:updated` rediffuse un état ABSOLU sans crédit ni notification
+      // (suivi #9623), et les crédits de profil se paient une fois par compte.
+      const { result: updatedUser, replayed } = await withMutationVerdict({
         request,
         fastify,
         userId: userId!,
@@ -257,9 +264,9 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         // décorative : une relecture de rejeu qui l'omettrait servirait le
         // DÉFAUT à la place de la valeur stockée — sur le seul chemin dont
         // personne ne regarde la sortie. Le COMPILATEUR le tient, mesuré :
-        // `withMutationLog` intersecte les deux formes de retour, si bien que
-        // retirer l'`include` d'un SEUL des deux sites fait perdre la relation
-        // au type et `resolveAutoTranslateEnabled` refuse l'argument
+        // `withMutationVerdict` intersecte les deux formes de retour, si bien
+        // que retirer l'`include` d'un SEUL des deux sites fait perdre la
+        // relation au type et `resolveAutoTranslateEnabled` refuse l'argument
         // (TS2559) — le témoin de projection en nomme l'intention.
         op: () => fastify.prisma.user.update({
           where: { id: userId },
@@ -273,6 +280,19 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
+      // `user:<moi>` seulement. Les partenaires ont `user:updated` plus bas, et sa
+      // charge publique. Seule une écriture qui A EU LIEU et qui CHANGE
+      // l'instantané diffuse — la ligne écrite comparée à la ligne lue avant
+      // elle : une bio, une ville, un réglage, ou des noms renvoyés à l'identique
+      // par l'iOS publié ne diffusent rien. Elle part ICI, avant les écritures
+      // voisines (traduction automatique, profil vocal) : l'une d'elles peut
+      // lever et répondre 500 sur une ligne DÉJÀ écrite, et la reprise du client,
+      // qui ne change plus rien, ne diffuserait plus.
+      if (!replayed && ownProfileSnapshotChanged(current, updatedUser)) {
+        announceOwnProfileUpdated(fastify, updatedUser);
+      }
 
       // `autoTranslateEnabled` — ACCEPTÉE par les deux schémas du corps (AJV
       // `updateUserRequestSchema`, Zod `updateUserProfileSchema`) et JETÉE
@@ -355,16 +375,6 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         // Invalider ce cache pour que « X écrit… » reflète le nouveau nom sans
         // attendre l'expiration du TTL. Jumeau du refresh de langue ci-dessus.
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
-      }
-
-      // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
-      // `user:<moi>` seulement. Les partenaires ont `user:updated` ci-dessus, et sa
-      // charge publique. Seule une écriture qui CHANGE l'instantané diffuse — la
-      // ligne écrite comparée à la ligne lue avant elle : une bio, une ville, un
-      // réglage, ou des noms renvoyés à l'identique par l'iOS publié ne diffusent
-      // rien.
-      if (ownProfileSnapshotChanged(current, updatedUser)) {
-        announceOwnProfileUpdated(fastify, updatedUser);
       }
 
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(

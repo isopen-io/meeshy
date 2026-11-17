@@ -44,11 +44,6 @@ jest.mock('../../../../services/CacheStore', () => ({
   getCacheStore: jest.fn(() => ({ del: jest.fn(async () => undefined) })),
 }));
 
-jest.mock('../../../../utils/withMutationLog', () => ({
-  ...(jest.requireActual('../../../../utils/withMutationLog') as object),
-  withMutationLog: jest.fn(({ op }: { op: () => unknown }) => op()),
-}));
-
 jest.mock('../../../../utils/password-hash', () => ({
   ...(jest.requireActual('../../../../utils/password-hash') as object),
   verifyPassword: jest.fn(async () => true),
@@ -60,6 +55,7 @@ jest.mock('../../../../routes/auth/types', () => ({
 
 import { updateUserAvatar, updateUserBanner, updateUserProfile, updateUsername } from '../../../../routes/users/profile';
 import { ownProfileSnapshotChanged, ownProfileUpdatedPayload } from '../../../../routes/users/own-profile-sync';
+import { MutationLogDuplicate } from '../../../../services/MutationLogService';
 
 const ALICE = '507f1f77bcf86cd799439011';
 const BOB = '507f1f77bcf86cd799439022';
@@ -145,17 +141,38 @@ const recordProfileUpdates = (client: ClientSocket): (() => readonly ProfileUpda
 
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function makePrisma(served: Record<string, unknown>) {
+/** L'écriture VOISINE que `PATCH /users/me` attend après celle du profil, et qu'un témoin fait échouer. */
+type FailingNeighbour = 'autoTranslate' | 'voice';
+
+const mongoBlip = async (): Promise<never> => {
+  throw new Error('mongo blip');
+};
+
+/**
+ * `stored` : les lignes que rendent les lectures successives de `findUnique` —
+ * chacune une fois dans l'ordre, la dernière ensuite. Une seule par défaut.
+ */
+function makePrisma(params: {
+  readonly served: Record<string, unknown>;
+  readonly stored?: readonly Record<string, unknown>[];
+  readonly failing?: FailingNeighbour;
+}) {
+  const stored = params.stored ?? [aliceRow({ usernameHistory: [] })];
+  const findUnique = jest.fn(async () => stored[stored.length - 1]);
+  stored.slice(0, -1).forEach((row) => findUnique.mockResolvedValueOnce(row));
   return {
-    userPreferences: { findMany: jest.fn(async () => []) },
+    userPreferences: {
+      findMany: jest.fn(async () => []),
+      upsert: jest.fn(params.failing === 'autoTranslate' ? mongoBlip : async () => ({ id: 'prefs-alice' })),
+    },
     userPreference: { findMany: jest.fn(async () => []) },
-    userVoiceModel: { updateMany: jest.fn(async () => ({ count: 0 })) },
+    userVoiceModel: { updateMany: jest.fn(params.failing === 'voice' ? mongoBlip : async () => ({ count: 0 })) },
     messageAttachment: { findFirst: jest.fn(async () => ({ id: 'att-own' })) },
     participant: { updateMany: jest.fn(async () => ({ count: 2 })) },
     user: {
-      findUnique: jest.fn(async () => aliceRow({ usernameHistory: [] })),
+      findUnique,
       findFirst: jest.fn(async () => null),
-      update: jest.fn(async () => served),
+      update: jest.fn(async () => params.served),
     },
   };
 }
@@ -164,17 +181,28 @@ async function buildApp(params: {
   readonly route: (app: FastifyInstance) => Promise<void>;
   readonly served: Record<string, unknown>;
   readonly io: SocketIOServer | null;
+  readonly stored?: readonly Record<string, unknown>[];
+  readonly failing?: FailingNeighbour;
+  /** Le journal de mutation reconnaît ce `X-Client-Mutation-Id` : déjà appliqué, son résultat est relu. */
+  readonly replayedMutationId?: string;
 }) {
   const app = Fastify({ logger: false });
   const emitUserUpdated = jest.fn(async () => undefined);
-  app.decorate('prisma', makePrisma(params.served) as never);
+  const prisma = makePrisma(params);
+  app.decorate('prisma', prisma as never);
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as unknown as { authContext: unknown }).authContext = {
       isAuthenticated: true,
       userId: ALICE,
       registeredUser: { id: ALICE, role: 'USER', username: 'alice' },
     };
+    (req as unknown as { clientMutationId?: string }).clientMutationId = params.replayedMutationId;
   });
+  app.decorate('mutationLogService', {
+    recordOrReturn: jest.fn(async () => {
+      throw new MutationLogDuplicate(ALICE, 'updateProfile');
+    }),
+  } as never);
   app.decorate('notificationService', { emitUserUpdated } as never);
   app.decorate('socketIOHandler', {
     getManager: () => ({
@@ -185,7 +213,7 @@ async function buildApp(params: {
   } as never);
   await params.route(app as unknown as FastifyInstance);
   await app.ready();
-  return { app, emitUserUpdated };
+  return { app, emitUserUpdated, prisma };
 }
 
 describe('#18924 — la charge PROPRE de mon profil : l’instantané de ce que mes appareils affichent, rien d’autre', () => {
@@ -362,6 +390,47 @@ describe('#18924 — PATCH /users/me ne diffuse que ce qui a CHANGÉ : la ligne 
     });
 
     expect((await received).profile).toMatchObject({ systemLanguage: 'en', displayName: 'Alice Cooper' });
+    await app.close();
+  });
+});
+
+describe('#18924 — l’instantané part dès l’écriture du profil, et seulement si elle a eu lieu', () => {
+  it.each([
+    ['la préférence de traduction automatique', 'autoTranslate', { autoTranslateEnabled: false }],
+    ['le profil vocal', 'voice', { voicePublic: true }],
+  ] as const)('langue écrite, puis %s échoue : 500, mais l’autre appareil a reçu la nouvelle langue', async (_label, failing, neighbour) => {
+    const { io, clients } = await liveSockets([ALICE, ALICE]);
+    const [, aliceOther] = clients;
+    const { app, prisma } = await buildApp({ route: updateUserProfile, served: aliceRow({ systemLanguage: 'en' }), io, failing });
+    const received = nextProfileUpdate(aliceOther!);
+
+    const res = await app.inject({ method: 'PATCH', url: '/users/me', payload: { systemLanguage: 'en', ...neighbour } });
+
+    expect(res.statusCode).toBe(500);
+    expect(prisma.user.update).toHaveBeenCalledTimes(1);
+    expect((await received).profile.systemLanguage).toBe('en');
+    await app.close();
+  });
+
+  it('un REJEU du journal ne rediffuse rien : l’annonce appartient à l’écriture qui a eu lieu, même si la ligne a bougé depuis', async () => {
+    const { io, clients } = await liveSockets([ALICE, ALICE]);
+    const [, aliceOther] = clients;
+    const aliceReceived = recordProfileUpdates(aliceOther!);
+    const { app, prisma } = await buildApp({
+      route: updateUserProfile,
+      served: aliceRow({ systemLanguage: 'en' }),
+      io,
+      stored: [aliceRow(), aliceRow({ systemLanguage: 'en' })],
+      replayedMutationId: 'cmid-langue-en',
+    });
+
+    const res = await app.inject({ method: 'PATCH', url: '/users/me', payload: { systemLanguage: 'en' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.user.systemLanguage).toBe('en');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    await settle(150);
+    expect(aliceReceived()).toEqual([]);
     await app.close();
   });
 });
