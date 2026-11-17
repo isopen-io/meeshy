@@ -131,6 +131,18 @@ export function bindSocialRealtime(deps: SocialRealtimeDeps): () => void {
   };
 
   /**
+   * `comment:media-updated` (#18921) — LE VOCAL D'UN COMMENTAIRE REÇOIT SA
+   * TRANSCRIPTION EN DIRECT : la transcription et les pistes traduites se posent
+   * sur le média en cache. La loi vit avec le cache (`publication-comments.ts`),
+   * cette ligne ne fait que BRANCHER, par `import()` comme ses voisines (D-98).
+   */
+  const onCommentMediaUpdated = (payload: unknown): void => {
+    void import('./publication-comments').then(({ applyCommentMediaUpdated }) => {
+      applyCommentMediaUpdated(deps.queryClient, payload);
+    });
+  };
+
+  /**
    * `story:reacted` / `story:unreacted` (#7227, W8) — LE RAIL SUIT LES
    * RÉACTIONS EN DIRECT. La règle (compte ABSOLU, garde « jamais le cœur
    * d'un autre ») vit dans `reaction-realtime.ts` — SÉPARÉ de
@@ -323,6 +335,7 @@ export function bindSocialRealtime(deps: SocialRealtimeDeps): () => void {
     [SERVER_EVENTS.COMMENT_LIKED, onCommentLiked],
     [SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked],
     [SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated],
+    [SERVER_EVENTS.COMMENT_MEDIA_UPDATED, onCommentMediaUpdated],
     [SERVER_EVENTS.STORY_CREATED, onStoryChanged],
     [SERVER_EVENTS.STORY_UPDATED, onStoryChanged],
     [SERVER_EVENTS.STATUS_CREATED, onStatusMoodChanged],

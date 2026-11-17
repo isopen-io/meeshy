@@ -67,7 +67,6 @@ const ASYMETRIES: readonly {
       'audio:translation-ready',
       'audio:translations-completed',
       'audio:translations-progressive',
-      'comment:media-updated',
       'comment:reaction-added',
       'comment:reaction-removed',
       'conversation:join-error',
