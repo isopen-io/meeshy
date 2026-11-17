@@ -219,8 +219,13 @@ describe('#19049 — le validateur faible ignore les cinq champs d’accusé, et
     deliveredToAllAt: '2026-11-17T08:01:00.000Z',
     readByAllAt: null,
   };
+  const windowServing = (message: Readonly<Record<string, unknown>>) => ({
+    success: true,
+    data: [message],
+    meta: { userLanguage: 'fr', mentionedUsers: [] },
+  });
   const weakValidatorOf = (message: Readonly<Record<string, unknown>>): string =>
-    messageWindowETag({ success: true, data: [message], meta: { userLanguage: 'fr', mentionedUsers: [] } }, { liveReceipts: true });
+    messageWindowETag(windowServing(message), { liveReceipts: true });
 
   const CONTENT_CHANGES: readonly (readonly [string, string, unknown])[] = [
     ['édition', 'content', 'Rendez-vous à 19 h'],
