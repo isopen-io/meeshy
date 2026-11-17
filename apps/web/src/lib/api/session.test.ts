@@ -590,3 +590,79 @@ describe('createSessionStore — une session tenue n’écrase pas l’entrée p
     expect(reloadedUser(storage)?.systemLanguage).toBe('en');
   });
 });
+
+/**
+ * DEUX ONGLETS, UN MÊME COMPTE, DEUX SESSIONS (#19132, réserve R2 de #19081).
+ * Ada se reconnecte dans un onglet : l'entrée persistée porte désormais son
+ * jeton RÉCENT. L'autre onglet tient encore l'ancienne session ; une édition
+ * de profil — ou la projection de `GET /me` en fond — y réécrivait l'entrée
+ * avec l'ANCIEN jeton, que le prochain rechargement reprenait : révoqué ou
+ * échu, il déconnectait Ada sans raison. Comparer le seul compte ne suffit
+ * pas : deux sessions du même compte ne sont pas la même session.
+ */
+describe('createSessionStore — une session tenue ne remplace jamais le jeton plus récent d’une autre session du même compte', () => {
+  const ADA: SessionUser = { id: 'u-ada', username: 'ada', displayName: 'Ada', systemLanguage: 'fr' };
+
+  const staleTabThenFreshLogin = (storage: SessionStorage, ada: SessionUser = ADA) => {
+    const staleTab = createSessionStore({ storage, now: () => FIXED_NOW });
+    staleTab.getState().establish({ user: ada, token: 'jwt-ancien', sessionToken: 'sess-ancienne', expiresIn: 3600 });
+    createSessionStore({ storage, now: () => FIXED_NOW }).getState().establish({ user: ada, token: 'jwt-recent', sessionToken: 'sess-recente', expiresIn: 7200 });
+    return staleTab;
+  };
+
+  const reloaded = (storage: SessionStorage) => {
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+    store.getState().restoreSession();
+    return store.getState().session;
+  };
+
+  test('l’onglet au jeton ancien édite le profil : l’entrée persistée garde le jeton récent', () => {
+    const storage = fakeStorage();
+    const staleTab = staleTabThenFreshLogin(storage);
+
+    staleTab.getState().updateUser({ systemLanguage: 'en' });
+
+    const held = staleTab.getState().session;
+    expect(held.status === 'authenticated' ? held.user.systemLanguage : undefined).toBe('en');
+    const after = reloaded(storage);
+    expect(after.status === 'authenticated' ? after.token : undefined).toBe('jwt-recent');
+    expect(after.status === 'authenticated' ? after.sessionToken : undefined).toBe('sess-recente');
+    expect(after.status === 'authenticated' ? after.expiresAt : undefined).toBe(FIXED_NOW + 7200 * 1000);
+  });
+
+  test('l’adresse prouvée dans l’onglet au jeton ancien ne remplace pas non plus le jeton récent', () => {
+    const storage = fakeStorage();
+    const staleTab = staleTabThenFreshLogin(storage, { ...ADA, emailUnproven: true });
+
+    staleTab.getState().noteEmailProven();
+
+    const after = reloaded(storage);
+    expect(after.status === 'authenticated' ? after.token : undefined).toBe('jwt-recent');
+  });
+
+  test('le même identifiant de session sous un autre jeton reste une autre session : rien n’est réécrit', () => {
+    const storage = fakeStorage();
+    const staleTab = createSessionStore({ storage, now: () => FIXED_NOW });
+    staleTab.getState().establish({ user: ADA, token: 'jwt-ancien', sessionToken: 'sess-ada', expiresIn: 3600 });
+    createSessionStore({ storage, now: () => FIXED_NOW }).getState().establish({ user: ADA, token: 'jwt-renouvele', sessionToken: 'sess-ada', expiresIn: 7200 });
+
+    staleTab.getState().updateUser({ displayName: 'Ada L.' });
+
+    const after = reloaded(storage);
+    expect(after.status === 'authenticated' ? after.token : undefined).toBe('jwt-renouvele');
+    expect(after.status === 'authenticated' ? after.user.displayName : undefined).toBe('Ada');
+  });
+
+  test('la session qui a écrit l’entrée y persiste toujours son édition', () => {
+    const storage = fakeStorage();
+    staleTabThenFreshLogin(storage);
+    const freshTab = createSessionStore({ storage, now: () => FIXED_NOW });
+    freshTab.getState().restoreSession();
+
+    freshTab.getState().updateUser({ systemLanguage: 'en' });
+
+    const after = reloaded(storage);
+    expect(after.status === 'authenticated' ? after.user.systemLanguage : undefined).toBe('en');
+    expect(after.status === 'authenticated' ? after.token : undefined).toBe('jwt-recent');
+  });
+});

@@ -408,18 +408,25 @@ function persist(storage: SessionStorage, session: PersistedSession): void {
 }
 
 /**
- * UNE SESSION TENUE NE RÉÉCRIT QUE SA PROPRE ENTRÉE (#18914, audit C3). Deux
- * onglets partagent `meeshy.session`, et aucun ne suit l'autre : l'onglet
- * d'Ada qui persistait une édition — ou la projection de `GET /me`, qui tourne
- * en fond (`served-profile-session.ts`) — écrivait sa session par-dessus celle
- * de Bob, ouverte dans l'autre onglet, et Bob rechargé se réveillait en Ada.
- * L'édition reste tenue en mémoire ; elle n'est persistée que si l'entrée
- * persistée nomme le MÊME compte. Absente ou corrompue, l'entrée n'est pas
+ * UNE SESSION TENUE NE RÉÉCRIT QUE SA PROPRE ENTRÉE (#18914, audit C3 ;
+ * #19132). Deux onglets partagent `meeshy.session`, et aucun ne suit l'autre :
+ * l'onglet d'Ada qui persistait une édition — ou la projection de `GET /me`,
+ * qui tourne en fond (`served-profile-session.ts`) — écrivait sa session
+ * par-dessus celle de Bob, ouverte dans l'autre onglet, et Bob rechargé se
+ * réveillait en Ada. Le même compte ne suffit pas non plus : Ada reconnectée
+ * dans un onglet persiste un jeton RÉCENT, que l'autre onglet, resté sur
+ * l'ancienne session, remplaçait par le sien — révoqué ou échu, il la
+ * déconnectait au rechargement. L'édition reste tenue en mémoire ; elle n'est
+ * persistée que si l'entrée persistée est la MÊME session : même compte, même
+ * jeton, même identifiant de session. Absente ou corrompue, l'entrée n'est pas
  * recréée : un autre onglet l'a fermée.
  */
+const isSameSession = (persisted: PersistedAccount, held: PersistedAccount): boolean =>
+  persisted.user.id === held.user.id && persisted.token === held.token && persisted.sessionToken === held.sessionToken;
+
 function persistHeld(storage: SessionStorage, session: PersistedAccount): void {
   const persisted = readPersisted(storage);
-  if (persisted === 'absent' || persisted === 'corrupted' || persisted.kind === 'guest' || persisted.user.id !== session.user.id) return;
+  if (persisted === 'absent' || persisted === 'corrupted' || persisted.kind === 'guest' || !isSameSession(persisted, session)) return;
   persist(storage, session);
 }
 
