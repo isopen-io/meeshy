@@ -9,6 +9,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { sharedLocationNoticesOf } from './sharedLocationNotices';
+import type { SharedLocationRequestDeps } from './sharedLocationRequest';
 import type { LocationGhostState } from '@meeshy/shared/types/shared-location';
 import { writeLocationGhost } from './locationGhost';
 import { exportSharedLocationEnds, type SharedLocationEnd } from './sharedLocationEnds';
@@ -54,6 +55,21 @@ export const noticesParams = (prisma: PrismaClient) => ({ prisma, notifications:
 
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {
   return { prisma: params.prisma, cache: lazyCache, io: params.io, now: () => Date.now(), notifyStarted: (notices) => sharedLocationNoticesOf(noticesParams(params.prisma)).started(notices) };
+}
+
+/**
+ * La demande de prolonger ou de refaire un partage (#19204) : le plafond est un `SET NX EX` du
+ * cache partagé (son repli mémoire, en panne, garde le plafond dans le processus) ; la
+ * notification passe par le service résolu à l'usage.
+ */
+export function sharedLocationRequestDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRequestDeps {
+  return {
+    prisma: params.prisma,
+    io: params.io,
+    now: () => Date.now(),
+    claim: (key, ttlSeconds) => getCacheStore().setnx(key, '1', ttlSeconds),
+    notify: (notice) => sharedLocationNoticesOf(noticesParams(params.prisma)).requested(notice),
+  };
 }
 
 type RefreshParams = { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined; readonly report: (error: unknown) => void };
