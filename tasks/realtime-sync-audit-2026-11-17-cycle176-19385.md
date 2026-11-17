@@ -3,8 +3,17 @@
 *2026-11-17. Branche `claude/exciting-planck-pjjp7a`, partie de la tête de `dev`
 (`56e4bf53`).*
 
-**Livré** : #19385 — les accusés de lecture suivent le cercle (`dm.readReceipts`,
-MSG-04 de #14107).
+**NON LIVRÉ — BLOQUÉ par l'audit adversarial.** #19385 est développé, poussé, et
+son PR (#19413) est en BROUILLON. Le constat tient entièrement ; le PÉRIMÈTRE et
+la MESURE DE PRODUCTION du lot étaient faux. La décision qui gouverne la reprise
+est **#19419**. Ce journal décrit donc un cycle qui a trouvé un vrai défaut et
+n'a pas su le refermer — le § « Ce que l'audit a cassé » en fin de fichier dit
+quoi, et c'est la partie qui vaut.
+
+*Rédaction : les §§ qui suivent ont été écrits AVANT l'audit et sont conservés
+tels quels, parce que c'est leur confrontation au § final qui instruit. Là où
+ils affirment que le lot est juste ou complet, ils ont tort, et le § final le
+nomme ligne à ligne.*
 **Ouvert** : #19386 (réciprocité, décision), #19402 (agrégats, décision),
 #19403 (jumelle des pièces jointes), #19404, #19405, #19406, #19407, #19408 —
 les six constats de l'audit qui n'étaient pas ce lot.
@@ -204,3 +213,83 @@ cycles plus tard.
 - **#14107 reste OUVERTE** : MSG-04 n'est livré que côté serveur, et son volet
   client reste à vérifier (aucun client ne fabrique un accusé qu'il n'a pas reçu,
   mais c'est à MESURER, pas à supposer).
+
+---
+
+## Ce que l'audit adversarial a cassé — et c'est le vrai résultat du cycle
+
+L'audit exigé par le `CLAUDE.md` pour un lot de contrôle d'accès a rendu onze
+constats et un verdict BLOQUANT. J'ai vérifié moi-même les quatre qui décident ;
+les quatre tiennent.
+
+| # | constat | vérifié comment |
+|---|---|---|
+| 1 | le socket a **QUATRE** émetteurs de `READ_STATUS_UPDATED`, le lot n'en garde **un** | `grep` des émetteurs de production |
+| 2 | le lot **fabrique** un faux « lu par tous » (`hidden` retiré avant `totalMembers`) | lecture de `MessageReadStatusService.ts:1542-1550` |
+| 3 | la mesure de production est **fausse** : répondre à une demande ne relève AUCUN lien | `messageRequests.ts:385-410`, `raiseLink: false` |
+| 4 | en 1:1 l'**agrégat EST l'identité**, donc le renvoi à #19402 ne tient pas | `MessageReadStatusService.ts:2603` |
+
+### La leçon que ce cycle a ÉCRITE puis VIOLÉE dans le même commit
+
+Le fichier de leçon de ce cycle cite la leçon 261 : *« une énumération de sites
+porte DEUX affirmations : "ces sites appliquent la règle" (vérifiable) et "ce
+sont les sites où la règle s'applique" (presque jamais vérifiée) »*.
+
+Mon relevé a annoncé « 1 socket + 3 REST ». Le socket en a quatre, et
+`broadcastReadStatus.ts:148` — **le fichier que j'ai modifié** — porte déjà la
+phrase : « une règle de confidentialité qui tient à trois portes sur quatre n'est
+pas une règle : il suffit d'entrer par la quatrième. »
+
+> **Citer une leçon n'est pas l'appliquer, et l'écrire dans le même lot ne protège
+> de rien.** J'ai cherché les sites qui RÉSOLVENT un accusé (d'où les trois portes
+> REST, toutes justes) et jamais les sites qui en ÉMETTENT un. La question « qui
+> applique cette règle ? » rend ce qu'on sait déjà chercher ; celle qui attrape
+> les quatre est **« qui ÉMET cet événement ? »**, posée sur le nom de
+> l'événement, pas sur le nom de la règle.
+
+### La garde de présence m'a attrapé en citant son propre interdit
+
+`presence-visibility-viewer-aware-guard` rougit sur « ni défini, ni appelé, **ni
+cité** » : mon doc-comment écrit `resolvePrefsOnly` pour expliquer l'analogie.
+La garde a raison — un identifiant supprimé ne revient pas, même en prose, parce
+qu'un `grep` futur le retrouverait et croirait le site vivant.
+
+Et cela **précise** le constat du lot au lieu de le contredire : la garde
+interdit un IDENTIFIANT, le canal des accusés portait la même FORME sous un autre
+nom. C'est pourquoi elle ne l'avait jamais vu, et pourquoi elle m'a vu, moi, à
+l'instant où j'ai écrit le mot.
+
+### « Le compilateur tient la règle » ne vaut que là où le compilateur regarde
+
+J'ai annoncé les cinq sites d'appel « nommés par `tsc` ». Vrai des sites de
+PRODUCTION seulement : le `tsconfig` du gateway **exclut** `__tests__`. Retirer
+le `= {}` de `getMessageStatusDetails` a donc cassé à l'EXÉCUTION une dizaine de
+suites qui l'appellent sans options, et `tsc --noEmit` restait à EXIT=0.
+
+> La forme forte de #19303 reste juste ; son énoncé doit porter sa borne. **Un
+> paramètre requis supprime la discipline dans le périmètre du compilateur, et
+> la déplace ailleurs** — ici vers `ts-jest`, qui ne le dit qu'au moment où la
+> suite tourne.
+
+### Le gate complet, que je n'avais pas lancé avant d'annoncer
+
+**52 rouges, 23 suites** sur l'arbre fusionné (42 586 verts). Six suites sont les
+échecs HEIF/AVIF préexistants des cycles 173-175 ; les autres sont de moi, dont
+trois gates de maison : `receipts.ts` à **1015 lignes** (plafond 1000), le cumul
+hors budget qui REMONTE, et la garde de présence ci-dessus.
+
+> **Annoncer une preuve sur ses propres témoins est une mesure, pas une preuve.**
+> Les 26 verts et le `tsc` EXIT=0 étaient exacts et ne disaient rien des gates de
+> maison, que le lot n'avait pas lancés. L'ordre juste est : gates d'abord,
+> annonce ensuite.
+
+### Ce qui reste vrai
+
+Le CONSTAT tient entièrement, et aucun des onze points ne l'attaque :
+`dm.readReceipts` est déclarée, miroitée par les deux SDK, couverte par un témoin
+de catalogue, et appliquée par **aucun site** ; la fuite vers un pair sous
+Connaissance est réelle, et son asymétrie avec le canal de présence aussi.
+
+Réutilisables : `readReceiptCircleGate.ts` (citation à retirer, symétrie à
+corriger), le helper de témoins (l'audit le déclare non affaiblissant), les 26
+témoins, et le choix `.except()` (déclaré juste et nécessaire).
