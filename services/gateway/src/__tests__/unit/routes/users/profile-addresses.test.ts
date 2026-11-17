@@ -286,13 +286,14 @@ describe('la fiche sert chaque adresse au cercle choisi', () => {
     expect(relationReads).toBe(0);
   });
 
-  it('un lecteur sans compte ne lit que le cercle public, sans lecture de relation', async () => {
+  it('un lecteur sans compte ne reçoit aucune adresse : la fiche demande un compte', async () => {
     viewerId = null;
     rows = [adresse({ id: 'pub' }), adresse({ id: 'ami', circle: 'FRIEND' })];
     const app = await monter();
     const res = await app.inject({ method: 'GET', url: '/api/v1/u/aissa' });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain('aissandiaye.studio');
     expect(relationReads).toBe(0);
-    expect((res.json().data?.addresses ?? []).every((a: any) => a.id !== 'ami')).toBe(true);
   });
 
   it('toutes publiques : aucune lecture de relation', async () => {
