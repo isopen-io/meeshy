@@ -36,6 +36,8 @@ import {
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { deferAfterResponse, type AfterResponse } from '../utils/after-response.js';
 import { broadcastToUser } from '../utils/socket-broadcast';
+import { announceCommunityLinkEntry } from './community-link-entry-announce';
+import { linkActivityRelayOf } from '../socketio/linkActivityEvents';
 
 const logger = enhancedLogger.child({ module: 'CommunityMemberBroadcast' });
 
@@ -163,4 +165,15 @@ export function scheduleCommunityMemberBroadcastFrom(fastify: FastifyInstance, c
     { prisma: fastify.prisma, deliver: (userId, emission) => deliverToUserRoom(fastify, userId, emission) },
     change,
   );
+  if (change.kind === 'joined' && change.via === 'link') {
+    deferAfterResponse(
+      () => announceCommunityLinkEntry({
+        prisma: fastify.prisma,
+        relay: linkActivityRelayOf(fastify),
+        communityId: change.communityId,
+        at: new Date(),
+      }),
+      'community-link-entry',
+    );
+  }
 }

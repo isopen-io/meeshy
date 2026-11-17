@@ -44,10 +44,10 @@ type Emission = {
 export type TrackingLinkClickInput = {
   readonly link: {
     readonly token: string;
-    readonly createdBy: string | null;
+    readonly createdBy?: string | null;
     readonly totalClicks: number;
     readonly uniqueClicks: number;
-    readonly lastClickedAt: Date | null;
+    readonly lastClickedAt?: Date | null;
   };
   readonly click: { readonly country?: string | null; readonly clickedAt?: Date | null };
 };
