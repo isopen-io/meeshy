@@ -513,7 +513,7 @@ export class MessagingService {
           // GW-12 (#18906) — la métadonnée gardée est une liste blanche ; le reste
           // est retenu, et le journal n'en nomme que les clés.
           ...persistableEncryption(request.encryptedPayload, {
-            onWithheld: (keys) => logger.warn('e2ee metadata keys withheld from the message row', { ...corr, conversationId, keys })
+            onWithheld: ({ count, named }) => logger.warn('e2ee metadata keys withheld from the message row', { ...corr, conversationId, withheldCount: count, withheldNamed: named })
           }),
           deviceLayerRelay: request.deviceLayer,
           clientMessageId: request.clientMessageId
