@@ -88,7 +88,7 @@ const jeton = async (g: ReturnType<typeof guichet>, offers: unknown = ['vitrine'
   return issued.data.token;
 };
 
-const REFUS = { success: false, code: CONTACT_EXCHANGE_ERROR_CODES.UNAVAILABLE };
+const REFUS = { success: false, error: 'Partage indisponible', code: CONTACT_EXCHANGE_ERROR_CODES.UNAVAILABLE };
 
 describe('émettre un jeton de partage sans contact (#19205)', () => {
   it('rend un jeton bref qui ne contient ni identifiant, ni pseudo, et dit le verrou du numéro', async () => {
@@ -147,7 +147,7 @@ describe('accepter un jeton (#19205)', () => {
   it('la vitrine seule : aucune demande d\'ami, aucun champ `friendRequest`', async () => {
     const g = guichet();
     const res = await g.accepter(await jeton(g, ['vitrine']));
-    expect(res.success && res.data.friendRequest).toBe(false);
+    expect(res.success).toBe(true);
     expect(res.success && 'friendRequest' in res.data).toBe(false);
     expect(g.amities).toEqual([]);
   });
