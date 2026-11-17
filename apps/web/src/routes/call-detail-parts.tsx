@@ -237,7 +237,7 @@ export function CallDetailState({
   onRetry,
 }: {
   readonly language: InterfaceLanguage;
-  readonly kind: 'not-found' | 'error' | 'offline' | 'joining';
+  readonly kind: 'not-found' | 'error' | 'offline';
   readonly onRetry?: () => void;
 }) {
   const [title, body] =
@@ -245,26 +245,18 @@ export function CallDetailState({
       ? (['callJoin.detail.notFound.title', 'callJoin.detail.notFound.body'] as const)
       : kind === 'offline'
         ? (['calls.offline.title', 'calls.offline.cold.body'] as const)
-        : kind === 'joining'
-          ? (['callJoin.detail.joining', null] as const)
-          : (['calls.error.title', 'calls.error.body'] as const);
+        : (['calls.error.title', 'calls.error.body'] as const);
   return (
-    <div
-      role={kind === 'joining' ? 'status' : 'alert'}
-      data-call-detail-state={kind}
-      className="grid flex-1 content-center justify-items-center gap-3 px-6 py-10 text-center"
-    >
-      <span aria-hidden="true" style={{ color: kind === 'joining' ? 'var(--color-success)' : kind === 'not-found' ? INK_2 : MISSED_INK }}>
-        {kind === 'joining' ? <Glyph name="phone" size={28} /> : <Glyph name="warningCircle" size={28} />}
+    <div role="alert" data-call-detail-state={kind} className="grid flex-1 content-center justify-items-center gap-3 px-6 py-10 text-center">
+      <span aria-hidden="true" style={{ color: kind === 'not-found' ? INK_2 : MISSED_INK }}>
+        <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: INK }}>
         {translate(language, title)}
       </p>
-      {body === null ? null : (
-        <p className="text-caption" style={{ color: INK_2 }}>
-          {translate(language, body)}
-        </p>
-      )}
+      <p className="text-caption" style={{ color: INK_2 }}>
+        {translate(language, body)}
+      </p>
       {kind === 'error' && onRetry !== undefined ? (
         <button
           type="button"
@@ -276,6 +268,63 @@ export function CallDetailState({
           {translate(language, 'calls.retry')}
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * **UN APPEL VIVANT ATTEINT PAR SON ADRESSE SE REJOINT AU TOUCHER** (#18907) —
+ * quiconque partage la conversation peut forger `/call/<id>` : l'ouvrir ne doit
+ * ni acquérir caméra et micro ni émettre `call:join`. La page DEMANDE ;
+ * « Rejoindre » rejoint dans le geste, « Annuler » n'émet rien.
+ */
+export function CallJoinPrompt({
+  language,
+  name,
+  media,
+  onJoin,
+  onCancel,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly name: string;
+  readonly media: CallMedia;
+  readonly onJoin: () => void;
+  readonly onCancel: () => void;
+}) {
+  const question = translate(language, 'callJoin.named', { name });
+  return (
+    <div
+      role="alertdialog"
+      aria-label={question}
+      data-call-join-prompt={media}
+      className="grid flex-1 content-center justify-items-center gap-4 px-6 py-10 text-center"
+    >
+      <span aria-hidden="true" style={{ color: BRAND }}>
+        {media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={28} /> : <Glyph name="phone" size={28} />}
+      </span>
+      <p data-call-join-prompt-question className="text-body font-semibold" style={{ color: INK }}>
+        {question}
+      </p>
+      <div className="flex w-full max-w-xs gap-3">
+        <button
+          type="button"
+          data-call-join-prompt-action="cancel"
+          onClick={onCancel}
+          className="min-h-12 flex-1 rounded-card px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ ...CARD, color: INK, outlineColor: BRAND }}
+        >
+          {translate(language, 'callBackPrompt.cancel')}
+        </button>
+        <button
+          type="button"
+          data-call-join-prompt-action="join"
+          onClick={onJoin}
+          className="min-h-12 flex-1 rounded-card px-3 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ backgroundColor: 'var(--ios-indigo-600)', outlineColor: BRAND }}
+        >
+          {translate(language, 'callJoin.action')}
+        </button>
+      </div>
     </div>
   );
 }

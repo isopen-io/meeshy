@@ -20,7 +20,6 @@ const arCallJoin = {
   'callJoin.detail.loading': 'جارٍ تحميل المكالمة',
   'callJoin.detail.notFound.title': 'المكالمة غير موجودة',
   'callJoin.detail.notFound.body': 'لم تعد هذه المكالمة موجودة أو غير متاحة لك.',
-  'callJoin.detail.joining': 'جارٍ الاتصال بالمكالمة…',
   'keypad.title': 'لوحة الأرقام',
   'keypad.open': 'طلب رقم',
   'keypad.input.placeholder': 'رقم أو اسم',
