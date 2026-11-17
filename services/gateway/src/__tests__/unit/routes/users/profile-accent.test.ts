@@ -74,7 +74,7 @@ async function patch(payload: Record<string, unknown>, after: Record<string, unk
   };
   const emitUserUpdated = jest.fn<any>().mockResolvedValue(undefined);
   const emit = jest.fn();
-  const to = jest.fn(() => ({ emit }));
+  const to = jest.fn((_room: string) => ({ emit }));
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: 'log' as const, keywords: ['example'] } } });
   app.decorate('prisma', prisma as any);
   app.decorate('authenticate', async (req: FastifyRequest) => {
