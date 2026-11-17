@@ -10,11 +10,13 @@
  * toujours) : la fiche les couvre toutes, aucune lecture n'est économisable.
  * Une lecture qui échoue LÈVE : l'appelant ferme.
  */
-import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
+import { applyPresenceVisibility, type PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import {
-  profileFieldOpen,
   profileFieldServed,
   resolveProfileCircleView,
+  resolveProfileCircleViewAs,
+  resolveProfilePresenceAs,
   type ProfileCircleView,
   type ProfileGatedField,
 } from '@meeshy/shared/utils/profile-circle-view';
@@ -53,6 +55,7 @@ export async function readProfileCircleView(
     grantedByTarget: accords.byTarget,
     sharesCommunity: coMembers.has(targetId),
     blockedEitherWay: blocked.has(targetId),
+    targetDeactivated: target?.deactivated ?? false,
     viewerMinor: viewer?.age ?? 'unknown',
     targetMinor: target?.age ?? 'unknown',
     viewerRole: viewer?.role ?? null,
@@ -82,17 +85,53 @@ export function withPresenceGatedFields<T extends GatedColumns>(row: T, visibili
   return kept;
 }
 
-type SeenColumns = GatedColumns & { isOnline?: unknown; lastActiveAt?: unknown };
+type SeenColumns = GatedColumns & { isOnline?: boolean | null; lastActiveAt?: Date | null };
+
+/** Ce que « Voir comme » lit du propriétaire : ses préférences de présence. */
+export type OwnerPresencePreferences = { readonly showOnlineStatus: boolean; readonly showLastSeen: boolean };
 
 /**
- * La fiche du propriétaire telle que la voit un lecteur de la vue résolue
- * (« Voir comme ») : pays et fuseau par la porte de leur champ, la présence par
- * celle de ses deux capacités — un Ami lit « en ligne » et rien d'autre.
+ * « Voir comme » (`?as=`) : la vue du cercle ET la présence qu'un lecteur ordinaire
+ * de ce cercle recevrait du propriétaire RÉEL — son âge déclaré et son rôle pour la
+ * loi d'accès, ses préférences et sa désactivation pour la loi des valeurs. Rien
+ * n'est relâché pour le propriétaire : il voit ce que le service réel servirait.
  */
-export function profileSeenAs<T extends SeenColumns>(view: ProfileCircleView, row: T): T {
-  const kept = { ...row };
-  for (const field of GATED_FIELDS) if (!profileFieldOpen(view, field)) delete kept[COLUMN_OF[field]];
-  if (view.capabilities.presence?.state !== 'open') delete kept.isOnline;
-  if (view.capabilities.presenceDetailed?.state !== 'open') delete kept.lastActiveAt;
+export async function readProfileSeenAs(
+  prisma: PairAccessDb,
+  privacy: { getPreferences(userId: string): Promise<OwnerPresencePreferences> },
+  params: { readonly ownerId: string; readonly level: RelationLevel; readonly now?: Date },
+): Promise<{ readonly view: ProfileCircleView; readonly visibility: PresenceVisibility }> {
+  const [people, prefs] = await Promise.all([
+    peopleOf(prisma, [params.ownerId], params.now ?? new Date()),
+    privacy.getPreferences(params.ownerId),
+  ]);
+  const owner = people.get(params.ownerId);
+  const facts = { targetMinor: owner?.age ?? 'unknown', targetRole: owner?.role ?? null } as const;
+  return {
+    view: resolveProfileCircleViewAs({ level: params.level, targetId: params.ownerId, ...facts }),
+    visibility: resolveProfilePresenceAs({
+      level: params.level,
+      ...facts,
+      targetShowOnlineStatus: prefs.showOnlineStatus,
+      targetShowLastSeen: prefs.showLastSeen,
+      targetIsDeactivated: owner?.deactivated ?? true,
+    }),
+  };
+}
+
+/**
+ * La fiche du propriétaire telle que la voit un lecteur de « Voir comme » : pays,
+ * fuseau, « en ligne » et dernière vue par la présence que ce lecteur RECEVRAIT
+ * (`readProfileSeenAs`) — la même porte que pour un lecteur réel. Un champ fermé
+ * est retiré ; « en ligne » sans la date garde la garde anti-stale de l'Ami.
+ */
+export function profileSeenAs<T extends SeenColumns>(visibility: PresenceVisibility, row: T): T {
+  const kept = withPresenceGatedFields(row, visibility);
+  if ('isOnline' in kept) {
+    const served = applyPresenceVisibility({ isOnline: kept.isOnline ?? null, lastActiveAt: kept.lastActiveAt ?? null }, visibility);
+    kept.isOnline = served.isOnline;
+  }
+  if (!visibility.showOnline) delete kept.isOnline;
+  if (!visibility.showLastSeenTimestamp) delete kept.lastActiveAt;
   return kept;
 }

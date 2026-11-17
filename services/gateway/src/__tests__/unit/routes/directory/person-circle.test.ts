@@ -327,7 +327,9 @@ describe('?expand=circle vers une cible bloquée ou désactivée : aucun accord,
     expect('grantedByViewer' in circle).toBe(false);
     expect('grantedByTarget' in circle).toBe(false);
     expect('missing' in circle).toBe(false);
-    for (const [cle, etat] of Object.entries(circle.capabilities as Record<string, Charge>)) expect(etat.state, cle).toBe('locked');
+    const etats = Object.entries(circle.capabilities as Record<string, Charge>).map(([cle, etat]) => [cle, etat.state]);
+    expect(etats.length).toBeGreaterThan(10);
+    expect(etats).toEqual(etats.map(([cle]) => [cle, 'locked']));
   };
 
   it('le lecteur a bloqué la cible : ni les accords ni ce qui manque, rien d ouvert', async () => {
