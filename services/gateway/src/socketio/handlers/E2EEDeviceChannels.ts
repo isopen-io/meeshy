@@ -22,7 +22,8 @@ export function listenE2EEDeviceChannels(
 ): void {
   listenE2EESignals(socket, e2eeSignalHandlerDeps(params));
   listenE2EEDeviceVerifications(socket, {
-    relay: deviceTrustRuntime(params.prisma).relay,
+    // Résolu au premier message seulement : une connexion ne construit ni magasin de compteurs ni relais.
+    relay: { send: (input) => deviceTrustRuntime(params.prisma).relay.send(input) },
     callerOf: (socketId) => {
       const userId = params.socketToUser.get(socketId);
       const user = userId ? params.connectedUsers.get(userId) : undefined;

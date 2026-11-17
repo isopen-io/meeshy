@@ -25,7 +25,7 @@ export type VerificationSocketCaller = { readonly userId: string; readonly isAno
 export const E2EE_VERIFICATION_SOCKET_RATE_LIMIT = { maxRequests: 60, windowMs: 60_000, keyPrefix: 'socket:e2ee:verification' } as const;
 
 export type E2EEDeviceVerificationHandlerDeps = {
-  readonly relay: E2EEDeviceVerificationRelay;
+  readonly relay: Pick<E2EEDeviceVerificationRelay, 'send'>;
   readonly callerOf: (socketId: string) => VerificationSocketCaller;
   readonly withinRate?: (userId: string) => Promise<boolean>;
 };
