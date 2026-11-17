@@ -285,10 +285,12 @@ export async function reproduceEditedMessageNotifications(
       ? editedMessageBody({ lang, body: row.content ?? '', previousPreview, nextText: edited.content ?? '' })
       : editedReactionBody({ lang, body: row.content ?? '', nextText: edited.content ?? '' });
     metadata[previewKey] = BODY_DERIVES_FROM_MESSAGE.has(row.type) ? content : textSynthesis(lang, edited.content);
-    // #18910 — une correction qui laisse la synthèse (et le contexte) intacte
-    // n'a rien à réécrire ni à annoncer : sinon une faute de frappe corrigée
-    // refait partir `deleted` + `new` vers chaque destinataire.
-    if (JSON.stringify([row.content, context, metadata]) === before) continue;
+    // #18910 — une correction qui laisse la ligne intacte (corps, contexte et
+    // synthèse) n'a rien à réécrire ni à annoncer : sinon une faute de frappe
+    // corrigée refait partir `deleted` + `new` vers chaque destinataire. Le
+    // corps se compare dans sa forme D'APRÈS : celui d'une réaction ne se
+    // recopie pas dans la métadonnée.
+    if (JSON.stringify([content, context, metadata]) === before) continue;
     const data: Record<string, unknown> = { metadata, context, content };
 
     try {
