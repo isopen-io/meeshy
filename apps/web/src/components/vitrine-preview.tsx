@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import type { ProfileCircleView } from '@meeshy/shared/utils/profile-circle-view';
 
@@ -45,20 +47,25 @@ export function VitrineCapabilities({
   view,
   lockedOnly = false,
   lockedTitleKey = 'userProfile.vitrine.locked.title',
+  heading: Heading = 'h2',
 }: {
   readonly language: InterfaceLanguage;
   readonly view: ProfileCircleView;
   readonly lockedOnly?: boolean;
   readonly lockedTitleKey?: 'userProfile.vitrine.locked.title' | 'userProfile.vitrine.visitor.locked';
+  /** `h2` sur une page ; `h3` dans une feuille, dont le titre est déjà un `h2`. */
+  readonly heading?: 'h2' | 'h3';
 }) {
   const { opened, locked } = vitrinePreviewOf(view);
+  const openedId = useId();
+  const lockedId = useId();
   return (
     <>
       {lockedOnly || opened.length === 0 ? null : (
-        <section data-vitrine-opened="" aria-labelledby="vitrine-opened" className="grid gap-2">
-          <h2 id="vitrine-opened" className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink-secondary, inherit)' }}>
+        <section data-vitrine-opened="" aria-labelledby={openedId} className="grid gap-2">
+          <Heading id={openedId} className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink-secondary, inherit)' }}>
             {translate(language, 'userProfile.vitrine.opened.title')}
-          </h2>
+          </Heading>
           <ul className="flex flex-wrap gap-2">
             {opened.map((row) => (
               <li key={row.key} data-vitrine-capability={row.key} className="rounded-chip px-3 py-1.5 text-caption font-semibold" style={{ backgroundColor: 'var(--color-ios-fill, rgba(127,127,127,.14))' }}>
@@ -69,10 +76,10 @@ export function VitrineCapabilities({
         </section>
       )}
       {locked.length === 0 ? null : (
-        <section data-vitrine-locked="" aria-labelledby="vitrine-locked" className="grid gap-2">
-          <h2 id="vitrine-locked" className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink-secondary, inherit)' }}>
+        <section data-vitrine-locked="" aria-labelledby={lockedId} className="grid gap-2">
+          <Heading id={lockedId} className="text-caption font-bold uppercase tracking-wide" style={{ color: 'var(--color-ios-ink-secondary, inherit)' }}>
             {translate(language, lockedTitleKey)}
-          </h2>
+          </Heading>
           <div className="grid gap-2">
             {locked.map((row) => (
               <LockedRow key={row.key} language={language} row={row} />
@@ -127,6 +134,7 @@ export function VitrinePreview({
   readonly accent?: string;
 }) {
   const name = profile.displayName ?? profile.username;
+  const seenById = useId();
   return (
     <div data-vitrine-preview={level} className="grid gap-5">
       <MeeshyChipRow
@@ -141,18 +149,20 @@ export function VitrinePreview({
           if (next.includes(tapped)) onLevel(tapped as RelationLevel);
         }}
       />
-      <p className="text-caption font-semibold" aria-live="polite">
-        {translate(language, 'userProfile.vitrine.seenBy', { level: relationLevelLabel(language, level) })}
-      </p>
-      <header className="flex items-center gap-4">
-        <Avatar initials={initialsOf(name)} color={accent} size={64} name={name} {...(profile.avatar === null ? {} : { src: profile.avatar })} />
-        <div className="min-w-0">
-          <h1 className="truncate text-screen font-bold">{name}</h1>
-          <p className="truncate text-caption">@{profile.username}</p>
-        </div>
-      </header>
-      {profile.bio === null ? null : <p className="text-body">{profile.bio}</p>}
-      <VitrineCapabilities language={language} view={view} />
+      <div role="tabpanel" aria-labelledby={seenById} className="grid gap-5">
+        <p id={seenById} className="text-caption font-semibold" aria-live="polite">
+          {translate(language, 'userProfile.vitrine.seenBy', { level: relationLevelLabel(language, level) })}
+        </p>
+        <header className="flex items-center gap-4">
+          <Avatar initials={initialsOf(name)} color={accent} size={64} name={name} {...(profile.avatar === null ? {} : { src: profile.avatar })} />
+          <div className="min-w-0">
+            <h3 className="truncate text-screen font-bold">{name}</h3>
+            <p className="truncate text-caption">@{profile.username}</p>
+          </div>
+        </header>
+        {profile.bio === null ? null : <p className="text-body">{profile.bio}</p>}
+        <VitrineCapabilities language={language} view={view} heading="h3" />
+      </div>
     </div>
   );
 }

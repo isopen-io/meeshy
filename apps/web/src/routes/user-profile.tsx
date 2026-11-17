@@ -18,6 +18,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { profileFailureOf } from '@/lib/profile/failure';
+import { safeNextPath } from '@/lib/session-guard';
 import { userProfileTabs } from '@/lib/profile/tabs';
 import { useParams } from '@/lib/router';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
@@ -89,6 +90,14 @@ const ProfilePhoneReachabilityRow = lazy(() => import('@/components/phone-reacha
  * revanche, dit autre chose et se rend autrement : un débit n'est pas une
  * absence.
  */
+
+/**
+ * **« SE CONNECTER » RAMÈNE À LA VITRINE** (#18878) — la fiche est publique : le visiteur qui se
+ * connecte depuis elle revient à l'adresse qu'il lisait (`/u/…` ou `/@…`), jamais à la liste. Le
+ * chemin passe par la même garde que tout `next` (`safeNextPath`) : rien ne sort du domaine.
+ */
+export const visitorSignInHref = (location: { readonly pathname: string; readonly search: string }): string =>
+  href('login', undefined, { next: safeNextPath(`${location.pathname}${location.search}`) ?? undefined });
 
 function ProfileHeaderBar({ title, onSend }: { readonly title: string; readonly onSend?: () => void }) {
   return (
@@ -219,7 +228,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
     appQueryClient,
   );
 
-  const onSignIn = useCallback(() => navigate(href('login')), []);
+  const onSignIn = useCallback(() => navigate(visitorSignInHref(window.location)), []);
   const onCallFailed = useCallback((message: string) => announce(message, 'error'), [announce]);
   const onPostsAnnounce = useCallback((text: string) => announce(text), [announce]);
   const callPerson = useMemo(

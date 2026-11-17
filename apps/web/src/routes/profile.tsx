@@ -186,6 +186,8 @@ export default function ProfileScreen() {
      leurs libellés et les noms des choix se chargent à la demande, une fois. */
   const [decorSide, setDecorSide] = useState<DecorSide | null>(null);
   const [vitrineOpen, setVitrineOpen] = useState(false);
+  const openVitrine = useCallback(() => setVitrineOpen(true), []);
+  const closeVitrine = useCallback(() => setVitrineOpen(false), []);
   const [decorReady, setDecorReady] = useState(false);
   const [decorNames, setDecorNames] = useState<AppearanceNames | null>(null);
   const decorServed = profile?.profileDecor !== undefined;
@@ -336,7 +338,7 @@ export default function ProfileScreen() {
             />
           )}
           <StatsSection language={language} stats={statsQuery.data ?? null} />
-          {profile === undefined ? null : <VitrineEntry language={language} onOpen={() => setVitrineOpen(true)} />}
+          {profile === undefined ? null : <VitrineEntry language={language} onOpen={openVitrine} />}
           <ProfileTabs language={language} tabs={MY_PROFILE_TABS} active={tab} onChange={selectTab} idBase={tabBase} badges={badges} />
           <ProfileTabPanel idBase={tabBase} tab={tab}>
             {tab === 'posts' ? (
@@ -417,7 +419,7 @@ export default function ProfileScreen() {
       {retouch.layer}
       {vitrineOpen && profile !== undefined ? (
         <Suspense fallback={null}>
-          <VitrinePreviewSheet language={language} profile={profile} onClose={() => setVitrineOpen(false)} />
+          <VitrinePreviewSheet language={language} profile={profile} onClose={closeVitrine} />
         </Suspense>
       ) : null}
       {decorSide === null || !decorReady ? null : (

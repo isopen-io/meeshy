@@ -79,6 +79,35 @@ describe('VitrinePreview — ma Vitrine telle que la voit un cercle', () => {
     expect(text(opened)).toContain('Présence');
   });
 
+  test('dans la feuille, rien ne passe au-dessus de son titre (h2) : ni h1, et le nom et les sections sont des h3', () => {
+    const root = mount(preview('FRIEND'));
+    expect(root.querySelector('h1, h2')).toBeNull();
+    expect([...root.querySelectorAll('h3')].map((node) => text(node))).toEqual(['Aïssa Ndiaye', 'Ouvert à ce niveau', 'Masqué à ce niveau']);
+  });
+
+  test('ce que l’onglet montre est son panneau, nommé par le cercle choisi', () => {
+    const root = mount(preview('CLOSE'));
+    const panel = root.querySelector('[role="tabpanel"]');
+    expect(panel).not.toBeNull();
+    const label = root.querySelector(`#${CSS.escape(panel?.getAttribute('aria-labelledby') ?? 'absent')}`);
+    expect(text(label)).toBe('Vu par : Proche');
+    expect(panel?.querySelector('[data-kit-locked-row]')).not.toBeNull();
+  });
+
+  test('deux listes montées ensemble ne partagent aucun identifiant : chaque section est nommée par SON titre', () => {
+    const root = mount(
+      <>
+        <VitrineCapabilities language="fr" view={viewAt('FRIEND')} />
+        <VitrineCapabilities language="fr" view={viewAt('PUBLIC')} />
+      </>,
+    );
+    const ids = [...root.querySelectorAll('[id]')].map((node) => node.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const section of root.querySelectorAll('section[aria-labelledby]')) {
+      expect(section.querySelector(`#${CSS.escape(section.getAttribute('aria-labelledby') ?? '')}`)).not.toBeNull();
+    }
+  });
+
   test('sans verdict du tout (bloqué, ancien serveur) : aucune section inventée, pas de rangée', () => {
     const root = mount(<VitrineCapabilities language="fr" view={{ ...viewAt('PUBLIC'), capabilities: {} }} />);
     expect(lockedRows(root)).toHaveLength(0);
