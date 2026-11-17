@@ -1267,6 +1267,23 @@ describe('EmailService', () => {
 
       expect(result.success).toBe(true);
     });
+
+    it('porte le lien « Ne plus recevoir d’invitation » quand il est fourni (#19207)', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'inv-003' }));
+
+      await service.sendInvitationEmail({
+        to: 'new@example.com',
+        senderName: 'Alice',
+        downloadUrl: 'https://meeshy.me/signup/affiliate/aff_x',
+        optOutUrl: 'https://meeshy.me/invitations/opt-out?address=abc&key=def',
+        language: 'fr',
+      });
+
+      const payload = JSON.stringify(mockAxiosPost.mock.calls[mockAxiosPost.mock.calls.length - 1]);
+      expect(payload).toContain('https://meeshy.me/invitations/opt-out?address=abc&key=def');
+    });
   });
 
   // ==============================================

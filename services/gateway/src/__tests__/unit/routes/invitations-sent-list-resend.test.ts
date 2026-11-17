@@ -21,7 +21,7 @@ jest.mock('../../../utils/logger', () => ({
 }));
 
 import { invitationRoutes } from '../../../routes/invitations';
-import { invitationOptOutHash } from '../../../services/referrals/emailInvitations';
+import { invitationOptOutHash, invitationOptOutUrl } from '../../../services/referrals/emailInvitations';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const OTHER_ID = '507f1f77bcf86cd799439099';
@@ -268,9 +268,14 @@ describe('POST /invitations/email/:id/resend — une relance par 72 h, trois au 
 });
 
 describe('POST /invitations/email/opt-out — l’invité ne veut plus d’invitation', () => {
+  const linkOf = (email: string) => {
+    const url = new URL(invitationOptOutUrl(email));
+    return { address: url.searchParams.get('address'), key: url.searchParams.get('key') };
+  };
+
   it('garde l’empreinte de l’adresse, jamais l’adresse', async () => {
     const { app, prisma } = await buildApp(store());
-    const res = await app.inject({ method: 'POST', url: '/invitations/email/opt-out', payload: { token: 'aff_invite1' } });
+    const res = await app.inject({ method: 'POST', url: '/invitations/email/opt-out', payload: linkOf('marie.dupont@gmail.com') });
     await app.close();
 
     expect(res.statusCode).toBe(200);
@@ -283,18 +288,42 @@ describe('POST /invitations/email/opt-out — l’invité ne veut plus d’invit
   it('est idempotent', async () => {
     const { app, prisma } = await buildApp(store());
     prisma.emailInvitationOptOut.create.mockRejectedValueOnce(Object.assign(new Error('dup'), { code: 'P2002' }) as never);
-    const res = await app.inject({ method: 'POST', url: '/invitations/email/opt-out', payload: { token: 'aff_invite1' } });
+    const res = await app.inject({ method: 'POST', url: '/invitations/email/opt-out', payload: linkOf('marie.dupont@gmail.com') });
     await app.close();
 
     expect(res.statusCode).toBe(200);
   });
 
-  it('rend 404 pour un jeton qui ne porte aucune invitation', async () => {
-    const { app } = await buildApp(store());
-    const res = await app.inject({ method: 'POST', url: '/invitations/email/opt-out', payload: { token: 'aff_inconnu' } });
+  it('le jeton du lien d’inscription, que le parrain détient, ne désinscrit personne', async () => {
+    const { app, prisma } = await buildApp(store());
+    const res = await app.inject({ method: 'POST', url: '/invitations/email/opt-out', payload: { token: 'aff_invite1' } });
+    await app.close();
+
+    expect(res.statusCode).not.toBe(200);
+    expect(prisma.emailInvitationOptOut.create).not.toHaveBeenCalled();
+  });
+
+  it('refuse une clé qui n’est pas celle de l’adresse', async () => {
+    const { app, prisma } = await buildApp(store());
+    const forged = { address: invitationOptOutHash('marie.dupont@gmail.com'), key: linkOf('autre@gmail.com').key };
+    const res = await app.inject({ method: 'POST', url: '/invitations/email/opt-out', payload: forged });
     await app.close();
 
     expect(res.statusCode).toBe(404);
+    expect(prisma.emailInvitationOptOut.create).not.toHaveBeenCalled();
+  });
+
+  it('le lien part dans l’e-mail de l’invité, à l’envoi comme à la relance, jamais dans la réponse au parrain', async () => {
+    const { app, sendInvitationEmail } = await buildApp(store());
+    const sent = await app.inject({ method: 'POST', url: '/invitations/email', payload: { email: 'nouveau@example.com' } });
+    const resent = await app.inject({ method: 'POST', url: `/invitations/email/${INVITATION_ID}/resend` });
+    await app.close();
+
+    expect(sendInvitationEmail).toHaveBeenNthCalledWith(1, expect.objectContaining({ optOutUrl: invitationOptOutUrl('nouveau@example.com') }));
+    expect(sendInvitationEmail).toHaveBeenNthCalledWith(2, expect.objectContaining({ optOutUrl: invitationOptOutUrl('marie.dupont@gmail.com') }));
+    const { key } = linkOf('nouveau@example.com');
+    expect(sent.body).not.toContain(key);
+    expect(resent.body).not.toContain(linkOf('marie.dupont@gmail.com').key);
   });
 });
 
