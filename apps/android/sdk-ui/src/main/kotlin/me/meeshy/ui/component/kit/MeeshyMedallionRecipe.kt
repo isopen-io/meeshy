@@ -48,6 +48,9 @@ public data class MeeshyMedallionValues(
     val haloAlpha: Float,
     val layoutCountsDecor: Boolean,
     val dashedInsetFraction: Float,
+    val dashedStrokeDp: Float,
+    val borderDp: Float,
+    val borderIsDashed: Boolean,
     val struckStrokeDp: Float,
     val struckLengthFraction: Float,
     val struckAngleDegrees: Float,
@@ -74,6 +77,8 @@ public object MeeshyMedallionRecipe {
     private const val GLYPH_MIN_DP: Float = 14f
     private const val VALUE_FRACTION: Float = 0.44f
     private const val STRUCK_STROKE_DP: Float = 3f
+    private const val DASHED_STROKE_DP: Float = 2f
+    private const val LOCKED_BORDER_DP: Float = 1.5f
     private const val STRUCK_LENGTH: Float = 0.64f
     private const val STRUCK_ANGLE: Float = -45f
     private const val MAX_WAVES: Int = 3
@@ -114,6 +119,9 @@ public object MeeshyMedallionRecipe {
             haloAlpha = HALO_ALPHA,
             layoutCountsDecor = false,
             dashedInsetFraction = if (effectiveDecor == MeeshyMedallionDecor.Halo) DASHED_INSET_WITH_HALO else DASHED_INSET,
+            dashedStrokeDp = DASHED_STROKE_DP,
+            borderDp = if (locked) LOCKED_BORDER_DP else 0f,
+            borderIsDashed = locked,
             struckStrokeDp = STRUCK_STROKE_DP,
             struckLengthFraction = STRUCK_LENGTH,
             struckAngleDegrees = STRUCK_ANGLE,

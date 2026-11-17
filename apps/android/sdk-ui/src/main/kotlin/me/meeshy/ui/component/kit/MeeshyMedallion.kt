@@ -7,7 +7,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -21,8 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
@@ -169,7 +170,7 @@ public fun MeeshyMedallion(
                     m.background(background)
                 }
             }
-            .let { if (values.hasBorder) it.border(1.5.dp, tokens.hairline, clipShape) else it }
+            .let { if (values.borderDp > 0f) it.dashedBorder(values.borderDp, values.borderIsDashed, tokens.hairline, clipShape) else it }
             .let { if (spoken == null) it.decorative() else it.clearAndSetSemantics { contentDescription = spoken } },
         contentAlignment = Alignment.Center,
     ) {
@@ -180,6 +181,17 @@ public fun MeeshyMedallion(
             icon != null -> Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(values.glyphDp.dp))
         }
     }
+}
+
+/**
+ * Le contour du verrou : un trait de [widthDp] à l'intérieur de [shape], pointillé si [dashed]. Le trait est tracé à double
+ * largeur sous la découpe de la forme, dont seule la moitié intérieure reste visible.
+ */
+private fun Modifier.dashedBorder(widthDp: Float, dashed: Boolean, color: Color, shape: Shape): Modifier = drawWithContent {
+    drawContent()
+    val stroke = widthDp.dp.toPx() * 2f
+    val effect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())) else null
+    drawOutline(shape.createOutline(size, layoutDirection, this), color, style = Stroke(width = stroke, pathEffect = effect))
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDecor(
@@ -198,7 +210,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDecor(
             drawCircle(
                 color = base,
                 radius = radius - d * values.dashedInsetFraction,
-                style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))),
+                style = Stroke(width = values.dashedStrokeDp.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))),
             )
         }
         MeeshyMedallionDecor.Struck -> {
