@@ -74,7 +74,7 @@ import {
   type SharedLocationCell,
   type SharedLocationState,
 } from './sharedLocationStore';
-import { forgetSharedLocationEnds, noteSharedLocationReaderServed, noteSharedLocationServed, noteSharedLocationStopped, sharedLocationEndsFor } from './sharedLocationEnds';
+import { forgetSharedLocationEnds, noteSharedLocationReaderServed, noteSharedLocationReadersServed, noteSharedLocationServed, noteSharedLocationStopped, sharedLocationEndsFor } from './sharedLocationEnds';
 
 export type SharedLocationDb = PairAccessDb;
 
@@ -298,20 +298,22 @@ async function fanOut(
   emitterId: string,
   state: SharedLocationState,
   previous?: SharedLocationState,
-): Promise<{ readonly access: ReadonlyMap<string, SharedLocationReaderAccess>; readonly served: readonly string[] }> {
+): Promise<{ readonly access: ReadonlyMap<string, SharedLocationReaderAccess>; readonly served: readonly string[]; readonly fresh: readonly string[] }> {
   const access = await accessOf(deps, emitterId, state, recipientIdsOf(state));
   const deliveries = [...access].flatMap(([readerId, readerAccess]) => {
     const projection = projectSharedLocation(emitterId, state, readerAccess, readerId);
     if (!projection) return [];
-    if (previous && sameServed(projection, projectSharedLocation(emitterId, previous, readerAccess, readerId))) return [];
-    return [{ readerId, projection }];
+    const before = previous ? projectSharedLocation(emitterId, previous, readerAccess, readerId) : null;
+    if (sameServed(projection, before)) return [];
+    return [{ readerId, projection, fresh: previous !== undefined && before === null }];
   });
   const sent = deliveries.map((delivery) => delivery.readerId);
   await markSharedLocationSeen(deps.cache, emitterId, state, sent, deps.now());
   deliveries.forEach((delivery) => serve(deps.io, delivery.readerId, delivery.projection));
   await closeStaleReaders(deps, emitterId, state, access);
   const revoked = await revokedSince(deps, emitterId, state, sent);
-  return { access, served: sent.filter((readerId) => !revoked.includes(readerId)) };
+  const served = sent.filter((readerId) => !revoked.includes(readerId));
+  return { access, served, fresh: deliveries.filter((delivery) => delivery.fresh && served.includes(delivery.readerId)).map((delivery) => delivery.readerId) };
 }
 
 /**
@@ -469,8 +471,11 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
 
   const ack: SharedLocationAck = { success: true, data: { expiresAt: state.expiresAt } };
   try {
-    const { served } = await fanOut(deps, emitterId, state, current);
-    if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) return ack;
+    const { served, fresh } = await fanOut(deps, emitterId, state, current);
+    if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) {
+      await noteFreshEnds(deps, emitterId, state, fresh);
+      return ack;
+    }
     await reconcile(deps, emitterId, served);
     return STOPPED;
   } catch {
@@ -520,6 +525,20 @@ async function noteServedEnds(deps: SharedLocationRelayDeps, emitterId: string, 
     return precision ? [{ userId: readerId.toLowerCase(), endsAt: deadlineOf(state, readerId), precision }] : [];
   });
   await noteSharedLocationServed(deps.cache, emitterId, ends, deps.now()).catch(() => undefined);
+}
+
+/**
+ * Une position qui se met à servir un lecteur qui ne voyait rien — à la sortie du fantôme global
+ * (#19203), la position retenue ne servait personne — note son échéance (#19202), les autres
+ * fins ne bougent pas. Jamais bloquant.
+ */
+async function noteFreshEnds(deps: SharedLocationRelayDeps, emitterId: string, state: SharedLocationState, fresh: readonly string[]): Promise<void> {
+  const ends = fresh.flatMap((readerId) => {
+    const precision = recipientOf(state, readerId)?.precision;
+    return precision ? [{ userId: readerId.toLowerCase(), endsAt: deadlineOf(state, readerId), precision }] : [];
+  });
+  if (ends.length === 0) return;
+  await noteSharedLocationReadersServed(deps.cache, emitterId, ends, deps.now()).catch(() => undefined);
 }
 
 /**
@@ -629,6 +648,14 @@ export async function reflectSharedLocationGhost(deps: SharedLocationRelayDeps, 
     return;
   }
   await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom: new Date(now).toISOString() }, now);
+}
+
+/**
+ * La batterie accordée par le partage en cours (#19204) se rejoue quand le fantôme global change
+ * (#19203) : la batterie relit le fantôme. À appeler APRÈS l'écriture du compte. Jamais bloquant.
+ */
+export async function replaySharedLocationBatteryOf(deps: SharedLocationRelayDeps, emitterId: string): Promise<void> {
+  await refreshBatteryOf(deps, emitterId, [await readSharedLocation(deps.cache, emitterId, deps.now())]);
 }
 
 /** Le point servi est-il dans l'emprise ? Absente : toute la carte. */

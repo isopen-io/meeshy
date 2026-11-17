@@ -78,7 +78,12 @@ export async function noteSharedLocationServed(cache: SharedLocationKv, emitterI
  * lui seul prend son échéance, les autres fins ne bougent pas.
  */
 export async function noteSharedLocationReaderServed(cache: SharedLocationKv, emitterId: string, end: SharedLocationEnd, now: number): Promise<void> {
-  await rewrite(cache, emitterId, (previous) => [...previous.filter((entry) => !sameUser(entry.userId, end.userId)), end], now);
+  await noteSharedLocationReadersServed(cache, emitterId, [end], now);
+}
+
+/** Plusieurs lecteurs de plus, en UNE réécriture : eux seuls prennent leur échéance. */
+export async function noteSharedLocationReadersServed(cache: SharedLocationKv, emitterId: string, ends: readonly SharedLocationEnd[], now: number): Promise<void> {
+  await rewrite(cache, emitterId, (previous) => [...previous.filter((entry) => !ends.some((end) => sameUser(entry.userId, end.userId))), ...ends], now);
 }
 
 /** Le partage s'arrête : toute fin encore à venir se termine maintenant. */

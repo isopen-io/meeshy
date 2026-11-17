@@ -11,7 +11,7 @@ import { getSharedNotificationService } from '../notifications/notification-serv
 import { sharedLocationNoticesOf } from './sharedLocationNotices';
 import type { SharedLocationRequestDeps } from './sharedLocationRequest';
 import type { LocationGhostState } from '@meeshy/shared/types/shared-location';
-import { writeLocationGhost } from './locationGhost';
+import { setLocationGhost } from './locationGhost';
 import { exportSharedLocationEnds, type SharedLocationEnd } from './sharedLocationEnds';
 import { lazySharedLocationCache as lazyCache } from './sharedLocationLazyCache';
 import { refreshBatteryForReaders } from '../battery/batteryDeps';
@@ -19,7 +19,6 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import {
   captureSharedLocationAccess,
   endSharedLocationOfAccount,
-  reflectSharedLocationGhost,
   refreshSharedLocationBetween,
   type SharedLocationIo,
   type SharedLocationPairAccess,
@@ -116,16 +115,10 @@ export async function exportSharedLocationEndsOf(userId: string, report: (error:
 }
 
 /**
- * Règle le fantôme global (#19203) et y fait suivre le partage temporaire en cours. L'écriture
- * du compte fait foi et lève si elle échoue ; le reflet ne lève jamais : raté, il est journalisé,
- * et la position suivante relit le fantôme et coupe d'elle-même.
+ * Règle le fantôme global (#19203) et y fait suivre le partage temporaire en cours. La sortie
+ * est fail-closed et lève si le partage ne peut pas être retenu ; l'entrée et la batterie ne
+ * lèvent jamais après l'écriture du compte (`setLocationGhost`).
  */
 export async function setLocationGhostAfter(params: RefreshParams, userId: string, ghost: boolean): Promise<LocationGhostState> {
-  const written = await writeLocationGhost(params.prisma, userId, ghost, new Date());
-  try {
-    await reflectSharedLocationGhost(sharedLocationRelayDepsOf(params), userId, written.change);
-  } catch (error) {
-    params.report(error);
-  }
-  return written.state;
+  return setLocationGhost({ db: params.prisma, relay: sharedLocationRelayDepsOf(params), report: params.report }, userId, ghost);
 }
