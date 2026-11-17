@@ -125,12 +125,20 @@ export type EnvelopeDisposition = 'acknowledge' | 'retry';
  * `fail_local`, `fail_argument`) ou par la façade (bail, panne du module) ;
  * un code inconnu devient `BRIDGE_FAILURE`.
  *
- * **ACQUITTER OU RÉESSAYER**, aligné sur l'iPhone
- * (`E2EEEnvelopeOpener.isVerdict`) : une erreur du PROTOCOLE sur ce que
+ * **ACQUITTER OU RÉESSAYER** : une erreur du PROTOCOLE sur ce que
  * l'enveloppe apporte est un VERDICT, l'enveloppe ne se lira jamais et
- * s'acquitte ; ce qui tient à CET appareil — une identité qu'il n'a pas
- * (encore) approuvée, son propre état illisible, un bail tenu ailleurs, le
- * module en panne — se RÉESSAIE : acquitter perdrait la copie pour toujours.
+ * s'acquitte ; ce qui tient à CET appareil — son propre état illisible, un
+ * bail tenu ailleurs, le module en panne — se RÉESSAIE : acquitter perdrait la
+ * copie pour toujours.
+ *
+ * **CE N'EST PAS LA TABLE DE L'IPHONE.** `E2EEEnvelopeOpener.isVerdict` tient
+ * toute `SignalError` pour un verdict, et ACQUITTE donc `untrustedIdentity` ;
+ * le web la RÉESSAIE (une identité que cet appareil n'a pas encore approuvée
+ * n'est pas une enveloppe illisible). Ce classement n'est pas tranché, et
+ * d'autres lignes sont à revoir avant que l'ouvreur (W6) ne s'en serve : une
+ * erreur d'état LOCAL que `PROTOCOL` ou `INVALID_ARGUMENT` acquittent, une
+ * pré-clé absente du lot injecté, une panne du module rejouée sans budget
+ * (#19146, bloque W6).
  */
 export const LIBSIGNAL_ERROR_DISPOSITION = {
   UNTRUSTED_IDENTITY: 'retry',
