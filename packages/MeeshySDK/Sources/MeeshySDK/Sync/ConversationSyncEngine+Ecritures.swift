@@ -235,7 +235,15 @@ extension ConversationSyncEngine {
                 }
             }
         }
+        await realtimeMessagePersistor?(.attachmentEnriched(AttachmentEnrichment(event)))
         _messagesDidChange.send(event.conversationId)
+    }
+
+    /// `message:translation` (#18934) : la carte du cache, et la base du compte
+    /// comme la conversation ouverte — passé les 24 h du cache, rien d'autre.
+    /* partagé entre les fichiers du moteur (#4172) */ func handleTranslationReceived(_ event: TranslationEvent) async {
+        await cache.cacheTranslation(event)
+        await realtimeMessagePersistor?(.translationsReceived(event.translations))
     }
 
     /// `[langue: contenu]` du message reçu pour le Prisme de la ligne de liste — voir `PreviewTranslationCard`.
