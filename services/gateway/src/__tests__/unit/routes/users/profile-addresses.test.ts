@@ -60,6 +60,7 @@ jest.mock('../../../../services/TrackingLinkService', () => ({
 
 import { meAddressRoutes } from '../../../../routes/users/me-addresses';
 import { getUserByUsername } from '../../../../routes/users/profile';
+import { eraseProfileAddressesOf } from '../../../../services/profile-addresses/address-links';
 
 type Row = {
   id: string; userId: string; title: string; url: string; glyph: string; circle: string;
@@ -67,6 +68,13 @@ type Row = {
 };
 let rows: Row[] = [];
 let seq = 0;
+type Click = { id: string; trackingLinkId: string; ipAddress: string };
+let clicks: Click[] = [];
+const idOf = (token: string) => `id-${token}`;
+const tokenMatches = (token: string, where: any): boolean =>
+  (where.id?.in === undefined || (where.id.in as string[]).includes(idOf(token)))
+  && (where.token?.in === undefined || (where.token.in as string[]).includes(token))
+  && (where.createdBy === undefined || links[token].createdBy === where.createdBy);
 
 const adresse = (over: Partial<Row> = {}): Row => ({
   id: `ad${++seq}`, userId: OWNER, title: 'Site', url: 'https://aissandiaye.studio/', glyph: 'site',
@@ -89,31 +97,50 @@ const prisma = () => ({
     create: jest.fn<any>(async (a: any) => { const r = { ...adresse(), ...a.data }; rows.push(r); return r; }),
     update: jest.fn<any>(async (a: any) => { const r = rows.find((x) => x.id === a.where.id)!; Object.assign(r, a.data); return r; }),
     delete: jest.fn<any>(async (a: any) => { rows = rows.filter((r) => r.id !== a.where.id); return {}; }),
+    deleteMany: jest.fn<any>(async (a: any) => {
+      const before = rows.length;
+      rows = rows.filter((r) => r.userId !== a.where.userId);
+      return { count: before - rows.length };
+    }),
   },
   trackingLink: {
-    findMany: jest.fn<any>(async (a: any) => (a.where.token.in as string[])
-      .filter((token) => links[token]
-        && (a.where.createdBy === undefined || links[token].createdBy === a.where.createdBy)
+    findMany: jest.fn<any>(async (a: any) => Object.keys(links)
+      .filter((token) => tokenMatches(token, a.where)
         && (a.where.isActive === undefined || links[token].isActive === a.where.isActive))
-      .map((token) => ({ token, ...links[token] }))),
+      .map((token) => ({ id: idOf(token), token, ...links[token] }))),
+    deleteMany: jest.fn<any>(async (a: any) => {
+      const gone = Object.keys(links).filter((token) => tokenMatches(token, a.where));
+      links = Object.fromEntries(Object.entries(links).filter(([token]) => !gone.includes(token)));
+      return { count: gone.length };
+    }),
+  },
+  trackingLinkClick: {
+    deleteMany: jest.fn<any>(async (a: any) => {
+      const before = clicks.length;
+      clicks = clicks.filter((click) => !(a.where.trackingLinkId.in as string[]).includes(click.trackingLinkId));
+      return { count: before - clicks.length };
+    }),
   },
   $transaction: jest.fn<any>(async (ops: Promise<unknown>[]) => Promise.all(ops)),
 });
 
+let base: ReturnType<typeof prisma>;
+
 async function monter(): Promise<FastifyInstance> {
+  base = prisma();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async (req: any, reply: any) => {
     if (!viewerId) return reply.status(401).send({ success: false, error: 'Unauthorized' });
     req.authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId: viewerId, registeredUser: { id: viewerId, role: 'USER' } };
   });
-  app.decorate('prisma', prisma() as never);
+  app.decorate('prisma', base as never);
   await app.register(async (i) => { await meAddressRoutes(i); await getUserByUsername(i); }, { prefix: '/api/v1' });
   await app.ready();
   return app;
 }
 
 beforeEach(() => {
-  rows = []; created.length = 0; linkUpdates.length = 0; viewerId = OWNER; viewerLevel = 'PUBLIC'; relationReads = 0; tokenSeq = 0;
+  rows = []; clicks = []; created.length = 0; linkUpdates.length = 0; viewerId = OWNER; viewerLevel = 'PUBLIC'; relationReads = 0; tokenSeq = 0;
   links = { tokA: { createdBy: OWNER, isActive: true, totalClicks: 128, originalUrl: 'https://aissandiaye.studio/' } };
 });
 
@@ -370,5 +397,49 @@ describe('le lien de suivi d’une adresse ne sert que s’il est encore le sien
     expect(links.tokA.originalUrl).toBe('https://ma-banque.fr/');
     viewerId = OTHER;
     expect((await fiche(app)).addresses).toEqual([expect.objectContaining({ id: 'a', trackedPath: '/l/tokA' })]);
+  });
+});
+
+describe('une adresse retirée n’emporte aucune copie au-delà de la purge du compte', () => {
+  const URL_PRIVEE = 'https://ma-banque.fr/';
+  const porteLAdresse = () => Object.values(links).filter((link) => link.originalUrl === URL_PRIVEE);
+
+  it('adresse supprimée, puis purge : aucun TrackingLink ne porte son URL, aucun clic de ses lecteurs ne reste', async () => {
+    const app = await monter();
+    const cree = await post(app, corps({ url: URL_PRIVEE, title: 'Banque' }));
+    const token = cree.json().data.trackedPath.slice('/l/'.length);
+    clicks = [{ id: 'k1', trackingLinkId: idOf(token), ipAddress: '203.0.113.7' }];
+    expect((await app.inject({ method: 'DELETE', url: `/api/v1/users/me/addresses/${cree.json().data.id}` })).statusCode).toBe(200);
+
+    await eraseProfileAddressesOf(base as never, OWNER);
+
+    expect(porteLAdresse()).toEqual([]);
+    expect(clicks).toEqual([]);
+  });
+
+  it('suivi coupé, puis purge : le lien détaché ne garde ni l’URL, ni le titre, ni les clics', async () => {
+    const app = await monter();
+    const cree = await post(app, corps({ url: URL_PRIVEE, title: 'Banque' }));
+    const token = cree.json().data.trackedPath.slice('/l/'.length);
+    clicks = [{ id: 'k1', trackingLinkId: idOf(token), ipAddress: '203.0.113.7' }];
+    const off = await app.inject({ method: 'PATCH', url: `/api/v1/users/me/addresses/${cree.json().data.id}`, payload: { countClicks: false } });
+    expect(off.statusCode).toBe(200);
+
+    await eraseProfileAddressesOf(base as never, OWNER);
+
+    expect(porteLAdresse()).toEqual([]);
+    expect(clicks).toEqual([]);
+  });
+
+  it('ne supprime ni le lien d’un autre compte, ni ses autres liens, ni leurs clics', async () => {
+    links.repris = { createdBy: OTHER, isActive: true, totalClicks: 9, originalUrl: URL_PRIVEE };
+    links.message = { createdBy: OWNER, isActive: true, totalClicks: 3, originalUrl: 'https://lien-de-message.example/' };
+    clicks = [{ id: 'k2', trackingLinkId: idOf('repris'), ipAddress: '192.0.2.1' }, { id: 'k3', trackingLinkId: idOf('message'), ipAddress: '192.0.2.2' }];
+    rows = [adresse({ id: 'a', trackingToken: 'repris' }), adresse({ id: 'b', trackingToken: 'tokA' })];
+    const app = await monter();
+    await app.inject({ method: 'DELETE', url: '/api/v1/users/me/addresses/a' });
+    await app.inject({ method: 'DELETE', url: '/api/v1/users/me/addresses/b' });
+    expect(Object.keys(links).sort()).toEqual(['message', 'repris']);
+    expect(clicks.map((click) => click.id)).toEqual(['k2', 'k3']);
   });
 });
