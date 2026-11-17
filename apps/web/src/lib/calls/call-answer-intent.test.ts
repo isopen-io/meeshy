@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
+import { createFakeIndexedDB } from '@/test-support/fake-indexed-db';
+
+import { CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, consumeCallAnswerConfirmation } from './call-answer-confirmation';
 import { ANSWER_INTENT_TTL_MS, answerCallIdFromMessage, answerCallIdFromSearch, listenCallAnswerIntents } from './call-answer-intent';
 import { createCallStore, type ActiveCall, type CallPhase } from './call-store';
 
@@ -40,11 +43,19 @@ const ringingCall = (callId: string, phase: CallPhase = { kind: 'incoming' }): A
   quality: null,
 });
 
-function harness(options: { readonly search?: string } = {}) {
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/**
+ * `confirmable` : les appels dont le worker a posé la confirmation. Le bouchon
+ * la CONSOMME, comme la vraie lecture (`call-answer-confirmation.ts`) : une
+ * confirmation ne sert qu'une fois.
+ */
+function harness(options: { readonly search?: string; readonly confirmable?: readonly string[]; readonly confirm?: (callId: string) => Promise<boolean> } = {}) {
   const store = createCallStore();
   const accepted: number[] = [];
   const closed: string[] = [];
   const forgotten: number[] = [];
+  const confirmable = new Set(options.confirmable ?? []);
   const listeners: Array<(event: { data: unknown }) => void> = [];
   let clock = 1_000;
   listenCallAnswerIntents({
@@ -55,6 +66,7 @@ function harness(options: { readonly search?: string } = {}) {
     accept: () => void accepted.push(clock),
     closeRinging: (callId) => void closed.push(callId),
     now: () => clock,
+    confirm: options.confirm ?? (async (callId) => confirmable.delete(callId)),
   });
   return {
     store,
@@ -83,12 +95,42 @@ describe('lire l’intention', () => {
 });
 
 describe('décrocher l’appel désigné', () => {
-  test('onglet neuf : l’appel désigné décroche dès qu’il sonne, et l’adresse est nettoyée', () => {
-    const h = harness({ search: '?repondre=call-1' });
+  test('onglet neuf : l’appel désigné par une adresse CONFIRMÉE par le worker décroche dès qu’il sonne, et l’adresse est nettoyée', async () => {
+    const h = harness({ search: '?repondre=call-1', confirmable: ['call-1'] });
     expect(h.forgotten).toHaveLength(1);
+    await settle();
     expect(h.accepted).toEqual([]);
     h.ring('call-1');
     expect(h.accepted).toHaveLength(1);
+  });
+
+  test('une adresse forgée, que le worker n’a pas posée, ne décroche JAMAIS : l’appel sonne et attend un toucher', async () => {
+    const h = harness({ search: '?repondre=call-1' });
+    await settle();
+    h.ring('call-1');
+    expect(h.accepted).toEqual([]);
+    expect(h.forgotten).toHaveLength(1);
+  });
+
+  test('la confirmation du worker ne sert qu’une fois : la même adresse rejouée ne décroche plus', async () => {
+    const idb = createFakeIndexedDB();
+    idb.seed(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-1', { callId: 'call-1', until: 60_000 });
+    const confirm = (callId: string) => consumeCallAnswerConfirmation({ callId, now: 1_000, indexedDB: idb as unknown as IDBFactory });
+    const first = harness({ search: '?repondre=call-1', confirm });
+    await settle();
+    first.ring('call-1');
+    expect(first.accepted).toHaveLength(1);
+    const replay = harness({ search: '?repondre=call-1', confirm });
+    await settle();
+    replay.ring('call-1');
+    expect(replay.accepted).toEqual([]);
+  });
+
+  test('la confirmation d’un AUTRE appel ne vaut pas pour celui que l’adresse désigne', async () => {
+    const h = harness({ search: '?repondre=call-1', confirmable: ['call-2'] });
+    await settle();
+    h.ring('call-1');
+    expect(h.accepted).toEqual([]);
   });
 
   test('onglet ouvert : l’appel qui sonne déjà décroche à la réception du message', () => {
@@ -98,22 +140,25 @@ describe('décrocher l’appel désigné', () => {
     expect(h.accepted).toHaveLength(1);
   });
 
-  test('un AUTRE appel qui sonne ne décroche pas', () => {
-    const h = harness({ search: '?repondre=call-1' });
+  test('un AUTRE appel qui sonne ne décroche pas', async () => {
+    const h = harness({ search: '?repondre=call-1', confirmable: ['call-1'] });
+    await settle();
     h.ring('call-2');
     expect(h.accepted).toEqual([]);
   });
 
-  test('l’intention ne sert qu’une fois', () => {
-    const h = harness({ search: '?repondre=call-1' });
+  test('l’intention ne sert qu’une fois', async () => {
+    const h = harness({ search: '?repondre=call-1', confirmable: ['call-1'] });
+    await settle();
     h.ring('call-1');
     h.store.setState({ call: null });
     h.ring('call-1');
     expect(h.accepted).toHaveLength(1);
   });
 
-  test('passé la sonnerie, l’intention expire', () => {
-    const h = harness({ search: '?repondre=call-1' });
+  test('passé la sonnerie, l’intention expire', async () => {
+    const h = harness({ search: '?repondre=call-1', confirmable: ['call-1'] });
+    await settle();
     h.advance(ANSWER_INTENT_TTL_MS + 1);
     h.ring('call-1');
     expect(h.accepted).toEqual([]);

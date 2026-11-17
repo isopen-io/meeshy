@@ -13,6 +13,8 @@ protocol NotificationFeedProviding: AnyObject {
     var allNotificationsRead: AnyPublisher<Void, Never> { get }
     var notificationReadRolledBack: AnyPublisher<String, Never> { get }
     var notificationWasDeleted: AnyPublisher<String, Never> { get }
+    var notificationArrivedRead: AnyPublisher<String, Never> { get }
+    var readNotificationsPurged: AnyPublisher<Void, Never> { get }
 
     func cachedFeed() async -> CacheResult<[APINotification]>
     func storeFeed(_ notifications: [APINotification]) async throws
@@ -42,6 +44,8 @@ final class LiveNotificationFeed: NotificationFeedProviding {
     var allNotificationsRead: AnyPublisher<Void, Never> { manager.allNotificationsRead.eraseToAnyPublisher() }
     var notificationReadRolledBack: AnyPublisher<String, Never> { manager.notificationReadRolledBack.eraseToAnyPublisher() }
     var notificationWasDeleted: AnyPublisher<String, Never> { manager.notificationWasDeleted.eraseToAnyPublisher() }
+    var notificationArrivedRead: AnyPublisher<String, Never> { manager.notificationArrivedRead.eraseToAnyPublisher() }
+    var readNotificationsPurged: AnyPublisher<Void, Never> { manager.readNotificationsPurged.eraseToAnyPublisher() }
 
     func cachedFeed() async -> CacheResult<[APINotification]> {
         await CacheCoordinator.shared.notifications.load(for: Self.persistedCacheKey)

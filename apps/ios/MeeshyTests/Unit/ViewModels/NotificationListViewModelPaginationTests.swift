@@ -93,4 +93,56 @@ final class NotificationListViewModelPaginationTests: XCTestCase {
         XCTAssertTrue(vm.loadDidFail)
         XCTAssertFalse(vm.isLoading)
     }
+
+
+    // MARK: - La cloche montée suit les signaux du flux (#19104)
+
+    func test_refresh_surUnCacheFrais_vaQuandMemeAuServeur() async {
+        let mock = MockNotificationListService()
+        mock.pages = [NotificationStubs.page(["n1"])]
+        let feed = MockNotificationFeed()
+        feed.cached = .fresh([NotificationStubs.notification("c1")], age: 5)
+        let vm = makeSUT(mock, feed: feed)
+
+        await vm.loadInitial()
+        await vm.refresh()
+
+        XCTAssertEqual(mock.appels.count, 1)
+        XCTAssertEqual(vm.notifications.map(\.id), ["n1"])
+        XCTAssertEqual(feed.storedFeeds.last?.map(\.id), ["n1"])
+    }
+
+    func test_notificationArrivedRead_relitLaListeMontee() async {
+        let mock = MockNotificationListService()
+        mock.pages = [NotificationStubs.page(["a"]), NotificationStubs.page(["b", "a"])]
+        let feed = MockNotificationFeed()
+        let vm = makeSUT(mock, feed: feed)
+        await vm.loadInitial()
+
+        feed.arrivedReadSubject.send("b")
+        for _ in 0..<300 where vm.notifications.map(\.id) != ["b", "a"] {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(vm.notifications.map(\.id), ["b", "a"], "la notification arrivée lue reprend son rang dans la cloche ouverte")
+        XCTAssertEqual(mock.appels.count, 2)
+    }
+
+    func test_readNotificationsPurged_retireToutesLesLignesLues_memeHorsDuCache() async {
+        let feed = MockNotificationFeed()
+        let vm = makeSUT(MockNotificationListService(), feed: feed)
+        vm.notifications = [
+            NotificationStubs.notification("u1"),
+            NotificationStubs.notification("r1", isRead: true),
+            NotificationStubs.notification("u2"),
+            NotificationStubs.notification("r2", isRead: true)
+        ]
+
+        feed.readPurgedSubject.send(())
+        for _ in 0..<300 where vm.notifications.map(\.id) != ["u1", "u2"] {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(vm.notifications.map(\.id), ["u1", "u2"], "une purge faite ailleurs retire aussi les lignes lues des pages chargées")
+    }
 }

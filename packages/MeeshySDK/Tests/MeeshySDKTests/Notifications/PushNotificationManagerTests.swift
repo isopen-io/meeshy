@@ -408,14 +408,6 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertNil(defaults.string(forKey: PushNotificationManager.lastRegisteredTokenKey))
     }
 
-    // Note: `unregisterDeviceToken()` is intentionally NOT covered by a unit
-    // test here because it issues a real `APIClient.shared.request` DELETE
-    // before clearing the persisted token. Wiring an `APIClientProviding`
-    // mock through `PushNotificationManager.init` would expand the scope of
-    // this fix; the existing two tests already pin the injected-defaults
-    // contract for the read + write paths. A follow-up PR can add the API
-    // client injection if the unregister path needs unit coverage.
-
     // MARK: - resetSession (P1 — logout)
 
     /// Prouve que `resetSession()` clear le payload de navigation pending

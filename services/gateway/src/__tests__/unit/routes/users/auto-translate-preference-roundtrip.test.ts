@@ -133,11 +133,22 @@ function makePrisma(magasin: Magasin) {
       magasin.document === ABSENT ? null : { application: magasin.document }
     ),
     upsert: jest.fn<any>(async (args: any) => {
-      magasin.document =
-        magasin.document === ABSENT ? args.create.application : args.update.application;
-      return { application: magasin.document };
+      if (magasin.document === ABSENT) magasin.document = args.create.application ?? null;
+      else if (args.update.application !== undefined) magasin.document = args.update.application;
+      return { id: 'pref-1', application: magasin.document };
     }),
   };
+
+  // #18910 — la clé se pose DANS la base (pipeline `$mergeObjects` sur la valeur vivante) : le double applique le
+  // pipeline comme Mongo, une colonne qui n'est pas un objet valant `{}`.
+  const $runCommandRaw = jest.fn<any>(async (command: any) => {
+    if (magasin.document === ABSENT) return { n: 0 };
+    const [defaults, , submitted] = command.updates[0].u[0].$set.application.$mergeObjects;
+    const vivant = typeof magasin.document === 'object' && magasin.document !== null && !Array.isArray(magasin.document)
+      ? magasin.document : {};
+    magasin.document = { ...defaults.$literal, ...vivant, ...submitted.$literal };
+    return { n: 1, nModified: 1 };
+  });
 
   // Le vrai client HONORE `include` : sans cela le double rendrait la ligne
   // `User` nue quelle que soit la requête, et un site qui aurait cessé de
@@ -159,6 +170,7 @@ function makePrisma(magasin: Magasin) {
     },
     userVoiceModel: { updateMany: jest.fn<any>(async () => ({ count: 0 })) },
     userPreferences,
+    $runCommandRaw,
   };
 }
 

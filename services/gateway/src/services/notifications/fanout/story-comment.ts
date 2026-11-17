@@ -348,9 +348,13 @@ export async function createStoryCommentNotificationsBatch(
   // « publication », mais on conserve REEL dans la metadata pour que le client
   // affiche le libellé/icône « Réel » distinct.
   const i18nPostType = postType === 'REEL' ? 'POST' : postType;
-  const authorName = postAuthor?.displayName?.trim()
+  // Sa propre story : l'auteur EST l'acteur, que le titre nomme déjà et que
+  // `showSenderName:false` masque — il n'entre pas une seconde fois dans la
+  // phrase. Même garde que la jumelle `activity-relay.ts` (#19210).
+  const ownContent = params.storyAuthorId === params.commenterId;
+  const authorName = ownContent ? '' : (postAuthor?.displayName?.trim()
     || postAuthor?.username?.trim()
-    || '';
+    || '');
   const langs = await deps.resolveRecipientLangs([authorId, ...engagedRecipients, ...friendRecipients]);
   const contextSubtitleFor = (lang: string): string => authorName
     ? notificationString(lang, 'comment.subtitleFrom', { postType: i18nPostType, author: authorName })

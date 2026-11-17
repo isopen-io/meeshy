@@ -15,6 +15,7 @@ import type { NotificationRecord } from '@/lib/notifications/record';
 import {
   adjustNotificationCounts,
   findNotification,
+  insertNotificationByCreatedAt,
   markNotificationsRead,
   prependNotification,
   removeNotifications,
@@ -81,16 +82,33 @@ export const notificationIdOf = (payload: unknown): string | null => {
  * type (`byType`) d'un dans tous les cas. Une ligne déjà connue ne compte pas
  * deux fois.
  *
+ * `rewrite` : la notification revient d'une suppression de même id (édition) — voir le corps.
+ *
+ * Rend `true` si l'arrivée a AVANCÉ le compte des non-lues : la lecture à l'arrivée ne décompte que ce qui a été
+ * compté (une réécriture, une ligne déjà connue ou déjà lue n'ont rien ajouté).
+ *
  * Les listes sont marquées PÉRIMÉES sans être relues (`refetchType: 'none'`) :
  * la charge socket porte le titre de la BANNIÈRE (le nom de l'acteur), pas le
  * titre persisté de la liste — la prochaine lecture, au retour sur l'écran, les
  * réconcilie sans qu'aucune requête ne parte maintenant.
  */
-export function applyNotificationNew(queryClient: QueryClient, notification: NotificationRecord): void {
-  if (findNotification(queryClient, notification.id) !== undefined) return;
-  prependNotification(queryClient, notification);
-  adjustNotificationCounts(queryClient, { total: 1, unread: notification.state.isRead ? 0 : 1, ofType: notification.type });
+export function applyNotificationNew(
+  queryClient: QueryClient,
+  notification: NotificationRecord,
+  options: { readonly rewrite?: boolean } = {},
+): boolean {
+  if (findNotification(queryClient, notification.id) !== undefined) return false;
+  const counted = options.rewrite !== true && !notification.state.isRead;
+  if (options.rewrite === true) {
+    /* UNE RÉÉCRITURE (édition : `deleted` puis `new`, même id, `isRead` conservé) n'ajoute rien au compte : la
+       suppression ne l'a pas décrémenté non plus. La ligne reprend son rang, elle ne passe pas en tête. */
+    insertNotificationByCreatedAt(queryClient, notification);
+  } else {
+    prependNotification(queryClient, notification);
+    adjustNotificationCounts(queryClient, { total: 1, unread: counted ? 1 : 0, ofType: notification.type });
+  }
   void queryClient.invalidateQueries({ queryKey: NOTIFICATION_LISTS_KEY, refetchType: 'none' });
+  return counted;
 }
 
 export function applyNotificationRead(queryClient: QueryClient, payload: unknown): void {

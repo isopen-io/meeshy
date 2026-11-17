@@ -10,6 +10,7 @@ import {
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { getSharedNotificationService } from '../services/notifications/notification-service-registry.js';
 
 const logger = enhancedLogger.child({ module: 'BroadcastReadStatus' });
 
@@ -203,6 +204,9 @@ export async function broadcastReadStatus(
   args: ReadStatusBroadcastArgs
 ): Promise<void> {
   const { io, prisma, readStatusService, privacyPreferencesService, bridgeService } = deps;
+  // #18910 — le curseur de lecture vient d'être écrit : la pastille de l'iPhone se recompte sur lui, qu'une
+  // notification ait été marquée ou non (lecture progressive, messages arrivés sans notification).
+  if (args.type === 'read' && !args.isAnonymous) getSharedNotificationService()?.noteReadCursorMoved(args.userId);
   if (!io) return;
 
   const actorUserId = args.isAnonymous ? null : args.userId;

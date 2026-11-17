@@ -168,7 +168,7 @@ describe('signaux chiffrés de bout en bout à deux appareils, libsignal réel (
 
     // Le réveil ne porte que son type opaque : ni signal, ni conversation, ni expéditeur.
     expect(pushCalls).toEqual(
-      expect.arrayContaining([{ userId: BOB, platforms: ['ios'], payload: { title: '', body: '', silent: true, data: { type: 'e2ee_wake' } } }]),
+      expect.arrayContaining([{ userId: BOB, platforms: ['ios'], types: ['apns'], payload: { title: '', body: '', silent: true, data: { type: 'e2ee_wake' } } }]),
     );
     expect(JSON.stringify(pushCalls)).not.toContain(CONVERSATION);
 
