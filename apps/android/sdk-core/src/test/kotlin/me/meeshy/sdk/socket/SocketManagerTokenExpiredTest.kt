@@ -3,6 +3,7 @@ package me.meeshy.sdk.socket
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.auth.SessionRevocationReason
 import org.json.JSONObject
 import org.junit.Test
 
@@ -49,9 +50,9 @@ class SocketManagerTokenExpiredTest {
         rig.manager.connect()
         val socket = rig.factory.created.single()
 
-        rig.manager.sessionRevoked.test {
+        rig.manager.sessionRevocations.test {
             socket.fire("auth:session-revoked", JSONObject().put("reason", "logout"))
-            assertThat(awaitItem()).isEqualTo("logout")
+            assertThat(SessionRevocationReason.fromSocketPayload(awaitItem().payload)).isEqualTo(SessionRevocationReason.LOGOUT)
         }
         assertThat(socket.disconnectCalls).isEqualTo(0)
     }
@@ -65,10 +66,6 @@ class SocketManagerTokenExpiredTest {
         rig.manager.disconnect()
 
         rig.manager.sessionRevocations.test {
-            lateHandlers.forEach { it(arrayOf<Any>(JSONObject().put("reason", "logout"))) }
-            expectNoEvents()
-        }
-        rig.manager.sessionRevoked.test {
             lateHandlers.forEach { it(arrayOf<Any>(JSONObject().put("reason", "logout"))) }
             expectNoEvents()
         }
