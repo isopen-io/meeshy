@@ -392,6 +392,12 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(seenAs.contains("VitrineCransSection("))
     }
 
+    func test_bannerWithoutPhotoOrDesign_isTheKitLivingBanner() throws {
+        let decor = try code("Meeshy/Features/Profile/Views/ProfileDecorSheet.swift")
+        XCTAssertTrue(decor.contains("MeeshyLivingBanner(tint: Color(hex: accentHex), height: Double(height))"),
+                      "la bannière nue est K27, plus un dégradé redessiné sur place")
+    }
+
     /// La valeur SERVIE par le catalogue pour la langue du simulateur : le témoin tient en français comme en anglais (CI).
     private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
 }

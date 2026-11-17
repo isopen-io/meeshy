@@ -567,11 +567,10 @@ struct ProfileBannerPaintView: View {
         case .photo(let bannerURL):
             CachedBannerImage(urlString: bannerURL, thumbHash: thumbHash, fallbackColor: accentHex, height: height)
         case .plain:
-            LinearGradient(
-                colors: [Color(hex: accentHex).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            // Sans photo ni design : la bannière vivante du kit (K27, planche `Main`), figée sous « réduire les
+            // animations » par le kit lui-même.
+            MeeshyLivingBanner(tint: Color(hex: accentHex), height: Double(height))
+                .accessibilityHidden(true)
         }
     }
 }
