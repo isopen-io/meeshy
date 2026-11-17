@@ -183,10 +183,10 @@ nonisolated enum ComposerMoodGate {
 ///
 /// Ce que ce type est, et surtout ce qu'il n'est PAS :
 ///
-/// - il **enveloppe** l'atelier de composition du SDK (`StoryComposerView`), il
-///   ne le réécrit pas. L'atelier porte des milliers de lignes éprouvées ; en
-///   refaire une version app-side ferait diverger deux surfaces sans qu'aucun
-///   test ne le dise ;
+/// - il **compose avec les briques du SDK** (`StoryComposerViewModel`,
+///   `StoryComposerCanvasView`), il ne les réécrit pas. Elles portent des
+///   milliers de lignes éprouvées ; en refaire une version app-side ferait
+///   diverger deux surfaces sans qu'aucun test ne le dise ;
 /// - il **ne construit aucun aperçu**. Loi 6 de la doctrine — « le lecteur EST
 ///   l'aperçu » : composer et viewers partagent un seul registre de rendu, et un
 ///   quatrième chemin d'aperçu casserait le WYSIWYG par construction. Le socle

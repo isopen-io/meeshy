@@ -17,8 +17,8 @@ import MeeshyUI
 //
 // Les membres de ces extensions ne sont pas `private` : Swift ne rend un
 // `private` visible qu'aux extensions du MÊME fichier. C'est le patron que
-// `StoryComposerView` suit déjà dans le SDK (`+TopBar`, `+Canvas`,
-// `+Publication`). La contrepartie est portée par les gardes de source, dont
+// `StoryComposerViewModel` suit déjà dans le SDK (`+Elements`, `+Repost`,
+// `+TextEditing`). La contrepartie est portée par les gardes de source, dont
 // l'adresse est l'UNITÉ (`AppSourceGuard.unit`) et non un fichier :
 // sans cela, chaque découpage éteindrait en silence toutes les gardes NÉGATIVES
 // du type — elles passeraient au vert en lisant la moitié qui ne contient pas

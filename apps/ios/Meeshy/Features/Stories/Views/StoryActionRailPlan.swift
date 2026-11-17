@@ -18,7 +18,7 @@ import MeeshySDK
 /// un bouton au milieu de la lecture.
 ///
 /// `nonisolated` : rule engine pur sans état partagé (parité
-/// StoryCanvasFraming / BandStateMachine) — le target app compile en
+/// StoryCanvasFraming) — le target app compile en
 /// defaultIsolation MainActor, sans ce modificateur le bundle de tests
 /// (nonisolated) ne peut ni appeler `resolve` ni lire les propriétés
 /// (exit 65 = échec de COMPILE).

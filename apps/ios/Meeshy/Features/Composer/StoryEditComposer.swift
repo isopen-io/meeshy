@@ -27,7 +27,7 @@ import MeeshyUI
 ///
 /// ## Ce qui change pour l'auteur
 ///
-/// L'édition montait `StoryComposerView` NU, donc sans plateau ni socle. Elle
+/// L'édition montait l'ancien atelier du SDK NU, donc sans plateau ni socle. Elle
 /// n'offre toujours AUCUN changement de format, et c'est la table qui le veut :
 /// `UpdatePostSchema.type` n'accepte que POST et RÉEL, et changer le format d'un
 /// contenu publié est le rôle du repost, pas de l'édition. L'éventail ne se

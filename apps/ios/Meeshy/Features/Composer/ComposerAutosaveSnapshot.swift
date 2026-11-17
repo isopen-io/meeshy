@@ -5,7 +5,7 @@ import MeeshyUI
 
 // **La sauvegarde automatique du MEUBLE** (#8848).
 //
-// L'atelier du SDK (`StoryComposerView`) s'autosauvegardait dans
+// L'ancien atelier du SDK, aujourd'hui retiré, s'autosauvegardait dans
 // `StoryDraftStore` depuis E1 : débounce de 2,5 s, écriture au passage en
 // arrière-plan, reprise à l'ouverture. Le 2026-09-01 (a7136904dc, 7d51e2bbc1,
 // #4700/#4751), story, réel et post ont quitté l'atelier pour se composer dans
