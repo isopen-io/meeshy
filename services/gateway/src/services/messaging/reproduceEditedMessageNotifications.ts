@@ -241,6 +241,7 @@ export async function reproduceEditedMessageNotifications(
 
     const metadata = asBlob(row.metadata);
     const context = asBlob(row.context);
+    const before = JSON.stringify([row.content, context, metadata]);
     const previousPreview = typeof metadata[previewKey] === 'string'
       ? (metadata[previewKey] as string)
       : '';
@@ -284,6 +285,10 @@ export async function reproduceEditedMessageNotifications(
       ? editedMessageBody({ lang, body: row.content ?? '', previousPreview, nextText: edited.content ?? '' })
       : editedReactionBody({ lang, body: row.content ?? '', nextText: edited.content ?? '' });
     metadata[previewKey] = BODY_DERIVES_FROM_MESSAGE.has(row.type) ? content : textSynthesis(lang, edited.content);
+    // #18910 — une correction qui laisse la synthèse (et le contexte) intacte
+    // n'a rien à réécrire ni à annoncer : sinon une faute de frappe corrigée
+    // refait partir `deleted` + `new` vers chaque destinataire.
+    if (JSON.stringify([row.content, context, metadata]) === before) continue;
     const data: Record<string, unknown> = { metadata, context, content };
 
     try {

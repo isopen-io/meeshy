@@ -58,6 +58,7 @@ import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
 import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
+import { reproducedPushAudience } from './reproducedPushAudience';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
@@ -3442,7 +3443,10 @@ export class NotificationService {
         )
       );
 
-      replacements.push({ row, title, subtitle: socketPayload.subtitle, stale });
+      const audience = await reproducedPushAudience(row, async (conversationId) =>
+        this.isConversationMutedFor(userId, conversationId, row.type as NotificationType));
+      if (audience === 'replace') replacements.push({ row, title, subtitle: socketPayload.subtitle, stale });
+      if (audience === 'revoke') revoked.push(stale);
     }
 
     this.revokeDeliveredPushes(revoked);
