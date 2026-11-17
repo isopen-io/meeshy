@@ -30,6 +30,8 @@ struct MeeshyCodeScreenBrightness: UIViewRepresentable {
         private let lease = UUID()
         private var holds = false
 
+        nonisolated deinit {}
+
         override func didMoveToWindow() {
             super.didMoveToWindow()
             applyIfNeeded()

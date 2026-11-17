@@ -17,6 +17,8 @@ public final class MeeshyDeviceTilt: ObservableObject {
 
     public init() {}
 
+    nonisolated deinit {}
+
     public var isAvailable: Bool {
         #if canImport(CoreMotion)
         manager.isDeviceMotionAvailable

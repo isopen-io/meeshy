@@ -112,6 +112,7 @@ private enum MeeshyCodeModulesCache {
     private final class Box {
         let matrix: GameQRMatrix
         init(_ matrix: GameQRMatrix) { self.matrix = matrix }
+        nonisolated deinit {}
     }
 
     private static let storage: NSCache<NSString, Box> = {
