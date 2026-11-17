@@ -6,6 +6,7 @@ import type { NotificationRecord } from '@/lib/notifications/record';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import {
   NOTIFICATION_COUNTS_QUERY_KEY,
+  notificationCountsQueryOptions,
   notificationListKey,
   type NotificationCounts,
   type NotificationsInfiniteData,
@@ -16,8 +17,9 @@ import {
   performMarkAllNotificationsRead,
   performMarkNotificationRead,
   performMarkNotificationsOfTypeRead,
+  performReadOnArrival,
 } from './notifications-actions';
-import { applyNotificationCounts, applyNotificationNew } from './notifications-realtime';
+import { applyNotificationCounts, applyNotificationDeleted, applyNotificationNew, applyNotificationRead } from './notifications-realtime';
 
 /**
  * LE MARQUAGE OPTIMISTE (#6288) — le compte bouge AVANT la réponse, et revient
@@ -95,12 +97,103 @@ describe('marquer UNE notification lue', () => {
     const { transport, release } = suspended();
 
     const pending = performMarkNotificationRead({ id: 'n1', deps: { source: 'gateway', transport, queryClient } });
-    release({ ok: false, status: 404, error: 'Notification not found' });
+    release({ ok: false, status: 403, error: 'Forbidden' });
 
     expect(await pending).toBe(false);
     expect(unread(queryClient)).toBe(2);
     expect(readState(queryClient, 'n1')).toBe(false);
     expect(ids(queryClient, 'unread')).toEqual(['n1', 'n2']);
+  });
+
+  test('un 404 : la passerelle n’a plus la ligne — elle quitte la cloche au lieu de revenir non lue, et le compte se relit', async () => {
+    const queryClient = seeded();
+    const { transport, release } = suspended();
+
+    const pending = performMarkNotificationRead({ id: 'n1', deps: { source: 'gateway', transport, queryClient } });
+    release({ ok: false, status: 404, error: 'Notification not found' });
+
+    expect(await pending).toBe(false);
+    expect(ids(queryClient, 'all')).toEqual(['n2', 'n3']);
+    expect(ids(queryClient, 'unread')).toEqual(['n2']);
+    expect(queryClient.getQueryState(NOTIFICATION_COUNTS_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+
+  test('supprimée pendant le POST, puis un 404 : la ligne ne ressuscite pas, et la pastille suit l’écho de la passerelle', async () => {
+    const queryClient = seeded();
+    const { transport, release } = suspended();
+
+    const pending = performMarkNotificationRead({ id: 'n1', deps: { source: 'gateway', transport, queryClient } });
+    applyNotificationDeleted(queryClient, { notificationId: 'n1' });
+    applyNotificationCounts(queryClient, { unread: 1, total: 2 });
+    release({ ok: false, status: 404, error: 'Notification not found' });
+
+    expect(await pending).toBe(false);
+    expect(ids(queryClient, 'all')).toEqual(['n2', 'n3']);
+    expect(unread(queryClient)).toBe(1);
+  });
+
+  test('une AUTRE notification arrivée pendant le POST survit au refus, et la pastille dit ce que dit la passerelle', async () => {
+    const queryClient = seeded();
+    const { transport, release } = suspended();
+
+    const pending = performMarkNotificationRead({ id: 'n1', deps: { source: 'gateway', transport, queryClient } });
+    applyNotificationNew(queryClient, record('n9', false));
+    applyNotificationCounts(queryClient, { unread: 3, total: 4 });
+    expect(unread(queryClient)).toBe(2);
+    release({ ok: false, status: 503, error: 'unavailable' });
+
+    expect(await pending).toBe(false);
+    expect([...(ids(queryClient, 'unread') ?? [])].sort()).toEqual(['n1', 'n2', 'n9']);
+    expect(unread(queryClient)).toBe(3);
+  });
+
+  test('un compte RELU chez la passerelle pendant le POST (retour sur l’onglet) déduit la lecture en attente', async () => {
+    const queryClient = seeded();
+    let releaseRead: (result: ApiResult<unknown>) => void = () => undefined;
+    const transport = {
+      request: (req: HttpRequest) =>
+        req.method === 'GET'
+          ? Promise.resolve<ApiResult<unknown>>({ ok: true, data: { unread: 2, total: 3 } })
+          : new Promise<ApiResult<unknown>>((resolve) => (releaseRead = resolve)),
+    } as unknown as HttpTransport;
+    const deps = { source: 'gateway' as const, transport };
+
+    const pending = performMarkNotificationRead({ id: 'n1', deps: { ...deps, queryClient } });
+    const reread = await queryClient.fetchQuery({ ...notificationCountsQueryOptions(deps, { pendingReadsOf: queryClient }), staleTime: 0 });
+    expect(reread.unread).toBe(1);
+
+    releaseRead({ ok: true, data: undefined });
+    await pending;
+    const afterConfirmation = await queryClient.fetchQuery({ ...notificationCountsQueryOptions(deps, { pendingReadsOf: queryClient }), staleTime: 0 });
+    expect(afterConfirmation.unread).toBe(2);
+  });
+
+  test('la lecture à l’arrivée d’une ligne que la passerelle dit DÉJÀ lue ne décompte rien, et son refus ne recompte rien', async () => {
+    const queryClient = seeded();
+    const { transport, release } = suspended();
+
+    const pending = performReadOnArrival({ notification: record('n3', true), deps: { source: 'gateway', transport, queryClient } });
+    expect(unread(queryClient)).toBe(2);
+    applyNotificationCounts(queryClient, { unread: 2, total: 3 });
+    expect(unread(queryClient)).toBe(2);
+    release({ ok: false, status: 503, error: 'unavailable' });
+
+    expect(await pending).toBe(false);
+    expect(unread(queryClient)).toBe(2);
+  });
+
+  test('la passerelle a lu la ligne pendant le POST, puis la réponse se perd : elle ne revient pas non lue', async () => {
+    const queryClient = seeded();
+    const { transport, release } = suspended();
+
+    const pending = performMarkNotificationRead({ id: 'n1', deps: { source: 'gateway', transport, queryClient } });
+    applyNotificationRead(queryClient, { notificationId: 'n1' });
+    applyNotificationCounts(queryClient, { unread: 1, total: 3 });
+    release({ ok: false, status: 0, error: 'network' });
+
+    expect(await pending).toBe(false);
+    expect(readState(queryClient, 'n1')).toBe(true);
+    expect(unread(queryClient)).toBe(1);
   });
 
   test('une ligne DÉJÀ lue ne coûte ni requête ni décrément', async () => {

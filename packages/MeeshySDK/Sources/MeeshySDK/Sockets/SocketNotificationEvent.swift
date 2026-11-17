@@ -172,6 +172,11 @@ public struct SocketNotificationContext: Decodable, Sendable {
     /// mais il ne doit pas non plus le FABRIQUER depuis une autre source.
     public let firstAttachmentUrl: String?
     public let firstAttachmentMimeType: String?
+    /// Date de publication et d'expiration de l'entité sociale liée : la ligne
+    /// rangée par le socket dit « publiée il y a 2 j » et « expirée » sans
+    /// attendre la relecture REST (#19104, ios-notifs-3).
+    public let postCreatedAt: String?
+    public let postExpiresAt: String?
 }
 
 public struct SocketNotificationMetadata: Decodable, Sendable {

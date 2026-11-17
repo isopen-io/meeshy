@@ -84,9 +84,18 @@ http:
     # de repli ci-dessous, jamais sur ceux de la passerelle saine. Leurs origines
     # sont un SOUS-ENSEMBLE de celles que la passerelle admet (garde :
     # services/gateway/src/__tests__/unit/config/gateway-unavailable-cors-18920.test.ts).
+    # Limite de cette garde en PRODUCTION : la passerelle y lit `CORS_ORIGINS`
+    # dans le `.env` de l'hôte (`docker-compose.prod.yml`), hors du dépôt, et le
+    # témoin ne confronte la liste ci-dessous qu'aux DÉFAUTS du code
+    # (`DEFAULT_ALLOWED_ORIGINS`). Une origine ajoutée au repli de production se
+    # vérifie donc aussi dans ce `.env`. Le staging écrit la sienne dans son
+    # compose, et le témoin la lit.
     # Leur prévol laisse passer la requête réelle jusqu'au 503 : tous les en-têtes
     # (`*`, `Authorization` nommé — le joker ne le couvre pas), les verbes de la
-    # passerelle ; sans `accessControlMaxAge`, rien n'est gardé en cache.
+    # passerelle. Sans `accessControlMaxAge`, le navigateur garde ce prévol son
+    # délai PAR DÉFAUT, 5 s (Fetch : une réponse sans `Access-Control-Max-Age`
+    # vaut 5 secondes) — jamais les 24 h de `cors-prod` : la passerelle revenue
+    # retrouve en quelques secondes ses propres prévols.
     gateway-unavailable-cors-prod:
       headers:
         accessControlAllowOriginList:
@@ -128,9 +137,10 @@ http:
         accessControlAllowCredentials: true
         addVaryHeader: true
 
-  # #18920 — les routeurs de REPLI de la passerelle : même hôte, priorité 1 (le
-  # routeur Docker de la passerelle, de priorité la longueur de sa règle, gagne
-  # dès qu'il existe), et un service SANS serveur — 503 « no available server »,
+  # #18920 — les routeurs de REPLI de la passerelle : même hôte, priorité 1 (2
+  # pour le repli des adresses signées, plus bas ; le routeur Docker de la
+  # passerelle, de priorité la longueur de sa règle, gagne dès qu'il existe), et
+  # un service SANS serveur — 503 « no available server »,
   # jamais une passerelle démarrante ou malade servie en contournant son
   # healthcheck. Application : staging d'abord (son routeur seul, puis
   # `curl -i -H 'Origin: https://staging.meeshy.me' https://gate.staging.meeshy.me/api/v1/health`
@@ -157,6 +167,39 @@ http:
       middlewares:
         - "gateway-unavailable-cors-staging"
       service: gateway-unavailable
+
+    # #9600 — les adresses SIGNÉES ont leur repli propre, hors du journal d'accès.
+    # Le jeton vit dans le CHEMIN (`/api/v1/attachments/signed/<jeton>`) et suffit
+    # à lire le fichier : passerelle saine, son routeur Docker `*-signed-files` ne
+    # journalise pas ; passerelle absente, il disparaît avec elle, et le repli de
+    # l'hôte ci-dessus écrivait chaque jeton demandé pendant la panne. Priorité 2 :
+    # devant le repli de l'hôte (1), sous tout routeur Docker de la passerelle (la
+    # longueur de sa règle). Garde : gateway-unavailable-cors-18920.test.ts.
+    gateway-signed-files-unavailable:
+      rule: "Host(`gate.meeshy.me`) && PathPrefix(`/api/v1/attachments/signed/`)"
+      priority: 2
+      entryPoints:
+        - "websecure"
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - "gateway-unavailable-cors-prod"
+      service: gateway-unavailable
+      observability:
+        accessLogs: false
+
+    gateway-staging-signed-files-unavailable:
+      rule: "Host(`gate.staging.meeshy.me`) && PathPrefix(`/api/v1/attachments/signed/`)"
+      priority: 2
+      entryPoints:
+        - "websecure"
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - "gateway-unavailable-cors-staging"
+      service: gateway-unavailable
+      observability:
+        accessLogs: false
 
   services:
     gateway-unavailable:

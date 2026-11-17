@@ -19,7 +19,9 @@
 import type { FastifyInstance } from 'fastify';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
+  OWN_PROFILE_FIELDS,
   profileUpdatedEventDataSchema,
+  type OwnProfileField,
   type OwnProfileSnapshot,
   type ProfileUpdatedEventData,
 } from '@meeshy/shared/types/own-profile-sync';
@@ -32,6 +34,38 @@ export type OwnProfileRow = OwnProfileSnapshot & {
   readonly id: string;
   readonly updatedAt: Date;
 };
+
+/**
+ * Les colonnes de l'instantané, pour une lecture qui doit le COMPARER avant
+ * d'écrire. `satisfies` tient la liste égale à `OWN_PROFILE_FIELDS` : un champ
+ * ajouté au contrat ne compile plus tant que la lecture ne le demande pas.
+ */
+export const OWN_PROFILE_SELECT = {
+  systemLanguage: true,
+  regionalLanguage: true,
+  customDestinationLanguage: true,
+  displayName: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+  avatar: true,
+  banner: true,
+} as const satisfies Record<OwnProfileField, true>;
+
+type OwnProfileColumns = { readonly [Field in OwnProfileField]?: string | null };
+
+/**
+ * L'écriture a-t-elle CHANGÉ l'instantané ? La ligne écrite comparée à la ligne
+ * lue avant l'écriture, sur les neuf champs — un champ absent vaut `null`, comme
+ * dans la charge. Un champ PRÉSENT dans le corps n'en est pas un : l'iOS publié
+ * renvoie prénom, nom et nom affiché inchangés à chaque enregistrement (#13825),
+ * et une langue se réécrit à l'identique. Sans ligne lue avant, rien ne prouve un
+ * changement : rien ne part.
+ */
+export function ownProfileSnapshotChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns): boolean {
+  if (!before) return false;
+  return OWN_PROFILE_FIELDS.some((field) => (before[field] ?? null) !== (after[field] ?? null));
+}
 
 /** L'instantané servi à mes appareils, ou `null` quand la ligne ne permet pas de le composer selon le contrat. */
 export function ownProfileUpdatedPayload(row: OwnProfileRow): ProfileUpdatedEventData | null {

@@ -229,6 +229,37 @@ final class NotificationCachePatchTests: XCTestCase {
         XCTAssertTrue(result[0].isRead)
     }
 
+    /// Revue N8 (#19104) — une ligne NOUVELLE plus ancienne que toute la fenêtre n'y entre pas : rangée en queue,
+    /// elle décalerait la pagination par offset et `loadMore` sauterait une ligne du serveur.
+    func test_upsertingByCreatedAt_aNewRowOlderThanTheWholeWindow_staysOut() {
+        let items = [
+            makeDated(id: "n3", createdAt: "2026-11-03T10:00:00.000Z"),
+            makeDated(id: "n2", createdAt: "2026-11-02T10:00:00.000Z")
+        ]
+
+        let result = NotificationCachePatch.upsertingByCreatedAt(items, makeDated(id: "n0", createdAt: "2026-10-01T10:00:00.000Z"))
+
+        XCTAssertEqual(result.map(\.id), ["n3", "n2"])
+    }
+
+    func test_upsertingByCreatedAt_aRowAlreadyAtTheEndOfTheWindow_isStillReplaced() {
+        let items = [
+            makeDated(id: "n3", createdAt: "2026-11-03T10:00:00.000Z"),
+            makeDated(id: "n1", createdAt: "2026-11-01T10:00:00.000Z")
+        ]
+
+        let result = NotificationCachePatch.upsertingByCreatedAt(items, makeDated(id: "n1", createdAt: "2026-11-01T10:00:00.000Z", isRead: true))
+
+        XCTAssertEqual(result.map(\.id), ["n3", "n1"])
+        XCTAssertTrue(result[1].isRead)
+    }
+
+    func test_upsertingByCreatedAt_anEmptyWindow_takesTheRow() {
+        let result = NotificationCachePatch.upsertingByCreatedAt([], makeDated(id: "n1", createdAt: "2026-11-01T10:00:00.000Z"))
+
+        XCTAssertEqual(result.map(\.id), ["n1"])
+    }
+
     func test_markingRead_friendRequestId_marksOnlyTheRowsOfThatRequest() {
         let items = [
             makeDated(id: "a", createdAt: "2026-11-02T10:00:00.000Z", friendRequestId: "fr1"),
