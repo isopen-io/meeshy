@@ -583,9 +583,20 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
     return heldSessionKey(session) === (typeof persisted === 'object' ? heldSessionKey(sessionOf(persisted)) : null);
   };
 
-  /** L'édition reste tenue en mémoire ; l'entrée d'une autre session n'est pas réécrite. */
-  const persistHeld = (held: AuthenticatedSession, user: SessionUser): void => {
-    if (holdsDevice(held)) persist(storage, { user, token: held.token, sessionToken: held.sessionToken, expiresAt: held.expiresAt });
+  /**
+   * UNE ÉDITION S'APPLIQUE À CE QUE L'APPAREIL TIENT, CHAMP PAR CHAMP (#19132).
+   * L'utilisateur que l'appareil tient pour CETTE session reçoit l'édition et
+   * devient celui de l'onglet : un autre onglet de la même session a pu y
+   * changer une langue que celui-ci n'a pas encore suivie, et réécrire
+   * l'utilisateur entier de l'onglet la ramenait. L'entrée d'une autre session
+   * n'est pas réécrite ; l'édition reste alors tenue en mémoire seulement.
+   */
+  const editHeld = (held: AuthenticatedSession, edit: (user: SessionUser) => SessionUser): SessionUser => {
+    const device = deviceSession();
+    if (device.status !== 'authenticated' || heldSessionKey(device) !== heldSessionKey(held)) return edit(held.user);
+    const user = edit(device.user);
+    persist(storage, { user, token: held.token, sessionToken: held.sessionToken, expiresAt: held.expiresAt });
+    return user;
   };
 
   return createStore<SessionStoreState>((set, get) => ({
@@ -608,16 +619,12 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
     updateUser: (fields) => {
       const current = get().session;
       if (current.status !== 'authenticated') return;
-      const user = pickSessionUser(withProfileFields(current.user, fields));
-      persistHeld(current, user);
-      set({ session: { ...current, user } });
+      set({ session: { ...current, user: editHeld(current, (user) => pickSessionUser(withProfileFields(user, fields))) } });
     },
     noteEmailProven: () => {
       const current = get().session;
       if (current.status !== 'authenticated' || current.user.emailUnproven !== true) return;
-      const { emailUnproven: _proven, ...user } = current.user;
-      persistHeld(current, user);
-      set({ session: { ...current, user } });
+      set({ session: { ...current, user: editHeld(current, ({ emailUnproven: _proven, ...user }) => user) } });
     },
     restoreSession: () => {
       if (readPersisted(storage) === 'absent') adoptLegacySession(storage, now());

@@ -723,3 +723,44 @@ describe('W4 — changer de compte depuis un onglet périmé range ce que l’ap
     expect(restored.status === 'guest' ? restored.sessionToken : restored.status).toBe('anon-1');
   });
 });
+
+/**
+ * UNE ÉDITION S'APPLIQUE À CE QUE L'APPAREIL TIENT, CHAMP PAR CHAMP (W6).
+ * `persistHeld` écrivait l'utilisateur ENTIER de l'onglet : deux onglets de la
+ * même session, B change la langue, A change son nom avant d'avoir suivi B —
+ * et l'entrée revenait à l'ancienne langue d'A, que B suivait ensuite.
+ * L'écouteur ferme la fenêtre ordinaire (W1) ; ce témoin ferme la course.
+ */
+describe('W6 — une édition de profil ne ramène pas un champ qu’un autre onglet vient de changer (#19132)', () => {
+  test('A change son nom avant d’avoir suivi B : la langue que B vient de changer reste', () => {
+    const storage = fakeStorage();
+    const tabA = openTab(storage);
+    tabA.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    const tabB = openTab(storage);
+    tabB.getState().restoreSession();
+
+    tabB.getState().updateUser({ systemLanguage: 'en' });
+    tabA.getState().updateUser({ displayName: 'Ada L.' });
+
+    const restored = reloaded(storage);
+    expect(restored.status === 'authenticated' ? restored.user.systemLanguage : undefined).toBe('en');
+    expect(restored.status === 'authenticated' ? restored.user.displayName : undefined).toBe('Ada L.');
+    const held = tabA.getState().session;
+    expect(held.status === 'authenticated' ? held.user.systemLanguage : undefined).toBe('en');
+  });
+
+  test('l’adresse prouvée dans A ne ramène pas non plus la langue changée dans B', () => {
+    const storage = fakeStorage();
+    const tabA = openTab(storage);
+    tabA.getState().establish({ user: { ...ADA, emailUnproven: true }, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    const tabB = openTab(storage);
+    tabB.getState().restoreSession();
+
+    tabB.getState().updateUser({ systemLanguage: 'en' });
+    tabA.getState().noteEmailProven();
+
+    const restored = reloaded(storage);
+    expect(restored.status === 'authenticated' ? restored.user.systemLanguage : undefined).toBe('en');
+    expect(restored.status === 'authenticated' ? restored.user.emailUnproven : undefined).toBeUndefined();
+  });
+});
