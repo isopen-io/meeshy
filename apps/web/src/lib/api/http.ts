@@ -391,7 +391,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  async function request<T>(req: HttpRequest): Promise<ApiResult<T>> {
+  async function attempt<T>(req: HttpRequest, mayReplay: boolean): Promise<ApiResult<T>> {
     if (req.expectedIdentity !== undefined && options.identity !== undefined && options.identity() !== req.expectedIdentity) {
       return { ok: false, status: 0, error: 'Le compte a changé pendant l’opération', code: IDENTITY_CHANGED };
     }
@@ -467,7 +467,11 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
        ferme jamais la session de B ouverte entre-temps. Ni de la session
        courante du MÊME compte, si elle n'a pas présenté ce crédential : l'onglet
        a repris entre-temps celle que l'appareil tient (#19132). */
-    const credentialChanged = JSON.stringify(options.credential?.() ?? null) !== JSON.stringify(credential);
+    const followed = options.credential?.() ?? null;
+    const credentialChanged = JSON.stringify(followed) !== JSON.stringify(credential);
+    /* Le MÊME compte tient désormais un autre jeton (audit #19352) : la requête,
+       que la passerelle a refusée avant de l'exécuter, repart une fois sous lui. */
+    if (unauthorized && presentsIdentity && !identityChanged() && credentialChanged && followed !== null && mayReplay) return attempt<T>(req, false);
     if (unauthorized && presentsIdentity && !identityChanged() && !credentialChanged) options.onUnauthorized?.(refusalOf(envelope));
     if (deletedAccount !== null) options.onAccountDeleted?.(deletedAccount);
 
@@ -508,6 +512,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     };
   }
 
+  const request = <T,>(req: HttpRequest): Promise<ApiResult<T>> => attempt<T>(req, true);
   const transport = (({ method, path, body }) => request({ method, path, body })) as HttpTransport;
   transport.request = request;
   return transport;
