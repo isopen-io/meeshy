@@ -10,8 +10,8 @@ const content = (it: MeeshyMediaGridItem) => <i data-image={it.id} />;
 
 describe('MeeshyMediaGrid — la loi de placement', () => {
   test('chaque tuile va dans la colonne la plus courte, de gauche à droite à égalité', () => {
-    const placed = meeshyMediaGridPlacement({ aspects: [1, 2, 1, 1], columns: 2, spacing: 8, width: 308 });
-    expect(placed.columns).toEqual([[0, 2], [1]]);
+    const placed = meeshyMediaGridPlacement({ aspects: [1, 0.5, 1, 1], columns: 2, spacing: 8, width: 308 });
+    expect(placed.columns).toEqual([[0, 2], [1, 3]]);
   });
 
   test('les hauteurs suivent la largeur de colonne, l’écart compte entre deux tuiles', () => {

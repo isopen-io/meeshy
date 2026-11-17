@@ -1,0 +1,349 @@
+/* L'ÉPINGLE DE CARTE (K36, #18877) — le contenu de l'hôte sous un liseré, un disque de
+   précision, une onde. Les mesures viennent de `meeshy-map-pin-recipe.ts` (`--kit-pin-*`).
+   Seules `transform` et `opacity` s'animent ; mouvement réduit : l'onde devient un anneau fixe. */
+@layer components {
+  .kit-pin {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: var(--kit-pin-target, 2.75rem);
+    min-block-size: var(--kit-pin-target, 2.75rem);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: default;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button.kit-pin {
+    cursor: pointer;
+  }
+
+  .kit-pin:focus-visible {
+    outline: 2.5px solid var(--color-ios-ink);
+    outline-offset: 3px;
+    border-radius: 999px;
+  }
+
+  .kit-pin__stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    transform: scale(var(--kit-pin-press, 1));
+    transition: transform var(--motion-morph-duration, 420ms) var(--motion-morph, ease-out);
+  }
+
+  .kit-pin__stage[data-selected] {
+    z-index: 1;
+  }
+
+  .kit-pin__body {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-pin-size);
+    block-size: var(--kit-pin-size);
+    border-radius: 999px;
+    box-shadow: 0 0 0 var(--kit-pin-liner) var(--color-ios-bg), 0 0.625rem 1.5rem rgb(0 0 0 / 0.55);
+    transition: inline-size var(--motion-morph-duration, 420ms) var(--motion-morph, ease-out), block-size var(--motion-morph-duration, 420ms) var(--motion-morph, ease-out);
+  }
+
+  .kit-pin__stage[data-kind='own'] .kit-pin__body {
+    box-shadow: 0 0 0 var(--kit-pin-liner) #fff, 0 0.625rem 1.5rem rgb(0 0 0 / 0.55);
+  }
+
+  .kit-pin__stage[data-selected] .kit-pin__body {
+    box-shadow: 0 0 0 var(--kit-pin-liner) #fff, 0 0.625rem 1.5rem rgb(0 0 0 / 0.55);
+  }
+
+  .kit-pin__content {
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: hidden;
+    border-radius: 999px;
+    opacity: var(--kit-pin-content-opacity, 1);
+    filter: none;
+  }
+
+  .kit-pin__stage[data-stale] .kit-pin__content {
+    opacity: var(--kit-pin-content-opacity, 0.55);
+  }
+
+  .kit-pin__stage[data-kind='ghost'] .kit-pin__body {
+    border: 1.5px dashed var(--color-ios-ink-3);
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .kit-pin__selection {
+    position: absolute;
+    inset: -0.5rem;
+    border-radius: 999px;
+    border: 3px solid var(--kit-pin-tint, var(--color-ios-brand));
+    pointer-events: none;
+  }
+
+  .kit-pin__badge {
+    position: absolute;
+    inset-block-end: -0.125rem;
+    inset-inline-end: -0.125rem;
+    min-inline-size: var(--kit-pin-badge);
+    min-block-size: var(--kit-pin-badge);
+  }
+
+  .kit-pin__point {
+    position: absolute;
+    inset-block-end: calc(-0.4 * var(--kit-pin-point));
+    inline-size: var(--kit-pin-point);
+    block-size: var(--kit-pin-point);
+    border-radius: 0.1875rem;
+    background: var(--color-ios-bg);
+    transform: rotate(45deg);
+    z-index: -1;
+  }
+
+  .kit-pin__stage[data-selected] .kit-pin__point {
+    background: #fff;
+  }
+
+  .kit-pin__pulse {
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-start: 50%;
+    inline-size: var(--kit-pin-size);
+    block-size: var(--kit-pin-size);
+    margin-inline-start: calc(-0.5 * var(--kit-pin-size));
+    margin-block-start: calc(-0.5 * var(--kit-pin-size));
+    border-radius: 999px;
+    border: var(--kit-pin-ring) solid var(--kit-pin-tint, var(--color-ios-brand));
+    box-sizing: border-box;
+    pointer-events: none;
+    transform: scale(calc(1 + var(--kit-pin-offset) / 24));
+    opacity: 0.8;
+  }
+
+  .kit-pin__pulse[data-animates] {
+    animation: kit-pin-pulse 2400ms var(--motion-pulse, ease-out) infinite;
+    animation-play-state: var(--motion-pulse-play, running);
+  }
+
+  .kit-pin__caption {
+    position: absolute;
+    inset-block-start: calc(100% + 0.25rem);
+    padding: 0 0.5rem;
+    min-block-size: 1.375rem;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: var(--color-ios-card);
+    color: var(--color-ios-ink);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .kit-pin__above {
+    position: absolute;
+    inset-block-end: calc(100% + 0.25rem);
+  }
+
+  .kit-pin__below {
+    position: absolute;
+    inset-block-start: calc(100% + 0.25rem);
+  }
+
+  .kit-blur-disc {
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-start: 50%;
+    inline-size: var(--kit-pin-disc);
+    block-size: var(--kit-pin-disc);
+    margin-inline-start: calc(-0.5 * var(--kit-pin-disc));
+    margin-block-start: calc(-0.5 * var(--kit-pin-disc));
+    border-radius: 999px;
+    box-sizing: border-box;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--kit-pin-tint, var(--color-ios-brand)) calc(var(--kit-pin-disc-opacity, 0.18) * 100%), transparent);
+    border: 1.5px solid var(--kit-pin-tint, var(--color-ios-brand));
+    animation: kit-pin-breathe 5s ease-in-out infinite;
+  }
+
+  .kit-blur-disc[data-stale] {
+    border: 1.5px dashed var(--color-ios-ink-3);
+    animation: none;
+  }
+
+  .kit-pin-cluster {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+
+  button.kit-pin-cluster {
+    cursor: pointer;
+  }
+
+  .kit-pin-cluster__stage {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem;
+    border-radius: 999px;
+    background: var(--color-ios-bg);
+    box-shadow: 0 0.625rem 1.5rem rgb(0 0 0 / 0.55);
+    animation: kit-pin-pop 380ms var(--motion-morph, ease-out) both;
+  }
+
+  .kit-pin-cluster__item {
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-pin-cluster);
+    block-size: var(--kit-pin-cluster);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-inline-end: calc(-1 * var(--kit-pin-overlap));
+  }
+
+  .kit-pin-cluster__item:last-of-type {
+    margin-inline-end: 0;
+  }
+
+  .kit-pin-cluster__fill {
+    inline-size: var(--kit-pin-cluster);
+    block-size: var(--kit-pin-cluster);
+    border-radius: 999px;
+    background: var(--kit-pin-tint, var(--color-ios-brand));
+  }
+
+  .kit-pin-cluster__count {
+    position: absolute;
+    inset-block-start: -0.5rem;
+    inset-inline-end: -0.5rem;
+    min-inline-size: var(--kit-pin-count);
+    block-size: var(--kit-pin-count);
+    padding: 0 0.375rem;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--kit-pin-tint, var(--color-ios-brand));
+    color: var(--color-ios-on-brand);
+    font-size: 0.75rem;
+    font-weight: 800;
+  }
+
+  .kit-pin-preview {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    inline-size: 100%;
+    min-block-size: 7.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 1.125rem;
+    background: var(--color-ios-fill);
+    color: var(--color-ios-ink);
+    text-align: start;
+    font: inherit;
+  }
+
+  .kit-pin-preview__background,
+  .kit-pin-preview__veil {
+    position: absolute;
+    inset: 0;
+  }
+
+  .kit-pin-preview__veil {
+    background: linear-gradient(to top, rgb(0 0 0 / 0.55), transparent 60%);
+  }
+
+  .kit-pin-preview__pin {
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-start: 40%;
+    transform: translate(-50%, -50%);
+  }
+
+  .kit-pin-preview__legend {
+    position: absolute;
+    inset-inline: 0.75rem;
+    inset-block-end: 0.625rem;
+    display: grid;
+    gap: 0.125rem;
+    color: #fff;
+  }
+
+  .kit-pin-preview__title {
+    font-weight: 800;
+    font-size: 0.875rem;
+  }
+
+  .kit-pin-preview__subtitle {
+    font-size: 0.75rem;
+    opacity: 0.85;
+  }
+
+  @media (hover: hover) {
+    button.kit-pin:hover .kit-pin__stage {
+      transform: scale(1.04);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-blur-disc,
+    .kit-pin__pulse[data-animates],
+    .kit-pin-cluster__stage {
+      animation: none;
+    }
+
+    .kit-pin__stage,
+    .kit-pin__body {
+      transition: none;
+    }
+  }
+}
+
+@keyframes kit-pin-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+
+  to {
+    transform: scale(2.3);
+    opacity: 0;
+  }
+}
+
+@keyframes kit-pin-breathe {
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes kit-pin-pop {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  70% {
+    transform: scale(1.1);
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

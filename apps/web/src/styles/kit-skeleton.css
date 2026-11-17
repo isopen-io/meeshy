@@ -15,6 +15,7 @@
     background-color: var(--color-ios-fill);
     overflow: hidden;
     isolation: isolate;
+    animation: kit-skeleton-appear 120ms ease-out var(--kit-skeleton-appear, 150ms) both;
   }
 
   .kit-skeleton[data-shape='ticket'] {
@@ -63,5 +64,15 @@
   .kit-skeleton::after {
     animation: none;
     opacity: 0;
+  }
+}
+
+@keyframes kit-skeleton-appear {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }

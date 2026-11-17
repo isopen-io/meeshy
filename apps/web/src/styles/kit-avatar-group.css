@@ -1,0 +1,232 @@
+/* LE GROUPE D'AVATARS (K48, #18877) — pile, duo, rangée, grille. Le détourage est un liseré
+   à la couleur du fond de l'hôte (`--kit-group-surface`). Mesures de `meeshy-avatar-group-recipe.ts`.
+   Seules `transform` et `opacity` s'animent ; mouvement réduit : le duo ne respire plus. */
+@layer components {
+  .kit-avatar-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-inline-size: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-ios-ink);
+    font: inherit;
+    text-align: start;
+  }
+
+  .kit-avatar-group--press {
+    min-block-size: 3rem;
+    cursor: pointer;
+  }
+
+  .kit-avatar-group--press:focus-visible,
+  .kit-avatar-group__cell:focus-visible {
+    outline: 2.5px solid var(--color-ios-ink);
+    outline-offset: 3px;
+  }
+
+  .kit-avatar-group__faces {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+  }
+
+  .kit-avatar-group__face {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-group-size);
+    block-size: var(--kit-group-size);
+    border-radius: 999px;
+    box-shadow: 0 0 0 var(--kit-group-ring) var(--kit-group-surface, var(--color-ios-bg));
+    margin-inline-start: calc(-1 * var(--kit-group-overlap));
+  }
+
+  .kit-avatar-group__face:first-child {
+    margin-inline-start: 0;
+  }
+
+  .kit-avatar-group__overflow {
+    background: var(--color-ios-fill);
+    color: var(--color-ios-ink-2);
+    font-weight: 900;
+    font-size: calc(var(--kit-group-size) * 0.34);
+  }
+
+  .kit-avatar-group[data-layout='duo'] .kit-avatar-group__face:last-child {
+    mix-blend-mode: screen;
+  }
+
+  .kit-avatar-group[data-layout='duo'] .kit-avatar-group__faces {
+    position: relative;
+  }
+
+  .kit-avatar-group[data-layout='duo'] .kit-avatar-group__faces::after {
+    content: '';
+    position: absolute;
+    inset: 15%;
+    border-radius: 999px;
+    background: radial-gradient(circle, color-mix(in srgb, var(--kit-group-tint, var(--color-ios-brand)) calc(var(--kit-group-halo, 0.34) * 100%), transparent), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .kit-avatar-group[data-breathes] .kit-avatar-group__face:first-child {
+    animation: kit-group-breathe-a 4600ms ease-in-out infinite;
+  }
+
+  .kit-avatar-group[data-breathes] .kit-avatar-group__face:last-child {
+    animation: kit-group-breathe-b 4600ms ease-in-out infinite;
+  }
+
+  .kit-avatar-group__summary {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--color-ios-ink-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .kit-avatar-group__chevron {
+    flex: none;
+    inline-size: 1rem;
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-avatar-group__chevron:dir(rtl) svg {
+    transform: scaleX(-1);
+  }
+
+  .kit-avatar-group__cells {
+    display: flex;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .kit-avatar-group__cells[data-layout='grid'] {
+    display: grid;
+    gap: 0.5rem 1.375rem;
+    overflow: visible;
+  }
+
+  .kit-avatar-group__cell {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 0.5rem;
+    flex: none;
+    inline-size: 3.875rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-ios-ink-2);
+    font: inherit;
+  }
+
+  .kit-avatar-group__cells[data-layout='grid'] .kit-avatar-group__cell {
+    inline-size: auto;
+  }
+
+  button.kit-avatar-group__cell {
+    cursor: pointer;
+  }
+
+  button.kit-avatar-group__cell:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .kit-avatar-group__disc {
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-group-size);
+    block-size: var(--kit-group-size);
+    border-radius: 999px;
+    transition: box-shadow 180ms ease-out;
+  }
+
+  .kit-avatar-group__cell[data-selected] .kit-avatar-group__disc {
+    box-shadow: 0 0 0 var(--kit-group-select) var(--kit-group-surface, var(--color-ios-bg)), 0 0 0 calc(var(--kit-group-select) * 2) var(--kit-group-tint, var(--color-ios-brand));
+  }
+
+  .kit-avatar-group__check {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0.5rem;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-group-check);
+    block-size: var(--kit-group-check);
+    border-radius: 999px;
+    background: var(--kit-group-tint, var(--color-ios-brand));
+    color: var(--color-ios-bg);
+    box-shadow: 0 0 0 2.5px var(--kit-group-surface, var(--color-ios-bg));
+    animation: kit-group-check 260ms var(--motion-morph, ease-out) both;
+  }
+
+  .kit-avatar-group__check svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .kit-avatar-group__caption {
+    max-inline-size: 100%;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .kit-avatar-group__cell[data-selected] .kit-avatar-group__caption {
+    color: var(--color-ios-ink);
+  }
+
+  .kit-avatar-group__trailing {
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-avatar-group[data-breathes] .kit-avatar-group__face,
+    .kit-avatar-group__check {
+      animation: none;
+    }
+  }
+}
+
+@keyframes kit-group-breathe-a {
+  50% {
+    transform: translateX(0.3125rem);
+  }
+}
+
+@keyframes kit-group-breathe-b {
+  50% {
+    transform: translateX(-0.3125rem);
+  }
+}
+
+@keyframes kit-group-check {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  70% {
+    transform: scale(1.35);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

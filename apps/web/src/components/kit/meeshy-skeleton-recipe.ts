@@ -34,6 +34,9 @@ export const MEESHY_SKELETON_MEASURE = {
   ticketRadius: 20,
 } as const;
 
+/** Aucun squelette avant 150 ms : une réponse rapide ne clignote pas. */
+export const MEESHY_SKELETON_APPEAR_MS = 150;
+
 const LINE_RATIOS: readonly number[] = [0.7, 0.55, 0.62, 0.4, 0.5, 0.66, 0.45];
 
 /** La largeur d'une ligne vient d'une suite fixe de 40 à 70 % : deux écrans voisins ne se ressemblent pas, un même écran ne saute jamais. */
@@ -72,4 +75,5 @@ export const meeshySkeletonStyle = (recipe: MeeshySkeletonRecipe, offsetMs: numb
     '--kit-skeleton-radius': recipe.radius === 'full' ? '999px' : rem(recipe.radius),
     '--kit-skeleton-cut': recipe.cut !== null ? rem(recipe.cut) : '0px',
     '--kit-skeleton-delay': `${offsetMs}ms`,
+    '--kit-skeleton-appear': `${MEESHY_SKELETON_APPEAR_MS}ms`,
   }) as CSSProperties;

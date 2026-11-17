@@ -81,7 +81,7 @@ describe('MeeshyStateBlock — ce qu’on lit et ce qu’on touche', () => {
     const button = container.querySelector('button') as HTMLButtonElement;
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.getAttribute('aria-busy')).toBe('true');
-    expect(spokenText(button)).toContain('en cours');
+    expect(document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent).toBe('en cours');
     act(() => button.click());
     expect(plays).toBe(0);
   });
