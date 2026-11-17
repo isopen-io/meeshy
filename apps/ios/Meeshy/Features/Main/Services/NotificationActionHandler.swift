@@ -64,6 +64,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
     private let notifyRefusedReply: @MainActor (String?) -> Void
     private let stopBring: @MainActor (String) async -> Void
+    private let markReadThroughStore: @MainActor (String) async -> Bool
+    let recordPendingRevocations: @MainActor ([String]) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
@@ -189,8 +191,17 @@ final class NotificationActionHandler: NotificationActionHandling {
         endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared,
         awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live,
-        stopBring: @escaping @MainActor (String) async -> Void = { await BringCenter.shared.stopAndWait(bringId: $0) }
+        stopBring: @escaping @MainActor (String) async -> Void = { await BringCenter.shared.stopAndWait(bringId: $0) },
+        markReadThroughStore: @escaping @MainActor (String) async -> Bool = {
+            await ConversationStore.shared.markReadDurably($0)
+        },
+        // ios-systeme-7 — l'inscription que l'extension relit avant de livrer.
+        recordPendingRevocations: @escaping @MainActor ([String]) -> Void = {
+            PendingBannerRevocations.inAppGroup().record($0, now: Date())
+        }
     ) {
+        self.markReadThroughStore = markReadThroughStore
+        self.recordPendingRevocations = recordPendingRevocations
         self.stopBring = stopBring
         self.repliesAwaitingRegime = repliesAwaitingRegime
         self.awaitingReplyRules = awaitingReplyRules
@@ -406,10 +417,14 @@ final class NotificationActionHandler: NotificationActionHandling {
     private func handleMarkRead(_ payload: NotificationPayload) async {
         guard let conversationId = payload.conversationId else { return }
         localMarkRead(conversationId)
-        do {
-            try await conversationService.markRead(conversationId: conversationId)
-        } catch {
-            logger.error("markRead REST failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        // ios-systeme-4 — le store porte l'envoi dans sa file persistante (rejeu au retour du
+        // réseau) ; le POST direct n'est que le repli d'une conversation que le store ne connaît pas.
+        if !(await markReadThroughStore(conversationId)) {
+            do {
+                try await conversationService.markRead(conversationId: conversationId)
+            } catch {
+                logger.error("markRead REST failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
         removeDeliveredForConversation(conversationId)
     }
