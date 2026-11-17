@@ -126,4 +126,13 @@ class MeeshyMedallionTest {
         assertThat(MeeshyMedallionRecipe.isHiddenFromVoice(label = "")).isTrue()
         assertThat(MeeshyMedallionRecipe.isHiddenFromVoice(label = "Or III")).isFalse()
     }
+
+    @Test
+    fun `l'anneau pointille trace a 2 et le contour verrouille est pointille a 15, comme la fiche, iOS et le web`() {
+        assertThat(resolve(decor = MeeshyMedallionDecor.Dashed).dashedStrokeDp).isEqualTo(2f)
+        val locked = resolve(state = MeeshyMedallionState.Locked)
+        assertThat(locked.borderDp).isEqualTo(1.5f)
+        assertThat(locked.borderIsDashed).isTrue()
+        assertThat(resolve().borderDp).isEqualTo(0f)
+    }
 }
