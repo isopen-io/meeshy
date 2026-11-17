@@ -14,6 +14,8 @@ const input = (overrides: Partial<IncomingCallPushInput> = {}): IncomingCallPush
   iceServersJson: '[]',
   isChinaDevice: false,
   voipCapable: true,
+  conversationType: 'direct',
+  isGroup: false,
   ...overrides,
 });
 
@@ -49,11 +51,32 @@ describe('buildIncomingCallPushes', () => {
       callerAvatar: 'https://a/b.png',
       isVideo: 'false',
       iceServers: '[]',
+      conversationType: 'direct',
+      isGroup: 'false',
     });
   });
 
   it('falls back to an APNs alert for a China-region device or one without a voip token', () => {
     expect(buildIncomingCallPushes(input({ isChinaDevice: true }))[0]?.types).toEqual(['apns']);
     expect(buildIncomingCallPushes(input({ voipCapable: false }))[0]?.types).toEqual(['apns']);
+  });
+
+  it('tells a callee woken by the push that a group call is ringing, on both families', () => {
+    const pushes = buildIncomingCallPushes(input({ conversationType: 'group', isGroup: true }));
+
+    for (const push of pushes) {
+      expect(push.payload.data).toMatchObject({ conversationType: 'group', isGroup: 'true' });
+      expect(push.payload.data).not.toHaveProperty('invitedBy');
+    }
+  });
+
+  it('names the inviter of a person rung into a call already under way', () => {
+    const pushes = buildIncomingCallPushes(
+      input({ conversationType: 'direct', isGroup: true, invitedByUserId: 'caller-1' })
+    );
+
+    for (const push of pushes) {
+      expect(push.payload.data).toMatchObject({ conversationType: 'direct', isGroup: 'true', invitedBy: 'caller-1' });
+    }
   });
 });
