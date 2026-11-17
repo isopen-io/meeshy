@@ -9,10 +9,13 @@ import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import type { NotificationRecord } from '@/lib/notifications/record';
 import { createOutboxStore } from '@/lib/send/outbox-store';
 
+import type { ApiResult, HttpRequest, HttpTransport } from './http';
+
 import {
   NOTIFICATION_COUNTS_QUERY_KEY,
   notificationListKey,
   type NotificationCounts,
+  type NotificationsDeps,
   type NotificationsInfiniteData,
 } from './notifications';
 import { createRealtimeConnection } from './socket';
@@ -66,7 +69,7 @@ const served = (id: string, createdAt: string, content: string) => ({
   state: { isRead: false, readAt: null, createdAt },
 });
 
-function connect(options: { readonly now?: () => number } = {}) {
+function connect(options: { readonly now?: () => number; readonly notificationsApi?: NotificationsDeps } = {}) {
   const socket = fakeSocket();
   const queryClient = new QueryClient();
   const empty: NotificationsInfiniteData = { pages: [{ notifications: [], hasMore: false, nextCursor: null }], pageParams: [undefined] };
@@ -219,5 +222,84 @@ describe('web-notifs-2 — une réécriture plus ancienne que la première page 
     socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, served('n1', '2026-11-17T07:00:00.000Z', 'édité'));
 
     expect(ids(queryClient)).toEqual(['n9', 'n8']);
+  });
+});
+
+describe('web-notifs-3 — une notification arrivée sur la conversation OUVERTE est lue à l’arrivée', () => {
+  const reaction = (id: string, conversationId: string) => ({
+    ...served(id, '2026-11-17T09:00:00.000Z', 'Awa a réagi ❤️'),
+    type: 'message_reaction',
+    context: { conversationId },
+  });
+  const answering = () => {
+    const requests: HttpRequest[] = [];
+    const answer: ApiResult<unknown> = { ok: true, data: undefined };
+    const transport = { request: async (req: HttpRequest) => (requests.push(req), answer) } as unknown as HttpTransport;
+    const notificationsApi: NotificationsDeps = { source: 'gateway', transport };
+    return { notificationsApi, calls: () => requests.map((req) => `${req.method} ${req.path}`) };
+  };
+  const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  const openThread = (pathname: string) => {
+    globals.window = { location: { pathname }, addEventListener: () => undefined, removeEventListener: () => undefined };
+  };
+
+  test('sur /c/X, la réaction est marquée lue, la pastille ne bouge pas et aucune bannière ne descend', async () => {
+    openThread('/c/X');
+    const { notificationsApi, calls } = answering();
+    const { socket, queryClient } = connect({ notificationsApi });
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, reaction('n1', 'X'));
+    await settle();
+
+    expect(calls()).toEqual(['POST /api/v1/notifications/n1/read']);
+    expect(unread(queryClient)).toBe(0);
+    expect(bannerId()).toBeNull();
+  });
+
+  test('sur /c/Y, la même réaction reste non lue et compte', async () => {
+    openThread('/c/Y');
+    const { notificationsApi, calls } = answering();
+    const { socket, queryClient } = connect({ notificationsApi });
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, reaction('n1', 'X'));
+    await settle();
+
+    expect(calls()).toEqual([]);
+    expect(unread(queryClient)).toBe(1);
+    expect(bannerId()).toBe('n1');
+  });
+
+  test('onglet caché : rien n’est lu — personne ne regarde le fil', async () => {
+    openThread('/c/X');
+    globals.document = { hidden: true };
+    const { notificationsApi, calls } = answering();
+    const { socket, queryClient } = connect({ notificationsApi });
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, reaction('n1', 'X'));
+    await settle();
+
+    expect(calls()).toEqual([]);
+    expect(unread(queryClient)).toBe(1);
+  });
+
+  test('un appel entrant sur le fil ouvert n’est PAS marqué lu : la couche d’appel le présente', async () => {
+    openThread('/c/X');
+    const { notificationsApi, calls } = answering();
+    const { socket } = connect({ notificationsApi });
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, { ...reaction('n1', 'X'), type: 'incoming_call' });
+    await settle();
+
+    expect(calls()).toEqual([]);
+  });
+
+  test('sans transport de cloche, la notification reste non lue (rien ne part, rien ne casse)', async () => {
+    openThread('/c/X');
+    const { socket, queryClient } = connect();
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, reaction('n1', 'X'));
+    await settle();
+
+    expect(unread(queryClient)).toBe(1);
   });
 });
