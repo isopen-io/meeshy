@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { AMI, AUTRE, deferred, flush, HOUR, makeAcrossTabs, makeWorld, PARIS, STARTED, T0 } from '@/test-support/shared-location-sharing-world';
 
 import type { SharedLocationFix, SharedLocationVerdict } from './shared-location-sending';
+import type { SharedLocationFixResult } from './shared-location-sharing';
 import { SHARED_LOCATION_RETRY_MS } from './shared-location-sharing';
 import { EMPTY_ROSTER, encodeSharedLocationRoster, rosterOps } from './shared-location-roster';
 
@@ -506,5 +507,22 @@ describe('un « Arrêter » hors ligne part au retour du réseau (#18388, iso #1
     expect(tabB.center.entry(AMI)).toBeNull();
     expect(rosterOps.entry(tabB.stored(), AMI)).toBeNull();
     expect(tabB.center.entry(AUTRE)).not.toBeNull();
+  });
+
+  test('#18431 : une demande de permission restée ouverte dans un onglet ne retient pas l’« Arrêter » d’un autre', async () => {
+    const memory = new Map<string, string>();
+    const acrossTabs = makeAcrossTabs();
+    const tabA = makeWorld({ memory, acrossTabs });
+    await tabA.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    const tabB = makeWorld({ memory, acrossTabs });
+    const prompt = deferred<SharedLocationFixResult>();
+    tabB.source.pending = prompt.promise;
+    const sharing = tabB.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    await flush();
+    expect(await tabA.center.stopSharing(AMI)).toBeNull();
+    expect(tabA.stops()).toBe(1);
+    prompt.resolve({ kind: 'fix', fix: PARIS });
+    expect(await sharing).toBeNull();
+    expect(tabB.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city' }]);
   });
 });

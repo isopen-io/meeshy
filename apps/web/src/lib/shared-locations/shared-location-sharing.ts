@@ -378,35 +378,45 @@ export function createSharedLocationSharingCenter({
     return current.kind === 'fix' ? current.fix : null;
   };
 
-  const locked = async (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> => {
+  /* Le verrou de l'onglet seul : ce qui attend l'utilisateur (une demande de permission) s'y tient, jamais sous celui des autres onglets. */
+  const gated = async (run: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> => {
     await gate.enter();
     try {
       store.setState({ busy: true });
-      return await acrossTabs(async () => {
-        if (!isLive()) return 'failed';
-        reread();
-        return operation();
-      });
+      return await run();
     } finally {
       store.setState({ busy: false });
       gate.leave();
     }
   };
 
+  /* Sous le verrou du compte, la liste gardée est relue : un autre onglet a pu la changer pendant l'attente (#18431). */
+  const acrossAccountTabs = (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> =>
+    acrossTabs(async () => {
+      if (!isLive()) return 'failed';
+      reread();
+      return operation();
+    });
+
+  const locked = (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> =>
+    gated(() => acrossAccountTabs(operation));
+
   const center: SharedLocationSharingCenter = {
     store,
     entry: (userId) => rosterOps.entry(rosterOps.pruned(roster(), now()), userId),
     showsRow: (userId, offered) => offered || center.entry(userId) !== null,
     share: ({ userId, precision, durationMinutes }) =>
-      locked(async () => {
+      gated(async () => {
+        if (!isLive()) return 'failed';
         const current = await fixes.currentFix();
         if (current.kind === 'denied') return 'location-denied';
         if (current.kind === 'unavailable') return 'location-unavailable';
-        if (!isLive()) return 'failed';
-        markReceived(false);
-        const previous = roster();
-        const next = rosterOps.adding(rosterOps.pruned(previous, now()), { userId, precision, durationMinutes, now: now() });
-        return publish(next, current.fix, previous);
+        return acrossAccountTabs(async () => {
+          markReceived(false);
+          const previous = roster();
+          const next = rosterOps.adding(rosterOps.pruned(previous, now()), { userId, precision, durationMinutes, now: now() });
+          return publish(next, current.fix, previous);
+        });
       }),
     stopSharing: (userId) =>
       locked(async () => {

@@ -84,12 +84,12 @@ export function makeWorld({
       return (stopQueue.shift() ?? (async () => true))();
     },
   };
-  const source = { result: fix, granted, prompts: 0, following: 0, listener: null as ((fix: SharedLocationFix) => void) | null };
+  const source = { result: fix, pending: null as Promise<SharedLocationFixResult> | null, granted, prompts: 0, following: 0, listener: null as ((fix: SharedLocationFix) => void) | null };
   const fixes: SharedLocationFixSource = {
     isGranted: async () => source.granted,
     currentFix: async () => {
       source.prompts += 1;
-      return source.result;
+      return source.pending ?? source.result;
     },
     follow: (onFix) => {
       source.following += 1;
