@@ -136,11 +136,12 @@ class RouteManifestRatchetTest {
          * relit quand la passerelle annonce que son partage a changé) ; le recalage d'Android la portera (#18578).
          * 130 : moins `GET /relations/locations/mine`, que porte `RelationsApi.ownSharedLocation` (#18578 : le centre de
          * partage Android se recale sur la liste que la passerelle sert).
-         * 133 : plus les trois routes de la vérification de mes appareils chiffrés (#18906, vague 2 de l'E2EE —
-         * `GET|POST /e2ee/devices/self/verifications` et `POST /e2ee/devices/self/verifications/ack`), servies par la
-         * passerelle et dont `ApiRoutesE2Ee` nomme déjà les chemins ; l'E2EE Android les portera avec la comparaison de code.
+         * 133 : plus `GET`/`POST /e2ee/devices/self/verifications` et `POST /e2ee/devices/self/verifications/ack` (#19080,
+         * vérification d'appareil E2EE servie par la passerelle) ; #19189 les portera.
+         * 138 : plus les cinq routes « Mes adresses » sous `/users/me/addresses` (lecture, création, modification,
+         * suppression, ordre — lot `serveur-mes-adresses` de #18857) ; la face Liens Android (#18889) les portera.
          */
-        const val TO_PORT_CEILING = 133
+        const val TO_PORT_CEILING = 138
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
