@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  E2EE_MAX_DEPTH,
   E2EE_SIGNAL_KINDS,
   e2eeContentV1Schema,
   e2eePlaintextPayload,
@@ -57,6 +58,7 @@ type VerdictCase = {
   readonly version?: number;
   readonly kind?: string;
   readonly expected?: Record<string, unknown>;
+  readonly reason?: string;
 };
 
 type Vectors<T> = {
@@ -119,6 +121,15 @@ describe('les vecteurs du contenu chiffré sont cohérents avec eux-mêmes', () 
       'misattributed-conversation',
       'unreadable',
     ]);
+  });
+
+  it('une raison de vecteur n’accompagne qu’un verdict illisible, et c’est une raison du contrat', () => {
+    const reasons = [...content.verdicts, ...signals.verdicts].filter((v) => v.reason !== undefined);
+    expect(reasons.length).toBeGreaterThan(0);
+    reasons.forEach((v) => {
+      expect(v.verdict).toBe('unreadable');
+      expect(['not-utf8', 'not-json', 'not-an-object', 'invalid-version', 'invalid-fields']).toContain(v.reason);
+    });
   });
 
   it('chaque action connue d’un signal a son cas d’aller-retour', () => {
@@ -215,6 +226,7 @@ describe('l’ouverture rend le verdict d’iOS, et une version future ne se per
     expect(opening.verdict).toBe(vector.verdict);
     if (opening.verdict === 'future-version') expect({ version: opening.version, json: opening.json }).toEqual({ version: vector.version, json: vector.plaintextJson });
     if (opening.verdict === 'admitted-unknown-kind') expect(opening.header.kind).toBe(vector.kind);
+    if (vector.reason !== undefined) expect(opening).toMatchObject({ reason: vector.reason });
     if (opening.verdict === 'admitted' || opening.verdict === 'admitted-unauthored') {
       expect(opening.payload === 'message' ? opening.content : opening.signal).toEqual(vector.expected);
     }
@@ -259,6 +271,74 @@ describe('l’ouverture reste linéaire, quel que soit ce qui suit le remplissag
 
     expect(openE2EEPlaintext(plaintext, origin)).toMatchObject({ verdict: 'future-version', version: 2, json });
     expect(fastestOf(5, () => openE2EEPlaintext(plaintext, origin))).toBeLessThan(5);
+  });
+});
+
+/**
+ * #19112 (audit de #19077, P1) — un pair peut sceller un clair très imbriqué.
+ * Un analyseur récursif y déborde (kotlinx sur Android), un autre le lit
+ * (`JSON.parse`) : le même clair ne rendait pas le même verdict sur les trois
+ * clients. Le contrat borne la profondeur à 64, comptée hors des chaînes par un
+ * parcours linéaire AVANT l'analyse : au-delà, illisible (`not-json`), quelle
+ * que soit la version, sans exception.
+ */
+describe('la profondeur d’un clair est bornée par le contrat, avant toute analyse (#19112)', () => {
+  const origin: E2EEEnvelopeOrigin = { conversationId: 'c1', senderUserId: 'u', senderDeviceId: 1 };
+  const nested = (levels: number): string => `${'['.repeat(levels)}${']'.repeat(levels)}`;
+  const messageOfDepth = (depth: number, version = 1): string =>
+    `{"conversationId":"c1","sentAt":1,"text":"x","v":${version},"x":${nested(depth - 1)}}`;
+  const signalOfDepth = (depth: number, version = 1): string =>
+    `{"active":true,"conversationId":"c1","kind":"typing","s":${version},"sentAt":1,"x":${nested(depth - 1)}}`;
+  const notJson = { verdict: 'unreadable', reason: 'not-json' };
+
+  it('la borne du contrat est 64', () => {
+    expect(E2EE_MAX_DEPTH).toBe(64);
+  });
+
+  it('un contenu à la borne se lit ; un niveau de plus est illisible', () => {
+    expect(readE2EEContent(messageOfDepth(E2EE_MAX_DEPTH))).toMatchObject({ verdict: 'read', content: { text: 'x' } });
+    expect(readE2EEContent(messageOfDepth(E2EE_MAX_DEPTH + 1))).toEqual(notJson);
+  });
+
+  it('une version future au-delà de la borne est illisible, pas gardée', () => {
+    expect(readE2EEContent(messageOfDepth(E2EE_MAX_DEPTH, 2))).toMatchObject({ verdict: 'future-version', version: 2 });
+    expect(readE2EEContent(messageOfDepth(E2EE_MAX_DEPTH + 1, 2))).toEqual(notJson);
+  });
+
+  it('un signal suit la même borne, et la sonde range l’illisible parmi les messages', () => {
+    expect(e2eePlaintextPayload(signalOfDepth(E2EE_MAX_DEPTH))).toBe('signal');
+    expect(readE2EESignal(signalOfDepth(E2EE_MAX_DEPTH))).toMatchObject({ verdict: 'read', signal: { kind: 'typing' } });
+    expect(readE2EESignal(signalOfDepth(E2EE_MAX_DEPTH + 1))).toEqual(notJson);
+    expect(e2eePlaintextPayload(signalOfDepth(E2EE_MAX_DEPTH + 1))).toBe('message');
+    expect(openE2EEPlaintext(signalOfDepth(E2EE_MAX_DEPTH + 1, 2), origin)).toEqual({ payload: 'message', ...notJson });
+  });
+
+  it('les crochets et accolades d’une chaîne ne comptent pas, échappements compris', () => {
+    const text = `\\"${'['.repeat(200)}${'{'.repeat(200)} \\\\ ]]] }}}`;
+    const json = `{"conversationId":"c1","sentAt":1,"text":"${text}","v":1}`;
+
+    expect(readE2EEContent(json)).toMatchObject({ verdict: 'read', content: { text: JSON.parse(`"${text}"`) as string } });
+  });
+
+  it('une barre oblique inverse échappée ferme la chaîne : ce qui la suit compte', () => {
+    const json = `{"conversationId":"c1","note":"\\\\","sentAt":1,"text":"x","v":1,"x":${nested(E2EE_MAX_DEPTH)}}`;
+
+    expect(readE2EEContent(json)).toEqual(notJson);
+  });
+
+  it('un clair hostile de 30 000 niveaux est illisible en temps linéaire, sans exception', () => {
+    const hostile = utf8(nested(30_000));
+    const start = performance.now();
+
+    expect(() => openE2EEPlaintext(hostile, origin)).not.toThrow();
+    expect(openE2EEPlaintext(hostile, origin)).toEqual({ payload: 'message', ...notJson });
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
+  it('un octet invalide se juge avant la profondeur : pas de l’UTF-8 d’abord', () => {
+    const deepThenInvalid = new Uint8Array([...utf8(nested(E2EE_MAX_DEPTH + 1)), 0xff]);
+
+    expect(readE2EEContent(deepThenInvalid)).toEqual({ verdict: 'unreadable', reason: 'not-utf8' });
   });
 });
 

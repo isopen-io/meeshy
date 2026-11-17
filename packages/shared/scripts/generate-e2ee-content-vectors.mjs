@@ -27,6 +27,10 @@ const CID = 'cid_6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
 const T = 1790000000000;
 const FROM_ALICE = { conversationId: CONV, senderUserId: ALICE, senderDeviceId: 3 };
 
+/** `levels` tableaux imbriqués : sous un objet, la profondeur du clair vaut `levels + 1` (#19112). */
+const nested = (levels) => `${'['.repeat(levels)}${']'.repeat(levels)}`;
+const MAX_DEPTH = 64;
+
 const TIERS = [256, 1024, 4096, 16384];
 const STEP = 16384;
 const ceiling = (n) => Math.min(65536, Math.floor(524288 / Math.max(n, 1))) - 2048;
@@ -497,6 +501,60 @@ const contentVerdicts = [
     verdict: 'admitted',
     expected: { v: 1, text: 'x', conversationId: CONV, sentAt: T, authorUserId: ALICE, authorDeviceId: 3 },
   },
+  {
+    name: 'depth-at-the-limit-reads',
+    description: 'Une profondeur de 64 (l’objet, puis 63 tableaux sous une clé que la version 1 ignore) est la borne du contrat : le contenu se lit (#19112).',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"x","v":1,"x":${nested(MAX_DEPTH - 1)}}`, recipients: 1 },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'admitted',
+    expected: { v: 1, text: 'x', conversationId: CONV, sentAt: T, authorUserId: ALICE, authorDeviceId: 3 },
+  },
+  {
+    name: 'depth-beyond-the-limit-is-unreadable',
+    description: 'Un niveau de plus que la borne : illisible (`not-json`) AVANT toute analyse — aucun analyseur ne descend dans un clair hostile (#19112).',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"x","v":1,"x":${nested(MAX_DEPTH)}}`, recipients: 1 },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+    reason: 'not-json',
+  },
+  {
+    name: 'future-version-beyond-the-limit-is-unreadable',
+    description: 'La profondeur se juge avant la version : une version future au-delà de la borne est illisible, jamais gardée (#19112).',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"x","v":2,"x":${nested(MAX_DEPTH)}}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+    reason: 'not-json',
+  },
+  {
+    name: 'brackets-inside-strings-do-not-count',
+    description: 'Les crochets et accolades d’une chaîne ne comptent pas, après un guillemet échappé (`\\"`) comme avant une barre oblique inverse échappée (`\\\\`) : 400 ouvrants dans le texte, le contenu se lit (#19112).',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","sentAt":${T},"text":"\\"${'['.repeat(200)}${'{'.repeat(200)} \\\\ ]]] }}}","v":1}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'admitted',
+    expected: { v: 1, text: `"${'['.repeat(200)}${'{'.repeat(200)} \\ ]]] }}}`, conversationId: CONV, sentAt: T, authorUserId: ALICE, authorDeviceId: 3 },
+  },
+  {
+    name: 'escaped-backslash-closes-the-string',
+    description: 'Une barre oblique inverse échappée (`"\\\\"`) n’échappe pas le guillemet qui la suit : la chaîne se ferme, et les 64 tableaux qui suivent comptent — profondeur 65, illisible (#19112).',
+    plaintext: { text: `{${AUTHOR},"conversationId":"${CONV}","note":"\\\\","sentAt":${T},"text":"x","v":1,"x":${nested(MAX_DEPTH)}}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+    reason: 'not-json',
+  },
+  {
+    name: 'deep-array-is-not-json',
+    description: 'Mille tableaux imbriqués : illisible par la profondeur (`not-json`), avant de savoir que ce n’est pas un objet (#19112).',
+    plaintext: { text: nested(1000) },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+    reason: 'not-json',
+  },
 ];
 
 // --- signaux : cas positifs ---
@@ -767,6 +825,33 @@ const signalVerdicts = [
     verdict: 'admitted',
     expected: { s: 1, kind: 'reaction', target: M1, emoji: '🙈', removed: false, conversationId: CONV, sentAt: T, authorUserId: ALICE, authorDeviceId: 3 },
   },
+  {
+    name: 'depth-at-the-limit-reads',
+    description: 'Un signal de profondeur 64 (l’objet, puis 63 tableaux sous une clé inconnue) se lit : la borne vaut pour les signaux comme pour les messages (#19112).',
+    plaintext: { text: `{${TYPING},"s":1,"sentAt":${T},"x":${nested(MAX_DEPTH - 1)}}`, recipients: 2 },
+    envelope: FROM_ALICE,
+    payload: 'signal',
+    verdict: 'admitted',
+    expected: { s: 1, kind: 'typing', active: true, conversationId: CONV, sentAt: T, authorUserId: ALICE, authorDeviceId: 3 },
+  },
+  {
+    name: 'depth-beyond-the-limit-is-an-unreadable-message',
+    description: 'Un niveau de plus : illisible avant toute analyse, et, comme tout JSON illisible, la sonde le range parmi les messages (#19112).',
+    plaintext: { text: `{${TYPING},"s":1,"sentAt":${T},"x":${nested(MAX_DEPTH)}}`, recipients: 2 },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+    reason: 'not-json',
+  },
+  {
+    name: 'future-version-beyond-the-limit-is-an-unreadable-message',
+    description: 'Une version future de signal au-delà de la borne n’est pas gardée : illisible, rangée parmi les messages (#19112).',
+    plaintext: { text: `{${TYPING},"s":2,"sentAt":${T},"x":${nested(MAX_DEPTH)}}` },
+    envelope: FROM_ALICE,
+    payload: 'message',
+    verdict: 'unreadable',
+    reason: 'not-json',
+  },
 ];
 
 // --- dérivations mécaniques + vérifications ---
@@ -802,6 +887,7 @@ const deriveVerdict = (c) => {
   if (c.version !== undefined) out.version = c.version;
   if (c.kind !== undefined) out.kind = c.kind;
   if (c.expected !== undefined) out.expected = c.expected;
+  if (c.reason !== undefined) out.reason = c.reason;
   return out;
 };
 

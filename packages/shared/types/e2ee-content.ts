@@ -41,6 +41,16 @@ export const E2EE_CONTENT_VERSION = 1 as const;
 /** La version d'un signal (clé `s` — jamais `v`, pour qu'un client antérieur ne le lise pas comme un message). */
 export const E2EE_SIGNAL_VERSION = 1 as const;
 
+/**
+ * La profondeur d'imbrication la plus grande d'un clair (#19112) : un contenu a
+ * une profondeur de 1 (l'objet), un signal de 2 au plus. Elle se compte AVANT
+ * l'analyse, hors des chaînes (`nestsWithin`) ; au-delà, le clair est illisible
+ * (`not-json`), quelle que soit sa version. Sans borne, un pair qui scelle
+ * 30 000 crochets faisait déborder un analyseur récursif (kotlinx) et se lisait
+ * sous un autre (`JSON.parse`) : le même clair ne rendait pas le même verdict.
+ */
+export const E2EE_MAX_DEPTH = 64;
+
 /** Un `Int64` Swift (`sentAt`, en millisecondes) : un entier JSON sûr, sans coercition. */
 const int64 = z.number().int();
 /** Un `UInt32` Swift (`authorDeviceId`). */
@@ -204,9 +214,48 @@ const refusingLoneSurrogates = (key: string, value: unknown): unknown => {
   return value;
 };
 
+const QUOTE = 0x22;
+const BACKSLASH = 0x5c;
+const OPENERS: ReadonlySet<number> = new Set([0x5b, 0x7b]);
+const CLOSERS: ReadonlySet<number> = new Set([0x5d, 0x7d]);
+
+/**
+ * La profondeur reste-t-elle sous la borne ? Un parcours LINÉAIRE du texte, sans
+ * analyse : `[` et `{` ouvrent un niveau, `]` et `}` le ferment, et rien ne
+ * compte entre deux guillemets — où une barre oblique inverse échappe l'unité
+ * qui la suit : `\"` ne ferme pas la chaîne, `\\"` la ferme. Les délimiteurs sont
+ * ASCII : compter sur des unités UTF-16, des octets UTF-8 ou des points de code
+ * donne le même résultat. Pour un JSON valide, le compte est sa profondeur ; un
+ * texte qui n'en est pas un, l'analyse le refuse ensuite.
+ */
+const nestsWithin = (text: string, limit: number): boolean => {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      escaped = unit === BACKSLASH;
+      inString = unit !== QUOTE;
+      continue;
+    }
+    if (unit === QUOTE) inString = true;
+    if (CLOSERS.has(unit)) depth -= 1;
+    if (OPENERS.has(unit)) depth += 1;
+    if (depth > limit) return false;
+  }
+  return true;
+};
+
+/** UTF-8 strict d'abord (`not-utf8`), puis la profondeur (`not-json`), puis l'analyse. */
 const parse = (plaintext: E2EEPlaintext): Parsed => {
   const text = typeof plaintext === 'string' ? plaintext : decodeUtf8(plaintext);
   if (text === null) return { ok: false, reason: 'not-utf8' };
+  if (!nestsWithin(text, E2EE_MAX_DEPTH)) return { ok: false, reason: 'not-json' };
   try {
     return { ok: true, text, value: JSON.parse(text, refusingLoneSurrogates) as unknown };
   } catch {
