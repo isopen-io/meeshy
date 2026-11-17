@@ -67,15 +67,6 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
             }
             .store(in: &cancellables)
 
-        // Une resynchronisation (reconnexion, retour au premier plan, trou de
-        // séquence) a relu le cache : la liste montée se relit aussi (#19104).
-        feed.feedResynced
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                self?.scheduleRefresh()
-            }
-            .store(in: &cancellables)
-
         feed.notificationMarkedRead
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notificationId in

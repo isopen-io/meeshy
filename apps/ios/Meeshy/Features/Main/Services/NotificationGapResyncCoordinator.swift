@@ -24,13 +24,6 @@ final class NotificationGapResyncCoordinator {
     nonisolated deinit {}
     static let shared = NotificationGapResyncCoordinator()
 
-    /// Émis après chaque resynchronisation du cache de la cloche (trou de
-    /// séquence, reconnexion, retour au premier plan) — même quand
-    /// l'écriture du cache échoue, le compteur étant relu dans tous les cas.
-    /// La cloche MONTÉE s'y relit : sans lui, elle gardait ses lignes manquées,
-    /// lues ou supprimées ailleurs sous un compteur, lui, rafraîchi (#19104).
-    static let didResync = PassthroughSubject<Void, Never>()
-
     private let debounce: TimeInterval
     private let resync: @Sendable @concurrent () async -> Void
     private let gapPublisher: AnyPublisher<Int64, Never>
@@ -132,7 +125,6 @@ final class NotificationGapResyncCoordinator {
             Logger.notifResync.error("Notification cache not replaced after resync: \(error.localizedDescription, privacy: .public)")
         }
         await NotificationGapResyncCoordinator.refreshUnreadCount()
-        await NotificationGapResyncCoordinator.announceResync()
     }
 
     /// Le saut d'acteur, nommé : `defaultResync` est une closure `@Sendable`
@@ -140,12 +132,6 @@ final class NotificationGapResyncCoordinator {
     @MainActor
     private static func refreshUnreadCount() async {
         await NotificationToastManager.shared.refreshUnreadCount()
-    }
-
-    /// Même saut d'acteur pour l'annonce : les abonnés sont des vues montées.
-    @MainActor
-    private static func announceResync() {
-        didResync.send(())
     }
 }
 

@@ -23,7 +23,6 @@ final class MockNotificationFeed: NotificationFeedProviding {
     let deletedSubject = PassthroughSubject<String, Never>()
     let arrivedReadSubject = PassthroughSubject<String, Never>()
     let readPurgedSubject = PassthroughSubject<Void, Never>()
-    let resyncedSubject = PassthroughSubject<Void, Never>()
 
     private(set) var cachedFeedCallCount = 0
     private(set) var storedFeeds: [[APINotification]] = []
@@ -41,7 +40,6 @@ final class MockNotificationFeed: NotificationFeedProviding {
     var notificationWasDeleted: AnyPublisher<String, Never> { deletedSubject.eraseToAnyPublisher() }
     var notificationArrivedRead: AnyPublisher<String, Never> { arrivedReadSubject.eraseToAnyPublisher() }
     var readNotificationsPurged: AnyPublisher<Void, Never> { readPurgedSubject.eraseToAnyPublisher() }
-    var feedResynced: AnyPublisher<Void, Never> { resyncedSubject.eraseToAnyPublisher() }
 
     func cachedFeed() async -> CacheResult<[APINotification]> {
         cachedFeedCallCount += 1
