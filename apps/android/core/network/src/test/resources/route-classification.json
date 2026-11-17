@@ -331,6 +331,7 @@
     "GET /api/v1/user-preferences/communities",
     "GET /api/v1/user-preferences/communities/:communityId",
     "GET /api/v1/users/:id",
+    "GET /api/v1/users/:id/in-common",
     "GET /api/v1/users/:userId/affiliate-token",
     "GET /api/v1/users/friend-requests",
     "GET /api/v1/users/id/:id",
