@@ -83,9 +83,9 @@ public fun MeeshyChart(
     Column(modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = summary }) {
         Box(Modifier.fillMaxWidth().decorative()) {
             when (kind) {
-                MeeshyChartKind.Bars -> BarsChart(points, values, tint, progress.value, tokens.hairline)
-                MeeshyChartKind.Line -> LineChart(points, values, tint, progress.value)
-                MeeshyChartKind.Donut -> DonutChart(points, values, tint, othersLabel, tokens.controlFill, progress.value, valueText)
+                MeeshyChartKind.Bars -> BarsChart(points, values, tint, { progress.value }, tokens.hairline)
+                MeeshyChartKind.Line -> LineChart(points, values, tint) { progress.value }
+                MeeshyChartKind.Donut -> DonutChart(points, values, tint, othersLabel, tokens.controlFill, { progress.value }, valueText)
                 MeeshyChartKind.Funnel -> FunnelChart(points, values, tint, valueText)
                 MeeshyChartKind.Breakdown -> BreakdownChart(points, values, tint, valueText)
                 MeeshyChartKind.Strip -> StripChart(points, values, tint)
@@ -106,14 +106,14 @@ private fun DrawScope.baseline(color: Color) {
 }
 
 @Composable
-private fun BarsChart(points: List<MeeshyChartPoint>, values: MeeshyChartValues, tint: Color, progress: Float, line: Color) {
+private fun BarsChart(points: List<MeeshyChartPoint>, values: MeeshyChartValues, tint: Color, progress: () -> Float, line: Color) {
     val fractions = MeeshyChartScale.normalized(points.map { it.value })
     val peak = MeeshyChartScale.peak(points.map { it.value })?.index
     Canvas(Modifier.fillMaxWidth().height(values.heightDp.dp)) {
         val gap = values.barGapDp.dp.toPx()
         val barWidth = ((size.width - gap * (points.size - 1)) / points.size).coerceAtLeast(1f)
         fractions.forEachIndexed { index, fraction ->
-            val barHeight = (size.height * fraction * progress).coerceAtLeast(if (fraction > 0f) 2.dp.toPx() else 0f)
+            val barHeight = (size.height * fraction * progress()).coerceAtLeast(if (fraction > 0f) 2.dp.toPx() else 0f)
             drawRoundRect(
                 color = if (index == peak) tint else tint.copy(alpha = DIM_ALPHA),
                 topLeft = Offset(index * (barWidth + gap), size.height - barHeight),
@@ -126,13 +126,13 @@ private fun BarsChart(points: List<MeeshyChartPoint>, values: MeeshyChartValues,
 }
 
 @Composable
-private fun LineChart(points: List<MeeshyChartPoint>, values: MeeshyChartValues, tint: Color, progress: Float) {
+private fun LineChart(points: List<MeeshyChartPoint>, values: MeeshyChartValues, tint: Color, progress: () -> Float) {
     val fractions = MeeshyChartScale.normalized(points.map { it.value })
     val peak = MeeshyChartScale.peak(points.map { it.value })?.index
     Canvas(Modifier.fillMaxWidth().height(values.heightDp.dp)) {
         val pad = 4.dp.toPx()
         val step = if (points.size > 1) (size.width - 2 * pad) / (points.size - 1) else 0f
-        fun at(index: Int) = Offset(pad + step * index, size.height - pad - (size.height - 2 * pad) * fractions[index] * progress)
+        fun at(index: Int) = Offset(pad + step * index, size.height - pad - (size.height - 2 * pad) * fractions[index] * progress())
         val path = Path().apply { fractions.indices.forEach { if (it == 0) moveTo(at(it).x, at(it).y) else lineTo(at(it).x, at(it).y) } }
         val area = Path().apply {
             addPath(path)
@@ -153,7 +153,7 @@ private fun DonutChart(
     tint: Color,
     othersLabel: String,
     track: Color,
-    progress: Float,
+    progress: () -> Float,
     valueText: (Double) -> String,
 ) {
     val tokens = MeeshyTheme.tokens
@@ -168,7 +168,7 @@ private fun DonutChart(
             if (values.keepsTrack) drawArc(track, 0f, 360f, false, topLeft, Size(diameter, diameter), style = Stroke(thickness))
             parts.forEachIndexed { index, part ->
                 val color = if (shown[index].key == "others") tokens.textMuted else tint.copy(alpha = DONUT_RAMP[index.coerceAtMost(DONUT_RAMP.lastIndex)])
-                drawArc(color, -90f + part.start * 360f, part.share * 360f * progress, false, topLeft, Size(diameter, diameter), style = Stroke(thickness))
+                drawArc(color, -90f + part.start * 360f, part.share * 360f * progress(), false, topLeft, Size(diameter, diameter), style = Stroke(thickness))
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
