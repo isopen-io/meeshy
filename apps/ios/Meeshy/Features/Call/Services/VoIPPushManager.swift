@@ -62,6 +62,12 @@ final class VoIPPushManager: NSObject, ObservableObject {
     private var pendingTokenToRegister: String?
     private var authCancellable: AnyCancellable?
 
+    /// Génération de SESSION (#18911, ios-systeme-3) : `unregisterAndClearToken()`
+    /// l'avance. Un enregistrement lancé sous une génération antérieure est périmé :
+    /// il n'écrit ni cooldown ni jeton « enregistré » que le compte suivant
+    /// hériterait, et se fait suivre d'un POST sous la session courante.
+    private var sessionGeneration: UInt64 = 0
+
     /// VoIP tokens are credentials; they no longer live in
     /// UserDefaults. ``KeychainVoIPTokenStore`` writes them to the Keychain
     /// with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so the NSE can
@@ -162,6 +168,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// previous account's VoIP registration until the cooldown naturally
     /// expired — a cross-account privacy leak on shared devices.
     func unregisterAndClearToken() async {
+        sessionGeneration &+= 1
         unregister()
         await tokenStore.clear()
         lastRegisteredRecord = nil
@@ -217,6 +224,19 @@ final class VoIPPushManager: NSObject, ObservableObject {
             await self?.retryPendingTokenRegistration()
         }
         logger.info("VoIP push force re-registration triggered")
+    }
+
+    /// La réponse qui vient d'arriver appartient à une session QUITTÉE : la
+    /// passerelle garde le dernier POST reçu, et celui du compte courant a pu être
+    /// traité avant. Sous une session ouverte, on reposte le jeton PushKit courant
+    /// — aucun cooldown ne l'a précédé, `lastRegisteredRecord` est resté vide.
+    private func replayRegistrationUnderCurrentSession() async {
+        guard authTokenAvailable(), let current = voipToken else {
+            logger.info("Stale VoIP token registration response: no session left to re-register under")
+            return
+        }
+        logger.info("Stale VoIP token registration response: re-registering under the current session")
+        await registerTokenWithBackend(current)
     }
 
     /// G4c — retries the backend registration of a token whose POST failed
@@ -499,8 +519,13 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             device: deviceIdentity()
         )
 
+        let generation = sessionGeneration
         do {
             try await tokenRegistrar.register(body)
+            guard generation == sessionGeneration else {
+                await replayRegistrationUnderCurrentSession()
+                return
+            }
             let record = VoIPTokenRecord(token: token, at: now)
             do {
                 try await tokenStore.save(token: token, at: now)

@@ -94,13 +94,38 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// (sûre car @MainActor) coupe les doublons avant le réseau.
     private var inFlightTokenRegistration: String?
 
+    /// Génération de SESSION (#18911, ios-systeme-3) : `resetSession()` l'avance.
+    /// Un enregistrement lancé sous une génération antérieure est périmé — il
+    /// n'écrit ni cooldown ni « dernier jeton enregistré », ne libère pas la
+    /// réservation de la session courante, et se fait suivre d'un POST sous elle.
+    private var sessionGeneration: UInt64 = 0
+
+    private let registrar: any PushTokenRegistrationProviding
+    private let isAuthenticated: @MainActor () -> Bool
+
     override private convenience init() {
         self.init(userDefaults: .standard, keychainStore: KeychainManager.shared)
     }
 
-    public init(userDefaults: UserDefaults, keychainStore: any KeychainStoring) {
+    public convenience init(userDefaults: UserDefaults, keychainStore: any KeychainStoring) {
+        self.init(
+            userDefaults: userDefaults,
+            keychainStore: keychainStore,
+            registrar: APIPushTokenRegistrar(),
+            isAuthenticated: { APIClient.shared.authToken != nil }
+        )
+    }
+
+    init(
+        userDefaults: UserDefaults,
+        keychainStore: any KeychainStoring,
+        registrar: any PushTokenRegistrationProviding,
+        isAuthenticated: @escaping @MainActor () -> Bool
+    ) {
         self.userDefaults = userDefaults
         self.keychainStore = keychainStore
+        self.registrar = registrar
+        self.isAuthenticated = isAuthenticated
         super.init()
         migrateDeviceTokenFromUserDefaultsIfNeeded()
     }
@@ -263,6 +288,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// avant `POST /auth/logout` (#18911, ios-systeme-1). Câblée depuis
     /// `AuthManager.leaveActiveSession`.
     public func resetSession() {
+        sessionGeneration &+= 1
+        inFlightTokenRegistration = nil
         pendingNotificationPayload = nil
         deviceToken = nil
         keychainStore.delete(forKey: Self.persistedTokenKey, account: nil)
@@ -295,8 +322,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
     // MARK: - Private
 
-    private func sendTokenToBackend(token: String) async {
-        guard APIClient.shared.authToken != nil else {
+    private func sendTokenToBackend(token: String, replayingAfterStaleResponse: Bool = false) async {
+        guard isAuthenticated() else {
             logger.info("Skipping token registration: user not authenticated")
             return
         }
@@ -306,10 +333,18 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // (persisted token from previous session) with `registerDeviceToken`
         // (native callback firing right after) — both posted the same token
         // back-to-back, generating duplicate 10s+ POSTs in the slow-request log.
+        // Un rejeu après réponse périmée ne s'y soumet pas : la passerelle garde
+        // le DERNIER POST reçu, et celui qu'on rejoue doit partir après.
         let now = Date()
+        let generation = sessionGeneration
         let lastToken = await keychainLoadOffMain(Self.lastRegisteredTokenKey)
+        guard generation == sessionGeneration else {
+            await replayRegistrationUnderCurrentSession()
+            return
+        }
         let lastAt = userDefaults.object(forKey: Self.lastRegisteredAtKey) as? Date
-        if lastToken == token,
+        if !replayingAfterStaleResponse,
+           lastToken == token,
            let lastAt,
            now.timeIntervalSince(lastAt) < Self.registrationCooldown {
             logger.debug("Skipping token registration: same token registered \(Int(now.timeIntervalSince(lastAt)))s ago")
@@ -319,12 +354,12 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // Réservation in-flight : empêche les appelants concurrents (callback
         // APNs + reRegisterTokenIfNeeded au login) de poster le MÊME token en
         // parallèle avant que le premier POST n'ait persisté son timestamp.
-        guard inFlightTokenRegistration != token else {
+        guard replayingAfterStaleResponse || inFlightTokenRegistration != token else {
             logger.debug("Skipping token registration: same token already in flight")
             return
         }
         inFlightTokenRegistration = token
-        defer { inFlightTokenRegistration = nil }
+        defer { if generation == sessionGeneration { inFlightTokenRegistration = nil } }
 
         let request = RegisterDeviceTokenRequest(
             token: token,
@@ -335,16 +370,30 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         )
 
         do {
-            let _: APIResponse<RegisterDeviceTokenResponse> = try await APIClient.shared.post(
-                UsersEndpoint.registerDeviceToken,
-                body: request
-            )
+            try await registrar.register(request)
+            guard generation == sessionGeneration else {
+                await replayRegistrationUnderCurrentSession()
+                return
+            }
             try? keychainStore.save(token, forKey: Self.lastRegisteredTokenKey, account: nil)
             userDefaults.set(now, forKey: Self.lastRegisteredAtKey)
             logger.info("Device token registered with backend (env=\(Self.apnsEnvironment))")
         } catch {
             logger.error("Failed to register device token: \(error.localizedDescription)")
         }
+    }
+
+    /// La réponse qui vient d'arriver appartient à une session QUITTÉE : la
+    /// passerelle a pu rattacher le jeton à ce compte après le POST du compte
+    /// courant. Sous une session ouverte, on reposte le jeton courant, ce qui le
+    /// rend à son propriétaire ; sans session, il n'y a rien à rendre.
+    private func replayRegistrationUnderCurrentSession() async {
+        guard isAuthenticated(), let current = deviceToken else {
+            logger.info("Stale token registration response: no session left to re-register under")
+            return
+        }
+        logger.info("Stale token registration response: re-registering under the current session")
+        await sendTokenToBackend(token: current, replayingAfterStaleResponse: true)
     }
 }
 
