@@ -9,7 +9,7 @@
  * Le jour et le mois sont ceux d'UTC : le serveur ne connaît pas le fuseau du lecteur au moment
  * du compte, et deux frontières différentes donneraient deux totaux pour la même visite.
  */
-import { addUtcDays, utcDayKey, utcDayStart } from './iso-week';
+import { addUtcDays, utcDayKey, utcDayStart } from './iso-week.js';
 
 /** La série rendue au propriétaire : les trente derniers jours, aujourd'hui compris. */
 export const PROFILE_LINK_VISIT_SERIES_DAYS = 30;
