@@ -120,10 +120,27 @@ struct ProfileCreatedLinks: View {
             firstLink
         case .ready:
             filters
-            ForEach(model.visibleTickets) { ticket in
-                ProfileCreatedLinkTicket(ticket: ticket, accent: accent, locale: locale,
-                                         destination: destination(of: ticket), onOpen: onOpen)
-            }
+            tickets(model.summary.serving(model.visibleTickets))
+            stoppedSection(model.summary.stopped(model.visibleTickets))
+        }
+    }
+
+    private func tickets(_ tickets: [LinksFaceTicket]) -> some View {
+        ForEach(tickets) { ticket in
+            ProfileCreatedLinkTicket(ticket: ticket, accent: accent, locale: locale,
+                                     destination: destination(of: ticket), onOpen: onOpen)
+        }
+    }
+
+    /// « À l'arrêt » (planche `Etat-Erreur` vue 4) : les liens pleins, en pause ou expirés passent sous ceux qui servent,
+    /// sous leur propre en-tête et leur compte.
+    @ViewBuilder
+    private func stoppedSection(_ stopped: [LinksFaceTicket]) -> some View {
+        if !stopped.isEmpty {
+            MeeshySectionHeader(title: ProfileLinksCopy.stoppedTitle, count: stopped.count, form: .overline)
+                .padding(.top, MeeshySpacing.sm)
+                .accessibilityIdentifier("profile.links.stopped")
+            tickets(stopped)
         }
     }
 

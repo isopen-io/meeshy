@@ -29,6 +29,14 @@ public enum LinksFaceFigure: Sendable, Equatable {
     }
 }
 
+/// Ce qui empêche un lien créé de servir (planche `Etat-Erreur` vue 4) : mis en pause par moi, arrivé à échéance, ou
+/// plein. L'ordre des cas est celui où ils se disent — une pause l'emporte, puis l'échéance, puis le plafond.
+public enum LinksFaceStoppage: Sendable, Equatable {
+    case paused
+    case expired
+    case full
+}
+
 /// Un billet de la face Liens : ce que c'est, son adresse en chasse fixe, ce qu'on copie, et son chiffre.
 public struct LinksFaceTicket: Sendable, Equatable, Identifiable {
     public let id: String
@@ -50,6 +58,13 @@ public struct LinksFaceTicket: Sendable, Equatable, Identifiable {
         self.figure = figure
         self.isActive = isActive
         self.expiresAt = expiresAt
+    }
+
+    /// Ce qui empêche ce lien de servir à `now`, ou `nil` s'il sert.
+    public func stoppage(now: Date = Date()) -> LinksFaceStoppage? {
+        if !isActive { return .paused }
+        if let expiresAt, expiresAt <= now { return .expired }
+        return figure.fill == 1 ? .full : nil
     }
 }
 
@@ -86,9 +101,19 @@ public struct LinksFaceSummary: Sendable, Equatable {
 
     public static let empty = LinksFaceSummary()
 
-    /// Le compte « N actifs » de l'en-tête : un lien actif et pas expiré.
+    /// Le compte « N actifs » de l'en-tête : un lien qui sert encore — ni en pause, ni expiré, ni plein.
     public func activeCount(now: Date = Date()) -> Int {
-        tickets.filter { $0.isActive && ($0.expiresAt.map { $0 > now } ?? true) }.count
+        serving(tickets, now: now).count
+    }
+
+    /// Les billets qui servent encore, dans leur ordre.
+    public func serving(_ tickets: [LinksFaceTicket], now: Date = Date()) -> [LinksFaceTicket] {
+        tickets.filter { $0.stoppage(now: now) == nil }
+    }
+
+    /// « À l'arrêt » : les billets qui ne servent plus, rangés sous les autres, dans leur ordre.
+    public func stopped(_ tickets: [LinksFaceTicket], now: Date = Date()) -> [LinksFaceTicket] {
+        tickets.filter { $0.stoppage(now: now) != nil }
     }
 
     public func tickets(for filter: LinksFaceFilter) -> [LinksFaceTicket] {

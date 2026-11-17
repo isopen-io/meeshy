@@ -86,4 +86,47 @@ struct LinksFaceSummaryTests {
         #expect(summary.tickets(for: .family(.tracking)).map(\.title) == ["Réel Dakar la nuit"])
         #expect(summary.tickets(for: .all).count == 2)
     }
+
+    // MARK: - À l'arrêt (planche `Etat-Erreur` vue 4)
+
+    @Test func aLinkThatStillServesIsNotStopped() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let ticket = LinksFaceSummary.ticket(share: share(uses: 23, cap: 50))
+        #expect(ticket.stoppage(now: now) == nil)
+    }
+
+    @Test func aCappedLinkThatReachedItsCapIsFull() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let full = LinksFaceSummary.ticket(share: share(uses: 50, cap: 50))
+        let beyond = LinksFaceSummary.ticket(share: share(uses: 52, cap: 50))
+        #expect(full.stoppage(now: now) == .full)
+        #expect(beyond.stoppage(now: now) == .full)
+    }
+
+    @Test func aPausedLinkIsPausedEvenWhenFullOrExpired() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let ticket = LinksFaceSummary.ticket(share: share(uses: 50, cap: 50, active: false,
+                                                          expiresAt: Date(timeIntervalSince1970: 10)))
+        #expect(ticket.stoppage(now: now) == .paused)
+    }
+
+    @Test func anExpiredLinkIsExpiredBeforeBeingFull() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let ticket = LinksFaceSummary.ticket(share: share(uses: 50, cap: 50, expiresAt: Date(timeIntervalSince1970: 10)))
+        #expect(ticket.stoppage(now: now) == .expired)
+    }
+
+    @Test func stoppedLinksGoBelowTheOnesThatServeAndLeaveTheActiveCount() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let summary = LinksFaceSummary(share: [
+            share(id: "full", uses: 50, cap: 50),
+            share(id: "live"),
+            share(id: "paused", active: false),
+        ])
+        let serving = summary.serving(summary.tickets, now: now).map(\.id)
+        let stopped = summary.stopped(summary.tickets, now: now).map(\.id)
+        #expect(serving == ["share:live"])
+        #expect(stopped == ["share:full", "share:paused"])
+        #expect(summary.activeCount(now: now) == 1)
+    }
 }

@@ -31,13 +31,10 @@ struct ProfileCreatedLinkTicket: View {
         }
     }
 
-    private var isExpired: Bool { ticket.expiresAt.map { $0 <= Date() } ?? false }
+    private var stoppage: LinksFaceStoppage? { ticket.stoppage() }
 
     /// Ce qui empêche le lien de servir, dit en mots : la teinte barrée n'est jamais seule.
-    private var status: String? {
-        if isExpired { return ProfileLinksCopy.expired }
-        return ticket.isActive ? nil : ProfileLinksCopy.paused
-    }
+    private var status: String? { stoppage.map { ProfileLinksCopy.stoppage($0) } }
 
     private var figureText: String { ticket.figure.value.formatted(.number.locale(locale)) }
 
@@ -49,6 +46,38 @@ struct ProfileCreatedLinkTicket: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            billet
+            if let stoppage { consequence(of: stoppage) }
+        }
+    }
+
+    /// Sous le billet d'un lien à l'arrêt (planche `Etat-Erreur` vue 4) : ce que l'arrêt veut dire pour qui le reçoit,
+    /// et le geste qui le relance — il ouvre le détail, où la limite et l'interrupteur se règlent.
+    private func consequence(of stoppage: LinksFaceStoppage) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.sm) {
+            Text(ProfileLinksCopy.stoppageConsequence(stoppage))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(ThemeManager.shared.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let relaunch = relaunchTitle(stoppage) {
+                MeeshyButton(relaunch, systemImage: stoppage == .full ? "plus" : "power", kind: .outline, size: .s36,
+                             tint: Self.tint(of: ticket.family), action: { open() })
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xs)
+    }
+
+    /// Le geste qui relance un lien arrêté, quand l'app a de quoi le faire depuis son détail.
+    private func relaunchTitle(_ stoppage: LinksFaceStoppage) -> String? {
+        switch (stoppage, destination) {
+        case (.full, .share): return ProfileLinksCopy.raiseLimit
+        case (.paused, .share), (.paused, .tracking): return ProfileLinksCopy.turnBackOn
+        default: return nil
+        }
+    }
+
+    private var billet: some View {
         MeeshyTicket(
             title: ticket.title,
             code: ticket.code,

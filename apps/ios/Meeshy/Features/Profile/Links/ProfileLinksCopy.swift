@@ -124,6 +124,38 @@ nonisolated enum ProfileLinksCopy {
     }
     static var paused: String { String(localized: "profile.links.paused", defaultValue: "En pause", bundle: .main) }
     static var expired: String { String(localized: "profile.links.expired", defaultValue: "Expiré", bundle: .main) }
+    static var full: String { String(localized: "profile.links.full", defaultValue: "Complet", bundle: .main) }
+
+    /// Le mot court qui dit pourquoi un lien ne sert plus, posé sur son billet.
+    static func stoppage(_ stoppage: LinksFaceStoppage) -> String {
+        switch stoppage {
+        case .paused: return paused
+        case .expired: return expired
+        case .full: return full
+        }
+    }
+
+    /// Ce que l'arrêt veut dire pour qui reçoit le lien (planche `Etat-Erreur` vue 4), sous le billet.
+    static func stoppageConsequence(_ stoppage: LinksFaceStoppage) -> String {
+        switch stoppage {
+        case .full:
+            return String(localized: "profile.links.stopped.full", defaultValue: "Plus personne ne peut entrer par ce lien.", bundle: .main)
+        case .paused:
+            return String(localized: "profile.links.stopped.paused", defaultValue: "Il ne mène plus nulle part. Rallume-le quand tu veux.", bundle: .main)
+        case .expired:
+            return String(localized: "profile.links.stopped.expired", defaultValue: "Ce lien n'est plus valable.", bundle: .main)
+        }
+    }
+
+    static var stoppedTitle: String {
+        String(localized: "profile.links.stopped", defaultValue: "À l'arrêt", bundle: .main)
+    }
+    static var raiseLimit: String {
+        String(localized: "profile.links.stopped.raiseLimit", defaultValue: "Augmenter la limite", bundle: .main)
+    }
+    static var turnBackOn: String {
+        String(localized: "profile.links.stopped.turnBackOn", defaultValue: "Rallumer", bundle: .main)
+    }
     static func expires(_ relative: String) -> String {
         let format = String(localized: "profile.links.expires", defaultValue: "Expire %@", bundle: .main)
         return String(format: format, relative)
