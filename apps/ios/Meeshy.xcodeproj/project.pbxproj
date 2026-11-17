@@ -566,6 +566,7 @@
 		1C6365864E731B06380DFC8A /* ConversationAttachmentFileReadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43178A787FA413CCEAEB1C74 /* ConversationAttachmentFileReadTests.swift */; };
 		1C6EEEE0AFFEAD171ADB8CF6 /* SettingsSectionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520A3402898E98A6780AF1FD /* SettingsSectionCard.swift */; };
 		1C831AA82900A745A44D476F /* SessionTransitionPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0016995061E3B6CB76B0738A /* SessionTransitionPlan.swift */; };
+		93CF3ED719563F651C2CA4CB /* RevokedSessionPurge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C70B828EB1EB2068EB43E89 /* RevokedSessionPurge.swift */; };
 		1C83CE0D5D3FB4D22AEF5413 /* ConversationPreviewEffectRendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2730E3BC2E9C3DAF2C80337A /* ConversationPreviewEffectRendering.swift */; };
 		1C94A3139CECA8E35947EE0B /* ConversationHistoryLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D2116AF5688A49EE3F0D424 /* ConversationHistoryLoaderTests.swift */; };
 		1CBADA98B99BDF16C5437D49 /* ComposerSceneViewfinderMount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728363F533CB66D480DBA619 /* ComposerSceneViewfinderMount.swift */; };
@@ -4819,6 +4820,7 @@
 		00008A0920B7ACBE2AAB8727 /* CallMontageRiseAndFadeGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMontageRiseAndFadeGuardTests.swift; sourceTree = "<group>"; };
 		000EBA9963DBF574F94AE01B /* ConversationAudioCoordinator+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationAudioCoordinator+NowPlaying.swift"; sourceTree = "<group>"; };
 		0016995061E3B6CB76B0738A /* SessionTransitionPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransitionPlan.swift; sourceTree = "<group>"; };
+		5C70B828EB1EB2068EB43E89 /* RevokedSessionPurge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevokedSessionPurge.swift; sourceTree = "<group>"; };
 		001F26830F96012BCFB0EE1B /* ConcurrencyPrimitivesMigrationGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrencyPrimitivesMigrationGuardTests.swift; sourceTree = "<group>"; };
 		003584F81D0B65A6FD4ACACB /* StoryGroupIntroPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryGroupIntroPresenter.swift; sourceTree = "<group>"; };
 		0041267258225C5A1277F028 /* jovial_ballons_back.webp */ = {isa = PBXFileReference; path = jovial_ballons_back.webp; sourceTree = "<group>"; };
@@ -10531,6 +10533,7 @@
 				53071E06F948CCE2B9A1BFC3 /* RootScene.swift */,
 				656E7EF93287AD17B76BAACD /* SessionContent.swift */,
 				0016995061E3B6CB76B0738A /* SessionTransitionPlan.swift */,
+				5C70B828EB1EB2068EB43E89 /* RevokedSessionPurge.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -18307,6 +18310,7 @@
 				7EC1983A2EBE0E57E44D9934 /* SessionOpeningGate.swift in Sources */,
 				4FC3524D3E91D6CA45398828 /* SessionPurgeDecision.swift in Sources */,
 				1C831AA82900A745A44D476F /* SessionTransitionPlan.swift in Sources */,
+				93CF3ED719563F651C2CA4CB /* RevokedSessionPurge.swift in Sources */,
 				9F34B94DD23065C6167DCF5A /* SettingsAnnexFold.swift in Sources */,
 				37F563051D64D590148B98AE /* SettingsBlockView.swift in Sources */,
 				76BAA74CA7B2168E531BA079 /* SettingsFocus.swift in Sources */,
