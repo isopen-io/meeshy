@@ -8,6 +8,8 @@ import SwiftUI
 
 struct ProfileReportSheet: View {
     let name: String
+    var avatarURL: String?
+    var accentColor = ""
     let isAlreadyBlocked: Bool
     let onSend: (ProfileReportDraft) async -> ProfileReportOutcome
 
@@ -31,8 +33,7 @@ struct ProfileReportSheet: View {
 
     private var compose: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-            MeeshySectionHeader(title: ProfileReportCopy.title(name))
-            MeeshyNote(ProfileReportCopy.anonymity, lead: .systemImage("lock.shield"))
+            header
             MeeshyChoiceTiles(
                 label: ProfileReportCopy.question,
                 items: ProfileReportReason.allCases.map { reason in
@@ -68,6 +69,24 @@ struct ProfileReportSheet: View {
             MeeshyButton(ProfileReportCopy.cancel, kind: .text, width: .fill, action: { dismiss() })
         }
         .padding(MeeshySpacing.xl)
+    }
+
+    /// En tête, qui l'on signale : son avatar, « Signaler Rui », l'anonymat du signalement, et ✕ pour fermer.
+    private var header: some View {
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
+            MeeshyAvatar(name: name, context: .userListItem, accentColor: accentColor, avatarURL: avatarURL)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                Text(verbatim: ProfileReportCopy.title(name))
+                    .meeshyScaledFont(MeeshyFont.titleSize, weight: .heavy, design: .rounded)
+                    .accessibilityAddTraits(.isHeader)
+                Text(verbatim: ProfileReportCopy.anonymity)
+                    .meeshyScaledFont(MeeshyFont.labelSize)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: MeeshySpacing.sm)
+            MeeshyGlassButton(systemImage: "xmark", label: ProfileReportCopy.close, size: .s40, action: { dismiss() })
+        }
     }
 
     private func sentState(_ outcome: ProfileReportOutcome) -> some View {
