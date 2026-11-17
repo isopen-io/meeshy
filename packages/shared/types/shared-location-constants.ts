@@ -68,6 +68,10 @@ export const SHARED_LOCATION_ERROR_CODES = {
   RATE_LIMITED: 'SHARED_LOCATION_RATE_LIMITED',
   /** Le serveur ne peut pas sceller ou ranger la position : rien ne part. */
   UNAVAILABLE: 'SHARED_LOCATION_UNAVAILABLE',
+  /** Une demande de partage sous Ami (#19204) : la loi ne l'ouvre pas dans cette paire. */
+  REQUEST_FORBIDDEN: 'SHARED_LOCATION_REQUEST_FORBIDDEN',
+  /** Une demande déjà faite à cette personne dans la fenêtre (#19204). */
+  REQUEST_TOO_SOON: 'SHARED_LOCATION_REQUEST_TOO_SOON',
 } as const;
 export type SharedLocationErrorCode = (typeof SHARED_LOCATION_ERROR_CODES)[keyof typeof SHARED_LOCATION_ERROR_CODES];
 
@@ -88,3 +92,10 @@ export function parseSharedLocationIncludes(raw: unknown): SharedLocationSnapsho
   const words = typeof raw === 'string' ? raw.split(',').map((word) => word.trim().toLowerCase()) : [];
   return { blood: words.includes('blood'), ended: words.includes('ended') };
 }
+
+/** Ce qu'une demande adressée à l'émetteur peut dire (#19204) : prolonger le partage en cours, ou en refaire un après sa fin. */
+export const SHARED_LOCATION_REQUEST_KINDS = ['extend', 'reask'] as const;
+export type SharedLocationRequestKind = (typeof SHARED_LOCATION_REQUEST_KINDS)[number];
+
+/** Une demande par paire (quel que soit son genre) par fenêtre : on demande, on ne harcèle pas. */
+export const SHARED_LOCATION_REQUEST_WINDOW_MINUTES = 30;

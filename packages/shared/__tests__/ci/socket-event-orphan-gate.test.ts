@@ -49,6 +49,7 @@ const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['agent:admin-event', 'ÉMIS — `AgentAdminRelay` vers la room des agents admin. Aucune surface cliente ne le lit.'],
   ['link:message:new', "ÉMIS — `linkMessageEmissions` et le rejeu hors ligne. `services/gateway/CLAUDE.md` lui prêtait « son unique auditeur (le web) » ; la prémisse est CORRIGÉE depuis le cycle 161 — aucun client ne cite ce nom ni sa constante, et le raisonnement du cycle 114 tient pour une raison plus forte."],
   ['location:blood-proximity', 'ÉMIS — `bloodProximity.ts`, DEUX `emit` par alerte. Le client du mode Sang n\'est peut-être pas encore écrit (#13928).'],
+  ['location:share-requested', 'ÉMIS — `sharedLocationRequest.ts`, à l\'émetteur seul, quand un destinataire demande de prolonger ou de refaire son partage (#19204). Lecteurs : les lots clients de la carte du profil (#18857) ; la notification `location_share_requested` porte la même demande app fermée.'],
   ['call:transcription-result', 'ni émis ni lu — dette de contrat.'],
   ['call:translation-enabled', 'ni émis ni lu — dette de contrat.'],
   ['call:translation-requested', 'ni émis ni lu — dette de contrat.'],

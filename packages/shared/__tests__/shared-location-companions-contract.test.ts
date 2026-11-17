@@ -6,7 +6,7 @@ import {
   sharedLocationRequestPayloadSchema,
   sharedLocationStartPayloadSchema,
 } from '../types/shared-location';
-import { NotificationType } from '../types/notification';
+import { NotificationTypeEnum as NotificationType } from '../types/notification';
 import { NotificationPreferenceSchema, NOTIFICATION_PREFERENCE_DEFAULTS } from '../types/preferences';
 import { isNotificationTypeEnabled } from '../types/notification-preferences';
 import { notificationTypeEnum } from '../utils/notification-type-enum';
