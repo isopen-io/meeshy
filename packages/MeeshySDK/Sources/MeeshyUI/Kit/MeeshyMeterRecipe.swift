@@ -95,10 +95,12 @@ public nonisolated struct MeeshyMeterRecipe: Sendable, Equatable {
     }
 
     /// La valeur dite : le texte de l'hôte (« 23 sur 50 »), sinon le pourcentage
-    /// écrit par la langue. La vraie valeur dès le premier rendu.
-    public static func spokenValue(spoken: String?, fraction: Double?, locale: Locale) -> String {
+    /// écrit par la langue. La vraie valeur dès le premier rendu. Sans valeur
+    /// (`indeterminate`) et sans texte de l'hôte, rien : jamais « 0 % ».
+    public static func spokenValue(spoken: String?, fraction: Double?, locale: Locale) -> String? {
         if let spoken, !spoken.isEmpty { return spoken }
-        let percent = Int(((fraction ?? 0) * 100).rounded())
+        guard let fraction else { return nil }
+        let percent = Int((fraction * 100).rounded())
         return MeeshyProgressRingRecipe.percentText(percent, locale: locale)
     }
 
@@ -112,9 +114,16 @@ public nonisolated struct MeeshyMeterRecipe: Sendable, Equatable {
         return posed ? (fraction ?? 0) : 0
     }
 
-    /// L'entrée d'une valeur : jouée une fois, jamais sous mouvement réduit.
+    /// L'entrée suit la réponse de `rise`, amortie à 1 : une mesure ne dépasse
+    /// jamais sa valeur, et un remplissage plein ne déborde jamais sa piste.
+    public static var entryResponse: Double {
+        MeeshyMotionRecipe.resolve(token: .rise).response ?? 0
+    }
+    public static let entryDamping: Double = 1
+
+    /// L'entrée d'une valeur : jouée une fois, sans rebond, jamais sous mouvement réduit.
     public static func entryAnimation(reduce: Bool, animatesOnAppear: Bool) -> Animation? {
         guard animatesOnAppear, !reduce else { return nil }
-        return MeeshyMotion.animation(.morph, reduce: false)
+        return .spring(response: entryResponse, dampingFraction: entryDamping)
     }
 }

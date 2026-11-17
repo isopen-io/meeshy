@@ -170,9 +170,41 @@ public nonisolated struct MeeshyButtonRecipe: Sendable, Equatable {
 /// **La loi du maintien** : `true` au doigt posé, `false` au doigt levé, sorti
 /// ou si le bouton disparaît ; jamais deux `true` de suite, jamais deux `false`.
 public nonisolated struct MeeshyButtonHoldLaw: Sendable, Equatable {
+    /// La marge autour du disque avant qu'un doigt qui glisse soit « sorti ».
+    public static let exitSlop: Double = 16
+
     public private(set) var isHeld = false
+    private var isTouchSpent = false
 
     public init() {}
+
+    /// Le point du doigt est-il sur le disque, marge comprise ? Un point non fini est dehors.
+    public static func isInside(x: Double, y: Double, diameter: Double) -> Bool {
+        guard x.isFinite, y.isFinite, diameter.isFinite else { return false }
+        let radius = diameter / 2
+        let dx = x - radius
+        let dy = y - radius
+        return (dx * dx + dy * dy).squareRoot() <= radius + exitSlop
+    }
+
+    /// Le doigt posé ou qui glisse : sur la cible d'un bouton allumé, il arme une
+    /// fois ; sorti, ou le bouton éteint, il relâche, et ce toucher ne réarme plus
+    /// jusqu'au doigt levé.
+    public mutating func track(isInside: Bool, isEnabled: Bool) -> Bool? {
+        guard !isTouchSpent else { return nil }
+        guard isInside, isEnabled else {
+            isTouchSpent = true
+            return release()
+        }
+        return press()
+    }
+
+    /// Le doigt levé, ou le geste annulé par le système : relâche ce qui tient, et
+    /// le toucher suivant repart de zéro.
+    public mutating func endTouch() -> Bool? {
+        isTouchSpent = false
+        return release()
+    }
 
     /// Le doigt se pose : `true` une seule fois, `nil` s'il tenait déjà.
     public mutating func press() -> Bool? {
@@ -215,6 +247,22 @@ public nonisolated enum MeeshyButtonPairLaw {
 
     public static func stacks(isAccessibilitySize: Bool) -> Bool {
         isAccessibilitySize
+    }
+
+    /// La largeur qu'il faut pour que chaque bouton tienne entier dans sa part.
+    public static func neededWidth(primaryIdeal: Double, secondaryIdeal: Double) -> Double {
+        let whole = primaryShare + secondaryShare
+        return max(primaryIdeal * whole / primaryShare, secondaryIdeal * whole / secondaryShare) + spacing
+    }
+
+    /// La paire s'empile aux très grandes polices, et dès qu'un libellé ne tient
+    /// pas dans sa part : un libellé ne se coupe ni ne déborde sur son voisin.
+    public static func stacks(isAccessibilitySize: Bool,
+                              total: Double,
+                              primaryIdeal: Double,
+                              secondaryIdeal: Double) -> Bool {
+        guard !isAccessibilitySize else { return true }
+        return neededWidth(primaryIdeal: primaryIdeal, secondaryIdeal: secondaryIdeal) > total + 1e-6
     }
 }
 
