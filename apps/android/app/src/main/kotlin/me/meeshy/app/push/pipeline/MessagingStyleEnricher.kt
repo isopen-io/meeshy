@@ -10,6 +10,7 @@ import me.meeshy.app.R
 import me.meeshy.app.push.media.CircularAvatar
 import me.meeshy.app.push.media.PushMediaFetcher
 import me.meeshy.sdk.model.push.ConversationShortcutId
+import me.meeshy.sdk.model.push.PushConversationLockSeal
 import me.meeshy.sdk.model.push.PushNotificationActions
 import me.meeshy.sdk.model.push.PushPresentationText
 import javax.inject.Inject
@@ -44,7 +45,7 @@ class MessagingStyleEnricher @Inject constructor(
             .build()
 
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName(context.getString(R.string.push_message_you)).build())
-        previousMessages(request).forEach(style::addMessage)
+        previousMessages(request, text).forEach(style::addMessage)
         style.addMessage(text, PushNotificationActions.timestampMillis(payload, System.currentTimeMillis()), sender)
         if (!payload.isDirectConversation) {
             style.isGroupConversation = true
@@ -56,13 +57,18 @@ class MessagingStyleEnricher @Inject constructor(
         ConversationShortcutId.of(payload.conversationId)?.let(builder::setShortcutId)
     }
 
-    private fun previousMessages(request: EnrichmentRequest): List<NotificationCompat.MessagingStyle.Message> {
+    /**
+     * L'historique de la bannière déjà posée. Sous le scellé d'un verrou PIN, seuls les messages identiques au libellé
+     * survivent : une bannière posée AVANT le verrou porte du texte en clair qui ne doit pas être recopié.
+     */
+    private fun previousMessages(request: EnrichmentRequest, served: String): List<NotificationCompat.MessagingStyle.Message> {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return emptyList()
         val previous = runCatching { manager.activeNotifications }.getOrNull()
             ?.firstOrNull { it.id == request.notificationId && it.tag == null }
             ?.notification ?: return emptyList()
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(previous) ?: return emptyList()
-        return style.messages.takeLast(MAX_HISTORY - 1)
+        val sealed = PushConversationLockSeal.isSealed(request.push.payload)
+        return style.messages.filter { !sealed || it.text.toString() == served }.takeLast(MAX_HISTORY - 1)
     }
 
     /** La photo de l'expéditeur ne voyage jamais avec un message protégé : seul son nom est dit, comme le titre servi. */

@@ -15,9 +15,12 @@ import me.meeshy.app.push.PushTapIntentFactory
 import me.meeshy.app.push.IncomingPush
 import me.meeshy.app.push.MessageNotificationId
 import me.meeshy.app.push.NotificationChannelIds
+import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.FocusFilterSnapshot
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.push.PushBadgePolicy
+import me.meeshy.sdk.model.push.PushConversationLockSeal
 import me.meeshy.sdk.model.push.PushDelivery
 import me.meeshy.sdk.model.push.PushDeliveryContext
 import me.meeshy.sdk.model.push.PushDeliveryGate
@@ -33,6 +36,7 @@ import javax.inject.Singleton
  * Renders every non-call, non-revocation push — data-only (app in background or killed)
  * and legacy `notification + data` (foreground) alike — the Android counterpart of the iOS
  * Notification Service Extension :
+ *  0. **seal** (conversation locked by PIN : label only, no text, no media, no avatar, no action) ;
  *  1. **dedup** on `notificationId` (a push delivered twice posts once) ;
  *  2. **gate** ([PushDeliveryGate]) with the HYDRATED preferences (a cold process reads the
  *     persisted ones, not the defaults), the system interruption filter read at reception ;
@@ -52,6 +56,7 @@ class PushNotificationPipeline @Inject constructor(
     private val summaryNotifier: PushSummaryNotifier,
     private val interactions: PushInteractionBus = PushInteractionBus(),
     private val displayGates: Set<@JvmSuppressWildcards PushDisplayGate> = emptySet(),
+    private val lockStore: ConversationLockStore = InMemoryConversationLockStore(),
 ) {
     private val tapIntents = PushTapIntentFactory(context)
 
@@ -66,10 +71,11 @@ class PushNotificationPipeline @Inject constructor(
     }
 
     /** `true` when a notification was posted. */
-    suspend fun renderNow(incoming: IncomingPush): Boolean {
-        val payload = incoming.payload
+    suspend fun renderNow(received: IncomingPush): Boolean {
         // A data push with nothing to show is a silent sync : the observers handle it.
-        if ((incoming.notificationTitle ?: payload.title) == null && (incoming.notificationBody ?: payload.body) == null) return false
+        if ((received.notificationTitle ?: received.payload.title) == null && (received.notificationBody ?: received.payload.body) == null) return false
+        val incoming = sealedIfLocked(received)
+        val payload = incoming.payload
         if (displayGates.any { gate -> !runCatching { gate.allows(incoming) }.getOrDefault(true) }) return false
         if (!firstDelivery(payload.notificationId)) return false
 
@@ -125,6 +131,28 @@ class PushNotificationPipeline @Inject constructor(
         interactions.emit(PushInteraction.Displayed(payload.notificationId))
         groupKey?.let { summaryNotifier.post(it, channelId, badge) }
         return true
+    }
+
+    /**
+     * Le verrou PIN protège le CONTENU (iOS `NSEAttachmentPolicy`) : la charge d'une conversation verrouillée est scellée
+     * AVANT toute lecture — texte, avatar et média n'existent plus pour les étapes suivantes, qui ne rendent que le
+     * libellé. Un verrou illisible scelle (fail-closed) : mieux vaut une bannière muette qu'un secret en clair.
+     */
+    private fun sealedIfLocked(push: IncomingPush): IncomingPush {
+        val conversationId = push.payload.conversationId ?: return push
+        val locked = try {
+            lockStore.isLocked(conversationId)
+        } catch (failure: Exception) {
+            Timber.e(failure, "Conversation lock unreadable, sealing the banner")
+            true
+        }
+        if (!locked) return push
+        return IncomingPush.of(
+            data = PushConversationLockSeal.seal(push.data),
+            notificationTitle = push.notificationTitle,
+            notificationBody = context.getString(R.string.push_placeholder_locked),
+            hasNotificationBlock = push.hasNotificationBlock,
+        )
     }
 
     private suspend fun enrich(builder: NotificationCompat.Builder, request: EnrichmentRequest) {
