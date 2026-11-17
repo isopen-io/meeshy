@@ -1,0 +1,194 @@
+/* LA CARTE À CODE (K31, #18876) — une plaque TOUJOURS claire (le code se lit sur fond
+   clair, dans les deux thèmes), une matrice en un seul tracé, un reflet qui balaie. Le verre
+   vient de K01 (`MeeshyGlass`), jamais dessiné ici. Pendant l'inclinaison : une
+   transformation, aucune mise en page. Chaque valeur chiffrée vient de
+   `meeshy-code-card-recipe.ts` (`--kit-code-*`) ; l'inclinaison les réécrit sur l'élément. */
+@layer components {
+  .kit-code-card {
+    display: inline-block;
+    inline-size: var(--kit-code-card-w);
+    max-inline-size: 100%;
+    perspective: 900px;
+    animation: kit-code-arrive var(--kit-code-arrival) var(--motion-rise) both;
+  }
+
+  .kit-code-card__press {
+    display: block;
+    inline-size: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    min-block-size: 44px;
+  }
+
+  .kit-code-card__press:focus-visible {
+    outline: 2px solid var(--accent, var(--color-ios-brand));
+    outline-offset: 3px;
+    border-radius: var(--kit-code-card-radius);
+  }
+
+  .kit-code-card__surface {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    box-sizing: border-box;
+    padding: 22px 24px 20px;
+    border-radius: var(--kit-code-card-radius);
+    overflow: hidden;
+    transform: rotateY(var(--kit-code-pivot));
+    transform-style: preserve-3d;
+  }
+
+  .kit-code-card__surface[data-plain] {
+    background-color: #fff;
+    color: #000;
+  }
+
+  .kit-code-card[data-style='plain'] .kit-code-card__surface {
+    transform: none;
+  }
+
+  .kit-code-card__header {
+    min-inline-size: 0;
+  }
+
+  .kit-code-card__plate,
+  .kit-code-plate {
+    display: grid;
+    place-items: center;
+    padding: var(--kit-code-plate-margin);
+    border-radius: var(--kit-code-plate-radius);
+    background-color: var(--kit-code-plate);
+    transform: translateX(var(--kit-code-plate-x));
+  }
+
+  .kit-code-plate {
+    transform: none;
+    inline-size: fit-content;
+  }
+
+  .kit-code-matrix {
+    position: relative;
+    display: block;
+    color: var(--kit-code-ink);
+    animation: kit-code-fade var(--kit-code-arrival) ease both;
+  }
+
+  .kit-code-matrix svg {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .kit-code-matrix__modules,
+  .kit-code-matrix__pupil {
+    fill: var(--kit-code-ink);
+  }
+
+  .kit-code-matrix__ring {
+    stroke: var(--kit-code-tint);
+  }
+
+  .kit-code-matrix__center {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-code-center);
+    block-size: var(--kit-code-center);
+    border-radius: 22%;
+    background-color: var(--kit-code-plate);
+    color: var(--kit-code-tint);
+    transform: translate(calc(-50% + var(--kit-code-center-x)), -50%);
+  }
+
+  .kit-code-card__caption {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+  }
+
+  .kit-code-card__glint {
+    position: absolute;
+    inset-block: 0;
+    inline-size: 25%;
+    inset-inline-start: var(--kit-code-glint);
+    background-image: linear-gradient(108deg, transparent, rgb(255 255 255 / 0.18), transparent);
+    pointer-events: none;
+  }
+
+  .kit-code-card__view {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: var(--kit-code-plate-radius);
+    overflow: hidden;
+  }
+
+  .kit-code-card__reticle {
+    position: absolute;
+    inset: 12%;
+    border: 3px solid var(--color-ios-ink);
+    border-radius: 14px;
+    mask-image: linear-gradient(#000, #000);
+  }
+
+  .kit-code-card__reticle[data-state='seeking'] {
+    border-color: var(--accent, var(--color-ios-brand));
+    animation: kit-motion-pulse var(--motion-pulse-duration) var(--motion-pulse) infinite;
+  }
+
+  .kit-code-card__reticle {
+    transition: transform var(--motion-morph-duration) var(--motion-morph);
+  }
+
+  .kit-code-card__reticle[data-state='found'] {
+    border-color: var(--color-success);
+    transform: scale(0.78);
+  }
+
+  @keyframes kit-code-arrive {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes kit-code-fade {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-code-card {
+      animation: kit-code-fade var(--kit-code-arrival) ease both;
+    }
+
+    .kit-code-card__surface {
+      transform: none;
+    }
+
+    .kit-code-card__reticle[data-state='seeking'] {
+      animation: none;
+    }
+  }
+}

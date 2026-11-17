@@ -1,0 +1,234 @@
+/* LES TUILES DE CHOIX (K47, #18877) — une tête, un titre, une phrase, une marque. Le choix
+   se lit à trois signes (bord de 2, fond teinté, coche), jamais à la couleur seule. Mesures
+   posées par `meeshy-choice-tiles-recipe.ts` (`--kit-choice-*`). Seules `transform` et
+   `opacity` s'animent ; mouvement réduit : la coche entre en fondu, sans échelle. */
+@layer components {
+  .kit-choice-grid {
+    display: grid;
+    align-items: stretch;
+  }
+
+  .kit-choice {
+    position: relative;
+    display: grid;
+    grid-auto-flow: row;
+    align-content: start;
+    justify-items: start;
+    gap: 0.5rem;
+    min-block-size: var(--kit-choice-min, 0);
+    padding: var(--kit-choice-padding, 1rem);
+    border: var(--kit-choice-border, 1px) solid var(--color-ios-hairline);
+    border-radius: var(--kit-choice-radius, 1.5rem);
+    background: var(--color-ios-fill);
+    color: var(--color-ios-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    opacity: var(--kit-choice-opacity, 1);
+    transform: scale(var(--kit-choice-press, 1));
+    transition: transform var(--motion-morph-duration, 420ms) var(--motion-morph, ease-out), background-color 160ms linear, border-color 160ms linear;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .kit-choice::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--color-ios-ink);
+    opacity: calc(var(--kit-choice-veil, 0) * 0.5);
+    pointer-events: none;
+  }
+
+  .kit-choice[data-format='wide'] {
+    grid-column: 1 / -1;
+    grid-auto-flow: column;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    align-content: center;
+    gap: 0.875rem;
+  }
+
+  .kit-choice[data-format='compact'] {
+    align-content: center;
+    gap: 0.25rem;
+  }
+
+  .kit-choice[data-content='value'] {
+    align-content: space-between;
+  }
+
+  .kit-choice:focus-visible {
+    outline: 2px solid var(--color-ios-ink);
+    outline-offset: 3px;
+  }
+
+  .kit-choice[data-selected] {
+    border-color: var(--kit-choice-tint, var(--color-ios-brand));
+    background: linear-gradient(160deg, color-mix(in srgb, var(--kit-choice-tint, var(--color-ios-brand)) 22%, transparent), var(--color-ios-fill));
+    box-shadow: 0 0.875rem 1.875rem color-mix(in srgb, var(--kit-choice-tint, var(--color-ios-brand)) 28%, transparent);
+  }
+
+  .kit-choice[data-locked] {
+    border-style: dashed;
+    cursor: default;
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-choice:disabled {
+    cursor: default;
+  }
+
+  .kit-choice__head {
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-choice-head, 2.875rem);
+    block-size: var(--kit-choice-head, 2.875rem);
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--kit-choice-tint, var(--color-ios-brand)) 24%, transparent);
+    color: var(--kit-choice-tint, var(--color-ios-brand));
+  }
+
+  .kit-choice__head[data-content='icon'] {
+    border-radius: 999px;
+    background: var(--color-ios-card);
+    color: var(--color-ios-ink);
+  }
+
+  .kit-choice[data-inverted] .kit-choice__head {
+    background: var(--color-ios-ink);
+    color: var(--color-ios-bg);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--kit-choice-tint, var(--color-ios-brand)) 30%, transparent);
+  }
+
+  .kit-choice__head svg {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+  }
+
+  .kit-choice__value {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    font-weight: 800;
+  }
+
+  .kit-choice__number {
+    font-size: var(--kit-choice-value, 2.5rem);
+    line-height: 1;
+  }
+
+  .kit-choice__unit {
+    font-size: 0.875rem;
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-choice__body {
+    display: grid;
+    gap: 0.25rem;
+    min-inline-size: 0;
+  }
+
+  .kit-choice__title {
+    font-size: var(--kit-choice-title, 1.03rem);
+    font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .kit-choice__detail {
+    font-size: 0.78rem;
+    color: var(--color-ios-ink-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .kit-choice__locked {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-choice__locked svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .kit-choice__trailing {
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-choice__check {
+    position: absolute;
+    inset-block-start: 0.625rem;
+    inset-inline-end: 0.625rem;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-choice-check, 1.5rem);
+    block-size: var(--kit-choice-check, 1.5rem);
+    border-radius: 999px;
+    background: var(--kit-choice-tint, var(--color-ios-brand));
+    color: var(--color-ios-bg);
+    animation: kit-choice-check 320ms var(--motion-rise, ease-out) 60ms both;
+  }
+
+  .kit-choice[data-format='compact'] .kit-choice__check {
+    inset-block-start: -0.4375rem;
+    inset-inline-end: -0.4375rem;
+    box-shadow: 0 0 0 3px var(--color-ios-bg);
+  }
+
+  .kit-choice__check svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .kit-choice[data-fade] .kit-choice__check {
+    animation: kit-choice-fade 120ms linear both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-choice {
+      transition: background-color 120ms linear, border-color 120ms linear;
+    }
+
+    .kit-choice__check {
+      animation: kit-choice-fade 120ms linear both;
+    }
+  }
+}
+
+@keyframes kit-choice-check {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.28);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes kit-choice-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
