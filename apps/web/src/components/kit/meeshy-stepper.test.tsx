@@ -94,8 +94,12 @@ describe('MeeshyStepper — boutons', () => {
     minus: container.querySelector<HTMLButtonElement>('[data-kit-stepper-minus]') as HTMLButtonElement,
     plus: container.querySelector<HTMLButtonElement>('[data-kit-stepper-plus]') as HTMLButtonElement,
   });
-  const press = (node: HTMLElement) => act(() => node.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 })));
-  const release = (node: HTMLElement) => act(() => node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 })));
+  const press = (node: HTMLElement) => act(() => {
+      node.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
+    });
+  const release = (node: HTMLElement) => act(() => {
+      node.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+    });
 
   const props = { label: 'Nombre d’entrées', range: { min: 1, max: 50 }, decrementLabel: 'Moins d’entrées', incrementLabel: 'Plus d’entrées' } as const;
 
@@ -237,9 +241,13 @@ describe('MeeshyStepper — piste', () => {
     const changes: number[] = [];
     const container = mount(<MeeshyStepper kind="track" label="Précision" value={2} stops={STOPS} onChange={(index) => changes.push(index)} />);
     const current = container.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]');
-    act(() => current?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    act(() => {
+      current?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
     expect(changes).toEqual([]);
-    act(() => current?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })));
+    act(() => {
+      current?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
     expect(changes).toEqual([1]);
   });
 
@@ -261,7 +269,9 @@ describe('MeeshyStepper — jalons', () => {
     const container = mount(<MeeshyStepper kind="milestones" label="Histoire" value={1} stops={MILESTONES} stateLabels={{ done: 'fait', current: 'en cours', todo: 'à faire' }} />);
     const items = [...container.querySelectorAll<HTMLElement>('[role="listitem"]')];
     expect(items.map((item) => item.getAttribute('data-state'))).toEqual(['done', 'current', 'todo']);
-    expect(items.map((item) => item.textContent)).toEqual([expect.stringContaining('fait'), expect.stringContaining('en cours'), expect.stringContaining('à faire')]);
+    expect(items[0]?.textContent).toContain('fait');
+    expect(items[1]?.textContent).toContain('en cours');
+    expect(items[2]?.textContent).toContain('à faire');
   });
 
   test('la légende est facultative, le titre obligatoire', () => {

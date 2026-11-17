@@ -119,7 +119,9 @@ describe('MeeshyTranslationMark — le composant', () => {
   test('appui long : onExplore ; Maj+F10 aussi', () => {
     let explored = 0;
     const container = mount(<MeeshyTranslationMark sourceLanguageName="de l’italien" isShowingOriginal={false} onToggle={() => {}} onExplore={() => (explored += 1)} words={WORDS} />);
-    act(() => container.querySelector('button')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true })));
+    act(() => {
+      container.querySelector('button')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+    });
     expect(explored).toBe(1);
   });
 

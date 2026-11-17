@@ -94,6 +94,7 @@ export const MeeshyTranslationMark = memo(function MeeshyTranslationMark({
       onExplore();
     }
   };
+  const toneProps = tone === undefined ? {} : { tone };
   const rootProps = {
     className: className === undefined ? 'kit-translation' : `kit-translation ${className}`,
     style: meeshyTranslationMarkStyle(recipe, tint),
@@ -128,11 +129,11 @@ export const MeeshyTranslationMark = memo(function MeeshyTranslationMark({
     return (
       <span {...rootProps}>
         {onToggle === undefined ? (
-          <MeeshyGlass as="span" tone={tone} className="kit-translation__legend" data-kit-translation-legend="">
+          <MeeshyGlass as="span" {...toneProps} className="kit-translation__legend" data-kit-translation-legend="">
             {content}
           </MeeshyGlass>
         ) : (
-          <MeeshyGlass as="button" type="button" interactive tone={tone} className="kit-translation__legend" data-kit-translation-legend="" aria-pressed={isShowingOriginal} aria-label={label ?? texts.toggle} aria-disabled={isPending === true ? 'true' : undefined} onClick={toggle} onContextMenu={explore} onKeyDown={exploreByKey}>
+          <MeeshyGlass as="button" type="button" interactive {...toneProps} className="kit-translation__legend" data-kit-translation-legend="" aria-pressed={isShowingOriginal} aria-label={label ?? texts.toggle} aria-disabled={isPending === true ? 'true' : undefined} onClick={toggle} onContextMenu={explore} onKeyDown={exploreByKey}>
             {content}
           </MeeshyGlass>
         )}

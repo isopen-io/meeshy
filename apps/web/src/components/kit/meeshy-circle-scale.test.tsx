@@ -117,7 +117,9 @@ describe('MeeshyCircleScale — le composant', () => {
     const picked: number[] = [];
     const container = mount(<MeeshyCircleScale levels={LEVELS} current={3} onSelect={(rank) => picked.push(rank)} />);
     const current = container.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]');
-    act(() => current?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    act(() => {
+      current?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
     expect(picked).toEqual([4]);
   });
 
