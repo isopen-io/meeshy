@@ -1,5 +1,3 @@
-import type { ResultatInvitation } from '@/lib/view/invitation';
-
 /**
  * L'ADRESSE QU'ON PARTAGE D'UNE PUBLICATION (#6278, D-48) — la forme
  * CANONIQUE que les deux autres clients reconnaissent déjà : le repli de
@@ -25,22 +23,3 @@ export function profileShareUrl(username: string): string {
 export function publicationShareUrl(postId: string): string {
   return `${CANONICAL_ORIGIN}/feeds/post/${encodeURIComponent(postId)}`;
 }
-
-/**
- * Ce que le lecteur DOIT s'entendre dire : rien quand la feuille du système a
- * déjà parlé (partagé ou annulé) ; un retour quand rien n'a bougé à l'écran.
- * `feed.share.error` (`Localizable.xcstrings`) pour l'échec. Une CLÉ DE
- * CATALOGUE (#6488), jamais un texte déjà traduit — cette couche n'a pas la
- * langue d'interface, seul l'hôte qui annonce (`usePostGesture`) l'a.
- *
- * UNE UNION LITTÉRALE, jamais `InterfaceCatalogKey` — voir le même
- * doc-comment sur `PostGestureMessageKey` (`lib/api/feed-gestures.ts`).
- */
-type ShareOutcomeKey = 'feed.share.copied' | 'feed.share.error';
-
-export const RETOUR_PARTAGE_PUBLICATION: Record<ResultatInvitation, ShareOutcomeKey | null> = {
-  partage: null,
-  annule: null,
-  copie: 'feed.share.copied',
-  indisponible: 'feed.share.error',
-};

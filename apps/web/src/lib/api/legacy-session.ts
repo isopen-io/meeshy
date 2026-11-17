@@ -11,7 +11,7 @@ import type { SessionStorage, SessionUser } from './session';
  *
  * ## Ce que le legacy persiste — mesuré dans `apps/web`
  *
- *  - `AuthManager` (`services/auth-manager.service.ts`, clés de
+ *  - `AuthManager` (`legacy-web-final:apps/web/services/auth-manager.service.ts`, clés de
  *    `constants/auth.ts`), sa source de vérité : `meeshy_auth_token` (le JWT
  *    BRUT), `meeshy_session_token` (brut, absent d'une connexion sans session
  *    nommée), `meeshy_user_data` (l'utilisateur servi, en JSON) ;

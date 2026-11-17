@@ -11,6 +11,8 @@ import { OBJECT_ID_REGEX } from './object-id.js';
 import { AuthSchemas } from './auth-schemas.js';
 import { notificationTypeEnum } from './notification-type-enum.js';
 import { isProfileImageReference } from './profile-image-reference.js';
+import { CITY_MAX_LENGTH, isPlainCityText } from './profile-city.js';
+import { RELATION_LEVELS } from '../types/relation.js';
 import { usernameMaxLength, usernameMinLength } from '../types/api-schemas/identity-bounds.js';
 import {
   PASSWORD_MIN_LENGTH,
@@ -341,6 +343,9 @@ export const updateUserProfileSchema = z.object({
     .optional(),
   autoTranslateEnabled: z.boolean().optional(),
   voicePublic: z.boolean().optional(),
+  // #18862 : la ville DÉCLARÉE et le cercle qui la lit. Vide / null = effacement.
+  city: z.union([z.string().max(CITY_MAX_LENGTH).refine(isPlainCityText, { message: 'La ville ne peut contenir ni balise ni caractère de contrôle' }), z.null()]).optional(),
+  cityCircle: z.union([z.enum(RELATION_LEVELS), z.null()]).optional(),
 }).strict();
 
 export { isProfileImageReference };
