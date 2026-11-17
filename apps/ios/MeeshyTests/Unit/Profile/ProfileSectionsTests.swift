@@ -300,6 +300,50 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(voice.contains(".onDisappear { player.stop() }"), "la voix se tait quand on quitte la fiche")
     }
 
+    // MARK: - Publications (K49)
+
+    func test_publicationTiles_onAnEmptyCacheWhileLoading_areThreeSkeletons_neverASpinner() {
+        let tiles = ProfilePublicationTiles.items(posts: [], isLoading: true)
+        XCTAssertEqual(tiles.map(\.kind), [.skeleton, .skeleton, .skeleton])
+        XCTAssertTrue(ProfilePublicationTiles.items(posts: [], isLoading: false).isEmpty, "rien de publié : la section se tait")
+    }
+
+    func test_publicationTiles_showMyThreeLatest_aPictureTile_orATextTile() {
+        let photo = FeedPost(id: "p1", author: "Aïcha", content: "", media: [FeedMedia(type: .image, url: "/a.jpg")])
+        let text = FeedPost(id: "p2", author: "Aïcha", content: "  Bonjour Dakar  ")
+        let video = FeedPost(id: "p3", author: "Aïcha", content: "",
+                             media: [FeedMedia(type: .video, url: "/v.mp4", thumbnailUrl: "/v.jpg")])
+        let older = FeedPost(id: "p4", author: "Aïcha", content: "plus ancien")
+
+        let tiles = ProfilePublicationTiles.items(posts: [photo, text, video, older], isLoading: false)
+
+        XCTAssertEqual(tiles.map(\.id), ["p1", "p2", "p3"], "trois tuiles, la suite derrière « Tout voir »")
+        XCTAssertEqual(tiles.map(\.kind), [.media, .text, .media])
+        XCTAssertEqual(tiles[1].text, "Bonjour Dakar")
+        XCTAssertEqual(ProfilePublicationTiles.thumbnail(of: photo), "/a.jpg")
+        XCTAssertEqual(ProfilePublicationTiles.thumbnail(of: video), "/v.jpg", "une vidéo se montre par sa vignette")
+        XCTAssertNil(ProfilePublicationTiles.thumbnail(of: text))
+    }
+
+    func test_publicationTile_ofAReel_carriesThePlayGlyphAndItsDuration_andSaysWhatItIs() {
+        let reel = FeedPost(id: "r1", author: "Aïcha", type: "REEL", content: "Au marché",
+                            media: [FeedMedia(type: .video, thumbnailUrl: "/r.jpg", duration: 24)])
+        let tile = ProfilePublicationTiles.item(for: reel)
+        XCTAssertEqual(tile.badge, MeeshyMediaTileBadge(systemImage: "play.fill", value: reel.media.first?.durationFormatted))
+        XCTAssertTrue(tile.label.hasPrefix(ProfilePublicationsCopy.kindName(of: reel)), tile.label)
+        XCTAssertTrue(tile.label.contains("Au marché"), tile.label)
+        XCTAssertNil(ProfilePublicationTiles.item(for: FeedPost(id: "t", author: "A", content: "x")).badge)
+    }
+
+    func test_vitrine_mountsMyPublications_inTheKitGrid_withSeeAll() throws {
+        let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(profile.contains("ProfilePublicationsSection(userId: userId, accentColor: accentColor)"))
+        let section = try code("Meeshy/Features/Profile/Faces/ProfilePublicationsSection.swift")
+        XCTAssertTrue(section.contains("MeeshyMediaGrid("), "la grille est K49, aucune tuile redessinée sur place")
+        XCTAssertTrue(section.contains("ProfileUserPostsList(userId: userId"), "« Tout voir » ouvre toute ma liste")
+        XCTAssertTrue(section.contains(".closesForConversationOpening(.sheet)"))
+    }
+
     /// La valeur SERVIE par le catalogue pour la langue du simulateur : le témoin tient en français comme en anglais (CI).
     private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
 }

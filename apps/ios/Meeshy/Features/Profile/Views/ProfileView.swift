@@ -328,6 +328,9 @@ struct ProfileView: View {
         if !isEditing, let voice = ProfileVoiceSample.make(user: user) {
             ProfileVoiceSection(sample: voice, accentColor: accentColor)
         }
+        if !isEditing, let userId = user?.id {
+            ProfilePublicationsSection(userId: userId, accentColor: accentColor)
+        }
     }
 
     private func perform(_ action: ProfileFaceAction) {
