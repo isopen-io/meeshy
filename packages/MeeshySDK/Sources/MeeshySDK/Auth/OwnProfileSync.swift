@@ -32,8 +32,8 @@ public enum OwnProfileSync {
     /// n'est pas écrasée — elle se lève dès que l'instantané la porte.
     @MainActor
     public static func apply(_ event: ProfileUpdatedEvent, to auth: AuthManager) {
-        guard let user = auth.currentUser, let projected = projected(user, applying: event) else { return }
-        let resolved = AuthManager.resolveServerUserWithOptimistic(projected, pending: auth.pendingOptimisticProfile)
+        guard let user = auth.currentUser, let repainted = Self.projected(user, applying: event) else { return }
+        let resolved = AuthManager.resolveServerUserWithOptimistic(repainted, pending: auth.pendingOptimisticProfile)
         auth.currentUser = resolved.user
         auth.saveUserToKeychain(resolved.user, userId: resolved.user.id)
         guard resolved.clearedPending else { return }
