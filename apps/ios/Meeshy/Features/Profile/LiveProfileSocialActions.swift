@@ -5,8 +5,8 @@ import MeeshyUI
 final class LiveProfileSocialActions: ProfileSocialActionsProviding {
     nonisolated deinit {}
 
-    func sendFriendRequest(to userId: String) async throws -> FriendRequest {
-        try await FriendService.shared.sendFriendRequest(receiverId: userId, message: nil)
+    func sendFriendRequest(to userId: String, message: String?) async throws -> FriendRequest {
+        try await FriendService.shared.sendFriendRequest(receiverId: userId, message: message)
     }
 
     func deleteFriendRequest(_ requestId: String) async throws {

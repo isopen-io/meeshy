@@ -102,7 +102,7 @@ extension UserProfileSheet {
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName,
                                 linked: $relationLinked) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                    connectionButton(.request) { Task { await sendConnectionRequest() } }
+                    ProfileFriendRequestCard(tint: accentTint) { note in Task { await sendConnectionRequest(message: note) } }
                     ProfileLockedCapabilities(level: .public, tint: accentTint)
                 }
             }
@@ -216,13 +216,12 @@ extension UserProfileSheet {
     }
 }
 
-/// Une étape de la demande de connexion (planche `Etat-Demande`) : un libellé, un glyphe, primaire ou non.
+/// Une étape d'une demande déjà partie ou reçue (planche `Etat-Demande`) : un libellé, un glyphe, primaire ou non.
 nonisolated enum ProfileConnectionStep: CaseIterable, Sendable {
-    case request, cancel, resend, accept, decline
+    case cancel, resend, accept, decline
 
     var title: String {
         switch self {
-        case .request: return String(localized: "profile.action.connectionRequest", defaultValue: "Demande de connexion", bundle: .module)
         case .cancel: return String(localized: "profile.action.cancelRequest", defaultValue: "Annuler la demande", bundle: .module)
         case .resend: return String(localized: "profile.action.resendRequest", defaultValue: "Renvoyer la demande", bundle: .module)
         case .accept: return String(localized: "profile.action.acceptConnection", defaultValue: "Accepter la connexion", bundle: .module)
@@ -232,7 +231,6 @@ nonisolated enum ProfileConnectionStep: CaseIterable, Sendable {
 
     var systemImage: String {
         switch self {
-        case .request: return "person.badge.plus"
         case .cancel: return "xmark"
         case .resend: return "arrow.clockwise"
         case .accept: return "checkmark"
@@ -240,9 +238,10 @@ nonisolated enum ProfileConnectionStep: CaseIterable, Sendable {
         }
     }
 
-    /// Demander et accepter sont les gestes qui avancent ; annuler, renvoyer et refuser restent secondaires.
+    /// Accepter est le geste qui avance ; annuler, renvoyer et refuser restent secondaires. Demander vit dans
+    /// `ProfileFriendRequestCard`.
     var isPrimary: Bool {
-        self == .request || self == .accept
+        self == .accept
     }
 }
 

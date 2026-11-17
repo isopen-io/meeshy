@@ -2,7 +2,8 @@ import MeeshySDK
 
 @MainActor
 public protocol ProfileSocialActionsProviding: AnyObject {
-    func sendFriendRequest(to userId: String) async throws -> FriendRequest
+    /// `message` : le mot facultatif de la demande (planche `Etat-Demande`), `nil` sans mot.
+    func sendFriendRequest(to userId: String, message: String?) async throws -> FriendRequest
     func deleteFriendRequest(_ requestId: String) async throws
     func respondToFriendRequest(_ requestId: String, accepted: Bool) async throws
     func blockUser(_ userId: String) async throws

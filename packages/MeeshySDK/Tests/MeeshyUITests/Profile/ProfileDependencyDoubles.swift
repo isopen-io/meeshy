@@ -45,8 +45,11 @@ final class StubProfileSocialActions: ProfileSocialActionsProviding {
     private(set) var unblockCalls: [String] = []
     private(set) var reportCalls: [(userId: String, reportType: String)] = []
 
-    func sendFriendRequest(to userId: String) async throws -> FriendRequest {
+    private(set) var sentMessages: [String?] = []
+
+    func sendFriendRequest(to userId: String, message: String?) async throws -> FriendRequest {
         sendCalls.append(userId)
+        sentMessages.append(message)
         return try sendResult.get()
     }
 

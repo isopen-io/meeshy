@@ -386,9 +386,9 @@ public struct UserProfileSheet: View {
 
     // MARK: - Connection Actions
 
-    func sendConnectionRequest() async {
+    func sendConnectionRequest(message: String? = nil) async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
-        guard let requestId = await connectionActions.sendRequest(to: userId) else {
+        guard let requestId = await connectionActions.sendRequest(to: userId, message: message) else {
             HapticFeedback.error()
             postToast(String(localized: "profile.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module), isSuccess: false)
             return

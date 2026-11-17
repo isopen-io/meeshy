@@ -22,6 +22,25 @@ final class ProfileConnectionActionsTests: XCTestCase {
         XCTAssertEqual(fixture.relationships.events, ["didSend:u-bob:req-9"])
     }
 
+    /// Planche `Etat-Demande` — « Ajoute un mot » est facultatif : le mot part rogné, un mot vide ne part pas.
+    func test_sendRequest_avecUnMot_lEnvoieRogne() async {
+        let fixture = Fixture()
+        fixture.social.sendResult = .success(ProfileDependencyDoubles.makeFriendRequest(id: "req-9"))
+
+        _ = await fixture.sut.sendRequest(to: "u-bob", message: "  On s'est croisées au festival  ")
+
+        XCTAssertEqual(fixture.social.sentMessages, ["On s'est croisées au festival"])
+    }
+
+    func test_sendRequest_motVide_nEnvoieAucunMot() async {
+        let fixture = Fixture()
+        fixture.social.sendResult = .success(ProfileDependencyDoubles.makeFriendRequest(id: "req-9"))
+
+        _ = await fixture.sut.sendRequest(to: "u-bob", message: "   ")
+
+        XCTAssertEqual(fixture.social.sentMessages, [nil])
+    }
+
     func test_sendRequest_echec_rendNilSansToucherLEtat() async {
         let fixture = Fixture()
         fixture.social.sendResult = .failure(StubFailure())

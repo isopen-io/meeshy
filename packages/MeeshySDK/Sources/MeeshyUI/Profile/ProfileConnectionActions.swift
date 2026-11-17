@@ -5,8 +5,11 @@ struct ProfileConnectionActions {
     let relationships: any ProfileRelationshipStateProviding
     let social: any ProfileSocialActionsProviding
 
-    func sendRequest(to userId: String) async -> String? {
-        guard let request = try? await social.sendFriendRequest(to: userId) else { return nil }
+    /// Le mot facultatif part rogné ; vide, il ne part pas.
+    func sendRequest(to userId: String, message: String? = nil) async -> String? {
+        let note = message?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sent = (note?.isEmpty ?? true) ? nil : note
+        guard let request = try? await social.sendFriendRequest(to: userId, message: sent) else { return nil }
         relationships.didSendRequest(to: userId, requestId: request.id)
         return request.id
     }
