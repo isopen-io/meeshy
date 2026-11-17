@@ -80,6 +80,25 @@ describe('MeeshyChoiceTiles — un seul choix', () => {
     expect(touched).toEqual(['h8']);
     expect(document.activeElement).toBe(tile(container, 'h8'));
   });
+
+  test('les flèches sautent une tuile éteinte : le choix et le focus atteignent la suivante, jamais une impasse', () => {
+    const touched: string[] = [];
+    const row: readonly MeeshyChoiceItem[] = [{ id: 'h1', title: '1 heure' }, { id: 'off', title: 'Éteinte', state: 'disabled' }, { id: 'h8', title: '8 heures' }];
+    const container = mount(<MeeshyChoiceTiles label="Durée" items={row} selection={{ single: 'h1' }} onSelect={(id) => touched.push(id)} />);
+    act(() => tile(container, 'h1').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    expect(touched).toEqual(['h8']);
+    expect(document.activeElement).toBe(tile(container, 'h8'));
+  });
+
+  test('une flèche ne déclenche jamais une tuile verrouillée : seul un toucher ouvre ce qui l’ouvre', () => {
+    const touched: string[] = [];
+    const asked: string[] = [];
+    const container = mount(<MeeshyChoiceTiles label="Durée" items={items} selection={{ single: 'inf' }} onSelect={(id) => touched.push(id)} onLockedTap={(id) => asked.push(id)} />);
+    act(() => tile(container, 'inf').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    act(() => tile(container, 'inf').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
+    expect(asked).toEqual([]);
+    expect(touched).toEqual([]);
+  });
 });
 
 describe('MeeshyChoiceTiles — plusieurs choix', () => {

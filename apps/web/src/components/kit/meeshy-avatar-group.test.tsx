@@ -91,6 +91,15 @@ describe('MeeshyAvatarGroup — rangée, grille, sélection', () => {
     expect(changes).toEqual([2]);
   });
 
+  test('les flèches sautent une cellule éteinte : le choix et le focus atteignent la suivante', () => {
+    const changes: (number | null)[] = [];
+    const container = mount(<MeeshyAvatarGroup count={3} layout="rail" size={56} label="Suggestions" caption={(index) => names[index] ?? null} selection={{ single: 0 }} isEnabled={(index) => index !== 1} onSelectionChange={(next) => changes.push((next as { single: number | null }).single)} cell={cell} />);
+    const radios = () => Array.from(container.querySelectorAll('[role="radio"]')) as HTMLElement[];
+    act(() => radios()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    expect(changes).toEqual([2]);
+    expect(document.activeElement).toBe(radios()[2]);
+  });
+
   test('sélection multiple : le nouvel ensemble est rendu à l’hôte', () => {
     const changes: ReadonlySet<number>[] = [];
     const container = mount(<MeeshyAvatarGroup count={4} layout="rail" size={56} label="Inviter" caption={(index) => names[index] ?? null} selection={{ multiple: new Set([0]) }} onSelectionChange={(next) => changes.push((next as { multiple: ReadonlySet<number> }).multiple)} cell={cell} />);

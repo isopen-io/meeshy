@@ -4,7 +4,7 @@ import { kitMount, spokenText } from '@/test-support/kit-mount';
 
 import { MeeshyChart, meeshyChartRecipe, MeeshyChartScale, type MeeshyChartPoint } from './meeshy-chart';
 
-const { mount, act } = kitMount();
+const { mount, render, act } = kitMount();
 const point = (id: string, value: number, extra: Partial<MeeshyChartPoint> = {}): MeeshyChartPoint => ({ id, value, label: id, spoken: `${id}, ${value} clics`, ...extra });
 const days = [point('d1', 4), point('d2', 214), point('d3', 30), point('d4', 0)];
 
@@ -139,5 +139,29 @@ describe('MeeshyChart — les sept genres se dessinent', () => {
     expect(sizes[0]).toBe(78);
     expect(sizes[1]).toBeGreaterThanOrEqual(34);
     expect(sizes[1]).toBeLessThan(sizes[0] as number);
+  });
+});
+
+describe('MeeshyChart — le repère des points', () => {
+  test('un point de courbe se pose sur la courbe dans les deux sens de lecture : son abscisse est physique, comme le tracé SVG', () => {
+    const container = mount(<MeeshyChart kind="line" points={days} summary="Courbe" onSelect={() => {}} />);
+    const dot = container.querySelector('[data-kit-chart-dot]') as HTMLElement;
+    expect(dot.style.left).toBe(`${(4 / 300) * 100}%`);
+    expect(dot.style.getPropertyValue('inset-inline-start')).toBe('');
+  });
+
+  test('une bulle se pose où l’hôte la place, quel que soit le sens de lecture', () => {
+    const container = mount(<MeeshyChart kind="bubbles" points={[point('a', 488, { position: { x: 0.2, y: 0.4 } })]} summary="Pays" />);
+    const bubble = container.querySelector('[data-kit-chart-bubble]') as HTMLElement;
+    expect(bubble.style.left).toBe('20%');
+    expect(bubble.style.top).toBe('40%');
+  });
+
+  test('l’axe garde ses bornes quand deux libellés se répètent (L M M J V)', () => {
+    const container = mount(<MeeshyChart kind="bars" points={days} summary="Barres" axisLabels={['L', 'M', 'M', 'J', 'V']} />);
+    const read = () => Array.from(container.querySelectorAll('[data-kit-chart-axis] span')).map((node) => node.textContent);
+    expect(read()).toEqual(['L', 'M', 'M', 'J', 'V']);
+    render(<MeeshyChart kind="bars" points={days} summary="Barres" axisLabels={['M', 'M', 'J', 'V', 'S']} />);
+    expect(read()).toEqual(['M', 'M', 'J', 'V', 'S']);
   });
 });

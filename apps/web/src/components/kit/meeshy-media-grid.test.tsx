@@ -4,7 +4,7 @@ import { kitMount } from '@/test-support/kit-mount';
 
 import { MeeshyMediaGrid, meeshyMediaGridPlacement, meeshyMediaGridRecipe, type MeeshyMediaGridItem } from './meeshy-media-grid';
 
-const { mount, act } = kitMount();
+const { mount, render, act } = kitMount();
 const item = (id: string, extra: Partial<MeeshyMediaGridItem> = {}): MeeshyMediaGridItem => ({ id, kind: 'media', label: `Ouvrir ${id}`, ...extra });
 const content = (it: MeeshyMediaGridItem) => <i data-image={it.id} />;
 
@@ -94,5 +94,39 @@ describe('MeeshyMediaGrid — ce qu’on lit et ce qu’on touche', () => {
     const seen: string[] = [];
     mount(<MeeshyMediaGrid label="Vitrine" items={[item('a')]} onOpen={() => {}} content={(it, size) => { seen.push(`${it.id}:${typeof size.width}`); return null; }} />);
     expect(seen).toEqual(['a:number']);
+  });
+});
+
+describe('MeeshyMediaGrid — la page suivante', () => {
+  test('une page qui ne remplit pas l’écran en redemande une : la sentinelle se réarme quand des tuiles arrivent, pas sans', () => {
+    const scope = globalThis as unknown as { IntersectionObserver: unknown };
+    const original = scope.IntersectionObserver;
+    class AlwaysVisible {
+      private readonly callback: (entries: readonly { readonly isIntersecting: boolean }[]) => void;
+      constructor(callback: (entries: readonly { readonly isIntersecting: boolean }[]) => void) {
+        this.callback = callback;
+      }
+      observe(): void {
+        this.callback([{ isIntersecting: true }]);
+      }
+      unobserve(): void {}
+      disconnect(): void {}
+      takeRecords(): readonly unknown[] {
+        return [];
+      }
+    }
+    scope.IntersectionObserver = AlwaysVisible;
+    try {
+      let reached = 0;
+      const grid = (ids: readonly string[]) => <MeeshyMediaGrid label="Publications" items={ids.map((id) => item(id))} onOpen={() => {}} onReachEnd={() => (reached += 1)} content={content} />;
+      mount(grid(['a', 'b']));
+      expect(reached).toBe(1);
+      render(grid(['a', 'b', 'c', 'd']));
+      expect(reached).toBe(2);
+      render(grid(['a', 'b', 'c', 'd']));
+      expect(reached).toBe(2);
+    } finally {
+      scope.IntersectionObserver = original;
+    }
   });
 });

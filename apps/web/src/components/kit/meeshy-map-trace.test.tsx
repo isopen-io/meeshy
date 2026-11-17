@@ -127,3 +127,16 @@ describe('MeeshyMapTrace — ce qu’on lit', () => {
     expect(mount(<MeeshyMapTrace label="Journée" points={route} kind="history" />).querySelector('[data-kit-trace-head]')).toBeNull();
   });
 });
+
+describe('MeeshyMapTrace — le repère des étiquettes', () => {
+  test('un arrêt et l’étiquette du milieu se posent sous leur point dans les deux sens de lecture : coordonnées physiques, comme le tracé', () => {
+    const container = mount(<MeeshyMapTrace label="Journée" points={route} kind="route" midCaption="2,4 km" stops={[{ id: 's1', pointIndex: 1, value: '12:30', title: 'Marché' }]} />);
+    const stop = container.querySelector('[data-kit-trace-stop]') as HTMLElement;
+    expect(stop.style.left).toBe('90px');
+    expect(stop.style.top).toBe('102px');
+    expect(stop.style.getPropertyValue('inset-inline-start')).toBe('');
+    const mid = container.querySelector('[data-kit-trace-mid]') as HTMLElement;
+    expect(mid.style.left).not.toBe('');
+    expect(mid.style.getPropertyValue('inset-inline-start')).toBe('');
+  });
+});

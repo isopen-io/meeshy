@@ -124,6 +124,25 @@ describe('MeeshyReorderList — sans le doigt', () => {
     expect(moves).toEqual([]);
   });
 
+  test('clavier : le focus quitte la poignée en plein déplacement — l’ordre de départ revient, rien n’est posé', () => {
+    const moves: [number, number][] = [];
+    const container = mount(list({}, (from, to) => moves.push([from, to])));
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    try {
+      const handle = container.querySelector('[data-kit-reorder-row="fr"] [data-kit-reorder-handle]') as HTMLButtonElement;
+      act(() => handle.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })));
+      act(() => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+      act(() => handle.dispatchEvent(new FocusEvent('blur', { relatedTarget: outside })));
+      const order = Array.from(container.querySelectorAll('[data-kit-reorder-row]')).map((node) => node.getAttribute('data-kit-reorder-row'));
+      expect(order).toEqual(['fr', 'en', 'wo']);
+      expect(container.querySelector('[data-kit-reorder-row="fr"]')?.getAttribute('data-phase')).toBe('rest');
+      expect(moves).toEqual([]);
+    } finally {
+      outside.remove();
+    }
+  });
+
   test('le nouveau rang est annoncé une fois posé', () => {
     const container = mount(list());
     act(() => (container.querySelector('[data-kit-reorder-row="fr"] [data-kit-reorder-down]') as HTMLButtonElement).click());
