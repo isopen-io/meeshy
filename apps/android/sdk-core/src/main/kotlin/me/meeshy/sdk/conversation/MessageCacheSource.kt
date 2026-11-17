@@ -60,7 +60,7 @@ internal class MessageCacheSource(
     private val media: AcknowledgedBubbleMedia? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
-    private val resourceKey = "messages:$conversationId"
+    private val resourceKey = ThreadSyncKey.of(conversationId)
 
     /**
      * Every snapshot write goes through the field-level merge: local columns kept, nothing

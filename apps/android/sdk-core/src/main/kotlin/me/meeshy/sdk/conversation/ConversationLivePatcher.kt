@@ -231,7 +231,7 @@ class ConversationLivePatcher @Inject constructor(
         if (conversationId.isBlank()) return
         database.withTransaction {
             conversationDao.deleteByIds(listOf(conversationId))
-            messageDao.clearConversation(conversationId)
+            database.clearThreadCache(conversationId)
         }
     }
 

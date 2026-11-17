@@ -463,7 +463,7 @@ internal class ConversationCacheSource(
             conversationDao.upsertAll(carried.map { entityOf(it, now) })
             carried.forEach(searchIndex::indexConversation)
             merge.removedIds.chunked(DELETE_CHUNK_SIZE).forEach { conversationDao.deleteByIds(it) }
-            applied.invalidatedMessageIds.forEach { database.messageDao().clearConversation(it) }
+            applied.invalidatedMessageIds.forEach { database.clearThreadCache(it) }
             merge
         }
 

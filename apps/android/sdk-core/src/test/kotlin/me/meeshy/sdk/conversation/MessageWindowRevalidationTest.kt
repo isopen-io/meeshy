@@ -14,6 +14,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.cache.purge.RoomCachePayloadStores
+import me.meeshy.sdk.model.mediacache.CacheDataKind
+import me.meeshy.sdk.model.mediacache.CacheDomain
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
@@ -513,6 +516,72 @@ class MessageWindowRevalidationTest {
         assertThat(harness.ids()).containsExactly("m1", "m2").inOrder()
     }
 
+    // — a purged thread (#19050): its validator leaves with its messages —
+
+    private fun MessageCollaboratorHarness.retention() = MessageRetentionPurger(
+        database, database.messageDao(), database.pendingIdDao(), database.editRevisionDao(), database.ephemeralReceiptDao(), outbox,
+    )
+
+    /**
+     * The cache purge empties every thread. Its validator, kept, made the first conditional request after the purge come
+     * back 304 — which confirmed an EMPTY thread as fresh, for good on a quiet thread.
+     */
+    @Test
+    fun `a thread emptied by the cache purge is read again without If-None-Match, and its messages come back`() =
+        runHarnessTest { harness ->
+            val gateway = GatewayMessageHistory(served = listOf(message("m1", T1), message("m2", T2)))
+            val repo = harness.repository(gateway)
+            repo.refresh(CONVERSATION)
+
+            RoomCachePayloadStores(harness.database).store(CacheDataKind.MESSAGES, CacheDomain.CONVERSATIONS)!!.clear()
+            repo.refresh(CONVERSATION)
+
+            assertThat(gateway.validators).containsExactly(null, null).inOrder()
+            assertThat(gateway.notModified).isEqualTo(0)
+            assertThat(harness.ids()).containsExactly("m1", "m2").inOrder()
+        }
+
+    @Test
+    fun `a thread purged whole by the retention is read again without If-None-Match`() = runHarnessTest { harness ->
+        val gateway = GatewayMessageHistory(served = listOf(message("m1", T1)))
+        val repo = harness.repository(gateway)
+        repo.refresh(CONVERSATION)
+
+        harness.retention().purgeConversation(CONVERSATION)
+        repo.refresh(CONVERSATION)
+
+        assertThat(gateway.validators).containsExactly(null, null).inOrder()
+        assertThat(harness.ids()).containsExactly("m1")
+    }
+
+    /** A quiet thread whose every message is older than the retention window: the pass empties it, its validator goes. */
+    @Test
+    fun `a thread the retention ages out is read again without If-None-Match`() = runHarnessTest { harness ->
+        val gateway = GatewayMessageHistory(served = listOf(message("m1", T1)))
+        val repo = harness.repository(gateway)
+        repo.refresh(CONVERSATION)
+
+        harness.retention().run(nowMillis = Instant.parse(T1).toEpochMilli() + ONE_YEAR)
+        repo.refresh(CONVERSATION)
+
+        assertThat(gateway.validators).containsExactly(null, null).inOrder()
+        assertThat(harness.ids()).containsExactly("m1")
+    }
+
+    /** A thread the retention only trims keeps nothing stale to confirm: the other threads keep their validator. */
+    @Test
+    fun `the retention leaves the validator of a thread it did not touch`() = runHarnessTest { harness ->
+        val gateway = GatewayMessageHistory(served = listOf(message("m1", T1)))
+        val repo = harness.repository(gateway)
+        repo.refresh(CONVERSATION)
+        val primed = harness.database.syncMetaDao().etag(KEY)
+
+        harness.retention().run(nowMillis = Instant.parse(T1).toEpochMilli() + ONE_DAY)
+
+        assertThat(primed).isNotNull()
+        assertThat(harness.database.syncMetaDao().etag(KEY)).isEqualTo(primed)
+    }
+
     /** A strictly increasing server instant, one minute per message. */
     private fun minute(index: Int): String = Instant.ofEpochSecond(BASE_SECOND + index * 60L).toString()
 
@@ -521,6 +590,8 @@ class MessageWindowRevalidationTest {
         const val KEY = "messages:$CONVERSATION"
         const val BASE_SECOND = 1_780_000_000L
         const val THREE_MINUTES = 180_000L
+        const val ONE_DAY = 86_400_000L
+        const val ONE_YEAR = 365L * ONE_DAY
 
         /** Real time the stream stays open after a failure: ample for an in-memory reread loop to show itself. */
         const val QUIET_SPELL_MILLIS = 300L

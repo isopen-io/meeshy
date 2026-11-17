@@ -36,6 +36,17 @@ public interface SyncMetaDao {
     @Upsert
     public suspend fun upsert(meta: SyncMetaEntity)
 
+    /**
+     * #19050 — forgets one resource's freshness, watermark and validator: the rows it described left the cache, so
+     * nothing may confirm them any more (a 304 would declare the emptied cache fresh).
+     */
+    @Query("DELETE FROM sync_meta WHERE resourceKey = :key")
+    public suspend fun delete(key: String)
+
+    /** Same as [delete], for every resource whose key starts with [prefix] — matched literally, never as a pattern. */
+    @Query("DELETE FROM sync_meta WHERE substr(resourceKey, 1, length(:prefix)) = :prefix")
+    public suspend fun deleteByPrefix(prefix: String)
+
     @Query("DELETE FROM sync_meta")
     public suspend fun clear()
 }

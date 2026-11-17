@@ -44,6 +44,9 @@ public data class RetentionReport(
  * Supprime les messages périmés, éphémères échus et excédentaires AVEC leurs lignes filles (ponts
  * `pending_ids`, révisions d'édition, reçus éphémères, traductions, transcriptions et pistes audio retenues —
  * comme `MessageChildRows.delete` iOS), sans jamais toucher une ligne optimiste non envoyée.
+ *
+ * #19050 — un fil dont une passe retire des lignes perd aussi sa clé de synchro ([ThreadSyncKey]) : sa fenêtre récente
+ * n'est peut-être plus entière, et un 304 la confirmerait telle quelle — vide, pour un fil calme dont tout a vieilli.
  */
 @Singleton
 public class MessageRetentionPurger @Inject internal constructor(
@@ -101,6 +104,7 @@ public class MessageRetentionPurger @Inject internal constructor(
         }
         DedicatedTranslationRows.drop(database, ids)
         keys.map { it.id }.chunked(CHUNK).forEach { messageDao.deleteByIds(it) }
+        keys.mapTo(HashSet()) { it.conversationId }.forEach { database.syncMetaDao().delete(ThreadSyncKey.of(it)) }
     }
 
     private companion object {

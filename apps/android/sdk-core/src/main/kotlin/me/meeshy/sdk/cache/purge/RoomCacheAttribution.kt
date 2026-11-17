@@ -1,8 +1,11 @@
 package me.meeshy.sdk.cache.purge
 
+import androidx.room.withTransaction
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.sdk.conversation.ConversationCacheSource
+import me.meeshy.sdk.conversation.ThreadSyncKey
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.mediacache.CacheAttributionDeriver
@@ -10,6 +13,7 @@ import me.meeshy.sdk.model.mediacache.CacheDataKind
 import me.meeshy.sdk.model.mediacache.CacheDomain
 import me.meeshy.sdk.model.mediacache.CacheMediaIndex
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.story.StoryCacheSource
 
 /**
  * L'attribution dérivée de Room : les pièces jointes des messages -> Conversations, les médias des stories -> Stories,
@@ -72,7 +76,13 @@ public class RoomCacheAttributionSource(
     }
 }
 
-/** Les charges Room de la purge : messages, conversations, stories et fil (Publications). */
+/**
+ * Les charges Room de la purge : messages, conversations, stories et fil (Publications).
+ *
+ * #19050 — un magasin purgé ne se croit plus frais : sa fraîcheur, son point de reprise et son validateur (`sync_meta`)
+ * partent avec les lignes qu'ils décrivaient, dans la même transaction. Gardé, l'`ETag` d'un fil faisait confirmer par un
+ * 304 un fil VIDE comme frais ; gardée, la fraîcheur d'une liste vidée la donnait pour réglée jusqu'à sa péremption.
+ */
 public class RoomCachePayloadStores(private val database: MeeshyDatabase) : CachePayloadStores {
 
     override fun store(kind: CacheDataKind, domain: CacheDomain): CachePayloadStore? = when {
@@ -86,19 +96,34 @@ public class RoomCachePayloadStores(private val database: MeeshyDatabase) : Cach
     private fun messages() = object : CachePayloadStore {
         private val dao = database.messageDao()
         override suspend fun bytes(): Long = dao.purgeablePayloadBytes()
-        override suspend fun clear(): Long = dao.purgeablePayloadBytes().also { dao.clearPurgeable() }
+        override suspend fun clear(): Long = database.withTransaction {
+            dao.purgeablePayloadBytes().also {
+                dao.clearPurgeable()
+                database.syncMetaDao().deleteByPrefix(ThreadSyncKey.PREFIX)
+            }
+        }
     }
 
     private fun conversations() = object : CachePayloadStore {
         private val dao = database.conversationDao()
         override suspend fun bytes(): Long = dao.payloadBytes()
-        override suspend fun clear(): Long = dao.payloadBytes().also { dao.clear() }
+        override suspend fun clear(): Long = database.withTransaction {
+            dao.payloadBytes().also {
+                dao.clear()
+                database.syncMetaDao().delete(ConversationCacheSource.RESOURCE_KEY)
+            }
+        }
     }
 
     private fun stories() = object : CachePayloadStore {
         private val dao = database.storyDao()
         override suspend fun bytes(): Long = dao.payloadBytes()
-        override suspend fun clear(): Long = dao.payloadBytes().also { dao.clear() }
+        override suspend fun clear(): Long = database.withTransaction {
+            dao.payloadBytes().also {
+                dao.clear()
+                database.syncMetaDao().delete(StoryCacheSource.RESOURCE_KEY)
+            }
+        }
     }
 
     private fun feed() = object : CachePayloadStore {
