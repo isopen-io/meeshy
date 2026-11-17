@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.relation.RelationFeature
 import me.meeshy.sdk.model.relation.RelationLevel
 import org.junit.Test
 import java.io.File
+import java.lang.reflect.Modifier
 
 /**
  * « Voir comme » (#18887) : la Vitrine rendue au niveau d'un cercle. L'aperçu se calcule depuis la loi d'accès partagée
@@ -121,7 +122,7 @@ class VitrineAsCircleTest {
 
     @Test
     fun `une rangée verrouillée ne porte que la capacité et le cercle, jamais une donnée`() {
-        val fields = VitrineLock::class.java.declaredFields.filterNot { it.isSynthetic }.map { it.name }
+        val fields = VitrineLock::class.java.declaredFields.filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }.map { it.name }
         assertThat(fields).containsExactly("capability", "opensAt")
     }
 
