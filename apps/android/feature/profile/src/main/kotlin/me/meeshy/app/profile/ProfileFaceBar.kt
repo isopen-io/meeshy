@@ -10,7 +10,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.profile.ProfileFace
-import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.component.kit.MeeshyGlass
+import me.meeshy.ui.component.kit.MeeshyGlassDensity
 import me.meeshy.ui.component.kit.MeeshySegmented
 import me.meeshy.ui.component.kit.MeeshySegmentedOption
 import me.meeshy.ui.component.kit.MeeshySegmentedRole
@@ -33,9 +34,10 @@ internal fun ProfileFaceBar(
     modifier: Modifier = Modifier,
 ) {
     val options = faces.map { MeeshySegmentedOption(id = it, title = stringResource(it.titleRes())) }
-    MeeshyGlassSurface(
+    MeeshyGlass(
         modifier = modifier.fillMaxWidth().testTag(PROFILE_FACE_BAR_TAG),
         shape = RoundedCornerShape(32.dp),
+        density = MeeshyGlassDensity.Dense,
     ) {
         MeeshySegmented(
             label = stringResource(R.string.fiche_faces_label),
