@@ -1,0 +1,922 @@
+{
+  "_doc": "Table des 64 emoji de la méthode SAS « emoji » de Matrix (m.sas.v1). Dérivée de matrix-org/matrix-spec data-definitions/sas-emoji.json (SHA-256 2b4defb276d61f11cb9cbfb0ba326b96a8dbd9e768e6bc53fa0f565cd598e887), Apache-2.0 ; modifiée par Meeshy le 2026-11-17 : clés renommées (number, emoji, unicode, names), sept langues retenues (fr, en, es, de, it, pt-BR, ar), métadonnées ajoutées (_doc, source, license). Texte de la licence : LICENSE-sas-emoji.txt.",
+  "source": {
+    "repository": "matrix-org/matrix-spec",
+    "path": "data-definitions/sas-emoji.json",
+    "sha256": "2b4defb276d61f11cb9cbfb0ba326b96a8dbd9e768e6bc53fa0f565cd598e887",
+    "license": "Apache-2.0",
+    "fetchedOn": "2026-11-17",
+    "notice": "aucun fichier NOTICE amont (relevé le 2026-11-17) ; à revérifier à chaque mise à jour"
+  },
+  "modified": {
+    "by": "Meeshy",
+    "on": "2026-11-17",
+    "changes": [
+      "clés renommées (number, emoji, unicode, names)",
+      "sept langues retenues (fr, en, es, de, it, pt-BR, ar)",
+      "métadonnées ajoutées (_doc, source, modified, license)"
+    ]
+  },
+  "license": {
+    "spdx": "Apache-2.0",
+    "file": "LICENSE-sas-emoji.txt"
+  },
+  "emoji": [
+    {
+      "number": 0,
+      "emoji": "🐶",
+      "unicode": "U+1F436",
+      "names": {
+        "fr": "Chien",
+        "en": "Dog",
+        "es": "Perro",
+        "de": "Hund",
+        "it": "Cane",
+        "pt-BR": "Cachorro",
+        "ar": "كلب"
+      }
+    },
+    {
+      "number": 1,
+      "emoji": "🐱",
+      "unicode": "U+1F431",
+      "names": {
+        "fr": "Chat",
+        "en": "Cat",
+        "es": "Gato",
+        "de": "Katze",
+        "it": "Gatto",
+        "pt-BR": "Gato",
+        "ar": "هِرَّة"
+      }
+    },
+    {
+      "number": 2,
+      "emoji": "🦁",
+      "unicode": "U+1F981",
+      "names": {
+        "fr": "Lion",
+        "en": "Lion",
+        "es": "León",
+        "de": "Löwe",
+        "it": "Leone",
+        "pt-BR": "Leão",
+        "ar": "أَسَد"
+      }
+    },
+    {
+      "number": 3,
+      "emoji": "🐎",
+      "unicode": "U+1F40E",
+      "names": {
+        "fr": "Cheval",
+        "en": "Horse",
+        "es": "Caballo",
+        "de": "Pferd",
+        "it": "Cavallo",
+        "pt-BR": "Cavalo",
+        "ar": "حِصَان"
+      }
+    },
+    {
+      "number": 4,
+      "emoji": "🦄",
+      "unicode": "U+1F984",
+      "names": {
+        "fr": "Licorne",
+        "en": "Unicorn",
+        "es": "Unicornio",
+        "de": "Einhorn",
+        "it": "Unicorno",
+        "pt-BR": "Unicórnio",
+        "ar": "حصان وحيد القرن"
+      }
+    },
+    {
+      "number": 5,
+      "emoji": "🐷",
+      "unicode": "U+1F437",
+      "names": {
+        "fr": "Cochon",
+        "en": "Pig",
+        "es": "Cerdo",
+        "de": "Schwein",
+        "it": "Maiale",
+        "pt-BR": "Porco",
+        "ar": "خِنزِير"
+      }
+    },
+    {
+      "number": 6,
+      "emoji": "🐘",
+      "unicode": "U+1F418",
+      "names": {
+        "fr": "Éléphant",
+        "en": "Elephant",
+        "es": "Elefante",
+        "de": "Elefant",
+        "it": "Elefante",
+        "pt-BR": "Elefante",
+        "ar": "فِيل"
+      }
+    },
+    {
+      "number": 7,
+      "emoji": "🐰",
+      "unicode": "U+1F430",
+      "names": {
+        "fr": "Lapin",
+        "en": "Rabbit",
+        "es": "Conejo",
+        "de": "Hase",
+        "it": "Coniglio",
+        "pt-BR": "Coelho",
+        "ar": "أَرنَب"
+      }
+    },
+    {
+      "number": 8,
+      "emoji": "🐼",
+      "unicode": "U+1F43C",
+      "names": {
+        "fr": "Panda",
+        "en": "Panda",
+        "es": "Panda",
+        "de": "Panda",
+        "it": "Panda",
+        "pt-BR": "Panda",
+        "ar": "باندَا"
+      }
+    },
+    {
+      "number": 9,
+      "emoji": "🐓",
+      "unicode": "U+1F413",
+      "names": {
+        "fr": "Coq",
+        "en": "Rooster",
+        "es": "Gallo",
+        "de": "Hahn",
+        "it": "Gallo",
+        "pt-BR": "Galo",
+        "ar": "دِيك"
+      }
+    },
+    {
+      "number": 10,
+      "emoji": "🐧",
+      "unicode": "U+1F427",
+      "names": {
+        "fr": "Manchot",
+        "en": "Penguin",
+        "es": "Pingüino",
+        "de": "Pinguin",
+        "it": "Pinguino",
+        "pt-BR": "Pinguim",
+        "ar": "بطريق"
+      }
+    },
+    {
+      "number": 11,
+      "emoji": "🐢",
+      "unicode": "U+1F422",
+      "names": {
+        "fr": "Tortue",
+        "en": "Turtle",
+        "es": "Tortuga",
+        "de": "Schildkröte",
+        "it": "Tartaruga",
+        "pt-BR": "Tartaruga",
+        "ar": "سُلحفاة"
+      }
+    },
+    {
+      "number": 12,
+      "emoji": "🐟",
+      "unicode": "U+1F41F",
+      "names": {
+        "fr": "Poisson",
+        "en": "Fish",
+        "es": "Pez",
+        "de": "Fisch",
+        "it": "Pesce",
+        "pt-BR": "Peixe",
+        "ar": "سَمَكة"
+      }
+    },
+    {
+      "number": 13,
+      "emoji": "🐙",
+      "unicode": "U+1F419",
+      "names": {
+        "fr": "Poulpe",
+        "en": "Octopus",
+        "es": "Pulpo",
+        "de": "Oktopus",
+        "it": "Polpo",
+        "pt-BR": "Polvo",
+        "ar": "أُخطُبُوط"
+      }
+    },
+    {
+      "number": 14,
+      "emoji": "🦋",
+      "unicode": "U+1F98B",
+      "names": {
+        "fr": "Papillon",
+        "en": "Butterfly",
+        "es": "Mariposa",
+        "de": "Schmetterling",
+        "it": "Farfalla",
+        "pt-BR": "Borboleta",
+        "ar": "فَرَاشَة"
+      }
+    },
+    {
+      "number": 15,
+      "emoji": "🌷",
+      "unicode": "U+1F337",
+      "names": {
+        "fr": "Fleur",
+        "en": "Flower",
+        "es": "Flor",
+        "de": "Blume",
+        "it": "Fiore",
+        "pt-BR": "Flor",
+        "ar": "زَهرَة"
+      }
+    },
+    {
+      "number": 16,
+      "emoji": "🌳",
+      "unicode": "U+1F333",
+      "names": {
+        "fr": "Arbre",
+        "en": "Tree",
+        "es": "Árbol",
+        "de": "Baum",
+        "it": "Albero",
+        "pt-BR": "Árvore",
+        "ar": "شَجَرَة"
+      }
+    },
+    {
+      "number": 17,
+      "emoji": "🌵",
+      "unicode": "U+1F335",
+      "names": {
+        "fr": "Cactus",
+        "en": "Cactus",
+        "es": "Cactus",
+        "de": "Kaktus",
+        "it": "Cactus",
+        "pt-BR": "Cacto",
+        "ar": "صبار"
+      }
+    },
+    {
+      "number": 18,
+      "emoji": "🍄",
+      "unicode": "U+1F344",
+      "names": {
+        "fr": "Champignon",
+        "en": "Mushroom",
+        "es": "Seta",
+        "de": "Pilz",
+        "it": "Fungo",
+        "pt-BR": "Cogumelo",
+        "ar": "فُطر"
+      }
+    },
+    {
+      "number": 19,
+      "emoji": "🌏",
+      "unicode": "U+1F30F",
+      "names": {
+        "fr": "Globe",
+        "en": "Globe",
+        "es": "Globo",
+        "de": "Globus",
+        "it": "Globo",
+        "pt-BR": "Globo",
+        "ar": "كُرَةٌ أرضِيَّة"
+      }
+    },
+    {
+      "number": 20,
+      "emoji": "🌙",
+      "unicode": "U+1F319",
+      "names": {
+        "fr": "Lune",
+        "en": "Moon",
+        "es": "Luna",
+        "de": "Mond",
+        "it": "Luna",
+        "pt-BR": "Lua",
+        "ar": "قَمَر"
+      }
+    },
+    {
+      "number": 21,
+      "emoji": "☁️",
+      "unicode": "U+2601U+FE0F",
+      "names": {
+        "fr": "Nuage",
+        "en": "Cloud",
+        "es": "Nube",
+        "de": "Wolke",
+        "it": "Nuvola",
+        "pt-BR": "Nuvem",
+        "ar": "سَحابَة"
+      }
+    },
+    {
+      "number": 22,
+      "emoji": "🔥",
+      "unicode": "U+1F525",
+      "names": {
+        "fr": "Feu",
+        "en": "Fire",
+        "es": "Fuego",
+        "de": "Feuer",
+        "it": "Fuoco",
+        "pt-BR": "Fogo",
+        "ar": "نار"
+      }
+    },
+    {
+      "number": 23,
+      "emoji": "🍌",
+      "unicode": "U+1F34C",
+      "names": {
+        "fr": "Banane",
+        "en": "Banana",
+        "es": "Plátano",
+        "de": "Banane",
+        "it": "Banana",
+        "pt-BR": "Banana",
+        "ar": "مَوزَة"
+      }
+    },
+    {
+      "number": 24,
+      "emoji": "🍎",
+      "unicode": "U+1F34E",
+      "names": {
+        "fr": "Pomme",
+        "en": "Apple",
+        "es": "Manzana",
+        "de": "Apfel",
+        "it": "Mela",
+        "pt-BR": "Maçã",
+        "ar": "تُفَّاحَة"
+      }
+    },
+    {
+      "number": 25,
+      "emoji": "🍓",
+      "unicode": "U+1F353",
+      "names": {
+        "fr": "Fraise",
+        "en": "Strawberry",
+        "es": "Fresa",
+        "de": "Erdbeere",
+        "it": "Fragola",
+        "pt-BR": "Morango",
+        "ar": "فَراوِلَة"
+      }
+    },
+    {
+      "number": 26,
+      "emoji": "🌽",
+      "unicode": "U+1F33D",
+      "names": {
+        "fr": "Maïs",
+        "en": "Corn",
+        "es": "Maíz",
+        "de": "Mais",
+        "it": "Mais",
+        "pt-BR": "Milho",
+        "ar": "ذُرَة"
+      }
+    },
+    {
+      "number": 27,
+      "emoji": "🍕",
+      "unicode": "U+1F355",
+      "names": {
+        "fr": "Pizza",
+        "en": "Pizza",
+        "es": "Pizza",
+        "de": "Pizza",
+        "it": "Pizza",
+        "pt-BR": "Pizza",
+        "ar": "بِيتزا"
+      }
+    },
+    {
+      "number": 28,
+      "emoji": "🎂",
+      "unicode": "U+1F382",
+      "names": {
+        "fr": "Gâteau",
+        "en": "Cake",
+        "es": "Tarta",
+        "de": "Kuchen",
+        "it": "Torta",
+        "pt-BR": "Bolo",
+        "ar": "كَعكَة"
+      }
+    },
+    {
+      "number": 29,
+      "emoji": "❤️",
+      "unicode": "U+2764U+FE0F",
+      "names": {
+        "fr": "Cœur",
+        "en": "Heart",
+        "es": "Corazón",
+        "de": "Herz",
+        "it": "Cuore",
+        "pt-BR": "Coração",
+        "ar": "قَلب"
+      }
+    },
+    {
+      "number": 30,
+      "emoji": "😀",
+      "unicode": "U+1F600",
+      "names": {
+        "fr": "Sourire",
+        "en": "Smiley",
+        "es": "Emoticono",
+        "de": "Lächeln",
+        "it": "Faccina sorridente",
+        "pt-BR": "Sorriso",
+        "ar": "اِبتِسَامَة"
+      }
+    },
+    {
+      "number": 31,
+      "emoji": "🤖",
+      "unicode": "U+1F916",
+      "names": {
+        "fr": "Robot",
+        "en": "Robot",
+        "es": "Robot",
+        "de": "Roboter",
+        "it": "Robot",
+        "pt-BR": "Robô",
+        "ar": "رُوبُوت"
+      }
+    },
+    {
+      "number": 32,
+      "emoji": "🎩",
+      "unicode": "U+1F3A9",
+      "names": {
+        "fr": "Chapeau",
+        "en": "Hat",
+        "es": "Sombrero",
+        "de": "Hut",
+        "it": "Cappello",
+        "pt-BR": "Chapéu",
+        "ar": "قُبَّعَة"
+      }
+    },
+    {
+      "number": 33,
+      "emoji": "👓",
+      "unicode": "U+1F453",
+      "names": {
+        "fr": "Lunettes",
+        "en": "Glasses",
+        "es": "Gafas",
+        "de": "Brille",
+        "it": "Occhiali",
+        "pt-BR": "Óculos",
+        "ar": "نَظَّارَة"
+      }
+    },
+    {
+      "number": 34,
+      "emoji": "🔧",
+      "unicode": "U+1F527",
+      "names": {
+        "fr": "Clé à molette",
+        "en": "Spanner",
+        "es": "Llave inglesa",
+        "de": "Schraubenschlüssel",
+        "it": "Chiave inglese",
+        "pt-BR": "Chave inglesa",
+        "ar": "مِفتَاحُ رَبط"
+      }
+    },
+    {
+      "number": 35,
+      "emoji": "🎅",
+      "unicode": "U+1F385",
+      "names": {
+        "fr": "Père Noël",
+        "en": "Santa",
+        "es": "Papá Noel",
+        "de": "Weihnachtsmann",
+        "it": "Babbo Natale",
+        "pt-BR": "Papai-noel",
+        "ar": "سانتا"
+      }
+    },
+    {
+      "number": 36,
+      "emoji": "👍",
+      "unicode": "U+1F44D",
+      "names": {
+        "fr": "Pouce en l’air",
+        "en": "Thumbs Up",
+        "es": "Pulgar arriba",
+        "de": "Daumen Hoch",
+        "it": "Pollice alzato",
+        "pt-BR": "Joinha",
+        "ar": "رَفعُ إِبهَام"
+      }
+    },
+    {
+      "number": 37,
+      "emoji": "☂️",
+      "unicode": "U+2602U+FE0F",
+      "names": {
+        "fr": "Parapluie",
+        "en": "Umbrella",
+        "es": "Paraguas",
+        "de": "Regenschirm",
+        "it": "Ombrello",
+        "pt-BR": "Guarda-chuva",
+        "ar": "مِظَلَّة"
+      }
+    },
+    {
+      "number": 38,
+      "emoji": "⌛",
+      "unicode": "U+231B",
+      "names": {
+        "fr": "Sablier",
+        "en": "Hourglass",
+        "es": "Reloj de arena",
+        "de": "Sanduhr",
+        "it": "Clessidra",
+        "pt-BR": "Ampulheta",
+        "ar": "سَاعَةٌ رَملِيَّة"
+      }
+    },
+    {
+      "number": 39,
+      "emoji": "⏰",
+      "unicode": "U+23F0",
+      "names": {
+        "fr": "Réveil",
+        "en": "Clock",
+        "es": "Reloj",
+        "de": "Uhr",
+        "it": "Orologio",
+        "pt-BR": "Relógio",
+        "ar": "سَاعَة"
+      }
+    },
+    {
+      "number": 40,
+      "emoji": "🎁",
+      "unicode": "U+1F381",
+      "names": {
+        "fr": "Cadeau",
+        "en": "Gift",
+        "es": "Regalo",
+        "de": "Geschenk",
+        "it": "Regalo",
+        "pt-BR": "Presente",
+        "ar": "هَدِيَّة"
+      }
+    },
+    {
+      "number": 41,
+      "emoji": "💡",
+      "unicode": "U+1F4A1",
+      "names": {
+        "fr": "Ampoule",
+        "en": "Light Bulb",
+        "es": "Bombilla",
+        "de": "Glühbirne",
+        "it": "Lampadina",
+        "pt-BR": "Lâmpada",
+        "ar": "مِصبَاح"
+      }
+    },
+    {
+      "number": 42,
+      "emoji": "📕",
+      "unicode": "U+1F4D5",
+      "names": {
+        "fr": "Livre",
+        "en": "Book",
+        "es": "Libro",
+        "de": "Buch",
+        "it": "Libro",
+        "pt-BR": "Livro",
+        "ar": "كِتَاب"
+      }
+    },
+    {
+      "number": 43,
+      "emoji": "✏️",
+      "unicode": "U+270FU+FE0F",
+      "names": {
+        "fr": "Crayon",
+        "en": "Pencil",
+        "es": "Lápiz",
+        "de": "Bleistift",
+        "it": "Matita",
+        "pt-BR": "Lápis",
+        "ar": "قَلَمُ رَصاص"
+      }
+    },
+    {
+      "number": 44,
+      "emoji": "📎",
+      "unicode": "U+1F4CE",
+      "names": {
+        "fr": "Trombone",
+        "en": "Paperclip",
+        "es": "Clip",
+        "de": "Büroklammer",
+        "it": "Graffetta",
+        "pt-BR": "Clipe de papel",
+        "ar": "مِشبَكُ وَرَق"
+      }
+    },
+    {
+      "number": 45,
+      "emoji": "✂️",
+      "unicode": "U+2702U+FE0F",
+      "names": {
+        "fr": "Ciseaux",
+        "en": "Scissors",
+        "es": "Tijeras",
+        "de": "Schere",
+        "it": "Forbici",
+        "pt-BR": "Tesoura",
+        "ar": "مِقَصّ"
+      }
+    },
+    {
+      "number": 46,
+      "emoji": "🔒",
+      "unicode": "U+1F512",
+      "names": {
+        "fr": "Cadenas",
+        "en": "Lock",
+        "es": "Candado",
+        "de": "Schloss",
+        "it": "Lucchetto",
+        "pt-BR": "Cadeado",
+        "ar": "قُفل"
+      }
+    },
+    {
+      "number": 47,
+      "emoji": "🔑",
+      "unicode": "U+1F511",
+      "names": {
+        "fr": "Clé",
+        "en": "Key",
+        "es": "Llave",
+        "de": "Schlüssel",
+        "it": "Chiave",
+        "pt-BR": "Chave",
+        "ar": "مِفتَاح"
+      }
+    },
+    {
+      "number": 48,
+      "emoji": "🔨",
+      "unicode": "U+1F528",
+      "names": {
+        "fr": "Marteau",
+        "en": "Hammer",
+        "es": "Martillo",
+        "de": "Hammer",
+        "it": "Martello",
+        "pt-BR": "Martelo",
+        "ar": "مِطرَقَة"
+      }
+    },
+    {
+      "number": 49,
+      "emoji": "☎️",
+      "unicode": "U+260EU+FE0F",
+      "names": {
+        "fr": "Téléphone",
+        "en": "Telephone",
+        "es": "Teléfono",
+        "de": "Telefon",
+        "it": "Telefono",
+        "pt-BR": "Telefone",
+        "ar": "تِلِفُون"
+      }
+    },
+    {
+      "number": 50,
+      "emoji": "🏁",
+      "unicode": "U+1F3C1",
+      "names": {
+        "fr": "Drapeau",
+        "en": "Flag",
+        "es": "Bandera",
+        "de": "Flagge",
+        "it": "Bandiera",
+        "pt-BR": "Bandeira",
+        "ar": "عَلَم"
+      }
+    },
+    {
+      "number": 51,
+      "emoji": "🚂",
+      "unicode": "U+1F682",
+      "names": {
+        "fr": "Train",
+        "en": "Train",
+        "es": "Tren",
+        "de": "Zug",
+        "it": "Treno",
+        "pt-BR": "Trem",
+        "ar": "قِطَار"
+      }
+    },
+    {
+      "number": 52,
+      "emoji": "🚲",
+      "unicode": "U+1F6B2",
+      "names": {
+        "fr": "Vélo",
+        "en": "Bicycle",
+        "es": "Bicicleta",
+        "de": "Fahrrad",
+        "it": "Bicicletta",
+        "pt-BR": "Bicicleta",
+        "ar": "دَرّاجَة"
+      }
+    },
+    {
+      "number": 53,
+      "emoji": "✈️",
+      "unicode": "U+2708U+FE0F",
+      "names": {
+        "fr": "Avion",
+        "en": "Aeroplane",
+        "es": "Avión",
+        "de": "Flugzeug",
+        "it": "Aeroplano",
+        "pt-BR": "Avião",
+        "ar": "طَائِرة"
+      }
+    },
+    {
+      "number": 54,
+      "emoji": "🚀",
+      "unicode": "U+1F680",
+      "names": {
+        "fr": "Fusée",
+        "en": "Rocket",
+        "es": "Cohete",
+        "de": "Rakete",
+        "it": "Razzo",
+        "pt-BR": "Foguete",
+        "ar": "صَارُوخ"
+      }
+    },
+    {
+      "number": 55,
+      "emoji": "🏆",
+      "unicode": "U+1F3C6",
+      "names": {
+        "fr": "Trophée",
+        "en": "Trophy",
+        "es": "Trofeo",
+        "de": "Pokal",
+        "it": "Trofeo",
+        "pt-BR": "Troféu",
+        "ar": "كَأسُ النَّصر"
+      }
+    },
+    {
+      "number": 56,
+      "emoji": "⚽",
+      "unicode": "U+26BD",
+      "names": {
+        "fr": "Ballon",
+        "en": "Ball",
+        "es": "Bola",
+        "de": "Ball",
+        "it": "Palla",
+        "pt-BR": "Bola",
+        "ar": "كُرَة"
+      }
+    },
+    {
+      "number": 57,
+      "emoji": "🎸",
+      "unicode": "U+1F3B8",
+      "names": {
+        "fr": "Guitare",
+        "en": "Guitar",
+        "es": "Guitarra",
+        "de": "Gitarre",
+        "it": "Chitarra",
+        "pt-BR": "Guitarra",
+        "ar": "غيتار"
+      }
+    },
+    {
+      "number": 58,
+      "emoji": "🎺",
+      "unicode": "U+1F3BA",
+      "names": {
+        "fr": "Trompette",
+        "en": "Trumpet",
+        "es": "Trompeta",
+        "de": "Trompete",
+        "it": "Trombetta",
+        "pt-BR": "Trombeta",
+        "ar": "بُوق"
+      }
+    },
+    {
+      "number": 59,
+      "emoji": "🔔",
+      "unicode": "U+1F514",
+      "names": {
+        "fr": "Cloche",
+        "en": "Bell",
+        "es": "Campana",
+        "de": "Glocke",
+        "it": "Campana",
+        "pt-BR": "Sino",
+        "ar": "جَرَس"
+      }
+    },
+    {
+      "number": 60,
+      "emoji": "⚓",
+      "unicode": "U+2693",
+      "names": {
+        "fr": "Ancre",
+        "en": "Anchor",
+        "es": "Ancla",
+        "de": "Anker",
+        "it": "Ancora",
+        "pt-BR": "Âncora",
+        "ar": "مِرسَاة"
+      }
+    },
+    {
+      "number": 61,
+      "emoji": "🎧",
+      "unicode": "U+1F3A7",
+      "names": {
+        "fr": "Casque audio",
+        "en": "Headphones",
+        "es": "Cascos",
+        "de": "Kopfhörer",
+        "it": "Cuffie",
+        "pt-BR": "Fones de ouvido",
+        "ar": "سَمّاعَة رَأس"
+      }
+    },
+    {
+      "number": 62,
+      "emoji": "📁",
+      "unicode": "U+1F4C1",
+      "names": {
+        "fr": "Dossier",
+        "en": "Folder",
+        "es": "Carpeta",
+        "de": "Ordner",
+        "it": "Cartella",
+        "pt-BR": "Pasta",
+        "ar": "مُجَلَّد"
+      }
+    },
+    {
+      "number": 63,
+      "emoji": "📌",
+      "unicode": "U+1F4CC",
+      "names": {
+        "fr": "Punaise",
+        "en": "Pin",
+        "es": "Alfiler",
+        "de": "Stecknadel",
+        "it": "Puntina",
+        "pt-BR": "Alfinete",
+        "ar": "دَبُّوس"
+      }
+    }
+  ]
+}

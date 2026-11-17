@@ -11,6 +11,7 @@ import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
 import { cityAsReaderOf } from '../users/profile-city';
+import { addressesSeenAs, type ServedAddress } from '@meeshy/shared/utils/profile-addresses';
 import { profileViewerId } from '../users/profile-block-gate';
 import { getOptionalAuth } from '../users/presence-gate';
 import { parseFieldList, parseTokenSet, restrictFields } from '../../utils/sparse-fieldset';
@@ -391,6 +392,9 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
         delete base.cityCircle;
         const villeVue = cityAsReaderOf({ id: String(profil.id), city: profil.city as string | undefined, cityCircle: profil.cityCircle as string | null | undefined }, voirComme);
         if (villeVue !== null) base.city = villeVue;
+        delete base.addresses;
+        const adressesVues = addressesSeenAs((profil.addresses as ServedAddress[] | undefined) ?? [], voirComme);
+        if (adressesVues.length > 0) base.addresses = adressesVues;
       }
 
       // La présence est RETIRÉE par défaut, jamais ajoutée par ce paramètre :

@@ -9,7 +9,7 @@ import { join } from 'path';
 
 const SCHEMA = readFileSync(join(__dirname, '../../../../../../packages/shared/prisma/schema.prisma'), 'utf8');
 
-const DIRECTORY_MODELS = ['E2EEDevice', 'E2EEOneTimePreKey', 'MessageEnvelope'] as const;
+const DIRECTORY_MODELS = ['E2EEDevice', 'E2EEOneTimePreKey', 'MessageEnvelope', 'E2EEDeviceVerificationMessage'] as const;
 
 const modelBody = (name: string): string | undefined => {
   const match = new RegExp(`^model ${name} \\{([\\s\\S]*?)^\\}`, 'm').exec(SCHEMA);
@@ -36,6 +36,15 @@ describe("l'annuaire E2EE par appareil (schéma)", () => {
   it('garantit un appareil par (utilisateur, deviceId) et une pré-clé par (génération d’appareil, nature, keyId)', () => {
     expect(modelBody('E2EEDevice')).toMatch(/@@unique\(\[userId, deviceId\]\)/);
     expect(modelBody('E2EEOneTimePreKey')).toMatch(/@@unique\(\[userId, deviceId, registrationId, kind, keyId\]\)/);
+  });
+
+  it('adresse un message de comparaison à une GÉNÉRATION, avec sa durée de vie, et l’indexe pour sa lecture et son balayage (#19156)', () => {
+    const body = modelBody('E2EEDeviceVerificationMessage') ?? '';
+    expect(body).toMatch(/recipientRegistrationId\s+Int/);
+    expect(body).toMatch(/senderRegistrationId\s+Int/);
+    expect(body).toMatch(/expiresAt\s+DateTime\b/);
+    expect(body).toMatch(/@@index\(\[userId, recipientDeviceId, recipientRegistrationId, createdAt\]\)/);
+    expect(body).toMatch(/@@index\(\[expiresAt\]\)/);
   });
 
   it('indexe la réservation sur usedAt et la lecture des enveloppes par appareil destinataire', () => {

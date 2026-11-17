@@ -259,7 +259,15 @@ export function registerSendMessageRoute(
             retryAfter: { type: 'number' },
           }
         },
-        500: errorResponseSchema
+        500: errorResponseSchema,
+        503: {
+          description: 'Rien n’est écrit : chiffrement au repos indisponible (SERVER_AT_REST_UNAVAILABLE, #11381), ou écriture non validée (MESSAGE_SEND_RETRYABLE : renvoyer au même clientMessageId après retryAfter secondes)',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            retryAfter: { type: 'number' },
+          }
+        }
       }
     },
     preValidation: [optionalAuth],
@@ -511,6 +519,15 @@ export function registerSendMessageRoute(
         }
         if (result.code === SERVER_AT_REST_UNAVAILABLE) {
           return sendError(reply, 503, result.error || 'Chiffrement sur le serveur indisponible', { code: result.code });
+        }
+        // Audit de #19080, E3 — une écriture non validée (conflit, délai) se rejoue au même clientMessageId.
+        if (result.code === ErrorCode.MESSAGE_SEND_RETRYABLE) {
+          const retryAfter = result.retryAfter ?? 1;
+          reply.header('retry-after', String(retryAfter));
+          return sendError(reply, 503, result.error || ErrorMessages[ErrorCode.MESSAGE_SEND_RETRYABLE].fr, {
+            code: ErrorCode.MESSAGE_SEND_RETRYABLE,
+            details: { retryAfter }
+          });
         }
         if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED || result.code === SERVER_AT_REST_CIPHERTEXT_REFUSED) {
           return sendBadRequest(reply, result.error || 'Invalid message request', { code: result.code });

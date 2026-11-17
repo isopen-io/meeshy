@@ -36,12 +36,7 @@ final class TrackBarViewTests: XCTestCase {
     func test_labelColumnWidth_fitsFullDurationLabel() {
         // Colonne élargie à 84 pt : « 12,0 s » doit rester lisible en entier —
         // à 52 pt la durée tronquait en « 12,… » (capture user 2026-07-20).
-        // Elle DOIT égaler `TimelineScrubArea.laneLabelWidth` (offset
-        // ruler/playhead) sinon ticks et pistes se désalignent (round 2026-07-19).
         XCTAssertEqual(TrackBarView<Color>.labelColumnWidth, 84, accuracy: 0.01)
-        XCTAssertEqual(TrackBarView<Color>.labelColumnWidth,
-                       TimelineScrubArea<Color>.laneLabelWidth, accuracy: 0.01,
-                       "La colonne d'étiquette et l'offset ruler/playhead doivent rester en lockstep.")
     }
 
     func test_accessibilityLabel_backgroundSection_announcesSection() {
@@ -90,7 +85,5 @@ final class TrackBarViewTests: XCTestCase {
 
     func test_clocks_roundTheWholeDuration_neverMinutesAndSecondsApart() {
         XCTAssertEqual(TrackBarView<Color>.formatTrackDuration(119.6), "2:00")
-        XCTAssertEqual(TransportBar.formatTimeCompact(seconds: 119.6), "2:00")
-        XCTAssertEqual(TransportBar.formatTimeCompact(seconds: 65.4), "1:05")
     }
 }

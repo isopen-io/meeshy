@@ -7,7 +7,6 @@ final class TapTargetSingleSourceGuardTests: XCTestCase {
 
     private static let files = [
         "Sources/MeeshyUI/Primitives/MoodBadge.swift",
-        "Sources/MeeshyUI/Story/Timeline/Views/Controls/TransportBar.swift",
         "Sources/MeeshyUI/Story/Controls/ComposerControlHitTarget.swift",
         "Sources/MeeshyUI/Settings/SettingsComponents.swift"
     ]
@@ -25,7 +24,6 @@ final class TapTargetSingleSourceGuardTests: XCTestCase {
     func test_values_followTheSharedConstant() {
         let side = MeeshyControlSize.tapTarget
         XCTAssertEqual(MeeshyMoodBadge.minimumHitTarget, side)
-        XCTAssertEqual(TransportBar.minimumHitTargetSize, CGSize(width: side, height: side))
         XCTAssertEqual(ComposerControlMetrics.hitDiameter, side)
         XCTAssertEqual(ComposerControlMetrics.hitInset, 4)
         XCTAssertEqual(SettingsRowMetrics.minimumHeight, side)

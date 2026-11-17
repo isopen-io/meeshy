@@ -39,8 +39,12 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     friendRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
     externalConversationPeer: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // Les adresses de fiche (#18863) : un compte qui n'en a publié aucune.
+    profileAddress: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    trackingLink: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    trackingLinkClick: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
-    ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
+    ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof', 'e2EEDeviceVerificationMessage'].map((model) =>
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
     conversationShareLink: shareLinkTable([]),
     notification: {
@@ -126,20 +130,22 @@ describe('purgeAccountIsolatedData', () => {
     expect(summary.sessionsDeleted).toBe(3);
   });
 
-  it("efface ses appareils chiffrés, leurs pré-clés, les enveloppes qui lui sont adressées (#12543) et la trace de ses preuves de liaison (#12933)", async () => {
+  it("efface ses appareils chiffrés, leurs pré-clés, les enveloppes qui lui sont adressées (#12543) ou qu'il a émises (#12544), ses messages de comparaison (#19156) et la trace de ses preuves de liaison (#12933)", async () => {
     const prisma = fakePrisma({
       e2EEDevice: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
       e2EEOneTimePreKey: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 150 }) },
       messageEnvelope: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 4 }) },
       e2EERevokedIdentity: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
       e2EEBindingProof: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+      e2EEDeviceVerificationMessage: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }) },
     });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.e2EEDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(prisma.e2EEOneTimePreKey.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
-    expect(prisma.messageEnvelope.deleteMany).toHaveBeenCalledWith({ where: { recipientUserId: USER_ID } });
+    expect(prisma.messageEnvelope.deleteMany).toHaveBeenCalledWith({ where: { OR: [{ recipientUserId: USER_ID }, { senderUserId: USER_ID }] } });
     expect(prisma.e2EERevokedIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(prisma.e2EEBindingProof.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.e2EEDeviceVerificationMessage.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.e2eeErased).toEqual({ devices: 2, preKeys: 150, envelopes: 4 });
   });
 
@@ -148,6 +154,28 @@ describe('purgeAccountIsolatedData', () => {
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.externalConversationPeer.deleteMany).toHaveBeenCalledWith({ where: { openedByUserId: USER_ID } });
     expect(summary.externalPeerHandlesDeleted).toBe(2);
+  });
+
+  it("efface ses adresses de fiche (#18863), leurs liens de suivi et les clics de leurs lecteurs : aucune copie de l'URL ne survit", async () => {
+    const prisma = fakePrisma({
+      profileAddress: {
+        findMany: jest.fn<any>().mockResolvedValue([{ trackingToken: 'tokA' }, { trackingToken: null }, { trackingToken: 'tokB' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }),
+      },
+      trackingLink: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'tl1' }, { id: 'tl2' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }),
+      },
+      trackingLinkClick: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 5 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.trackingLink.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { createdBy: USER_ID, addressId: { isSet: true } },
+    }));
+    expect(prisma.trackingLinkClick.deleteMany).toHaveBeenCalledWith({ where: { trackingLinkId: { in: ['tl1', 'tl2'] } } });
+    expect(prisma.trackingLink.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['tl1', 'tl2'] } } });
+    expect(prisma.profileAddress.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(summary.profileAddressesDeleted).toBe(3);
   });
 
   it('deletes the UserVoiceModel row for the account', async () => {

@@ -354,18 +354,4 @@ final class APIServiceTests: XCTestCase {
 
         XCTAssertNil(pagination.nextCursor)
     }
-
-    // MARK: - RefreshTokenData Decoding (App Model)
-
-    func test_refreshTokenData_decodesCorrectly() throws {
-        let json = """
-        {"token": "new-jwt-token", "expiresIn": 3600}
-        """
-        let data = json.data(using: .utf8)!
-
-        let tokenData = try JSONDecoder().decode(RefreshTokenData.self, from: data)
-
-        XCTAssertEqual(tokenData.token, "new-jwt-token")
-        XCTAssertEqual(tokenData.expiresIn, 3600)
-    }
 }

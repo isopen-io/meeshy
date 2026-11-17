@@ -1,29 +1,6 @@
 import SwiftUI
 import MeeshyUI
 
-/// **Le verre d'un rail : une carte-colonne, ou des boutons SÉPARÉS**
-/// (directive porteur 2026-09-27 : « que de faire une bande à gauche et à
-/// droite, fais des boutons séparés sans caption »).
-///
-/// Sur la scène plein écran, aucune colonne ne se dessine et aucune entrée ne
-/// porte plus de disque de verre (#10358, #10364) : glyphes blancs en relief
-/// (`ComposerFloatingRailInk`) ; ailleurs (rangée basse), la carte-colonne
-/// d'avant reste.
-struct ComposerRailCard: ViewModifier {
-    let separate: Bool
-    let plateauTint: Color
-
-    func body(content: Content) -> some View {
-        if separate {
-            content
-        } else {
-            content.adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2,
-                                                       style: .continuous),
-                                  tint: plateauTint.opacity(0.55))
-        }
-    }
-}
-
 /// **L'encre d'un glyphe du rail gauche posé sur la scène** (#10358, retour de
 /// recette porteur 2026-10-12 : « enlever l'effet bulle glass autour des tools
 /// de la rail gauche et avoir les boutons en blanc avec ombre sur relief »).

@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 826,
+  "routeCount": 834,
   "routes": [
     {
       "method": "DELETE",
@@ -1190,6 +1190,20 @@
     {
       "method": "DELETE",
       "path": "/api/v1/users/:userId/block",
+      "module": "userRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/users/me/addresses/:id",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -3618,6 +3632,20 @@
       "method": "GET",
       "path": "/api/v1/e2ee/devices/self/prekey-count",
       "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/e2ee/devices/self/verifications",
+      "module": "e2eeDeviceTrustRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -6332,6 +6360,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/users/me/addresses",
+      "module": "userRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/users/me/blocked-users",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
@@ -7344,6 +7386,20 @@
     {
       "method": "PATCH",
       "path": "/api/v1/users/me",
+      "module": "userRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/users/me/addresses/:id",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -9214,6 +9270,34 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/e2ee/devices/self/verifications",
+      "module": "e2eeDeviceTrustRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/e2ee/devices/self/verifications/ack",
+      "module": "e2eeDeviceTrustRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/e2ee/envelopes/ack",
       "module": "e2eeRoutes",
       "mountPrefix": "/api/v1",
@@ -10586,6 +10670,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/users/me/addresses",
+      "module": "userRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/users/me/change-email",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
@@ -11652,6 +11750,20 @@
       "method": "PUT",
       "path": "/api/v1/user-preferences/conversations/:conversationId",
       "module": "conversationPreferencesRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/users/me/addresses/order",
+      "module": "userRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [

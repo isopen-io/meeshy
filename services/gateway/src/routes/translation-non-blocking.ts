@@ -10,6 +10,7 @@ import { gatewayKeyring, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, translat
 import { SERVER_AT_REST_UNREADABLE } from '../services/messaging/serverAtRest';
 import { historyReaderFromAuthContext } from '../services/historyFloor';
 import { readerMayTranslateMessage } from '../services/messaging/translationReadGate';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -196,11 +197,26 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
         }
 
         const existingMessage = await fastify.prisma.message.findUnique({
-          where: { id: validatedData.message_id }
+          where: { id: validatedData.message_id },
+          include: { conversation: { select: { encryptionMode: true } } }
         });
 
         if (!existingMessage) {
           return sendNotFound(reply, 'Message not found');
+        }
+
+        // SECURITY (GWX-07, #18906) — la MÊME loi que POST /translate-blocking :
+        // le serveur ne retraduit que ce qu'il lit — régime de la conversation ET
+        // du message, régime inconnu ⇒ scellé (fail-closed). Une ligne e2ee était
+        // jugée « lisible » (son texte est le littéral `[Encrypted]`) et partait
+        // vers le traducteur, qui rangeait la « traduction » d'un message scellé.
+        const serverReadsMessage = sharedTranslationServerReadsMessage({
+          conversationEncryptionMode: existingMessage.conversation?.encryptionMode ?? null,
+          messageIsEncrypted: existingMessage.isEncrypted,
+          messageEncryptionMode: existingMessage.encryptionMode,
+        });
+        if (!serverReadsMessage) {
+          return sendBadRequest(reply, 'E2EE_NOT_TRANSLATABLE', { message: 'End-to-end encrypted messages cannot be translated by the server' });
         }
 
         // #11381 — un message `server`/`hybrid` se retraduit depuis son CLAIR, jamais depuis `content: ''`.

@@ -52,7 +52,7 @@ enum GameNavigationMap {
 
     private static func isRoot(_ route: Route) -> Bool {
         switch route {
-        case .progression, .progressionDashboard: true
+        case .progression: true
         default: false
         }
     }

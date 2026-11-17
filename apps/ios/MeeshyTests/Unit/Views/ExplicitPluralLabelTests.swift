@@ -32,23 +32,23 @@ final class ExplicitPluralLabelTests: XCTestCase {
         return (try XCTUnwrap(Bundle(path: path)), Locale(identifier: code))
     }
 
-    // MARK: - LoadMoreRepliesCell (texte visible + accessibilityLabel)
+    // MARK: - StoryCommentThread.loadMoreRepliesLabel (texte visible + accessibilityLabel)
 
     func test_loadMoreRepliesLabelText_singularForOne() throws {
         let en = try localized("en")
-        XCTAssertEqual(LoadMoreRepliesCell.labelText(remaining: 1, bundle: en.bundle, locale: en.locale),
+        XCTAssertEqual(StoryCommentThread.loadMoreRepliesLabel(remaining: 1, bundle: en.bundle, locale: en.locale),
                        "View 1 more reply")
     }
 
     func test_loadMoreRepliesLabelText_pluralForMany() throws {
         let en = try localized("en")
-        XCTAssertEqual(LoadMoreRepliesCell.labelText(remaining: 3, bundle: en.bundle, locale: en.locale),
+        XCTAssertEqual(StoryCommentThread.loadMoreRepliesLabel(remaining: 3, bundle: en.bundle, locale: en.locale),
                        "View 3 more replies")
     }
 
     func test_loadMoreRepliesLabelText_frenchAgreesInTheSingular() throws {
         let fr = try localized("fr")
-        XCTAssertEqual(LoadMoreRepliesCell.labelText(remaining: 1, bundle: fr.bundle, locale: fr.locale),
+        XCTAssertEqual(StoryCommentThread.loadMoreRepliesLabel(remaining: 1, bundle: fr.bundle, locale: fr.locale),
                        "Voir 1 réponse de plus")
     }
 

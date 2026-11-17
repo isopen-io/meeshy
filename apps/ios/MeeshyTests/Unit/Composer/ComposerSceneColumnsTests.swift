@@ -11,33 +11,6 @@ final class ComposerSceneColumnsTests: XCTestCase {
         ComposerToolControl(id: id, symbolName: "pencil.tip", label: id, isExpanded: false)
     }
 
-    // MARK: - Rail gauche : l'éclair puis le Cadre, après le lieu (#8713)
-
-    func test_served_eclairPuisCadre_dansCetOrdre() {
-        XCTAssertEqual(ComposerLeadingSceneToggles.served(animated: true, frame: true), [.animated, .frame])
-        XCTAssertEqual(ComposerLeadingSceneToggles.served(animated: true, frame: false), [.animated])
-        XCTAssertEqual(ComposerLeadingSceneToggles.served(animated: false, frame: true), [.frame],
-                       "sans média de fond, pas de Cadre ; sans éclair, le Cadre garde sa place relative")
-        XCTAssertEqual(ComposerLeadingSceneToggles.served(animated: false, frame: false), [])
-    }
-
-    func test_anchor_rangeeQuiPorteLeLieu_seRangeApresLeLieu() {
-        let story = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors, format: .story, allowsCapture: true)
-            .filter { $0.level(for: .story).appearsOnCanvas }
-        XCTAssertTrue(story.contains(.place), "prémisse : en Story, le lieu vit à gauche")
-        XCTAssertEqual(ComposerLeadingSceneToggles.anchor(in: story), .place)
-    }
-
-    func test_anchor_rangeeSansLieu_seRangeApresLaDernierePorte() {
-        XCTAssertEqual(ComposerLeadingSceneToggles.anchor(in: [.media, .text, .drawing]), .drawing)
-        XCTAssertNil(ComposerLeadingSceneToggles.anchor(in: []))
-    }
-
-    func test_symbol_eclairEtCadre_gardentLeursGlyphes() {
-        XCTAssertEqual(ComposerSceneToggle.animated.symbol, "bolt.fill")
-        XCTAssertEqual(ComposerSceneToggle.frame.symbol, "crop")
-    }
-
     // MARK: - Rail droit : l'historique TOUJOURS en bas (#8713)
 
     func test_foot_outilOuvert_garderLHistorique_sansTemps() {

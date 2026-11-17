@@ -87,9 +87,3 @@ extension MeeshyComposerHost {
         viewModel.openTimelinePanel()
     }
 }
-
-nonisolated enum ComposerAnimatedCopy {
-    static var toggle: String {
-        String(localized: "composer.animated.toggle", defaultValue: "Animé", bundle: .main)
-    }
-}

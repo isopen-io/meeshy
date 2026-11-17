@@ -13,6 +13,11 @@
 # de dépendre d'un define global.
 [define]
 "__SHELL__" = "false"
+# `__RUNTIME_CONFIG__` — faux sous `bun test` (#18988) : `src/lib/api/config.ts`
+# ne lit `/config.json` qu'au démarrage d'un VRAI document ; un témoin qui
+# l'importe ne part jamais sur le réseau. `runtime-config.test.ts` teste le
+# chargeur par injection.
+"__RUNTIME_CONFIG__" = "false"
 "__BENCH__" = "0"
 # `__FIXTURES__` — vrai sous `bun test` : c'est la valeur du build NORMAL
 # (`VITE_DATA_SOURCE` absente ⇒ `fixtures`), et tous les témoins lisent la

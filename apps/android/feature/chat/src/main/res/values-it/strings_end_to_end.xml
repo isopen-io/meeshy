@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="chat_composer_end_to_end">Questa conversazione è crittografata end-to-end: scrivi dall’app Meeshy su iPhone</string>
-    <string name="chat_menu_e2ee_signals_notice">Reagire, fissare ed eliminare per tutti: dall’app Meeshy su iPhone.</string>
-    <string name="chat_menu_e2ee_signals_notice_alone">Crittografata end-to-end: reagire, fissare ed eliminare per tutti si fanno dall’app Meeshy su iPhone.</string>
+    <string name="chat_composer_end_to_end">Questa conversazione crittografata non si può ancora scrivere da questo dispositivo</string>
+    <string name="chat_menu_e2ee_signals_notice">Reagire, fissare ed eliminare per tutti: non ancora su questo dispositivo.</string>
+    <string name="chat_menu_e2ee_signals_notice_alone">Crittografata end-to-end: reagire, fissare ed eliminare per tutti, non ancora qui.</string>
+    <string name="chat_e2ee_send_not_sent">Messaggio crittografato non inviato: il testo è tornato nel campo</string>
 </resources>

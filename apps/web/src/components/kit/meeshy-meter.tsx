@@ -53,8 +53,8 @@ function Decoration({ marks, isStepped }: { readonly marks: readonly number[]; r
   if (isStepped || marks.length === 0) return null;
   return (
     <>
-      {marks.map((mark) => (
-        <span key={mark} className="kit-meter__mark" aria-hidden="true" style={{ insetInlineStart: `${Math.min(Math.max(mark, 0), 1) * 100}%` }} />
+      {marks.map((mark, index) => (
+        <span key={`${index}-${mark}`} className="kit-meter__mark" aria-hidden="true" style={{ insetInlineStart: `${Math.min(Math.max(mark, 0), 1) * 100}%` }} />
       ))}
     </>
   );
