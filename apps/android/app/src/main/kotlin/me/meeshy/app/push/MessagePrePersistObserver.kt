@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.MinimalMessageIngest
+import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.model.MinimalMessageSeed
 import me.meeshy.sdk.net.TokenStore
 import timber.log.Timber
@@ -21,7 +22,8 @@ import javax.inject.Singleton
  * Pré-persistance d'un message poussé par FCM (miroir du pré-enregistrement de la
  * `NotificationServiceExtension`, iOS) : la graine minimale ([MinimalMessageSeed]) est écrite en
  * Room si le message est absent, pour qu'il soit là à l'ouverture du fil, avant même le REST.
- * Jamais d'écrasement d'un payload riche ([MinimalMessageIngest]) ; rien sans session enregistrée.
+ * Jamais d'écrasement d'un payload riche ([MinimalMessageIngest]) ; rien sans session enregistrée, rien pour une
+ * conversation verrouillée par code.
  *
  * Branché comme [PushObserver] : [MeeshyFcmService] n'est pas modifié. L'écriture saute sur sa
  * propre portée (FCM n'accorde que quelques secondes au fil d'appel).
@@ -30,6 +32,7 @@ import javax.inject.Singleton
 class MessagePrePersistObserver @Inject constructor(
     private val ingest: MinimalMessageIngest,
     private val tokenStore: TokenStore,
+    private val lockStore: ConversationLockStore,
 ) : PushObserver {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -38,6 +41,7 @@ class MessagePrePersistObserver @Inject constructor(
         // restauré la session en mémoire, et c'est précisément le cas que la pré-persistance sert.
         if (!tokenStore.isAuthenticated || tokenStore.userId == null) return
         val seed = MinimalMessageSeed.fromPush(push.payload) ?: return
+        if (isLocked(seed.conversationId)) return
         scope.launch {
             try {
                 ingest.ingest(seed)
@@ -47,6 +51,14 @@ class MessagePrePersistObserver @Inject constructor(
                 Timber.w(failure, "Pré-persistance du message poussé en échec")
             }
         }
+    }
+
+    /** Miroir de `NSEPreparationStep.plan` : une conversation verrouillée ne s'écrit pas ; un verrou illisible non plus. */
+    private fun isLocked(conversationId: String): Boolean = try {
+        lockStore.isLocked(conversationId)
+    } catch (failure: Exception) {
+        Timber.w(failure, "Conversation lock unreadable, message not pre-persisted")
+        true
     }
 }
 
