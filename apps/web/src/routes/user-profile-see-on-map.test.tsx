@@ -59,11 +59,14 @@ const sharing = (userId: string, expiresInMs = 42 * 60_000) => ({
   expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
 });
 
-/** Les positions arrivent APRÈS l'ouverture de session : le magasin appartient au compte ouvert et se vide à chaque changement d'identité. */
+/**
+ * Les positions arrivent APRÈS l'ouverture de session (le magasin appartient au compte ouvert et se vide à chaque
+ * changement d'identité) et APRÈS le rattrapage de la fiche : en démonstration il ne sert personne, et un
+ * rattrapage fait foi sur ce qui était arrivé avant lui — la position vient donc du direct, fiche ouverte.
+ */
 async function mountActions(received: readonly ReturnType<typeof sharing>[] = []): Promise<HTMLDivElement> {
   sessionStore.getState().establish({ user: { id: VIEWER, username: 'lecteur', displayName: 'Lecteur' }, token: 't', sessionToken: 's', expiresIn: 3600 });
   await settle();
-  received.forEach((location) => sharedLocationsStore.getState().receive(location));
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -78,6 +81,8 @@ async function mountActions(received: readonly ReturnType<typeof sharing>[] = []
   await settle();
   await settle();
   act(() => container.querySelector<HTMLButtonElement>('[data-profile-faces] [data-kit-chip="actions"]')?.click());
+  await settle();
+  act(() => received.forEach((location) => sharedLocationsStore.getState().receive(location)));
   await settle();
   return container;
 }
