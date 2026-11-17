@@ -533,8 +533,11 @@ export function createAuthClient({ transport, store, linkSecrets = browserLinkDe
         path: authEndpoints.logout,
         headers: session === null ? {} : { Authorization: `Bearer ${session.token}`, 'X-Session-Token': session.sessionToken },
       });
+    // Les deux fermetures partent ensemble et sont attendues ensemble : un échec
+    // de la première ne reste pas orphelin pendant que la seconde voyage, et il
+    // revient à l'appelant.
     const result = close(held);
-    if (other !== null) await close(other).catch(() => undefined);
+    if (other !== null) await Promise.allSettled([result, close(other)]);
     return result;
   }
 

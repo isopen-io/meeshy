@@ -539,6 +539,35 @@ describe('W2 — se déconnecter dans l’onglet resté sur l’ancienne session
     expect(freshTab.getState().session.status).toBe('anonymous');
   });
 
+  test('une fermeture qui échoue ne laisse aucun rejet orphelin pendant que la seconde part, et l’échec revient à l’appelant', async () => {
+    const storage = fakeStorage();
+    const { staleTab } = staleTabThenFreshLogin(storage);
+    const orphans: unknown[] = [];
+    const onOrphan = (reason: unknown): void => void orphans.push(reason);
+    process.on('unhandledRejection', onOrphan);
+    try {
+      const transport = {
+        request: <T>(request: HttpRequest): Promise<ApiResult<T>> =>
+          request.headers?.Authorization === 'Bearer jwt-ancien'
+            ? Promise.reject(new Error('panne'))
+            : new Promise((resolve) => setTimeout(() => resolve({ ok: true, status: 200, data: { message: 'ok' } as T }), 5)),
+      };
+
+      const outcome = await createAuthClient({ transport, store: staleTab })
+        .logout()
+        .then(
+          () => 'résolue',
+          () => 'rejetée',
+        );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(outcome).toBe('rejetée');
+      expect(orphans).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onOrphan);
+    }
+  });
+
   test('un AUTRE compte ouvert ailleurs n’est ni fermé ni effacé : on ne se déconnecte que du compte qu’on voit', async () => {
     const storage = fakeStorage();
     const adaTab = openTab(storage);
