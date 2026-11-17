@@ -300,6 +300,18 @@ enum ProfileStatesCopy {
         String(localized: "profile.state.blocked.remains", defaultValue: "Ce qui reste", bundle: .module)
     }
 
+    /// La mention sous une action de « Parler » hors ligne ; aucune en ligne.
+    static func reachMention(_ reach: ProfileTalkReach) -> String? {
+        switch reach {
+        case .available:
+            return nil
+        case .queued:
+            return String(localized: "profile.state.offline.queued", defaultValue: "sera envoyé", bundle: .module)
+        case .needsNetwork:
+            return String(localized: "profile.state.offline.needsNetwork", defaultValue: "réseau requis", bundle: .module)
+        }
+    }
+
     static var readOnly: String {
         String(localized: "profile.state.blocked.readOnly", defaultValue: "Lecture seule", bundle: .module)
     }

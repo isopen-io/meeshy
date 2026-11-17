@@ -143,3 +143,31 @@ final class ProfileUnavailableExitTests: XCTestCase {
         XCTAssertNil(exits.secondary)
     }
 }
+
+/// #18873 — planche `Etat-HorsLigne` : hors ligne, « Écrire » reste offert (le message part au retour du réseau),
+/// « Appeler » et « Vidéo » se ferment et le disent ; en ligne, rien ne s'ajoute.
+final class ProfileTalkReachTests: XCTestCase {
+
+    func test_resolve_enLigne_aucuneMention() {
+        XCTAssertEqual(ProfileTalkReach.resolve(.write, isOffline: false), .available)
+        XCTAssertEqual(ProfileTalkReach.resolve(.call, isOffline: false), .available)
+    }
+
+    func test_resolve_horsLigne_ecrirePartiraAuRetour() {
+        XCTAssertEqual(ProfileTalkReach.resolve(.write, isOffline: true), .queued)
+    }
+
+    func test_resolve_horsLigne_appelsFermes() {
+        XCTAssertEqual(ProfileTalkReach.resolve(.call, isOffline: true), .needsNetwork)
+        XCTAssertEqual(ProfileTalkReach.resolve(.video, isOffline: true), .needsNetwork)
+    }
+
+    func test_isOffline_seulementQuandLaFicheVientDuCacheFauteDeReseau() {
+        let offline = ProfileSheetPhase.shown(fallback: ProfileCacheFallback(failure: .offline, age: 60))
+        let serverDown = ProfileSheetPhase.shown(fallback: ProfileCacheFallback(failure: .unreachable, age: 60))
+
+        XCTAssertTrue(ProfileTalkReach.isOffline(offline))
+        XCTAssertFalse(ProfileTalkReach.isOffline(serverDown))
+        XCTAssertFalse(ProfileTalkReach.isOffline(.shown(fallback: nil)))
+    }
+}

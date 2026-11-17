@@ -101,3 +101,25 @@ nonisolated enum ProfileSharedConversationAccess: Sendable, Equatable {
         return isBlockedByMe ? .readOnly : .open
     }
 }
+
+/// Ce qu'une action de « Parler » peut faire hors ligne (planche `Etat-HorsLigne`) : « Écrire » part au retour du réseau,
+/// les appels attendent le réseau ; en ligne, tout est offert sans mention.
+nonisolated enum ProfileTalkReach: Equatable, Sendable {
+    case available
+    case queued
+    case needsNetwork
+
+    static func resolve(_ action: ProfileRelationAction, isOffline: Bool) -> ProfileTalkReach {
+        guard isOffline else { return .available }
+        switch action {
+        case .call, .video: return .needsNetwork
+        default: return .queued
+        }
+    }
+
+    /// Hors ligne : la fiche lue vient du cache parce que le téléphone n'a pas de réseau.
+    static func isOffline(_ phase: ProfileSheetPhase) -> Bool {
+        guard case .shown(let fallback?) = phase else { return false }
+        return fallback.failure == .offline
+    }
+}

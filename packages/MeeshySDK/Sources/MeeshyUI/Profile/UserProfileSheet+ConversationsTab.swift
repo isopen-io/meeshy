@@ -39,8 +39,12 @@ extension UserProfileSheet {
                 }
 
                 ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
-                    sharedConversationRow(conv, access: sharedConversationAccess)
-                        .staggeredAppear(index: index)
+                    ProfileSharedConversationRow(conversation: conv, access: sharedConversationAccess) {
+                        HapticFeedback.light()
+                        guard let onNavigateToConversation else { return openSharedConversation(conv) }
+                        onNavigateToConversation(conv)
+                    }
+                    .staggeredAppear(index: index)
 
                     if index < effectiveConversations.count - 1 {
                         Divider()
@@ -56,23 +60,48 @@ extension UserProfileSheet {
         ProfileSharedConversationAccess.resolve(isBlockedByMe: isBlocked, isUnavailable: isBlockedByTarget)
     }
 
-    /// Une conversation en commun ; je l'ai bloqué, elle s'ouvre en lecture seule et le dit (planche `Etat-Bloque`).
-    private func sharedConversationRow(_ conv: MeeshyConversation, access: ProfileSharedConversationAccess) -> some View {
+    /// La sortie du vide : écrire le premier message, sur la fiche d'un autre qu'aucun blocage ne ferme.
+    private var firstMessageExit: MeeshyStateBlockAction? {
+        guard !isCurrentUser, !isInteractionDisabled else { return nil }
+        return MeeshyStateBlockAction(
+            title: String(localized: "profile.conversations.firstMessage", defaultValue: "Envoyer un premier message", bundle: .module),
+            systemImage: "paperplane"
+        ) {
+            HapticFeedback.medium()
+            openConversation()
+        }
+    }
+
+    private func openSharedConversation(_ conv: MeeshyConversation) {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NotificationCenter.default.post(name: Notification.Name("navigateToConversation"), object: conv)
+        }
+    }
+}
+
+/// Une conversation en commun ; je l'ai bloqué, elle s'ouvre en lecture seule et le dit (planche `Etat-Bloque`) ;
+/// introuvable ou il m'a bloqué, elle ferme.
+struct ProfileSharedConversationRow: View {
+    let conversation: MeeshyConversation
+    let access: ProfileSharedConversationAccess
+    let onOpen: () -> Void
+    @ResolvedThemePalette private var theme
+
+    var body: some View {
         Button {
             guard access != .closed else { return }
-            HapticFeedback.light()
-            guard let onNavigateToConversation else { return openSharedConversation(conv) }
-            onNavigateToConversation(conv)
+            onOpen()
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(
-                    name: conv.name,
+                    name: conversation.name,
                     context: .conversationList,
-                    accentColor: conv.accentColor,
-                    avatarURL: conv.avatar ?? conv.participantAvatarURL
+                    accentColor: conversation.accentColor,
+                    avatarURL: conversation.avatar ?? conversation.participantAvatarURL
                 )
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(conv.name)
+                    Text(conversation.name)
                         .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
@@ -95,24 +124,5 @@ extension UserProfileSheet {
         .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .rectangle))
         .disabled(access == .closed)
         .opacity(access == .closed ? 0.35 : 1)
-    }
-
-    /// La sortie du vide : écrire le premier message, sur la fiche d'un autre qu'aucun blocage ne ferme.
-    private var firstMessageExit: MeeshyStateBlockAction? {
-        guard !isCurrentUser, !isInteractionDisabled else { return nil }
-        return MeeshyStateBlockAction(
-            title: String(localized: "profile.conversations.firstMessage", defaultValue: "Envoyer un premier message", bundle: .module),
-            systemImage: "paperplane"
-        ) {
-            HapticFeedback.medium()
-            openConversation()
-        }
-    }
-
-    private func openSharedConversation(_ conv: MeeshyConversation) {
-        dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            NotificationCenter.default.post(name: Notification.Name("navigateToConversation"), object: conv)
-        }
     }
 }

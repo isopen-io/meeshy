@@ -37,10 +37,12 @@ extension UserProfileSheet {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: String(localized: "profile.relation.section.talk", defaultValue: "Parler", bundle: .module))
             MeeshyActionGrid {
-                labeledAction(.write) { openConversation() }
+                labeledAction(.write, reach: talkReach(.write)) { openConversation() }
                 if offersCall {
-                    labeledAction(.call) { requestCall(isVideo: false) }
-                    labeledAction(.video) { requestCall(isVideo: true) }
+                    labeledAction(.call, reach: talkReach(.call)) { requestCall(isVideo: false) }
+                        .disabled(talkReach(.call) == .needsNetwork)
+                    labeledAction(.video, reach: talkReach(.video)) { requestCall(isVideo: true) }
+                        .disabled(talkReach(.video) == .needsNetwork)
                 }
                 ProfileWhereSlot.of(self, .action)
             }
@@ -48,14 +50,22 @@ extension UserProfileSheet {
         }
     }
 
-    func labeledAction(_ operation: ProfileRelationAction, hint: String? = nil, action: @escaping () -> Void) -> some View {
+    func labeledAction(_ operation: ProfileRelationAction, hint: String? = nil, reach: ProfileTalkReach = .available,
+                       action: @escaping () -> Void) -> some View {
         MeeshyLabeledAction(
             title: operation.title,
             systemImage: operation.systemImage,
+            value: ProfileStatesCopy.reachMention(reach),
+            valueKind: reach == .queued ? .accent : .quiet,
             tint: accentTint,
             hint: hint,
             action: action
         )
+    }
+
+    /// Hors ligne (planche `Etat-HorsLigne`) : « Écrire » partira au retour du réseau, les appels l'attendent.
+    func talkReach(_ action: ProfileRelationAction) -> ProfileTalkReach {
+        ProfileTalkReach.resolve(action, isOffline: ProfileTalkReach.isOffline(phase))
     }
 
     var offersCall: Bool {
