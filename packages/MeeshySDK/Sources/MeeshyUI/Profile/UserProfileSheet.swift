@@ -258,7 +258,7 @@ public struct UserProfileSheet: View {
             case .vitrine:
                 vitrineFace
             case .links:
-                linksFace
+                RelationLinksFace.of(self)
             case .actions:
                 actionsFace
             }

@@ -7,15 +7,39 @@ import MeeshySDK
 // fixe, et les gestes du billet en actions libellées (K32) — copier, QR, envoyer son profil, sans contact. Puis « Ses
 // adresses » : celles que la fiche me SERT, et seulement elles — le serveur filtre par cercle, rien n'est déduit ici.
 // Ouvrir une adresse dit d'abord qu'on quitte Meeshy. Sans pseudo, il n'a pas d'adresse : l'état vide (K38) le dit et
-// ramène à sa Vitrine (loi 8 : un état vide a toujours une sortie).
+// ramène à sa Vitrine (loi 8 : un état vide a toujours une sortie). Sous ses adresses, ce que mon cercle tient fermé, en
+// rangées verrouillées, puis « Ses communautés ouvertes » (#19444, `RelationLinksReach.swift`).
 
-extension UserProfileSheet {
+extension RelationLinksFace {
+    static func of(_ sheet: UserProfileSheet) -> RelationLinksFace {
+        let profile = sheet.loader.profile
+        return RelationLinksFace(
+            link: ProfileLink(username: sheet.displayUser.username), name: sheet.displayUser.resolvedDisplayName,
+            addresses: profile?.addresses?.items ?? [], lockedAddresses: profile?.lockedAddresses?.groups ?? [],
+            communities: profile?.openCommunities?.items ?? [], tint: sheet.accentTint,
+            sendRoute: ProfileSendRoute.of(sheet), sendSheet: sheet.sendSheet, onLeave: { sheet.dismiss() },
+            onCopy: { sheet.copyProfileLink($0) }, onShowVitrine: { sheet.face = .vitrine },
+            joinCommunity: { id in await RelationLinksFace.join(communityId: id) }
+        )
+    }
+}
 
-    var linksFace: some View {
-        RelationLinksFace(link: ProfileLink(username: displayUser.username), name: displayUser.resolvedDisplayName,
-                          addresses: loader.profile?.addresses?.items ?? [], tint: accentTint,
-                          sendRoute: profileSendRoute, sendSheet: sendSheet, onLeave: { dismiss() },
-                          onCopy: { copyProfileLink($0) }, onShowVitrine: { face = .vitrine })
+/// « Envoyer son profil » (#19442) : sa carte part par la feuille d'envoi Meeshy de l'app, sinon par celle du système.
+extension ProfileSendRoute {
+    @MainActor static func of(_ sheet: UserProfileSheet) -> ProfileSendRoute? {
+        let user = sheet.displayUser
+        return resolve(userId: sheet.resolvedUserId, displayName: user.resolvedDisplayName,
+                       link: ProfileLink(username: user.username), avatarURL: user.avatarURL, bio: user.bio,
+                       hostOffered: sheet.sendSheet != nil)
+    }
+}
+
+extension ProfileSendExits {
+    static func of(_ sheet: UserProfileSheet) -> ProfileSendExits {
+        let sharing = sheet.$sharesProfile
+        let leave = sheet.dismiss
+        return ProfileSendExits(close: { sharing.wrappedValue = false },
+                                closeProfile: { sharing.wrappedValue = false; leave() })
     }
 }
 
@@ -23,14 +47,18 @@ struct RelationLinksFace: View {
     let link: ProfileLink?
     let name: String
     let addresses: [ProfileAddress]
+    let lockedAddresses: [ServedLockedAddresses.Group]
+    let communities: [ProfileOpenCommunity]
     let tint: Color
     let sendRoute: ProfileSendRoute?
     let sendSheet: ProfileSendSheet?
     let onLeave: () -> Void
     let onCopy: (ProfileLink) -> Void
     let onShowVitrine: () -> Void
+    let joinCommunity: (String) async -> Bool
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.profileCommunityDoor) private var communityDoor
     @State private var sharesProfile = false
     @State private var showsCode: RelationLinksCodeMode?
     @State private var leaving: ProfileAddress?
@@ -49,7 +77,11 @@ struct RelationLinksFace: View {
                     tint: tint
                 )
             }
-            if !addresses.isEmpty { addressesSection }
+            if !addresses.isEmpty || !lockedAddresses.isEmpty { addressesSection }
+            if !communities.isEmpty {
+                RelationOpenCommunitiesSection(communities: communities, tint: tint, join: joinCommunity,
+                                               onOpen: communityOpening)
+            }
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .confirmationDialog(RelationLinksCopy.leaveTitle, isPresented: isLeaving, titleVisibility: .visible,
@@ -58,6 +90,23 @@ struct RelationLinksFace: View {
             Button(RelationLinksCopy.cancel, role: .cancel) { leaving = nil }
         } message: { address in
             Text(RelationLinksCopy.leaveMessage(address.host))
+        }
+    }
+
+    private var communityOpening: ((String) -> Void)? {
+        guard let communityDoor else { return nil }
+        return { id in
+            onLeave()
+            communityDoor.open(id)
+        }
+    }
+
+    static func join(communityId: String) async -> Bool {
+        do {
+            _ = try await CommunityService.shared.join(communityId: communityId)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -130,7 +179,15 @@ struct RelationLinksFace: View {
 
     private var addressesSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(title: RelationLinksCopy.addressesTitle, count: addresses.count)
+            MeeshySectionHeader(title: RelationLinksCopy.addressesTitle, count: addresses.isEmpty ? nil : addresses.count)
+            if !addresses.isEmpty { servedAddresses }
+            RelationLockedAddressRows(groups: lockedAddresses, tint: tint)
+        }
+        .accessibilityIdentifier("profile.relation.links.addresses")
+    }
+
+    private var servedAddresses: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             VStack(spacing: 0) {
                 ForEach(Array(addresses.enumerated()), id: \.element.id) { index, address in
                     MeeshyToggleRow(address.title, systemImage: address.glyph.systemImage, subtitle: address.displayURL,
@@ -142,7 +199,6 @@ struct RelationLinksFace: View {
             .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
             MeeshyNote(RelationLinksCopy.visibleToYou(addresses.count), lead: .systemImage("eye"))
         }
-        .accessibilityIdentifier("profile.relation.links.addresses")
     }
 
     private func open(_ address: ProfileAddress) {

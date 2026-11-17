@@ -248,7 +248,9 @@ extension MeeshyUser {
             profileDecor: profileDecor,
             addresses: addresses,
             city: city, cityCircle: cityCircle,
-            profileAccentColor: profileAccentColor
+            profileAccentColor: profileAccentColor,
+            lockedAddresses: lockedAddresses,
+            openCommunities: openCommunities
         )
     }
 }

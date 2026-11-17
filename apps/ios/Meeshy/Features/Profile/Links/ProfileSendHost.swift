@@ -27,7 +27,7 @@ struct ProfileSendHost: View {
     /// L'hôte que l'app pose sur toutes les feuilles de profil.
     static var sheet: ProfileSendSheet {
         ProfileSendSheet { request, exits in
-            AnyView(ProfileSendHost(request: request, exits: exits))
+            ProfileSlot.view(.send, userId: "", displayName: "", send: ProfileSendHost(request: request, exits: exits))
         }
     }
 }

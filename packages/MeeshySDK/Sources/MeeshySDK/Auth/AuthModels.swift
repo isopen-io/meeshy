@@ -573,6 +573,12 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// `#RRGGBB`. `nil` = automatique, un ancien serveur, ou une valeur hors liste : l'accent se calcule comme avant.
     public let profileAccentColor: String?
 
+    /// Ce que mon cercle ne m'ouvre pas de ses adresses (#19444) : un compte par cercle, rien d'autre. `nil` = un
+    /// ancien serveur : la face Liens s'en passe.
+    public let lockedAddresses: ServedLockedAddresses?
+    /// Ses communautés publiques, avec mon appartenance (#19444). `nil` = un ancien serveur : la section n'existe pas.
+    public let openCommunities: ServedOpenCommunities?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -602,7 +608,9 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         addresses: ServedProfileAddresses? = nil,
         city: String? = nil,
         cityCircle: String? = nil,
-        profileAccentColor: String? = nil
+        profileAccentColor: String? = nil,
+        lockedAddresses: ServedLockedAddresses? = nil,
+        openCommunities: ServedOpenCommunities? = nil
     ) {
         self.id = id
         self.username = username
@@ -647,6 +655,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.city = city
         self.cityCircle = cityCircle
         self.profileAccentColor = profileAccentColor
+        self.lockedAddresses = lockedAddresses
+        self.openCommunities = openCommunities
     }
 
     /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
@@ -681,7 +691,9 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             profileDecor: decor,
             addresses: addresses,
             city: city, cityCircle: cityCircle,
-            profileAccentColor: profileAccentColor
+            profileAccentColor: profileAccentColor,
+            lockedAddresses: lockedAddresses,
+            openCommunities: openCommunities
         )
     }
 
@@ -731,7 +743,9 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             profileDecor: profileDecor,
             addresses: addresses,
             city: city, cityCircle: cityCircle,
-            profileAccentColor: profileAccentColor
+            profileAccentColor: profileAccentColor,
+            lockedAddresses: lockedAddresses,
+            openCommunities: openCommunities
         )
     }
 

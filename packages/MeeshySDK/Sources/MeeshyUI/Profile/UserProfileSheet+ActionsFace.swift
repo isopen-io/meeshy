@@ -23,7 +23,8 @@ extension UserProfileSheet {
         .padding(.horizontal, MeeshySpacing.xl)
         .task(id: pendingRequestId) { await loadPendingRequest() }
         .sheet(isPresented: $sharesProfile) {
-            ProfileSendPresentation(route: profileSendRoute, host: sendSheet, exits: profileSendExits)
+            ProfileSendPresentation(route: ProfileSendRoute.of(self), host: sendSheet,
+                                    exits: ProfileSendExits.of(self))
         }
     }
 
@@ -145,20 +146,6 @@ extension UserProfileSheet {
     }
 
     // MARK: - Sa fiche
-
-    /// « Envoyer son profil » (#19442) : sa carte part par la feuille d'envoi Meeshy de l'app, sinon par celle du système.
-    var profileSendRoute: ProfileSendRoute? {
-        ProfileSendRoute.resolve(userId: resolvedUserId, displayName: displayUser.resolvedDisplayName,
-                                 link: ProfileLink(username: displayUser.username), avatarURL: displayUser.avatarURL,
-                                 bio: displayUser.bio, hostOffered: sendSheet != nil)
-    }
-
-    var profileSendExits: ProfileSendExits {
-        let sharing = $sharesProfile
-        let leave = dismiss
-        return ProfileSendExits(close: { sharing.wrappedValue = false },
-                                closeProfile: { sharing.wrappedValue = false; leave() })
-    }
 
     func copyProfileLink(_ link: ProfileLink) {
         UIPasteboard.general.url = link.url

@@ -558,6 +558,9 @@ struct ProfileSheetEnvironment: ViewModifier {
                 scanner: { onOpened in ProfileSlot.view(.scanner, userId: "", displayName: "", onOpened: onOpened) }
             ))
             .environment(\.profileSendSheet, ProfileSendHost.sheet)
+            .environment(\.profileCommunityDoor, ProfileCommunityDoor { id in
+                DeepLinkRouter.shared.pendingDeepLink = .community(id: id)
+            })
             .environment(\.profileLoading, LiveProfileLoading())
             .environment(\.avatarListeningSource, ListeningCenter.shared.source)
     }
@@ -567,15 +570,16 @@ struct ProfileSheetEnvironment: ViewModifier {
 /// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case banner, relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions
+    case banner, relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send
 
     static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false),
                      mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil,
                      onOpened: (() -> Void)? = nil, tint: Color = .clear,
-                     liveRequest: ProfileLiveRequest? = nil, actionsPart: ProfileActionsPart? = nil) -> AnyView {
+                     liveRequest: ProfileLiveRequest? = nil, actionsPart: ProfileActionsPart? = nil,
+                     send: ProfileSendHost? = nil) -> AnyView {
         AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked,
                                    mapRequest: mapRequest, openMap: openMap, onOpened: onOpened, tint: tint,
-                                   liveRequest: liveRequest, actionsPart: actionsPart))
+                                   liveRequest: liveRequest, actionsPart: actionsPart, send: send))
     }
 }
 
@@ -590,6 +594,7 @@ private struct ProfileSlotContent: View {
     let tint: Color
     let liveRequest: ProfileLiveRequest?
     let actionsPart: ProfileActionsPart?
+    let send: ProfileSendHost?
 
     var body: some View {
         switch slot {
@@ -621,6 +626,8 @@ private struct ProfileSlotContent: View {
             if let liveRequest, let actionsPart {
                 ProfileActionsPartContent(part: actionsPart, request: liveRequest)
             }
+        case .send:
+            if let send { send }
         }
     }
 }
