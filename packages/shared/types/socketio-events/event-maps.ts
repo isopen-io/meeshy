@@ -321,7 +321,7 @@ import type {
   MessageTranslationSharedEventData,
   TranslationEvent,
 } from './translation.js';
-import type { UserUpdatedEventData } from './user.js';
+import type { UserProfileChangedEventData, UserUpdatedEventData } from './user.js';
 
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
@@ -531,6 +531,7 @@ export interface ServerToClientEvents {
 
   // User Profile
   [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;
+  [SERVER_EVENTS.USER_PROFILE_CHANGED]: (data: UserProfileChangedEventData) => void;
 
   // Conversation Categories
   [SERVER_EVENTS.CATEGORY_CREATED]: (data: CategoryCreatedEventData) => void;

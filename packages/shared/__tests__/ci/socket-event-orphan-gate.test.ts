@@ -57,6 +57,7 @@ const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['relation:level-lowered', "ÉMIS — `emitRelationLevelLowered` (`socketio/relationEvents.ts`) vers la SEULE room de l'acteur après `POST /relations/:userId/level` (#19366). Lecteurs : les clients du profil (#18857) ; d'ici là chacun relit `GET /relations/:userId`."],
   ['user:blocked-by-me', "ÉMIS — `emitBlockedByMe` vers la SEULE room de l'acteur après `PUT /directory/blocks/:id` et son alias (#19366). Lecteurs : les clients du profil (#18857) ; d'ici là chacun relit `GET /directory/blocks`."],
   ['user:unblocked-by-me', "ÉMIS — `emitBlockedByMe` vers la SEULE room de l'acteur après `DELETE /directory/blocks/:id` et son alias (#19366). Lecteurs : les clients du profil (#18857)."],
+  ['user:profile-changed', "ÉMIS — `emitProfileChanged` (`services/notifications/profile-changed.ts`) vers les liés Connaissance+ et les partenaires de conversation, hors blocage, quand bio, ville, langues, voix, décor ou adresses changent (#19384). Lecteurs : les clients du profil (#18857), qui revalident `GET /directory/people/:handle` avec `If-None-Match`."],
   ['e2ee:own-device-retired', 'ÉMIS — `own-device-announcements.ts` au retrait d\'une génération (#19156). Lecteurs : lots clients 4, 5 et 6.'],
 ]);
 

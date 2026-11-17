@@ -6,7 +6,7 @@
  * (domaine, possession → 403 `PACK_NOT_OWNED`, élément absent d'un pack
  * possédé → 404 `DECOR_ITEM_NOT_FOUND`, loi des cadres →
  * 403 `FRAME_USAGE_MISMATCH`). Diffusé en `profile:decor-updated` sur `user:<id>`
- * (mes autres appareils). La lecture se fait par `GET /me` et le profil public.
+ * (mes autres appareils) et `user:profile-changed` chez ses lecteurs (#19384). La lecture se fait par `GET /me` et le profil public.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -20,6 +20,7 @@ import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger';
 import { sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess, sendUnauthorized } from '../../utils/response.js';
 import { broadcastToUser } from '../../utils/socket-broadcast';
+import { announceProfileChanged } from '../../services/notifications/profile-changed';
 
 export const DECOR_ITEM_NOT_FOUND_CODE = 'DECOR_ITEM_NOT_FOUND';
 
@@ -76,6 +77,7 @@ export default async function profileDecorRoutes(fastify: FastifyInstance, optio
         });
         const decor = servedProfileDecor(index, row);
         broadcastToUser(fastify, userId, SERVER_EVENTS.PROFILE_DECOR_UPDATED, { userId, decor, at: new Date().toISOString() });
+        void announceProfileChanged(fastify, { userId });
         return sendSuccess(reply, decor);
       } catch (error) {
         logError(fastify.log, 'Error equipping profile decor:', error);

@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
-import { compareRelationLevel, type RelationLevel } from '@meeshy/shared/types/relation';
+import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
 import { postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 import type { CacheStore } from '../CacheStore';
 import { viewerPostAudience } from './feedVisibility';
@@ -65,7 +65,7 @@ const SYNTHETIC_FLOOR: Readonly<Partial<Record<PostVisibility, RelationLevel>>> 
 
 function circleAudience(level: RelationLevel) {
   const clauses = (Object.entries(SYNTHETIC_FLOOR) as [PostVisibility, RelationLevel][])
-    .filter(([, floor]) => compareRelationLevel(level, floor) >= 0)
+    .filter(([, floor]) => relationLevelIfAtLeast(level, floor) !== null)
     .map(([visibility]) => (visibility === PostVisibility.COMMUNITY ? { visibility, ...UNATTACHED } : { visibility }));
   return { OR: clauses };
 }

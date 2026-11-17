@@ -16,6 +16,7 @@ import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendUnauthorized, sendBadRequest } from '../utils/response';
+import { announceProfileChanged } from '../services/notifications/profile-changed';
 
 const logger = enhancedLogger.child({ module: 'VoiceProfileRoutes' });
 
@@ -493,6 +494,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       return sendError(reply, statusCode, result.error, { code: result.errorCode });
     }
 
+    void announceProfileChanged(fastify, { userId: auth.registeredUser.id });
     return sendSuccess(reply, result.data, { statusCode: 201 });
   });
 
@@ -603,6 +605,8 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
                          result.errorCode === 'PROFILE_MISMATCH' ? 403 : 400;
       return sendError(reply, statusCode, result.error, { code: result.errorCode });
     }
+
+    void announceProfileChanged(fastify, { userId: auth.registeredUser.id });
 
     return sendSuccess(reply, result.data);
   });
@@ -828,6 +832,8 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     if (!result.success) {
       return sendError(reply, 400, result.error as string, { code: (result as any).errorCode });
     }
+
+    void announceProfileChanged(fastify, { userId: auth.registeredUser.id });
 
     return sendSuccess(reply, (result as any).data);
   });

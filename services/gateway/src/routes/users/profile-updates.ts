@@ -36,6 +36,7 @@ import {
 } from '../../utils/auto-translate-preference';
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
+import { announceProfileChanged, touchesProfileFiche } from '../../services/notifications/profile-changed';
 import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
@@ -368,6 +369,12 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // (bio, ville, réglages) ne diffuse rien.
       if (langChanged || nameChanged) {
         announceOwnProfileUpdated(fastify, updatedUser);
+      }
+
+      // #19384 — la fiche que les AUTRES lisent a changé (bio, ville, langues, voix) :
+      // signal sans contenu vers ses lecteurs, qui la revalident par If-None-Match.
+      if (touchesProfileFiche(body)) {
+        void announceProfileChanged(fastify, { userId: userId!, updatedAt: updatedUser.updatedAt });
       }
 
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(

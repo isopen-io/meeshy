@@ -645,6 +645,10 @@ export const SERVER_EVENTS = {
 
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',
+  // --- La fiche d'un autre a changé (#19384) : signal SANS contenu, le lecteur revalide sa fiche ---
+  // Ville, adresses et décor dépendent du cercle du lecteur : rien de la fiche ne voyage ici.
+  // Le client relit `GET /directory/people/:handle` avec `If-None-Match` (304 bon marché).
+  USER_PROFILE_CHANGED: 'user:profile-changed',
 
   // --- Conversation Categories ---
   CATEGORY_CREATED: 'category:created',

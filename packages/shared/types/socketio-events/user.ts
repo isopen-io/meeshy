@@ -41,6 +41,19 @@ export interface UserUpdatedEventData {
   }>;
 }
 
+/**
+ * Payload de `USER_PROFILE_CHANGED` (#19384) — la fiche de `userId` a changé
+ * (bio, ville, langues, voix, décor, adresses). AUCUN contenu : chaque lecteur
+ * a sa propre fiche, découpée par son cercle, et la revalide par
+ * `GET /directory/people/:handle` avec `If-None-Match`. `updatedAt` (ISO) est
+ * l'horloge serveur de l'écriture : un client qui a déjà une fiche plus récente
+ * peut ignorer le signal.
+ */
+export interface UserProfileChangedEventData {
+  readonly userId: string;
+  readonly updatedAt: string;
+}
+
 export interface UserPermissions {
   readonly canAccessAdmin: boolean;
   readonly canManageUsers: boolean;
