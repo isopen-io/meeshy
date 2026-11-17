@@ -21,6 +21,7 @@ import type {
 import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
 import type { GameMissionsUpdatedEventData, GameUpdatedEventData } from '../game-sync.js';
+import type { ProfileUpdatedEventData } from '../own-profile-sync.js';
 import type { ContentCaptureAck, ContentCaptureReportInput } from '../content-capture.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
 import type {
@@ -516,6 +517,9 @@ export interface ServerToClientEvents {
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;
   [SERVER_EVENTS.PROFILE_DECOR_UPDATED]: (data: ProfileDecorUpdatedEventData) => void;
+
+  // Mon profil (#18924) — sur `user:<moi>` seulement
+  [SERVER_EVENTS.PROFILE_UPDATED]: (data: ProfileUpdatedEventData) => void;
 
   // Mes stickers (#16515)
   [SERVER_EVENTS.STICKER_LIBRARY_UPDATED]: (data: StickerLibraryUpdatedEventData) => void;
