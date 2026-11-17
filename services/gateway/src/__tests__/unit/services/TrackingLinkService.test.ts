@@ -471,6 +471,27 @@ describe('TrackingLinkService.recordClick', () => {
     const updateCall = (prisma.trackingLink.update as jest.Mock<any>).mock.calls[0][0];
     expect(updateCall.data.uniqueClicks).toBeUndefined();
   });
+
+  it('never counts a unique visitor on a link whose author chose not to (#19418), the click still counts', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink({ countUnique: false }), clickFindFirstResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.recordClick({ token: 'ABC123', ipAddress: '9.9.9.9' });
+
+    const updateCall = (prisma.trackingLink.update as jest.Mock<any>).mock.calls[0][0];
+    expect(updateCall.data.uniqueClicks).toBeUndefined();
+    expect(updateCall.data.totalClicks).toEqual({ increment: 1 });
+  });
+
+  it('keeps counting unique visitors on a legacy link without the choice (#19418)', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink({ countUnique: null }), clickFindFirstResult: null });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.recordClick({ token: 'ABC123', ipAddress: '9.9.9.9' });
+
+    const updateCall = (prisma.trackingLink.update as jest.Mock<any>).mock.calls[0][0];
+    expect(updateCall.data.uniqueClicks).toEqual({ increment: 1 });
+  });
 });
 
 // ─── getTrackingLinkStats ────────────────────────────────────────────────────

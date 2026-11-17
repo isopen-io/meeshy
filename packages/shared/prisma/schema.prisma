@@ -2670,6 +2670,9 @@ model TrackingLink {
   messageId      String?   @db.ObjectId // Message contenant le lien
   totalClicks    Int       @default(0) // Nombre total de clics
   uniqueClicks   Int       @default(0) // Nombre de clics uniques (par IP/fingerprint)
+  /// Compter les visiteurs uniques (#19418) : `false` ⇒ un clic n'incrémente jamais `uniqueClicks`.
+  /// Absent ou null = vrai, le comportement de tout lien antérieur.
+  countUnique    Boolean?
   isActive       Boolean   @default(true) // Le lien est-il actif
   expiresAt      DateTime? // Date d'expiration (null = pas d'expiration)
   createdAt      DateTime  @default(now())

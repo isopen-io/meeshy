@@ -1,6 +1,6 @@
 import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
+import { TrackingLink, TrackingLinkClick, TrackingTargetType } from '@meeshy/shared/types/tracking-link';
 import { TrackingTargetCarriesEmailSecretError, isServableTrackingTarget, servedTrackingLinkTarget } from './tracking-link-target';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { EngagementService } from './engagement/EngagementService';
@@ -206,6 +206,11 @@ export class TrackingLinkService {
     customToken?: string;
     /** L'adresse de fiche dont ce lien est le lien DÉDIÉ (#18863). */
     addressId?: string;
+    /** La cible MEESHY du lien (#19418) — vérifiée par l'appelant, jamais ici. */
+    targetType?: Exclude<TrackingTargetType, 'EXTERNAL'>;
+    targetId?: string;
+    /** `false` ⇒ les clics de ce lien ne comptent aucun visiteur unique (#19418). */
+    countUnique?: boolean;
     /**
      * `true` ⇒ la création est un geste de l'auteur (`POST /tracking-links`)
      * et lui paie `social.tracked_link`. La réécriture automatique des URL
@@ -246,6 +251,8 @@ export class TrackingLinkService {
         messageId: params.messageId,
         expiresAt: params.expiresAt,
         ...(params.addressId ? { addressId: params.addressId } : {}),
+        ...(params.targetType && params.targetId ? { targetType: params.targetType, targetId: params.targetId } : {}),
+        ...(params.countUnique === false ? { countUnique: false } : {}),
         isActive: true,
         totalClicks: 0,
         uniqueClicks: 0
@@ -340,6 +347,16 @@ export class TrackingLinkService {
   }
 
   /**
+   * Le lien que cet auteur a déjà pour cette cible MEESHY (#19418), quel que
+   * soit son état : l'index unique partiel `(targetId, createdBy)` n'en admet
+   * qu'un, et `shareWithTrackingLink` le réutilise de même.
+   */
+  async findTargetTrackingLink(targetId: string, createdBy: string): Promise<TrackingLink | null> {
+    const trackingLink = await this.prisma.trackingLink.findFirst({ where: { targetId, createdBy } });
+    return trackingLink as TrackingLink | null;
+  }
+
+  /**
    * Enregistre un clic sur un lien de tracking
    */
   async recordClick(params: {
@@ -396,7 +413,8 @@ export class TrackingLinkService {
     }
 
     // Vérifier si c'est un clic unique (basé sur IP + device fingerprint)
-    const isUnique = await this.isUniqueClick(
+    // `countUnique: false` (#19418) : l'auteur a choisi de ne pas compter les visiteurs uniques.
+    const isUnique = trackingLink.countUnique !== false && await this.isUniqueClick(
       trackingLink.id,
       params.ipAddress,
       params.deviceFingerprint

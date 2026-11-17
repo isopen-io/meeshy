@@ -36,6 +36,7 @@ export interface TrackingLink {
   readonly targetType?: TrackingTargetType; // Ce que le lien vise (#19412)
   readonly targetId?: string | null; // L'élément visé, nul pour une adresse externe
   readonly addressId?: string | null; // L'adresse de fiche qu'il suit (#18863)
+  readonly countUnique?: boolean | null; // Compter les visiteurs uniques — absent/null = vrai (#19418)
 }
 
 /**

@@ -7,6 +7,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { repostCommunityId } from './posts/repostCommunity';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
+import { postWebUrl } from './posts/postWebUrl';
 import { STORY_VIEW_RESET } from './posts/postCounters';
 import { readPostViews, readViewerInteractions, type ViewerListRequest } from './posts/viewerEngagement';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
@@ -1524,9 +1525,7 @@ export class PostService {
     // TrackingTargetType) so the redirect page + DeepLinkRouter open the right
     // surface — never blindly "POST". Stories get their dedicated viewer URL.
     const targetType = ({ POST: 'POST', REEL: 'REEL', STORY: 'STORY', STATUS: 'STATUS' } as const)[post.type];
-    // Real v1 page per type: /post, /reel, /story, /mood (fallback /feeds/post).
-    const webPath = ({ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' } as const)[post.type] ?? 'feeds/post';
-    const originalUrl = `${baseUrl}/${webPath}/${postId}`;
+    const originalUrl = postWebUrl(baseUrl, post.type, postId);
 
     try {
       const created = await this.prisma.$transaction(async (tx) => {
