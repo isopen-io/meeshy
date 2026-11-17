@@ -364,6 +364,19 @@ export function createSharedLocationSharingCenter({
   };
 
   /*
+   * « Pas de partage » couvre aussi une session remplacée par un autre appareil pendant l'envoi : la passerelle dit ce
+   * qui court. Un partage servi ⇒ le retrait reste en attente et se rejoue (la liste seule ignore qui n'est plus servi) ;
+   * aucun, ou une relecture qui ne conclut pas sur une passerelle muette ⇒ la liste se vide, sans arrêt ni relevé.
+   */
+  const settleNotSharing = async (): Promise<SharedLocationShareProblem | null> => {
+    const truth = await served().catch(() => null);
+    if (!isLive()) return 'failed';
+    if (truth !== null && truth.recipients.length > 0) return 'unconfirmed';
+    wipe();
+    return null;
+  };
+
+  /*
    * Retirer quelqu'un ou solder une échéance republie la LISTE SEULE (#19284) : la passerelle reprend le point qu'elle
    * garde, et cet onglet n'envoie pas sa position — il peut n'avoir fait que recevoir la liste d'un autre appareil
    * (#18580). Sans partage côté passerelle, il n'y a plus rien à retirer chez personne. Une passerelle d'avant refuse
@@ -375,10 +388,7 @@ export function createSharedLocationSharingCenter({
     const listOnly = await publish(wanted, null, roster());
     if (listOnly !== 'invalid' && listOnly !== 'not-sharing') return listOnly;
     if (!isLive()) return 'failed';
-    if (listOnly === 'not-sharing') {
-      wipe();
-      return null;
-    }
+    if (listOnly === 'not-sharing') return settleNotSharing();
     const fix = freshLastFix() ?? (await silentFix());
     if (fix === null) return stopAll();
     if (!isLive()) return 'failed';

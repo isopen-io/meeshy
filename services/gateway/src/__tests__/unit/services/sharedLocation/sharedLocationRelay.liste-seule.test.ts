@@ -54,7 +54,7 @@ describe('retirer une personne sans envoyer sa position', () => {
 
     const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision: 'neighborhood' }], durationMinutes: 60 });
 
-    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + 10 * MINUTE + HEURE) } });
+    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + HEURE) } });
     expect(m.vers(SANG).map((e) => [e.event, e.data])).toEqual([[SERVER_EVENTS.SHARED_LOCATION_ENDED, { userId: EMETTEUR }]]);
     const servi = (await sharedLocationSnapshotFor(m.deps, AMI, {})).items;
     expect(servi.map((item) => [item.latitude, item.longitude, item.updatedAt])).toEqual([[PARIS.latitude, PARIS.longitude, iso(T0)]]);
@@ -88,17 +88,18 @@ describe('retirer une personne sans envoyer sa position', () => {
 });
 
 describe('ce que la liste seule ne fait PAS', () => {
-  it('elle n\'ajoute personne : une personne absente du partage servi est refusée, rien ne part', async () => {
+  it('elle n\'ajoute personne : une personne absente du partage servi est ignorée, les autres retraits prennent', async () => {
     const m = monde();
     await demarrer(m);
     m.emissions.length = 0;
 
-    const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }, { userId: NON_CHOISI }], durationMinutes: 60 });
+    const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }, { userId: NON_CHOISI, precision: 'exact' }], durationMinutes: 60 });
 
-    expect(ack).toMatchObject({ success: false, code: 'SHARED_LOCATION_INVALID' });
-    expect(m.emissions).toEqual([]);
+    expect(ack).toMatchObject({ success: true });
+    expect(m.vers(NON_CHOISI)).toEqual([]);
     expect((await sharedLocationSnapshotFor(m.deps, NON_CHOISI, {})).items).toEqual([]);
-    expect((await sharedLocationSnapshotFor(m.deps, SANG, {})).items).toHaveLength(1);
+    expect((await sharedLocationSnapshotFor(m.deps, SANG, {})).items).toEqual([]);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toHaveLength(1);
   });
 
   it('elle ne fait pas revenir une personne dont l\'échéance est passée', async () => {
@@ -106,9 +107,44 @@ describe('ce que la liste seule ne fait PAS', () => {
     await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, expiresInSeconds: 600 }, { userId: PROCHE }], durationMinutes: 60, position: PARIS });
     m.avancer(11 * MINUTE);
 
-    const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }, { userId: PROCHE }], durationMinutes: 60 });
+    expect(await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }, { userId: PROCHE }], durationMinutes: 60 })).toMatchObject({ success: true });
 
-    expect(ack).toMatchObject({ success: false, code: 'SHARED_LOCATION_INVALID' });
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items).toHaveLength(1);
+  });
+
+  it('une liste où personne n\'est encore servi vaut un arrêt : chacun reçoit la fin', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    expect(await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: NON_CHOISI }], durationMinutes: 60 })).toMatchObject({ success: false, code: 'SHARED_LOCATION_NOT_SHARING' });
+
+    expect([AMI, PROCHE, SANG].map((id) => m.vers(id).map((e) => e.event))).toEqual([[SERVER_EVENTS.SHARED_LOCATION_ENDED], [SERVER_EVENTS.SHARED_LOCATION_ENDED], [SERVER_EVENTS.SHARED_LOCATION_ENDED]]);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+  });
+
+  it('elle ne relève pas une précision : une personne réglée sur la ville ne reçoit jamais le point exact', async () => {
+    const m = monde();
+    await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'city' }, { userId: PROCHE }], durationMinutes: 60, position: PARIS });
+    m.emissions.length = 0;
+
+    await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }], durationMinutes: 60 });
+
+    expect(m.vers(AMI).map((e) => e.data.precision)).toEqual(['city']);
+    expect(JSON.stringify(m.vers(AMI))).not.toContain(String(PARIS.latitude));
+  });
+
+  it('elle ne prolonge ni le terme ni une échéance', async () => {
+    const m = monde();
+    await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, expiresInSeconds: 600 }, { userId: PROCHE }], durationMinutes: 60, position: PARIS });
+    m.avancer(5 * MINUTE);
+
+    const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }, { userId: PROCHE }], durationMinutes: 480 });
+
+    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + HEURE) } });
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items.map((item) => item.expiresAt)).toEqual([iso(T0 + 10 * MINUTE)]);
+    m.avancer(6 * MINUTE);
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
   });
 
@@ -125,6 +161,36 @@ describe('ce que la liste seule ne fait PAS', () => {
     m.avancer(HEURE + 1);
     const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }], durationMinutes: 60 });
     expect(ack).toMatchObject({ success: false, code: 'SHARED_LOCATION_NOT_SHARING' });
+  });
+});
+
+describe('un autre appareil agit pendant la liste seule', () => {
+  it('un retrait fait par le téléphone entre la lecture et la prise n\'est pas défait', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.cache.suspendreProchaineEcriture('claim');
+    const listeSeule = startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }, { userId: SANG, precision: 'exact' }], durationMinutes: 60 });
+    await new Promise((resolve) => setImmediate(resolve));
+    await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }], durationMinutes: 60, position: PLUS_LOIN });
+    m.cache.relacher();
+    await listeSeule;
+
+    expect((await sharedLocationSnapshotFor(m.deps, SANG, {})).items).toEqual([]);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items.map((item) => item.latitude)).toEqual([PLUS_LOIN.latitude]);
+  });
+
+  it('une position écrite par le téléphone pendant la liste seule ne recule pas', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.cache.suspendreProchaineEcriture('claim');
+    const listeSeule = startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }], durationMinutes: 60 });
+    await new Promise((resolve) => setImmediate(resolve));
+    await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    m.cache.relacher();
+    await listeSeule;
+
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items.map((item) => item.latitude)).toEqual([PLUS_LOIN.latitude]);
+    expect(changes(m, AMI).at(-1)?.data.latitude).toBe(PLUS_LOIN.latitude);
   });
 });
 

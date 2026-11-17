@@ -29,8 +29,10 @@
  * 7. LA LISTE SEULE (#19284, #18580) : un retrait ou une échéance republie la liste SANS
  *    `position`. La passerelle reprend la position COMPLÈTE du partage en cours, avec son
  *    heure (le point n'est pas rafraîchi) et la maille retenue de chaque destinataire
- *    restant : l'appareil qui retire n'envoie jamais la sienne. Une liste seule n'ajoute
- *    personne (`INVALID`) ; sans partage en cours, `NOT_SHARING`. Une passerelle d'avant
+ *    restant : l'appareil qui retire n'envoie jamais la sienne. Une liste seule ne fait que
+ *    retirer : une personne qui n'est plus servie est ignorée, la précision ne monte pas, le
+ *    terme et les échéances ne reculent pas ; si personne ne reste, ou sans partage en cours,
+ *    `NOT_SHARING` (et le partage est arrêté). Une passerelle d'avant
  *    refuse une charge sans position (`INVALID`) : le client renvoie alors sa position ;
  * 8. PLUSIEURS APPAREILS d'un même compte (#18389) : la passerelle ne connaît qu'UN partage
  *    par compte, et c'est lui qui fait foi. Après chaque démarrage ou arrêt accepté, elle

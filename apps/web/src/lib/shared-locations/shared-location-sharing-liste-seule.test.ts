@@ -90,3 +90,14 @@ describe('une échéance', () => {
     expect(world.center.entry(AUTRE)).not.toBeNull();
   });
 });
+
+describe('« pas de partage » pendant que le téléphone en démarre un', () => {
+  test('la passerelle sert encore un partage : la liste n’est pas vidée, le retrait reste en attente', async () => {
+    const world = makeWorld({ stored: deuxPersonnes(), granted: false, served: { recipients: [{ userId: AUTRE, precision: 'city', expiresAt: new Date(T0 + HOUR).toISOString() }], expiresAt: new Date(T0 + HOUR).toISOString() } });
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'not-sharing' }));
+    expect(await world.center.stopSharing(AMI)).toBe('withdrawal-pending');
+    expect(world.center.entry(AUTRE)).not.toBeNull();
+    expect(world.stops()).toBe(0);
+    expect(world.source.prompts).toBe(0);
+  });
+});

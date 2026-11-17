@@ -33,6 +33,7 @@ import {
   SHARED_LOCATION_ERROR_CODES,
   SHARED_LOCATION_EXACT_MIN_RADIUS_METERS,
   SHARED_LOCATION_GRID_DEGREES,
+  SHARED_LOCATION_PRECISIONS,
   sharedLocationStartPayloadSchema,
   sharedLocationUpdatePayloadSchema,
   type SharedLocationAck,
@@ -352,36 +353,49 @@ async function drainRetiring(deps: SharedLocationRelayDeps, emitterId: string, a
   }
 }
 
-type SharedLocationBasis = Pick<SharedLocationState, 'recipients' | 'position' | 'updatedAt'>;
-
 const NOT_SHARING = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
-const LIST_ONLY_ADDS = failed(SHARED_LOCATION_ERROR_CODES.INVALID, 'Une liste sans position n\'ajoute personne');
+
+const coarser = (a: SharedLocationPrecision, b: SharedLocationPrecision): SharedLocationPrecision =>
+  SHARED_LOCATION_PRECISIONS.indexOf(a) >= SHARED_LOCATION_PRECISIONS.indexOf(b) ? a : b;
+
+const earlier = (a: string, b: string): string => (Date.parse(a) <= Date.parse(b) ? a : b);
 
 /**
- * La LISTE SEULE (#19284, #18580) : sans position, la passerelle reprend celle du partage en
- * cours, avec son heure — le point n'est pas rafraîchi — et la maille retenue de chaque
- * destinataire qui garde sa précision. Elle ne fait que retirer : une personne absente des
- * destinataires encore servis (jamais choisie, ou échue) est refusée, puisqu'ajouter est un
- * geste qui envoie sa position. Sans partage en cours, rien à reprendre.
+ * La LISTE SEULE (#19284, #18580) appliquée au partage `current` : elle ne fait que RETIRER.
+ * Une personne que `current` ne sert plus (jamais choisie, retirée ailleurs, échue) est
+ * ignorée — une liste périmée ne la fait pas revenir ; la précision ne peut que baisser ; le
+ * terme et chaque échéance ne peuvent que se rapprocher. La position, son heure et la maille
+ * retenue de qui garde sa précision viennent de `current` : le point n'est pas rafraîchi.
+ * `null` : personne ne reste.
  */
-async function listOnlyBasis(
-  deps: SharedLocationRelayDeps,
-  emitterId: string,
-  recipients: SharedLocationState['recipients'],
+function listOnlyState(
+  current: SharedLocationState,
+  wanted: SharedLocationState['recipients'],
+  term: string,
   now: number,
-): Promise<SharedLocationBasis | typeof NOT_SHARING | typeof LIST_ONLY_ADDS> {
-  const current = await readSharedLocation(deps.cache, emitterId, now);
-  if (!current) return NOT_SHARING;
+): Omit<SharedLocationState, 'sessionId'> | null {
   const live = new Map(liveRecipients(current, now).map((recipient) => [recipient.userId.toLowerCase(), recipient]));
-  if (recipients.some((recipient) => !live.has(recipient.userId))) return LIST_ONLY_ADDS;
-  return {
-    recipients: recipients.map((recipient) => {
-      const kept = live.get(recipient.userId);
-      return kept?.cell !== undefined && kept.precision === recipient.precision ? { ...recipient, cell: kept.cell } : recipient;
-    }),
-    position: current.position,
-    updatedAt: current.updatedAt,
-  };
+  const expiresAt = earlier(term, current.expiresAt);
+  const recipients = wanted.flatMap((recipient) => {
+    const kept = live.get(recipient.userId);
+    if (!kept) return [];
+    const precision = coarser(recipient.precision, kept.precision);
+    const deadline = earlier(earlier(recipient.expiresAt ?? expiresAt, deadlineOf(current, kept.userId)), expiresAt);
+    return [{
+      userId: recipient.userId,
+      precision,
+      ...(kept.cell !== undefined && kept.precision === precision ? { cell: kept.cell } : {}),
+      ...(Date.parse(deadline) < Date.parse(expiresAt) ? { expiresAt: deadline } : {}),
+    }];
+  });
+  return recipients.length === 0 ? null : { recipients, position: current.position, updatedAt: current.updatedAt, expiresAt };
+}
+
+/** Plus rien à servir : la liste seule vaut un arrêt. */
+async function stoppedByListOnly(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationAck> {
+  await advanceSharedLocationGeneration(deps.cache, emitterId);
+  await drainRetiring(deps, emitterId);
+  return NOT_SHARING;
 }
 
 /**
@@ -389,7 +403,12 @@ async function listOnlyBasis(
  * génération lue : un arrêt survenu pendant le démarrage l'emporte. La session remplacée
  * est retirée en prévenant ceux qu'elle servait. Une fois la prise faite, le partage EST
  * courant : un échec de l'éventail ne le dément pas (le rattrapage et la position suivante
- * serviront), et l'accusé le dit. Sans position, c'est une liste seule ({@link listOnlyBasis}).
+ * serviront), et l'accusé le dit.
+ *
+ * Sans position, c'est une liste seule ({@link listOnlyState}). Elle est rejouée APRÈS la
+ * prise sur la session REMPLACÉE, relue : un démarrage ou une position écrits par un autre
+ * appareil entre la première lecture et la prise ne sont ni défaits ni reculés — la session
+ * remplacée ne peut plus changer, la prise l'ayant retirée du pointeur.
  */
 export async function startSharedLocation(deps: SharedLocationRelayDeps, emitterId: string, payload: unknown): Promise<SharedLocationAck> {
   const parsed = sharedLocationStartPayloadSchema.safeParse(payload);
@@ -405,19 +424,34 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
       ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
     }));
   const position = parsed.data.position;
+  const termIso = new Date(term).toISOString();
 
   let state: SharedLocationState;
   try {
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
     if (!(await usableAccounts(deps.prisma, [emitterId])).has(emitterId)) return STOPPED;
-    const basis = position ? { recipients, position, updatedAt: new Date(now).toISOString() } : await listOnlyBasis(deps, emitterId, recipients, now);
-    if ('success' in basis) return basis;
-    state = { sessionId: randomUUID(), ...basis, expiresAt: new Date(term).toISOString() };
+    const sessionId = randomUUID();
+    if (position) {
+      state = { sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso };
+    } else {
+      const current = await readSharedLocation(deps.cache, emitterId, now);
+      if (!current) return NOT_SHARING;
+      const listed = listOnlyState(current, recipients, termIso, now);
+      if (!listed) return await stoppedByListOnly(deps, emitterId);
+      state = { sessionId, ...listed };
+    }
     await storeSharedLocation(deps.cache, emitterId, state, now);
     const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
     if (!claim.claimed) {
       await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
       return STOPPED;
+    }
+    if (!position) {
+      const displaced = claim.displaced === null ? null : await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);
+      const listed = displaced ? listOnlyState(displaced, recipients, termIso, now) : null;
+      if (!listed) return await stoppedByListOnly(deps, emitterId);
+      state = { sessionId, ...listed };
+      if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
     }
   } catch {
     return UNAVAILABLE;
