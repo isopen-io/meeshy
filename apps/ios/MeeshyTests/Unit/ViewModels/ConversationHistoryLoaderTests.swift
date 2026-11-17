@@ -283,6 +283,35 @@ final class ConversationHistoryLoaderTests: XCTestCase {
         XCTAssertEqual(cursor, t1)
     }
 
+    /// Sans filigrane — conversation née après la migration, nourrie par la NSE ou
+    /// le socket —, le rattrapage repart du plus ANCIEN message serveur détenu :
+    /// repartir du plus récent, entré seul, laissait le trou entre les deux.
+    func test_catchUpCursor_sansFiligrane_repartDuPlusAncienMessageServeurDetenu() async throws {
+        let service = MockMessageService()
+        let (loader, persistence) = try makeLoaderAndStore(service: service)
+        try await persistence.upsertFromAPIMessages(page(["2025-06-01T00:00:00.000Z"], prefix: "seul-a-").data)
+        try await persistence.upsertFromAPIMessages(page(["2025-06-01T02:00:00.000Z"], prefix: "seul-b-").data)
+
+        let cursor = await loader.catchUpCursor(newestHeld: t1.addingTimeInterval(7_200))
+
+        XCTAssertEqual(cursor, t1)
+    }
+
+    /// Et la page des trente plus récents qui ne rejoint que le message de 02:00
+    /// n'ouvre pas le fil : elle laisserait l'écart d'avant invisible à jamais.
+    func test_refreshLatest_sansFiligrane_neRejoignantQueLePlusRecent_laisseLeFilOuvert() async throws {
+        let service = MockMessageService()
+        let (loader, persistence) = try makeLoaderAndStore(service: service)
+        try await persistence.upsertFromAPIMessages(page(["2025-06-01T00:00:00.000Z"], prefix: "seul-a-").data)
+        try await persistence.upsertFromAPIMessages(page(["2025-06-01T02:00:00.000Z"], prefix: "seul-b-").data)
+        service.listResult = .success(page(["2025-06-01T01:59:00.000Z", "2025-06-01T02:30:00.000Z"], prefix: "recent-"))
+
+        _ = await loader.refreshLatest(warmCache: true, readerPrism: [])
+
+        let held = try await watermark(in: persistence)
+        XCTAssertNil(held)
+    }
+
     func test_fetchMissed_partiDeLaFinDuFil_graveLesPagesPuisEtendLeFiligrane() async throws {
         let service = MockMessageService()
         let (loader, persistence) = try makeLoaderAndStore(service: service)
