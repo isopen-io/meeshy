@@ -1,0 +1,195 @@
+{
+  "composant": "MeeshyStepper",
+  "cle": "K53",
+  "note": "Vecteurs de parité (fiche K53 § 03, § 10). Loi du pas : bornée, rend aussi hitBound ; la valeur ne glisse pas, elle saute d'un cran.",
+  "pas": [
+    {
+      "valeur": 5,
+      "delta": 1,
+      "min": 1,
+      "max": 10,
+      "pas": 1,
+      "resultat": 6,
+      "butee": false
+    },
+    {
+      "valeur": 10,
+      "delta": 1,
+      "min": 1,
+      "max": 10,
+      "pas": 1,
+      "resultat": 10,
+      "butee": true
+    },
+    {
+      "valeur": 1,
+      "delta": -1,
+      "min": 1,
+      "max": 10,
+      "pas": 1,
+      "resultat": 1,
+      "butee": true
+    },
+    {
+      "valeur": 3,
+      "delta": -1,
+      "min": 1,
+      "max": 10,
+      "pas": 5,
+      "resultat": 1,
+      "butee": true
+    },
+    {
+      "valeur": 3,
+      "delta": 1,
+      "min": 1,
+      "max": 10,
+      "pas": 5,
+      "resultat": 8,
+      "butee": false
+    },
+    {
+      "valeur": 8,
+      "delta": 1,
+      "min": 1,
+      "max": 10,
+      "pas": 5,
+      "resultat": 10,
+      "butee": true
+    },
+    {
+      "valeur": 50,
+      "delta": 0,
+      "min": 1,
+      "max": 100,
+      "pas": 1,
+      "resultat": 50,
+      "butee": false
+    },
+    {
+      "valeur": 500,
+      "delta": 1,
+      "min": 1,
+      "max": 100,
+      "pas": 1,
+      "resultat": 100,
+      "butee": true
+    }
+  ],
+  "echelle": [
+    {
+      "valeur": 1,
+      "base": 1,
+      "paliers": [],
+      "pas": 1
+    },
+    {
+      "valeur": 10,
+      "base": 1,
+      "paliers": [
+        {
+          "depuis": 10,
+          "pas": 5
+        },
+        {
+          "depuis": 50,
+          "pas": 10
+        }
+      ],
+      "pas": 5
+    },
+    {
+      "valeur": 49,
+      "base": 1,
+      "paliers": [
+        {
+          "depuis": 10,
+          "pas": 5
+        },
+        {
+          "depuis": 50,
+          "pas": 10
+        }
+      ],
+      "pas": 5
+    },
+    {
+      "valeur": 50,
+      "base": 1,
+      "paliers": [
+        {
+          "depuis": 10,
+          "pas": 5
+        },
+        {
+          "depuis": 50,
+          "pas": 10
+        }
+      ],
+      "pas": 10
+    }
+  ],
+  "mesures": {
+    "capsule": 50,
+    "marge": 3,
+    "ecart": 4,
+    "disque": 44,
+    "disqueCompact": 36,
+    "cible": 44,
+    "valeur": 20,
+    "valeurLargeurMin": 34,
+    "dimmed": 0.36,
+    "piste": 3,
+    "rayonPiste": 2,
+    "case": 60,
+    "reperMin": 10,
+    "reperMax": 56,
+    "traceJalons": 3,
+    "traceDepart": 21
+  },
+  "arrets": [
+    {
+      "nombre": 1,
+      "rendu": false
+    },
+    {
+      "nombre": 2,
+      "rendu": true
+    },
+    {
+      "nombre": 5,
+      "rendu": true
+    },
+    {
+      "nombre": 6,
+      "rendu": false
+    }
+  ],
+  "remplissage": [
+    {
+      "nombre": 3,
+      "choisi": 0,
+      "fraction": 0
+    },
+    {
+      "nombre": 3,
+      "choisi": 1,
+      "fraction": 0.5
+    },
+    {
+      "nombre": 3,
+      "choisi": 2,
+      "fraction": 1
+    },
+    {
+      "nombre": 3,
+      "choisi": 9,
+      "fraction": 1
+    },
+    {
+      "nombre": 3,
+      "choisi": -4,
+      "fraction": 0
+    }
+  ]
+}

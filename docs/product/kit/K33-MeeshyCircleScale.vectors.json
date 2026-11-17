@@ -1,0 +1,126 @@
+{
+  "composant": "MeeshyCircleScale",
+  "cle": "K33",
+  "note": "Vecteurs de parité (fiche K33 § 03, § 10). Loi d'intensité comptée depuis le haut : 100, 52, 32, 18, 8, contour (0). Trois niveaux ou moins : un cran sur deux (100, 32, 8).",
+  "intensite": [
+    {
+      "niveaux": 2,
+      "intensites": [
+        0.32,
+        1.0
+      ]
+    },
+    {
+      "niveaux": 3,
+      "intensites": [
+        0.08,
+        0.32,
+        1.0
+      ]
+    },
+    {
+      "niveaux": 4,
+      "intensites": [
+        0.18,
+        0.32,
+        0.52,
+        1.0
+      ]
+    },
+    {
+      "niveaux": 5,
+      "intensites": [
+        0.08,
+        0.18,
+        0.32,
+        0.52,
+        1.0
+      ]
+    },
+    {
+      "niveaux": 6,
+      "intensites": [
+        0.0,
+        0.08,
+        0.18,
+        0.32,
+        0.52,
+        1.0
+      ]
+    },
+    {
+      "niveaux": 7,
+      "intensites": [
+        0.0,
+        0.0,
+        0.08,
+        0.18,
+        0.32,
+        0.52,
+        1.0
+      ]
+    },
+    {
+      "niveaux": 8,
+      "intensites": [
+        0.0,
+        0.0,
+        0.0,
+        0.08,
+        0.18,
+        0.32,
+        0.52,
+        1.0
+      ]
+    }
+  ],
+  "bornes": [
+    {
+      "niveaux": 6,
+      "courant": -3,
+      "attendu": 0
+    },
+    {
+      "niveaux": 6,
+      "courant": 2,
+      "attendu": 2
+    },
+    {
+      "niveaux": 6,
+      "courant": 99,
+      "attendu": 5
+    },
+    {
+      "niveaux": 1,
+      "courant": 0,
+      "attendu": 0
+    }
+  ],
+  "tailles": [
+    {
+      "taille": "compact",
+      "pilule": 26
+    },
+    {
+      "taille": "regular",
+      "pilule": 34
+    },
+    {
+      "taille": "large",
+      "pilule": 44
+    }
+  ],
+  "mesures": {
+    "pastille": 58,
+    "cran": 12,
+    "ecartCran": 6,
+    "traitAnneau": 1.5,
+    "ecartAnneaux": 20,
+    "traitAllume": 4,
+    "lueur": 26,
+    "pressedScale": 0.92,
+    "disabledOpacity": 0.4,
+    "centre": 40,
+    "repere": 48
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "composant": "MeeshyTranslationMark",
+  "cle": "K51",
+  "note": "Vecteurs de parité (fiche K51 § 03, § 10). La marque annonce ce que l'hôte rend, jamais autre chose ; sans onToggle elle informe sans promettre de geste.",
+  "mesures": {
+    "glyphe": 16,
+    "texte": 12.5,
+    "texteAnnonce": 13,
+    "graisseMention": 400,
+    "graisseBascule": 700,
+    "ecart": 7,
+    "cible": 44,
+    "pressedScale": 0.94,
+    "pressedInk": 0.62,
+    "pending": 0.5,
+    "fonduMs": 200,
+    "etroit": 320
+  },
+  "modes": [
+    {
+      "isShowingOriginal": false,
+      "mode": null,
+      "attendu": "translated"
+    },
+    {
+      "isShowingOriginal": true,
+      "mode": null,
+      "attendu": "original"
+    },
+    {
+      "isShowingOriginal": true,
+      "mode": "announce",
+      "attendu": "announce"
+    }
+  ],
+  "bascule": [
+    {
+      "densite": "line",
+      "mode": "translated",
+      "aBascule": true,
+      "affichee": true
+    },
+    {
+      "densite": "line",
+      "mode": "original",
+      "aBascule": true,
+      "affichee": true
+    },
+    {
+      "densite": "line",
+      "mode": "announce",
+      "aBascule": true,
+      "affichee": false
+    },
+    {
+      "densite": "icon",
+      "mode": "translated",
+      "aBascule": true,
+      "affichee": false
+    },
+    {
+      "densite": "legend",
+      "mode": "translated",
+      "aBascule": true,
+      "affichee": true
+    },
+    {
+      "densite": "line",
+      "mode": "translated",
+      "aBascule": false,
+      "affichee": false
+    }
+  ],
+  "mention": [
+    {
+      "densite": "line",
+      "affichee": true
+    },
+    {
+      "densite": "legend",
+      "affichee": true
+    },
+    {
+      "densite": "icon",
+      "affichee": false
+    }
+  ]
+}
