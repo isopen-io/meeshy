@@ -11,6 +11,7 @@ import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationReadEntry
 import me.meeshy.sdk.model.ConversationReadEvent
+import me.meeshy.sdk.model.conversationlist.ConversationLiveFacet
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.sync.UnreadLedger
 import timber.log.Timber
@@ -25,6 +26,8 @@ public class ConversationReadLedgerStore @Inject constructor(
     private val ledger: UnreadLedger,
     private val database: MeeshyDatabase,
     private val conversationDao: ConversationDao,
+    /** #18926 — a count written here during a list sweep is journaled: the page built before cannot undo it. */
+    private val journal: ConversationLiveJournal = ConversationLiveJournal(),
 ) {
 
     /** Applique [event] puis persiste le compteur de la conversation qu'il nomme. Rend l'entrée d'avant. */
@@ -58,6 +61,7 @@ public class ConversationReadLedgerStore @Inject constructor(
                         ),
                     ),
                 )
+                journal.record(conversationId, setOf(ConversationLiveFacet.UNREAD))
             }
         } catch (cancelled: CancellationException) {
             throw cancelled

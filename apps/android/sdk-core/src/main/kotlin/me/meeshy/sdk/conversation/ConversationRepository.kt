@@ -10,6 +10,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.sdk.cache.CachePolicy
+import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
@@ -76,6 +77,8 @@ class ConversationRepository @Inject constructor(
     private val fence: AccountFence? = null,
     presenceSink: ServedPresenceSink = ServedPresenceSink.None,
     syncDelta: SyncDeltaFetching = SyncDeltaFetching.None,
+    /** #18926 — shared with the live patcher: what the realtime writes during a sweep survives its page. */
+    liveJournal: ConversationLiveJournal = ConversationLiveJournal(),
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
@@ -99,6 +102,7 @@ class ConversationRepository @Inject constructor(
         fence = fence,
         presenceSink = presenceSink,
         syncDelta = syncDelta,
+        journal = liveJournal,
     )
 
     /**
@@ -110,7 +114,14 @@ class ConversationRepository @Inject constructor(
         policy: CachePolicy = CachePolicy.Default,
         onSyncError: (Throwable) -> Unit = {},
     ): Flow<CacheResult<List<ApiConversation>>> =
-        cacheFirstFlow(policy, cacheSource, onRevalidateError = onSyncError)
+        cacheFirstFlow(policy, streamSource(policy), onRevalidateError = onSyncError)
+
+    /** #18927 — the stream joins the list's single sweep, and starts none when the instant it reads again is fresh. */
+    private fun streamSource(policy: CachePolicy): SwrCacheSource<List<ApiConversation>> =
+        object : SwrCacheSource<List<ApiConversation>> by cacheSource {
+            override suspend fun revalidate() =
+                cacheSource.revalidateFromStream(StreamFreshness(SystemCacheClock, policy.freshForMillis))
+        }
 
     /**
      * Cache-first single conversation: the Room row written by the list sync,
@@ -173,10 +184,29 @@ class ConversationRepository @Inject constructor(
         conversationDao.recentByUpdatedAt(limit)
             .map { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
 
-    /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
+    /** Explicit refresh (pull-to-refresh / retry): joins the sweep in flight, if any. Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()
     }
+
+    /**
+     * #18927 — the socket came back: events were missed, so a sweep that STARTS after this call — one more behind the
+     * sweep in flight, never that one, built before them. Throws on failure.
+     */
+    suspend fun catchUp() {
+        cacheSource.catchUp()
+    }
+
+    /** [catchUp], silent: a failure is reported as `false`, the cache stays on screen. */
+    suspend fun catchUpSilently(): Boolean =
+        try {
+            cacheSource.catchUp()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
 
     /**
      * Silent sync (launch prewarm, cached-fresh first frame, return to the foreground): the same

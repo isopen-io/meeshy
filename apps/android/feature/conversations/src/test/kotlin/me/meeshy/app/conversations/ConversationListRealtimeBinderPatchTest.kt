@@ -278,13 +278,15 @@ class ConversationListRealtimeBinderPatchTest {
 
         frames.connection.value = SocketConnectionState.CONNECTED
         runCurrent()
-        coVerify(exactly = 0) { rig.repo.refresh() }
+        coVerify(exactly = 0) { rig.repo.catchUp() }
 
         frames.connection.value = SocketConnectionState.CONNECTING
         runCurrent()
         frames.connection.value = SocketConnectionState.CONNECTED
         runCurrent()
-        coVerify(exactly = 1) { rig.repo.refresh() }
+        // #18927 — a catch-up, never a refresh that would join a sweep built before the events missed.
+        coVerify(exactly = 1) { rig.repo.catchUp() }
+        coVerify(exactly = 0) { rig.repo.refresh() }
     }
 
     /**

@@ -59,7 +59,8 @@ internal class ConversationListRealtimeBinder(
             }
         }
         scope.launch { for (patch in lane) runSilently(patch) }
-        scope.launch { for (request in catchUpRequests) runSilently { repository.refresh() } }
+        // #18927 — un rattrapage part APRÈS la demande : une passe de plus derrière le balayage en vol, jamais celui-ci.
+        scope.launch { for (request in catchUpRequests) runSilently { repository.catchUp() } }
         scope.launch { watchReconnections() }
         scope.launch { messageSocketManager.messageReceived.collect { enqueue { patcher.applyMessage(it) } } }
         scope.launch { messageSocketManager.messageEdited.collect { enqueue { patcher.applyEdited(it) } } }

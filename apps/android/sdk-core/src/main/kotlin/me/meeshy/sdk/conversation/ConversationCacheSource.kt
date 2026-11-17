@@ -37,6 +37,9 @@ import me.meeshy.sdk.net.api.listConditionalResult
 import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.model.sync.PageFetchPlan
+import me.meeshy.sdk.model.conversationlist.ConversationLiveFacet
+import me.meeshy.sdk.model.conversationlist.ConversationLiveFacets
+import me.meeshy.sdk.model.sync.SharedPass
 import me.meeshy.sdk.model.sync.SyncOwnership
 import me.meeshy.sdk.sync.SyncAccountProvider
 import me.meeshy.sdk.sync.SyncCheckpointStore
@@ -85,7 +88,16 @@ internal class ConversationCacheSource(
     private val presenceSink: ServedPresenceSink = ServedPresenceSink.None,
     /** #14512 — `GET /sync` first on a warm cache; [SyncDeltaFetching.None] (an old server) keeps `GET /conversations` alone. */
     private val syncDelta: SyncDeltaFetching = SyncDeltaFetching.None,
+    /** #18926 — what the realtime writes during a sweep: its page, built before, never undoes it. */
+    private val journal: ConversationLiveJournal? = null,
 ) : SwrCacheSource<List<ApiConversation>> {
+
+    /**
+     * #18927 — ONE sweep at a time: foreground, prewarm, the stream's collectors and an explicit refresh join the sweep in
+     * flight instead of starting the same reads again; a catch-up ([catchUp]) queues exactly one more, started after it.
+     * The sweep runs in its own job: a waiter the stream cancels leaves it to finish.
+     */
+    private val passes = SharedPass(::revalidateOnce)
 
     /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
     private var seededAccount: String? = null
@@ -339,18 +351,36 @@ internal class ConversationCacheSource(
      * full-sweep threshold, where "nothing new" must not be conflated with
      * "exhaustively confirmed current".
      */
-    override suspend fun revalidate() {
+    override suspend fun revalidate() = passes.join()
+
+    /** #18927 — events were missed (a reconnection): a sweep that STARTS after this call, never the one already flying. */
+    suspend fun catchUp() = passes.catchUp()
+
+    /**
+     * #18927 — the stream's entry. It judges a snapshot whose rows and sync instant come from two queries, so the write of
+     * the sweep that just landed reaches it as new rows with the PREVIOUS instant — a transient Stale. Read again here with
+     * the stream's own clock and window ([freshness]), the instant says the list is fresh, and no second sweep starts.
+     */
+    suspend fun revalidateFromStream(freshness: StreamFreshness) {
+        if (freshness.isFresh(syncMetaDao.lastSyncedAt(RESOURCE_KEY))) return
+        passes.join()
+    }
+
+    /** One sweep. The account lock is released only by the sweep that took it (#18927). */
+    private suspend fun revalidateOnce() {
         val ticket = fence?.currentTicket()
         val account = accountProvider.activeAccountId()
-        if (account != null) ownership.claim(account)
+        val claimed = account != null && ownership.claim(account).claimed
+        val flight = journal?.open()
         try {
-            revalidateOwned(account, ticket)
+            revalidateOwned(account, ticket, flight)
         } finally {
-            if (account != null) ownership.release(account)
+            flight?.let { journal?.close(it) }
+            if (claimed && account != null) ownership.release(account)
         }
     }
 
-    private suspend fun revalidateOwned(account: String?, ticket: AccountTicket?) {
+    private suspend fun revalidateOwned(account: String?, ticket: AccountTicket?, flight: Long?) {
         val watermark = syncMetaDao.watermark(RESOURCE_KEY)
         val currentEtag = syncMetaDao.etag(RESOURCE_KEY)
         val currentEtagScope = syncMetaDao.etagRequestKey(RESOURCE_KEY)
@@ -391,6 +421,7 @@ internal class ConversationCacheSource(
                 advanceWatermark = outcome.isComplete,
                 etag = outcome.capturedEtag ?: currentEtag,
                 etagScope = if (outcome.capturedEtag != null) requestScope else currentEtagScope,
+                flight = flight,
             )
             val prunedNow = !useDelta && outcome.isComplete
             recordCheckpoint(account, now, pruned = prunedNow, fullReconcile = prunedNow)
@@ -513,6 +544,7 @@ internal class ConversationCacheSource(
         advanceWatermark: Boolean,
         etag: String?,
         etagScope: String?,
+        flight: Long? = null,
     ) {
         val now = clock.nowMillis()
         // The watermark's own value — NEVER the fallback-adjusted one in [entityOf] — see the
@@ -525,14 +557,51 @@ internal class ConversationCacheSource(
         val watermarkToStore = receivedMax ?: currentWatermark
         database.withTransaction {
             seedEndToEndFromCache()
-            val carried = conversations.map { keepingEndToEnd(carryingKnownPeers(it)) }
+            val moved = flight?.let { journal?.moved(it) }.orEmpty()
+            val locals = moved.keys.mapNotNull { conversationDao.find(it) }.associateBy { it.id }
+            val carried = conversations.map { keepingEndToEnd(carryingKnownPeers(keepingLive(it, moved, locals))) }
             confirmServedClear(carried)
-            val rows = carried.map { entityOf(it, now) }
+            val rows = carried.map { rankedLive(entityOf(it, now), moved, locals) }
             conversationDao.upsertAll(rows)
             carried.forEach(searchIndex::indexConversation)
-            if (prune) pruneMissing(rows.map { it.id })
+            if (prune) pruneMissing(rows.map { it.id } + moved.keys)
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermarkToStore, etag, etagScope))
         }
+    }
+
+    /**
+     * #18926 — compare-and-swap, facet by facet: the served row replaces the cached one, except each facet the realtime
+     * wrote during the sweep's flight ([moved]), which stays as the local row holds it — a `message:new` that advanced the
+     * preview and the rank while a page read before it was in flight. A facet nothing wrote takes the served value: a
+     * preview that went back (the last message deleted while away) goes back. A row written live during the flight is never
+     * pruned by a page that predates it.
+     */
+    private fun keepingLive(
+        served: ApiConversation,
+        moved: Map<String, Set<ConversationLiveFacet>>,
+        locals: Map<String, ConversationEntity>,
+    ): ApiConversation {
+        val facets = moved[served.id] ?: return served
+        val local = locals[served.id]
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
+            ?: return served
+        return ConversationLiveFacets.keepLive(served, local, facets)
+    }
+
+    /**
+     * The rank a live preview or activity raised during the flight stays (#18926): the served row carries the instant it
+     * was built at, and the row would drop below where the realtime put it. Like the live patcher's own writes, a rank never
+     * goes down here.
+     */
+    private fun rankedLive(
+        row: ConversationEntity,
+        moved: Map<String, Set<ConversationLiveFacet>>,
+        locals: Map<String, ConversationEntity>,
+    ): ConversationEntity {
+        val facets = moved[row.id] ?: return row
+        if (ConversationLiveFacet.PREVIEW !in facets && ConversationLiveFacet.ACTIVITY !in facets) return row
+        val local = locals[row.id] ?: return row
+        return if (local.updatedAt > row.updatedAt) row.copy(updatedAt = local.updatedAt) else row
     }
 
     /**
