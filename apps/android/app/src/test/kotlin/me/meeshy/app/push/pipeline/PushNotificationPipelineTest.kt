@@ -235,6 +235,43 @@ class PushNotificationPipelineTest {
         assertThat(active().map { it.notification.number }).containsExactly(0, 0, 0, 0)
     }
 
+    private fun correction(id: String, text: String) =
+        message(id, "body" to text, "reproduced" to "true", "replacesNotificationId" to id)
+
+    @Test
+    fun `la correction d un message affiche est rendue sur la banniere en place, sans sonner`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(message("X", "body" to "Petit mot reçu"))
+
+        val posted = pipeline.renderNow(correction("X", "Message texte"))
+
+        assertThat(posted).isTrue()
+        assertThat(child().extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString()).isEqualTo("Message texte")
+        assertThat(child().flags and Notification.FLAG_ONLY_ALERT_ONCE).isNotEqualTo(0)
+    }
+
+    @Test
+    fun `la correction d un message dont la banniere n est plus la ne sonne pas une seconde fois`() = runTest {
+        manager.cancelAll()
+
+        val posted = pipeline().renderNow(correction("X", "Message texte"))
+
+        assertThat(posted).isFalse()
+        assertThat(active()).isEmpty()
+    }
+
+    @Test
+    fun `une correction ne compte pas un message de plus sur la banniere`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(message("n1"))
+        pipeline.renderNow(message("n2"))
+        assertThat(child().number).isEqualTo(2)
+
+        pipeline.renderNow(correction("n2", "Salut, corrigé"))
+
+        assertThat(child().number).isEqualTo(2)
+    }
+
     @Test
     fun `un message ephemere expire avec sa duree`() = runTest {
         pipeline().renderNow(message("n1", "ephemeralDuration" to "30"))

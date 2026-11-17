@@ -211,6 +211,24 @@ class RichMessageBannerTest {
     }
 
     @Test
+    fun `la correction d un message remplace son texte dans la banniere au lieu de l empiler`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "messageId" to "m1", "body" to "RDV 18h à Gare du Nord"))
+        pipeline.renderNow(push("notificationId" to "n2", "messageId" to "m2", "body" to "Tu viens ?"))
+
+        pipeline.renderNow(
+            push(
+                "notificationId" to "n1", "messageId" to "m1", "body" to "RDV 19h à Châtelet",
+                "reproduced" to "true", "replacesNotificationId" to "n1",
+            ),
+        )
+
+        val texts = children().single().texts()
+        assertThat(texts).containsExactly("RDV 19h à Châtelet", "Tu viens ?").inOrder()
+        assertThat(children().single().flags and Notification.FLAG_ONLY_ALERT_ONCE).isNotEqualTo(0)
+    }
+
+    @Test
     fun `les boutons portent le compte connecte au rendu`() = runTest {
         pipeline().renderNow(push())
 
