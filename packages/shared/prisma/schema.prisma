@@ -2219,6 +2219,31 @@ model PairInteractionDay {
   @@index([userHighId, day])
 }
 
+/// LES VISITES DE MON LIEN DE PROFIL, par jour UTC (#19206, chantier #18857).
+///
+/// Une ligne par propriétaire et par jour : `visits` compte les ouvertures de sa fiche par
+/// `/@pseudo` (redirigé vers `/directory/people/:handle`), `/u/:username` ou
+/// `/directory/people/:handle`. AGRÉGAT seulement : aucune IP, aucun identifiant de visiteur,
+/// aucune ville. Ni le propriétaire ni un robot d'aperçu ne comptent ; le dédoublonnage se fait
+/// en Redis par fenêtre de trente minutes, sous une empreinte HMAC du jour qui ne se garde pas.
+///
+/// Incrément ATOMIQUE sans lecture (`increment`), reprise en incrément sur `P2002`. Seul le
+/// propriétaire lit (`GET /users/me/profile-link/stats`) ; purgée avec le compte, exportée.
+///
+/// Expiration : `expiresAt` porte un index TTL (`expireAfterSeconds: 0`) posé par
+/// `migrations/2026-11-17-profile-link-visit-day-indexes.mongodb.js`, hors `db push`.
+/// Conservation 40 jours (`PROFILE_LINK_VISIT_RETENTION_DAYS`).
+model ProfileLinkVisitDay {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Minuit UTC du jour compté.
+  day       DateTime
+  visits    Int      @default(0)
+  expiresAt DateTime
+
+  @@unique([userId, day])
+}
+
 /// Les CONSENTEMENTS d'une personne envers UNE AUTRE, écrits au rituel du Sang
 /// (#13933, cercles de proximité, RG-09). Une ligne par couple ORIENTÉ (`ownerId`
 /// règle, `otherId` en bénéficie) : la loi d'accès dit le PLAFOND de ce que le niveau
