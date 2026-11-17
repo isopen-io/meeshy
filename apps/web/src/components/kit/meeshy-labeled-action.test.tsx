@@ -138,14 +138,86 @@ describe('MeeshyLabeledAction — une cible, une action', () => {
     expect(spokenText(button)).toContain('activé');
   });
 
+  test('une action destructive ou douce n’est pas une bascule : aucun aria-pressed', () => {
+    for (const kind of ['destructive', 'soft'] as const) {
+      const container = mount(<MeeshyLabeledAction title="Bloquer" glyph={glyph} kind={kind} onPress={() => {}} />);
+      expect(container.querySelector('button')?.hasAttribute('aria-pressed')).toBe(false);
+    }
+    const off = mount(<MeeshyLabeledAction title="Bring" glyph={glyph} kind="normal" onPress={() => {}} />);
+    expect(off.querySelector('button')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
   test('un label remplace le nom composé', () => {
     const container = mount(<MeeshyLabeledAction title="Écrire" label="Écrire à Léo" glyph={glyph} onPress={() => {}} />);
     expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('Écrire à Léo');
   });
 
-  test('l’appui long est toujours aussi une action nommée : le menu s’ouvre par un bouton frère', () => {
+  test('le menu ne se montre pas au repos : il s’annonce sur le bouton, par ses raccourcis', () => {
     const container = mount(<MeeshyLabeledAction title="Position" glyph={glyph} menu={<div data-menu="" />} menuLabel="Plus d’options pour Position" onPress={() => {}} />);
-    expect(container.querySelector('[data-menu]')).not.toBeNull();
+    expect(container.querySelector('[data-menu]')).toBeNull();
+    const button = container.querySelector('button') as HTMLElement;
+    expect(button.getAttribute('aria-haspopup')).toBe('menu');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('ContextMenu Shift+F10');
+  });
+
+  test('clic droit ou Maj+F10 ouvrent le menu sans jouer l’action ; Échap le referme et rend le focus', () => {
+    let presses = 0;
+    const container = mount(<MeeshyLabeledAction title="Position" glyph={glyph} menu={<button type="button" data-menu-item="">Itinéraire</button>} menuLabel="Plus d’options pour Position" onPress={() => (presses += 1)} />);
+    const button = container.querySelector('button') as HTMLElement;
+    act(() => {
+      button.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(container.querySelector('[data-menu-item]')).not.toBeNull();
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(presses).toBe(0);
+    act(() => {
+      (container.querySelector('[data-menu-item]') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(container.querySelector('[data-menu-item]')).toBeNull();
+    expect(document.activeElement).toBe(button);
+    act(() => button.focus());
+    act(() => {
+      button.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+    });
+    expect(container.querySelector('[data-menu-item]')).not.toBeNull();
+    expect(presses).toBe(0);
+  });
+
+  test('l’appui tenu 500 ms ouvre le menu, et le relâcher qui suit ne joue pas l’action', async () => {
+    let presses = 0;
+    const container = mount(<MeeshyLabeledAction title="Position" glyph={glyph} menu={<button type="button" data-menu-item="">Itinéraire</button>} onPress={() => (presses += 1)} />);
+    const button = container.querySelector('button') as HTMLElement;
+    act(() => {
+      button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 560));
+    });
+    expect(container.querySelector('[data-menu-item]')).not.toBeNull();
+    act(() => {
+      button.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+      button.click();
+    });
+    expect(presses).toBe(0);
+    act(() => button.click());
+    expect(presses).toBe(1);
+  });
+
+  test('choisir dans le menu le referme', () => {
+    const container = mount(<MeeshyLabeledAction title="Position" glyph={glyph} menu={<button type="button" data-menu-item="">Itinéraire</button>} onPress={() => {}} />);
+    const button = container.querySelector('button') as HTMLElement;
+    act(() => {
+      button.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    act(() => (container.querySelector('[data-menu-item]') as HTMLElement).click());
+    expect(container.querySelector('[data-menu-item]')).toBeNull();
+  });
+
+  test('sans menu, le bouton n’annonce aucun menu', () => {
+    const button = mount(<MeeshyLabeledAction title="Écrire" glyph={glyph} onPress={() => {}} />).querySelector('button') as HTMLElement;
+    expect(button.hasAttribute('aria-haspopup')).toBe(false);
+    expect(button.hasAttribute('aria-keyshortcuts')).toBe(false);
   });
 
   test('silhouette : mêmes colonnes, jamais si une valeur existe', () => {

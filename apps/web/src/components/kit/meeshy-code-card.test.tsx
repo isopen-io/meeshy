@@ -125,6 +125,13 @@ describe('MeeshyCodeCard — la carte', () => {
     expect(container.querySelector('[data-kit-code-modules]')).toBeNull();
   });
 
+  test('un payload que l’encodeur refuse (trop long) ne laisse pas un squelette éternel', () => {
+    const container = mount(<MeeshyCodeCard payload={'x'.repeat(5000)} label="Ma carte" caption="meeshy.me/@aissa" />);
+    expect(container.querySelector('[data-kit-skeleton]')).toBeNull();
+    expect(container.querySelector('[data-kit-code-modules]')).toBeNull();
+    expect(container.querySelector('[data-kit-code-card]')?.getAttribute('data-ready')).toBeNull();
+  });
+
   test('prêt : la matrice remplace le squelette, une image nommée dont la valeur est la légende', () => {
     const container = mount(<MeeshyCodeCard payload="https://meeshy.me/@aissa" label="Code de ton profil" caption="meeshy.me/@aissa" />);
     expect(container.querySelector('[data-kit-skeleton]')).toBeNull();

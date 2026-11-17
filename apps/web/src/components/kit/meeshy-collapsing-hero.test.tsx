@@ -100,6 +100,13 @@ describe('MeeshyCollapsingHero — une seule identité', () => {
     expect(taps).toBe(1);
   });
 
+  test('sans nom à dire, la barre repliée ne pose aucun bouton muet', () => {
+    const folded = mount(<MeeshyCollapsingHero progress={1} title="Léo" onCollapsedTap={() => {}} />);
+    expect(folded.querySelector('[data-kit-hero-bar-hit]')).toBeNull();
+    const empty = mount(<MeeshyCollapsingHero progress={1} title="Léo" backToTopLabel="" onCollapsedTap={() => {}} />);
+    expect(empty.querySelector('[data-kit-hero-bar-hit]')).toBeNull();
+  });
+
   test('leading et trailing gardent leur cible de 44 à tous les crans', () => {
     for (const progress of [0, 0.5, 1]) {
       const container = mount(<MeeshyCollapsingHero progress={progress} title="Léo" leading={<button type="button">Retour</button>} trailing={<button type="button">Plus</button>} />);

@@ -125,6 +125,37 @@ describe('MeeshyPersonRow — balayage doublé', () => {
     expect(presses).toBe(0);
   });
 
+  const swipe = (target: HTMLElement, from: number, to: number): void => {
+    act(() => {
+      target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: from, clientY: 20 }));
+      target.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: to, clientY: 20 }));
+      target.click();
+    });
+  };
+
+  test('un balayage ouvre les actions et le clic qui le termine ne presse pas la rangée', () => {
+    const log: string[] = [];
+    let presses = 0;
+    const container = mount(<MeeshyPersonRow title="Léo" trailingActions={actions(log)} onPress={() => (presses += 1)} />);
+    const hit = container.querySelector('[data-kit-person-hit]') as HTMLElement;
+    swipe(hit, 200, 100);
+    expect(container.querySelector('.kit-person-swipe')?.getAttribute('data-open')).toBe('trailing');
+    expect(presses).toBe(0);
+  });
+
+  test('ouverte, un toucher sur la rangée la referme au lieu de la presser ; refermée, il la presse', () => {
+    const log: string[] = [];
+    let presses = 0;
+    const container = mount(<MeeshyPersonRow title="Léo" trailingActions={actions(log)} onPress={() => (presses += 1)} />);
+    const hit = container.querySelector('[data-kit-person-hit]') as HTMLElement;
+    swipe(hit, 200, 100);
+    act(() => hit.click());
+    expect(container.querySelector('.kit-person-swipe')?.hasAttribute('data-open')).toBe(false);
+    expect(presses).toBe(0);
+    act(() => hit.click());
+    expect(presses).toBe(1);
+  });
+
   test('deux actions au plus par bord, le destructif en dernier', () => {
     const log: string[] = [];
     const three = [...actions(log), { title: 'Bloquer', glyph: <svg />, perform: () => {} }];

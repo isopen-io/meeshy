@@ -160,6 +160,32 @@ describe('MeeshyTicket — le retournement', () => {
     expect(live.textContent).toBe('verso');
   });
 
+  test('le focus suit le retournement : le côté qui devient inerte ne garde jamais le focus', () => {
+    const front = (flipped: boolean) => (
+      <MeeshyTicket title="x" code="y" stub={<button type="button" data-flip-trigger="">Voir le verso</button>} back={<button type="button" data-back-trigger="">Voir le recto</button>} isFlipped={flipped} flipLabels={{ front: 'recto', back: 'verso' }} />
+    );
+    const container = mount(front(false));
+    act(() => (container.querySelector('[data-flip-trigger]') as HTMLElement).focus());
+    expect(document.activeElement?.hasAttribute('data-flip-trigger')).toBe(true);
+    render(front(true));
+    const back = container.querySelector('[data-kit-ticket-back]') as HTMLElement;
+    expect(back.contains(document.activeElement)).toBe(true);
+    act(() => (container.querySelector('[data-back-trigger]') as HTMLElement).focus());
+    render(front(false));
+    expect((container.querySelector('[data-kit-ticket-front]') as HTMLElement).contains(document.activeElement)).toBe(true);
+  });
+
+  test('un focus hors du billet n’est pas volé par le retournement', () => {
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    const container = mount(<MeeshyTicket title="x" code="y" back={<p>QR</p>} isFlipped={false} />);
+    outside.focus();
+    render(<MeeshyTicket title="x" code="y" back={<p>QR</p>} isFlipped />);
+    expect(document.activeElement).toBe(outside);
+    expect(container.querySelector('[data-kit-ticket-back]')).not.toBeNull();
+    outside.remove();
+  });
+
   test('sans back, isFlipped est ignoré', () => {
     const container = mount(<MeeshyTicket title="x" code="y" isFlipped />);
     expect(ticket(container).getAttribute('data-flipped')).toBeNull();

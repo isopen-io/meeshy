@@ -100,6 +100,15 @@ describe('MeeshyGroupCard — nom, rôle, valeur', () => {
     expect(container.querySelector('[data-kit-group-hit]')).toBeNull();
   });
 
+  test('le nom du groupe EST son sur-titre : aria-labelledby mène au texte du sur-titre, l’accessoire n’y entre pas', () => {
+    const container = mount(<MeeshyGroupCard overline="Où il est" headerTrailing={<button type="button">Modifier</button>}><p>a</p></MeeshyGroupCard>);
+    const group = container.querySelector('[role="group"]') as HTMLElement;
+    const ids = (group.getAttribute('aria-labelledby') ?? '').split(' ').filter((id) => id !== '');
+    expect(ids.length).toBeGreaterThan(0);
+    const name = ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ').trim();
+    expect(name).toBe('Où il est');
+  });
+
   test('avec onPress : un seul bouton nommé, qui répond une fois', () => {
     let presses = 0;
     const container = mount(<MeeshyGroupCard label="Carte de Léo" onPress={() => (presses += 1)}><p>a</p></MeeshyGroupCard>);

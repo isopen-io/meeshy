@@ -7,7 +7,7 @@ import { kitMount, spokenText } from '@/test-support/kit-mount';
 import { contrastRatio } from './kit-color';
 import { MeeshyLivingBanner, meeshyBannerParallax, meeshyBannerSensorRuns, meeshyLivingBannerRecipe } from './meeshy-living-banner';
 
-const { mount } = kitMount();
+const { mount, render, act } = kitMount();
 
 describe('MeeshyLivingBanner — la recette en valeurs', () => {
   test('dégradé à 165°, trois arrêts : teinte à 72 %, teinte à 34 %, fond de l’écran', () => {
@@ -114,6 +114,25 @@ describe('MeeshyLivingBanner — silence et emplacements', () => {
     expect(container.querySelector('[data-kit-skeleton]')).not.toBeNull();
     expect(container.querySelector('[data-kit-banner-orb]')).toBeNull();
     expect(container.querySelector('button')).toBeNull();
+  });
+
+  const tilt = (gamma: number): void => {
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event('deviceorientation'), { gamma }));
+    });
+  };
+
+  test('l’inclinaison déplace les orbes dès le montage', () => {
+    const container = mount(<MeeshyLivingBanner tint="#A855F7" allowsDeviceTilt />);
+    tilt(15);
+    expect((container.firstElementChild as HTMLElement).style.getPropertyValue('--kit-banner-near-x')).toBe('12px');
+  });
+
+  test('une bannière montée en chargement s’anime une fois chargée : le capteur part avec le décor', () => {
+    const container = mount(<MeeshyLivingBanner tint="#A855F7" allowsDeviceTilt isLoading />);
+    render(<MeeshyLivingBanner tint="#A855F7" allowsDeviceTilt />);
+    tilt(15);
+    expect((container.firstElementChild as HTMLElement).style.getPropertyValue('--kit-banner-near-x')).toBe('12px');
   });
 
   test('l’image posée est celle de l’hôte, déjà résolue : les orbes s’effacent', () => {
