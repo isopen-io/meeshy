@@ -32,6 +32,7 @@ import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 
 /**
  * The messages of a conversation, offline-first (ARCHITECTURE.md §4, §5): Room is the single
@@ -382,16 +383,27 @@ class MessageRepository internal constructor(
         refusedAsGone: Boolean = false,
         readBackBudgetMillis: Long = READ_BACK_BUDGET_MS,
     ): Unit = withContext(NonCancellable) {
+        val ticket = mutations.ticket()
         val read = conversationId?.let { readBackWithin(it, messageId, readBackBudgetMillis) } ?: MessageReadBack.Unknown
-        settle(messageId, read, refusedAsGone)
+        settle(ticket, messageId, read, refusedAsGone)
     }
 
-    private suspend fun settle(messageId: String, read: MessageReadBack, refusedAsGone: Boolean) {
+    /**
+     * #19422 — what the read decides belongs to the account that ASKED for it ([ticket], taken before the request): the
+     * settlement lands only while that account is still the current one, never in the same message id of the next.
+     */
+    private suspend fun settle(ticket: AccountTicket?, messageId: String, read: MessageReadBack, refusedAsGone: Boolean) {
+        if (!mutations.isCurrent(ticket)) return
         when (read) {
-            is MessageReadBack.Served -> if (read.message.deletedAt == null) markUndeleted(messageId, snapshot = read.message)
-            MessageReadBack.Absent -> confirmDeletion(messageId)
-            MessageReadBack.Unknown -> if (refusedAsGone) confirmDeletion(messageId) else markUndeleted(messageId)
+            is MessageReadBack.Served -> if (read.message.deletedAt == null) mutations.markUndeleted(ticket, messageId, read.message)
+            MessageReadBack.Absent -> confirmDeletionUnder(ticket, messageId)
+            MessageReadBack.Unknown ->
+                if (refusedAsGone) confirmDeletionUnder(ticket, messageId) else mutations.markUndeleted(ticket, messageId, null)
         }
+    }
+
+    private suspend fun confirmDeletionUnder(ticket: AccountTicket?, messageId: String) {
+        mutations.commitUnder(ticket) { confirmDeletion(messageId) }
     }
 
     private suspend fun readBackWithin(conversationId: String, messageId: String, budgetMillis: Long): MessageReadBack =

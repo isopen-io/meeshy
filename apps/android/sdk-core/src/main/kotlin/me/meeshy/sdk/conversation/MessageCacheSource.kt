@@ -242,8 +242,12 @@ internal class MessageCacheSource(
     private suspend fun purgedDuringFlight(held: HeldBefore): Boolean =
         held.threadKnown && syncMetaDao.lastSyncedAt(resourceKey) == null && database.conversationDao().find(conversationId) == null
 
-    /** The recent window as the server served it, and the validator to keep with it. */
-    private class ServedWindow(val messages: List<ApiMessage>, val etag: String?)
+    /**
+     * The recent window as the server served it, and the validator to keep with it. [reachesOldest] — the page says no
+     * older message remains (`pagination.hasMore == false` with its `total`, #19423): an absent or partial pagination
+     * proves nothing, and counts as « more remain ».
+     */
+    private class ServedWindow(val messages: List<ApiMessage>, val etag: String?, val reachesOldest: Boolean)
 
     /** The messages read beyond the window, and how far that read went. */
     private class GapRead(val messages: List<ApiMessage>, val sweep: Sweep)
@@ -340,7 +344,11 @@ internal class MessageCacheSource(
                 }
                 null
             }
-            is ConditionalResult.Fresh -> ServedWindow(result.data, result.etag)
+            is ConditionalResult.Fresh -> ServedWindow(
+                result.data,
+                result.etag,
+                reachesOldest = result.pagination?.let { it.total != null && !it.hasMore } == true,
+            )
             is ConditionalResult.Failure -> throw MessageSyncException(result.error.message)
         }
     }
@@ -362,7 +370,7 @@ internal class MessageCacheSource(
         database.withTransaction {
             if (purgedDuringFlight(held)) return@withTransaction
             val merged = ingestion.mergeInTransaction(window.messages + gap.messages, now, conversationId, settlements, held.versions)
-            prune(window.messages, held.ids)
+            prune(window, held.ids)
             syncMetaDao.upsert(
                 SyncMetaEntity(resourceKey, now, contiguity.watermark, window.etag.takeUnless { merged.disavowedServed }, null),
             )
@@ -383,18 +391,21 @@ internal class MessageCacheSource(
      * BEFORE the request (by identity — a row written during the flight, dated ahead or not, is unknown to the page), that
      * rank above the page's cut in the gateway's total order `(createdAt desc, id desc)` — a row of the same millisecond as
      * the oldest served, with a lower id, may be the one the limit cut, alive — and that the page serves under none of
-     * their keys. A served date that cannot be read proves nothing: nothing is pruned (fail-closed). The vault being the
+     * their keys — or, when the window serves the WHOLE history ([ServedWindow.reachesOldest], #19423), that rank below it
+     * too: nothing older exists on the server. A served date that cannot be read proves nothing: nothing is pruned
+     * (fail-closed). The vault being the
      * only copy of a sealed message's plaintext, each pruned row records its erasure (#14655): the same rule governs the
      * row and its plaintext, so no deleted message leaves its plaintext behind, and no live one loses it.
      */
-    private suspend fun prune(window: List<ApiMessage>, heldBefore: Set<String>) {
-        val served = window.map { RecentWindowPrune.Served(it.id, it.clientMessageId, isoToEpochMillisOrNull(it.createdAt)) }
-        val from = served.mapNotNull { it.createdAt }.minOrNull() ?: Long.MIN_VALUE
+    private suspend fun prune(window: ServedWindow, heldBefore: Set<String>) {
+        val served = window.messages.map { RecentWindowPrune.Served(it.id, it.clientMessageId, isoToEpochMillisOrNull(it.createdAt)) }
+        val from = if (window.reachesOldest) Long.MIN_VALUE else served.mapNotNull { it.createdAt }.minOrNull() ?: Long.MIN_VALUE
         val candidates = messageDao.syncedSince(conversationId, from)
         val gone = RecentWindowPrune.gone(
             held = candidates.map { RecentWindowPrune.Held(it.id, it.serverId, it.createdAt) },
             heldBefore = heldBefore,
             page = served,
+            reachesOldest = window.reachesOldest,
         ).toHashSet()
         if (gone.isEmpty()) return
         val removed = candidates.filter { it.id in gone }
