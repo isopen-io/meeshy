@@ -45,7 +45,7 @@ import {
  * remplaçait ce que le temps réel avait posé. La racine reste `online` : hors
  * ligne, elle est EN PAUSE, comme le reste du produit (`lib/view/cold-state.ts`).
  *
- * Trois règles pour qui écrit :
+ * Quatre règles pour qui écrit :
  *  - une écriture vive garde la date de la dernière LECTURE serveur
  *    (`updatedAt`) : le temps réel ne fait pas passer un cache pour frais
  *    (WEB-08) ;
@@ -53,7 +53,25 @@ import {
  *    la réponse le compte peut-être déjà ;
  *  - ce qui est rejoué se calcule SUR la donnée reçue, jamais sur un
  *    instantané pris avant elle : rejoué sur une réponse plus fraîche,
- *    l'instantané la ferait reculer.
+ *    l'instantané la ferait reculer ;
+ *  - un GESTE optimiste écrit dans un `createLiveGesture()` (#19082) : refusé,
+ *    il est RETIRÉ des journaux — la réponse d'une relecture partie avant lui
+ *    sert la vérité du serveur, que le geste n'a pas changée — et ce qui le
+ *    défait dans le cache se calcule sur la rangée reçue (et donc ne touche
+ *    rien de la réponse).
+ *
+ * INVENTAIRE DES ÉCRITURES DE LA RACINE `['conversations']` (#19082) — toutes
+ * passent par `writeLive` : `patchConversation`, `patchConversationDetail`,
+ * `patchThreadMessages`, `upsertThreadMessage` (et leurs appelants du temps
+ * réel et des gestes), `removeRows`/`restoreRows` (masquer pour moi),
+ * `applyConversationGone`, le départ d'une conversation
+ * (`conversation-departure.ts`) et le portrait repeint (`my-portrait.ts`).
+ * N'en ont pas besoin : l'hydratation du cache persisté et l'amorce
+ * `initialData` (aucune relecture n'est en vol avant elles), et la relecture
+ * qui REMPLACE la liste (`refreshConversations`, `fetchInfiniteQuery`), qui est
+ * elle-même la réponse. Hors de la racine (membres, médias d'une conversation,
+ * statistiques), rien n'est journalisé : ces clés n'ont pas d'écrivain vif
+ * concurrent d'une relecture. `live-cache-gestures.test.ts` en garde la règle.
  */
 export const LIVE_CACHE_ROOT = ['conversations'] as const;
 
@@ -64,16 +82,57 @@ export type LiveWriteOptions = {
 
 type Replay = (data: unknown) => unknown;
 
+type Entry = { readonly replay: Replay; readonly gesture: object | null };
+
 /** Le journal de chaque requête en vol — la requête est la clé, sa donnée peut ne pas exister encore. */
-const journals = new WeakMap<object, readonly Replay[]>();
+const journals = new WeakMap<object, readonly Entry[]>();
 /** La réponse d'une lecture, et la requête qui l'a demandée. */
 const servedBy = new WeakMap<object, object>();
 const installed = new WeakSet<QueryClient>();
 
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
 
-const replayed = (writes: readonly Replay[], response: unknown): unknown =>
-  writes.reduce((data, write) => write(data) ?? data, response);
+const replayed = (writes: readonly Entry[], response: unknown): unknown =>
+  writes.reduce((data, write) => write.replay(data) ?? data, response);
+
+/** Le geste dont les écritures vives sont en train de s'écrire, et les requêtes dont il a noté un journal. */
+let ambient: { readonly token: object; readonly touched: Set<object> } | null = null;
+
+export type LiveGesture = {
+  /** Écrit les écritures vives de `apply` AU NOM du geste. */
+  run<T>(apply: () => T): T;
+  /** Le geste est refusé : aucune relecture en vol ne le rejouera. */
+  retract(): void;
+};
+
+/**
+ * **UN GESTE OPTIMISTE, ET SON RETRAIT** (#19082). Ses écritures vives sont
+ * journalisées comme les autres — la réponse d'une relecture partie avant lui
+ * ne le défait pas —, mais un geste REFUSÉ se retire des journaux : rejouer sur
+ * la réponse un geste que le serveur n'a pas fait la ferait mentir.
+ */
+export function createLiveGesture(): LiveGesture {
+  const token = {};
+  const touched = new Set<object>();
+  return {
+    run: (apply) => {
+      const previous = ambient;
+      ambient = { token, touched };
+      try {
+        return apply();
+      } finally {
+        ambient = previous;
+      }
+    },
+    retract: () => {
+      touched.forEach((query) => {
+        const entries = journals.get(query);
+        if (entries !== undefined) journals.set(query, entries.filter((entry) => entry.gesture !== token));
+      });
+      touched.clear();
+    },
+  };
+}
 
 function shareWithLiveWrites(previous: unknown, next: unknown): unknown {
   const query = isObject(next) ? servedBy.get(next) : undefined;
@@ -115,6 +174,8 @@ export function writeLive<T>(
   if (query === undefined) return;
   if (query.state.data !== undefined) queryClient.setQueryData<T>(queryKey, updater, { updatedAt: query.state.dataUpdatedAt });
   const journaled = installed.has(queryClient) && options.relative !== true && query.state.fetchStatus !== 'idle' && partialMatchKey(queryKey, LIVE_CACHE_ROOT);
+  if (!journaled) return;
   /* Le journal d'une requête ne reçoit jamais que SA donnée : `T`. */
-  if (journaled) journals.set(query, [...(journals.get(query) ?? []), (data) => updater(data as T)]);
+  journals.set(query, [...(journals.get(query) ?? []), { replay: (data) => updater(data as T), gesture: ambient?.token ?? null }]);
+  ambient?.touched.add(query);
 }

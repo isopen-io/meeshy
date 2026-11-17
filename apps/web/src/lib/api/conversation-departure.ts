@@ -7,6 +7,7 @@ import type { DepartureKind } from '@/lib/conversation-departure';
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, type ConversationsDeps } from './conversations';
 import type { ConversationsInfiniteData } from './conversations-pages';
 import type { HttpRequest } from './http';
+import { createLiveGesture, writeLive, type LiveGesture } from './live-cache-journal';
 import type { Conversation } from './types';
 
 /**
@@ -23,6 +24,11 @@ import type { Conversation } from './types';
  * répond 404 à personne, et un refus doit ramener la rangée. Réussi, ce geste
  * emporte aussi le cache des messages (`conversationQueryKey` en préfixe) ;
  * refusé (403), il se dit `refused` — l'hôte le retient et le motive (#14690).
+ *
+ * PAR LE JOURNAL DES ÉCRITURES VIVES (#19082) : une relecture de la liste
+ * partie avant le geste ne ramène pas la rangée ; refusé, le geste se retire
+ * des journaux, et la rangée revient — telle que la réponse la sert, si une
+ * relecture était en vol, ou telle qu'elle était.
  */
 export type DepartureDeps = ConversationsDeps & { readonly queryClient: QueryClient };
 
@@ -41,26 +47,27 @@ const refused = (kind: DepartureKind, status: number): boolean => kind === 'obso
 
 type Withdrawn = { readonly pageIndex: number; readonly index: number; readonly conversation: Conversation };
 
-function withdraw(queryClient: QueryClient, conversationId: string): Withdrawn | null {
+const withoutConversation =
+  (conversationId: string) =>
+  (data: ConversationsInfiniteData | undefined): ConversationsInfiniteData | undefined =>
+    data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.conversations.some((c) => c.id === conversationId))
+      ? data
+      : { ...data, pages: data.pages.map((page) => ({ ...page, conversations: page.conversations.filter((c) => c.id !== conversationId) })) };
+
+function withdraw(queryClient: QueryClient, conversationId: string, gesture: LiveGesture): Withdrawn | null {
   const data = queryClient.getQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY);
-  if (data === undefined || !Array.isArray(data.pages)) return null;
-  const pageIndex = data.pages.findIndex((page) => page.conversations.some((c) => c.id === conversationId));
-  const page = data.pages[pageIndex];
-  if (page === undefined) return null;
-  const index = page.conversations.findIndex((c) => c.id === conversationId);
-  const conversation = page.conversations[index];
-  if (conversation === undefined) return null;
-  queryClient.setQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY, {
-    ...data,
-    pages: data.pages.map((p, i) => (i === pageIndex ? { ...p, conversations: p.conversations.filter((c) => c.id !== conversationId) } : p)),
-  });
-  return { pageIndex, index, conversation };
+  const pageIndex = data === undefined || !Array.isArray(data.pages) ? -1 : data.pages.findIndex((page) => page.conversations.some((c) => c.id === conversationId));
+  const page = data?.pages[pageIndex];
+  const index = page === undefined ? -1 : page.conversations.findIndex((c) => c.id === conversationId);
+  const conversation = page?.conversations[index];
+  gesture.run(() => writeLive(queryClient, CONVERSATIONS_QUERY_KEY, withoutConversation(conversationId)));
+  return conversation === undefined ? null : { pageIndex, index, conversation };
 }
 
 function restore(queryClient: QueryClient, withdrawn: Withdrawn | null): void {
   if (withdrawn === null) return;
-  queryClient.setQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY, (data) => {
-    if (data === undefined) return data;
+  writeLive<ConversationsInfiniteData>(queryClient, CONVERSATIONS_QUERY_KEY, (data) => {
+    if (data === undefined || !Array.isArray(data.pages)) return data;
     if (data.pages.some((page) => page.conversations.some((c) => c.id === withdrawn.conversation.id))) return data;
     return {
       ...data,
@@ -89,16 +96,18 @@ export async function performDeparture(params: {
   const { conversationId, kind, online, deps } = params;
   if (!online) return 'offline';
 
-  const withdrawn = withdraw(deps.queryClient, conversationId);
+  const gesture = createLiveGesture();
+  const withdrawn = withdraw(deps.queryClient, conversationId, gesture);
   if (__FIXTURES__ && deps.source === 'fixtures') return 'departed';
 
   const result = await deps.transport.request<unknown>(REQUESTS[kind](conversationId)).catch(() => null);
   if (result === null || (!result.ok && !alreadyGone(kind, result.status))) {
+    gesture.retract();
     restore(deps.queryClient, withdrawn);
     return result !== null && !result.ok && refused(kind, result.status) ? 'refused' : 'failed';
   }
 
-  withdraw(deps.queryClient, conversationId);
+  withdraw(deps.queryClient, conversationId, gesture);
   deps.queryClient.removeQueries({ queryKey: conversationQueryKey(conversationId) });
   return 'departed';
 }

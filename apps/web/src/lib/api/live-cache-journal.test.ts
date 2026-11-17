@@ -1,16 +1,16 @@
-import { InfiniteQueryObserver, QueryObserver, onlineManager, type QueryClient } from '@tanstack/react-query';
+import { InfiniteQueryObserver, QueryObserver, onlineManager } from '@tanstack/react-query';
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 import type { TranscriptionReadyEventData } from '@meeshy/shared/types/socketio-events/audio';
+import type { MessageHiddenForMeEventData } from '@meeshy/shared/types/socketio-events/message';
 import type { AttachmentReactionUpdateEventData } from '@meeshy/shared/types/socketio-events/reaction';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
-import type { MessageHiddenForMeEventData } from '@meeshy/shared/types/socketio-events/message';
 
 import { conversationStore } from '@/lib/conversation-store';
 import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { createOutboxStore } from '@/lib/send/outbox-store';
 import { E2EE_PLAINTEXT_SENTINEL, sentinelLeaks } from '@/test-support/e2ee-plaintext-sentinel';
+import { answering, deferred, listPage, openList, openThread, pageOf, row, seedList, servedRow, settle, socketMessage } from '@/test-support/live-relecture';
 import { liveQueryClient } from '@/test-support/live-query-client';
 import { routedTransport } from '@/test-support/routed-transport';
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
@@ -19,8 +19,11 @@ import { performDeparture } from './conversation-departure';
 import { CONVERSATIONS_QUERY_KEY, conversationQuery, conversationQueryKey, findCachedConversation, patchConversationDetail } from './conversations';
 import type { ConversationsPage } from './conversations-pages';
 import { performDeleteForMe } from './delete-message';
+import { installLiveCacheJournal } from './live-cache-journal';
 import { messagesQueryKey, upsertThreadMessage } from './messages';
-import { threadWindowOf, type MessagesPage, type MessagesPageParam } from './messages-pages';
+import type { MessagesPage, MessagesPageParam } from './messages-pages';
+import { appCacheHooks, appQueryClient, createAppQueryClient, type StorageLike } from './query-client';
+import { performReaction } from './reactions';
 import {
   applyConversationUnreadUpdated,
   applyMessageAttachmentUpdated,
@@ -34,11 +37,8 @@ import { applyMessageHiddenForMe } from './realtime-message-hidden';
 import { applyMessageDeleted } from './realtime-message-mutations';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import { applyTranscriptionReady } from './realtime-transcription-ready';
-import { installLiveCacheJournal } from './live-cache-journal';
-import { appCacheHooks, appQueryClient, createAppQueryClient, type StorageLike } from './query-client';
-import { performReaction } from './reactions';
 import { reactionStore } from './reaction-store';
-import type { Attachment, Conversation, Message } from './types';
+import type { Attachment, Conversation } from './types';
 
 /**
  * **UNE ÉCRITURE TEMPS RÉEL N'EST JAMAIS ÉCRASÉE PAR UNE RELECTURE PARTIE AVANT
@@ -55,100 +55,6 @@ import type { Attachment, Conversation, Message } from './types';
  * faite pendant le vol le porte sans le rejouer. Un delta RELATIF (ma
  * réaction, +1) n'y entre jamais : la réponse le compte peut-être déjà.
  */
-
-type Deferred<T> = { readonly promise: Promise<T>; readonly resolve: (value: T) => void };
-
-function deferred<T>(): Deferred<T> {
-  const handle: { resolve: (value: T) => void } = { resolve: () => undefined };
-  const promise = new Promise<T>((resolve) => {
-    handle.resolve = resolve;
-  });
-  return { promise, resolve: (value) => handle.resolve(value) };
-}
-
-const settle = async (queryClient: QueryClient): Promise<void> => {
-  for (let i = 0; i < 40 && queryClient.isFetching() > 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
-};
-
-const pageOf = (messages: readonly Message[], cursor: string | null = null): MessagesPage => ({ messages, hasOlder: cursor !== null, nextCursor: cursor });
-
-const row = (partial: Partial<Conversation> = {}): Conversation =>
-  ({
-    id: 'c-a',
-    type: 'group',
-    status: 'active',
-    visibility: 'private',
-    isActive: true,
-    memberCount: 3,
-    participants: [],
-    createdAt: new Date('2026-11-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-11-01T00:00:00.000Z'),
-    unreadCount: 0,
-    ...partial,
-  }) as Conversation;
-
-const listPage = (rows: readonly Conversation[]): ConversationsPage => ({
-  conversations: rows,
-  pagination: { limit: 30, offset: 0, total: rows.length, hasMore: false },
-  cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
-});
-
-const socketMessage = (id: string, conversationId = 'c-a'): SocketIOMessage =>
-  ({
-    id,
-    conversationId,
-    senderId: 'u-other',
-    content: 'nouveau',
-    originalLanguage: 'fr',
-    messageType: 'text',
-    createdAt: '2026-11-17T10:00:05.000Z',
-  }) as unknown as SocketIOMessage;
-
-/** `201` pour une réaction NEUVE : un `200` dit « elle existait déjà », et `performReaction` défait alors son +1. */
-const answering = (method: string, status = 200) => routedTransport((req) => (req.method === method ? { ok: true, status, data: {} } : undefined)).transport;
-
-/**
- * Le fil OUVERT, tel que l'application l'observe : la fenêtre aplatie par
- * `threadWindowOf` en `select` — TanStack rappelle alors `structuralSharing`
- * sur la valeur SÉLECTIONNÉE. La `queryFn` sert ce que le serveur tient à l'appel.
- */
-function openThread(queryClient: QueryClient, respond: (pageParam: MessagesPageParam) => Promise<MessagesPage>) {
-  const calls: MessagesPageParam[] = [];
-  const observer = new InfiniteQueryObserver(queryClient, {
-    queryKey: messagesQueryKey('c-a'),
-    queryFn: ({ pageParam }: { readonly pageParam: MessagesPageParam }) => {
-      calls.push(pageParam);
-      return respond(pageParam);
-    },
-    initialPageParam: undefined as MessagesPageParam,
-    getNextPageParam: (last: MessagesPage) => last.nextCursor ?? undefined,
-    select: threadWindowOf,
-    staleTime: 0,
-  });
-  return { observer, calls, stop: observer.subscribe(() => undefined) };
-}
-
-function openList(queryClient: QueryClient, respond: (call: number) => Promise<ConversationsPage>) {
-  const calls = { count: 0 };
-  const observer = new InfiniteQueryObserver(queryClient, {
-    queryKey: CONVERSATIONS_QUERY_KEY,
-    queryFn: () => {
-      calls.count += 1;
-      return respond(calls.count);
-    },
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: () => undefined,
-    staleTime: 0,
-  });
-  return { calls, stop: observer.subscribe(() => undefined) };
-}
-
-const seedList = (queryClient: QueryClient, rows: readonly Conversation[]): void => {
-  queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, { pages: [listPage(rows)], pageParams: [undefined] });
-};
-
-const servedRow = (queryClient: QueryClient, id: string): Message | undefined => threadOf(queryClient, 'c-a')?.messages.find((m) => m.id === id);
 
 const DELETION = { messageId: 'm-1', conversationId: 'c-a', deletedAt: '2026-11-17T10:00:00.000Z' } as const;
 

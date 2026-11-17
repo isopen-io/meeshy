@@ -53,18 +53,22 @@ export function applyTranscriptionReady(queryClient: QueryClient, data: Transcri
  * au menu (#11370). Mêmes refus : fil fermé, message ou pièce inconnus, pièce
  * voilée ou déjà transcrite ⇒ rien.
  */
+/** Une pièce ACCUEILLE une transcription : ni voilée, ni déjà transcrite. */
+const accepts = (attachment: Attachment): boolean => !maskedAttachment(attachment) && attachment.transcription == null;
+
 export function graftTranscription(
   queryClient: QueryClient,
   data: { readonly conversationId: string; readonly messageId: string; readonly attachmentId: string; readonly transcription: AudioTranscription },
 ): void {
   const target = findCachedThreadMessage(queryClient, data.conversationId, data.messageId)?.attachments?.find((a) => a.id === data.attachmentId);
-  if (target === undefined || maskedAttachment(target) || target.transcription != null) return;
+  if (target === undefined || !accepts(target)) return;
   /* Greffée SUR la rangée reçue, jamais sur un instantané : une relecture en
-     vol rejoue cette écriture sur sa réponse (#18914). */
+     vol rejoue cette écriture sur sa réponse (#18914) — et ses refus se jugent
+     sur la pièce REÇUE, voilée ou déjà transcrite entre-temps (#19082). */
   const grafted = (message: Message): Message =>
     message.attachments === undefined
       ? message
-      : { ...message, attachments: message.attachments.map((a): Attachment => (a.id === data.attachmentId ? { ...a, transcription: data.transcription } : a)) };
+      : { ...message, attachments: message.attachments.map((a): Attachment => (a.id === data.attachmentId && accepts(a) ? { ...a, transcription: data.transcription } : a)) };
   patchThreadMessages(queryClient, data.conversationId, (messages) => messages.map((m) => (m.id === data.messageId ? grafted(m) : m)));
 }
 

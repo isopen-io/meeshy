@@ -7,7 +7,7 @@ import type { RowExit } from '@/lib/view/row-exit-motion';
 
 import { CONVERSATIONS_QUERY_KEY, findCachedConversation, patchConversation } from './conversations';
 import type { ApiResult, HttpRequest } from './http';
-import { writeLive } from './live-cache-journal';
+import { createLiveGesture, writeLive, type LiveGesture } from './live-cache-journal';
 import { mediaHubConversationKey } from './media-hub-cache';
 import { findCachedThreadMessage, messagesQueryKey, patchThreadMessages } from './messages';
 import type { MessagesPage, MessagesPageParam } from './messages-pages';
@@ -31,6 +31,11 @@ import type { Conversation, Message } from './types';
  * Optimiste dans les deux cas, et un refus ou une coupure REND ce qui n'est
  * pas parti, à sa place, sans écraser ce que le cache a appris pendant le vol.
  * Un échec PARTIEL ne rend que les messages refusés : l'issue les compte.
+ * Chaque message est un GESTE du journal des écritures vives (#19082) : une
+ * relecture partie avant lui ne le défait pas ; refusé, il se retire des
+ * journaux, et ce qui le défait se calcule sur la rangée reçue — jamais en
+ * reposant l'instantané d'avant le geste, qui ferait reculer une réponse plus
+ * fraîche.
  *
  * RETIRER (#11150) — la même boucle « pour tous », le MOTIF en corps
  * (`{ reason }`) : c'est ce qui distingue, côté passerelle, le retrait par la
@@ -62,6 +67,8 @@ type TombstoneSnapshot = {
 
 type PagedMessages = InfiniteData<MessagesPage, MessagesPageParam>;
 
+type GesturedDeletion = { readonly snapshot: TombstoneSnapshot; readonly gesture: LiveGesture };
+
 const windowsOf = (queryClient: QueryClient, queryKey: QueryKey): readonly (readonly [QueryKey, PagedMessages])[] =>
   queryClient
     .getQueriesData<PagedMessages>({ queryKey })
@@ -82,17 +89,46 @@ const snapshotOf = (queryClient: QueryClient, conversationId: string, message: M
 const wasTombstonedAt = (message: Message | null | undefined, deletedAt: string): boolean =>
   message !== undefined && message !== null && String(message.deletedAt) === deletedAt;
 
+/** Le contenu que la pierre tombale ou la purge d'une vue unique a ÔTÉ à la rangée — rendu sur la rangée REÇUE. */
+const withContentOf = (received: Message, before: Message): Message => {
+  const { attachments: _attachments, deletedAt: _deletedAt, isFullyConsumed: _consumed, ...rest } = received;
+  return {
+    ...rest,
+    content: before.content,
+    translations: before.translations,
+    ...(before.attachments === undefined ? {} : { attachments: before.attachments }),
+    ...(before.deletedAt === undefined ? {} : { deletedAt: before.deletedAt }),
+    ...(before.isFullyConsumed === undefined ? {} : { isFullyConsumed: before.isFullyConsumed }),
+  };
+};
+
+/** Une vue unique PURGÉE par la suppression (`purgeViewOnceIn`) — jamais une que le serveur a vraiment consommée avant le geste. */
+const purgedByDeletion = (received: Message, before: Message): boolean =>
+  received.isViewOnce === true && received.isFullyConsumed === true && before.isFullyConsumed !== true;
+
+/** Ce que la ligne de liste a perdu au geste — son aperçu —, rendu sur la ligne REÇUE ; le reste (non-lus, titre…) est le sien. */
+const withLastMessageOf = (received: Conversation, before: Conversation): Conversation => {
+  const { lastMessageTranslations: _card, ...rest } = received;
+  return {
+    ...rest,
+    ...(before.lastMessage === undefined ? {} : { lastMessage: before.lastMessage }),
+    ...(before.lastMessageAt === undefined ? {} : { lastMessageAt: before.lastMessageAt }),
+    ...(before.lastMessageOriginalLanguage === undefined ? {} : { lastMessageOriginalLanguage: before.lastMessageOriginalLanguage }),
+    ...(before.lastMessageTranslations === undefined ? {} : { lastMessageTranslations: before.lastMessageTranslations }),
+  };
+};
+
 function restoreTombstone(queryClient: QueryClient, conversationId: string, snapshot: TombstoneSnapshot, deletedAt: string): void {
   const { id, row, quotes, conversation } = snapshot;
   patchThreadMessages(queryClient, conversationId, (messages) =>
     messages.map((m) => {
-      if (m.id === id) return row !== undefined && (wasTombstonedAt(m, deletedAt) || m.isViewOnce) ? row : m;
+      if (m.id === id) return row !== undefined && (wasTombstonedAt(m, deletedAt) || purgedByDeletion(m, row)) ? withContentOf(m, row) : m;
       const quoted = quotes.get(m.id);
       return quoted !== undefined && m.replyTo?.id === id && wasTombstonedAt(m.replyTo, deletedAt) ? { ...m, replyTo: quoted } : m;
     }),
   );
   if (conversation?.lastMessage?.id !== id) return;
-  patchConversation(queryClient, conversationId, (c) => (stillStandsIn(c.lastMessage, id, deletedAt, conversation) ? conversation : c));
+  patchConversation(queryClient, conversationId, (c) => (stillStandsIn(c.lastMessage, id, deletedAt, conversation) ? withLastMessageOf(c, conversation) : c));
 }
 
 /**
@@ -115,26 +151,29 @@ export async function performDeleteForEveryone(params: DeleteParams & { readonly
   const { applyMessageDeleted } = await import('./realtime-message-mutations');
   const now = params.now ?? new Date();
   const deletedAt = now.toISOString();
-  const snapshots = messages.map((message) => snapshotOf(queryClient, conversationId, message));
-  const describedByList = snapshots.some((s) => s.conversation?.lastMessage?.id === s.id);
-  messages.forEach((message) => applyMessageDeleted(queryClient, { messageId: message.id, conversationId }, now));
+  const gestures: readonly GesturedDeletion[] = messages.map((message) => ({ snapshot: snapshotOf(queryClient, conversationId, message), gesture: createLiveGesture() }));
+  const describedByList = gestures.some(({ snapshot }) => snapshot.conversation?.lastMessage?.id === snapshot.id);
+  gestures.forEach(({ snapshot, gesture }) => gesture.run(() => applyMessageDeleted(queryClient, { messageId: snapshot.id, conversationId }, now)));
 
-  const outcome = await snapshots.reduce<Promise<{ readonly deleted: number; readonly failed: readonly TombstoneSnapshot[]; readonly offline: boolean }>>(
-    async (previous, snapshot) => {
+  const outcome = await gestures.reduce<Promise<{ readonly deleted: number; readonly failed: readonly GesturedDeletion[]; readonly offline: boolean }>>(
+    async (previous, gestured) => {
       const so = await previous;
-      if (so.offline) return { ...so, failed: [...so.failed, snapshot] };
+      if (so.offline) return { ...so, failed: [...so.failed, gestured] };
       const result = await transport.request<unknown>({
         method: 'DELETE',
-        path: conversationsEndpoints.byIdMessagesByMessageId(conversationId, snapshot.id),
+        path: conversationsEndpoints.byIdMessagesByMessageId(conversationId, gestured.snapshot.id),
         ...removalBody(params.reason),
       });
       if (result.ok) return { ...so, deleted: so.deleted + 1 };
-      return { ...so, failed: [...so.failed, snapshot], offline: result.status === 0 };
+      return { ...so, failed: [...so.failed, gestured], offline: result.status === 0 };
     },
     Promise.resolve({ deleted: 0, failed: [], offline: false }),
   );
 
-  outcome.failed.forEach((snapshot) => restoreTombstone(queryClient, conversationId, snapshot, deletedAt));
+  outcome.failed.forEach(({ snapshot, gesture }) => {
+    gesture.retract();
+    restoreTombstone(queryClient, conversationId, snapshot, deletedAt);
+  });
   /* La ligne décrivait un message supprimé : son remplaçant, seul le serveur le
      sait (#11466). Il le pousse par `conversation:updated` ; la liste est relue
      pour le cas où cet évènement se perd — socket coupé, onglet en veille. */
@@ -254,7 +293,8 @@ export async function performDeleteForMe(params: DeleteParams & { readonly rowEx
   const rowExit = params.rowExit ?? NO_ROW_EXIT;
   const ids: ReadonlySet<string> = new Set(messages.map((m) => m.id));
   const leaving = rowExit.collapse(ids);
-  const hide = () => hideRowsForReader(queryClient, conversationId, ids);
+  const gesture = createLiveGesture();
+  const hide = () => gesture.run(() => hideRowsForReader(queryClient, conversationId, ids));
   const hiding = leaving === null ? Promise.resolve(hide()) : leaving.then(hide);
 
   const answer = transport.request<unknown>(
@@ -266,6 +306,7 @@ export async function performDeleteForMe(params: DeleteParams & { readonly rowEx
   const result = await answer;
 
   if (!result.ok) {
+    gesture.retract();
     restoreRows(queryClient, removed);
     rowExit.unfold(ids);
     return { deleted: 0, failed: messages.length, offline: result.status === 0 };
