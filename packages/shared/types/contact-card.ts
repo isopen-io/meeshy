@@ -108,10 +108,6 @@ export type ResolveContactsRequest = {
   readonly defaultCountry?: string;
 };
 
-export type ResolveContactsResponse = {
-  readonly accounts: readonly PublicContactAccount[];
-};
-
 /** Schéma JSON (Fastify) d'un {@link PublicContactAccount} — fermé. */
 export const publicContactAccountSchema = {
   type: 'object',

@@ -62,8 +62,6 @@ export function loadVisitorCatalog(language: InterfaceLanguage): Promise<Visitor
   return request;
 }
 
-export const isVisitorCatalogLoaded = (language: InterfaceLanguage): boolean => loaded.has(language);
-
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 export function translateVisitor<K extends VisitorCatalogKey>(language: InterfaceLanguage, key: K, ...params: TranslateVisitorArgs<K>): string;

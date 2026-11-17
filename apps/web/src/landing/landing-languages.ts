@@ -19,10 +19,6 @@ export const LANDING_LANGUAGES: readonly LandingLanguage[] = SUPPORTED_INTERFACE
 
 export const ROOT_LANDING_LANGUAGE: LandingLanguage = DEFAULT_INTERFACE_LANGUAGE;
 
-export function isLandingLanguage(code: string): code is LandingLanguage {
-  return (LANDING_LANGUAGES as readonly string[]).includes(code);
-}
-
 /** L'adresse publique d'une landing : `/` pour la langue racine, `/<code>` sinon. */
 export function landingPath(language: LandingLanguage): string {
   return language === ROOT_LANDING_LANGUAGE ? '/' : `/${language}`;

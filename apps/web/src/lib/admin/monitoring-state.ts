@@ -8,7 +8,6 @@
  * changer un filtre ne doit pas le faire disparaître.
  */
 export const MONITORING_TABS = ['health', 'routes'] as const;
-export type MonitoringTab = (typeof MONITORING_TABS)[number];
 
 export const ROUTE_USAGE_SCOPES = ['watched', 'all'] as const;
 export type RouteUsageScope = (typeof ROUTE_USAGE_SCOPES)[number];

@@ -2,7 +2,7 @@ import type { ContentPage } from './type';
 
 /**
  * « Politique de confidentialité » — le contenu de
- * `apps/web/locales/fr/privacy.json`, mot pour mot, dans l'ordre où la page
+ * `legacy-web-final:apps/web/locales/fr/privacy.json`, mot pour mot, dans l'ordre où la page
  * legacy le rend.
  *
  * `print` n'entre pas, pour la raison donnée dans `app/terms/contenu.ts` : un

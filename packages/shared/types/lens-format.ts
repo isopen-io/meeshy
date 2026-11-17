@@ -52,7 +52,6 @@ export const LENS_COSTS = ['light', 'standard', 'rich'] as const;
 
 /** Les cinq primitives de v1, et rien d'autre. */
 export const LENS_LAYER_KINDS = ['lut', 'frame', 'sticker', 'text', 'particles'] as const;
-export type LensLayerKind = (typeof LENS_LAYER_KINDS)[number];
 
 export const LENS_ANCHOR_TYPES = ['screen', 'face'] as const;
 

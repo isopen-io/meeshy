@@ -77,7 +77,7 @@ export function SceneObjectAudio({
   // TOUS LES HOOKS AVANT LE RETOUR ANTICIPÉ (revue-correction #6901) : `src`
   // dépend du PORTEUR (`carrier.media`), qui change quand le fil se
   // rafraîchit — un `useEffect` posé APRÈS le `return null` change le NOMBRE
-  // de hooks d'un rendu à l'autre. Sous React (`bun run build:react`) c'est
+  // de hooks d'un rendu à l'autre. Sous React (les témoins `bun test`) c'est
   // une exception (« Rendered fewer hooks than expected »), sous Preact un
   // effet qui ne se rejoue ni ne se nettoie plus. Aucun lint ne le garde ici :
   // web-v2 n'a pas de configuration eslint.
