@@ -11,8 +11,14 @@ extension NotificationActionHandler {
     /// push de contrôle `notification_revoked` (AppDelegate) comme par le
     /// socket `notification:deleted` (`observeRevocations`). Un seul atome
     /// `UNUserNotificationCenter` derrière : `removeDeliveredNotifications`.
+    ///
+    /// **La révocation s'inscrit AVANT de retirer** (ios-systeme-7, #19104) : une bannière que
+    /// l'extension prépare encore n'est pas livrée, `removeDeliveredNotifications` ne la trouve
+    /// pas, et sa livraison suivante survivrait au message supprimé. L'extension relit
+    /// l'inscription juste avant de livrer ; les balayages retirent ce qui est passé entre-temps.
     func revokeDeliveredBanners(notificationIds: [String]) async {
         guard !notificationIds.isEmpty else { return }
+        recordPendingRevocations(notificationIds)
         await removeDeliveredForNotificationIds(notificationIds)
     }
 
@@ -34,9 +40,16 @@ extension NotificationActionHandler {
     /// La règle de sélection n'est pas réécrite ici : `EphemeralBannerDeadline`
     /// (SDK) la tient pour les trois cibles. Une bannière sans échéance n'est
     /// jamais retirée.
+    ///
+    /// Elle retire aussi les bannières dont la notification a été RÉVOQUÉE pendant que l'extension
+    /// les préparait (ios-systeme-7) : livrées après le retrait, personne d'autre ne les reprend.
     nonisolated static func sweepExpiredEphemeralBanners(now: Date = Date()) async {
+        let revocations = PendingBannerRevocations.inAppGroup()
         await removeDeliveredNotificationsAwaiting(
-            matching: { EphemeralBannerDeadline.isExpired(userInfo: $0, now: now) }
+            matching: {
+                EphemeralBannerDeadline.isExpired(userInfo: $0, now: now)
+                    || revocations.isRevoked($0, now: now)
+            }
         )
     }
 

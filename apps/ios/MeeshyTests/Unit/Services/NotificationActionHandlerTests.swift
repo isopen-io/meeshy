@@ -223,7 +223,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             destinationGuard: Self.destinationGuard(remembering: rememberedEndToEnd),
             notifyRefusedEndToEndReply: { _, _ in refusedReplyNotices += 1 },
             endToEnd: MockEndToEndMessaging(),
-            markReadThroughStore: { _ in false }
+            markReadThroughStore: { _ in false },
+            recordPendingRevocations: { _ in }
         )
 
         return SUTContext(

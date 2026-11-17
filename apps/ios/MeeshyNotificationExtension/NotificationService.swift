@@ -72,7 +72,9 @@ class NotificationService: UNNotificationServiceExtension {
     override func serviceExtensionTimeWillExpire() {
         enrichment?.cancel()
         guard let bestAttemptContent else { return }
-        delivery?.deliver(bestAttemptContent)
+        delivery?.deliver(Self.isRevokedWhilePreparing(bestAttemptContent.userInfo)
+            ? Self.withdrawnContent(from: bestAttemptContent)
+            : bestAttemptContent)
     }
 
     // MARK: - Pipeline
@@ -246,7 +248,29 @@ class NotificationService: UNNotificationServiceExtension {
             discard(result)
             return
         }
+        guard !isRevokedWhilePreparing(working.userInfo) else {
+            discard(result)
+            delivery.deliver(withdrawnContent(from: working))
+            return
+        }
         delivery.deliver(finalContent(from: working, result: result, isCommunicationType: isCommunicationType))
+    }
+
+    /// ios-systeme-7 (#19104) — le push silencieux `notification_revoked` peut arriver dans l'app
+    /// PENDANT que cette extension télécharge la pièce jointe : il n'y avait alors aucune bannière
+    /// à retirer. L'app inscrit la révocation dans le groupe d'apps ; on la relit au dernier
+    /// instant, juste avant de livrer.
+    private static func isRevokedWhilePreparing(_ userInfo: [AnyHashable: Any]) -> Bool {
+        PendingBannerRevocations.inAppGroup().isRevoked(userInfo, now: Date())
+    }
+
+    private static func withdrawnContent(from content: UNMutableNotificationContent) -> UNNotificationContent {
+        let neutralBody = NSLocalizedString(
+            NSEAttachmentPolicy.withdrawnBannerLocKey,
+            bundle: InterfaceLanguageResolver.bundle(),
+            comment: ""
+        )
+        return NSEAttachmentPolicy.withdrawing(content, neutralBody: neutralBody)
     }
 
     private static func finalContent(
@@ -473,9 +497,12 @@ class NotificationService: UNNotificationServiceExtension {
             let entries = delivered.map {
                 (id: $0.request.identifier, userInfo: $0.request.content.userInfo)
             }
+            // ios-systeme-7 — aussi les bannières livrées APRÈS une révocation que l'app avait déjà
+            // traitée : l'inscription du groupe d'apps est ce qui les désigne.
             let expired = EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now)
+                + PendingBannerRevocations.inAppGroup().revokedIdentifiers(from: entries, now: now)
             guard !expired.isEmpty else { return }
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: expired)
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: Array(Set(expired)))
         }
     }
 
