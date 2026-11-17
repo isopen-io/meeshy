@@ -57,7 +57,7 @@ const OVERRIDES = {
    * éphémère et le tombstone « Vu et supprimé »
    * (`BubbleMetaBadges.swift:146-171`, `BubbleSystemViews.swift:50-85`) et
    * `flame` régulier dans l'aperçu de LISTE
-   * (`LentilleConversationRow.swift:600-631`, `previewKindOf` §5.9) — les
+   * (`LentilleConversationRow.swift:600-631`, §5.9) — les
    * DEUX variants sont donc extraits, même dispositif que `fill-play`.
    */
   'flame-fill': join(CORE, 'fill/flame-fill.svg'),

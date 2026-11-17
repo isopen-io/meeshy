@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Message } from '@/lib/api/types';
 
 import { DESTRUCTION_MS, destructionPhaseOf } from './ephemeral-destruction';
-import { peekEphemeralDeadline, type EphemeralMessageFields } from './ephemeral-reception';
 import { deadlineThroughQuotes, lookupOf } from './quote-cascade';
 
 /**
@@ -17,30 +16,13 @@ import { deadlineThroughQuotes, lookupOf } from './quote-cascade';
  * `peekEphemeralDeadline` (la règle partagée, lue sans poser de réception),
  * la phase celle de `destructionPhaseOf`. Une rangée qui BRÛLE reste (l'effet
  * se voit) ; une rangée PARTIE sort, et le fil, le Résumé et le cache persisté
- * (`lib/api/ephemeral-cache.ts`) la retirent par cette seule fonction.
+ * (`lib/api/ephemeral-cache.ts`) la retirent par `livingMessages`.
  *
  * #10433 — une RÉPONSE part avec ce qu'elle cite (`quote-cascade.ts`) : le fil
  * et le cache lisent l'échéance d'une rangée À TRAVERS ses citations, si bien
  * que la mort locale d'un éphémère emporte ses réponses sans attendre le
  * `message:expired` de la passerelle.
  */
-
-export function isEphemeralGone(input: {
-  readonly message: EphemeralMessageFields;
-  readonly isMine: boolean;
-  readonly now: number;
-  readonly destroying?: boolean;
-  readonly expired?: boolean;
-}): boolean {
-  return (
-    destructionPhaseOf({
-      deadline: peekEphemeralDeadline({ message: input.message, isMine: input.isMine, now: input.now }),
-      now: input.now,
-      destroying: input.destroying ?? false,
-      expired: input.expired ?? false,
-    }) === 'gone'
-  );
-}
 
 type LivingInput<M extends Message> = {
   readonly messages: readonly M[];

@@ -226,21 +226,3 @@ export function toStickyPreference(mode: ConversationReadingMode | null): Readin
       return 'bulles';
   }
 }
-
-/** Réciproque de `toStickyPreference` — ce que `store.ts` mémorise pour une préférence choisie. */
-export function toStoredMode(preference: ReadingModePreference): ConversationReadingMode | null {
-  switch (preference) {
-    case 'auto':
-      return null;
-    case 'focal':
-      return 'focal';
-    case 'script':
-      return 'script';
-    case 'resume':
-      return 'summary';
-    case 'riviere':
-      return 'river';
-    case 'bulles':
-      return 'bubbles';
-  }
-}
