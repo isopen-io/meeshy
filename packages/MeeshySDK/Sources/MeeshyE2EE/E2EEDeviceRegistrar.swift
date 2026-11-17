@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import os
 
 /// Cet appareil, enrôlé, avec l'identité sous laquelle il l'a été : les stores
 /// et le chiffreur se construisent depuis CETTE identité, jamais une autre.
@@ -51,6 +52,7 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
     private let platform: E2EEPlatform
     private let label: String?
     private let now: @Sendable () -> Date
+    private let logger = MeeshyLog.logger(.e2ee, subsystem: .sdk)
 
     public init(
         identities: any E2EEIdentityVaultProviding,
@@ -71,14 +73,15 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
     }
 
     public func ensureEnrolled(userId: String) async throws -> E2EEEnrolledDevice {
-        let recorded = try vault.read { try E2EELocalEnrollmentRecord.load(in: $0) }
-        // Sans enrôlement local, l'identité du trousseau (qui survit à la
+        let recorded = try recordedEnrollment()
+        // Sans enrôlement local LISIBLE, l'identité du trousseau (qui survit à la
         // désinstallation) n'a plus ses sessions ni ses pré-clés : elle est
         // tirée de nouveau, et ses pairs reçoivent un 409 `stale` (#12882, § 4.5).
         if recorded?.userId != userId { try reset() }
         let identity = try currentOrCreateIdentity()
         if let recorded, recorded.userId == userId, recorded.registrationId == identity.registrationId,
            let kept = try await stillBound(recorded, identity: identity) {
+            await recordEnrollmentDate(of: kept.device, justEnrolled: false)
             return kept
         }
         let returning = recorded?.userId == userId
@@ -101,6 +104,23 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
         try lock.withLock {
             try vault.write { try $0.removeAll() }
             try identities.erase()
+        }
+    }
+
+    /// L'enrôlement enregistré — rien quand le coffre est ÉTRANGER : ses lignes
+    /// ont été scellées par une clé que ce trousseau n'a pas (sauvegarde iCloud
+    /// ou Finder restaurée, Démarrage rapide : la clé et l'identité sont
+    /// `ThisDeviceOnly`, elles ne suivent pas). Rien de ce coffre ne se lira
+    /// plus : il est vidé comme s'il était absent, et l'installation s'enrôle
+    /// comme un NOUVEL appareil (spec § 4.5, IOS-03, #18945). Seul l'échec
+    /// d'ouverture d'une ligne le prouve : une base occupée ou un trousseau
+    /// verrouillé peuvent n'être que passagers, ils remontent sans rien effacer.
+    private func recordedEnrollment() throws -> E2EELocalDevice? {
+        do {
+            return try vault.read { try E2EELocalEnrollmentRecord.load(in: $0) }
+        } catch E2EERecordVaultError.unsealable(kind: _) {
+            logger.warning("e2ee vault sealed by a key this device no longer has: enrolling as a new device")
+            return nil
         }
     }
 
@@ -135,7 +155,21 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
         let device = E2EELocalDevice(userId: userId, deviceId: enrollment.deviceId, registrationId: identity.registrationId)
         try vault.write { try E2EELocalEnrollmentRecord.save(device, in: $0) }
         if returning { try await replenish(try await directory.preKeyStock(), identity: identity) }
+        await recordEnrollmentDate(of: device, justEnrolled: !returning)
         return E2EEEnrolledDevice(device: device, identity: identity)
+    }
+
+    /// La date d'enrôlement de CETTE génération, rangée au coffre une fois
+    /// (R-3) : celle que le serveur donne à l'appareil courant, la même horloge
+    /// que la date d'un message ; à défaut, pour un enrôlement qui vient
+    /// d'avoir lieu, l'heure de l'appareil. Au mieux : un annuaire injoignable
+    /// ne fait pas échouer l'enrôlement, la date se cherche au suivant.
+    private func recordEnrollmentDate(of device: E2EELocalDevice, justEnrolled: Bool) async {
+        guard (try? vault.read({ try E2EELocalEnrollmentRecord.loadDate(in: $0) })) == nil else { return }
+        let listed = try? await directory.ownDevices()
+        let served = listed?.first(where: { $0.current && $0.deviceId == device.deviceId })?.enrolledAt
+        guard let date = served ?? (justEnrolled ? now() : nil) else { return }
+        try? vault.write { try E2EELocalEnrollmentRecord.saveDate(date, of: device, in: $0) }
     }
 
     private func replenish(_ stock: E2EEPreKeyStock, identity: E2EELocalIdentity) async throws {

@@ -48,7 +48,6 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'notifications',
   'profile',
   'settings',
-  'userProfile',
   'hashtag',
   /**
    * LES QUATRE ADRESSES D'ADMINISTRATION (#6432, #6795) — absentes de cette
@@ -171,6 +170,15 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   // reste privé.
   test('story (#9149) — publique : le lecteur sert le visiteur et l’invite', () =>
     expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'story' })).toBe('allow'));
+  // #18878 — la vitrine de quelqu'un est une PAGE PUBLIQUE : `GET /directory/people/:handle`
+  // sert un lecteur sans compte (`getOptionalAuth`), et l'adresse courte `/@pseudo` est un lien
+  // qu'on partage hors de Meeshy. Un visiteur sans compte la voit — au niveau Public, jamais plus.
+  test('userProfile (#18878) — publique : le visiteur sans compte voit la vitrine Public', () => {
+    for (const sessionStatus of ['anonymous', 'guest'] as const) {
+      expect(resolveRouteAccess({ sessionStatus, source: 'gateway', routeKey: 'userProfile' })).toBe('allow');
+      expect(resolveRouteAccess({ sessionStatus, source: 'gateway', routeKey: 'userShortcut' })).toBe('allow');
+    }
+  });
   // #5893 — GET /social/posts?scope=home exige une session malgré
   // optionalAuth à la porte : un visiteur sans compte y recevait jusqu'ici
   // l'écran d'attente (route publique par défaut).

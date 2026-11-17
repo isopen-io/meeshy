@@ -62,6 +62,7 @@ type Negative = {
 type Displayed = { indexes: number[]; emoji: string[]; names: Record<string, string[]>; decimal: number[] | number };
 type OptionVector = {
   name: string;
+  role: 'répondeur' | 'initiateur';
   bit1: number[];
   bit2: number[];
   streamHex: string;
@@ -238,14 +239,13 @@ describe('propriétés et négatifs (§ 8)', () => {
 describe('les options en carré, à l’octet près (§ 4.9)', () => {
   const codeBytes = bytesOfHex(V1.expected.sasBytesHex);
   const ackBytes = bytesOfHex(V1.expected.ack.bytesHex);
-  const decimalOf = {
-    'carre-du-code-vecteur-1': (symbols: readonly number[]) => codeDecimals(codeFromSymbols(symbols, (codeBytes[5] ?? 0) & 0x3f)),
-    'carre-de-l-accuse-vecteur-1': (symbols: readonly number[]) => ackDecimal(ackFromSymbols(symbols, (ackBytes[1] ?? 0) & 0x0f)),
-  } as const;
+  const isCode = (option: OptionVector): boolean => option.role === 'répondeur';
+  const decimalOf = (option: OptionVector, symbols: readonly number[]) =>
+    isCode(option) ? codeDecimals(codeFromSymbols(symbols, (codeBytes[5] ?? 0) & 0x3f)) : ackDecimal(ackFromSymbols(symbols, (ackBytes[1] ?? 0) & 0x0f));
 
-  it.each(vectors.options.map((option) => [option.name, option] as const))('%s', (name, option) => {
-    const symbols = name === 'carre-du-code-vecteur-1' ? codeEmojiIndexes(codeBytes) : ackEmojiIndexes(ackBytes);
-    const square = name === 'carre-du-code-vecteur-1' ? CODE_SQUARE : ACK_SQUARE;
+  it.each(vectors.options.map((option) => [option.name, option] as const))('%s', (_name, option) => {
+    const symbols = isCode(option) ? codeEmojiIndexes(codeBytes) : ackEmojiIndexes(ackBytes);
+    const square = isCode(option) ? CODE_SQUARE : ACK_SQUARE;
     expect([...square.bit1]).toEqual(option.bit1);
     expect([...square.bit2]).toEqual(option.bit2);
     const stream = bytesOfHex(option.streamHex);
@@ -266,7 +266,7 @@ describe('les options en carré, à l’octet près (§ 4.9)', () => {
       expect(rendered.indexes).toEqual(wanted.indexes);
       expect(rendered.emoji).toEqual(wanted.emoji);
       expect(rendered.names).toEqual(wanted.names);
-      expect(decimalOf[name as keyof typeof decimalOf](displayed)).toEqual(wanted.decimal);
+      expect(decimalOf(option, displayed)).toEqual(wanted.decimal);
     });
     expect(options.displayed[options.correctAt]).toEqual([...symbols]);
   });

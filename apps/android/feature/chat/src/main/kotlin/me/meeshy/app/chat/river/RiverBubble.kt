@@ -62,6 +62,7 @@ import me.meeshy.app.chat.rememberBubbleVoicePlayback
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.BubbleEndToEndSeal
 import me.meeshy.ui.component.river.RiverAttachmentBlock
 import me.meeshy.ui.component.river.RiverEmojiText
 import me.meeshy.ui.component.river.RiverQuotedMediaFace
@@ -216,7 +217,7 @@ private fun StickerBox(sticker: BubbleStickerSpec, content: RiverBubbleContent, 
 @Composable
 private fun spokenLabel(content: RiverBubbleContent): String {
     val body = when {
-        content.protection == RiverProtection.END_TO_END_SEALED -> stringResource(UiR.string.bubble_message_end_to_end)
+        content.protection == RiverProtection.END_TO_END_SEALED -> stringResource(BubbleEndToEndSeal.label(content.endToEndSeal))
         content.protection == RiverProtection.BURNED -> stringResource(UiR.string.bubble_burned_a11y)
         content.blurReveal != null -> ""
         else -> content.text
@@ -358,7 +359,7 @@ private fun RiverAttachments(source: BubbleContent, content: RiverBubbleContent,
 @Composable
 private fun BubbleBody(content: RiverBubbleContent, laneColor: Color) {
     when (content.protection) {
-        RiverProtection.END_TO_END_SEALED -> MutedLine(stringResource(UiR.string.bubble_message_end_to_end))
+        RiverProtection.END_TO_END_SEALED -> MutedLine(stringResource(BubbleEndToEndSeal.label(content.endToEndSeal)))
         RiverProtection.BURNED -> MutedLine(stringResource(UiR.string.bubble_burned))
         RiverProtection.NONE -> {
             if (content.text.isBlank()) return

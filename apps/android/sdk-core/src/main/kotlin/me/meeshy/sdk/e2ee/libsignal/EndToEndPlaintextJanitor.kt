@@ -100,10 +100,15 @@ internal class EndToEndPlaintextJanitor internal constructor(
 
     private enum class Batch { DONE, MORE, BLOCKED }
 
-    /** Une enveloppe ouverte après l'effacement de son message : son clair, tout juste rangé, repart. */
+    /**
+     * Une enveloppe ouverte après l'effacement de son message, ou de sa conversation : son clair, tout juste rangé, repart.
+     * L'effacement d'une conversation se juge à l'instant où la PASSERELLE a reçu le message, jamais à l'horloge de
+     * l'émetteur écrite dans le chiffré (#14672) : un émetteur en avance n'échappe pas à la suppression, un émetteur en
+     * retard ne fait pas effacer un message écrit après elle. Sans instant servi, le message est tenu pour postérieur.
+     */
     suspend fun reconsider(opened: E2eeOpenOutcome.Opened) {
         val owner = account()?.takeIf { it.isNotBlank() } ?: return
-        if (ledger.wasErased(owner, opened.messageId, opened.conversationId, opened.content.sentAt)) {
+        if (ledger.wasErased(owner, opened.messageId, opened.conversationId, opened.servedAtMillis ?: Long.MAX_VALUE)) {
             vault.erase(owner, listOf(opened.messageId))
         }
     }

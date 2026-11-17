@@ -493,6 +493,38 @@ public actor OutboxFlusher {
         outboxFlusherLog.info("Publication \(id, privacy: .public) retirée par son auteur pendant l'envoi")
     }
 
+    /// Ce qu'un échec laisse de sa ligne : l'état de la tentative
+    /// (`attemptStateColumns`), ou RIEN pour une ligne qui ne se rejouera
+    /// jamais et dont la charge est du clair (`erasesRefusedRow`), effacée
+    /// octets mis à zéro.
+    private func persistFailure(_ snapshot: OutboxRecord, erasing: Bool) async {
+        do {
+            if erasing {
+                try await pool.writeWithoutTransaction { db in
+                    try db.withSecureDelete { _ = try OutboxRecord.deleteOne(db, key: snapshot.id) }
+                }
+            } else {
+                try await pool.write { db in try snapshot.update(db, columns: Self.attemptStateColumns) }
+            }
+        } catch {
+            // `attempts` n'est pas incrémenté : sans trace, la ligne peut
+            // retenter indéfiniment sans jamais atteindre `.exhausted`.
+            outboxFlusherLog.error("Failure state not persisted for \(snapshot.id, privacy: .public), retry budget not consumed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Un message ou une modification refusés parce que leur conversation est
+    /// chiffrée de bout en bout — par la garde, avant tout transport
+    /// (`EndToEndSendRefusal`), ou par la passerelle (`E2EE_PLAINTEXT_REFUSED`) —
+    /// ne se rejouent jamais, et leur charge est le TEXTE EN CLAIR d'un message
+    /// d'une conversation scellée : la ligne s'efface au lieu d'attendre le
+    /// ramasse-miettes de 7 jours (#16747). La bulle garde son échec, et le fil
+    /// la renvoie chiffrée.
+    static func erasesRefusedRow(_ record: OutboxRecord, after error: Error) -> Bool {
+        guard record.kind == .sendMessage || record.kind == .editMessage else { return false }
+        return error is EndToEndSendRefusal || EndToEndSendGate.isServerPlaintextRefusal(error)
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
@@ -613,16 +645,7 @@ public actor OutboxFlusher {
                 current.nextAttemptAt = Date().addingTimeInterval(retryPolicy.delay(afterFailure: current.attempts))
             }
 
-            let failedSnapshot = current
-            do {
-                try await pool.write { db in
-                    try failedSnapshot.update(db, columns: Self.attemptStateColumns)
-                }
-            } catch {
-                // `attempts` n'est pas incrémenté : sans trace, la ligne peut
-                // retenter indéfiniment sans jamais atteindre `.exhausted`.
-                outboxFlusherLog.error("Failure state not persisted for \(failedSnapshot.id, privacy: .public), retry budget not consumed: \(error.localizedDescription, privacy: .public)")
-            }
+            await persistFailure(current, erasing: Self.erasesRefusedRow(current, after: error))
 
             // Wave 1 Task 3.6 + Phase 4 prereq — emit BOTH the outcome
             // callback (Phase 4 cmid→outcome correlation channel for one-shot

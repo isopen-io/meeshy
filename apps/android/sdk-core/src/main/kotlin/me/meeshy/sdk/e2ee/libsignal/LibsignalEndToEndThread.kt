@@ -110,9 +110,10 @@ internal class LibsignalEndToEndThread @Inject constructor(
     }
 
     /**
-     * Le clair de chaque message à sa place ; et le clair d'un message parti (échu, vue unique ouverte) quitte le coffre
-     * au passage — une ligne relue le dit même quand l'événement temps réel a manqué. Une pierre tombale n'efface rien ici
-     * (#14656) : la suppression CONFIRMÉE passe par la file durable ([PlaintextErasureLedger]).
+     * Le clair de chaque message à sa place, ou la raison pour laquelle il n'est pas là (#18983) ; et le clair d'un message
+     * parti (échu, vue unique ouverte) quitte le coffre au passage — une ligne relue le dit même quand l'événement temps
+     * réel a manqué. Une pierre tombale n'efface rien ici (#14656) : la suppression CONFIRMÉE passe par la file durable
+     * ([PlaintextErasureLedger]).
      */
     private suspend fun projected(userId: String, conversationId: String, messages: List<LocalMessage>): List<LocalMessage> {
         val now = clock.nowMillis()
@@ -121,7 +122,6 @@ internal class LibsignalEndToEndThread @Inject constructor(
         val keys = (candidates.flatMap { EndToEndPlaintextOverlay.keysOf(it.message, userId) } + gone).distinct()
         if (keys.isEmpty()) return messages
         val entries = runtime.plaintexts(userId, keys)
-        if (entries.isEmpty()) return messages
         entries.keys.filter { it in gone }.takeIf { it.isNotEmpty() }?.let { runtime.erase(userId, it) }
         return messages.map { local -> local.copy(message = EndToEndPlaintextOverlay.apply(local.message, entries, conversationId, userId)) }
     }

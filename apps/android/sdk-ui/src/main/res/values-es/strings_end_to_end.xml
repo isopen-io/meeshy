@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_message_end_to_end">Cifrado de extremo a extremo: léelo en la app Meeshy en iPhone</string>
+    <string name="bubble_message_end_to_end">Mensaje cifrado de extremo a extremo, aún no está en este dispositivo</string>
+    <string name="bubble_message_end_to_end_unreadable">Este mensaje cifrado no se pudo abrir en este dispositivo</string>
+    <string name="bubble_message_end_to_end_update">Actualiza Meeshy para leer este mensaje cifrado</string>
+    <string name="bubble_message_end_to_end_other_device">Escrito en otro de tus dispositivos, aún no aprobado aquí</string>
+    <string name="bubble_failed_e2ee_device_limit">16 dispositivos cifrados alcanzados: quita uno en Mis dispositivos cifrados</string>
 </resources>

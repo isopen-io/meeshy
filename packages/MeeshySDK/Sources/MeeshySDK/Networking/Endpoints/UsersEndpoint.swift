@@ -22,6 +22,9 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
     case friendRequests
     case idById(id: String)
     case me
+    case meAddresses
+    case meAddressesById(id: String)
+    case meAddressesOrder
     case meAvatar
     case meBanner
     case meBlockedUsers
@@ -63,6 +66,9 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
         case .friendRequests: return "/api/v1/users/friend-requests"
         case .idById(let id): return "/api/v1/users/id/\(id)"
         case .me: return "/api/v1/users/me"
+        case .meAddresses: return "/api/v1/users/me/addresses"
+        case .meAddressesById(let id): return "/api/v1/users/me/addresses/\(id)"
+        case .meAddressesOrder: return "/api/v1/users/me/addresses/order"
         case .meAvatar: return "/api/v1/users/me/avatar"
         case .meBanner: return "/api/v1/users/me/banner"
         case .meBlockedUsers: return "/api/v1/users/me/blocked-users"
