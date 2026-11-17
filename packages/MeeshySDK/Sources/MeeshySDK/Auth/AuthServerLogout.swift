@@ -50,6 +50,20 @@ enum AuthServerLogout {
         }
     }
 
+    /// #18911 (ios-systeme-1) — la sortie de session d'un compte qu'on QUITTE :
+    /// les jetons push de l'installation partent d'abord, la session se ferme
+    /// ensuite. Distincte de `run(token:using:)` seul, qui referme une session que
+    /// l'appareil n'a jamais adoptée (preuve par lien refusée) : sans jeton à
+    /// retirer, voire retirant ceux du compte ouvert si c'était le même.
+    @MainActor
+    static func endSession(token: String, using authService: AuthServiceProviding, keychain: any KeychainStoring) async {
+        await run(
+            token: token,
+            using: authService,
+            unregisteringPushDevice: PushDeviceIdentity.current(keychain: keychain).deviceId
+        )
+    }
+
     private static func attempt(
         _ label: String,
         delays: [TimeInterval],
