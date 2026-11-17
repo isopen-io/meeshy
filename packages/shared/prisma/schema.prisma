@@ -131,6 +131,8 @@ model User {
   city                      String?
   /// Cercle (RelationLevel) à partir duquel la ville se lit ; null = la personne seule.
   cityCircle                String?
+  /// Couleur d'accent de la vitrine (#19201) : une teinte de PROFILE_ACCENT_HEXES ; null = accent calculé.
+  profileAccentColor        String?
   /// Adresses personnelles publiées sur la fiche (#18863).
   profileAddresses          ProfileAddress[]
   email                     String   @unique
