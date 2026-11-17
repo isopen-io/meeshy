@@ -31,12 +31,12 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   performanceLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
 }));
 
-const mockResolveConversationId = jest.fn();
+const mockResolveConversationId = jest.fn<(...args: unknown[]) => Promise<string>>();
 jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: unknown[]) => mockResolveConversationId(...args),
 }));
 
-const mockCanAccessConversation = jest.fn();
+const mockCanAccessConversation = jest.fn<(...args: unknown[]) => Promise<boolean>>();
 jest.mock('../../../../routes/conversations/utils/access-control', () =>
   (jest.requireActual('../../../helpers/acces-conversation-double') as { doubleAccesConversation: (actual: unknown, can: unknown) => unknown }).doubleAccesConversation(
     jest.requireActual('../../../../routes/conversations/utils/access-control') as Record<string, unknown>,
