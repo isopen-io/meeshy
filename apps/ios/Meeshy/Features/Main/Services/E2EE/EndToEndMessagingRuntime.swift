@@ -36,6 +36,10 @@ nonisolated protocol EndToEndMessagingProviding: Sendable {
     /// Les messages dont le coffre de `account` tient le clair ; `nil` si ce
     /// coffre n'est pas le sien.
     func storedMessageIds(as account: String) async -> [String]?
+    /// Quand CET appareil, dans sa génération actuelle, a été enrôlé pour
+    /// `account` (R-3) : un message antérieur n'a aucune enveloppe pour lui.
+    /// `nil` quand le coffre ne le sait pas, ou n'est pas celui de ce compte.
+    func enrolledAt(as account: String) async -> Date?
     /// Chaque enveloppe ouverte, par la socket ou le rattrapage.
     var opened: AnyPublisher<E2EEOpenOutcome, Never> { get }
     /// Le compte de chaque session qui s'ouvre (`nil` à la fermeture) : ce qui
@@ -289,6 +293,11 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
               let store = try? provisioning.plaintexts(owner: owner),
               let ids = try? store.storedMessageIds(), (try? store.servesItsOwner()) == true else { return nil }
         return ids
+    }
+
+    func enrolledAt(as account: String) async -> Date? {
+        guard let owner = session.account, owner == account else { return nil }
+        return try? provisioning.plaintexts(owner: owner).enrolledAt()
     }
 
     /// Une enveloppe poussée par la socket de cet appareil.

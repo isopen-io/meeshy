@@ -5,17 +5,18 @@ import MeeshySDK
 
 /// **Un message chiffré que cet appareil ne montre pas dit POURQUOI** (IOS-04,
 /// #18947) — au lieu du littéral `[Encrypted]` que la passerelle sert, le même
-/// pour quatre situations : rien n'est arrivé, la copie d'un de mes appareils
-/// attend l'approbation, le message attend une mise à jour, il est illisible.
+/// pour toutes les situations : rien n'est arrivé, la copie d'un de mes
+/// appareils attend l'approbation, le message attend une mise à jour, il est
+/// illisible, ou il a été écrit avant l'enrôlement de cet appareil (R-3).
 @MainActor
 final class EndToEndWithheldNoticeTests: XCTestCase {
     private let conversationId = "00000000000000000000cd01"
     private let peer = "00000000000000000000cd77"
 
-    private func sealed(isMe: Bool = false) -> MeeshyMessage {
+    private func sealed(isMe: Bool = false, createdAt: Date = Date()) -> MeeshyMessage {
         MeeshyMessage(
             id: "m1", clientMessageId: "cid_1", conversationId: conversationId, senderId: "p1",
-            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee",
+            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee", createdAt: createdAt,
             senderUserId: isMe ? "me" : peer, isMe: isMe
         )
     }
@@ -32,7 +33,7 @@ final class EndToEndWithheldNoticeTests: XCTestCase {
     func test_eachState_hasItsOwnWords_neverTheServedLiteral() {
         let texts = EndToEndWithheldNotice.allCases.map(\.text)
 
-        XCTAssertEqual(Set(texts).count, EndToEndWithheldNotice.allCases.count, "quatre états, quatre phrases")
+        XCTAssertEqual(Set(texts).count, EndToEndWithheldNotice.allCases.count, "un état, une phrase")
         XCTAssertFalse(texts.contains(E2EEWire.contentPlaceholder))
         XCTAssertFalse(texts.contains(where: \.isEmpty))
     }
@@ -63,6 +64,52 @@ final class EndToEndWithheldNoticeTests: XCTestCase {
 
     func test_nothingYetForMyOwnMessage_awaitsTheApprovalBetweenMyDevices() {
         XCTAssertEqual(EndToEndWithheldNotice.of(sealed(isMe: true), entry: nil), .awaitingApproval)
+    }
+
+    // MARK: - Écrit avant l'enrôlement de cet appareil (R-3)
+
+    private func renderedCell(for message: MeeshyMessage, enrolledAt: Date, vault: E2EEPlaintextEntry? = nil) async -> MeeshyMessage {
+        let endToEnd = MockEndToEndMessaging()
+        endToEnd.enrollmentDate = enrolledAt
+        if let vault { endToEnd.store(vault, for: message.id) }
+        var messages = [message]
+        let clear = EndToEndThreadClear()
+        await clear.resolve(&messages, from: endToEnd, conversationId: conversationId, account: "me")
+        var cell = message
+        clear.apply(to: &cell, conversationId: conversationId)
+        return cell
+    }
+
+    func test_theCell_saysBeforeThisDevice_forMyHistoryOlderThanTheEnrollment() async {
+        let enrolledAt = Date()
+
+        let cell = await renderedCell(for: sealed(isMe: true, createdAt: enrolledAt.addingTimeInterval(-86_400)), enrolledAt: enrolledAt)
+
+        XCTAssertEqual(cell.content, EndToEndWithheldNotice.beforeThisDevice.text, "jamais « en attente d'approbation » pour un message qui ne viendra pas")
+    }
+
+    func test_theCell_saysBeforeThisDevice_forAPeersHistoryOlderThanTheEnrollment() async {
+        let enrolledAt = Date()
+
+        let cell = await renderedCell(for: sealed(createdAt: enrolledAt.addingTimeInterval(-86_400)), enrolledAt: enrolledAt)
+
+        XCTAssertEqual(cell.content, EndToEndWithheldNotice.beforeThisDevice.text, "jamais « en attente de déchiffrement » pour un message qui ne viendra pas")
+    }
+
+    func test_whatTheVaultKeeps_winsOverTheEnrollmentDate() async {
+        let enrolledAt = Date()
+
+        let cell = await renderedCell(for: sealed(createdAt: enrolledAt.addingTimeInterval(-86_400)), enrolledAt: enrolledAt, vault: kept(version: 2))
+
+        XCTAssertEqual(cell.content, EndToEndWithheldNotice.updateRequired.text)
+    }
+
+    func test_theCell_stillAwaitsTheApproval_forAMessageWrittenAfterTheEnrollment() async {
+        let enrolledAt = Date()
+
+        let cell = await renderedCell(for: sealed(isMe: true, createdAt: enrolledAt.addingTimeInterval(60)), enrolledAt: enrolledAt)
+
+        XCTAssertEqual(cell.content, EndToEndWithheldNotice.awaitingApproval.text)
     }
 
     // MARK: - La cellule

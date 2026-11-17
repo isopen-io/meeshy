@@ -6,22 +6,26 @@ import MeeshySDK
 /// clair** (IOS-04, #18947).
 ///
 /// La passerelle sert le même littéral `[Encrypted]` pour tout message chiffré
-/// de bout en bout, et le fil le rendait tel quel pour quatre situations que
+/// de bout en bout, et le fil le rendait tel quel pour des situations que
 /// l'utilisateur doit distinguer : rien n'est encore arrivé ; la copie d'un de
 /// MES autres appareils attend l'approbation entre eux ; le message est écrit
 /// dans une version que celle-ci ne lit pas encore (ses octets sont gardés, la
-/// mise à jour le rendra lisible) ; le message ne peut pas être lu ici.
+/// mise à jour le rendra lisible) ; le message ne peut pas être lu ici ; il a
+/// été écrit avant que cet appareil ne soit enrôlé, et ne s'y lira jamais (R-3).
 nonisolated enum EndToEndWithheldNotice: Equatable, CaseIterable {
     case pending
     case awaitingApproval
     case updateRequired
     case unreadable
+    case beforeThisDevice
 
     /// Ce que le coffre sait d'un message dont le clair n'est pas adopté.
     /// Sans rien au coffre, un message que J'AI écrit vient d'un autre de mes
     /// appareils (celui-ci garde le clair de ses envois) : sa copie attend que
     /// les deux appareils se soient approuvés. Un clair lisible mais pas à SA
-    /// place ne se montre pas : il est illisible ici.
+    /// place ne se montre pas : il est illisible ici. Un message écrit avant
+    /// l'enrôlement de cet appareil (`beforeThisDevice`) se juge en amont, par
+    /// sa date : le coffre n'en sait rien.
     static func of(_ message: MeeshyMessage, entry: E2EEPlaintextEntry?) -> EndToEndWithheldNotice {
         switch entry {
         case nil:
@@ -43,6 +47,8 @@ nonisolated enum EndToEndWithheldNotice: Equatable, CaseIterable {
             String(localized: "e2ee.thread.updateRequired", defaultValue: "Mettez à jour Meeshy pour lire ce message", bundle: .main)
         case .unreadable:
             String(localized: "e2ee.thread.unreadable", defaultValue: "Ce message n’a pas pu être lu sur cet appareil", bundle: .main)
+        case .beforeThisDevice:
+            String(localized: "e2ee.thread.beforeThisDevice", defaultValue: "Envoyé avant l’ajout de cet appareil : il ne se lit pas ici", bundle: .main)
         }
     }
 }

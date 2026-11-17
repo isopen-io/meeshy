@@ -34,6 +34,49 @@ final class E2EEDeviceRegistrarTests: XCTestCase {
         )
     }
 
+    // MARK: - R-3 : quand cette génération a été enrôlée
+
+    func test_aNewEnrollment_recordsTheServersDateForThisDevice() async throws {
+        let server = FakeE2EEServer()
+        let phone = try installation()
+        let served = Date(timeIntervalSince1970: 1_790_000_000)
+        let directory = DatedOwnDevicesDirectory(inner: server.client(userId: alice, sessionId: "s1"), enrolledAt: served)
+
+        _ = try await phone.registrar(directory).ensureEnrolled(userId: alice)
+
+        XCTAssertEqual(try E2EEPlaintextVault(vault: phone.vault, owner: alice).enrolledAt(), served)
+    }
+
+    func test_withoutTheServersDate_aNewEnrollment_keepsTheDevicesClock() async throws {
+        let server = FakeE2EEServer()
+        let phone = try installation()
+        let clock = Date(timeIntervalSince1970: 1_790_000_100)
+        let registrar = E2EEDeviceRegistrar(
+            identities: E2EEIdentityVault(secrets: phone.secrets), vault: phone.vault, lock: phone.lock,
+            directory: server.client(userId: alice, sessionId: "s1"), platform: .ios, label: "iPhone", now: { clock }
+        )
+
+        _ = try await registrar.ensureEnrolled(userId: alice)
+
+        XCTAssertEqual(try E2EEPlaintextVault(vault: phone.vault, owner: alice).enrolledAt(), clock)
+        XCTAssertNil(try E2EEPlaintextVault(vault: phone.vault, owner: bob).enrolledAt(), "le coffre d'un autre compte ne dit rien")
+    }
+
+    func test_anInstallationEnrolledWithoutADate_learnsItFromTheServer_neverFromItsClock() async throws {
+        let server = FakeE2EEServer()
+        let phone = try installation()
+        let undated = server.client(userId: alice, sessionId: "s1")
+        _ = try await phone.registrar(undated).ensureEnrolled(userId: alice)
+        try phone.vault.write { try $0.remove(.localEnrollment, E2EELocalEnrollmentRecord.dateKey) }
+
+        _ = try await phone.registrar(undated).ensureEnrolled(userId: alice)
+        XCTAssertNil(try E2EEPlaintextVault(vault: phone.vault, owner: alice).enrolledAt(), "déjà enrôlée, elle ne prend pas l'heure de l'appareil pour la sienne")
+
+        let served = Date(timeIntervalSince1970: 1_780_000_000)
+        _ = try await phone.registrar(DatedOwnDevicesDirectory(inner: undated, enrolledAt: served)).ensureEnrolled(userId: alice)
+        XCTAssertEqual(try E2EEPlaintextVault(vault: phone.vault, owner: alice).enrolledAt(), served)
+    }
+
     func test_theFirstLaunch_enrollsWithAFullBatch_andTheNextOnlyReadsTheStock() async throws {
         let server = FakeE2EEServer()
         let phone = try installation()
@@ -268,5 +311,24 @@ extension FakeE2EEDirectoryClient {
     /// Fait consommer `count` pré-clés de `userId` par ce client (un tiers qui réserve des bundles).
     func bundlesSync(of userId: String, count: Int) -> Int {
         (0..<count).reduce(0) { total, _ in total + server.bundlesForTest(of: userId).devices.count }
+    }
+}
+
+/// L'annuaire qui date l'appareil courant, comme `GET /e2ee/devices` (`enrolledAt`).
+private final class DatedOwnDevicesDirectory: ForwardingE2EEDirectory {
+    private let served: Date
+
+    init(inner: FakeE2EEDirectoryClient, enrolledAt served: Date) {
+        self.served = served
+        super.init(inner: inner)
+    }
+
+    override func ownDevices() async throws -> [E2EEOwnDeviceDetails] {
+        try await inner.ownDevices().map { device in
+            E2EEOwnDeviceDetails(
+                deviceId: device.deviceId, registrationId: device.registrationId, platform: device.platform, label: device.label,
+                enrolledAt: device.current ? served : device.enrolledAt, lastSeenAt: device.lastSeenAt, current: device.current
+            )
+        }
     }
 }

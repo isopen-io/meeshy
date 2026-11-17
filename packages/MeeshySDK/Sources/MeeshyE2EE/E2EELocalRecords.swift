@@ -112,6 +112,11 @@ public protocol E2EEPlaintextStoring: Sendable {
     func storedMessageIds() throws -> [String]
     /// Le coffre est-il enrôlé pour le compte qui le demande ?
     func servesItsOwner() throws -> Bool
+    /// Quand cette génération de l'appareil a été enrôlée, à l'horloge du
+    /// serveur quand il l'a dite (R-3) : un message antérieur n'a aucune
+    /// enveloppe pour elle. `nil` si le coffre ne le sait pas, ou n'est pas
+    /// celui du compte qui le demande.
+    func enrolledAt() throws -> Date?
 }
 
 public enum E2EEPlaintextVaultError: Error, Equatable {
@@ -184,6 +189,13 @@ public final class E2EEPlaintextVault: E2EEPlaintextStoring {
 
     public func servesItsOwner() throws -> Bool {
         try vault.read { try serves(in: $0) }
+    }
+
+    public func enrolledAt() throws -> Date? {
+        try vault.read { transaction in
+            guard try serves(in: transaction) else { return nil }
+            return try E2EELocalEnrollmentRecord.loadDate(in: transaction)
+        }
     }
 
     public func storedMessageIds() throws -> [String] {
@@ -284,6 +296,7 @@ public struct E2EELocalDevice: Codable, Equatable, Sendable {
 
 enum E2EELocalEnrollmentRecord {
     static let key = "current"
+    static let dateKey = "enrolledAt"
 
     static func load(in transaction: any E2EERecordTransaction) throws -> E2EELocalDevice? {
         try transaction.load(.localEnrollment, key).map { try JSONDecoder().decode(E2EELocalDevice.self, from: $0) }
@@ -291,5 +304,24 @@ enum E2EELocalEnrollmentRecord {
 
     static func save(_ device: E2EELocalDevice, in transaction: any E2EERecordTransaction) throws {
         try transaction.save(try JSONEncoder().encode(device), as: .localEnrollment, key)
+    }
+
+    /// La date d'enrôlement de la génération enregistrée, jamais celle d'une autre.
+    static func loadDate(in transaction: any E2EERecordTransaction) throws -> Date? {
+        guard let device = try load(in: transaction),
+              let dated = try transaction.load(.localEnrollment, dateKey).map({ try JSONDecoder().decode(Dated.self, from: $0) }),
+              dated.deviceId == device.deviceId, dated.registrationId == device.registrationId else { return nil }
+        return dated.enrolledAt
+    }
+
+    static func saveDate(_ date: Date, of device: E2EELocalDevice, in transaction: any E2EERecordTransaction) throws {
+        let dated = Dated(deviceId: device.deviceId, registrationId: device.registrationId, enrolledAt: date)
+        try transaction.save(try JSONEncoder().encode(dated), as: .localEnrollment, dateKey)
+    }
+
+    private struct Dated: Codable {
+        let deviceId: UInt32
+        let registrationId: UInt32
+        let enrolledAt: Date
     }
 }

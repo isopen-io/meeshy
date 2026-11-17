@@ -329231,6 +329231,53 @@
         }
       }
     },
+    "e2ee.thread.beforeThisDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسلت قبل إضافة هذا الجهاز، ولا يمكن قراءتها هنا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vor dem Hinzufügen dieses Geräts gesendet – hier nicht lesbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent before this device was added, so it can’t be read here"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado antes de añadir este dispositivo: no se puede leer aquí"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyé avant l’ajout de cet appareil : il ne se lit pas ici"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviato prima dell’aggiunta di questo dispositivo: qui non si può leggere"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviada antes de este dispositivo ser adicionado: não pode ser lida aqui"
+          }
+        }
+      }
+    },
     "e2ee.thread.pending": {
       "extractionState": "manual",
       "localizations": {

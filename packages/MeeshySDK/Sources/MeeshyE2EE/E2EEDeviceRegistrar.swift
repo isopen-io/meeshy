@@ -81,6 +81,7 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
         let identity = try currentOrCreateIdentity()
         if let recorded, recorded.userId == userId, recorded.registrationId == identity.registrationId,
            let kept = try await stillBound(recorded, identity: identity) {
+            await recordEnrollmentDate(of: kept.device, justEnrolled: false)
             return kept
         }
         let returning = recorded?.userId == userId
@@ -154,7 +155,21 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
         let device = E2EELocalDevice(userId: userId, deviceId: enrollment.deviceId, registrationId: identity.registrationId)
         try vault.write { try E2EELocalEnrollmentRecord.save(device, in: $0) }
         if returning { try await replenish(try await directory.preKeyStock(), identity: identity) }
+        await recordEnrollmentDate(of: device, justEnrolled: !returning)
         return E2EEEnrolledDevice(device: device, identity: identity)
+    }
+
+    /// La date d'enrôlement de CETTE génération, rangée au coffre une fois
+    /// (R-3) : celle que le serveur donne à l'appareil courant, la même horloge
+    /// que la date d'un message ; à défaut, pour un enrôlement qui vient
+    /// d'avoir lieu, l'heure de l'appareil. Au mieux : un annuaire injoignable
+    /// ne fait pas échouer l'enrôlement, la date se cherche au suivant.
+    private func recordEnrollmentDate(of device: E2EELocalDevice, justEnrolled: Bool) async {
+        guard (try? vault.read({ try E2EELocalEnrollmentRecord.loadDate(in: $0) })) == nil else { return }
+        let listed = try? await directory.ownDevices()
+        let served = listed?.first(where: { $0.current && $0.deviceId == device.deviceId })?.enrolledAt
+        guard let date = served ?? (justEnrolled ? now() : nil) else { return }
+        try? vault.write { try E2EELocalEnrollmentRecord.saveDate(date, of: device, in: $0) }
     }
 
     private func replenish(_ stock: E2EEPreKeyStock, identity: E2EELocalIdentity) async throws {
