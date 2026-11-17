@@ -346,4 +346,15 @@ class NotificationConsumptionServiceTest {
         assertThat(f.rows()).containsExactly("n2", false)
         assertThat(f.repo.unreadCountStream.value).isEqualTo(1)
     }
+
+    @Test
+    fun `a deleted notification also leaves the lists a category loaded on its own`() = runTest {
+        val f = fixture(notification("n1"))
+        val unreadScope = NotificationScope(unreadOnly = true)
+        f.repo.replaceAll(unreadScope, listOf(notification("n1"), notification("older")))
+
+        f.service.onSocketDeleted("older")
+
+        assertThat(f.repo.cachedItems(unreadScope).orEmpty().map { it.id }).containsExactly("n1")
+    }
 }

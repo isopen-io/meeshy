@@ -171,6 +171,7 @@ class NotificationConsumptionService @Inject constructor(
 
     fun onSocketDeleted(notificationId: String) {
         repository.applyDeleted(notificationId)
+        repository.patchEverywhere { rows -> rows.filterNot { it.id == notificationId } }
         events.publishDeleted(notificationId)
     }
 
