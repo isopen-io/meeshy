@@ -4,6 +4,7 @@ import { ADDRESS_MAX_COUNT, isAddressCircle, servedAddresses, type AddressColumn
 import { readProfileCircleView } from '../../services/relations/profileCircleView';
 import { leadsTo, ownedAddressLinks } from '../../services/profile-addresses/address-links';
 import { profileViewerId } from './profile-block-gate';
+import { ownerIsActive } from '../../services/profile-addresses/address-link-gate';
 
 /**
  * Ce que la fiche chargée devient une fois ses ADRESSES décidées (#18863).
@@ -30,6 +31,7 @@ export async function withServedAddresses<T extends { id: string }>(
   if (rows.length === 0) return row;
   const viewerId = profileViewerId(request);
   const isSelf = viewerId !== undefined && viewerId === targetId;
+  if (!isSelf && !(await ownerIsActive(fastify.prisma, targetId))) return row;
   const needsRelation = !isSelf && viewerId !== undefined && rows.some((r) => isAddressCircle(r.circle) && r.circle !== 'PUBLIC');
   const viewerLevel: RelationLevel = needsRelation
     ? (await readProfileCircleView(fastify.prisma, { viewerId, targetId })).level

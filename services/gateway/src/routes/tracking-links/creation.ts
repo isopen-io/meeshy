@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { mayManageTrackingLink } from './link-ownership';
+import { isForeignAddressLink, mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import {
   TRACKING_TARGET_CARRIES_EMAIL_SECRET,
@@ -351,7 +351,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
-      if (!trackingLink) {
+      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
