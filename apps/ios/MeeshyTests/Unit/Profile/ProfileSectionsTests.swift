@@ -602,6 +602,13 @@ private actor AddressServiceDouble: ProfileAddressProviding {
     }
 }
 
+/// Les interrupteurs posés depuis les billets, dans leur ordre.
+private actor SwitchLog {
+    private(set) var sent: [String] = []
+
+    func note(_ entry: String) { sent.append(entry) }
+}
+
 private nonisolated struct AddressCacheDouble: ProfileAddressCaching {
     let result: CacheResult<[ProfileAddress]>
 
@@ -877,11 +884,80 @@ final class TrackingLinkInsightsTests: XCTestCase {
 
     func test_stoppedLink_offersTheGestureItsDetailKnows_andNoneWhenExpired() {
         XCTAssertEqual(ProfileCreatedLinkTicket.relaunchTitle(.full, family: .share), ProfileLinksCopy.raiseLimit)
-        XCTAssertEqual(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .share), ProfileLinksCopy.turnBackOn)
-        XCTAssertEqual(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .tracking), ProfileLinksCopy.turnBackOn)
+        XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .share), "un lien en pause se rallume par son interrupteur")
+        XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .tracking))
         XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.expired, family: .share), "un lien expiré ne se relance pas d'un geste")
         XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.full, family: .tracking), "un lien de suivi n'a pas de limite")
         XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .referral))
+    }
+
+    func test_pausedLink_ofShareOrTracking_isSwitchedBackOnFromItsTicket_theOthersOpenTheirDetail() throws {
+        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .share))
+        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .tracking))
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .community), "aucun service ne rallume un lien de communauté")
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.full, family: .share), "un lien plein se règle par sa limite")
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.expired, family: .tracking))
+        let ticket = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileCreatedLinkTicket.swift"))
+        XCTAssertTrue(ticket.contains("MeeshyToggleRow(ProfileLinksCopy.linkActive"), "« Lien actif » est la ligne à interrupteur du kit")
+        XCTAssertTrue(ticket.contains("accessory: .toggle(isOn: false)"))
+        XCTAssertTrue(ticket.contains("action: { onSwitch(true) }"))
+    }
+
+    func test_createdLinks_switchingAPausedShareLinkOn_appliesAtOnce_andSendsItsLinkId() async {
+        let log = SwitchLog()
+        let paused = shareLink("a").withActive(false)
+        let model = ProfileLinksFaceModel(
+            sources: sources(cached: ProfileLinksSnapshot(share: [paused]), fetched: .none),
+            switches: ProfileLinksSwitches(share: { id, isActive in await log.note("\(id):\(isActive)") },
+                                           tracking: { _, _ in })
+        )
+        await model.load()
+        XCTAssertEqual(model.summary.stopped(model.visibleTickets).count, 1)
+
+        let accepted = await model.setActive(true, ticketId: "share:a")
+
+        XCTAssertTrue(accepted)
+        XCTAssertEqual(model.shareLink(id: "share:a")?.isActive, true)
+        XCTAssertTrue(model.summary.stopped(model.visibleTickets).isEmpty, "le billet rallumé quitte « À l'arrêt »")
+        let sent = await log.sent
+        XCTAssertEqual(sent, ["mshy_a:true"])
+    }
+
+    func test_createdLinks_aRefusedSwitchIsUndone() async {
+        let paused = shareLink("a").withActive(false)
+        let model = ProfileLinksFaceModel(
+            sources: sources(cached: ProfileLinksSnapshot(share: [paused]), fetched: .none),
+            switches: ProfileLinksSwitches(share: { _, _ in throw URLError(.notConnectedToInternet) },
+                                           tracking: { _, _ in })
+        )
+        await model.load()
+
+        let accepted = await model.setActive(true, ticketId: "share:a")
+
+        XCTAssertFalse(accepted)
+        XCTAssertEqual(model.shareLink(id: "share:a")?.isActive, false, "le serveur a refusé : le lien reste en pause")
+    }
+
+    func test_createdLinks_switchingAPausedTrackingLinkOn_sendsItsToken() async throws {
+        let log = SwitchLog()
+        let json = """
+        {"id":"t1","token":"dkr-nuit","name":"Réel","originalUrl":"https://a.io","shortUrl":"https://meeshy.me/l/dkr-nuit",
+         "totalClicks":412,"uniqueClicks":3,"isActive":false,"createdAt":0}
+        """
+        let paused = try JSONDecoder().decode(TrackingLink.self, from: Data(json.utf8))
+        let model = ProfileLinksFaceModel(
+            sources: sources(cached: ProfileLinksSnapshot(tracking: [paused]), fetched: .none),
+            switches: ProfileLinksSwitches(share: { _, _ in },
+                                           tracking: { token, isActive in await log.note("\(token):\(isActive)") })
+        )
+        await model.load()
+
+        let accepted = await model.setActive(true, ticketId: "tracking:t1")
+
+        XCTAssertTrue(accepted)
+        XCTAssertEqual(model.trackingLink(id: "tracking:t1")?.isActive, true)
+        let sent = await log.sent
+        XCTAssertEqual(sent, ["dkr-nuit:true"])
     }
 
     func test_pausedLink_saysWhatItKeeps_inTheWordsOfItsFigure() throws {

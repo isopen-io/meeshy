@@ -169,8 +169,11 @@ nonisolated enum ProfileLinksCopy {
     static var raiseLimit: String {
         String(localized: "profile.links.stopped.raiseLimit", defaultValue: "Augmenter la limite", bundle: .main)
     }
-    static var turnBackOn: String {
-        String(localized: "profile.links.stopped.turnBackOn", defaultValue: "Rallumer", bundle: .main)
+    static var linkActive: String {
+        String(localized: "profile.links.stopped.active", defaultValue: "Lien actif", bundle: .main)
+    }
+    static var switchRefused: String {
+        String(localized: "profile.links.stopped.switchRefused", defaultValue: "Le lien n'a pas pu se rallumer", bundle: .main)
     }
     static func expires(_ relative: String) -> String {
         let format = String(localized: "profile.links.expires", defaultValue: "Expire %@", bundle: .main)

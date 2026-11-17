@@ -19,6 +19,8 @@ struct ProfileCreatedLinkTicket: View {
     let locale: Locale
     let destination: ProfileCreatedLinkDestination
     let onOpen: (Route) -> Void
+    /// « Lien actif » posé depuis le billet d'un lien en pause.
+    let onSwitch: (Bool) -> Void
 
     @State private var opensDetail = false
 
@@ -48,12 +50,42 @@ struct ProfileCreatedLinkTicket: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             billet
-            if let stoppage { consequence(of: stoppage) }
+            if let stoppage, Self.switchesInPlace(stoppage, family: ticket.family) {
+                activeSwitch(of: stoppage)
+            } else if let stoppage {
+                consequence(of: stoppage)
+            }
+        }
+    }
+
+    /// Un lien de partage ou de suivi en pause se rallume depuis son billet (planche `Etat-Erreur` vue 4) : les autres
+    /// arrêts ouvrent leur détail, seul à savoir les régler.
+    static func switchesInPlace(_ stoppage: LinksFaceStoppage, family: LinksFaceFamily) -> Bool {
+        stoppage == .paused && (family == .share || family == .tracking)
+    }
+
+    /// « Lien actif », éteint, avec ce que la pause veut dire, puis ce que le lien garde : l'interrupteur répond tout
+    /// de suite, et le billet remonte parmi ceux qui servent.
+    private func activeSwitch(of stoppage: LinksFaceStoppage) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            MeeshyToggleRow(ProfileLinksCopy.linkActive,
+                            subtitle: ProfileLinksCopy.stoppageConsequence(stoppage),
+                            accessory: .toggle(isOn: false),
+                            tint: Self.tint(of: ticket.family),
+                            action: { onSwitch(true) })
+                .accessibilityIdentifier("profile.links.switch.\(ticket.id)")
+            if let kept = ticket.keptFigure() {
+                Text(ProfileLinksCopy.kept(kept, locale: locale))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(ThemeManager.shared.textMuted)
+                    .padding(.horizontal, MeeshySpacing.xs)
+                    .accessibilityIdentifier("profile.links.kept")
+            }
         }
     }
 
     /// Sous le billet d'un lien à l'arrêt (planche `Etat-Erreur` vue 4) : ce que l'arrêt veut dire pour qui le reçoit,
-    /// et le geste qui le relance — il ouvre le détail, où la limite et l'interrupteur se règlent.
+    /// et le geste qui le relance — il ouvre le détail, où la limite se règle.
     private func consequence(of stoppage: LinksFaceStoppage) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.sm) {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -69,19 +101,18 @@ struct ProfileCreatedLinkTicket: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if let relaunch = Self.relaunchTitle(stoppage, family: ticket.family) {
-                MeeshyButton(relaunch, systemImage: stoppage == .full ? "plus" : "power", kind: .outline, size: .s36,
+                MeeshyButton(relaunch, systemImage: "plus", kind: .outline, size: .s36,
                              tint: Self.tint(of: ticket.family), action: { open() })
             }
         }
         .padding(.horizontal, MeeshySpacing.xs)
     }
 
-    /// Le geste qui relance un lien arrêté, quand son détail sait le faire : la limite d'un lien de partage plein,
-    /// l'interrupteur d'un lien de partage ou de suivi en pause. Un lien expiré ne se relance pas d'un geste.
+    /// Le geste qui relance un lien arrêté depuis son détail : la limite d'un lien de partage plein. Un lien en pause
+    /// a son interrupteur sur le billet ; un lien expiré ne se relance pas d'un geste.
     static func relaunchTitle(_ stoppage: LinksFaceStoppage, family: LinksFaceFamily) -> String? {
         switch (stoppage, family) {
         case (.full, .share): return ProfileLinksCopy.raiseLimit
-        case (.paused, .share), (.paused, .tracking): return ProfileLinksCopy.turnBackOn
         default: return nil
         }
     }

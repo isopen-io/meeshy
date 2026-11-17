@@ -42,6 +42,17 @@ struct ProfileLinksSources {
     )
 }
 
+/// Où partent les interrupteurs posés depuis les billets : le même service que le détail de chaque famille.
+struct ProfileLinksSwitches {
+    let share: @Sendable (_ linkId: String, _ isActive: Bool) async throws -> Void
+    let tracking: @Sendable (_ token: String, _ isActive: Bool) async throws -> Void
+
+    @MainActor static let live = ProfileLinksSwitches(
+        share: { linkId, isActive in try await ShareLinkService.shared.toggleLink(linkId: linkId, isActive: isActive) },
+        tracking: { token, isActive in try await TrackingLinkService.shared.setActive(token: token, isActive: isActive) }
+    )
+}
+
 /// « Liens créés » de la face Liens (#18871) : le cache se peint tout de suite, le réseau revalide en silence. Pas de
 /// squelette sur un cache non vide ; une erreur sans rien à montrer a « Réessayer ».
 @MainActor
@@ -59,9 +70,11 @@ final class ProfileLinksFaceModel: ObservableObject {
     @Published var filter: LinksFaceFilter = .all
 
     private let sources: ProfileLinksSources
+    private let switches: ProfileLinksSwitches
 
-    init(sources: ProfileLinksSources = .live) {
+    init(sources: ProfileLinksSources = .live, switches: ProfileLinksSwitches = .live) {
         self.sources = sources
+        self.switches = switches
     }
 
     var summary: LinksFaceSummary { snapshot.summary }
@@ -97,6 +110,42 @@ final class ProfileLinksFaceModel: ObservableObject {
 
     func remove(shareLinkId: String) {
         snapshot.share = snapshot.share?.filter { $0.id != shareLinkId }
+    }
+
+    func replace(_ link: TrackingLink) {
+        snapshot.tracking = snapshot.tracking?.map { $0.id == link.id ? link : $0 }
+    }
+
+    /// « Lien actif » posé depuis le billet (planche `Etat-Erreur` vue 4) : le billet change tout de suite, le serveur
+    /// confirme ensuite, et un refus défait le geste. Rend `false` quand le geste n'a pas tenu.
+    @discardableResult
+    func setActive(_ isActive: Bool, ticketId: String) async -> Bool {
+        if let link = shareLink(id: ticketId) {
+            replace(link.withActive(isActive))
+            guard await Self.succeeds({ try await self.switches.share(link.linkId, isActive) }) else {
+                replace(link)
+                return false
+            }
+            await sources.save(ProfileLinksSnapshot(share: snapshot.share))
+            return true
+        }
+        guard let link = trackingLink(id: ticketId) else { return false }
+        replace(link.withActive(isActive))
+        guard await Self.succeeds({ try await self.switches.tracking(link.token, isActive) }) else {
+            replace(link)
+            return false
+        }
+        await sources.save(ProfileLinksSnapshot(tracking: snapshot.tracking))
+        return true
+    }
+
+    private static func succeeds(_ send: () async throws -> Void) async -> Bool {
+        do {
+            try await send()
+            return true
+        } catch {
+            return false
+        }
     }
 }
 

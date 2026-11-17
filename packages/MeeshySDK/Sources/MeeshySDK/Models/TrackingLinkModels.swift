@@ -21,6 +21,15 @@ public struct TrackingLink: Codable, Identifiable, Sendable, CacheIdentifiable {
     public var displayName: String { name ?? token }
 }
 
+public extension TrackingLink {
+    /// Le même lien, l'interrupteur posé : ce que l'écran montre avant que le serveur confirme.
+    func withActive(_ active: Bool) -> TrackingLink {
+        TrackingLink(id: id, token: token, name: name, campaign: campaign, source: source, medium: medium,
+                     originalUrl: originalUrl, shortUrl: shortUrl, totalClicks: totalClicks, uniqueClicks: uniqueClicks,
+                     isActive: active, expiresAt: expiresAt, createdAt: createdAt, lastClickedAt: lastClickedAt)
+    }
+}
+
 /// Réponse de `POST /api/v1/tracking-links` (#9185). La passerelle ENVELOPPE le
 /// lien — `{ trackingLink, existed? }`, contrat `CreateTrackingLinkResponseData`
 /// de `packages/shared/types/tracking-link.ts` — et `existed` signale un lien que

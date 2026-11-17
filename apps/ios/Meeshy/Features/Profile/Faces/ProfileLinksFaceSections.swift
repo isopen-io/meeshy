@@ -128,7 +128,18 @@ struct ProfileCreatedLinks: View {
     private func tickets(_ tickets: [LinksFaceTicket]) -> some View {
         ForEach(tickets) { ticket in
             ProfileCreatedLinkTicket(ticket: ticket, accent: accent, locale: locale,
-                                     destination: destination(of: ticket), onOpen: onOpen)
+                                     destination: destination(of: ticket), onOpen: onOpen,
+                                     onSwitch: { isActive in setActive(isActive, ticketId: ticket.id) })
+        }
+    }
+
+    /// L'interrupteur d'un billet : le geste vaut tout de suite, un refus se défait et se dit.
+    private func setActive(_ isActive: Bool, ticketId: String) {
+        Task {
+            let accepted = await model.setActive(isActive, ticketId: ticketId)
+            if accepted { return }
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(ProfileLinksCopy.switchRefused)
         }
     }
 

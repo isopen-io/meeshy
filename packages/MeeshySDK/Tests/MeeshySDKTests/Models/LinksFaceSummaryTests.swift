@@ -32,6 +32,18 @@ struct LinksFaceSummaryTests {
                        _count: AffiliateCount(affiliations: referrals), clickCount: 0)
     }
 
+    @Test func aTrackingLinkSwitchedKeepsEverythingButItsSwitch() throws {
+        let link = try tracking()
+        let paused = link.withActive(false)
+        #expect(paused.isActive == false)
+        #expect(paused.id == link.id)
+        #expect(paused.token == link.token)
+        #expect(paused.totalClicks == link.totalClicks)
+        #expect(paused.shortUrl == link.shortUrl)
+        let ticket = LinksFaceSummary(tracking: [paused]).tickets.first
+        #expect(ticket?.stoppage() == .paused)
+    }
+
     @Test func theFourFamiliesComeInTheOrderOfTheFilters() throws {
         let summary = LinksFaceSummary(share: [share()], tracking: [try tracking()], community: [community()],
                                        referral: [referral()])
