@@ -1,9 +1,10 @@
 import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
-import { isRelationLevel, type RelationLevel } from '@meeshy/shared/types/relation';
+import { isRelationLevel, parseRequestLevel, type RelationLevel } from '@meeshy/shared/types/relation';
 import {
   PROFILE_CAPABILITIES,
   type ProfileCapabilityKey,
   type ProfileCapabilityState,
+  type ProfileCircleMissing,
   type ProfileCircleView,
 } from '@meeshy/shared/utils/profile-circle-view';
 
@@ -42,7 +43,19 @@ const capabilitiesOf = (raw: Readonly<Record<string, unknown>>): ProfileCircleVi
     }),
   );
 
-/** `null` quand la charge n'a pas la forme attendue : l'écran n'invente aucun verdict. */
+/** Ce qui manque pour monter : un cran illisible s'écarte (`null`), il ne s'invente pas. */
+const missingOf = (raw: unknown): ProfileCircleMissing | null => {
+  if (!isRecord(raw)) return null;
+  const level = parseRequestLevel(raw.level);
+  return level === null ? null : { level, byViewer: raw.byViewer === true, byTarget: raw.byTarget === true };
+};
+
+/**
+ * `null` quand la charge n'a pas la forme attendue : l'écran n'invente aucun verdict. Les deux accords
+ * et le cran manquant (« Notre cercle ») se lisent aussi : sans eux, l'écran dirait « au plus près » à
+ * tout le monde. Un accord illisible reste ABSENT — c'est la forme que la passerelle sert vers une
+ * cible bloquée ou partie.
+ */
 export function decodeProfileCircleView(raw: unknown): ProfileCircleView | null {
   if (!isRecord(raw) || !isRelationLevel(raw.level) || !isRecord(raw.capabilities)) return null;
   return {
@@ -50,6 +63,9 @@ export function decodeProfileCircleView(raw: unknown): ProfileCircleView | null 
     level: raw.level,
     sharesCommunity: raw.sharesCommunity === true,
     capabilities: capabilitiesOf(raw.capabilities),
+    ...(isRelationLevel(raw.grantedByViewer) ? { grantedByViewer: raw.grantedByViewer } : {}),
+    ...(isRelationLevel(raw.grantedByTarget) ? { grantedByTarget: raw.grantedByTarget } : {}),
+    missing: missingOf(raw.missing),
   };
 }
 

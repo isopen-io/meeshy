@@ -114,16 +114,12 @@ export function CircleLadderCard({ language, ladder, name }: { readonly language
         {translate(language, 'userProfile.relation.circle.title')}
       </h2>
       <p className="text-caption font-semibold">{translate(language, 'userProfile.relation.circle.common', { level: level(ladder.level) })}</p>
-      {ladder.grantedByViewer === null ? null : (
-        <p data-relation-granted="viewer" className="text-caption">
-          {translate(language, 'userProfile.relation.circle.grantedByYou', { level: level(ladder.grantedByViewer) })}
-        </p>
-      )}
-      {ladder.grantedByTarget === null ? null : (
-        <p data-relation-granted="target" className="text-caption">
-          {translate(language, 'userProfile.relation.circle.grantedByThem', { name, level: level(ladder.grantedByTarget) })}
-        </p>
-      )}
+      <p data-relation-granted="viewer" className="text-caption">
+        {translate(language, 'userProfile.relation.circle.grantedByYou', { level: level(ladder.grantedByViewer) })}
+      </p>
+      <p data-relation-granted="target" className="text-caption">
+        {translate(language, 'userProfile.relation.circle.grantedByThem', { name, level: level(ladder.grantedByTarget) })}
+      </p>
       <p data-relation-missing={missing === null ? 'none' : missing.level} className="text-caption">
         {missing === null || missingKey === null
           ? translate(language, 'userProfile.relation.circle.top')

@@ -64,7 +64,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
-import { contrastOf } from './lib/contrast.mjs';
+import { chipContrastOf, contrastOf } from './lib/contrast.mjs';
 import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
@@ -148,10 +148,14 @@ const reachScrolled = async (page) => {
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const r = el.getBoundingClientRect();
         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        /* UNE PASTILLE DU KIT PORTE SA CIBLE DANS SON `::before`, élargi au plancher (`--target-min`) :
+           le cadre peint fait 36 px, la zone qu'un doigt touche en fait 44. C'est elle qui se mesure. */
+        const cible = el.classList.contains('kit-chip') ? Number.parseFloat(getComputedStyle(el, '::before').height) || 0 : 0;
         return {
           nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
           ok: hit !== null && (hit === el || el.contains(hit)),
-          hauteur: r.height,
+          par: hit === null || hit === el || el.contains(hit) ? null : `${hit.tagName.toLowerCase()}${hit.id === '' ? '' : `#${hit.id}`}.${String(hit.className).slice(0, 60)}`,
+          hauteur: Math.max(r.height, cible),
           href: el.getAttribute('href'),
           enProse: el.closest('[data-rich-text]') !== null,
         };
@@ -417,36 +421,38 @@ try {
 
       // ================================================ LE PROFIL PUBLIC DE QUELQU'UN (#7083)
       await context.setOffline(false);
-      await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+      /* UN ANCIEN LIEN `?tab=details` (#18879) ouvre la face Actions, où la section Détails s'est rangée :
+         les liens déjà partagés et les notifications déjà envoyées mènent encore aux gestes. */
+      await page.goto(`${BASE}/u/kwame-mensah?tab=details`, { waitUntil: 'load' });
       await page.waitForSelector('[data-user-hero]');
       await page.waitForSelector('[data-profile-relation]');
+      check((await page.$('[data-profile-face="actions"]')) !== null, `${label} : /u/?tab=details — un ancien lien ouvre la face Actions`);
+      await page.goto(`${BASE}/u/kwame-mensah?face=actions`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-profile-relation]');
 
-      // ------------------------------------------------ 9. l'identité, puis les onglets de `UserProfileSheet` (#6330)
+      // ------------------------------------------------ 9. l'identité, puis les trois faces (#18879)
       check((await textOf(page, '[data-user-hero] p')) === 'Kwame Mensah', `${label} : /u/ porte le nom (« ${await textOf(page, '[data-user-hero] p')} »)`);
       check((await textOf(page, '[data-user-hero] p:nth-of-type(2)')) === '@kwame-mensah', `${label} : /u/ porte l'@identifiant`);
       check((await page.$('[data-user-banner]')) !== null, `${label} : /u/ porte sa bannière`);
-      const publicTabs = await page.$$eval('[role="tab"]', (els) => els.map((el) => `${el.getAttribute('data-profile-tab')}:${el.getAttribute('aria-selected')}`));
+      const publicFaces = await page.$$eval('[data-profile-faces] [role="tab"]', (els) => els.map((el) => `${el.getAttribute('data-kit-chip')}:${el.getAttribute('aria-selected')}`));
       check(
-        JSON.stringify(publicTabs) === JSON.stringify(['details:true', 'conversations:false', 'posts:false']),
-        `${label} : /u/ — Détails · Conversations · Publications, Détails ouvert d'abord (${JSON.stringify(publicTabs)})`,
+        JSON.stringify(publicFaces) === JSON.stringify(['vitrine:false', 'liens:false', 'actions:true']),
+        `${label} : /u/ — Vitrine · Liens · Actions, la face de l'adresse ouverte (${JSON.stringify(publicFaces)})`,
+      );
+      check(
+        (await page.$eval('[role="tabpanel"][data-profile-face]', (el) => el.getAttribute('aria-label'))) === 'Actions',
+        `${label} : /u/ — le panneau ouvert porte le nom de sa face`,
       );
       const debordementPublic = await page.evaluate(() => {
         const main = document.getElementById('contenu');
         return main === null ? null : main.scrollWidth - main.clientWidth;
       });
-      check(debordementPublic === 0, `${label} : /u/ — la barre d'onglets n'élargit pas la colonne (débord ${debordementPublic} px)`);
+      check(debordementPublic === 0, `${label} : /u/ — le sélecteur de faces n'élargit pas la colonne (débord ${debordementPublic} px)`);
 
       const publicSections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
       check(
-        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION', 'STATISTIQUES']),
-        `${label} : /u/ — Détails porte la connexion et les compteurs, d'un coup, sans bloc du jeu (#10092 : niveau et rang vivent sur la bannière) (${JSON.stringify(publicSections)})`,
-      );
-      /* LE DÉFAUT D'iOS QU'ON NE COPIE PAS : `servedUserStats` retire quatre
-         compteurs à un tiers ; iOS les décode en 0 et annonce « 0 Messages ». */
-      const statsText = (await textOf(page, '[data-profile-stats]')) ?? '';
-      check(
-        !statsText.includes('Messages') && !statsText.includes('Traductions'),
-        `${label} : un compteur ABSENT ne peint AUCUNE tuile — « ${statsText.slice(0, 90)} »`,
+        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION']),
+        `${label} : /u/ — la face Actions porte la connexion, sans bloc du jeu (#10092 : niveau et rang vivent sur la bannière) (${JSON.stringify(publicSections)})`,
       );
       await capture(page, `profil-public-${scheme}-${width}x${height}`);
       const detailsRest = await reachAtRest(page, REACH);
@@ -461,9 +467,8 @@ try {
       const detailsInks = {
         nom: await contrastOf(page, '[data-user-hero] p'),
         identifiant: await contrastOf(page, '[data-user-hero] p:nth-of-type(2)'),
-        ongletActif: await contrastOf(page, '[role="tab"][aria-selected="true"] .whitespace-nowrap'),
-        ongletRepos: await contrastOf(page, '[role="tab"][aria-selected="false"] .whitespace-nowrap'),
-        valeurStat: await contrastOf(page, '[data-profile-stat="languagesUsed"] strong'),
+        faceActive: await chipContrastOf(page, '[data-profile-faces] [role="tab"][aria-selected="true"]'),
+        faceRepos: await chipContrastOf(page, '[data-profile-faces] [role="tab"][aria-selected="false"]'),
         ajouter: await contrastOf(page, '[data-profile-action="add"]'),
         /* « ÉCRIRE » entre à la revue de #7083 : 3,84 en clair à l'encre
            `--color-ios-brand`, le geste que l'audience de cet écran vient
@@ -473,10 +478,35 @@ try {
           if ((await page.$('[data-profile-action="block"]')) === null) await page.click('[data-profile-more]');
           return contrastOf(page, '[data-profile-action="block"]');
         })(),
-        membreDepuis: await contrastOf(page, '[data-profile-member-since]'),
       };
       const detailsFaibles = Object.entries(detailsInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
-      check(detailsFaibles.length === 0, `${label} : /u/ Détails — chaque texte tient AA — ${JSON.stringify(detailsInks)}`);
+      check(detailsFaibles.length === 0, `${label} : /u/ Actions — chaque texte tient AA — ${JSON.stringify(detailsInks)}`);
+
+      // ------------------------------------------------ 9 a. la Vitrine : les compteurs, puis les onglets de `UserProfileSheet` (#6330)
+      await page.click('[data-profile-faces] [data-kit-chip="vitrine"]');
+      await page.waitForSelector('[data-profile-face="vitrine"] [data-profile-stats]');
+      check(new URL(page.url()).searchParams.get('face') === null, `${label} : /u/ — revenir à la Vitrine nettoie l'adresse`);
+      const publicTabs = await page.$$eval('[role="tab"][data-profile-tab]', (els) => els.map((el) => `${el.getAttribute('data-profile-tab')}:${el.getAttribute('aria-selected')}`));
+      check(
+        JSON.stringify(publicTabs) === JSON.stringify(['conversations:false', 'posts:true']),
+        `${label} : /u/ Vitrine — Conversations · Publications, Publications ouvert d'abord (${JSON.stringify(publicTabs)})`,
+      );
+      /* LE DÉFAUT D'iOS QU'ON NE COPIE PAS : `servedUserStats` retire quatre
+         compteurs à un tiers ; iOS les décode en 0 et annonce « 0 Messages ». */
+      const statsText = (await textOf(page, '[data-profile-stats]')) ?? '';
+      check(
+        !statsText.includes('Messages') && !statsText.includes('Traductions'),
+        `${label} : un compteur ABSENT ne peint AUCUNE tuile — « ${statsText.slice(0, 90)} »`,
+      );
+      const vitrineInks = {
+        ongletActif: await contrastOf(page, '[role="tab"][data-profile-tab][aria-selected="true"] .whitespace-nowrap'),
+        ongletRepos: await contrastOf(page, '[role="tab"][data-profile-tab][aria-selected="false"] .whitespace-nowrap'),
+        valeurStat: await contrastOf(page, '[data-profile-stat="languagesUsed"] strong'),
+        membreDepuis: await contrastOf(page, '[data-profile-member-since]'),
+      };
+      const vitrineFaibles = Object.entries(vitrineInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(vitrineFaibles.length === 0, `${label} : /u/ Vitrine — chaque texte tient AA — ${JSON.stringify(vitrineInks)}`);
+      await capture(page, `profil-public-vitrine-${scheme}-${width}x${height}`);
       await page.click('[data-profile-tab="conversations"]');
       check(new URL(page.url()).searchParams.get('tab') === 'conversations', `${label} : /u/ — l'onglet ouvert s'inscrit dans l'adresse`);
 
@@ -677,9 +707,9 @@ try {
          INVERSE est joué dans la foulée : il prouve l'autre moitié de la loi,
          ET il rend la fixture à son état initial, sans quoi les trois
          combinaisons suivantes ouvriraient la fiche déjà « en attente ». */
-      await page.click('[data-profile-tab="details"]');
+      await page.click('[data-profile-faces] [data-kit-chip="actions"]');
       await page.waitForSelector('[data-profile-action="add"]');
-      check(new URL(page.url()).searchParams.get('tab') === null, `${label} : /u/ — revenir sur Détails nettoie l'adresse`);
+      check(new URL(page.url()).searchParams.get('face') === 'actions', `${label} : /u/ — la face ouverte s'inscrit dans l'adresse`);
       const relationTurned = async (selector) =>
         page.waitForFunction((s) => document.querySelector(s) !== null, selector, { timeout: 1000 }).then(() => true, () => false);
       await page.click('[data-profile-action="add"]');
@@ -728,7 +758,7 @@ try {
       await context.setOffline(false);
 
       // ------------------------------------------------ 16. « Écrire » mène à un fil
-      await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+      await page.goto(`${BASE}/u/kwame-mensah?face=actions`, { waitUntil: 'load' });
       await page.waitForSelector('[data-profile-action="write"]');
       await page.click('[data-profile-action="write"]');
       await page.waitForFunction(() => window.location.pathname.startsWith('/c/'), undefined, { timeout: 3000 });

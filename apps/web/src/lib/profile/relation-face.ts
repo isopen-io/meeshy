@@ -17,6 +17,9 @@ export type ProfileFace = (typeof PROFILE_FACES)[number];
 
 export const PROFILE_FACE_PARAM = 'face';
 
+const LEGACY_TAB_PARAM = 'tab';
+const LEGACY_ACTIONS_TAB = 'details';
+
 export const resolveProfileFace = ({ requested, fallback }: { readonly requested: string | null; readonly fallback: ProfileFace }): ProfileFace =>
   PROFILE_FACES.find((face) => face === requested) ?? fallback;
 
@@ -67,18 +70,22 @@ export function relationActionsOf(view: ProfileCircleView | null): readonly Rela
 
 export type CircleLadder = {
   readonly level: RelationLevel;
-  readonly grantedByViewer: RelationLevel | null;
-  readonly grantedByTarget: RelationLevel | null;
+  readonly grantedByViewer: RelationLevel;
+  readonly grantedByTarget: RelationLevel;
   readonly missing: { readonly level: RelationRequestLevel; readonly byViewer: boolean; readonly byTarget: boolean } | null;
 };
 
-/** « Notre cercle » : le niveau commun, ce que chaque côté a accordé, et ce qui manque pour monter. */
+/**
+ * « Notre cercle » : le niveau commun, ce que chaque côté a accordé, et ce qui manque pour monter.
+ * Vers une cible bloquée ou partie, la passerelle ne sert AUCUN accord : il n'y a plus de relation à
+ * montrer, et la carte se tait — sans quoi elle conclurait « au plus près » faute de cran manquant.
+ */
 export function circleLadderOf(view: ProfileCircleView | null): CircleLadder | null {
-  if (view === null || view.isSelf) return null;
+  if (view === null || view.isSelf || view.grantedByViewer === undefined || view.grantedByTarget === undefined) return null;
   return {
     level: view.level,
-    grantedByViewer: view.grantedByViewer ?? null,
-    grantedByTarget: view.grantedByTarget ?? null,
+    grantedByViewer: view.grantedByViewer,
+    grantedByTarget: view.grantedByTarget,
     missing: view.missing ?? null,
   };
 }
@@ -88,4 +95,17 @@ export function circleLadderOf(view: ProfileCircleView | null): CircleLadder | n
  * il y mène encore (rétrocompatibilité des liens partagés et des notifications déjà envoyées).
  */
 export const requestedFaceOf = (search: URLSearchParams): string | null =>
-  search.get(PROFILE_FACE_PARAM) ?? (search.get('tab') === 'details' ? 'actions' : null);
+  search.get(PROFILE_FACE_PARAM) ?? (search.get(LEGACY_TAB_PARAM) === LEGACY_ACTIONS_TAB ? 'actions' : null);
+
+/**
+ * L'adresse après un choix de face. L'ancien `?tab=details` a servi une fois (il a ouvert la face
+ * Actions) et se retire au premier choix : laissé derrière, il rouvrirait Actions dès qu'on revient à
+ * la face par défaut, que l'adresse n'écrit pas. Les autres paramètres sont gardés tels quels.
+ */
+export function faceSearch({ search, face, fallback }: { readonly search: URLSearchParams; readonly face: ProfileFace; readonly fallback: ProfileFace }): URLSearchParams {
+  const next = new URLSearchParams(search);
+  if (next.get(LEGACY_TAB_PARAM) === LEGACY_ACTIONS_TAB) next.delete(LEGACY_TAB_PARAM);
+  if (face === fallback) next.delete(PROFILE_FACE_PARAM);
+  else next.set(PROFILE_FACE_PARAM, face);
+  return next;
+}

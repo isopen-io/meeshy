@@ -1,9 +1,9 @@
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useId, useState, type ReactNode } from 'react';
 
 import { MeeshyChipRow } from '@/components/kit/meeshy-chip-row';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { PROFILE_FACES, PROFILE_FACE_PARAM, requestedFaceOf, resolveProfileFace, type ProfileFace } from '@/lib/profile/relation-face';
+import { faceSearch, PROFILE_FACES, requestedFaceOf, resolveProfileFace, type ProfileFace } from '@/lib/profile/relation-face';
 import { navigate, useOptionalRoute } from '@/lib/router';
 
 /**
@@ -22,10 +22,7 @@ export function useProfileFace(fallback: ProfileFace): readonly [ProfileFace, (f
     (face: ProfileFace) => {
       setLocal(face);
       if (route === null) return;
-      const next = new URLSearchParams(route.search);
-      if (face === fallback) next.delete(PROFILE_FACE_PARAM);
-      else next.set(PROFILE_FACE_PARAM, face);
-      const chain = next.toString();
+      const chain = faceSearch({ search: route.search, face, fallback }).toString();
       navigate(`${window.location.pathname}${chain === '' ? '' : `?${chain}`}`, true);
     },
     [fallback, route],
@@ -34,6 +31,21 @@ export function useProfileFace(fallback: ProfileFace): readonly [ProfileFace, (f
 }
 
 export const profileFacePanelId = (base: string, face: ProfileFace): string => `${base}-face-${face}`;
+
+/**
+ * Le panneau d'une face, NOMMÉ par sa face : les pastilles du sélecteur ne portent pas d'identifiant à
+ * pointer, et un panneau d'onglet sans nom se lit « panneau » au lecteur d'écran, sans dire lequel.
+ * Sa colonne est `minmax(0, 1fr)` : une carte de réel dont la largeur naît de sa hauteur (320×568)
+ * élargissait sinon la colonne de 2 px, la barre d'onglets en `-mx-4` débordait l'écran, et chaque
+ * texte du fil se recoupait autrement.
+ */
+export function ProfileFacePanel({ language, face, idBase, children }: { readonly language: InterfaceLanguage; readonly face: ProfileFace; readonly idBase: string; readonly children: ReactNode }) {
+  return (
+    <div role="tabpanel" id={profileFacePanelId(idBase, face)} aria-label={translate(language, `userProfile.relation.face.${face}`)} data-profile-face={face} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+      {children}
+    </div>
+  );
+}
 
 export function ProfileFaces({ language, active, onChange }: { readonly language: InterfaceLanguage; readonly active: ProfileFace; readonly onChange: (face: ProfileFace) => void }) {
   return (

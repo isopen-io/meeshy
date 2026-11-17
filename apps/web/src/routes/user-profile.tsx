@@ -8,7 +8,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { GameBannerOwnSlot, GameBannerVisitorSlot } from '@/components/game-profile-slots';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
-import { ProfileFaces, profileFacePanelId, useProfileFace } from '@/components/profile-faces';
+import { ProfileFacePanel, ProfileFaces, useProfileFace } from '@/components/profile-faces';
 import { CircleLadderCard, RelationLockedRows, RelationWriteAction } from '@/components/profile-relation-face';
 import { ReportSheet } from '@/components/report-sheet';
 import { apiDeps } from '@/lib/api/deps';
@@ -23,7 +23,6 @@ import { profileFailureOf } from '@/lib/profile/failure';
 import { safeNextPath } from '@/lib/session-guard';
 import { userProfileTabs } from '@/lib/profile/tabs';
 import { circleLadderOf, relationActionsOf } from '@/lib/profile/relation-face';
-import { profileCircleQueryOptions } from '@/lib/api/profile-circle';
 import { useParams } from '@/lib/router';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { profileSendRequest } from '@/lib/view/profile-share';
@@ -35,7 +34,8 @@ import { ProfileConversationsSection } from '@/routes/user-profile-conversations
 import { useProfileController } from '@/routes/user-profile-controller';
 import { ProfileHero } from '@/routes/user-profile-header';
 import { ProfileLinksFace } from '@/routes/user-profile-links-face';
-import { ProfileRelationRows } from '@/routes/user-profile-relation-rows';
+import { ProfileRelationRows, rowOffered } from '@/routes/user-profile-relation-rows';
+import { useRelationCircleVerdict } from '@/routes/user-profile-circle-verdict';
 import { ProfilePostsPanel } from '@/routes/user-profile-posts';
 import {
   ProfileBlockedCard,
@@ -220,19 +220,20 @@ export function UserProfileView({ username }: { readonly username: string }) {
   );
 
   /**
-   * **LE CERCLE COMMUN, JUGÉ PAR LA PASSERELLE** (#18879) — la paire réelle, jamais recalculée ici.
-   * Jamais sans compte, ni sur soi-même, ni sur un compte bloqué ; une passerelle plus ancienne ne le
-   * sert pas : `items` reste `null` et la face Actions garde son comportement d'avant.
+   * **LE CERCLE COMMUN, JUGÉ PAR LA PASSERELLE** (#18879) — jamais sans compte, ni sur soi-même, ni sur
+   * un compte bloqué ; une passerelle plus ancienne ne le sert pas : `items` reste `null` et la face
+   * Actions garde son comportement d'avant. Relu dès qu'un geste réglé fait bouger la relation.
    */
-  const circle = useQuery(
-    {
-      ...profileCircleQueryOptions({ ...apiDeps, handle: username, viewerId: viewerId ?? '' }),
-      enabled: viewerId !== null && showsContent && !isSelf,
-    },
-    appQueryClient,
-  );
-  const items = useMemo(() => relationActionsOf(circle.data ?? null), [circle.data]);
-  const ladder = useMemo(() => circleLadderOf(circle.data ?? null), [circle.data]);
+  const verdict = useRelationCircleVerdict({
+    handle: username,
+    viewerId,
+    personId: person?.id ?? subjectId,
+    relationKind: relation.kind,
+    enabled: showsContent && !isSelf,
+    settled: !busy,
+  });
+  const items = useMemo(() => relationActionsOf(verdict), [verdict]);
+  const ladder = useMemo(() => circleLadderOf(verdict), [verdict]);
 
   const onSignIn = useCallback(() => navigate(visitorSignInHref(window.location)), []);
   const onCallFailed = useCallback((message: string) => announce(message, 'error'), [announce]);
@@ -279,7 +280,9 @@ export function UserProfileView({ username }: { readonly username: string }) {
               <>
                 <ProfileFaces language={language} active={face} onChange={selectFace} />
                 {face === 'vitrine' ? (
-                  <div role="tabpanel" id={profileFacePanelId(faceBase, 'vitrine')} data-profile-face="vitrine" className="grid gap-6">
+                  <ProfileFacePanel language={language} face="vitrine" idBase={faceBase}>
+                    {/* LA VITRINE D'UN VISITEUR SANS COMPTE (#18878) : la page publique EST la Vitrine au cercle Public (loi 2), là où il arrive. */}
+                    {isSelf || signedIn ? null : <VisitorVitrine language={language} targetId={person.id} />}
                     <ProfileStatsSection language={language} stats={stats} createdAt={person.createdAt} loading={statsLoading} />
                     <ProfileTabs language={language} tabs={offered} active={tab} onChange={selectTab} idBase={tabBase} accent={accent} />
                     <ProfileTabPanel idBase={tabBase} tab={tab}>
@@ -303,18 +306,18 @@ export function UserProfileView({ username }: { readonly username: string }) {
                         />
                       )}
                     </ProfileTabPanel>
-                  </div>
+                  </ProfileFacePanel>
                 ) : face === 'liens' ? (
-                  <div role="tabpanel" id={profileFacePanelId(faceBase, 'liens')} data-profile-face="liens" className="grid gap-6">
+                  <ProfileFacePanel language={language} face="liens" idBase={faceBase}>
                     <ProfileLinksFace
                       language={language}
                       username={person.username}
                       onSend={signedIn ? () => openSendSheet(profileSendRequest({ id: person.id, username: person.username, name, avatar: person.avatar ?? null })) : undefined}
                       onCopied={announce}
                     />
-                  </div>
+                  </ProfileFacePanel>
                 ) : (
-                  <div role="tabpanel" id={profileFacePanelId(faceBase, 'actions')} data-profile-face="actions" className="grid gap-6">
+                  <ProfileFacePanel language={language} face="actions" idBase={faceBase}>
                     {isSelf ? (
                       /* SA PROPRE FICHE MÈNE À SON ÉDITION (#7188) — jamais un cul-de-sac. */
                       <ProfileSelfSection language={language} />
@@ -347,12 +350,11 @@ export function UserProfileView({ username }: { readonly username: string }) {
                         {ladder === null ? null : <CircleLadderCard language={language} ladder={ladder} name={name} />}
                       </>
                     )}
-                    {/* LA VITRINE D'UN VISITEUR SANS COMPTE (#18878) : le niveau Public de la loi d'accès, et ce que les cercles ouvrent. */}
-                    {isSelf || signedIn ? null : <VisitorVitrine language={language} targetId={person.id} />}
-                    {isSelf || !signedIn || !callsAvailable() ? null : (
+                    {/* APPELER suit le verdict du cercle commun : un appel qu'il ferme a sa rangée verrouillée, jamais un bouton à côté. */}
+                    {isSelf || !signedIn || !callsAvailable() || !rowOffered(items, 'call', true) ? null : (
                       <ProfileCall language={language} person={callPerson} online={online} onFailed={onCallFailed} />
                     )}
-                  </div>
+                  </ProfileFacePanel>
                 )}
               </>
             )}

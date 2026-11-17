@@ -113,3 +113,58 @@ export const luminanceOf = (page, selector) =>
     if (!el) return null;
     return Math.round(luminance(backdropOf(el)) * 1000) / 1000;
   }, selector);
+
+/**
+ * LE CONTRASTE DU LIBELLÉ D'UNE PASTILLE DU KIT (`.kit-chip`) — son fond n'est PAS un ancêtre du
+ * texte : c'est `.kit-chip__fill`, un frère posé dessous en absolu, avec sa propre opacité (repos,
+ * sélection). `contrastOf` le manquerait et mesurerait l'encre de la pastille choisie contre le fond
+ * de la page — 1:1 pour un blanc sur un fond de marque parfaitement lisible. On compose donc le fond
+ * de la page, puis la pastille de fond à son opacité, puis le texte.
+ *
+ * Rend `null` quand la pastille est absente, comme `contrastOf`.
+ */
+export const chipContrastOf = (page, selector) =>
+  page.evaluate((sel) => {
+    const parse = (value) => {
+      const n = (value.match(/[\d.]+/g) ?? []).map(Number);
+      if (n.length < 3) return null;
+      const scale = value.trimStart().startsWith('color(') ? 255 : 1;
+      return { r: n[0] * scale, g: n[1] * scale, b: n[2] * scale, a: n.length > 3 ? n[3] : 1 };
+    };
+    const over = (top, bottom) => ({
+      r: top.r * top.a + bottom.r * (1 - top.a),
+      g: top.g * top.a + bottom.g * (1 - top.a),
+      b: top.b * top.a + bottom.b * (1 - top.a),
+      a: 1,
+    });
+    const luminance = (c) => {
+      const f = (v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    };
+    const backdropOf = (el) => {
+      const layers = [];
+      for (let node = el; node; node = node.parentElement) {
+        const bg = parse(getComputedStyle(node).backgroundColor);
+        if (bg && bg.a > 0) layers.push(bg);
+        if (bg && bg.a === 1) break;
+      }
+      return layers.reduceRight((under, layer) => over(layer, under), { r: 255, g: 255, b: 255, a: 1 });
+    };
+    const chip = document.querySelector(sel);
+    if (!chip) return null;
+    const fillNode = chip.querySelector('.kit-chip__fill');
+    const fillStyle = fillNode === null ? null : getComputedStyle(fillNode);
+    const fill = fillStyle === null ? null : parse(fillStyle.backgroundColor);
+    const fillOpacity = fillStyle === null ? 0 : Number(fillStyle.opacity);
+    const base = backdropOf(chip);
+    const under = fill === null ? base : over({ ...fill, a: fill.a * (Number.isNaN(fillOpacity) ? 1 : fillOpacity) }, base);
+    const raw = parse(getComputedStyle(chip).color);
+    if (!raw) return null;
+    const opacity = Number(getComputedStyle(chip).opacity);
+    const text = over({ ...raw, a: raw.a * (Number.isNaN(opacity) ? 1 : opacity) }, under);
+    const [a, b] = [luminance(text), luminance(under)].sort((x, y) => y - x);
+    return Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100;
+  }, selector);
