@@ -142,8 +142,12 @@ class RouteManifestRatchetTest {
          * suppression, ordre — lot `serveur-mes-adresses` de #18857) ; la face Liens Android (#18889) les portera.
          * 139 : plus `GET /users/:id/in-common` (#19231 : nos communautés, nos amis et nos médias en commun sur la
          * fiche d'un autre) ; la fiche Android du chantier #18857 la portera.
+         * 147 : plus les huit routes de la part serveur du profil (#19200–#19207, PR #19316) — invitations par
+         * e-mail (liste, relance, désinscription), statistiques du lien de profil, échange de contact sans
+         * contact (création, acceptation), demande de position Sang et mode fantôme ; la fiche Android du
+         * chantier #18857 les portera.
          */
-        const val TO_PORT_CEILING = 139
+        const val TO_PORT_CEILING = 147
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
