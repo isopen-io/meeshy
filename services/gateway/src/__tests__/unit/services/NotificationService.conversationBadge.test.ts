@@ -394,4 +394,69 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
 
     expect((await sendMessageNotification()).badge).toBe(3);
   });
+  /**
+   * #18910 (android-systeme-7) — le push porte aussi le non-lu de SA conversation (`data.conversationUnread`),
+   * en nombre de MESSAGES : Android lit cette clé pour mettre à jour son registre de non-lus par conversation, app
+   * fermée comprise. `unreadCount` reste le total de CONVERSATIONS non lues. Même carte, une seule requête.
+   */
+  describe('conversationUnread — le non-lu de la conversation poussée (#18910)', () => {
+    it('test_push_carriesConversationUnread_messagesOfThatConversation_besideTheTotal', async () => {
+      seedConversations([
+        { conversationId: CONVERSATION_ID, participantId: 'participant-c', unreadMessages: 3 },
+        { conversationId: 'conv-d', participantId: 'participant-d', unreadMessages: 1 },
+      ]);
+
+      const payload = await sendMessageNotification();
+
+      expect(payload.data?.conversationUnread).toBe('3');
+      expect(payload.data?.unreadCount).toBe('2');
+      expect(payload.badge).toBe(2);
+    });
+
+    it('test_push_omitsConversationUnread_whenTheConversationIsMuted_totalStaysWithoutIt', async () => {
+      seedConversations([
+        { conversationId: CONVERSATION_ID, participantId: 'participant-c', unreadMessages: 3, isMuted: true },
+        { conversationId: 'conv-d', participantId: 'participant-d', unreadMessages: 1 },
+      ]);
+
+      const payload = await sendMessageNotification();
+
+      expect(payload.data).not.toHaveProperty('conversationUnread');
+      expect(payload.data?.unreadCount).toBe('1');
+    });
+
+    it('test_push_omitsConversationUnread_whenTheCountFails_neverAZeroInItsPlace', async () => {
+      seedConversations([{ conversationId: CONVERSATION_ID, participantId: 'participant-c', unreadMessages: 3 }]);
+      (prisma.conversationReadCursor.findMany as jest.Mock).mockRejectedValue(new Error('db down'));
+
+      const payload = await sendMessageNotification();
+
+      expect(payload.data).not.toHaveProperty('conversationUnread');
+      expect(payload.data).not.toHaveProperty('unreadCount');
+    });
+
+    it('test_reproducedPush_carriesTheSameConversationUnread', async () => {
+      seedConversations([
+        { conversationId: CONVERSATION_ID, participantId: 'participant-c', unreadMessages: 3 },
+        { conversationId: 'conv-d', participantId: 'participant-d', unreadMessages: 1 },
+      ]);
+      (prisma.notification.findUnique as jest.Mock).mockResolvedValue({
+        ...makeNotif(),
+        type: 'new_message',
+        title: null,
+        subtitle: null,
+        content: 'Corrigé',
+        context: { conversationId: CONVERSATION_ID, messageId: MESSAGE_ID },
+        delivery: { pushSent: true },
+      });
+
+      await service.announceNotificationsReproduced([{ id: 'notif-msg-1', userId: RECIPIENT_ID }]);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const data = lastPushPayload().data;
+      expect(data?.conversationUnread).toBe('3');
+      expect(data?.unreadCount).toBe('2');
+    });
+  });
 });
