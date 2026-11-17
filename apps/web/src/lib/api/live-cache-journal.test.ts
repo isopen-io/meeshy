@@ -1,5 +1,5 @@
-import { InfiniteQueryObserver, QueryObserver, type QueryClient } from '@tanstack/react-query';
-import { describe, expect, test } from 'bun:test';
+import { InfiniteQueryObserver, QueryObserver, onlineManager, type QueryClient } from '@tanstack/react-query';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 import type { TranscriptionReadyEventData } from '@meeshy/shared/types/socketio-events/audio';
@@ -13,7 +13,7 @@ import { routedTransport } from '@/test-support/routed-transport';
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
 
 import { performDeparture } from './conversation-departure';
-import { CONVERSATIONS_QUERY_KEY, conversationQuery, findCachedConversation } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, conversationQuery, conversationQueryKey, findCachedConversation } from './conversations';
 import type { ConversationsPage } from './conversations-pages';
 import { performDeleteForMe } from './delete-message';
 import { LIVE_CACHE_ROOT } from './live-cache-journal';
@@ -31,6 +31,7 @@ import { applyConversationGone } from './realtime-conversation-gone';
 import { applyMessageDeleted } from './realtime-message-mutations';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import { applyTranscriptionReady } from './realtime-transcription-ready';
+import { createAppQueryClient, type StorageLike } from './query-client';
 import { performReaction } from './reactions';
 import { reactionStore } from './reaction-store';
 import type { Attachment, Conversation, Message } from './types';
@@ -525,6 +526,61 @@ describe('une écriture temps réel ne fait pas passer le cache pour frais (WEB-
 
     expect(calls()).toHaveLength(1);
     stop();
+  });
+});
+
+/**
+ * **HORS LIGNE, LA RACINE RESTE EN PAUSE** (#18914, audit C1). Le crochet
+ * `persister` du journal fait passer TanStack en `offlineFirst` quand rien ne
+ * fixe le mode réseau : hors ligne, la requête partait, le service worker
+ * servait sa copie (sept jours) et elle remplaçait le cache — un message reçu
+ * disparaissait, un supprimé revenait. Le dépôt repose sur « hors ligne ⇒ en
+ * pause » (`lib/view/cold-state.ts`). Mesuré sur le client de l'APPLICATION.
+ */
+describe('hors ligne, la racine des conversations reste EN PAUSE', () => {
+  const memoryStorage = (): StorageLike => {
+    const data = new Map<string, string>();
+    return {
+      getItem: (key) => data.get(key) ?? null,
+      setItem: (key, value) => {
+        data.set(key, value);
+      },
+      removeItem: (key) => {
+        data.delete(key);
+      },
+    };
+  };
+  const appClient = () => createAppQueryClient({ buster: 'test:journal', storage: memoryStorage() });
+
+  afterEach(() => {
+    onlineManager.setOnline(true);
+  });
+
+  test('la liste, la fiche et le fil gardent le mode réseau « online », crochet du journal compris', () => {
+    const queryClient = appClient();
+
+    const modes = [CONVERSATIONS_QUERY_KEY, conversationQueryKey('c-a'), messagesQueryKey('c-a')].map(
+      (queryKey) => queryClient.defaultQueryOptions({ queryKey }).networkMode,
+    );
+
+    expect(modes).toEqual(['online', 'online', 'online']);
+  });
+
+  test('ouvrir un fil hors ligne attend le réseau : aucune copie ancienne ne remplace ce que le temps réel a posé', async () => {
+    const queryClient = appClient();
+    const read = localMessage({ id: 'm-lu', senderId: 'u-other' });
+    const received = localMessage({ id: 'm-recu', senderId: 'u-other' });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([read, received]));
+    onlineManager.setOnline(false);
+
+    const { calls, stop } = openThread(queryClient, () => Promise.resolve(pageOf([read])));
+    await settle(queryClient);
+
+    expect(calls).toHaveLength(0);
+    expect(queryClient.getQueryState(messagesQueryKey('c-a'))?.fetchStatus).toBe('paused');
+    expect(threadOf(queryClient, 'c-a')?.messages.map((m) => m.id)).toEqual(['m-lu', 'm-recu']);
+    stop();
+    queryClient.clear();
   });
 });
 

@@ -33,6 +33,13 @@ import {
  * toutes les pages d'une requête infinie comprises. Toute autre écriture PORTE
  * le journal jusqu'à la donnée qu'elle produit.
  *
+ * Ce crochet a un effet de bord, neutralisé dans le même appel : sans mode
+ * réseau fixé, TanStack passe toute requête qui porte un `persister` en
+ * `offlineFirst` (`defaultQueryOptions`). Hors ligne, la liste, la fiche et le
+ * fil partaient au lieu d'attendre ; le service worker servait sa copie, qui
+ * remplaçait ce que le temps réel avait posé. La racine reste `online` : hors
+ * ligne, elle est EN PAUSE, comme le reste du produit (`lib/view/cold-state.ts`).
+ *
  * Trois règles pour qui écrit :
  *  - une écriture vive garde la date de la dernière LECTURE serveur
  *    (`updatedAt`) : le temps réel ne fait pas passer un cache pour frais
@@ -78,7 +85,7 @@ async function markServed(queryFn: QueryFunction<unknown, QueryKey, never>, cont
 export function installLiveCacheJournal(queryClient: QueryClient): void {
   if (installed.has(queryClient)) return;
   installed.add(queryClient);
-  queryClient.setQueryDefaults(LIVE_CACHE_ROOT, { structuralSharing: shareWithLiveWrites, persister: markServed });
+  queryClient.setQueryDefaults(LIVE_CACHE_ROOT, { structuralSharing: shareWithLiveWrites, persister: markServed, networkMode: 'online' });
   queryClient.getQueryCache().subscribe((event) => {
     if (event.type !== 'updated' || !isObject(event.query.state.data)) return;
     if (event.action.type === 'fetch' || event.action.type === 'error') journals.delete(event.query.state.data);
