@@ -106,14 +106,21 @@ public object E2eePlaintextReader {
 
     private val parser: Json = Json { isLenient = false }
 
+    /**
+     * La profondeur se borne AVANT l'analyse en arbre, qui récurse (kotlinx 1.7.3 n'a aucune borne pour les tableaux) ; un
+     * débordement de pile qui passerait malgré tout est un clair illisible, jamais une `Error` qui remonte.
+     */
     private fun parse(plaintext: ByteArray): Parsed {
         val text = strictUtf8(plaintext) ?: return Parsed.Failed(E2eeUnreadableReason.NOT_UTF8)
+        if (!nestsWithin(text, MAX_DEPTH)) return Parsed.Failed(E2eeUnreadableReason.NOT_JSON)
         val root = try {
-            parser.parseToJsonElement(text)
+            parser.parseToJsonElement(text).takeIf { it.isStrictJson() }
         } catch (_: IllegalArgumentException) {
-            return Parsed.Failed(E2eeUnreadableReason.NOT_JSON)
+            null
+        } catch (_: StackOverflowError) {
+            null
         }
-        return if (root.isStrictJson()) Parsed.Ok(text, root) else Parsed.Failed(E2eeUnreadableReason.NOT_JSON)
+        return if (root != null) Parsed.Ok(text, root) else Parsed.Failed(E2eeUnreadableReason.NOT_JSON)
     }
 
     /** UTF-8 strict : une séquence invalide REFUSE le clair (JSONDecoder), elle ne se remplace pas par U+FFFD. */
@@ -247,6 +254,27 @@ internal class Fields(private val fields: Map<String, JsonElement>) {
  * aurait ajouté, par un parcours LINÉAIRE depuis la fin (WEBX-06 : une expression ancrée sur la fin était quadratique).
  */
 internal fun withoutTrailingWhitespace(text: String): String = text.trimEnd(' ', '\t', '\n', '\r')
+
+/**
+ * Le texte tient-il sous [limit] niveaux d'imbrication ? Un parcours LINÉAIRE qui compte crochets et accolades HORS des
+ * chaînes (audit de #19077, P1) : un pair ne fait jamais déborder la pile d'une lecture récursive.
+ */
+private fun nestsWithin(text: String, limit: Int): Boolean {
+    var depth = 0
+    var inString = false
+    var escaped = false
+    for (symbol in text) {
+        when {
+            escaped -> escaped = false
+            inString && symbol == '\\' -> escaped = true
+            symbol == '"' -> inString = !inString
+            inString -> Unit
+            symbol == '[' || symbol == '{' -> if (++depth > limit) return false
+            symbol == ']' || symbol == '}' -> depth--
+        }
+    }
+    return true
+}
 
 private val JSON_NUMBER = Regex("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?")
 private const val MAX_SAFE_INTEGER: Long = 9_007_199_254_740_991L

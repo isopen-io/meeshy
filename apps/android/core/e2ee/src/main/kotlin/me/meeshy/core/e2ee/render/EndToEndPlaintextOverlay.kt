@@ -3,6 +3,7 @@ package me.meeshy.core.e2ee.render
 import me.meeshy.core.e2ee.E2eeWire
 import me.meeshy.core.e2ee.content.E2eeContent
 import me.meeshy.core.e2ee.store.E2eePlaintextEntry
+import me.meeshy.core.e2ee.store.isSameAccount
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.EndToEndSeal
@@ -74,7 +75,7 @@ public object EndToEndPlaintextOverlay {
     private fun isInPlace(content: E2eeContent, senderUserId: String, message: ApiMessage, conversationId: String): Boolean {
         val author = announcedAuthor(message) ?: return false
         if (message.conversationId != conversationId || !content.belongsTo(conversationId)) return false
-        if (!isUserSpeech(message) || author != senderUserId) return false
+        if (!isUserSpeech(message) || !isSameAccount(author, senderUserId)) return false
         val written = content.clientMessageId
         val served = message.clientMessageId
         if (written != null && served != null && written != served) return false
@@ -97,7 +98,7 @@ public object EndToEndPlaintextOverlay {
     private const val DELETED_AT_UNKNOWN = "1970-01-01T00:00:00.000Z"
 
     private fun isMine(message: ApiMessage, readerUserId: String): Boolean =
-        readerUserId.isNotEmpty() && announcedAuthor(message) == readerUserId
+        readerUserId.isNotEmpty() && announcedAuthor(message)?.let { isSameAccount(it, readerUserId) } == true
 
     /** L'auteur que le message ANNONCE : l'utilisateur de l'expéditeur, sinon `senderId`. Sans auteur, aucun clair. */
     private fun announcedAuthor(message: ApiMessage): String? =

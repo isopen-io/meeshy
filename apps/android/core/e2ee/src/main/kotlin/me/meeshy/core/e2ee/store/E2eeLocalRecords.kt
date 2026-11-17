@@ -104,7 +104,10 @@ public class E2eePlaintextVault(
 
     public fun servesItsOwner(): Boolean = vault.read(::serves)
 
-    private fun serves(reader: RecordReader): Boolean = owner == null || E2eeEnrollmentRecords.load(reader)?.userId == owner
+    private fun serves(reader: RecordReader): Boolean {
+        val account = owner ?: return true
+        return E2eeEnrollmentRecords.load(reader)?.let { isSameAccount(it.userId, account) } == true
+    }
 }
 
 public class E2eeForeignVaultException : Exception("the e2ee vault belongs to another account")

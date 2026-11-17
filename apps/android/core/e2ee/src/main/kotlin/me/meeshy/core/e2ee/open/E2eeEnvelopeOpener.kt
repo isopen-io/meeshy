@@ -2,6 +2,7 @@ package me.meeshy.core.e2ee.open
 
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import kotlinx.coroutines.CancellationException
 import me.meeshy.core.e2ee.content.E2eeContent
 import me.meeshy.core.e2ee.content.E2eeContentException
 import me.meeshy.core.e2ee.content.E2eeEnvelopeOrigin
@@ -97,7 +98,8 @@ public class E2eeUnapprovedOwnDeviceException : Exception("envelope from an unap
  *
  * Une enveloppe que cet appareil ne sait pas traiter n'arrête jamais les autres (#18970) : toute lecture du coffre se
  * fait sous `try` (un refus du coffre fait ATTENDRE cette enveloppe, sans l'acquitter), et le rattrapage traite chaque
- * enveloppe isolément. Le clair se lit par la lecture STRICTE du contrat commun ([E2eePlaintextReader], #18944).
+ * enveloppe isolément, `Error` comprise (audit de #19077, P1). Le clair se lit par la lecture STRICTE du contrat commun
+ * ([E2eePlaintextReader], #18944), dont la profondeur est bornée avant toute analyse.
  */
 public class E2eeEnvelopeOpener(
     private val local: E2eeLocalDevice,
@@ -148,10 +150,15 @@ public class E2eeEnvelopeOpener(
         return outcomes
     }
 
-    /** Une enveloppe qui fait lever autre chose qu'un verdict attend SEULE : elle n'interrompt ni la page ni la file. */
+    /**
+     * Une enveloppe qui fait lever autre chose qu'un verdict attend SEULE, même sur une `Error` (une panique que le pont JNI
+     * rend en `AssertionError`, un débordement de pile) : elle n'interrompt ni la page, ni son accusé, ni la file.
+     */
     private fun isolated(envelope: E2eeServedEnvelope): E2eeOpenOutcome = try {
         open(envelope)
-    } catch (_: Exception) {
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Throwable) {
         E2eeOpenOutcome.Deferred(envelope.id)
     }
 

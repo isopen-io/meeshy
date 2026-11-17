@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.launch
 import me.meeshy.core.e2ee.wire.E2eeJson
 import me.meeshy.core.e2ee.wire.E2eeServedEnvelope
@@ -53,7 +54,7 @@ internal class EndToEndEnvelopeBinding @Inject constructor(
         val userId = session.currentUserId ?: return
         val queue = Channel<suspend () -> Unit>(Channel.UNLIMITED).also { work = it }
         jobs = listOf(
-            scope.launch { for (task in queue) runGuarded(task) },
+            scope.drainGuarded(queue),
             scope.launch { socket.connected.collect { enqueue { runtime.catchUp(userId) } } },
         )
         enqueue { runtime.prepare(userId) }
@@ -90,12 +91,15 @@ internal class EndToEndEnvelopeBinding @Inject constructor(
     private fun enqueue(task: suspend () -> Unit) {
         work?.trySend(task)
     }
+}
 
-    /**
-     * Un travail qui échoue n'arrête jamais la file (#18970) : une `Error` levée sous libsignal ou par le coffre tuerait la
-     * coroutine de la file, sans gestionnaire, et le processus avec elle — à chaque nouvelle enveloppe du même pair.
-     */
-    private suspend fun runGuarded(task: suspend () -> Unit) {
+/**
+ * La file de travail de la session : un travail qui échoue n'arrête jamais les suivants (#18970) — une `Error` levée sous
+ * libsignal ou par le coffre tuerait sinon la coroutine de la file, sans gestionnaire, et le processus avec elle, à chaque
+ * nouvelle enveloppe du même pair.
+ */
+internal fun CoroutineScope.drainGuarded(queue: ReceiveChannel<suspend () -> Unit>): Job = launch {
+    for (task in queue) {
         try {
             task()
         } catch (cancelled: CancellationException) {

@@ -45,9 +45,10 @@ internal class EndToEndSendHandler @Inject constructor(
         val payload = runCatching { json.decodeFromString(EndToEndSendPayload.serializer(), row.payload) }
             .getOrElse { return SendResult.PermanentFailure("Bad payload", unreadable = true) }
         val userId = session.currentUserId ?: return SendResult.Deferred(REASON_NO_SESSION)
-        val readable = runtime.plaintext(userId, payload.clientMessageId) as? E2eePlaintextEntry.Readable
-            ?: return SendResult.PermanentFailure(REASON_PLAINTEXT_MISSING)
         return try {
+            // Un coffre qui ne s'ouvre pas dit sa raison (#18977) ; un coffre verrouillé se réessaie ; seul un clair ABSENT juge.
+            val readable = runtime.plaintext(userId, payload.clientMessageId) as? E2eePlaintextEntry.Readable
+                ?: return SendResult.PermanentFailure(REASON_PLAINTEXT_MISSING)
             val served = runtime.deliver(userId, payload.conversationId, payload.peerUserId, readable.content, readable.content.replyTo)
             runtime.remember(userId, readable.content, listOf(served.id))
             messageRepository.reconcileSent(payload.clientMessageId, served)
