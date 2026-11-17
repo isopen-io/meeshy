@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vitrine_cap_presence">Presencia</string>
+    <string name="vitrine_cap_presence_detailed">Presencia detallada</string>
+    <string name="vitrine_cap_level_rank">Nivel y rango</string>
+    <string name="vitrine_cap_sparks">Chispas</string>
+    <string name="vitrine_cap_battery">Batería</string>
+    <string name="vitrine_cap_location_live">Ubicación continua</string>
+    <string name="vitrine_cap_location_history">Historial de ubicación</string>
+    <string name="vitrine_cap_direct_message">Mensaje directo</string>
+    <string name="vitrine_cap_message_request">Pedir escribir</string>
+    <string name="vitrine_cap_ring">Llamada</string>
+    <string name="vitrine_cap_talkie">Walkie-talkie</string>
+    <string name="vitrine_cap_together">Juntos</string>
+    <string name="vitrine_cap_bring">Bring</string>
+    <string name="vitrine_cap_listening_category">Escucha: categoría</string>
+    <string name="vitrine_cap_listening_title">Escucha: título</string>
+    <string name="vitrine_cap_location_temporary">Ubicación temporal</string>
+    <string name="vitrine_cap_location_proximity">Proximidad</string>
+    <string name="vitrine_cap_battery_pull">Consulta de batería</string>
+    <string name="vitrine_cap_unreachable">Teléfono inaccesible</string>
+    <string name="vitrine_as_title">Ver como</string>
+    <string name="vitrine_as_subtitle">Tu escaparate, tal como lo ve cada círculo.</string>
+    <string name="vitrine_as_open_title">Visible en este nivel</string>
+    <string name="vitrine_as_hidden_title">Oculto en este nivel</string>
+    <string name="vitrine_as_opens_from">Desde %1$s</string>
+    <string name="vitrine_as_nothing_hidden">Nada está oculto en este nivel.</string>
+</resources>
