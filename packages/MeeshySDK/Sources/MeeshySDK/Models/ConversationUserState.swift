@@ -186,6 +186,51 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         return merged
     }
 
+    // MARK: - Served row (#18916)
+
+    /// Adopte une ligne SERVIE par `/user-preferences/conversations` : les seuls
+    /// champs que la route sert, et sa version.
+    ///
+    /// La route ne sert ni `clearHistoryBefore` ni `deletedForUserAt` : les
+    /// écrire depuis une ligne qui ne les porte pas effacerait un « effacer
+    /// l'historique », et l'historique masqué réapparaîtrait. La lecture et les
+    /// champs propres à l'appareil ne viennent pas non plus de cette route.
+    /// Un booléen ou une liste absents gardent la valeur locale ; un champ
+    /// NULLABLE servi `null` dit « aucun », comme sur la diffusion vive.
+    func adoptingServed(_ served: APIConversationPreferences) -> ConversationUserState {
+        var adopted = self
+        adopted.isPinned = served.isPinned ?? isPinned
+        adopted.isMuted = served.isMuted ?? isMuted
+        adopted.mentionsOnly = served.mentionsOnly ?? mentionsOnly
+        adopted.isArchived = served.isArchived ?? isArchived
+        adopted.tags = served.tags ?? tags
+        adopted.sectionId = served.categoryId
+        adopted.orderInCategory = served.orderInCategory
+        adopted.customName = served.customName
+        adopted.reaction = served.reaction
+        adopted.appearance = served.appearance
+        adopted.version = served.version ?? version
+        return adopted
+    }
+
+    /// L'accusé d'un geste : la ligne que l'adaptateur a relue après le PUT.
+    ///
+    /// Quand sa version a sauté par-dessus le candidat local, d'autres écritures
+    /// ont eu lieu ailleurs pendant la coupure, et seule la ligne relue les
+    /// porte : elle est adoptée. Sinon, seule la version l'est — l'état
+    /// optimiste EST la ligne servie. Un autre geste encore en file garde son
+    /// état optimiste : l'adopter le ferait reculer à l'écran jusqu'à son
+    /// propre accusé.
+    func acknowledging(_ served: APIConversationPreferences?, keepingOptimistic: Bool) -> ConversationUserState {
+        guard let served, let servedVersion = served.version else { return self }
+        guard servedVersion > version, !keepingOptimistic else {
+            var acknowledged = self
+            acknowledged.version = servedVersion
+            return acknowledged
+        }
+        return adoptingServed(served)
+    }
+
     // MARK: - Codable (lenient decoder)
 
     /// Custom decoder that falls back to the init defaults for any
