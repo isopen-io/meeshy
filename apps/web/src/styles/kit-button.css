@@ -1,0 +1,244 @@
+/* LE BOUTON LIBELLÉ (K40, #18874) — la capsule, ses états et sa paire. Le VERRE du
+   genre `glass` n'est pas ici : il vient de K01 (`glass-kit.css`). Chaque valeur
+   chiffrée vient de `meeshy-button-recipe.ts`, qui la pose en propriétés
+   `--kit-button-*`. Seuls `transform` et `opacity` s'animent : l'appui s'enfonce
+   par l'échelle, le voile d'appui par l'opacité, et l'ombre teintée ne s'anime
+   jamais. */
+@layer components {
+  .kit-button {
+    position: relative;
+    display: var(--kit-button-display, inline-flex);
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-block-size: var(--kit-button-h);
+    inline-size: var(--kit-button-w);
+    max-inline-size: 100%;
+    padding: 0 var(--kit-button-pad);
+    border: var(--kit-button-border) solid currentcolor;
+    border-radius: var(--ios-radius-full);
+    background-color: var(--kit-button-fill);
+    color: var(--kit-button-ink);
+    font: inherit;
+    font-size: var(--kit-button-font);
+    font-weight: var(--kit-button-weight);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    transition:
+      transform var(--motion-morph-duration) var(--motion-morph),
+      opacity 120ms var(--motion-reduced);
+  }
+
+  .kit-button[data-width='fill'] {
+    inline-size: 100%;
+  }
+
+  .kit-button[data-shape='round'],
+  .kit-button[data-shape='hold'] {
+    padding: 0;
+    border-radius: var(--ios-radius-full);
+  }
+
+  .kit-button[data-shape='round'] {
+    block-size: var(--kit-button-h);
+  }
+
+  .kit-button::before {
+    content: '';
+    position: absolute;
+    inset-block: calc(-1 * var(--kit-button-slack));
+    inset-inline: 0;
+  }
+
+  .kit-button[data-kind='outline'] {
+    border-color: color-mix(in srgb, var(--kit-button-ink) 40%, transparent);
+  }
+
+  .kit-button[data-kind='text'],
+  .kit-button[data-kind='glass'],
+  .kit-button[data-kind='primary'],
+  .kit-button[data-kind='accent'],
+  .kit-button[data-kind='tinted'],
+  .kit-button[data-kind='danger'] {
+    border-color: transparent;
+  }
+
+  .kit-button[aria-disabled='true'] {
+    opacity: var(--kit-button-opacity);
+    cursor: default;
+  }
+
+  .kit-button[aria-busy='true'] {
+    cursor: progress;
+  }
+
+  .kit-button[data-pressed] {
+    transform: scale(var(--kit-button-scale-pressed));
+  }
+
+  .kit-button:focus-visible {
+    outline: var(--kit-button-ring) solid var(--kit-button-ink);
+    outline-offset: var(--kit-button-ring-offset);
+  }
+}
+
+.kit-button__veil {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: var(--color-ios-ink);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--motion-reduced);
+}
+
+.kit-button[data-pressed] > .kit-button__veil {
+  opacity: 0.14;
+}
+
+@media (hover: hover) {
+  .kit-button:not([aria-disabled='true']):not([aria-busy='true']):hover > .kit-button__veil {
+    opacity: 0.07;
+  }
+}
+
+.kit-button__body {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--kit-button-gap);
+  min-inline-size: 0;
+}
+
+.kit-button__glyph {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--kit-button-glyph);
+  block-size: var(--kit-button-glyph);
+}
+
+.kit-button__glyph > svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.kit-button__glyph[data-kit-button-busy] > svg {
+  animation: kit-button-spin 900ms linear infinite;
+}
+
+.kit-button__trailing {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-end: calc(-1 * var(--kit-button-trailing-cut));
+}
+
+.kit-button__title {
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.kit-button__deferred {
+  position: absolute;
+  inset-block-start: -2px;
+  inset-inline-end: -2px;
+  display: grid;
+  place-items: center;
+  inline-size: 18px;
+  block-size: 18px;
+  border-radius: var(--ios-radius-full);
+  background-color: var(--color-ios-surface);
+  color: var(--color-ios-ink-2);
+}
+
+.kit-button__deferred > svg {
+  inline-size: 12px;
+  block-size: 12px;
+}
+
+.kit-button__reason {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-start: 0;
+  margin-block-start: 4px;
+  inline-size: max-content;
+  max-inline-size: 100%;
+  white-space: normal;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ios-ink-3);
+}
+
+.kit-button__sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.kit-button[data-shape='hold'][data-hold-state='live']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--kit-button-fill);
+  animation: kit-motion-pulse 2.6s ease-out infinite;
+  animation-play-state: var(--motion-pulse-play);
+  pointer-events: none;
+}
+
+.kit-button[data-shape='hold'][data-hold-state='refused'] {
+  opacity: var(--kit-button-opacity);
+}
+
+@keyframes kit-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-button[data-pressed] {
+    transform: none;
+  }
+
+  .kit-button__glyph[data-kit-button-busy] > svg {
+    animation: none;
+  }
+
+  .kit-button[data-shape='hold'][data-hold-state='live']::after {
+    animation: none;
+    border-width: 6px;
+  }
+}
+
+.kit-button-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kit-button-pair-gap);
+  inline-size: 100%;
+}
+
+.kit-button-pair__primary {
+  display: flex;
+  flex: var(--kit-button-pair-primary) 1 max-content;
+}
+
+.kit-button-pair__secondary {
+  display: flex;
+  flex: var(--kit-button-pair-secondary) 1 max-content;
+}
+
+.kit-button-pair__primary > .kit-button,
+.kit-button-pair__secondary > .kit-button {
+  inline-size: 100%;
+  min-block-size: var(--kit-button-h);
+}

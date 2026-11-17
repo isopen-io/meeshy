@@ -1,0 +1,155 @@
+/* LA NOTE (K46, #18874) — une tête, une phrase, et ce qui les tient. Elle vit DANS LE
+   FLUX : elle pousse ce qui la suit, défile avec lui, et se replie quand elle n'est plus
+   vraie. Ni verre, ni flou, ni ombre. Chaque valeur chiffrée vient de
+   `meeshy-note-recipe.ts`, qui la pose en propriétés `--kit-note-*`. Le battement du
+   point anime `transform` et `opacity` seulement ; l'entrée d'un bandeau est la seule
+   mise en page animée, une fois. */
+@layer components {
+  .kit-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    box-sizing: border-box;
+    min-block-size: var(--kit-note-min-h);
+    padding: var(--kit-note-pad);
+    border-radius: var(--kit-note-radius);
+    color: var(--kit-note-phrase);
+    font-size: var(--kit-note-font);
+    font-weight: var(--kit-note-weight);
+    line-height: var(--kit-note-leading);
+    isolation: isolate;
+  }
+
+  .kit-note[data-form='band'] {
+    position: relative;
+    border-inline-start: var(--kit-note-rule) solid var(--kit-note-tone);
+    background-color: color-mix(in srgb, var(--kit-note-tone) calc(var(--kit-note-fill-opacity) * 100%), transparent);
+  }
+
+  .kit-note[data-form='banner'] {
+    inline-size: 100%;
+    align-items: center;
+    border-block-end: var(--kit-note-border-bottom) solid var(--color-ios-hairline);
+    background-color: var(--color-ios-card);
+  }
+
+  .kit-note[data-alignment='center'] {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .kit-note__body {
+    display: flex;
+    flex: 1 1 0;
+    align-items: baseline;
+    gap: 8px;
+    min-inline-size: 0;
+  }
+
+  .kit-note__lead {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--kit-note-lead);
+    block-size: var(--kit-note-lead);
+    color: var(--kit-note-tone);
+    align-self: flex-start;
+  }
+
+  .kit-note__lead > svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .kit-note__lead[data-dot] {
+    inline-size: var(--kit-note-dot);
+    block-size: var(--kit-note-dot);
+    margin-block-start: 0.35em;
+    border-radius: var(--ios-radius-full);
+    background-color: var(--kit-note-tone);
+  }
+
+  .kit-note__lead[data-dot]::after {
+    content: '';
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: inherit;
+    background-color: var(--kit-note-tone);
+    opacity: 0;
+  }
+
+  .kit-note__lead[data-pulse='true']::after {
+    animation: kit-motion-pulse var(--motion-pulse-duration) var(--motion-pulse) infinite;
+    animation-play-state: var(--motion-pulse-play);
+  }
+
+  .kit-note__text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-note-detail-gap);
+    min-inline-size: 0;
+  }
+
+  .kit-note__phrase {
+    overflow-wrap: anywhere;
+  }
+
+  .kit-note__phrase > strong {
+    font-weight: 700;
+    color: var(--color-ios-ink);
+  }
+
+  .kit-note__detail {
+    font-size: var(--kit-note-detail);
+    font-weight: 400;
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-note__action {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    min-block-size: var(--kit-note-action-target);
+  }
+
+  .kit-note[data-enters] {
+    animation: kit-note-enter var(--motion-rise-duration) var(--motion-rise) both;
+  }
+}
+
+.kit-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--kit-note-font);
+  line-height: var(--kit-note-leading);
+  color: var(--color-ios-ink);
+}
+
+.kit-note-list__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+@keyframes kit-note-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-note[data-enters],
+  .kit-note__lead[data-pulse='true']::after {
+    animation: none;
+  }
+}

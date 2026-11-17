@@ -37,7 +37,7 @@ describe('le registre du chantier face au catalogue web', () => {
   });
 
   test('le dossier du kit ne contient que des composants nommés par le registre', () => {
-    const named = new Set(lots.map((lot) => lot.target.split('/').pop()));
+    const named = new Set([...lots.map((lot) => lot.target.split('/').pop()), ...MeeshyKitCatalog.atomFiles]);
     const kitDir = join(ROOT, 'apps', 'web', 'src', 'components', 'kit');
     const components = readdirSync(kitDir).filter((file) => file.endsWith('.tsx') && !file.endsWith('.test.tsx') && file !== 'meeshy-kit-catalog.tsx');
     expect(components.filter((file) => !named.has(file))).toEqual([]);
