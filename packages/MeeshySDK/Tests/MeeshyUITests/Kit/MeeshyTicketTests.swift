@@ -88,7 +88,7 @@ struct MeeshyTicketTests {
             #expect(notches.leading.y == 77)
             #expect(notches.trailing.y == 77)
             #expect(notches.leading.x == 0)
-            #expect(notches.trailing.x == width)
+            #expect(Double(notches.trailing.x) == width)
         }
     }
 

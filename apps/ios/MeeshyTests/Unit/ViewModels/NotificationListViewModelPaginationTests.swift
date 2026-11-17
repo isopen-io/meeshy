@@ -111,20 +111,41 @@ final class NotificationListViewModelPaginationTests: XCTestCase {
         XCTAssertEqual(feed.storedFeeds.last?.map(\.id), ["n1"])
     }
 
-    func test_notificationArrivedRead_relitLaListeMontee() async {
+    /// Une notification entrée sans bruit (réécrite après une édition) reprend son rang dans la fenêtre chargée,
+    /// sans relire le serveur : une relecture jetait les pages de `loadMore` et faisait sauter le défilement.
+    func test_notificationArrivedQuietly_rangeLaLigneASaDate_sansRelireLeServeur() async {
         let mock = MockNotificationListService()
-        mock.pages = [NotificationStubs.page(["a"]), NotificationStubs.page(["b", "a"])]
         let feed = MockNotificationFeed()
         let vm = makeSUT(mock, feed: feed)
-        await vm.loadInitial()
+        vm.notifications = [
+            NotificationStubs.notification("c", type: "user_mentioned", createdAt: "2026-11-03T10:00:00.000Z"),
+            NotificationStubs.notification("a", type: "user_mentioned", createdAt: "2026-11-01T10:00:00.000Z")
+        ]
 
-        feed.arrivedReadSubject.send("b")
-        for _ in 0..<300 where vm.notifications.map(\.id) != ["b", "a"] {
+        feed.arrivedQuietlySubject.send(NotificationStubs.notification("b", type: "user_mentioned", createdAt: "2026-11-02T10:00:00.000Z"))
+        for _ in 0..<300 where vm.notifications.map(\.id) != ["c", "b", "a"] {
             try? await Task.sleep(for: .milliseconds(10))
         }
 
-        XCTAssertEqual(vm.notifications.map(\.id), ["b", "a"], "la notification arrivée lue reprend son rang dans la cloche ouverte")
-        XCTAssertEqual(mock.appels.count, 2)
+        XCTAssertEqual(vm.notifications.map(\.id), ["c", "b", "a"], "la réécriture reprend son rang, pas la tête")
+        XCTAssertEqual(mock.appels.count, 0, "aucune relecture : les pages déjà chargées restent")
+    }
+
+    /// Une demande d'ami lue ailleurs repeint TOUTES ses lignes de la cloche montée, au-delà du cache compris.
+    func test_friendRequestNotificationsRead_repeintLesLignesDeLaDemande_etSeulementElles() async {
+        let feed = MockNotificationFeed()
+        let vm = makeSUT(MockNotificationListService(), feed: feed)
+        vm.notifications = [
+            NotificationStubs.notification("f1", type: "friend_request", friendRequestId: "fr1"),
+            NotificationStubs.notification("f2", type: "friend_request", friendRequestId: "fr2")
+        ]
+
+        feed.friendRequestReadSubject.send("fr1")
+        for _ in 0..<300 where vm.notifications.first?.isRead != true {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(vm.notifications.map(\.isRead), [true, false])
     }
 
     func test_readNotificationsPurged_retireToutesLesLignesLues_memeHorsDuCache() async {
