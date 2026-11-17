@@ -95,6 +95,11 @@ export type SharedLocationRelayDeps = {
   readonly now: () => number;
   /** Porte `location_share_started` (#19204) ; absente, personne n'est prévenu. Un échec n'arrête jamais le partage. */
   readonly notifyStarted?: (notices: readonly SharedLocationStartedNotice[]) => Promise<void>;
+  /**
+   * Rejoue la batterie de `readerIds` après un démarrage ou un arrêt qui change l'accord de batterie
+   * du partage (#19204) ; absent, la batterie se recale au relevé suivant. Un échec n'arrête rien.
+   */
+  readonly refreshBattery?: (emitterId: string, readerIds: readonly string[]) => Promise<void>;
 };
 
 /**
@@ -163,7 +168,7 @@ const deadlineOf = (state: Pick<SharedLocationState, 'recipients' | 'expiresAt'>
 };
 
 /** Les destinataires dont l'échéance n'est pas passée : les seuls que la passerelle sert encore. */
-const liveRecipients = (state: SharedLocationState, now: number): SharedLocationState['recipients'] =>
+export const liveRecipients = (state: SharedLocationState, now: number): SharedLocationState['recipients'] =>
   state.recipients.filter((recipient) => Date.parse(deadlineOf(state, recipient.userId)) > now);
 
 /** Une position antérieure à la sortie du fantôme (#19203) ne se republie pas : seule la suivante repart. */
@@ -405,6 +410,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     position: parsed.data.position,
     updatedAt: new Date(now).toISOString(),
     expiresAt: new Date(term).toISOString(),
+    ...(parsed.data.shareBattery === true ? { shareBattery: true as const } : {}),
   };
 
   let previous: SharedLocationState | null;
@@ -429,6 +435,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) {
       await noteServedEnds(deps, emitterId, state, after.served);
       if (parsed.data.notifyRecipients === true) await notifyNewcomers(deps, emitterId, { state, previous, served: after.served, durationMinutes: parsed.data.durationMinutes });
+      await refreshBatteryOf(deps, emitterId, [previous, state]);
       return ack;
     }
     await reconcile(deps, emitterId, after.served);
@@ -478,6 +485,7 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
  * d'annoncer la fin, même si le pointeur est déjà parti.
  */
 export async function stopSharedLocation(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationStopAck> {
+  const stopped = await readSharedLocation(deps.cache, emitterId, deps.now()).catch(() => null);
   try {
     await advanceSharedLocationGeneration(deps.cache, emitterId);
     await drainRetiring(deps, emitterId);
@@ -485,7 +493,21 @@ export async function stopSharedLocation(deps: SharedLocationRelayDeps, emitterI
     return UNAVAILABLE;
   }
   await noteSharedLocationStopped(deps.cache, emitterId, deps.now()).catch(() => undefined);
+  await refreshBatteryOf(deps, emitterId, [stopped]);
   return { success: true };
+}
+
+/**
+ * Rejoue la batterie (#19204) de chaque destinataire vivant d'un partage qui l'accordait ou
+ * l'accorde, une fois le changement pris : la batterie relit l'accord du partage COURANT. Jamais
+ * bloquant ; sans partage avec batterie, rien n'est rejoué.
+ */
+async function refreshBatteryOf(deps: SharedLocationRelayDeps, emitterId: string, states: readonly (SharedLocationState | null)[]): Promise<void> {
+  if (!deps.refreshBattery) return;
+  const now = deps.now();
+  const readers = [...new Set(states.flatMap((state) => (state?.shareBattery ? liveRecipients(state, now).map((recipient) => recipient.userId.toLowerCase()) : [])))];
+  if (readers.length === 0) return;
+  await deps.refreshBattery(emitterId, readers).catch(() => undefined);
 }
 
 /**
@@ -638,7 +660,8 @@ export async function ownSharedLocationFor(deps: SharedLocationRelayDeps, emitte
   const recipients = liveRecipients(state, deps.now())
     .map((recipient) => ({ userId: recipient.userId.toLowerCase(), precision: recipient.precision, expiresAt: deadlineOf(state, recipient.userId) }))
     .sort((a, b) => a.userId.localeCompare(b.userId));
-  return { recipients, expiresAt: recipients.length === 0 ? null : state.expiresAt };
+  if (recipients.length === 0) return { recipients, expiresAt: null };
+  return { recipients, expiresAt: state.expiresAt, shareBattery: state.shareBattery === true };
 }
 
 /** Les émetteurs à lire : les liens du lecteur dès Ami, et les collègues de l'équipe (la loi les ouvre sans lien). */

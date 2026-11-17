@@ -21,6 +21,8 @@ import type { BatteryPullDeps } from './batteryPull';
 import { captureBatteryAccess, refreshBatteryBetween, type BatteryPairAccess, type BatteryPushPair, type BatteryRelayDeps } from './batteryRelay';
 import type { BatteryCache } from './batteryStore';
 import { phoneReachabilityRelayDepsOf } from '../phoneReachability/phoneReachabilityDeps';
+import { sharedBatteryGrantsAmong } from '../sharedLocation/sharedLocationBattery';
+import { lazySharedLocationCache } from '../sharedLocation/sharedLocationLazyCache';
 import { capturePhoneReachabilityAccess, refreshPhoneReachabilityBetween } from '../phoneReachability/phoneReachabilityRelay';
 
 /** Sans Redis (développement, panne), l'ensemble des émetteurs surveillés vit dans le processus. */
@@ -146,6 +148,7 @@ export function batteryRelayDepsOf(params: { readonly prisma: PrismaClient; read
     isTrackedDevice: ({ userId, sessionId }) => isTrackedBatteryDevice(params.prisma, { userId, sessionId, now: new Date() }),
     trackedDeviceConnected: (userId) => isTrackedBatteryDeviceConnected({ prisma: params.prisma, io: params.io, userId, now: new Date() }),
     retractPushes: (pairs) => retractBatteryNotifications(params.prisma, pairs),
+    sharedBatteryGrants: (emitterIds) => sharedBatteryGrantsAmong(lazySharedLocationCache, emitterIds, Date.now()),
   };
 }
 
@@ -220,5 +223,21 @@ export async function refreshBatteryAfter(
     await refreshPhoneReachabilityBetween(phoneReachabilityRelayDepsOf(params), { userA: pair.userA, userB: pair.userB, before: phone });
   } catch (error) {
     params.report(error);
+  }
+}
+
+/**
+ * Le partage de position qui accorde ou retire sa batterie (#19204) rejoue, pour chacun des
+ * lecteurs touchés, la batterie de la paire : `changed` vers qui gagne l'épisode en cours,
+ * `cleared` vers qui le voyait et ne le voit plus. Un échec par lecteur est signalé et n'arrête pas les autres.
+ */
+export async function refreshBatteryForReaders(params: RefreshParams, emitterId: string, readerIds: readonly string[]): Promise<void> {
+  const relay = batteryRelayDepsOf(params);
+  for (const readerId of readerIds) {
+    try {
+      await refreshBatteryBetween(relay, { userA: emitterId, userB: readerId });
+    } catch (error) {
+      params.report(error);
+    }
   }
 }

@@ -13,7 +13,9 @@ import type { SharedLocationRequestDeps } from './sharedLocationRequest';
 import type { LocationGhostState } from '@meeshy/shared/types/shared-location';
 import { writeLocationGhost } from './locationGhost';
 import { exportSharedLocationEnds, type SharedLocationEnd } from './sharedLocationEnds';
-import { redisSharedLocationKv, UNAVAILABLE_SHARED_LOCATION_KV, type SharedLocationKv } from './sharedLocationKv';
+import { lazySharedLocationCache as lazyCache } from './sharedLocationLazyCache';
+import { refreshBatteryForReaders } from '../battery/batteryDeps';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import {
   captureSharedLocationAccess,
   endSharedLocationOfAccount,
@@ -24,37 +26,23 @@ import {
   type SharedLocationRelayDeps,
 } from './sharedLocationRelay';
 
-/**
- * Le magasin STRICT du processus, résolu à l'usage : brancher une socket n'ouvre aucune
- * connexion. Sans client Redis, chaque opération échoue — jamais de repli mémoire, qui
- * dirait « arrêté » à un seul processus pendant qu'un autre continue de diffuser.
- */
-const kv = (): SharedLocationKv => {
-  const client = getCacheStore().getNativeClient();
-  return client ? redisSharedLocationKv(client) : UNAVAILABLE_SHARED_LOCATION_KV;
-};
+const logger = enhancedLogger.child({ module: 'SharedLocationDeps' });
 
-const lazyCache: SharedLocationRelayDeps['cache'] = {
-  get: (key) => kv().get(key),
-  mget: (keys) => kv().mget(keys),
-  set: (key, value, ttlSeconds) => kv().set(key, value, ttlSeconds),
-  del: (key) => kv().del(key),
-  expire: (key, ttlSeconds) => kv().expire(key, ttlSeconds),
-  claim: (keys, args) => kv().claim(keys, args),
-  setIfCurrent: (keys, args) => kv().setIfCurrent(keys, args),
-  advance: (keys) => kv().advance(keys),
-  retiring: (key) => kv().retiring(key),
-  retired: (key, session) => kv().retired(key, session),
-  markSeen: (key, members, ttlSeconds) => kv().markSeen(key, members, ttlSeconds),
-  seenAmong: (key, members) => kv().seenAmong(key, members),
-  unmarkSeen: (key, members) => kv().unmarkSeen(key, members),
-};
+/** Un rejeu de batterie raté se journalise sans charge ; la batterie se recale au relevé suivant. */
+const reportBattery = (error: unknown): void => logger.warn('[shared-location] battery not refreshed', { error: error instanceof Error ? error.message : 'unknown' });
 
 /** Le service de notification est résolu à l'usage : le registre peut se remplir après le câblage des sockets. */
 export const noticesParams = (prisma: PrismaClient) => ({ prisma, notifications: getSharedNotificationService() ?? null });
 
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {
-  return { prisma: params.prisma, cache: lazyCache, io: params.io, now: () => Date.now(), notifyStarted: (notices) => sharedLocationNoticesOf(noticesParams(params.prisma)).started(notices) };
+  return {
+    prisma: params.prisma,
+    cache: lazyCache,
+    io: params.io,
+    now: () => Date.now(),
+    notifyStarted: (notices) => sharedLocationNoticesOf(noticesParams(params.prisma)).started(notices),
+    refreshBattery: (emitterId, readerIds) => refreshBatteryForReaders({ ...params, report: reportBattery }, emitterId, readerIds),
+  };
 }
 
 /**
