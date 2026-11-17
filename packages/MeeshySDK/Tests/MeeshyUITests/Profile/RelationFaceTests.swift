@@ -3,6 +3,7 @@ import XCTest
 
 /// #18870 — la fiche d'un autre est le profil d'une relation en trois faces (loi 1, loi 3), le sélecteur en bas (loi 5).
 /// Ce que les anciens onglets portaient (Détails, Conversations, Publications) se range dans la Vitrine (loi 11).
+@MainActor
 final class RelationFaceTests: XCTestCase {
 
     func test_allCases_readVitrineThenLinksThenActions() {

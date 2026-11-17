@@ -209,7 +209,8 @@ nonisolated enum ProfileReportReason: String, CaseIterable, Sendable {
     case impersonation
     case other
 
-    var label: String {
+    /// `@MainActor` malgré le type `nonisolated` : `Bundle.module`.
+    @MainActor var label: String {
         switch self {
         case .spam: return String(localized: "report.reason.spam", defaultValue: "Spam", bundle: .module)
         case .inappropriate: return String(localized: "report.reason.inappropriate", defaultValue: "Contenu inapproprié", bundle: .module)

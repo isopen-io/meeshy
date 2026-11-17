@@ -12,7 +12,8 @@ public nonisolated enum RelationFace: String, CaseIterable, Hashable, Sendable {
     case links
     case actions
 
-    public var title: String {
+    /// `@MainActor` malgré le type `nonisolated` : `Bundle.module` est isolé par l'isolation par défaut de MeeshyUI.
+    @MainActor public var title: String {
         switch self {
         case .vitrine: return String(localized: "profile.relation.face.vitrine", defaultValue: "Vitrine", bundle: .module)
         case .links: return String(localized: "profile.relation.face.links", defaultValue: "Liens", bundle: .module)
@@ -20,7 +21,7 @@ public nonisolated enum RelationFace: String, CaseIterable, Hashable, Sendable {
         }
     }
 
-    public var option: MeeshySegmentedOption<RelationFace> {
+    @MainActor public var option: MeeshySegmentedOption<RelationFace> {
         switch self {
         case .vitrine:
             return MeeshySegmentedOption(id: self, title: title, systemImage: "person.crop.square",
@@ -32,7 +33,7 @@ public nonisolated enum RelationFace: String, CaseIterable, Hashable, Sendable {
         }
     }
 
-    public static var selectorLabel: String {
+    @MainActor public static var selectorLabel: String {
         String(localized: "profile.relation.face.selector", defaultValue: "Faces du profil", bundle: .module)
     }
 
