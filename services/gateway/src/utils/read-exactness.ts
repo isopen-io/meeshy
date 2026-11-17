@@ -159,7 +159,9 @@ export type ResolveCursorDeliveredAtInput = {
  * bascule, **l'absence de gel VEUT DIRE l'absence de livraison** — les deux
  * sites qui avancent ce curseur figent dans le même mouvement
  * (`markMessagesAsReceived`, et la cascade « lu ⇒ remis » de
- * `markConversationAsRead`), si bien qu'un message livré après la bascule porte
+ * `markMessagesAsRead` — nommée `markConversationAsRead` par ce commentaire
+ * jusqu'à #19261, un nom qu'aucune méthode du dépôt n'a jamais porté), si bien
+ * qu'un message livré après la bascule porte
  * toujours son entrée. Avant la bascule, le repli reste consenti : ces
  * messages-là n'ont jamais eu l'occasion d'être gelés, et les en priver les
  * ferait tous basculer en « jamais remis ».
