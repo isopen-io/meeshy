@@ -598,3 +598,49 @@ describe('W5 — le crédential du service worker est celui que l’appareil tie
     expect(shared.value?.credential).toBeNull();
   });
 });
+
+/**
+ * UN ONGLET RESTÉ ANONYME QUI REJOINT UN LIEN (W3). Ouvert avant que le compte
+ * ne se connecte ailleurs, il ne tenait rien : rejoindre en invité posait
+ * l'invité PAR-DESSUS l'entrée du compte, dont le jeton quittait l'appareil —
+ * l'autre onglet se réveillait invité au rechargement. L'identité rejointe est
+ * désormais tenue par le compte de l'appareil, comme celle d'un compte qui
+ * choisit « Anonyme » (#8816) : elle reste la session de la conversation, et
+ * rien du compte ne voyage avec elle.
+ */
+describe('W3 — rejoindre un lien en invité dans un onglet resté anonyme ne remplace pas le compte de l’appareil (#19132)', () => {
+  const LINK_GUEST = { participantId: null, nickname: 'invité', conversationId: 'c-1', link: 'lnk', mayWrite: true } as const;
+
+  test('l’entrée du compte ouvert dans un autre onglet reste, et son jeton avec elle', () => {
+    const storage = fakeStorage();
+    const anonymousTab = openTab(storage);
+    openTab(storage).getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 7200 });
+
+    anonymousTab.getState().adoptAnonymous({ sessionToken: 'guest-1', guest: LINK_GUEST });
+
+    expect(tokenOf(reloaded(storage))).toBe('jwt-ada');
+  });
+
+  test('l’identité rejointe reste la session de la conversation, tenue par le compte de l’appareil', () => {
+    const storage = fakeStorage();
+    const anonymousTab = openTab(storage);
+    openTab(storage).getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 7200 });
+
+    anonymousTab.getState().adoptAnonymous({ sessionToken: 'guest-1', guest: LINK_GUEST });
+
+    const session = anonymousTab.getState().session;
+    expect(session.status === 'guest' ? session.sessionToken : session.status).toBe('guest-1');
+    expect(tokenOf(session)).toBe('jwt-ada');
+    expect(anonymousTab.getState().anonymousScopeFor('c-1')).toBe('c-1');
+  });
+
+  test('sans compte sur l’appareil, rejoindre en invité pose toujours l’invité', () => {
+    const storage = fakeStorage();
+    const anonymousTab = openTab(storage);
+
+    anonymousTab.getState().adoptAnonymous({ sessionToken: 'guest-1', guest: LINK_GUEST });
+
+    const restored = reloaded(storage);
+    expect(restored.status === 'guest' ? restored.sessionToken : restored.status).toBe('guest-1');
+  });
+});

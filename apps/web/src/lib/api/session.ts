@@ -635,7 +635,10 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       set({ session: { status: 'anonymous' } });
     },
     adoptAnonymous: ({ sessionToken, guest }) => {
-      const account = heldAccountOf(get().session);
+      /* Un onglet resté anonyme pendant qu'un autre ouvrait un compte (#19132) :
+         l'identité rejointe est tenue par le compte de l'appareil, jamais
+         posée par-dessus son entrée. */
+      const account = heldAccountOf(get().session) ?? heldAccountOf(deviceSession());
       if (account === null) {
         get().establishGuest({ sessionToken, guest });
         return;
