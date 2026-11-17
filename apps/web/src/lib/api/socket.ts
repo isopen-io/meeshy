@@ -34,6 +34,7 @@ import {
 } from './realtime-message-mutations';
 import { applyMessageHiddenForMe, applyMessageRestoredForMe, isMessageHiddenForMeEvent, isMessageRestoredForMeEvent } from './realtime-message-hidden';
 import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
+import { applyMemberCountChange, memberCountChangeOf, type MembershipChange } from './realtime-member-count';
 import { applyConversationGone, conversationGoneOf, viewerConversationOf } from './realtime-conversation-gone';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
@@ -542,11 +543,24 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     if (isMessageHiddenForMeEvent(payload)) applyMessageHiddenForMe(deps.queryClient, payload, deps.viewerId());
   };
 
-  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
-  const onParticipantDeparture = (payload: unknown): void => {
-    const ended = viewerMembershipEndedOf(payload, deps.viewerId());
-    if (ended !== null) applyViewerMembershipEnded(deps.queryClient, ended);
+  /** L'effectif d'un groupe (#18914) : posé tel que servi, repli ±1 sur une passerelle antérieure. Règle : `realtime-member-count.ts`. */
+  const applyMembershipCount = (payload: unknown, change: MembershipChange): void => {
+    const counted = memberCountChangeOf(payload, change);
+    if (counted !== null) applyMemberCountChange(deps.queryClient, counted);
   };
+
+  const onParticipantJoined = (payload: unknown): void => applyMembershipCount(payload, 'joined');
+
+  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
+  const onParticipantDeparture =
+    (change: Exclude<MembershipChange, 'joined'>) =>
+    (payload: unknown): void => {
+      const ended = viewerMembershipEndedOf(payload, deps.viewerId());
+      if (ended !== null) applyViewerMembershipEnded(deps.queryClient, ended);
+      applyMembershipCount(payload, change);
+    };
+  const onParticipantLeft = onParticipantDeparture('left');
+  const onParticipantBanned = onParticipantDeparture('banned');
 
   /** `conversation:closed` / `-obsoleted` (#14645) — ligne, détail et messages partent. Règle : `realtime-conversation-gone.ts`. */
   const onConversationGone = (payload: unknown): void => {
@@ -904,8 +918,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
-  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
-  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
@@ -985,8 +1000,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
-      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
-      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
