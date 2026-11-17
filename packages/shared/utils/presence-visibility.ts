@@ -83,6 +83,14 @@ const TARGET = 'target';
  * @see docs/superpowers/specs/2026-06-30-profile-last-seen-visibility-design.md
  * @see services/gateway/decisions.md (entrée 2026-08-25 « Visibilité de la présence »)
  */
+/**
+ * Les deux features de présence, NOMMÉES ici une fois : la fiche par cercle
+ * (`profile-circle-view.ts`) les projette en capacités sans écrire leur nom
+ * (la garde de présence n'autorise ce nom qu'en deux sites).
+ */
+export const PRESENCE_ONLINE_FEATURE = 'presence.online' as const;
+export const PRESENCE_DETAILED_FEATURE = 'presence.detailed' as const;
+
 export const resolvePresenceVisibility = (input: PresenceVisibilityInput): PresenceVisibility => {
   if (input.targetIsDeactivated) return HIDDEN;
 

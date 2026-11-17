@@ -51,7 +51,7 @@ export async function peopleOf(prisma: PairAccessDb, ids: readonly string[], now
   return new Map(rows.map((row) => [row.id, { age: declaredAgeClass(row.birthDate ?? null, now), role: lawRoleOf(row) }]));
 }
 
-async function coMembersAmong(prisma: PairAccessDb, subjectId: string, ids: readonly string[]): Promise<ReadonlySet<string>> {
+export async function coMembersAmong(prisma: PairAccessDb, subjectId: string, ids: readonly string[]): Promise<ReadonlySet<string>> {
   const own = await prisma.communityMember.findMany({ where: { userId: subjectId, isActive: true }, select: { communityId: true } });
   if (own.length === 0) return new Set();
   const shared = await prisma.communityMember.findMany({
