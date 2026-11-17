@@ -90,9 +90,11 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
 
     /// Le clair, rempli au palier (#13142), chiffré pour chaque appareil de la
     /// directe et de mes appareils approuvés : un message et un signal partent
-    /// par le même chemin, à la même taille, et par la même file.
-    func seal(plaintext unpadded: Data, to peerUserId: String) async throws -> E2EESealedMessage {
-        try await queue.run { try await sealInTurn(plaintext: unpadded, to: peerUserId) }
+    /// par le même chemin, à la même taille, et par la même file. Une frappe y
+    /// est éphémère : elle ne retient jamais un message (`E2EESealingQueue`).
+    func seal(plaintext unpadded: Data, to peerUserId: String, isTyping: Bool = false) async throws -> E2EESealedMessage {
+        guard isTyping else { return try await queue.run { try await sealInTurn(plaintext: unpadded, to: peerUserId) } }
+        return try await queue.runTyping { try await self.sealInTurn(plaintext: unpadded, to: peerUserId) }
     }
 
     private func sealInTurn(plaintext unpadded: Data, to peerUserId: String) async throws -> E2EESealedMessage {
@@ -124,14 +126,17 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
     func sealAndDeliver<T: Sendable>(
         plaintext: Data,
         to peerUserId: String,
+        isTyping: Bool = false,
         deliver: @concurrent @Sendable (E2EESealedMessage) async throws -> T
     ) async throws -> T {
         for _ in 1...Self.maxAttempts {
-            let sealed = try await seal(plaintext: plaintext, to: peerUserId)
+            let sealed = try await seal(plaintext: plaintext, to: peerUserId, isTyping: isTyping)
             do {
                 return try await deliver(sealed)
             } catch let mismatch as E2EEDevicesMismatch {
-                try forget(mismatch.stale + mismatch.extra)
+                // Dans la file (R-2) : un scellement qui a déjà retenu cet
+                // appareil ne voit pas sa session effacée sous lui.
+                try await queue.run { try forget(mismatch.stale + mismatch.extra) }
             }
         }
         throw E2EESealError.devicesMismatchUnresolved
@@ -139,7 +144,8 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
 
     /// Le même chemin qu'un message pour un SIGNAL (#13142), signé de cet appareil.
     public func seal(_ signal: E2EESignal, to peerUserId: String) async throws -> E2EESealedMessage {
-        try await seal(plaintext: signal.authored(by: local.userId, deviceId: local.deviceId).encoded(), to: peerUserId)
+        let plaintext = try signal.authored(by: local.userId, deviceId: local.deviceId).encoded()
+        return try await seal(plaintext: plaintext, to: peerUserId, isTyping: Self.isTyping(signal))
     }
 
     public func sealAndDeliver<T: Sendable>(
@@ -147,7 +153,14 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
         to peerUserId: String,
         deliver: @concurrent @Sendable (E2EESealedMessage) async throws -> T
     ) async throws -> T {
-        try await sealAndDeliver(plaintext: signal.authored(by: local.userId, deviceId: local.deviceId).encoded(), to: peerUserId, deliver: deliver)
+        let plaintext = try signal.authored(by: local.userId, deviceId: local.deviceId).encoded()
+        return try await sealAndDeliver(plaintext: plaintext, to: peerUserId, isTyping: Self.isTyping(signal), deliver: deliver)
+    }
+
+    /// Une frappe est éphémère : seule la dernière vaut, un message passe devant (R-1).
+    private static func isTyping(_ signal: E2EESignal) -> Bool {
+        if case .typing = signal.action { return true }
+        return false
     }
 
     /// Un appareil périmé ou en trop perd sa session : la prochaine passe la
@@ -162,10 +175,21 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
     }
 
     /// Les appareils actifs d'un utilisateur, chacun avec une session à jour.
+    /// Un appareil listé que son bundle n'a pas ouvert — il s'est réenrôlé
+    /// entre la liste et les bundles, l'annuaire sert une autre génération
+    /// que celle listée — relance la liste UNE fois (R-4) : sans cela, un
+    /// premier envoi disait au correspondant de mettre Meeshy à jour.
     private func targets(of userId: String) async throws -> [Target] {
+        let first = try await listedWithSessions(of: userId)
+        guard first.targets.count < first.listed else { return first.targets }
+        return try await listedWithSessions(of: userId).targets
+    }
+
+    private func listedWithSessions(of userId: String) async throws -> (targets: [Target], listed: Int) {
         let listed = try await directory.devices(userId: userId).devices
             .filter { !(E2EEAccountId.same(userId, local.userId) && $0.deviceId == local.deviceId) }
-        return try await withSessions(userId: userId, listed)
+        let targets = try await withSessions(userId: userId, listed)
+        return (targets, listed.count)
     }
 
     /// Mes autres appareils : approuvés (ils reçoivent leur enveloppe) ou non.

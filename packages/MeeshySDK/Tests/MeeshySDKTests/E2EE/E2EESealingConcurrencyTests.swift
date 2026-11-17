@@ -165,6 +165,51 @@ final class E2EESealingConcurrencyTests: XCTestCase {
         XCTAssertFalse(try aliceIPhone.cipher.hasSession(with: bobPhone.device.address))
     }
 
+    func test_aPeerReenrolledBetweenTheListAndTheBundles_isListedAgain_andTheFirstMessageLeaves() async throws {
+        let server = FakeE2EEServer()
+        let aliceIPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let bobPhone = try await E2EETestPeer.enroll(bob, on: server)
+        let stale = StaleFirstListingDirectory(inner: aliceIPhone.directory, peer: bob)
+        let sealer = E2EEMessageSealer(local: aliceIPhone.device, cipher: aliceIPhone.cipher, directory: stale, approvals: aliceIPhone.approvals)
+
+        let sealed = try await sealer.seal(aliceIPhone.content("premier"), to: bob)
+
+        XCTAssertTrue(sealed.envelopes.contains {
+            $0.deviceId == bobPhone.device.deviceId && $0.registrationId == bobPhone.device.registrationId
+        }, "R-4 : jamais « votre correspondant doit mettre Meeshy à jour » pour une course de réenrôlement")
+        XCTAssertEqual(stale.listings, 2, "la liste se relit une fois, jamais plus")
+    }
+
+    // MARK: - R-2 : l'effacement Sesame passe par la file
+
+    func test_aSesameRefusal_neverForgetsASessionUnderASealInProgress() async throws {
+        let server = FakeE2EEServer()
+        let aliceIPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let bobPhone = try await E2EETestPeer.enroll(bob, on: server)
+        let gated = GatedOwnDevicesDirectory(inner: aliceIPhone.directory, owner: alice)
+        let sealer = E2EEMessageSealer(local: aliceIPhone.device, cipher: aliceIPhone.cipher, directory: gated, approvals: aliceIPhone.approvals)
+        _ = try await sealer.seal(aliceIPhone.content("ouverture"), to: bob)
+        let refusal = OneSesameRefusal(stale: [E2EEDeviceRef(userId: bob, deviceId: bobPhone.device.deviceId)])
+        let (peer, first, second) = (bob, aliceIPhone.content("un"), aliceIPhone.content("deux", clientMessageId: "cid_2"))
+
+        let refused = Task { try await sealer.sealAndDeliver(first, to: peer) { sealed in try await refusal.deliver(sealed) } }
+        let deliveryHeld = await waitUntil(timeout: 5) { refusal.isHolding }
+        XCTAssertTrue(deliveryHeld)
+        gated.arm()
+        let inProgress = Task { try await sealer.seal(second, to: peer) }
+        let sealHeld = await waitUntil(timeout: 5) { gated.isHolding }
+        XCTAssertTrue(sealHeld, "le second scellement tient la file, la session de Bob retenue")
+        refusal.release()
+        _ = await waitUntil(timeout: 5) { refusal.hasRefused }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        gated.release()
+
+        let sealedSecond = try await inProgress.value
+        _ = try await refused.value
+
+        XCTAssertTrue(sealedSecond.envelopes.contains { $0.userId == peer }, "le 409 n'efface la session qu'une fois le scellement en cours terminé")
+    }
+
     // MARK: - Outils
 
     private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) async -> Bool {
@@ -245,6 +290,101 @@ private final class GatedBundlesDirectory: ForwardingE2EEDirectory {
 
     func releaseOldest() {
         let next = lock.withLock { held.isEmpty ? nil : held.removeFirst() }
+        next?.resume()
+    }
+}
+
+/// La première liste des appareils du correspondant annonce la génération
+/// d'avant son réenrôlement ; les bundles, et les listes suivantes, la nouvelle.
+private final class StaleFirstListingDirectory: ForwardingE2EEDirectory {
+    private let peer: String
+    private let lock = NSLock()
+    private var count = 0
+
+    init(inner: FakeE2EEDirectoryClient, peer: String) {
+        self.peer = peer
+        super.init(inner: inner)
+    }
+
+    var listings: Int { lock.withLock { count } }
+
+    override func devices(userId: String) async throws -> E2EEUserDevices {
+        let served = try await inner.devices(userId: userId)
+        guard userId == peer else { return served }
+        let isFirst = lock.withLock { () -> Bool in
+            count += 1
+            return count == 1
+        }
+        guard isFirst else { return served }
+        return E2EEUserDevices(userId: served.userId, devices: served.devices.map {
+            E2EEDeviceListing(deviceId: $0.deviceId, registrationId: $0.registrationId % 0x3FFF + 1)
+        })
+    }
+}
+
+/// La liste de MES appareils attend que le témoin la libère, une fois armée.
+private final class GatedOwnDevicesDirectory: ForwardingE2EEDirectory {
+    private let owner: String
+    private let lock = NSLock()
+    private var armed = false
+    private var held: CheckedContinuation<Void, Never>?
+
+    init(inner: FakeE2EEDirectoryClient, owner: String) {
+        self.owner = owner
+        super.init(inner: inner)
+    }
+
+    var isHolding: Bool { lock.withLock { held != nil } }
+
+    func arm() { lock.withLock { armed = true } }
+
+    func release() {
+        let next = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+            armed = false
+            defer { held = nil }
+            return held
+        }
+        next?.resume()
+    }
+
+    override func devices(userId: String) async throws -> E2EEUserDevices {
+        if lock.withLock({ userId == owner && armed }) {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.withLock { held = continuation }
+            }
+        }
+        return try await inner.devices(userId: userId)
+    }
+}
+
+/// La remise qui répond UN refus Sesame (`stale`) quand le témoin la libère ; la suivante passe.
+private final class OneSesameRefusal: @unchecked Sendable {
+    private let stale: [E2EEDeviceRef]
+    private let lock = NSLock()
+    private var held: CheckedContinuation<Void, Never>?
+    private var refused = false
+
+    init(stale: [E2EEDeviceRef]) {
+        self.stale = stale
+    }
+
+    var isHolding: Bool { lock.withLock { held != nil } }
+    var hasRefused: Bool { lock.withLock { refused } }
+
+    func deliver(_ sealed: E2EESealedMessage) async throws -> E2EESealedMessage {
+        guard !hasRefused else { return sealed }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            lock.withLock { held = continuation }
+        }
+        lock.withLock { refused = true }
+        throw E2EEDevicesMismatch(stale: stale)
+    }
+
+    func release() {
+        let next = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+            defer { held = nil }
+            return held
+        }
         next?.resume()
     }
 }
