@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.relation.RelationConsent
 import me.meeshy.sdk.model.relation.RelationFeature
 import me.meeshy.sdk.model.relation.RelationLevel
 import org.junit.Test
+import java.io.File
 
 /**
  * « Voir comme » (#18887) : la Vitrine rendue au niveau d'un cercle. L'aperçu se calcule depuis la loi d'accès partagée
@@ -31,14 +32,32 @@ class VitrineAsCircleTest {
     }
 
     @Test
-    fun `un inconnu ne voit ni présence ni niveau ni position, tout en rangées verrouillées`() {
-        assertThat(open(RelationLevel.PUBLIC)).isEmpty()
+    fun `la vitrine annonce les capacités du contrat partagé, dans son ordre, comme le web et la passerelle`() {
+        assertThat(VitrineCapability.entries.map { it.feature.wire })
+            .containsExactlyElementsIn(sharedCapabilityWires()).inOrder()
+    }
+
+    @Test
+    fun `un inconnu peut demander à écrire et appeler, et ne voit ni présence ni niveau ni position`() {
+        assertThat(open(RelationLevel.PUBLIC)).containsExactly(RelationFeature.DM_REQUEST, RelationFeature.CALL_RING)
         val locked = lockedAt(RelationLevel.PUBLIC)
         assertThat(locked[RelationFeature.PRESENCE_ONLINE]).isEqualTo(RelationLevel.FRIEND)
         assertThat(locked[RelationFeature.GAME_BASIC]).isEqualTo(RelationLevel.FRIEND)
         assertThat(locked[RelationFeature.GAME_SPARKS_GLORY]).isEqualTo(RelationLevel.CLOSE)
         assertThat(locked[RelationFeature.DEVICE_BATTERY]).isEqualTo(RelationLevel.CLOSE)
         assertThat(locked[RelationFeature.LOCATION_LIVE]).isEqualTo(RelationLevel.BLOOD)
+    }
+
+    @Test
+    fun `une Connaissance écrit directement, sans voir la présence`() {
+        assertThat(open(RelationLevel.ACQUAINTANCE)).contains(RelationFeature.DM_DIRECT)
+        assertThat(open(RelationLevel.ACQUAINTANCE)).doesNotContain(RelationFeature.PRESENCE_ONLINE)
+    }
+
+    @Test
+    fun `un Ami peut recevoir une position temporaire, l'aperçu le dit au propriétaire`() {
+        assertThat(open(RelationLevel.FRIEND)).contains(RelationFeature.LOCATION_TEMPORARY)
+        assertThat(lockedAt(RelationLevel.PUBLIC)[RelationFeature.LOCATION_TEMPORARY]).isEqualTo(RelationLevel.FRIEND)
     }
 
     @Test
@@ -53,7 +72,10 @@ class VitrineAsCircleTest {
         assertThat(open(RelationLevel.CLOSE)).containsAtLeast(
             RelationFeature.PRESENCE_DETAILED, RelationFeature.GAME_SPARKS_GLORY, RelationFeature.DEVICE_BATTERY,
         )
-        assertThat(lockedAt(RelationLevel.CLOSE).keys).containsExactly(RelationFeature.LOCATION_LIVE, RelationFeature.LOCATION_HISTORY)
+        assertThat(lockedAt(RelationLevel.CLOSE).keys).containsExactly(
+            RelationFeature.LISTENING_TITLE, RelationFeature.LOCATION_LIVE, RelationFeature.LOCATION_HISTORY,
+            RelationFeature.LOCATION_PROXIMITY, RelationFeature.DEVICE_BATTERY_PULL,
+        )
     }
 
     @Test
@@ -92,6 +114,9 @@ class VitrineAsCircleTest {
     fun `les rangées verrouillées se rangent par cercle d'ouverture puis par ordre de la vitrine`() {
         val locked = VitrineAsCircle.view(RelationLevel.PUBLIC).locked
         assertThat(locked.map { it.opensAt }).isInOrder()
+        locked.groupBy { it.opensAt }.values.forEach { sameCircle ->
+            assertThat(sameCircle.map { it.capability.ordinal }).isInOrder()
+        }
     }
 
     @Test
@@ -99,6 +124,20 @@ class VitrineAsCircleTest {
         val fields = VitrineLock::class.java.declaredFields.filterNot { it.isSynthetic }.map { it.name }
         assertThat(fields).containsExactly("capability", "opensAt")
     }
+
+    private fun sharedCapabilityWires(): List<String> {
+        val source = sharedText("packages/shared/utils/profile-circle-view.ts")
+        val table = source.substringAfter("const PROFILE_CAPABILITY_FEATURE = {").substringBefore("}")
+        return Regex("""^\s*\w+:\s*'([^']+)',""", RegexOption.MULTILINE).findAll(table).map { it.groupValues[1] }.toList()
+            .also { assertThat(it).isNotEmpty() }
+    }
+
+    private fun sharedText(path: String): String =
+        generateSequence(File(".").absoluteFile) { it.parentFile }
+            .map { File(it, path) }
+            .firstOrNull { it.isFile }
+            ?.readText()
+            ?: throw AssertionError("Fichier partagé introuvable : $path")
 
     private fun previous(level: RelationLevel): RelationLevel = VitrineAsCircle.levels[VitrineAsCircle.levels.indexOf(level) - 1]
 
