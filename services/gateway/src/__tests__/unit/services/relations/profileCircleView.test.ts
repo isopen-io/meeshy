@@ -104,7 +104,8 @@ describe('readProfileCircleView — la loi lue sur la paire réelle', () => {
   it('un blocage posé par la CIBLE ferme tout, sur un cercle Proche', async () => {
     const view = await readProfileCircleView(prismaOf({ row: rowOf('CLOSE', 'CLOSE'), blockedByB: true }), { viewerId: A, targetId: B });
     expect(Object.values(view.capabilities).every((c) => c?.state === 'locked')).toBe(true);
-    expect(view.missing).toBeNull();
+    expect('missing' in view).toBe(false);
+    expect('grantedByTarget' in view).toBe(false);
   });
 
   it('un blocage posé par le LECTEUR ferme tout aussi', async () => {

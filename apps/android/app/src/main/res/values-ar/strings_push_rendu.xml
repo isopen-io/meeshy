@@ -9,4 +9,5 @@
     <string name="push_placeholder_ephemeral">رسالة مؤقتة</string>
     <string name="push_placeholder_hidden">رسالة مخفية</string>
     <string name="push_placeholder_encrypted">رسالة مشفرة</string>
+    <string name="push_placeholder_locked">محادثة مقفلة</string>
 </resources>

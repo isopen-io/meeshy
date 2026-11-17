@@ -40,27 +40,34 @@ class PushGroupingTest {
 
 class PushBadgePolicyTest {
 
+    private val on = UserNotificationPreferences()
+
     @Test
-    fun `le badge de la passerelle l emporte sur le compte local`() {
-        assertThat(PushBadgePolicy.badge(PushPayload(unreadCount = 4), UserNotificationPreferences(), localUnreadConversations = 9))
-            .isEqualTo(4)
+    fun `une premiere banniere compte un message`() {
+        assertThat(PushBadgePolicy.bannerCount(on, previous = null)).isEqualTo(1)
     }
 
     @Test
-    fun `sans cle le badge est derive localement`() {
-        assertThat(PushBadgePolicy.badge(PushPayload(), UserNotificationPreferences(), localUnreadConversations = 9)).isEqualTo(9)
-        assertThat(PushBadgePolicy.badge(PushPayload(), UserNotificationPreferences(), localUnreadConversations = null)).isNull()
+    fun `chaque message de plus allonge le nombre de la meme banniere`() {
+        assertThat(PushBadgePolicy.bannerCount(on, previous = 1)).isEqualTo(2)
+        assertThat(PushBadgePolicy.bannerCount(on, previous = 4)).isEqualTo(5)
     }
 
     @Test
-    fun `badges coupes effacent le badge`() {
+    fun `une correction de texte ne compte pas un message de plus`() {
+        assertThat(PushBadgePolicy.bannerCount(on, previous = 3, addsMessage = false)).isEqualTo(3)
+        assertThat(PushBadgePolicy.bannerCount(on, previous = null, addsMessage = false)).isEqualTo(1)
+    }
+
+    @Test
+    fun `badges coupes effacent le nombre`() {
         val prefs = UserNotificationPreferences(notificationBadgeEnabled = false)
 
-        assertThat(PushBadgePolicy.badge(PushPayload(unreadCount = 4), prefs, localUnreadConversations = 9)).isEqualTo(0)
+        assertThat(PushBadgePolicy.bannerCount(prefs, previous = 4)).isEqualTo(0)
     }
 
     @Test
-    fun `un compte negatif est ramene a zero`() {
-        assertThat(PushBadgePolicy.badge(PushPayload(unreadCount = -3), UserNotificationPreferences(), null)).isEqualTo(0)
+    fun `un nombre precedent negatif est ramene a zero`() {
+        assertThat(PushBadgePolicy.bannerCount(on, previous = -3)).isEqualTo(1)
     }
 }
