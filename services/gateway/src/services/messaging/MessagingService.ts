@@ -5,9 +5,11 @@
 
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions, AnonymousRightsOverride } from '@meeshy/shared/prisma/client';
-import type {
-  MessageRequest,
-  MessageResponse
+import {
+  ErrorCode,
+  ErrorMessages,
+  type MessageRequest,
+  type MessageResponse
 } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
@@ -58,6 +60,7 @@ import { persistableEncryption } from './e2eeRelayPayload';
 import { sealMessageIfConversationObsoleted } from '../conversations/obsoleteMessageSeal';
 import { mayReturnToSalon } from '../conversations/communityMembershipSync';
 import { newMemberRefusal } from '../conversations/newMemberAdmission';
+import { isUncommittedMessageWrite, MESSAGE_SEND_RETRY_AFTER_SECONDS } from './retryableWrite';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -596,6 +599,13 @@ export class MessagingService {
       if (isServerAtRestCiphertextRefusal(error)) {
         logger.warn('client at-rest ciphertext refused', { ...corr });
         return this.createErrorResponse(error.message, error.code);
+      }
+      // Audit de #19080, E3 — une transaction non validée (P2034, P2028) n'est pas un refus : rejouable.
+      if (isUncommittedMessageWrite(error)) {
+        logger.warn('message write not committed, retryable', { ...corr, prismaCode: (error as { code: string }).code });
+        return this.createErrorResponse(
+          ErrorMessages[ErrorCode.MESSAGE_SEND_RETRYABLE].fr, ErrorCode.MESSAGE_SEND_RETRYABLE, MESSAGE_SEND_RETRY_AFTER_SECONDS
+        );
       }
       // #3706 — un envoi libsignal refusé (Sesame, appareil, ancien client) : son code et son écart voyagent.
       if (isE2eeRelayRefusal(error)) {
