@@ -138,7 +138,7 @@ final class MessageAuthorRingTests: XCTestCase {
         "Auth/Views/AccountSwitcherSheet.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
         "Profile/Views/ProfileOwnAvatar.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
         "Profile/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
-        "MeeshyUI/Profile/UserProfileSheet+Header.swift": (2, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`)"),
+        "MeeshyUI/Profile/UserProfileSheet+Header.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`) ; un seul avatar voyage du héros à la barre (K28, #19410)"),
         "Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
         "Main/Views/PublicationViewersSheet.swift": (1, "vues d'une publication — la liste servie ne porte pas le contour (#10957)"),
         "Main/Views/ViewerEngagementDetailScreen.swift": (1, "détail d'une personne de la liste des vues — `StoryViewerItem` servi ne porte pas le contour (#10957)"),

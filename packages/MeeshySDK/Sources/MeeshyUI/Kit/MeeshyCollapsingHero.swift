@@ -11,6 +11,7 @@ import SwiftUI
 /// Un seul avatar et un seul titre voyagent du début à la fin : le titre est lu
 /// une fois, comme un en-tête, avec son sous-titre. La barre repliée devient un
 /// bouton nommé par `collapsedTapLabel` quand l'hôte donne `onCollapsedTap`.
+/// Une feuille, qui n'a pas de barre d'état au-dessus d'elle, donne `topInset`.
 public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, AvatarSlot: View>: View {
     private let progress: Double
     private let title: String
@@ -18,6 +19,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private let alignment: MeeshyCollapsingHeroAlignment
     private let expandedHeight: Double
     private let collapsedHeight: Double
+    private let topInset: Double?
     private let tone: MeeshyGlassTone?
     private let isLoading: Bool
     private let collapsedTapLabel: String?
@@ -35,6 +37,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
                 alignment: MeeshyCollapsingHeroAlignment = .leading,
                 expandedHeight: Double = MeeshyCollapsingHeroRecipe.expandedHeight,
                 collapsedHeight: Double = MeeshyCollapsingHeroRecipe.collapsedHeight,
+                topInset: Double? = nil,
                 tone: MeeshyGlassTone? = nil,
                 isLoading: Bool = false,
                 collapsedTapLabel: String? = nil,
@@ -49,6 +52,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         self.alignment = alignment
         self.expandedHeight = expandedHeight
         self.collapsedHeight = collapsedHeight
+        self.topInset = topInset
         self.tone = tone
         self.isLoading = isLoading
         self.collapsedTapLabel = collapsedTapLabel
@@ -70,7 +74,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         let recipe = self.recipe
         let isDark = colorScheme == .dark
         return GeometryReader { proxy in
-            let top = proxy.safeAreaInsets.top > 0 ? Double(proxy.safeAreaInsets.top) : 54
+            let top = MeeshyCollapsingHeroRecipe.controlTop(safeArea: Double(proxy.safeAreaInsets.top), topInset: topInset)
             ZStack(alignment: .topLeading) {
                 bannerLayer(recipe: recipe, width: proxy.size.width)
                 barLayer(recipe: recipe)
@@ -205,6 +209,7 @@ extension MeeshyCollapsingHero where AvatarSlot == EmptyView {
                 alignment: MeeshyCollapsingHeroAlignment = .leading,
                 expandedHeight: Double = MeeshyCollapsingHeroRecipe.expandedHeight,
                 collapsedHeight: Double = MeeshyCollapsingHeroRecipe.collapsedHeight,
+                topInset: Double? = nil,
                 tone: MeeshyGlassTone? = nil,
                 isLoading: Bool = false,
                 collapsedTapLabel: String? = nil,
@@ -213,7 +218,7 @@ extension MeeshyCollapsingHero where AvatarSlot == EmptyView {
                 @ViewBuilder leading: () -> Leading,
                 @ViewBuilder trailing: () -> Trailing) {
         self.init(progress: progress, title: title, subtitle: subtitle, alignment: alignment,
-                  expandedHeight: expandedHeight, collapsedHeight: collapsedHeight, tone: tone,
+                  expandedHeight: expandedHeight, collapsedHeight: collapsedHeight, topInset: topInset, tone: tone,
                   isLoading: isLoading, collapsedTapLabel: collapsedTapLabel, onCollapsedTap: onCollapsedTap,
                   banner: banner, leading: leading, trailing: trailing, avatar: nil)
     }

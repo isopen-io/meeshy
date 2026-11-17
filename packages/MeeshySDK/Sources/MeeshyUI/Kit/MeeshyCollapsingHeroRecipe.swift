@@ -99,6 +99,13 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
         return distance > 0 ? offset / distance : 0
     }
 
+    /// Le haut des commandes : l'inset que l'hôte donne (une feuille n'a pas de barre d'état au-dessus d'elle),
+    /// sinon la zone sûre, sinon 54. Un inset négatif vaut 0 ; un non-nombre est ignoré.
+    public static func controlTop(safeArea: Double, topInset: Double? = nil) -> Double {
+        if let topInset, topInset.isFinite { return max(topInset, 0) }
+        return safeArea > 0 ? safeArea : 54
+    }
+
     /// `progress` borné de 0 à 1 ; un non-nombre vaut 0.
     public static func clamped(_ progress: Double) -> Double {
         clamp01(progress)

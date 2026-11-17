@@ -75,6 +75,16 @@ struct MeeshyCollapsingHeroTests {
         #expect(bare.subtitleSize == 0)
     }
 
+    @Test("une feuille sans barre d'état pose ses commandes à l'inset donné ; sinon la zone sûre, sinon 54")
+    func controlTop_followsTheHostInset() {
+        #expect(MeeshyCollapsingHeroRecipe.controlTop(safeArea: 0, topInset: 12) == 12)
+        #expect(MeeshyCollapsingHeroRecipe.controlTop(safeArea: 59, topInset: 12) == 12)
+        #expect(MeeshyCollapsingHeroRecipe.controlTop(safeArea: 59) == 59)
+        #expect(MeeshyCollapsingHeroRecipe.controlTop(safeArea: 0) == 54)
+        #expect(MeeshyCollapsingHeroRecipe.controlTop(safeArea: 0, topInset: -4) == 0)
+        #expect(MeeshyCollapsingHeroRecipe.controlTop(safeArea: 47, topInset: .nan) == 47)
+    }
+
     @Test("garde de source : aucun type du domaine, aucun singleton, aucun verre dessiné")
     func source_isAgnostic() throws {
         let files = ["MeeshyCollapsingHero.swift", "MeeshyCollapsingHeroRecipe.swift"]

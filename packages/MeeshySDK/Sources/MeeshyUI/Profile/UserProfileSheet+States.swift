@@ -36,11 +36,8 @@ extension UserProfileSheet {
     /// La fiche réduite : l'identité grisée, ce que le blocage ferme, « Débloquer », « Signaler aussi », et ce qui
     /// reste — son lien, nos conversations en lecture seule.
     var blockedLayout: some View {
-        ScrollView(showsIndicators: false) {
+        heroScrollView(
             VStack(spacing: 0) {
-                bannerSection
-                identitySection(offset: 0)
-                    .padding(.top, -40)
                 MeeshyStateBlock(
                     kind: .denied,
                     title: ProfileStatesCopy.blockedTitle(displayUser.resolvedDisplayName),
@@ -58,10 +55,7 @@ extension UserProfileSheet {
                     .padding(.top, MeeshySpacing.xxl)
             }
             .padding(.bottom, MeeshySpacing.xxl)
-        }
-        .background(theme.backgroundPrimary)
-        .ignoresSafeArea(edges: .top)
-        .overlay(alignment: .topLeading) { closeButton }
+        )
         .task { await loadConversationsIfNeeded() }
     }
 

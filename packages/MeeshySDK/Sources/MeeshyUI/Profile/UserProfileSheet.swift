@@ -86,7 +86,7 @@ public struct UserProfileSheet: View {
     /// posée dans la pile de la feuille, la visionneuse ne pouvait pas déborder de sa hauteur (mi-écran en `.medium`).
     @State private var fullscreenImage: ProfileFullscreenImage?
     @State var showReportSheet = false
-    /// Signed scroll offset feeding `ProfileHeaderMetrics.progress`. Negative
+    /// Signed scroll offset feeding `ProfileHeroPlan.progress`. Negative
     /// while scrolling content down. Updated by the iOS 16-17 preference path
     /// and the iOS 18+ `trackScrollContentOffset` path simultaneously.
     @State var scrollRelay = ScrollOffsetRelay()
@@ -211,16 +211,12 @@ public struct UserProfileSheet: View {
         loaded.flatMap(event.repainted)
     }
 
-    /// The redesigned single-scroll layout: a big collapsible header scrolls
-    /// away, a compact identity bar fades in, and the face selector floats at the bottom (loi 5).
+    /// La fiche en un seul défilement (#19410) : le héros K28 se replie en barre de verre épinglée, et le sélecteur de
+    /// faces flotte en bas (loi 5).
     @ViewBuilder
     private var collapsibleLayout: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                ScrollOffsetReader(relay: scrollRelay) { offset in
-                    bigCollapsibleHeader(offset: offset)
-                }
-
+        heroScrollView(
+            VStack(spacing: 0) {
                 if case .shown(let fallback?) = phase {
                     ProfileCacheFallbackBanner(fallback: fallback, onRetry: { retryFromState() })
                         .padding(.top, MeeshySpacing.lg)
@@ -231,35 +227,7 @@ public struct UserProfileSheet: View {
 
                 Color.clear.frame(height: showsFaceSelector ? MeeshySpacing.xxl * 3 : 40)
             }
-
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: ScrollOffsetPreferenceKey.self,
-                    value: geo.frame(in: .named("profileScroll")).minY
-                )
-            }
-            .frame(height: 0)
-        }
-        .coordinateSpace(name: "profileScroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }
-        .trackScrollContentOffset { scrollRelay.offset = -$0 }
-        .background(theme.backgroundPrimary)
-        .ignoresSafeArea(edges: .top)
-        .overlay(alignment: .top) {
-            ScrollOffsetReader(relay: scrollRelay) { offset in
-                compactPinnedBar
-                    .opacity(Double(ProfileHeaderMetrics.progress(offset: offset)))
-                    .allowsHitTesting(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
-                    // Hide the compact identity from VoiceOver while the header is
-                    // still mostly expanded — the expanded identity is the primary
-                    // and reads name/@username; avoids a duplicate identity element.
-                    .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) <= 0.5)
-            }
-        }
-        // Always-on close affordance over the (reduced) banner, top-leading.
-        .overlay(alignment: .topLeading) {
-            closeButton
-        }
+        )
         .overlay(alignment: .bottom) {
             if showsFaceSelector {
                 RelationFaceSelector(face: $face, writeShortcut: writeShortcut)
