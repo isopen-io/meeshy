@@ -67,6 +67,23 @@ export function ownProfileSnapshotChanged(before: OwnProfileColumns | null | und
   return OWN_PROFILE_FIELDS.some((field) => (before[field] ?? null) !== (after[field] ?? null));
 }
 
+const PUBLIC_NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] as const satisfies readonly OwnProfileField[];
+
+/**
+ * Un des quatre composants du nom a-t-il CHANGÉ entre la ligne lue avant
+ * l'écriture et la ligne écrite ? Même règle que `ownProfileSnapshotChanged`
+ * (#19298) : sans ligne lue avant, rien ne prouve un changement.
+ */
+export function publicNameChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns): boolean {
+  if (!before) return false;
+  return PUBLIC_NAME_FIELDS.some((field) => (before[field] ?? null) !== (after[field] ?? null));
+}
+
+/** Une image d'identité (avatar, bannière) a-t-elle CHANGÉ par rapport à la valeur stockée ? */
+export function identityImageChanged(before: string | null | undefined, after: string | null | undefined): boolean {
+  return (before ?? null) !== (after ?? null);
+}
+
 /** L'instantané servi à mes appareils, ou `null` quand la ligne ne permet pas de le composer selon le contrat. */
 export function ownProfileUpdatedPayload(row: OwnProfileRow): ProfileUpdatedEventData | null {
   const parsed = profileUpdatedEventDataSchema.safeParse({

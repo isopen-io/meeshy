@@ -449,9 +449,19 @@ describe('PATCH /users/me — with language change fires socketIO refresh', () =
   });
 });
 
+/** Une écriture qui CHANGE vraiment le nom : la ligne servie par `update` porte le nouveau nom (#19298). */
+const prismaWriting = (written: Record<string, unknown>) => makePrisma({
+  user: {
+    findFirst: jest.fn<any>().mockResolvedValue(mockUser),
+    findUnique: jest.fn<any>().mockResolvedValue(mockUser),
+    update: jest.fn<any>().mockResolvedValue({ ...mockUser, ...written }),
+    updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+  },
+});
+
 describe('PATCH /users/me — realtime propagation to conversation partners', () => {
   it('emits USER_UPDATED with the whole name group when displayName/firstName/lastName change', async () => {
-    const prisma = makePrisma();
+    const prisma = prismaWriting({ firstName: 'Bob', lastName: 'Jones', displayName: 'Bob Jones' });
     const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
     const res = await app.inject({
       method: 'PATCH',
@@ -461,7 +471,7 @@ describe('PATCH /users/me — realtime propagation to conversation partners', ()
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
       userId: USER_ID,
-      changes: { firstName: 'Alice', lastName: 'Smith', displayName: 'Alice Smith', username: 'alice' },
+      changes: { firstName: 'Bob', lastName: 'Jones', displayName: 'Bob Jones', username: 'alice' },
     });
     await app.close();
   });
@@ -471,7 +481,7 @@ describe('PATCH /users/me — realtime propagation to conversation partners', ()
   // il ne sait pas si le prénom compte, sans `username` il ne sait pas sur quoi
   // retomber. Un delta d'un seul champ le laissait donc afficher l'ancien nom.
   it('emits the other three name components even when a single one changed', async () => {
-    const prisma = makePrisma();
+    const prisma = prismaWriting({ firstName: 'Bob' });
     const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
     const res = await app.inject({
       method: 'PATCH',
@@ -481,7 +491,7 @@ describe('PATCH /users/me — realtime propagation to conversation partners', ()
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
       userId: USER_ID,
-      changes: { firstName: 'Alice', lastName: 'Smith', displayName: 'Alice Smith', username: 'alice' },
+      changes: { firstName: 'Bob', lastName: 'Smith', displayName: 'Alice Smith', username: 'alice' },
     });
     await app.close();
   });
@@ -526,7 +536,7 @@ describe('PATCH /users/me — realtime propagation to conversation partners', ()
   });
 
   it('invalidates the cached typing identity when displayName/name changes', async () => {
-    const prisma = makePrisma();
+    const prisma = prismaWriting({ displayName: 'Bob Jones' });
     const app = await buildApp({ routes: [updateUserProfile], prisma, withSocketIOHandler: true });
     const res = await app.inject({
       method: 'PATCH',

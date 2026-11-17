@@ -42,7 +42,7 @@ import { refreshParticipantNameSnapshots } from '../../services/participantNameS
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
-import { announceOwnProfileUpdated, OWN_PROFILE_SELECT, ownProfileSnapshotChanged } from './own-profile-sync';
+import { announceOwnProfileUpdated, identityImageChanged, OWN_PROFILE_SELECT, ownProfileSnapshotChanged, publicNameChanged } from './own-profile-sync';
 
 /**
  * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
@@ -358,7 +358,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // client appliquer SON résolveur (`getUserDisplayName` web,
       // `APIConversationUser.name` iOS) au lieu d'en fabriquer une quatrième
       // copie côté serveur.
-      if (touchesName) {
+      if (touchesName && publicNameChanged(current, updatedUser)) {
         const publicChanges = {
           displayName: updatedUser.displayName,
           firstName: updatedUser.firstName,
@@ -499,9 +499,12 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
-      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { avatar: updatedUser.avatar } })
-        .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] emitUserUpdated failed', err));
-      announceOwnProfileUpdated(fastify, updatedUser);
+      // #19298 — une écriture identique à la valeur stockée ne diffuse rien.
+      if (current && identityImageChanged(current.avatar, updatedUser.avatar)) {
+        fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { avatar: updatedUser.avatar } })
+          .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] emitUserUpdated failed', err));
+        announceOwnProfileUpdated(fastify, updatedUser);
+      }
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
@@ -596,9 +599,12 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
-      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { banner: updatedUser.banner } })
-        .catch((err: unknown) => logError(fastify.log, '[BANNER_UPDATE] emitUserUpdated failed', err));
-      announceOwnProfileUpdated(fastify, updatedUser);
+      // #19298 — une écriture identique à la valeur stockée ne diffuse rien.
+      if (current && identityImageChanged(current.banner, updatedUser.banner)) {
+        fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { banner: updatedUser.banner } })
+          .catch((err: unknown) => logError(fastify.log, '[BANNER_UPDATE] emitUserUpdated failed', err));
+        announceOwnProfileUpdated(fastify, updatedUser);
+      }
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 
