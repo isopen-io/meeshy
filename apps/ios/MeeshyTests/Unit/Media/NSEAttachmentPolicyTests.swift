@@ -293,9 +293,12 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     /// Ce qui DÉCRIT le contenu : le texte et ses traductions, le chiffré, la
     /// pièce jointe, le détail (position, contact, invitation, lien, vignette),
     /// la réaction, le type de message, le motif d'un retrait, les libellés
-    /// d'action qui nomment le contenu.
+    /// d'action qui nomment le contenu. Et ce que l'iPhone ne lit pas : le
+    /// non-lu PAR conversation, que seul le registre Android indexe (#18910) —
+    /// sous PIN, il ne survit pas au scellé.
     private static let contentKeys: Set<String> = [
         "content", "originalLanguage", "translatedContent", "translatedLanguage", "encryptedContent",
+        "conversationUnread",
         "reactionEmoji", "messageType", "reason", "contentActionLabel", "replyActionLabel",
         "attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentFileSize",
         "attachmentId", "attachmentLanguage",
@@ -350,10 +353,12 @@ final class NSEAttachmentPolicyTests: XCTestCase {
             .map { $0.components(separatedBy: " // ")[0] }
             .joined(separator: "\n")
         let direct = try matches(#"(?:^|[{\s,(])([a-z][A-Za-z]*):\s"#, in: Substring(code))
-            .subtracting(["metadata", "language", "detail"])
+            .subtracting(["metadata", "language", "detail", "actor"])
         let detail = try between(try source("content-detail.ts"), "export function contentDetailPushFields", "\n}\n")
+        let identity = try between(try source("senderIdentityPushFields.ts"), "export type SenderIdentityPushFields = {", "};")
         return direct
             .union(try matches(#"^\s+readonly (\w+): string;"#, in: Substring(try source("push-media-fields.ts"))))
+            .union(try matches(#"^\s+readonly (\w+): string;"#, in: identity))
             .union(try matches(#"\['(\w+)',"#, in: detail))
             .union(try matches(#"(\w+)\?: string"#, in: Substring(try source("ephemeralPushFields.ts"))))
             .union(try matches(#"readonly (\w+)\?:"#, in: Substring(try source("callBackPushFields.ts"))))
