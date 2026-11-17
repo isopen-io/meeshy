@@ -25,6 +25,7 @@ import {
   servirProfilPublic,
 } from './public-profile';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { withCircleGatedFields } from '../../services/relations/profileCircleView';
 
 /**
  * Le sursis des trois portes de profil (#4274, corrigé #4440).
@@ -352,7 +353,8 @@ export async function getUserByEmail(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
+      const circled = await withCircleGatedFields(fastify.prisma, viewerId || undefined, user);
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, circled)));
     } catch (error) {
       logError(fastify.log, 'Get user by email error:', error);
       return sendInternalError(reply, 'Internal server error');
@@ -486,7 +488,8 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
+      const circled = await withCircleGatedFields(fastify.prisma, viewerId || undefined, user);
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, circled)));
     } catch (error) {
       logError(fastify.log, 'Get user by phone error:', error);
       return sendInternalError(reply, 'Internal server error');
