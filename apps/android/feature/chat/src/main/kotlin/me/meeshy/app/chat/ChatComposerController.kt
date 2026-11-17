@@ -33,6 +33,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ArrivalGreeting
+import me.meeshy.sdk.model.composer.EndToEndSendRestoration
 import me.meeshy.sdk.model.composer.SendPlaceTileLaw
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.ComposerLanguageState
@@ -471,10 +472,20 @@ internal class ChatComposerController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                state.update { it.copy(errorMessage = e.message) }
+                if (endToEndPeer != null) restoreEndToEndSend(text, replyToId) else state.update { it.copy(errorMessage = e.message) }
                 SendPlaceTileLaw.restoration(place, sent = false, current = _pendingPlace.value)?.let { _pendingPlace.value = it }
             }
         }
+    }
+
+    /**
+     * #18975 — un envoi chiffré qui n'a pas pu partir (coffre indisponible, appareil pas encore préparé) rend au composeur le
+     * texte et la réponse du geste, sans écraser ce qui a été écrit entre-temps : le texte saisi n'est jamais détruit.
+     */
+    private fun restoreEndToEndSend(text: String, replyToId: String?) {
+        val restored = EndToEndSendRestoration.restoration(text, replyToId, composerText.text, state.value.replyingToMessageId)
+        restored.text?.let { composerText.replace(it) }
+        restored.replyToId?.let { reply -> state.update { it.copy(replyingToMessageId = reply) } }
     }
 
     /**

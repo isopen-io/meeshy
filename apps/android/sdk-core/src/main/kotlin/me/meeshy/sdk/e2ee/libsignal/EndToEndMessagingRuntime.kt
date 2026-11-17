@@ -25,7 +25,6 @@ import me.meeshy.core.e2ee.session.E2eeSessionCipher
 import me.meeshy.core.e2ee.store.E2eeLocalDevice
 import me.meeshy.core.e2ee.store.E2eePlaintextEntry
 import me.meeshy.core.e2ee.store.E2eePlaintextVault
-import me.meeshy.core.e2ee.vault.InMemoryRecordBackend
 import me.meeshy.core.e2ee.vault.RecordSealer
 import me.meeshy.core.e2ee.vault.RecordVault
 import me.meeshy.core.e2ee.vault.SealedRecordBackend
@@ -116,10 +115,13 @@ public class EndToEndMessagingRuntime @Inject internal constructor(
         }
     }
 
-    /** Range le clair d'un message que J'AI écrit : l'enveloppe ne revient pas à l'appareil émetteur. */
+    /**
+     * Range le clair d'un message que J'AI écrit : l'enveloppe ne revient pas à l'appareil émetteur. Le coffre LOCAL suffit
+     * (#18975) : un appareil déjà enrôlé pour ce compte garde le texte hors ligne, sans relire l'annuaire ; la préparation
+     * réseau n'est demandée qu'à un coffre qui ne sert pas encore ce compte, et l'envoi, lui, attend dans la file.
+     */
     public suspend fun remember(userId: String, content: E2eeContent, messageIds: Collection<String>): Boolean = runCatching {
-        ready(userId)
-        withContext(Dispatchers.IO) { E2eePlaintextVault(vault, owner = userId).save(E2eePlaintextEntry.Readable(content, userId), messageIds) }
+        withContext(Dispatchers.IO) { E2eePlaintextVault(vault, owner = userId).keepMine(userId, content, messageIds) { ready(userId) } }
         _plaintextVersion.update { it + 1 }
     }.onFailure { Timber.e("e2ee own plaintext not stored: %s", it.javaClass.simpleName) }.isSuccess
 
@@ -188,12 +190,16 @@ public class EndToEndMessagingRuntime @Inject internal constructor(
         if (ready?.device?.userId == userId) ready = null
     }
 
+    /** Le fil relit sa projection dès qu'un clair, une version future, une pierre tombale ou un signal a été rangé. */
     private fun publish(outcomes: List<E2eeOpenOutcome>) {
-        if (outcomes.any { it is E2eeOpenOutcome.Opened || it is E2eeOpenOutcome.Undecryptable }) _plaintextVersion.update { it + 1 }
+        if (outcomes.any { it.acknowledges }) _plaintextVersion.update { it + 1 }
         outcomes.forEach { _opened.tryEmit(it) }
     }
 
-    /** Le coffre : la clé enveloppée par le Keystore, la base dédiée ([EndToEndVaultOpening] dit quand on efface). */
+    /**
+     * Le coffre : la clé enveloppée par le Keystore, la base dédiée ([EndToEndVaultOpening] dit quand on efface). Jamais de
+     * coffre en mémoire (#18977) : sans coffre durable, rien ne s'enrôle et rien ne s'acquitte.
+     */
     private fun openVault(): RecordVault {
         val directory = File(context.noBackupFilesDir, VAULT_DIRECTORY)
         val database = File(directory, VAULT_DATABASE)
@@ -201,7 +207,6 @@ public class EndToEndMessagingRuntime @Inject internal constructor(
             key = { KeystoreVaultKey(directory).open() },
             wipe = { context.deleteDatabase(database.absolutePath) },
             sealed = { key -> TransactionalRecordVault(SealedRecordBackend(SqliteRecordBackend(context, database), RecordSealer(key))) },
-            memory = { TransactionalRecordVault(InMemoryRecordBackend()) },
         )
     }
 

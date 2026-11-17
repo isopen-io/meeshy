@@ -8,12 +8,22 @@ import me.meeshy.core.e2ee.vault.RecordReader
 import me.meeshy.core.e2ee.vault.RecordTransaction
 import me.meeshy.core.e2ee.vault.RecordVault
 
-private val recordJson = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
+internal val recordJson = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
+
+/**
+ * Deux identifiants de compte désignent-ils le même compte ? UNE comparaison, insensible à la casse (#18973, jumelle de
+ * #18950) : un serveur qui sert mon identifiant dans une autre casse ne fait pas passer un de MES appareils pour celui
+ * d'un autre, ce qui le soustrairait à l'épingle de mes appareils.
+ */
+public fun isSameAccount(first: String, second: String): Boolean = first.equals(second, ignoreCase = true)
 
 /** L'adresse de CET appareil telle que l'annuaire l'a enrôlé. */
 @Serializable
 public data class E2eeLocalDevice(val userId: String, val deviceId: Int, val registrationId: Int) {
     public val address: E2eeDeviceAddress get() = E2eeDeviceAddress(userId, deviceId)
+
+    /** Ce compte est-il le mien, dans n'importe quelle casse ? */
+    public fun isMe(account: String): Boolean = isSameAccount(account, userId)
 }
 
 /** L'adresse libsignal d'un appareil Meeshy : (identifiant de compte, numéro d'appareil). */
@@ -33,44 +43,15 @@ public object E2eeEnrollmentRecords {
 }
 
 /**
- * Ce que l'appareil sait d'un message chiffré : son clair et l'auteur que libsignal a AUTHENTIFIÉ, ou le fait qu'il n'a
- * pas pu l'ouvrir (spec § 4.1 : une ligne « un message n'a pas pu être déchiffré », jamais un repli en clair).
- */
-public sealed interface E2eePlaintextEntry {
-    public data class Readable(val content: E2eeContent, val senderUserId: String) : E2eePlaintextEntry
-    public data object Undecryptable : E2eePlaintextEntry
-}
-
-@Serializable
-private data class PlaintextRecord(val state: String, val content: E2eeContent? = null, val sender: String? = null)
-
-/** Le clair local, par identifiant de message, écrit dans la MÊME transaction que le déchiffrement qui l'a produit. */
-public object E2eePlaintextRecords {
-    public fun load(messageId: String, reader: RecordReader): E2eePlaintextEntry? =
-        reader.load(RecordKind.PLAINTEXT, messageId)?.let { decode(it) }
-
-    public fun save(entry: E2eePlaintextEntry, messageId: String, transaction: RecordTransaction) {
-        val record = when (entry) {
-            is E2eePlaintextEntry.Readable -> PlaintextRecord("readable", entry.content, entry.senderUserId)
-            E2eePlaintextEntry.Undecryptable -> PlaintextRecord("undecryptable")
-        }
-        transaction.save(RecordKind.PLAINTEXT, messageId, recordJson.encodeToString(PlaintextRecord.serializer(), record).toByteArray())
-    }
-
-    private fun decode(raw: ByteArray): E2eePlaintextEntry {
-        val record = recordJson.decodeFromString(PlaintextRecord.serializer(), raw.decodeToString())
-        val content = record.content
-        val sender = record.sender
-        return if (record.state == "readable" && content != null && sender != null) E2eePlaintextEntry.Readable(content, sender)
-        else E2eePlaintextEntry.Undecryptable
-    }
-}
-
-/**
  * Le coffre des clairs, servi au seul compte dont l'installation est enrôlée (#13000) : un compte B connecté sur
  * l'appareil de A, tant qu'il ne s'est pas réenrôlé (ce qui efface tout), ne lit ni n'écrit rien du coffre de A.
+ * [nowMillis] est l'horloge LOCALE qui date chaque rangement (#14672) : jamais celle de l'émetteur.
  */
-public class E2eePlaintextVault(private val vault: RecordVault, private val owner: String?) {
+public class E2eePlaintextVault(
+    private val vault: RecordVault,
+    private val owner: String?,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+) {
 
     public fun entry(messageId: String): E2eePlaintextEntry? = vault.read { reader ->
         if (!serves(reader)) null else E2eePlaintextRecords.load(messageId, reader)
@@ -84,8 +65,19 @@ public class E2eePlaintextVault(private val vault: RecordVault, private val owne
     public fun save(entry: E2eePlaintextEntry, messageIds: Collection<String>) {
         vault.write { transaction ->
             if (!serves(transaction)) throw E2eeForeignVaultException()
-            messageIds.forEach { E2eePlaintextRecords.save(entry, it, transaction) }
+            val storedAt = nowMillis()
+            messageIds.forEach { E2eePlaintextRecords.save(entry, it, transaction, storedAt) }
         }
+    }
+
+    /**
+     * Range le clair d'un message que J'AI écrit (#18975) : le coffre LOCAL suffit. [prepare] (l'enrôlement, réseau) n'est
+     * demandé que si le coffre ne sert pas encore ce compte ; un appareil enrôlé garde le texte hors ligne, et l'envoi
+     * attend dans la file.
+     */
+    public suspend fun keepMine(account: String, content: E2eeContent, messageIds: Collection<String>, prepare: suspend () -> Unit) {
+        if (!servesItsOwner()) prepare()
+        save(E2eePlaintextEntry.Readable(content, account), messageIds)
     }
 
     public fun remove(messageIds: Collection<String>) {
@@ -96,19 +88,17 @@ public class E2eePlaintextVault(private val vault: RecordVault, private val owne
     }
 
     /**
-     * Retire le clair de chaque message de [conversationId] composé jusqu'à [composedUpTo] (#14655) : une conversation
-     * supprimée ne laisse rien au coffre, même des messages que le cache n'a jamais tenus. Le contenu porte sa
-     * conversation DANS le chiffré : un serveur ne peut pas y faire entrer un message d'une autre.
+     * Retire du coffre tout ce que l'appareil a rangé pour [conversationId] jusqu'à [composedUpTo] (#14655) — clairs, versions
+     * futures, pierres tombales ET signaux reçus (#18981) : une conversation supprimée ne laisse rien, même des messages que
+     * le cache n'a jamais tenus. La borne est l'horloge LOCALE de l'inscription, comparée à l'instant LOCAL du rangement
+     * (#14672) ; un rangement antérieur à ce champ est tenu pour antérieur à toute borne. Le contenu porte sa conversation
+     * DANS le chiffré : un serveur ne peut pas y faire entrer un message d'une autre.
      */
     public fun removeConversation(conversationId: String, composedUpTo: Long) {
         vault.write { transaction ->
             if (!serves(transaction) && E2eeEnrollmentRecords.load(transaction) != null) throw E2eeForeignVaultException()
-            transaction.keys(RecordKind.PLAINTEXT)
-                .filter { id ->
-                    val readable = E2eePlaintextRecords.load(id, transaction) as? E2eePlaintextEntry.Readable
-                    readable != null && readable.content.belongsTo(conversationId) && readable.content.sentAt <= composedUpTo
-                }
-                .forEach { transaction.remove(RecordKind.PLAINTEXT, it) }
+            E2eePlaintextRecords.storedIn(conversationId, composedUpTo, transaction).forEach { transaction.remove(RecordKind.PLAINTEXT, it) }
+            E2eeReceivedSignals.storedIn(conversationId, composedUpTo, transaction).forEach { transaction.remove(RecordKind.SIGNAL_RECEIVED, it) }
         }
     }
 

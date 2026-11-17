@@ -105,6 +105,20 @@ class E2eeCatchUpResilienceTest {
     }
 
     @Test
+    fun aSenderDeviceOutOfLibsignalBounds_isSetAside_unread_andNotAcknowledged() = runTest {
+        val server = FakeE2eeServer()
+        val a = E2eeTestDevice(server, alice).enroll()
+        val b = E2eeTestDevice(server, bob).enroll()
+        send(a, bob, "a1")
+        val envelope = server.mailbox.single().second.copy(senderDeviceId = 200)
+
+        val outcome = b.opener.receive(envelope)
+
+        assertThat(outcome).isEqualTo(E2eeOpenOutcome.Malformed(envelope.id))
+        assertThat(server.mailbox).hasSize(1)
+    }
+
+    @Test
     fun aMalformedSignalFromAnAuthenticatedPeer_isJudged_acknowledged_andNeverServedAgain() = runTest {
         val server = FakeE2eeServer()
         val a = E2eeTestDevice(server, alice).enroll()

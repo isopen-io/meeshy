@@ -48,6 +48,44 @@ class E2eeReceivedSignalsTest {
     }
 
     @Test
+    fun aDeleteForEveryoneFromAnotherMember_erasesNothing() = runTest {
+        val (server, a, b) = pair()
+        val carol = E2eeTestDevice(server, "64f0c0ffee0000000000cccc").enroll()
+        val target = send(a, bob, "à garder")
+        b.opener.catchUp()
+
+        signal(carol, bob, """{${header(carol)},"kind":"delete-for-everyone","s":1,"sentAt":2,"target":"$target"}""", "cid_forged")
+        b.opener.catchUp()
+
+        assertThat((b.plaintexts.entry(target) as E2eePlaintextEntry.Readable).content.text).isEqualTo("à garder")
+    }
+
+    @Test
+    fun aDeleteForEveryoneOfMyOwnMessage_fromMyPeer_erasesNothing() = runTest {
+        val (_, a, b) = pair()
+        b.plaintexts.save(E2eePlaintextEntry.Readable(E2eeContent.compose("le mien", null, null, conversation, "cid_mine", 1L), bob), listOf("m-mine"))
+
+        signal(a, bob, """{${header(a)},"kind":"delete-for-everyone","s":1,"sentAt":2,"target":"m-mine"}""", "cid_del")
+        b.opener.catchUp()
+
+        assertThat((b.plaintexts.entry("m-mine") as E2eePlaintextEntry.Readable).content.text).isEqualTo("le mien")
+    }
+
+    @Test
+    fun aDeletedMessage_saysItWasDeleted_inItsConversation() = runTest {
+        val (_, a, b) = pair()
+        val target = send(a, bob, "à effacer")
+        b.opener.catchUp()
+
+        signal(a, bob, """{${header(a)},"kind":"delete-for-everyone","s":1,"sentAt":2,"target":"$target"}""", "cid_del")
+        b.opener.catchUp()
+
+        assertThat(b.plaintexts.entry(target)).isEqualTo(E2eePlaintextEntry.DeletedForEveryone(conversation))
+        b.plaintexts.removeConversation(conversation, Long.MAX_VALUE)
+        assertThat(b.plaintexts.entry(target)).isNull()
+    }
+
+    @Test
     fun aReceivedSignal_leavesTheVaultWithItsConversation() = runTest {
         val (_, a, b) = pair()
         signal(a, bob, """{${header(a)},"kind":"edit","s":1,"sentAt":1,"target":"m0","text":"texte modifié secret"}""", "cid_edit")

@@ -1,5 +1,6 @@
 package me.meeshy.core.e2ee.device
 
+import kotlinx.coroutines.CancellationException
 import me.meeshy.core.e2ee.keys.E2eeDeviceKeyFactory
 import me.meeshy.core.e2ee.store.E2eeEnrollmentRecords
 import me.meeshy.core.e2ee.store.E2eeIdentityRecords
@@ -86,23 +87,57 @@ public class E2eeDeviceRegistrar(
         val enrollment = try {
             directory.enroll(request)
         } catch (error: E2eeRemoteException) {
-            when {
-                error.code == E2eeErrorCode.IDENTITY_REVOKED && regenerateOnRevocation -> {
-                    reset()
-                    return enroll(userId, E2eeIdentityRecords.currentOrCreate(vault), returning = false, regenerateOnRevocation = false)
-                }
-                error.code == E2eeErrorCode.DEVICE_LIMIT_REACHED -> throw E2eeEnrollmentException.DeviceLimitReached()
-                else -> throw error
+            if (error.code == E2eeErrorCode.IDENTITY_REVOKED && regenerateOnRevocation) {
+                reset()
+                return enroll(userId, E2eeIdentityRecords.currentOrCreate(vault), returning = false, regenerateOnRevocation = false)
             }
+            if (error.provesNothingWasKept()) factory.withdraw(request)
+            if (error.code == E2eeErrorCode.DEVICE_LIMIT_REACHED) throw E2eeEnrollmentException.DeviceLimitReached()
+            throw error
         }
+        factory.enrolled()
         val device = E2eeLocalDevice(userId, enrollment.deviceId, identity.registrationId)
         vault.write { E2eeEnrollmentRecords.save(device, it) }
-        if (returning) replenish(directory.preKeyStock(), identity)
+        if (returning) refill(identity)
         return E2eeEnrolledDevice(device, identity)
     }
 
+    /** Le stock d'une installation qui revient, relu AU MIEUX : sans réponse, la prochaine préparation le relira. */
+    private suspend fun refill(identity: E2eeLocalIdentity) {
+        val stock = try {
+            directory.preKeyStock()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return
+        }
+        replenish(stock, identity)
+    }
+
+    /**
+     * Le réapprovisionnement est AU MIEUX (#18974) : un refus ne retire jamais à l'appareil sa capacité de chiffrer ni de
+     * lire. Le lot refusé SANS avoir été rangé quitte le coffre avec ses clés privées ; tout autre échec (réseau, 5xx, 429,
+     * réponse perdue) le laisse en attente, et la préparation suivante le republie tel quel.
+     */
     private suspend fun replenish(stock: E2eePreKeyStock, identity: E2eeLocalIdentity) {
-        val request = E2eeDeviceKeyFactory(identity, vault).replenishment(stock, nowMillis()) ?: return
-        directory.publishKeys(stock.deviceId, request)
+        val factory = E2eeDeviceKeyFactory(identity, vault)
+        val request = factory.replenishment(stock, nowMillis()) ?: return
+        try {
+            directory.publishKeys(stock.deviceId, request)
+            factory.published()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (refused: E2eeRemoteException) {
+            if (refused.provesNothingWasKept()) factory.withdraw(request)
+        } catch (_: Exception) {
+            return
+        }
     }
 }
+
+/**
+ * Un refus qui PROUVE que la passerelle n'a rien rangé : un 4xx jugé sur la requête, hors 401 (jeton à rafraîchir),
+ * 408 (délai) et 429 (débit) — la passerelle vérifie tout avant d'écrire. Tout le reste est ambigu.
+ */
+private fun E2eeRemoteException.provesNothingWasKept(): Boolean =
+    httpStatus?.let { it in 400..499 && it != 401 && it != 408 && it != 429 } == true

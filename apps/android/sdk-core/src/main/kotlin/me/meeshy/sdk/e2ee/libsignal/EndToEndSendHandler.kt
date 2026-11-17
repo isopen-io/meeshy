@@ -10,6 +10,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.core.e2ee.device.E2eeEnrollmentException
 import me.meeshy.core.e2ee.seal.E2eeSealException
 import me.meeshy.core.e2ee.store.E2eePlaintextEntry
 import me.meeshy.core.e2ee.wire.E2eeErrorCode
@@ -58,6 +59,10 @@ internal class EndToEndSendHandler @Inject constructor(
         } catch (sealing: E2eeSealException) {
             Timber.w("e2ee send not sealed: %s", sealing.javaClass.simpleName)
             SendResult.PermanentFailure(REASON_NOT_SEALED)
+        } catch (_: E2eeEnrollmentException.DeviceLimitReached) {
+            SendResult.PermanentFailure(EndToEndDeviceLimit.REASON)
+        } catch (_: E2eeVaultUnavailableException) {
+            SendResult.PermanentFailure(REASON_UNAVAILABLE)
         } catch (failure: Exception) {
             Timber.w("e2ee send failed: %s", failure.javaClass.simpleName)
             SendResult.TransientFailure
@@ -83,7 +88,19 @@ internal class EndToEndSendHandler @Inject constructor(
         const val REASON_PLAINTEXT_MISSING: String = "E2EE_PLAINTEXT_MISSING: the message text is no longer on this device"
         const val REASON_NOT_SEALED: String = "E2EE_NOT_SEALED: the recipient has no device that encrypts, or its devices keep changing"
         const val REASON_REFUSED: String = "E2EE_REFUSED:"
+        const val REASON_UNAVAILABLE: String = "E2EE_UNAVAILABLE: this device keeps no durable end-to-end vault"
     }
+}
+
+/**
+ * **La limite d'appareils chiffrés atteinte** (#18976) : le compte a déjà `E2EE_MAX_ACTIVE_DEVICES` appareils actifs, et
+ * celui-ci ne peut pas s'enrôler. Un nouvel essai échouerait à l'identique tant qu'aucun appareil n'est retiré : l'échec
+ * est DÉFINITIF et lisible, et la bulle dit où en retirer un (« Mes appareils chiffrés »).
+ */
+public object EndToEndDeviceLimit {
+    public const val REASON: String = "E2EE_DEVICE_LIMIT: remove one of your encrypted devices to encrypt on this one"
+
+    public fun isReason(reason: String?): Boolean = reason == REASON
 }
 
 @Module

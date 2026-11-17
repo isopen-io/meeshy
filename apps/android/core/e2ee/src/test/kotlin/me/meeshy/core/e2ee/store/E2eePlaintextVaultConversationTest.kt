@@ -7,22 +7,24 @@ import me.meeshy.core.e2ee.vault.TransactionalRecordVault
 import org.junit.Test
 
 /**
- * #14655 — supprimer une conversation retire du coffre le clair de chacun de ses messages composés jusque-là, même ceux
- * que Room n'a jamais tenus ; ceux d'une autre conversation, et ceux composés après, restent.
+ * #14655 — supprimer une conversation retire du coffre le clair de chacun de ses messages rangés jusque-là, même ceux
+ * que Room n'a jamais tenus ; ceux d'une autre conversation, et ceux rangés après, restent. #14672 — la borne se compare à
+ * l'instant LOCAL du rangement, jamais à l'horloge de l'émetteur écrite dans le chiffré.
  */
 class E2eePlaintextVaultConversationTest {
 
-    private val vault = E2eePlaintextVault(TransactionalRecordVault(InMemoryRecordBackend()), owner = null)
-
-    private fun keep(id: String, conversationId: String, sentAt: Long) =
-        vault.save(E2eePlaintextEntry.Readable(E2eeContent.compose("t$id", "fr", null, conversationId, null, sentAt), "alice"), listOf(id))
-
     @Test
-    fun `les clairs de la conversation composes jusqu a la borne partent, les autres restent`() {
-        keep("m1", "c1", sentAt = 10)
-        keep("m2", "c1", sentAt = 20)
-        keep("m3", "c2", sentAt = 10)
-        keep("m4", "c1", sentAt = 31)
+    fun `les clairs de la conversation ranges jusqu a la borne partent, les autres restent`() {
+        var clock = 0L
+        val vault = E2eePlaintextVault(TransactionalRecordVault(InMemoryRecordBackend()), owner = null, nowMillis = { clock })
+        fun keep(id: String, conversationId: String, storedAt: Long) {
+            clock = storedAt
+            vault.save(E2eePlaintextEntry.Readable(E2eeContent.compose("t$id", "fr", null, conversationId, null, sentAtMillis = 1L), "alice"), listOf(id))
+        }
+        keep("m1", "c1", storedAt = 10)
+        keep("m2", "c1", storedAt = 20)
+        keep("m3", "c2", storedAt = 10)
+        keep("m4", "c1", storedAt = 31)
         vault.save(E2eePlaintextEntry.Undecryptable, listOf("m5"))
 
         vault.removeConversation("c1", composedUpTo = 30)
