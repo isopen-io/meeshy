@@ -174,6 +174,37 @@ describe('serveur-transport — la panne du fournisseur n\'est pas la faute du j
       expect(sixth.success).toBe(true);
     });
 
+    it('cinq jetons mal formés d\'affilée gardent leur faute mais ne coupent pas Firebase aux autres', async () => {
+      const svc = await service();
+      mockFirebaseMessagingSend.mockRejectedValue(fcmError('messaging/invalid-argument'));
+      const malformed = await send(svc, ids('m', 5).map((id) => token(id, 'fcm')));
+      expect(malformed.every((r) => r.success === false && !r.transient)).toBe(true);
+      mockFirebaseMessagingSend.mockReset();
+      mockFirebaseMessagingSend.mockResolvedValue('msg-id');
+
+      const [sixth] = await send(svc, [token('healthy', 'fcm')]);
+
+      expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(1);
+      expect(sixth.success).toBe(true);
+    });
+
+    it('Firebase muet au-delà du délai du disjoncteur : le jeton sain à deux fautes n\'est ni puni ni désactivé', async () => {
+      const svc = await service();
+      jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+      try {
+        mockFirebaseMessagingSend.mockReturnValue(new Promise(() => undefined));
+        const pending = send(svc, [token('healthy', 'fcm')]);
+        await jest.advanceTimersByTimeAsync(10_000);
+        const [result] = await pending;
+
+        expect(result).toMatchObject({ success: false, transient: true });
+        expect(strikes()).toHaveLength(0);
+        expect(deactivations()).toHaveLength(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it.each(['messaging/mismatched-credential', 'messaging/third-party-auth-error', 'app/network-error'])(
       'un échec fournisseur %s ne compte aucune faute au jeton',
       async (code) => {
