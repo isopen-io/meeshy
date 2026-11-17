@@ -54,18 +54,18 @@ public object MeeshyMotionRecipe {
     }
 
     private fun full(token: MeeshyMotionToken): MeeshyMotionValues = when (token) {
-        MeeshyMotionToken.Morph -> spring(420, 0.42f, 0.7f, MeeshyMotionHaptic.Light, MeeshyMotionHapticAt.Start)
-        MeeshyMotionToken.Travel -> spring(560, 0.56f, 0.82f, MeeshyMotionHaptic.Medium, MeeshyMotionHapticAt.Landing)
-        MeeshyMotionToken.Flip -> spring(500, 0.5f, 0.86f, MeeshyMotionHaptic.Rigid, MeeshyMotionHapticAt.MidCourse)
+        MeeshyMotionToken.Morph -> springValues(420, 0.42f, 0.7f, MeeshyMotionHaptic.Light, MeeshyMotionHapticAt.Start)
+        MeeshyMotionToken.Travel -> springValues(560, 0.56f, 0.82f, MeeshyMotionHaptic.Medium, MeeshyMotionHapticAt.Landing)
+        MeeshyMotionToken.Flip -> springValues(500, 0.5f, 0.86f, MeeshyMotionHaptic.Rigid, MeeshyMotionHapticAt.MidCourse)
         MeeshyMotionToken.Collapse ->
             MeeshyMotionValues(MeeshyMotionNature.Driven, 0, null, null, 0, MeeshyMotionHaptic.Light, MeeshyMotionHapticAt.Lock)
         MeeshyMotionToken.Rise ->
-            spring(360, 0.36f, 0.86f, MeeshyMotionHaptic.None, MeeshyMotionHapticAt.Never).copy(delayStepMillis = MeeshyMotion.CASCADE_STEP_MILLIS)
+            springValues(360, 0.36f, 0.86f, MeeshyMotionHaptic.None, MeeshyMotionHapticAt.Never).copy(delayStepMillis = MeeshyMotion.CASCADE_STEP_MILLIS)
         MeeshyMotionToken.Float -> loop(FLOAT_MILLIS)
         MeeshyMotionToken.Pulse -> loop(PULSE_MILLIS)
     }
 
-    private fun spring(duration: Int, response: Float, damping: Float, haptic: MeeshyMotionHaptic, at: MeeshyMotionHapticAt) =
+    private fun springValues(duration: Int, response: Float, damping: Float, haptic: MeeshyMotionHaptic, at: MeeshyMotionHapticAt) =
         MeeshyMotionValues(MeeshyMotionNature.Spring, duration, response, damping, 0, haptic, at)
 
     private fun loop(duration: Int) =
