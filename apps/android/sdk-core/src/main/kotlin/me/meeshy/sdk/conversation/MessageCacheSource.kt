@@ -22,6 +22,7 @@ import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.sync.LiveReceiptsContinuity
 import me.meeshy.sdk.model.sync.RecentWindowPrune
 import me.meeshy.sdk.model.sync.ThreadContiguity
 import me.meeshy.sdk.model.sync.ThreadContiguity.Sweep
@@ -72,6 +73,11 @@ internal class MessageCacheSource(
     private val revalidations: ThreadRevalidations? = null,
     /** #19115 — how the stream that drives [revalidate] judges freshness; `null`: [revalidate] always reads. */
     private val streamFreshness: StreamFreshness? = null,
+    /**
+     * #19049 — under `live-receipts` a 304 says nothing of the receipt counters: the validator leaves only while the socket
+     * stayed connected since this thread's last full read; `null` (no socket to keep them): the validator always may.
+     */
+    private val receipts: LiveReceiptsContinuity? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = ThreadSyncKey.of(conversationId)
@@ -186,7 +192,8 @@ internal class MessageCacheSource(
         val held = heldBefore()
         val window = readWindow(ticket, held) ?: return
         val gap = if (sweeping == Sweeping.SKIPPED) GapRead(emptyList(), Sweep.Skipped) else readGap(window.messages, held)
-        fence.commitOrWrite(ticket) { persist(window, gap, held) }
+        fence.commitOrWrite(ticket) { persist(window, gap, held) } ?: return
+        receipts?.readInFull(conversationId, held.receiptsEpoch)
     }
 
     /**
@@ -194,7 +201,9 @@ internal class MessageCacheSource(
      * - [ids]: the server rows held — the only ones its page may declare gone (#19046 F3, by identity);
      * - [versions]: the newest rows' versions — a row another write moved during the flight keeps what the page may not
      *   undo (#18915);
-     * - [upTo] and [contiguity]: where the sweep starts, and whether a validator may be sent (#19046 F12).
+     * - [upTo] and [contiguity]: where the sweep starts, and whether a validator may be sent (#19046 F12);
+     * - [receiptsEpoch] and [receiptsLive]: the socket connection the read starts under, and whether the receipts held
+     *   are live enough for a 304 to keep them (#19049).
      */
     private class HeldBefore(
         val upTo: Long?,
@@ -202,15 +211,22 @@ internal class MessageCacheSource(
         val etag: String?,
         val ids: Set<String>,
         val versions: HeldRowVersions,
+        val receiptsEpoch: Long,
+        val receiptsLive: Boolean,
     )
 
-    private suspend fun heldBefore(): HeldBefore = HeldBefore(
-        upTo = messageDao.newestSyncedCreatedAt(conversationId),
-        contiguity = ThreadContiguity(syncMetaDao.watermark(resourceKey), syncMetaDao.watermark(gapKey)),
-        etag = syncMetaDao.etag(resourceKey),
-        ids = messageDao.syncedIds(conversationId).toHashSet(),
-        versions = HeldRowVersions.of(messageDao.recentVersions(conversationId, HELD_VERSIONS), HELD_VERSIONS),
-    )
+    private suspend fun heldBefore(): HeldBefore {
+        val receiptsEpoch = receipts?.epoch() ?: 0L
+        return HeldBefore(
+            upTo = messageDao.newestSyncedCreatedAt(conversationId),
+            contiguity = ThreadContiguity(syncMetaDao.watermark(resourceKey), syncMetaDao.watermark(gapKey)),
+            etag = syncMetaDao.etag(resourceKey),
+            ids = messageDao.syncedIds(conversationId).toHashSet(),
+            versions = HeldRowVersions.of(messageDao.recentVersions(conversationId, HELD_VERSIONS), HELD_VERSIONS),
+            receiptsEpoch = receiptsEpoch,
+            receiptsLive = receipts?.mayRevalidateConditionally(conversationId) ?: true,
+        )
+    }
 
     /** The recent window as the server served it, and the validator to keep with it. */
     private class ServedWindow(val messages: List<ApiMessage>, val etag: String?)
@@ -286,11 +302,15 @@ internal class MessageCacheSource(
      * ([ThreadContiguity.mayRevalidateConditionally]): a row that arrived after that page and was then deleted, its event
      * missed, left the window identical, and the 304 kept it — with its plaintext.
      *
+     * #19049 — and only while the receipts held are live ([LiveReceiptsContinuity]): under `live-receipts` the validator
+     * ignores the receipt counters, so after a (re)connection the window is read once WITHOUT it, and the receipts missed
+     * during the cut are repaired by the 200.
+     *
      * Returns the page to write; `null` after a 304, whose only write —
      * `sync_meta`, the confirmation — is the last step of the revalidation.
      */
     private suspend fun readWindow(ticket: AccountTicket?, held: HeldBefore): ServedWindow? {
-        val validator = held.etag?.takeIf { held.contiguity.mayRevalidateConditionally(held.upTo) }
+        val validator = held.etag?.takeIf { held.contiguity.mayRevalidateConditionally(held.upTo) && held.receiptsLive }
         return when (val result = messageApi.listConditionalResult(conversationId = conversationId, ifNoneMatch = validator)) {
             is ConditionalResult.NotModified -> {
                 if (validator == null) {

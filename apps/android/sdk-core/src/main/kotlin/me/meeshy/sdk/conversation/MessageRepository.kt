@@ -15,6 +15,7 @@ import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.socket.SendMessageAck
+import me.meeshy.sdk.model.sync.LiveReceiptsContinuity
 import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
@@ -74,10 +75,13 @@ class MessageRepository internal constructor(
         listPreviews: SendPreviewSink? = null,
         /** L'index des médias de la conversation suit les messages supprimés. */
         mediaIndex: ConversationMediaHubIndex? = null,
+        /** #19049 — la fenêtre n'envoie son validateur que tant que la socket a tenu ses accusés depuis sa dernière lecture entière. */
+        receipts: LiveReceiptsContinuity? = null,
     ) : this(
         history = MessageHistoryReader(
             messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database),
             media = AcknowledgedBubbleMedia(adoption, previews, AcknowledgedBubbleMedia.ORIGIN_PAGE),
+            receipts = receipts,
         ),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(

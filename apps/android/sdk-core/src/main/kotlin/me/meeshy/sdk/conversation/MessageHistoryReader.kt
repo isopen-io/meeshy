@@ -5,6 +5,7 @@ import me.meeshy.sdk.session.commitOrWrite
 
 import androidx.room.withTransaction
 import me.meeshy.core.database.entity.SyncMetaEntity
+import me.meeshy.sdk.model.sync.LiveReceiptsContinuity
 import me.meeshy.sdk.model.sync.ThreadContiguity
 
 import java.util.concurrent.ConcurrentHashMap
@@ -50,6 +51,8 @@ internal class MessageHistoryReader(
     private val translations: TranslationLayer? = null,
     /** #16012 — les fichiers locaux de mon envoi suivent la ligne qu'une page sert avant l'accusé. */
     private val media: AcknowledgedBubbleMedia? = null,
+    /** #19049 — the window sends its validator only while the socket kept its receipts live since its last full read. */
+    private val receipts: LiveReceiptsContinuity? = null,
 ) {
     /**
      * #5189 — the nominal-flow observe window, per conversation: how many of
@@ -334,6 +337,7 @@ internal class MessageHistoryReader(
         media = media,
         revalidations = revalidations,
         streamFreshness = streamFreshness,
+        receipts = receipts,
     )
 
     companion object {
