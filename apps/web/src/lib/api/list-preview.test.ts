@@ -3,11 +3,12 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events/conversation';
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
+import { composeConversationPreview } from '@meeshy/shared/utils/conversation-preview';
 
 import { createHttpTransport } from '@/lib/api/http';
 import { createOutboxStore } from '@/lib/send/outbox-store';
 import { performSend, type SendDeps } from '@/lib/send/perform-send';
-import { previewKindOf } from '@/lib/view/conversation';
+import { previewInputOf } from '@/lib/view/conversation-preview-input';
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
@@ -340,7 +341,8 @@ describe('message:expired — la ligne passe seule à « expiré » (#7547)', ()
     const row = rowOf(client);
     expect(row?.lastMessage?.content).toBe('');
     expect('lastMessageTranslations' in (row ?? {})).toBe(false);
-    expect(previewKindOf(row as Conversation)).toBe('expired');
+    const preview = composeConversationPreview(previewInputOf(row as Conversation, { viewerId: 'u-viewer', language: 'fr', preferredLanguages: ['fr'], now: Date.now() }));
+    expect(preview.icon).toBe('expired');
     /* Le rang ne bouge pas : un message qui expire ne remonte rien. */
     expect(row?.lastMessageAt as unknown).toBe('2026-09-12T10:00:00.000Z');
   });

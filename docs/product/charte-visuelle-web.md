@@ -76,7 +76,7 @@ une violation, mais le dosage canonique existe presque toujours ci-dessus : le p
 |---|---|---|
 | bouton principal / secondaire / destructif / icône / sur média | `src/styles/ui.css` (`@utility`), nommés par `BUTTON` de `src/components/ui-chrome.tsx` | `className="btn-primary"` ; accent : `style={{ backgroundColor: 'var(--accent)' }}` en surcharge. Le destructif est un TEXTE rouge sur voile rouge, jamais du blanc sur du rouge |
 | confirmation | `src/components/confirm-dialog.tsx` | `tone="destructive"` |
-| en-tête d'écran | `ScreenHeader` + `BackGlyph` (`ui-chrome.tsx`), hauteur `SCREEN_HEADER_HEIGHT` (64) | retour à GAUCHE dans `CHROME_ACTION_HIT_CLASS` (44), titre `text-body font-semibold` |
+| en-tête d'écran | `BackGlyph` (`ui-chrome.tsx`), hauteur `SCREEN_HEADER_HEIGHT` (64) | retour à GAUCHE dans `CHROME_ACTION_HIT_CLASS` (44), titre `text-body font-semibold` |
 | action ronde du chrome | `ChromeActionDisc` + `CHROME_ACTION_HIT_CLASS` (`chrome-action.tsx`) | disque 28 dans une cible 44, teinte `currentColor` |
 | verre | `.glass` / `.glass-prominent` / `.glass-card` / `.glass-call` (`styles/glass.css`), `GlassSurface` | jamais un `backdrop-filter` ailleurs |
 | feuille | `Sheet` (`sheet.tsx`) | voile `backdrop:bg-veil` |
