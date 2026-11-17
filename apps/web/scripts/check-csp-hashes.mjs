@@ -22,7 +22,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { distScriptHashes, nginxScriptHashes, withNginxScriptHashes } from './lib/csp.mjs';
+import { distScriptHashes, nginxScriptHashes, precachedDocumentsWithoutHeadersRevision, withNginxScriptHashes } from './lib/csp.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(APP, 'dist');
@@ -56,3 +56,13 @@ if (refused.length > 0 || unused.length > 0) {
 }
 
 console.log(`  nginx.conf : les ${built.length} scripts en ligne des documents construits sont exactement ceux que la politique autorise (#18986).`);
+
+const SERVICE_WORKER = join(DIST, 'sw.js');
+if (existsSync(SERVICE_WORKER)) {
+  const stale = precachedDocumentsWithoutHeadersRevision(readFileSync(SERVICE_WORKER, 'utf8'));
+  if (stale.length > 0) {
+    for (const url of stale) console.error(`  ✗ sw.js précache ${url} sans la révision de ses en-têtes : un visiteur déjà installé le garderait SANS la CSP.`);
+    process.exit(1);
+  }
+  console.log('  sw.js : chaque document précaché porte la révision de ses en-têtes — un visiteur installé le retélécharge avec la CSP.');
+}

@@ -98,3 +98,28 @@ export const documentPolicy = (nginx, { forwardedProto }) => {
     .replace(/\s+/g, ' ')
     .trim();
 };
+
+/**
+ * UN DOCUMENT PRÉCACHÉ GARDE LES EN-TÊTES DE SON TÉLÉCHARGEMENT. Workbox range
+ * la réponse entière, et ne la retélécharge que si sa révision change ; cette
+ * révision est celle des OCTETS. Une politique posée par nginx n'atteindrait
+ * jamais un document inchangé déjà précaché chez un visiteur. La révision
+ * d'un document porte donc AUSSI celle de ses en-têtes : la monter quand la
+ * politique des documents change les refait tous entrer, avec les en-têtes du
+ * jour (`vite/pwa.ts`, `manifestTransforms`).
+ */
+export const PRECACHED_DOCUMENT_HEADERS_REVISION = 'csp-1';
+
+const isDocument = (url) => url.endsWith('.html');
+
+/** Le manifeste de précache, chaque document révisé AUSSI par ses en-têtes. */
+export const withDocumentHeadersRevision = (entries) =>
+  entries.map((entry) =>
+    isDocument(entry.url) && entry.revision !== null ? { ...entry, revision: `${entry.revision}.${PRECACHED_DOCUMENT_HEADERS_REVISION}` } : entry,
+  );
+
+/** Les documents que le worker construit précache SANS la révision des en-têtes du jour. */
+export const precachedDocumentsWithoutHeadersRevision = (serviceWorker) =>
+  [...serviceWorker.matchAll(/\{url:"([^"]+)",revision:"([^"]*)"\}/g)]
+    .filter(([, url, revision]) => isDocument(url) && !revision.endsWith(`.${PRECACHED_DOCUMENT_HEADERS_REVISION}`))
+    .map(([, url]) => url);

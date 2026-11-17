@@ -174,6 +174,13 @@ RUN set -eu; for p in about child-safety contact faq help partners privacy terms
     if grep -q 'src="/config.js"' /app/dist/index.html; then echo "index.html charge encore config.js"; exit 1; fi; \
     echo "les huit pages sont presentes et precachees, build-info.json ecrit"
 
+# LES CONDENSATS DE LA CSP SONT CEUX DE CE `dist/` (#18986). `nginx.conf`
+# n'autorise que les scripts en ligne dont il porte le condensat, calculé sur
+# le `dist/` de la CI. Celui-ci est construit ICI, par la bun de l'image : un
+# écart bloquerait les amorces en silence sur staging. Il fait échouer la
+# construction (`scripts/check-csp-hashes.mjs`, `scripts/lib/csp.test.ts`).
+RUN bun scripts/check-csp-hashes.mjs
+
 # ===== SERVICE =====
 FROM docker.io/nginx:1.31-alpine AS runner
 

@@ -4,7 +4,17 @@ import { readFileSync } from 'node:fs';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from '../../src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_APP_SCHEME_BOOTSTRAP, INLINE_SCHEME_BOOTSTRAP } from '../../src/lib/inline-scheme-bootstrap.js';
 
-import { NGINX_CSP_REGION, documentPolicy, inlineScriptHashes, nginxScriptHashes, scriptHash, withNginxScriptHashes } from './csp.mjs';
+import {
+  NGINX_CSP_REGION,
+  PRECACHED_DOCUMENT_HEADERS_REVISION,
+  documentPolicy,
+  inlineScriptHashes,
+  nginxScriptHashes,
+  precachedDocumentsWithoutHeadersRevision,
+  scriptHash,
+  withDocumentHeadersRevision,
+  withNginxScriptHashes,
+} from './csp.mjs';
 
 /**
  * **LA POLITIQUE DE SÉCURITÉ DU CONTENU DE L'ORIGINE** (#18986).
@@ -115,6 +125,58 @@ describe('nginx.conf — chaque réponse porte la politique (nginx n’hérite p
 });
 
 /**
+ * UN DOCUMENT PRÉCACHÉ GARDE LES EN-TÊTES DE SON TÉLÉCHARGEMENT (revue
+ * adversariale de #19083). Workbox range la réponse ENTIÈRE et ne la
+ * retélécharge que si sa révision change ; sa révision est celle des OCTETS.
+ * Chez un visiteur qui avait déjà le worker, un document inchangé restait donc
+ * servi SANS la politique que nginx pose désormais. La révision des documents
+ * porte aussi celle de leurs en-têtes : la monter les refait entrer.
+ */
+describe('withDocumentHeadersRevision — la révision d’un document précaché couvre ses en-têtes', () => {
+  test('un document `.html` reçoit la révision des en-têtes ; le reste ne change pas', () => {
+    const entries = [
+      { url: 'about.html', revision: 'abc', size: 1 },
+      { url: 'assets/app-1a2b.js', revision: null, size: 2 },
+      { url: 'brand/logo.png', revision: 'def', size: 3 },
+    ];
+
+    expect(withDocumentHeadersRevision(entries)).toEqual([
+      { url: 'about.html', revision: `abc.${PRECACHED_DOCUMENT_HEADERS_REVISION}`, size: 1 },
+      { url: 'assets/app-1a2b.js', revision: null, size: 2 },
+      { url: 'brand/logo.png', revision: 'def', size: 3 },
+    ]);
+  });
+
+  test('le worker construit n’annonce aucun document sans la révision des en-têtes', () => {
+    const revision = PRECACHED_DOCUMENT_HEADERS_REVISION;
+    const serviceWorker = `e.precacheAndRoute([{url:"index.html",revision:"1.${revision}"},{url:"about.html",revision:"2"},{url:"assets/a.js",revision:null}],{})`;
+
+    expect(precachedDocumentsWithoutHeadersRevision(serviceWorker)).toEqual(['about.html']);
+  });
+});
+
+/**
+ * L'IMAGE VÉRIFIE LES CONDENSATS SUR SON PROPRE `dist/` (revue adversariale de
+ * #19083). La CI les vérifie sur le `dist/` de SON job ; l'image en construit
+ * un autre (sa version de bun, son environnement). Un écart y bloquerait les
+ * amorces en ligne EN SILENCE sur staging : il fait désormais échouer la
+ * construction, entre le build et l'étape qui sert les fichiers.
+ */
+describe('Dockerfile — la construction échoue si un condensat manque', () => {
+  const dockerfile = readFileSync(new URL('../../Dockerfile', import.meta.url), 'utf8');
+
+  test('la vérification des condensats tourne sur le `dist/` de l’image, après le build et avant le service', () => {
+    const build = dockerfile.indexOf('\nRUN bun run build\n');
+    const check = dockerfile.indexOf('\nRUN bun scripts/check-csp-hashes.mjs\n');
+    const runner = dockerfile.indexOf('\nFROM docker.io/nginx');
+
+    expect(build).toBeGreaterThan(-1);
+    expect(check).toBeGreaterThan(build);
+    expect(runner).toBeGreaterThan(check);
+  });
+});
+
+/**
  * LE TRANSPORT : HSTS ET SES VOISINS SONT POSÉS PAR TRAEFIK, qui termine le TLS
  * (#18986). Le middleware `secure-headers` existait (`config/dynamic.yaml`) et
  * n'était branché sur AUCUN routeur : l'origine n'envoyait ni HSTS, ni
@@ -130,12 +192,29 @@ describe('Traefik — les routeurs de l’application posent les en-têtes de tr
     expect(middlewares('docker-compose.staging.yml', 'frontend-staging')).toContain('secure-headers@file');
   });
 
-  test('le middleware porte HSTS (un an, sous-domaines) et `nosniff`', () => {
-    const dynamic = compose('config/dynamic.yaml');
-    const headers = /\n {4}secure-headers:\n {6}headers:\n([\s\S]*?)\n\n/.exec(dynamic)?.[1] ?? '';
+  const secureHeaders = (file: string): string => /\n {4}secure-headers:\n {6}headers:\n([\s\S]*?)\n\n/.exec(compose(file))?.[1] ?? '';
+
+  test('le middleware porte HSTS (un an) et `nosniff`', () => {
+    const headers = secureHeaders('config/dynamic.yaml');
     expect(headers).toContain('stsSeconds: 31536000');
-    expect(headers).toContain('stsIncludeSubdomains: true');
     expect(headers).toContain('forceSTSHeader: true');
     expect(headers).toContain('contentTypeNosniff: true');
   });
+
+  /**
+   * HSTS PRUDENT (revue adversariale de #19083). Posé sur `meeshy.me`,
+   * `includeSubDomains` engagerait TOUT `*.meeshy.me` pendant un an, et
+   * `preload` inscrirait le domaine dans les navigateurs, sans retour rapide :
+   * un sous-domaine servi sans HTTPS deviendrait injoignable. Aucun inventaire
+   * des sous-domaines du DNS ne prouve qu'ils le supportent tous ; les deux
+   * attendent la décision qui le fera.
+   */
+  for (const file of ['config/dynamic.yaml', 'config/traefik-tls.yml']) {
+    test(`${file} : ni \`preload\`, ni \`includeSubDomains\` — HSTS n’engage que l’hôte qui le sert`, () => {
+      const headers = secureHeaders(file);
+      expect(headers).toContain('stsSeconds: 31536000');
+      expect(headers).not.toContain('stsPreload');
+      expect(headers).not.toContain('stsIncludeSubdomains');
+    });
+  }
 });

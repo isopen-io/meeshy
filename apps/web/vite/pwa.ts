@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { Plugin, PluginOption } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+import { withDocumentHeadersRevision } from '../scripts/lib/csp.mjs';
 import { INSTITUTIONAL_PATTERN } from '../scripts/lib/institutional-routes.mjs';
 import { LANDING_LANGUAGES, LANDING_SUBPATH_PATTERN, landingFiles } from '../src/landing/landing-languages.js';
 import { apiCacheIdentityPlugin } from '../src/lib/net/api-cache-identity.js';
@@ -168,6 +169,17 @@ export function meeshyPwa(): PluginOption {
        * (critère 3) exige à zéro.
        */
       globPatterns: ['**/*.{js,css,html,svg,woff2}', 'brand/*.png', 'favicon-48.png'],
+      /**
+       * UN DOCUMENT PRÉCACHÉ GARDE LES EN-TÊTES DE SON TÉLÉCHARGEMENT
+       * (#18986, revue adversariale de #19083). Workbox ne retélécharge
+       * une entrée que si sa révision change, et cette révision est celle
+       * des octets : sans ceci, un document inchangé, déjà précaché chez
+       * un visiteur, resterait servi SANS la CSP que nginx pose. Sa
+       * révision porte aussi celle de ses en-têtes
+       * (`PRECACHED_DOCUMENT_HEADERS_REVISION`, `scripts/lib/csp.mjs`) ;
+       * `check-csp-hashes.mjs` le vérifie sur le `sw.js` construit.
+       */
+      manifestTransforms: [(entries) => ({ manifest: withDocumentHeadersRevision(entries), warnings: [] })],
       /**
        * Chaque page institutionnelle est écrite dans DEUX formes —
        * `about.html` et `about/index.html` — parce qu'un serveur

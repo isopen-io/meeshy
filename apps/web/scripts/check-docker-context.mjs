@@ -92,6 +92,8 @@ const REQUIRED = [
   'apps/web/public/sw-share-target.js',
   'apps/web/scripts/prerender-institutional.tsx',
   'apps/web/scripts/check-nginx-public.sh',
+  'apps/web/scripts/check-csp-hashes.mjs',
+  'apps/web/scripts/lib/csp.mjs',
   'apps/web/scripts/lib/institutional-routes.mjs',
   'apps/web/scripts/lib/institutional-routes.d.mts',
   'apps/web/src/main.tsx',
