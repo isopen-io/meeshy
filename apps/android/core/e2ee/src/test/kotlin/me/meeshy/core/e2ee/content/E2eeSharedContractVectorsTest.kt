@@ -18,7 +18,8 @@ import org.junit.Test
  * #18944 — Android lit et écrit le contenu et les signaux chiffrés EXACTEMENT comme les vecteurs communs
  * (`packages/shared/fixtures/e2ee-content/`, `e2ee-signal/`, écrits d'après ce que l'iPhone écrit et accepte, #18940) :
  * mêmes octets canoniques, même remplissage, même sonde, mêmes verdicts. Les fichiers du dépôt sont lus par chemin
- * relatif (aucune copie) : un vecteur qui change fait tourner la CI Android (`packages/shared/fixtures/**`).
+ * relatif (aucune copie) : un vecteur qui change fait tourner la CI Android (le dossier packages/shared/fixtures et tout ce
+ * qu'il contient).
  */
 class E2eeSharedContractVectorsTest {
 
