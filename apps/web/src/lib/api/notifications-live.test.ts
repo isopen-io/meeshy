@@ -223,6 +223,32 @@ describe('web-notifs-2 — une réécriture plus ancienne que la première page 
 
     expect(ids(queryClient)).toEqual(['n9', 'n8']);
   });
+
+  test('une ligne d’une page SUIVANTE, éditée cloche ouverte, reprend son rang dans sa page au lieu de disparaître', () => {
+    const { socket, queryClient } = connect();
+    const row = (id: string, createdAt: string): NotificationRecord => ({
+      id,
+      type: 'new_message',
+      title: null,
+      content: id,
+      actor: null,
+      context: { conversationId: 'conv-1' },
+      metadata: {},
+      state: { isRead: false, createdAt },
+    });
+    queryClient.setQueryData(notificationListKey('all'), {
+      pages: [
+        { notifications: [row('n9', '2026-11-17T09:00:00.000Z'), row('n8', '2026-11-17T08:00:00.000Z')], hasMore: true, nextCursor: 'c1' },
+        { notifications: [row('n6', '2026-11-17T06:00:00.000Z'), row('n5', '2026-11-17T05:00:00.000Z'), row('n4', '2026-11-17T04:00:00.000Z')], hasMore: true, nextCursor: 'c2' },
+      ],
+      pageParams: [undefined, 'c1'],
+    });
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: 'n5' });
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, served('n5', '2026-11-17T05:00:00.000Z', 'édité'));
+
+    expect(ids(queryClient)).toEqual(['n9', 'n8', 'n6', 'n5', 'n4']);
+  });
 });
 
 describe('web-notifs-3 — une notification arrivée sur la conversation OUVERTE est lue à l’arrivée', () => {
@@ -267,6 +293,37 @@ describe('web-notifs-3 — une notification arrivée sur la conversation OUVERTE
     expect(calls()).toEqual([]);
     expect(unread(queryClient)).toBe(1);
     expect(bannerId()).toBe('n1');
+  });
+
+  test('cloche jamais ouverte (aucune liste en cache) : la pastille ne passe jamais à +1', async () => {
+    openThread('/c/X');
+    const { notificationsApi, calls } = answering();
+    const { socket, queryClient } = connect({ notificationsApi });
+    queryClient.removeQueries({ queryKey: notificationListKey('all') });
+    queryClient.removeQueries({ queryKey: notificationListKey('unread') });
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, reaction('n1', 'X'));
+
+    expect(unread(queryClient)).toBe(0);
+    await settle();
+    expect(calls()).toEqual(['POST /api/v1/notifications/n1/read']);
+    expect(unread(queryClient)).toBe(0);
+  });
+
+  test('la passerelle refuse le marquage : la notification redevient non lue et compte', async () => {
+    openThread('/c/X');
+    const requests: HttpRequest[] = [];
+    const refused: ApiResult<unknown> = { ok: false, status: 503, error: 'unavailable' };
+    const transport = { request: async (req: HttpRequest) => (requests.push(req), refused) } as unknown as HttpTransport;
+    const { socket, queryClient } = connect({ notificationsApi: { source: 'gateway', transport } });
+    queryClient.removeQueries({ queryKey: notificationListKey('all') });
+    queryClient.removeQueries({ queryKey: notificationListKey('unread') });
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, reaction('n1', 'X'));
+    await settle();
+
+    expect(requests).toHaveLength(1);
+    expect(unread(queryClient)).toBe(1);
   });
 
   test('onglet caché : rien n’est lu — personne ne regarde le fil', async () => {
