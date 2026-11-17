@@ -26,6 +26,7 @@ jest.mock('../../../../routes/users/presence-gate', () => ({
 }));
 
 import { directoryPersonRoutes } from '../../../../routes/directory/person';
+import { clearPrivacyPreferencesCache } from '../../../../services/preferences/privacy-cache';
 
 const CIBLE = '507f1f77bcf86cd799439011';
 const LECTEUR = '507f1f77bcf86cd799439022';
@@ -41,8 +42,14 @@ const lien = (parLecteur: string, parCible: string) => ({
   transitions: [],
 });
 
-function prismaDouble(row: ReturnType<typeof lien> | null) {
+type Cible = { readonly privacy?: Record<string, boolean>; readonly deactivatedAt?: Date | null };
+
+function prismaDouble(row: ReturnType<typeof lien> | null, cible: Cible = {}) {
   return {
+    userPreferences: {
+      findMany: jest.fn<any>(async () => (cible.privacy ? [{ userId: CIBLE, privacy: cible.privacy }] : [])),
+    },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findMany: jest.fn<any>(async (args: any) =>
         (args?.where?.blockedUserIds ? [] : args?.where?.id?.in ?? []).map((id: string) => ({ id, role: 'USER', birthDate: null, isActive: true, deletedAt: null, deactivatedAt: null })),
@@ -56,7 +63,7 @@ function prismaDouble(row: ReturnType<typeof lien> | null) {
               role: 'USER',
               isOnline: true,
               lastActiveAt: new Date(),
-              deactivatedAt: null,
+              deactivatedAt: cible.deactivatedAt ?? null,
               createdAt: new Date('2025-01-01T00:00:00Z'),
               registrationCountry: 'FR',
               timezone: 'Europe/Paris',
@@ -74,9 +81,10 @@ function prismaDouble(row: ReturnType<typeof lien> | null) {
   };
 }
 
-async function monter(viewerId: string | null, row: ReturnType<typeof lien> | null): Promise<FastifyInstance> {
+async function monter(viewerId: string | null, row: ReturnType<typeof lien> | null, cible: Cible = {}): Promise<FastifyInstance> {
+  clearPrivacyPreferencesCache();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', prismaDouble(row) as never);
+  app.decorate('prisma', prismaDouble(row, cible) as never);
   (app as unknown as { redis?: unknown }).redis = undefined;
   app.addHook('onRequest', async (req: any) => {
     req.authContext = viewerId
@@ -223,6 +231,41 @@ describe('?as=<cercle> — « Voir comme », réservé au propriétaire', () => 
   it('un cercle inconnu est refusé (400)', async () => {
     const app = await monter(CIBLE, null);
     expect((await lire(app, '?as=TOUT')).statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('pays et fuseau suivent la présence SERVIE — préférences et désactivation de la cible (#18861, audit)', () => {
+  it('Proche, la cible a caché sa présence : ni fuseau ni pays, à côté d une présence masquée', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'CLOSE'), { privacy: { showOnlineStatus: false, showLastSeen: false } });
+    const data = (await lire(app, '?expand=presence')).json().data as Charge;
+    expect(data.isOnline ?? null).toBeNull();
+    expect('timezone' in data).toBe(false);
+    expect('registrationCountry' in data).toBe(false);
+    await app.close();
+  });
+
+  it('Proche, la cible a caché sa dernière vue seulement : le pays part, l heure locale non', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'CLOSE'), { privacy: { showLastSeen: false } });
+    const data = (await lire(app, '')).json().data as Charge;
+    expect(data.registrationCountry).toBe('FR');
+    expect('timezone' in data).toBe(false);
+    await app.close();
+  });
+
+  it('Proche, compte désactivé : ni fuseau ni pays', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'CLOSE'), { deactivatedAt: new Date('2026-11-01T00:00:00Z') });
+    const data = (await lire(app, '')).json().data as Charge;
+    expect('timezone' in data).toBe(false);
+    expect('registrationCountry' in data).toBe(false);
+    await app.close();
+  });
+
+  it('Proche, rien de caché : pays et fuseau partent (témoin de non-régression)', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'CLOSE'), { privacy: { showOnlineStatus: true, showLastSeen: true } });
+    const data = (await lire(app, '')).json().data as Charge;
+    expect(data.registrationCountry).toBe('FR');
+    expect(data.timezone).toBe('Europe/Paris');
     await app.close();
   });
 });

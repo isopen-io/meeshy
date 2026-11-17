@@ -4,10 +4,12 @@ import {
   PROFILE_CAPABILITY_FEATURE,
   PROFILE_FIELD_FEATURE,
   profileFieldOpen,
+  profileFieldServed,
   resolveProfileCircleView,
   resolveProfileCircleViewAs,
   type ProfileCircleViewInput,
 } from '../utils/profile-circle-view';
+import { resolvePresenceVisibility, type PresenceVisibilityInput } from '../utils/presence-visibility';
 import { RELATION_FEATURE_MIN_LEVEL, RELATION_CONSENT_FEATURES } from '../utils/relation-levels';
 import { RELATION_LEVELS, compareRelationLevel, type RelationLevel } from '../types/relation';
 
@@ -130,6 +132,44 @@ describe('profileFieldOpen — fuseau et pays d inscription selon le cercle', ()
     const view = resolveProfileCircleView(inputAt('BLOOD', { blockedEitherWay: true }));
     expect(profileFieldOpen(view, 'country')).toBe(false);
     expect(profileFieldOpen(view, 'timezone')).toBe(false);
+  });
+});
+
+const presenceAt = (relationLevel: RelationLevel, overrides: Partial<PresenceVisibilityInput> = {}) =>
+  resolvePresenceVisibility({
+    isSelf: false,
+    viewerRole: 'USER',
+    relationLevel,
+    targetShowOnlineStatus: true,
+    targetShowLastSeen: true,
+    targetIsDeactivated: false,
+    isBlockedEitherWay: false,
+    ...overrides,
+  });
+
+describe('profileFieldServed — pays et fuseau suivent la présence SERVIE, jamais un second verdict', () => {
+  it('Proche, présence cachée par la cible : ni pays ni fuseau', () => {
+    const visibility = presenceAt('CLOSE', { targetShowOnlineStatus: false, targetShowLastSeen: false });
+    expect(profileFieldServed(visibility, 'country')).toBe(false);
+    expect(profileFieldServed(visibility, 'timezone')).toBe(false);
+  });
+
+  it('Proche, compte désactivé : ni pays ni fuseau', () => {
+    const visibility = presenceAt('CLOSE', { targetIsDeactivated: true });
+    expect(profileFieldServed(visibility, 'country')).toBe(false);
+    expect(profileFieldServed(visibility, 'timezone')).toBe(false);
+  });
+
+  it('Proche, dernière vue cachée seulement : le pays part, le fuseau (l heure locale) non', () => {
+    const visibility = presenceAt('CLOSE', { targetShowLastSeen: false });
+    expect(profileFieldServed(visibility, 'country')).toBe(true);
+    expect(profileFieldServed(visibility, 'timezone')).toBe(false);
+  });
+
+  it('Ami (binaire) : le pays, pas le fuseau ; Connaissance : rien', () => {
+    expect(profileFieldServed(presenceAt('FRIEND'), 'country')).toBe(true);
+    expect(profileFieldServed(presenceAt('FRIEND'), 'timezone')).toBe(false);
+    expect(profileFieldServed(presenceAt('ACQUAINTANCE'), 'country')).toBe(false);
   });
 });
 
