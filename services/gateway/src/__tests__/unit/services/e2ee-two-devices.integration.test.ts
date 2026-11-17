@@ -298,7 +298,7 @@ describe('E2EE de bout en bout à deux appareils, libsignal réel (#3706)', () =
     };
     // GW-05 (#18906) — la ligne et ses enveloppes s'écrivent dans UNE transaction.
     const transaction = async (run: (tx: unknown) => Promise<unknown>) => run(prisma);
-    const prisma: Record<string, unknown> = new Proxy(base, {
+    const prisma = new Proxy(base, {
       get: (target, key) => {
         if (key === '$transaction') return transaction;
         if (key === '$runCommandRaw') return recordedOperation('$runCommandRaw', 'command');
