@@ -1,4 +1,4 @@
-import type { FriendRequestBucket, FriendRequestRecord, PersonSummary } from '@/lib/api/friend-requests';
+import type { FriendRequestRecord, PersonSummary } from '@/lib/api/friend-requests';
 
 /**
  * **LES RÈGLES PURES DE LA DÉCOUVERTE** (#6363) — miroir de
@@ -76,11 +76,6 @@ export function relationshipOf(index: RelationshipIndex, userId: string): Relati
   const received = index.received.get(userId);
   if (received !== undefined) return { kind: 'pendingReceived', request: received };
   return { kind: 'none' };
-}
-
-/** La personne qu'une ligne de demande MONTRE : l'expéditeur d'une reçue, le destinataire d'une envoyée. */
-export function requestPartyOf(request: FriendRequestRecord, bucket: FriendRequestBucket): PersonSummary | null {
-  return bucket === 'sent' ? request.receiver : request.sender;
 }
 
 /** `sender?.name ?? "Inconnu"` d'iOS : nom affiché, sinon identifiant, sinon le repli fourni par l'appelant. */

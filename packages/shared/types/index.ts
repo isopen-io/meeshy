@@ -46,9 +46,6 @@ export { gatewayToUIMessage, getDisplayContent, isTranslating, hasTranslation } 
 // Export des types unifiés Phase 2 - Messaging
 export * from './messaging.js';
 
-// Export des types unifiés Phase 3 - Affiliate
-export * from './affiliate.js';
-
 // Export des types unifiés Phase 4 - Tracking Links
 export * from './tracking-link.js';
 
@@ -103,13 +100,6 @@ export * from './lens-partner.js';
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
 
-// Export des types unifiés Phase 8 - Push Notifications
-export * from './push-notification.js';
-
-// NOTE: Les types de notifications sont dans /apps/web/types/notification.ts
-// Ils ne sont pas dans /shared car ils utilisent des types frontend spécifiques
-// Le backend doit importer NotificationType depuis le webapp si nécessaire
-
 // Export des types posts/stories/statuts
 export * from './post.js';
 
@@ -154,9 +144,6 @@ export * from './report.js';
 
 // Export des types encryption (E2EE / Signal Protocol)
 export * from './encryption.js';
-
-// Export des types admin (audit logs, analytics, etc.)
-export * from './admin.js';
 
 // Export des types de sécurité (sessions, tokens, events)
 export * from './security.js';
@@ -247,9 +234,6 @@ export type { NotificationContentDetail, NotificationContentCategory } from './n
 // Legacy aliases for backwards compatibility
 export type { Notification as PrismaNotification } from './notification.js';
 export type { NotificationType as PrismaNotificationType } from './notification.js';
-
-// Export des types de préférences utilisateur
-export * from './user-preferences.js';
 
 // Export des types Voice API
 export * from './voice-api.js';

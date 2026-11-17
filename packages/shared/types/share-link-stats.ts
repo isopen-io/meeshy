@@ -43,8 +43,6 @@ export const shareLinkPreviewConversationSchema = z.object({
   createdAt: z.string(),
 });
 
-export type ShareLinkPreviewConversation = z.infer<typeof shareLinkPreviewConversationSchema>;
-
 export const shareLinkArrivalSchema = z.object({
   participantId: z.string(),
   displayName: z.string(),

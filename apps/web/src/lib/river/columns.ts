@@ -2,7 +2,7 @@
  * `columns.ts` — géométrie horizontale des couloirs de la Rivière,
  * ARITHMÉTIQUE PURE (R-134, miroir de `RiverColumnLayout.swift`, R-133).
  *
- * PORTÉ tel quel depuis `apps/web/components/conversations/riviere/
+ * PORTÉ tel quel depuis `legacy-web-final:apps/web/components/conversations/riviere/
  * river-column-layout.ts` (#5696, étape 2) — seule édition : `interface` →
  * `type` (CLAUDE.md, « prefer `type` over `interface` for data structures »).
  *

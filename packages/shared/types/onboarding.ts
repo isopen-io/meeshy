@@ -143,7 +143,6 @@ export const BirthDateDeclarationBodySchema = z
     }),
   })
   .strict();
-export type BirthDateDeclarationBody = z.infer<typeof BirthDateDeclarationBodySchema>;
 
 /**
  * Ce que la déclaration établit : la classe d'âge, et si Meeshy Global est
@@ -155,4 +154,3 @@ export const BirthDateDeclarationResultSchema = z
     viewerWriteRestrictionGlobal: z.boolean(),
   })
   .strict();
-export type BirthDateDeclarationResult = z.infer<typeof BirthDateDeclarationResultSchema>;

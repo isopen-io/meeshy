@@ -255,8 +255,6 @@ const es = {
   'feed.like.error': 'Error al dar me gusta',
   'post.bookmark.error': 'No se pudo guardar',
   'feed.gesture.pending': 'Acción no confirmada — sin conexión',
-  'feed.share.error': 'Error al compartir la publicación',
-  'feed.share.copied': 'Enlace copiado — ya solo queda pegarlo.',
 
   'root.menu.feed': 'Feed',
   'root.menu.game': 'Mi Leyenda',

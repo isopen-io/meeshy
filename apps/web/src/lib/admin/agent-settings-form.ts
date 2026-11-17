@@ -54,8 +54,6 @@ export type AgentFieldSpec =
       readonly maxItems?: number;
     };
 
-export type AgentFieldKind = AgentFieldSpec['kind'];
-
 /** Une section du formulaire : un titre (`id`) et ses champs, dans l'ordre. */
 export type AgentFieldSection = { readonly id: string; readonly keys: readonly string[] };
 
