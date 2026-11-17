@@ -139,10 +139,10 @@ const ASYMETRIES: readonly {
     events: ['game:missions-updated'],
   },
   {
-    absents: ['web', 'ios'],
+    absents: ['web'],
     raison:
-      "mon profil synchronisé entre mes appareils (#18924) : la passerelle l'émet sur `user:<moi>` et le lot Android "
-      + "le lit ; les lots web et iOS de #18924 le liront à leur tour, et `GET /me` reste la relecture sans la socket.",
+      "mon profil synchronisé entre mes appareils (#18924) : la passerelle l'émet sur `user:<moi>`, Android et iOS "
+      + "le lisent ; le lot web de #18924 le lira à son tour, et `GET /me` reste sa relecture sans la socket.",
     events: ['profile:updated'],
   },
 ];

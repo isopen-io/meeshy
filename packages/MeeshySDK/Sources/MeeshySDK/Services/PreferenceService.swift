@@ -177,6 +177,44 @@ public final class PreferenceService: PreferenceServiceProviding, Sendable {
         return set.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
+    // MARK: - Served conversation preferences (#18916)
+
+    private static let servedPreferencesPageSize = 100
+    private static let servedPreferencesMaxPages = 20
+
+    /// Les préférences par conversation CHANGÉES depuis `watermark`, le
+    /// filigrane SERVEUR (le plus récent `updatedAt` déjà lu ; `nil` : tout).
+    ///
+    /// La route les sert triées `updatedAt` décroissant, par pages de 100 au
+    /// plus : la lecture s'arrête à la première ligne plus ancienne que le
+    /// filigrane, à la dernière page, ou à la borne de pages. Une ligne SANS
+    /// `updatedAt` est gardée — ne pas savoir la dater n'autorise pas à la
+    /// jeter.
+    public func conversationPreferences(changedSince watermark: Date?) async throws -> [APIConversationPreferences] {
+        var served: [APIConversationPreferences] = []
+        for page in 0..<Self.servedPreferencesMaxPages {
+            let response: OffsetPaginatedAPIResponse<[APIConversationPreferences]> = try await api.request(
+                UserPreferencesEndpoint.conversations,
+                method: "GET",
+                body: nil,
+                queryItems: [
+                    URLQueryItem(name: "offset", value: String(page * Self.servedPreferencesPageSize)),
+                    URLQueryItem(name: "limit", value: String(Self.servedPreferencesPageSize))
+                ]
+            )
+            let changed = response.data.prefix { Self.isChanged($0, since: watermark) }
+            served.append(contentsOf: changed)
+            let readsOn = changed.count == Self.servedPreferencesPageSize && response.pagination?.hasMore != false
+            guard readsOn else { break }
+        }
+        return served
+    }
+
+    private static func isChanged(_ row: APIConversationPreferences, since watermark: Date?) -> Bool {
+        guard let watermark, let updatedAt = row.updatedAt else { return true }
+        return updatedAt >= watermark
+    }
+
     // MARK: - Cache-first overrides
 
     private static let cacheKey = "list"

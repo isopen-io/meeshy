@@ -229,15 +229,9 @@ public actor ConversationStore {
         await refreshPendingCount(convId: convId)
         let outcome = await dispatch(task)
         switch outcome {
-        case .completed(let authoritativeVersion):
+        case .completed(let served):
             await outbox.markCompleted(task.id)
-            if var conv = conversations[convId] {
-                if let v = authoritativeVersion {
-                    conv.userState.version = v
-                }
-                conv.userState.lastSyncedAt = Date()
-                commit(conv)
-            }
+            await acknowledge(served, for: convId, task: task.id)
             await refreshPendingCount(convId: convId)
 
         case .failedPermanent(let reason):
@@ -272,11 +266,9 @@ public actor ConversationStore {
             // the version (which we apply directly to the in-memory
             // conversation here rather than threading it back).
             switch result {
-            case .completed(let version):
-                if let v = version, var conv = await self.conversations[task.convId] {
-                    conv.userState.version = v
-                    conv.userState.lastSyncedAt = Date()
-                    await self.commit(conv)
+            case .completed(let served):
+                if served != nil {
+                    await self.acknowledge(served, for: task.convId, task: task.id)
                 }
                 return .completed
             case .failedPermanent(let reason):
@@ -339,6 +331,33 @@ public actor ConversationStore {
             conv.userState.lastSyncedAt = Date()
         }
         commit(conv)
+    }
+
+    /// Le RATTRAPAGE des préférences par conversation (#18916) : les lignes que
+    /// sert `GET /user-preferences/conversations`, relues à la reconnexion et
+    /// après la première hydratation. Une préférence posée ailleurs pendant une
+    /// coupure ne touche pas `Conversation.updatedAt`, et sa diffusion manquée
+    /// n'est jamais rejouée : sans cette relecture, rien ne la ramenait.
+    ///
+    /// Même garde de version que `applyRemote`, mais pas son écriture : la
+    /// ligne servie ne porte ni `clearHistoryBefore` ni `deletedForUserAt`
+    /// (`adoptingServed`). Une conversation que le store ne connaît pas est
+    /// ignorée — elle entrera riche, préférences comprises.
+    public func applyServedPreferences(_ rows: [APIConversationPreferences]) {
+        var adoptedAny = false
+        for row in rows {
+            guard let id = row.conversationId, let current = conversations[id],
+                  let servedVersion = row.version, servedVersion > current.userState.version else { continue }
+            var adopted = current
+            adopted.userState = current.userState.adoptingServed(row)
+            adopted.userState.lastSyncedAt = Date()
+            let imposed = adopted.imposingServedArchive()
+            relayAppearance(from: current, to: imposed)
+            conversations[id] = imposed
+            subjects.send(imposed)
+            adoptedAny = true
+        }
+        if adoptedAny { publishList() }
     }
 
     /// Apply a read-receipt socket event. Read receipts are **monotone**:
@@ -611,6 +630,22 @@ public actor ConversationStore {
         publishList()
     }
 
+    /// L'accusé d'un geste (M2, #18916) : la ligne relue après le PUT, et non
+    /// plus son seul numéro de version — sinon un changement fait ailleurs
+    /// pendant la coupure restait absent sous une version déjà adoptée, et ni
+    /// la diffusion de ce PUT (`version <= locale`) ni le rattrapage (`>`) ne
+    /// le ramenaient. `task` est exclu du compte : l'outbox le tient encore
+    /// pendant un `flush`.
+    private func acknowledge(_ served: APIConversationPreferences?, for convId: String, task: UUID) async {
+        let othersPending = await outbox.allPending().contains { $0.convId == convId && $0.id != task }
+        guard let current = conversations[convId] else { return }
+        var conv = current
+        conv.userState = current.userState.acknowledging(served, keepingOptimistic: othersPending)
+        conv.userState.lastSyncedAt = Date()
+        relayAppearance(from: current, to: conv)
+        commit(conv)
+    }
+
     /// Un fil OUVERT n'écoute que le relais (#10631) : une liste rafraîchie qui change le fond
     /// d'une conversation déjà connue le lui dit, sinon il garderait le choix d'avant. Le premier
     /// amorçage ne relaie rien — aucun fil n'a encore d'état à corriger.
@@ -633,11 +668,11 @@ public actor ConversationStore {
 
     // MARK: - Dispatch routing
 
-    /// Internal dispatch outcome carrying the authoritative version
-    /// returned by the server (for PUT-style mutations). Local-only
-    /// outcomes use `.completed(nil)`.
+    /// Internal dispatch outcome carrying the row the server serves after a
+    /// PUT-style mutation (its `version` included). Local-only and lifecycle
+    /// outcomes use `.completed(served: nil)`.
     enum DispatchOutcome: Sendable {
-        case completed(authoritativeVersion: Int?)
+        case completed(served: APIConversationPreferences?)
         case failedPermanent(reason: String)
         case failedTransient(reason: String)
     }
@@ -660,7 +695,7 @@ public actor ConversationStore {
 
         case .setLocked:
             // Local-only — dispatch is a no-op success.
-            return .completed(authoritativeVersion: nil)
+            return .completed(served: nil)
         }
     }
 
@@ -687,9 +722,9 @@ public actor ConversationStore {
             // The request type doesn't expose clearHistoryBefore in the
             // current PreferenceService surface; treat as success
             // locally until the server endpoint is wired.
-            return .completed(authoritativeVersion: nil)
+            return .completed(served: nil)
         default:
-            return .completed(authoritativeVersion: nil)
+            return .completed(served: nil)
         }
 
         do {
@@ -697,7 +732,7 @@ public actor ConversationStore {
                 conversationId: task.convId,
                 request: request
             )
-            return .completed(authoritativeVersion: updated.version)
+            return .completed(served: updated)
         } catch {
             return classifyError(error)
         }
@@ -706,7 +741,7 @@ public actor ConversationStore {
     private func runVoid(_ op: @Sendable () async throws -> Void) async -> DispatchOutcome {
         do {
             try await op()
-            return .completed(authoritativeVersion: nil)
+            return .completed(served: nil)
         } catch {
             return classifyError(error)
         }

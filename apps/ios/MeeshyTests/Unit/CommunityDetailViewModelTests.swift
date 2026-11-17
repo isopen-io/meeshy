@@ -158,6 +158,54 @@ final class CommunityDetailViewModelTests: XCTestCase {
         XCTAssertNil(stored)
     }
 
+    // #18935 — rejoindre, quitter : « mes communautés » (la bande Communautés
+    // de la liste, la feuille de partage) le voit sans attendre cinq minutes.
+
+    private func seedMyCommunities(_ ids: [String]) async throws -> GRDBCacheStore<String, APICommunity> {
+        let store = await CacheCoordinator.shared.communities
+        await store.invalidate(for: "list")
+        try await store.save(ids.map { CommunityStubs.community(id: $0, name: "Club \($0)") }, for: "list")
+        return store
+    }
+
+    func test_leaveCommunity_success_removesItFromCachedCommunityList() async throws {
+        let store = try await seedMyCommunities(["c1", "c2"])
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: MockCommunityService())
+
+        await viewModel.leaveCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(cached, ["c2"])
+    }
+
+    func test_leaveCommunity_failure_keepsItInTheCachedCommunityList() async throws {
+        let store = try await seedMyCommunities(["c1", "c2"])
+        let service = MockCommunityService()
+        service.voidResult = .failure(APIError.serverError(500, nil))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.leaveCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(cached, ["c1", "c2"], "un départ refusé ne retire rien")
+    }
+
+    func test_joinCommunity_success_addsItToTheCachedCommunityList() async throws {
+        let store = try await seedMyCommunities(["c2"])
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(id: "c1", name: "Club Lecture", currentUserRole: "member"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-reader" })
+
+        await viewModel.joinCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertEqual(cached, ["c1", "c2"], "la communauté rejointe entre en tête")
+    }
+
     // #7816 — un 403 est une RÉPONSE : le détail dit pourquoi dans la langue du
     // lecteur, jamais le message brut du serveur, et n'offre pas de réessayer.
 

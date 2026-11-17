@@ -124,7 +124,7 @@
     "apps/ios/Meeshy/Features/Main/Views/FeedView.swift::FeedView.scrollContent": 248,
     "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift::FriendRequestListView.friendRequestRow": 89,
     "apps/ios/Meeshy/Features/Main/Views/MessageListView.swift::MessageListView.updateUIViewController": 117,
-    "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift::ParticipantsView.body": 158,
+    "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift::ParticipantsView.body": 152,
     "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift::ParticipantsView.participantRow": 85,
     "apps/ios/Meeshy/Features/Main/Views/PostDetailView+CommentComposer.swift::PostDetailView.composer": 114,
     "apps/ios/Meeshy/Features/Main/Views/PostDetailView+CommentComposer.swift::PostDetailView.replyBannerView": 90,

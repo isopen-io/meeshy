@@ -12,19 +12,19 @@ class ConversationListViewModel: ObservableObject {
     @Published var conversations: [Conversation] = [] {
         didSet {
             _convIdIndex = nil
+            persister.noteRows(from: oldValue, to: conversations)
             // G-124 — point de composition de `GatewayBridgeProvider`
             // (`ConversationBridgeProviding`, LWS-2bis/M-048, `Lens/Core/
             // GatewayBridgeProvider.swift`). `didSet` est le SEUL endroit où
             // convergent le chargement REST initial (`setConversations`) et
-            // les rechargements déclenchés par le socket
-            // (`observeSync` → `reloadFromCache` → `setConversations`, sur
-            // `conversationsDidChange` — lui-même émis par
-            // `ConversationSyncEngine.handleUnreadUpdated`, qui recopie déjà
-            // `event.bridge` sur la conversation en cache) : « alimenté par
-            // la liste + le socket », exactement ce que demande l'en-tête du
-            // provider. Derrière le drapeau (R19, câblage OFF ⇒ zéro effet
-            // mesurable) — même garde que `groupConversations` (§4.4, seul
-            // point de greffe voisin de ce fichier).
+            // les rechargements déclenchés par le socket (`observeSync` →
+            // `reloadFromCache` → `setConversations`, sur `conversationsDidChange`
+            // — lui-même émis par `ConversationSyncEngine.handleUnreadUpdated`,
+            // qui recopie déjà `event.bridge` sur la conversation en cache) :
+            // « alimenté par la liste + le socket », exactement ce que demande
+            // l'en-tête du provider. Derrière le drapeau (R19, câblage OFF ⇒
+            // zéro effet mesurable) — même garde que `groupConversations`
+            // (§4.4, seul point de greffe voisin de ce fichier).
             if LentilleFeatureFlag.isLentilleListEnabled {
                 gatewayBridgeProvider.noteBridges(from: conversations)
             }

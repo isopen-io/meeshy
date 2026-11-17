@@ -61,14 +61,6 @@ extension CacheCoordinator {
         return result
     }
 
-    public func cachedTranscription(for messageId: String) -> TranscriptionReadyEvent? {
-        transcriptionCache[messageId]
-    }
-
-    public func cachedAudioTranslations(for messageId: String) -> [AudioTranslationEvent]? {
-        audioTranslationCache[messageId]
-    }
-
     // MARK: - Public Cache Methods (called by ConversationSyncEngine)
 
     public func cacheTranslation(_ event: TranslationEvent) {
@@ -92,21 +84,6 @@ extension CacheCoordinator {
         }
         // Persist this specific translation immediately (incremental, not full rewrite)
         persistTranslationIncremental(messageId: msgId, translations: existing, cachedAt: translationTimestamps[msgId] ?? Date())
-    }
-
-    public func cacheTranscription(_ event: TranscriptionReadyEvent) {
-        transcriptionCache[event.messageId] = event
-    }
-
-    public func cacheAudioTranslation(_ event: AudioTranslationEvent) {
-        let msgId = event.messageId
-        var existing = audioTranslationCache[msgId] ?? []
-        if let idx = existing.firstIndex(where: { $0.translatedAudio.targetLanguage == event.translatedAudio.targetLanguage }) {
-            existing[idx] = event
-        } else {
-            existing.append(event)
-        }
-        audioTranslationCache[msgId] = existing
     }
 
     private func evictTranslationCacheIfNeeded() {
@@ -182,7 +159,7 @@ extension CacheCoordinator {
         } catch {
             logger.error("Failed to load translation cache from GRDB: \(error)")
         }
-        logger.info("Loaded translation caches: \(self.translationCache.count) translations, \(self.transcriptionCache.count) transcriptions, \(self.audioTranslationCache.count) audio translations")
+        logger.info("Loaded translation caches: \(self.translationCache.count) translations")
 
         // One-time cleanup: remove legacy UserDefaults keys
         UserDefaults.standard.removeObject(forKey: "meeshy_cache_translations")
@@ -211,8 +188,6 @@ extension CacheCoordinator {
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
-        transcriptionCache.removeAll()
-        audioTranslationCache.removeAll()
         clearTranslationCacheDB()
     }
 }

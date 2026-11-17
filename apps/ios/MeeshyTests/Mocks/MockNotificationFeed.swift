@@ -9,6 +9,8 @@ final class MockNotificationFeed: NotificationFeedProviding {
 
     var unreadCount = 0
     var cached: CacheResult<[APINotification]> = .empty
+    /// Ce que le disque tient quel que soit son âge (`cachedFeedIgnoringExpiry`).
+    var diskFeed: [APINotification] = []
     var markAllResult = true
     var deleteResult = true
 
@@ -23,8 +25,10 @@ final class MockNotificationFeed: NotificationFeedProviding {
     let deletedSubject = PassthroughSubject<String, Never>()
     let arrivedReadSubject = PassthroughSubject<String, Never>()
     let readPurgedSubject = PassthroughSubject<Void, Never>()
+    let resyncedSubject = PassthroughSubject<Void, Never>()
 
     private(set) var cachedFeedCallCount = 0
+    private(set) var cachedFeedIgnoringExpiryCallCount = 0
     private(set) var storedFeeds: [[APINotification]] = []
     private(set) var refreshUnreadCountCallCount = 0
     private(set) var markedReadIds: [String] = []
@@ -40,10 +44,16 @@ final class MockNotificationFeed: NotificationFeedProviding {
     var notificationWasDeleted: AnyPublisher<String, Never> { deletedSubject.eraseToAnyPublisher() }
     var notificationArrivedRead: AnyPublisher<String, Never> { arrivedReadSubject.eraseToAnyPublisher() }
     var readNotificationsPurged: AnyPublisher<Void, Never> { readPurgedSubject.eraseToAnyPublisher() }
+    var resynced: AnyPublisher<Void, Never> { resyncedSubject.eraseToAnyPublisher() }
 
     func cachedFeed() async -> CacheResult<[APINotification]> {
         cachedFeedCallCount += 1
         return cached
+    }
+
+    func cachedFeedIgnoringExpiry() async -> [APINotification] {
+        cachedFeedIgnoringExpiryCallCount += 1
+        return diskFeed
     }
 
     func storeFeed(_ notifications: [APINotification]) async throws {

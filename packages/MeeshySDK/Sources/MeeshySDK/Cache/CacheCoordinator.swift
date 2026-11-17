@@ -113,10 +113,6 @@ public actor CacheCoordinator {
     /// hasn't reconciled yet, etc.) doesn't linger indefinitely in RAM.
     /// Matches the `messages` cache `staleTTL` window roughly.
     static let translationMaxAge: TimeInterval = 24 * 3600
-    var transcriptionCache =
-        BoundedFIFOMap<String, TranscriptionReadyEvent>(capacity: CacheCoordinator.maxTranslationCacheEntries)
-    var audioTranslationCache =
-        BoundedFIFOMap<String, [AudioTranslationEvent]>(capacity: CacheCoordinator.maxTranslationCacheEntries)
 
 
 
@@ -330,8 +326,6 @@ public actor CacheCoordinator {
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
-        transcriptionCache.removeAll()
-        audioTranslationCache.removeAll()
     }
 
     /// Démonte les abonnements pour que le `start()` suivant réarme, SANS
@@ -384,8 +378,6 @@ public actor CacheCoordinator {
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
-        transcriptionCache.removeAll()
-        audioTranslationCache.removeAll()
         clearTranslationCacheDB()
     }
 }

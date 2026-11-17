@@ -67,6 +67,15 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
             }
             .store(in: &cancellables)
 
+        // Au retour au premier plan et à la reconnexion, `notification:new` n'est pas
+        // rejoué : seule la resync de la liste servie dit qu'il y a du neuf (#18916).
+        feed.resynced
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.scheduleRefresh()
+            }
+            .store(in: &cancellables)
+
         feed.notificationMarkedRead
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notificationId in
@@ -168,7 +177,11 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
         case .fresh(let data, _), .stale(let data, _):
             showCachedPreview(data)
             await refreshFromAPI()
-        case .expired, .empty:
+        case .expired:
+            showCachedPreview(await feed.cachedFeedIgnoringExpiry())
+            isLoading = notifications.isEmpty
+            await refreshFromAPI()
+        case .empty:
             isLoading = notifications.isEmpty
             await refreshFromAPI()
         }
@@ -195,7 +208,9 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
             switch await feed.cachedFeed() {
             case .fresh(let data, _), .stale(let data, _):
                 showCachedPreview(data)
-            case .expired, .empty:
+            case .expired:
+                showCachedPreview(await feed.cachedFeedIgnoringExpiry())
+            case .empty:
                 break
             }
         }

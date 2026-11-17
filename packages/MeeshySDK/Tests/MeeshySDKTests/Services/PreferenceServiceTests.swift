@@ -476,4 +476,54 @@ final class PreferenceServiceTests: XCTestCase {
 
         XCTAssertEqual(result, ["family", "urgent"])
     }
+
+    // MARK: - conversationPreferences(changedSince:) — le rattrapage (#18916)
+
+    private static let newestServedAt = Date(timeIntervalSince1970: 1_795_000_000)
+
+    /// Une page SERVIE par `GET /user-preferences/conversations` : `count`
+    /// lignes datées une minute plus tôt l'une que l'autre, la première à
+    /// `newestServedAt` moins `startIndex` minutes — l'ordre `updatedAt desc`
+    /// de la route.
+    private func servedPageJSON(count: Int, startIndex: Int = 0, hasMore: Bool) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let rows = (startIndex..<(startIndex + count)).map { index in
+            let updatedAt = formatter.string(from: Self.newestServedAt.addingTimeInterval(Double(-60 * index)))
+            return #"{"conversationId":"c\#(index)","isPinned":true,"isMuted":false,"mentionsOnly":false,"isArchived":false,"tags":[],"categoryId":null,"orderInCategory":null,"customName":null,"reaction":null,"version":2,"updatedAt":"\#(updatedAt)"}"#
+        }.joined(separator: ",")
+        return #"{"success":true,"data":[\#(rows)],"pagination":{"total":150,"offset":\#(startIndex),"limit":100,"hasMore":\#(hasMore)}}"#
+    }
+
+    private func offsets() -> [String?] {
+        mock.requests.map { request in request.queryItems?.first(where: { $0.name == "offset" })?.value }
+    }
+
+    func test_conversationPreferences_withoutWatermark_readsEveryPageUntilTheLastOne() async throws {
+        mock.stubWireSequence("/user-preferences/conversations", jsons: [
+            servedPageJSON(count: 100, hasMore: true),
+            servedPageJSON(count: 50, startIndex: 100, hasMore: false)
+        ])
+
+        let served = try await service.conversationPreferences(changedSince: nil)
+
+        XCTAssertEqual(served.count, 150, "sans filigrane, toutes les lignes servies se relisent")
+        XCTAssertEqual(served.last?.conversationId, "c149")
+        XCTAssertEqual(offsets(), ["0", "100"], "chaque page reprend là où la précédente s'est arrêtée")
+        XCTAssertEqual(mock.requests.first?.queryItems?.first(where: { $0.name == "limit" })?.value, "100")
+    }
+
+    func test_conversationPreferences_sinceWatermark_stopsAtTheFirstOlderRow() async throws {
+        mock.stubWireSequence("/user-preferences/conversations", jsons: [
+            servedPageJSON(count: 100, hasMore: true),
+            servedPageJSON(count: 50, startIndex: 100, hasMore: false)
+        ])
+        let watermark = Self.newestServedAt.addingTimeInterval(-60 * 59.5)
+
+        let served = try await service.conversationPreferences(changedSince: watermark)
+
+        XCTAssertEqual(served.map { $0.conversationId ?? "" }, (0..<60).map { "c\($0)" },
+                       "la route trie `updatedAt desc` : tout ce qui suit la première ligne plus ancienne l'est aussi")
+        XCTAssertEqual(mock.requestCount, 1, "le filigrane atteint, la page suivante n'est jamais demandée")
+    }
 }
