@@ -151,15 +151,19 @@ export type SessionState =
 
 /**
  * LES CHAMPS DE SOI QU'UNE ÉDITION DE PROFIL FAIT VOYAGER JUSQU'À LA SESSION
- * (#6289) — exactement ceux que `SessionUser` porte au-delà de l'identité, et
- * rien d'autre : la bio, la bannière et les contacts vivent dans le cache du
- * profil, jamais dans le `localStorage` de la session (règle 1 ci-dessus).
+ * (#6289) — exactement ceux que `SessionUser` porte au-delà de son identifiant,
+ * et rien d'autre : la bio, la bannière et les contacts vivent dans le cache du
+ * profil, jamais dans le `localStorage` de la session (règle 1 ci-dessus). Le
+ * pseudo y est depuis #18924 : changé sur un autre appareil, il arrive par
+ * `profile:updated` et par `GET /me` ; l'identité de la session reste l'`id`
+ * (`sessionIdentityKey`).
  *
  * `undefined` = champ non touché ; `null` = champ EFFACÉ (une langue régionale
  * retirée quitte le Prisme). `customDestinationLanguage` garde son `null`, que
  * la connexion sert déjà sous cette forme.
  */
 export type SessionProfileFields = {
+  readonly username?: string;
   readonly displayName?: string | null;
   readonly avatar?: string | null;
   readonly systemLanguage?: string;
@@ -519,7 +523,7 @@ function withProfileFields(user: SessionUser, fields: SessionProfileFields): Ses
     fields.customDestinationLanguage === undefined ? user.customDestinationLanguage : fields.customDestinationLanguage;
   return {
     id: user.id,
-    username: user.username,
+    username: fields.username === undefined || fields.username === '' ? user.username : fields.username,
     ...(displayName === undefined ? {} : { displayName }),
     ...(avatar === undefined ? {} : { avatar }),
     ...(systemLanguage === undefined ? {} : { systemLanguage }),

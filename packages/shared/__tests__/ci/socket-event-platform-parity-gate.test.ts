@@ -119,6 +119,14 @@ const ASYMETRIES: readonly {
     events: ['community:member-joined', 'community:member-left', 'community:member-role-updated'],
   },
   {
+    absents: ['android', 'ios'],
+    raison:
+      "mon profil synchronisé entre mes appareils (#18924) : la passerelle l'émet sur `user:<moi>` et le web le "
+      + "lit sur la branche de ce lot ; les lots iOS et Android de #18924 le liront. Dette mesurée, à réconcilier "
+      + "à l'intégration des trois branches.",
+    events: ['profile:updated'],
+  },
+  {
     absents: ['web', 'ios'],
     raison:
       "signaux que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin et le "

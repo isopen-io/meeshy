@@ -24,6 +24,7 @@ import { bindGameStateSync } from './game-state-live';
 import { bindPreferencesLiveLazily } from './preferences-live';
 import { appRowGestures, replayAppRowGestures } from './app-row-gestures';
 import { bindCommunityLiveLazily } from './community-live-binding';
+import { bindOwnProfileLiveLazily } from './own-profile-live-binding';
 import { bindPresenceLive } from './presence-live';
 import { presenceStore } from './presence-store';
 import { apiDeps } from './deps';
@@ -141,6 +142,8 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   /* Les gestes de rangée faits sans réseau (#18917) : leurs overrides se revoient dès l'ouverture, ils partent à chaque (ré)authentification. */
   appRowGestures();
   next.socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, replayAppRowGestures);
+  /* `profile:updated` (#18924) : mes langues, mon nom, ma photo et ma bannière changés sur un autre appareil, sans relire `GET /me`. */
+  const unprofile = bindOwnProfileLiveLazily({ socket: next.socket, queryClient: appQueryClient });
   /* `community:updated` (#18435) et `community:member-*` (#18766) : un renommage, une entrée, un départ ou un rôle se voient chez chaque membre. */
   const uncommunity = bindCommunityLiveLazily({ socket: next.socket, queryClient: appQueryClient, viewerId: currentViewerId });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
@@ -158,6 +161,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     ungame();
     unpreferences();
     next.socket.off<unknown>(SERVER_EVENTS.AUTHENTICATED, replayAppRowGestures);
+    unprofile();
     uncommunity();
     unpresence();
     unrevoke();
