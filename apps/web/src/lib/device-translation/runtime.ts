@@ -12,6 +12,7 @@ import { createDeviceTranslationScheduler, type DeviceTranslationScheduler } fro
 import { sealPort } from './seal-port';
 import { createShareLedger, createTranslationSharer } from './share';
 import { postSharedTranslation } from './shared-translations-api';
+import { thirdPartyRuntimeGate } from './third-party-runtime-gate';
 import { createWorkerTranslator } from './worker-protocol';
 
 /**
@@ -27,6 +28,10 @@ import { createWorkerTranslator } from './worker-protocol';
  * déjà (`OfferedMessage.shareable`) : un clair qu'il ne lit pas se traduit ici et
  * n'en sort pas.
  *
+ * Le Worker importe un moteur TIERS (jsDelivr) : il ne démarre jamais dans un
+ * navigateur qui tient un coffre chiffré, et le coffre qui naît l'arrête
+ * (`third-party-runtime-gate.ts`, #18989).
+ *
  * Le consentement est vérifié par `useDeviceTranslation` AVANT l'`import()` de
  * ce module, et ce module ne partage aucun fichier statique avec le hook : un
  * module commun ferait du chunk du fil un chunk partagé, et son adresse grossirait
@@ -39,6 +44,10 @@ function deviceTranslationScheduler(queryClient: QueryClient): DeviceTranslation
   if (typeof Worker === 'undefined') return null;
 
   const worker = new Worker(new URL('./device-translation-worker.ts', import.meta.url), { type: 'module', name: 'meeshy-device-translation' });
+  thirdPartyRuntimeGate.register(() => {
+    worker.terminate();
+    scheduler = null;
+  });
   const builtin = (globalThis as { readonly Translator?: BuiltinTranslatorApi }).Translator;
   const store = createIndexedDbStore();
   const share = createTranslationSharer({
@@ -69,8 +78,11 @@ export function offerToDevice(
     readonly conversationEncryptionMode: string | null;
   },
 ): void {
-  deviceTranslationScheduler(queryClient)?.offer({
-    messages: offeredMessagesOf(params.messages, params.viewerId, params.conversationEncryptionMode),
-    preferredLanguages: params.preferredLanguages,
+  void thirdPartyRuntimeGate.mayStart().then((allowed) => {
+    if (!allowed) return;
+    deviceTranslationScheduler(queryClient)?.offer({
+      messages: offeredMessagesOf(params.messages, params.viewerId, params.conversationEncryptionMode),
+      preferredLanguages: params.preferredLanguages,
+    });
   });
 }

@@ -42,6 +42,15 @@ export const E2EE_VAULT_DB_PREFIX = 'meeshy-e2ee-';
  */
 export const E2EE_VAULT_DB_VERSION = 1;
 
+/**
+ * LA MARQUE « CE NAVIGATEUR TIENT UN COFFRE » — posée par le coffre AVANT sa
+ * première clé, jamais retirée tant qu'une base `meeshy-e2ee-*` existe. Elle
+ * tient lieu de preuve là où `indexedDB.databases()` n'existe pas, pour ce
+ * qui ne doit JAMAIS cohabiter avec un coffre : le moteur de traduction tiers
+ * (`device-translation/third-party-runtime-gate.ts`, #18989).
+ */
+export const E2EE_VAULT_HELD_KEY = 'meeshy.e2ee-vault-held';
+
 export const e2eeVaultLockName = (userId: string): string => `${E2EE_VAULT_LOCK_PREFIX}${userId}`;
 export const e2eeVaultDatabaseName = (userId: string): string => `${E2EE_VAULT_DB_PREFIX}${userId}`;
 
