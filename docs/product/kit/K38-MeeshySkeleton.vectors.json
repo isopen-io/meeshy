@@ -1,0 +1,74 @@
+{
+  "composant": "MeeshySkeleton",
+  "cle": "K38",
+  "note": "Vecteurs de parité du seul atome squelette de K38 (fiche K38 § 03, § 06). Squelette seulement si le cache est vide ; reflet après 150 ms, une seule horloge.",
+  "loi": [
+    {
+      "chargement": true,
+      "cache": false,
+      "affiche": true
+    },
+    {
+      "chargement": true,
+      "cache": true,
+      "affiche": false
+    },
+    {
+      "chargement": false,
+      "cache": false,
+      "affiche": false
+    },
+    {
+      "chargement": false,
+      "cache": true,
+      "affiche": false
+    }
+  ],
+  "mesures": {
+    "reflet": 1.6,
+    "delaiMs": 150,
+    "bande": 0.4,
+    "angle": 100,
+    "rayonLigne": 6,
+    "hauteurLigne": 14
+  },
+  "formes": [
+    {
+      "forme": "line",
+      "largeur": 200,
+      "ratio": 0.5,
+      "hauteur": 14,
+      "attendue": 100
+    },
+    {
+      "forme": "line",
+      "largeur": 200,
+      "ratio": 2,
+      "hauteur": 14,
+      "attendue": 200
+    },
+    {
+      "forme": "line",
+      "largeur": 200,
+      "ratio": -1,
+      "hauteur": 14,
+      "attendue": 0
+    },
+    {
+      "forme": "circle",
+      "diametre": 48,
+      "hauteur": 48
+    },
+    {
+      "forme": "pill",
+      "largeur": 80,
+      "hauteur": 34
+    },
+    {
+      "forme": "card",
+      "largeur": 300,
+      "aspect": 1.5,
+      "hauteur": 200
+    }
+  ]
+}

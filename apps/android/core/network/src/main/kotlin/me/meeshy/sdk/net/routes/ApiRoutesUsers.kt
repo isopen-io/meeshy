@@ -13,6 +13,7 @@ package me.meeshy.sdk.net.routes
 
 public object ApiRoutesUsers {
     public const val BY_ID: String = "users/{id}"
+    public const val BY_ID_IN_COMMON: String = "users/{id}/in-common"
     public const val BY_USER_ID_AFFILIATE_TOKEN: String = "users/{userId}/affiliate-token"
     public const val BY_USER_ID_BLOCK: String = "users/{userId}/block"
     public const val BY_USER_ID_GAME: String = "users/{userId}/game"

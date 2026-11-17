@@ -545,9 +545,15 @@ struct RootIntentRoutingLayer: ViewModifier {
             // receives it. Clearing AFTER we navigate makes this the single
             // consumption point.
             .onReceive(PushNotificationManager.shared.$pendingNotificationPayload) { payload in
-                guard let payload, AuthManager.shared.isAuthenticated else { return }
-                onPushNotificationTap(payload)
-                PushNotificationManager.shared.clearPendingNotification()
+                // #18911 (ios-systeme-6) — un toucher publié sans session, ou visant un autre
+                // compte, s'efface sans naviguer : B ne tombe pas dans la conversation de A.
+                PushTapAddressee.consume(
+                    payload,
+                    isAuthenticated: AuthManager.shared.isAuthenticated,
+                    currentUserId: PushTapAddressee.currentUserId(),
+                    navigate: onPushNotificationTap,
+                    clear: { PushNotificationManager.shared.clearPendingNotification() }
+                )
             }
             // Navigation par id demandée par une vue sans accès aux helpers de
             // résolution (StarredMessagesView) — le highlight scopé est déjà parké

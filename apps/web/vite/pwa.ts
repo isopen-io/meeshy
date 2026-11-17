@@ -8,6 +8,7 @@ import { withDocumentHeadersRevision } from '../scripts/lib/csp.mjs';
 import { INSTITUTIONAL_PATTERN } from '../scripts/lib/institutional-routes.mjs';
 import { LANDING_LANGUAGES, LANDING_SUBPATH_PATTERN, landingFiles } from '../src/landing/landing-languages.js';
 import { apiCacheIdentityPlugin } from '../src/lib/net/api-cache-identity.js';
+import { apiCacheOfflineOnlyPlugin } from '../src/lib/net/api-cache-offline-only.js';
 import { API_RESPONSE_CACHE_PATTERN } from '../src/lib/net/api-runtime-cache.js';
 import { EMAIL_TOKEN_NAVIGATIONS } from '../src/lib/net/email-token-navigations.js';
 import { mediaCacheFreshnessPlugin } from '../src/lib/net/media-cache-freshness.js';
@@ -412,9 +413,12 @@ export function meeshyPwa(): PluginOption {
             /* CHAQUE RÉPONSE SOUS L'IDENTITÉ QUI L'A DEMANDÉE (#8674) :
                sans lui, deux comptes du même appareil partageaient
                l'entrée d'une URL, et un réseau lent servait à B la
-               réponse d'A. Autonome — Workbox le stringifie ;
-               `check-sw-api-cache.mjs` le fait décider depuis sw.js. */
-            plugins: [apiCacheIdentityPlugin],
+               réponse d'A. ET LA COPIE NE SERT QUE HORS LIGNE (#18919) :
+               en ligne, une passerelle injoignable une seconde rendait la
+               copie d'il y a une heure, que TanStack prenait pour fraîche.
+               Autonomes — Workbox les stringifie ;
+               `check-sw-api-cache.mjs` les fait décider depuis sw.js. */
+            plugins: [apiCacheIdentityPlugin, apiCacheOfflineOnlyPlugin],
           },
         },
         /* AUDIO ET VIDÉO RESTENT HORS CACHE, ET C'EST UNE DÉCISION

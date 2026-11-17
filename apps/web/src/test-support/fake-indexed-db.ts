@@ -52,6 +52,13 @@ class FakeObjectStore {
     request.succeed(this.rows.get(key));
     return request;
   }
+
+  delete(key: string): FakeIDBRequest {
+    const request = new FakeIDBRequest();
+    this.rows.delete(key);
+    request.succeed(undefined);
+    return request;
+  }
 }
 
 class FakeTransaction {
@@ -94,6 +101,8 @@ export type FakeIndexedDB = {
   /** Écrit directement, hors du protocole asynchrone — pour PRÉ-SEMER un
    * témoin sans dépendre du module qu'on teste par ailleurs. */
   seed(name: string, store: string, key: string, value: unknown): void;
+  /** Lit directement, hors du protocole asynchrone — pour constater ce qu'un module a écrit ou consommé. */
+  peek(name: string, store: string, key: string): unknown;
 };
 
 export function createFakeIndexedDB(): FakeIndexedDB {
@@ -123,6 +132,9 @@ export function createFakeIndexedDB(): FakeIndexedDB {
       const db = databaseOf(name);
       if (!db.stores.has(store)) db.createObjectStore(store);
       db.stores.get(store)?.set(key, value);
+    },
+    peek(name, store, key) {
+      return databases.get(name)?.stores.get(store)?.get(key);
     },
   };
 }

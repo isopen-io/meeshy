@@ -1,10 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import type { NotificationRecord } from '@/lib/notifications/record';
+
 import {
   adjustNotificationCounts,
   findNotification,
   markNotificationsRead,
   removeNotifications,
+  restoreNotificationUnread,
   restoreNotifications,
   snapshotNotifications,
   unreadNotificationIds,
@@ -19,6 +22,7 @@ import {
   type NotificationCounts,
   type NotificationsDeps,
 } from './notifications';
+import { beginPendingRead, settlePendingRead } from './notifications-pending-reads';
 
 /**
  * **LES GESTES DE LA CLOCHE, OPTIMISTES** (#6288) — CLAUDE.md § Optimistic
@@ -26,12 +30,10 @@ import {
  * échec. La pastille du bouton flottant lit le MÊME compte que ces gestes
  * écrivent : elle baisse au tap, pas au retour de la passerelle.
  *
- * Le retour arrière restaure l'INSTANTANÉ plutôt que de rejouer l'inverse du
- * geste : une ligne marquée lue a QUITTÉ « Non lues », et l'y remettre à la
- * bonne place demanderait de savoir où elle était. Un événement socket arrivé
- * entre le geste et l'échec serait perdu par la restauration ; `notification:counts`
- * et la prochaine lecture le recalent — un geste REFUSÉ est rare, une ligne
- * remise au mauvais rang ne l'est pas.
+ * Les gestes de MASSE (tout lire, lire un type, supprimer) restaurent l'INSTANTANÉ plutôt que de rejouer l'inverse
+ * du geste ; un événement socket arrivé entre le geste et l'échec serait perdu par la restauration, et
+ * `notification:counts` comme la prochaine lecture le recalent. La lecture d'UNE ligne, geste ou lecture à
+ * l'arrivée, n'annule que ce qu'elle a fait (`readNotification`) : c'est elle qui court avec la suite du fil.
  *
  * Chaque geste rend `true` s'il a abouti : l'écran annonce l'échec, jamais le
  * succès (le changement à l'écran EST l'annonce).
@@ -40,17 +42,55 @@ import {
 export type NotificationActionDeps = NotificationsDeps & { readonly queryClient: QueryClient };
 
 export async function performMarkNotificationRead(params: { readonly id: string; readonly deps: NotificationActionDeps }): Promise<boolean> {
-  const { id, deps } = params;
-  const known = findNotification(deps.queryClient, id);
+  const known = findNotification(params.deps.queryClient, params.id);
   if (known?.state.isRead === true) return true;
+  return readNotification({ ...params, unread: known });
+}
 
-  const snapshot = snapshotNotifications(deps.queryClient);
-  markNotificationsRead(deps.queryClient, (n) => n.id === id);
-  if (known !== undefined) adjustNotificationCounts(deps.queryClient, { unread: -1 });
+/**
+ * **LA LECTURE À L'ARRIVÉE N'EST PAS UN GESTE** (#18907) — une notification arrivée sur le fil ouvert se marque lue
+ * sans que personne ne l'ait demandé, avec la même loi que le geste. Elle compte comme non lue ce que la PASSERELLE en
+ * dit (`state.isRead` de la charge poussée) : c'est ce que ses instantanés de compte comptent.
+ */
+export async function performReadOnArrival(params: { readonly notification: NotificationRecord; readonly deps: NotificationActionDeps }): Promise<boolean> {
+  const { notification, deps } = params;
+  return readNotification({ id: notification.id, deps, unread: notification.state.isRead ? undefined : notification });
+}
+
+/**
+ * **UNE LIGNE LUE, DE L'ÉCRAN À LA PASSERELLE** (#6288, #18907, revue du 2026-11-17) — sans instantané global : son
+ * retour arrière effaçait ce qui était arrivé pendant la requête et ressuscitait ce qui avait été supprimé. La ligne
+ * passe lue, la pastille baisse d'une unité si elle comptait la ligne (`unread`), et la lecture s'inscrit au registre
+ * des lectures en attente, que chaque compte serveur déduit tant qu'elle n'est pas confirmée. À la réponse :
+ * - succès : rien à faire, la passerelle annonce `read` et son compte ;
+ * - 404 : la passerelle n'a plus la ligne (supprimée pour tous, réaction retirée) — elle quitte la cloche au lieu de
+ *   revenir non lue, et le compte se relit chez elle ;
+ * - autre échec : seule une lecture ENCORE en attente se défait — sa ligne redevient non lue, la pastille la recompte.
+ *   Une ligne que la passerelle a lue, supprimée ou réécrite entre-temps ne revient pas.
+ */
+async function readNotification(params: {
+  readonly id: string;
+  readonly deps: NotificationActionDeps;
+  readonly unread: NotificationRecord | undefined;
+}): Promise<boolean> {
+  const { id, deps, unread } = params;
+  const { queryClient } = deps;
+  markNotificationsRead(queryClient, (n) => n.id === id);
+  const token = unread === undefined ? null : beginPendingRead(queryClient, unread);
+  if (token !== null) adjustNotificationCounts(queryClient, { unread: -1 });
 
   const result = await postNotificationRead(deps, id);
-  if (!result.ok) restoreNotifications(deps.queryClient, snapshot);
-  return result.ok;
+  const stillPending = token === null ? null : settlePendingRead(queryClient, id, token);
+  if (result.ok) return true;
+  if (result.status === 404) {
+    removeNotifications(queryClient, (n) => n.id === id);
+    void queryClient.invalidateQueries({ queryKey: NOTIFICATION_COUNTS_QUERY_KEY });
+    return false;
+  }
+  if (stillPending === null) return false;
+  restoreNotificationUnread(queryClient, stillPending);
+  adjustNotificationCounts(queryClient, { unread: 1 });
+  return false;
 }
 
 /**

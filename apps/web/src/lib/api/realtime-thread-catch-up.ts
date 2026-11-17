@@ -9,16 +9,17 @@ import type { MessagesInfiniteData } from './messages-pages';
  * 2026-10-04 : « on a parfois la notification, mais pas le message dans le
  * fil ».
  *
- * DEUX TROUS, deux fonctions.
+ * DEUX TROUS, deux remèdes.
  *
- * 1. **La requête en vol écrase le temps réel** (`keepLiveMessageOverFetch`).
- *    `upsertThreadMessage` pose le message dans le cache du fil ; mais si une
- *    requête du fil est en vol à cet instant (ouverture, retour de focus,
- *    reconnexion, page plus ancienne), TanStack remplace le cache par SA
- *    réponse — partie AVANT le message (`infiniteQueryBehavior` capture
- *    `oldPages` au départ). Le message disparaissait jusqu'à la relecture
- *    suivante. Invalider ANNULE la requête en vol (`cancelRefetch`) et en
- *    relance une, qui le contient.
+ * 1. **La requête en vol écrase le temps réel.** `upsertThreadMessage` pose
+ *    le message dans le cache du fil ; mais si une requête du fil est en vol
+ *    à cet instant (ouverture, retour de focus, reconnexion, page plus
+ *    ancienne), TanStack remplace le cache par SA réponse — partie AVANT le
+ *    message (`infiniteQueryBehavior` capture `oldPages` au départ). Le
+ *    message disparaissait jusqu'à la relecture suivante. On relançait la
+ *    requête ; c'est désormais le journal des écritures vives
+ *    (`live-cache-journal.ts`, #18914) qui rejoue l'écriture sur la réponse,
+ *    sans relance ni requête de plus.
  *
  * 2. **`message:new` ne parvient pas** (`catchUpThreadMessage`). Il ne voyage
  *    que dans la room de la conversation ; `conversation:updated` et
@@ -32,7 +33,7 @@ import type { MessagesInfiniteData } from './messages-pages';
  * 3. **La LISTE avait le même trou** (#9637, retour porteur 2026-10-07 : « les
  *    derniers messages reçus disparaissent », web et coque Android). Une
  *    relecture de la liste partie avant le message remettait l'aperçu
- *    précédent sur la ligne (`keepLiveListOverFetch`) ; même remède.
+ *    précédent sur la ligne ; même remède, le journal.
  *
  * 4. **La conversation HORS PAGE** (#10573, `createUnknownRowCatchUp`).
  *    `patchConversation` ne patche qu'une ligne que la liste en cache porte :
@@ -44,9 +45,6 @@ import type { MessagesInfiniteData } from './messages-pages';
  *    Le socket se branche après la première peinture : ce qui est parti entre
  *    la lecture REST et l'entrée dans les rooms ne parvient jamais.
  */
-
-const isFetching = (queryClient: QueryClient, queryKey: readonly unknown[]): boolean =>
-  queryClient.getQueryState(queryKey)?.fetchStatus === 'fetching';
 
 /** Invalider ANNULE la requête en vol (`cancelRefetch`) et en relance une, qui
  * contient ce que le temps réel vient de poser. */
@@ -60,14 +58,6 @@ const relaunchThread = (queryClient: QueryClient, conversationId: string): void 
 /** La LISTE seule (`exact`) : `['conversations']` préfixe aussi la case et la
  * page de chaque fil, qu'une relecture de liste n'a pas à relancer. */
 export const relaunchConversationList = (queryClient: QueryClient): void => relaunch(queryClient, CONVERSATIONS_QUERY_KEY);
-
-export function keepLiveMessageOverFetch(queryClient: QueryClient, conversationId: string): void {
-  if (isFetching(queryClient, messagesQueryKey(conversationId))) relaunchThread(queryClient, conversationId);
-}
-
-export function keepLiveListOverFetch(queryClient: QueryClient): void {
-  if (isFetching(queryClient, CONVERSATIONS_QUERY_KEY)) relaunchConversationList(queryClient);
-}
 
 /** La fenêtre d'une rafale : une salve de `message:new` d'un groupe hors page
  * ne coûte qu'UNE relecture, partie après elle. */

@@ -20,6 +20,12 @@ internal class PostDetailMemo {
     @Synchronized
     fun get(postId: String): ApiPost? = posts[postId]
 
+    /** #18931 — un post supprimé ailleurs ne se rouvre plus depuis la mémoire. */
+    @Synchronized
+    fun forget(postId: String) {
+        posts.remove(postId)
+    }
+
     @Synchronized
     fun clear() = posts.clear()
 

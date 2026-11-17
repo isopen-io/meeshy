@@ -1,5 +1,7 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { beforeEach, describe, expect, test } from 'bun:test';
+
+import { routedTransport } from '@/test-support/routed-transport';
 
 import {
   CONVERSATIONS_QUERY_KEY,
@@ -17,7 +19,7 @@ import {
   refreshConversations,
 } from './conversations';
 import type { ConversationsInfiniteData } from './conversations-pages';
-import { createHttpTransport } from './http';
+import { createHttpTransport, type HttpTransport } from './http';
 import { CONVERSATIONS, recordSurgedConversation, resetSurgedConversationsForTests } from './fixtures';
 import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 
@@ -346,6 +348,61 @@ describe('conversationQuery — initialData depuis la liste en cache', () => {
   test('sans queryClient, aucune initialData — la fabrique reste appelable', () => {
     const options = conversationQuery({ source: 'fixtures', transport: createHttpTransport({ base: '' }) }, 'c-a');
     expect('initialData' in options).toBe(false);
+  });
+});
+
+/**
+ * **LA LIGNE PEINT LA FICHE, ELLE NE LA DATE PAS** (#18914, WEB-08 et M2). La
+ * ligne de liste n'est qu'un sous-ensemble de la fiche (cinq participants
+ * contre cent) : une liste lue il y a moins de 30 s ne dispense pas la fiche
+ * d'être lue à l'ouverture du fil.
+ */
+describe('conversationQuery — la ligne peint la fiche, l’ouverture la relit', () => {
+  const settle = async (queryClient: QueryClient): Promise<void> => {
+    for (let i = 0; i < 40 && queryClient.isFetching() > 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  const listedFiveSecondsAgo = (): QueryClient => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
+    queryClient.setQueryData(
+      CONVERSATIONS_QUERY_KEY,
+      infiniteCacheOf([{ conversations: [CONVERSATIONS[0]!], pagination: { limit: 30, offset: 0, total: 1, hasMore: false }, cursorPagination: { limit: 30, hasMore: false, nextCursor: null } }]),
+      { updatedAt: Date.now() - 5_000 },
+    );
+    return queryClient;
+  };
+
+  const open = (queryClient: QueryClient, transport: HttpTransport) =>
+    new QueryObserver(queryClient, conversationQuery({ source: 'gateway', transport }, CONVERSATIONS[0]!.id, { queryClient }));
+
+  test('une liste lue il y a 5 s : ouvrir le fil relit la fiche en fond, peinte depuis la ligne sans état pending', async () => {
+    const queryClient = listedFiveSecondsAgo();
+    const { transport, calls } = routedTransport(() => ({ ok: true, data: CONVERSATIONS[0]! }));
+    const observer = open(queryClient, transport);
+    const stop = observer.subscribe(() => undefined);
+
+    const painted = observer.getCurrentResult();
+    expect(painted.status).toBe('success');
+    expect(painted.data?.id).toBe(CONVERSATIONS[0]!.id);
+    expect(painted.fetchStatus).toBe('fetching');
+    await settle(queryClient);
+
+    expect(calls()).toHaveLength(1);
+    stop();
+  });
+
+  test('une fiche lue d’elle-même il y a un instant ne repart pas à chaque ouverture', async () => {
+    const queryClient = listedFiveSecondsAgo();
+    const { transport, calls } = routedTransport(() => ({ ok: true, data: CONVERSATIONS[0]! }));
+    const first = open(queryClient, transport).subscribe(() => undefined);
+    await settle(queryClient);
+    first();
+
+    const again = open(queryClient, transport).subscribe(() => undefined);
+    await settle(queryClient);
+
+    expect(calls()).toHaveLength(1);
+    again();
   });
 });
 

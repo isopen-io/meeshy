@@ -38,6 +38,54 @@ enum ConversationDeltaRules {
         return fusion
     }
 
+    /// LA RELECTURE NE FAIT JAMAIS RECULER UN APERÇU ÉCRIT PENDANT SA REQUÊTE
+    /// (#18936) — comparer-et-échanger. La route riche se lit AVANT le cache, et
+    /// les événements vivent sur une autre file que les rattrapages : un
+    /// `message:new` appliqué pendant la requête serait écrasé par l'aperçu, plus
+    /// ancien, que la réponse portait. La facette du cache se garde si, et
+    /// seulement si, elle a changé depuis `avant`, l'instantané pris AVANT la
+    /// requête ; sinon la ligne servie gagne en entier — y compris quand son
+    /// `lastMessageAt` RECULE (dernier message supprimé pendant la coupure), le
+    /// cas même qui justifie la réhydratation. « Ne garder que plus récent » le
+    /// bloquerait. Une ligne absente de l'instantané n'a rien à défendre.
+    static func gardantLesFacettesEcritesPendantLaRequete(
+        _ servies: [MeeshyConversation],
+        avant: [MeeshyConversation],
+        maintenant: [MeeshyConversation]
+    ) -> [MeeshyConversation] {
+        let instantane = Dictionary(avant.map { ($0.id, FacetteVue($0)) }, uniquingKeysWith: { first, _ in first })
+        let courant = Dictionary(maintenant.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return servies.map { servie in
+            guard let ligne = courant[servie.id], let vue = instantane[servie.id], vue != FacetteVue(ligne)
+            else { return servie }
+            var gardee = servie
+            gardee.applyLastMessage(LastMessageFacet(conversation: ligne))
+            return gardee
+        }
+    }
+
+    /// Ce qu'un écrivain du groupe « dernier message » change quand il le touche :
+    /// un nouveau message, une édition, une traduction, une pièce, un auteur repeint.
+    private struct FacetteVue: Equatable {
+        let id: String?
+        let at: Date
+        let preview: String?
+        let senderName: String?
+        let translations: [String: String]?
+        let attachmentIds: [String]
+        let nature: LastMessageNature?
+
+        init(_ ligne: MeeshyConversation) {
+            id = ligne.lastMessageId
+            at = ligne.lastMessageAt
+            preview = ligne.lastMessagePreview
+            senderName = ligne.lastMessageSenderName
+            translations = ligne.lastMessageTranslations
+            attachmentIds = ligne.lastMessageAttachments.map(\.id)
+            nature = ligne.lastMessageNature
+        }
+    }
+
     /// #11164 — les directs gravés sous le LECTEUR, rendus à un nom générique,
     /// et l'horizon depuis lequel `/sync` doit les resservir pour que leur vrai
     /// interlocuteur revienne. `nil` quand aucune ligne n'est gravée ainsi.

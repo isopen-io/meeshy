@@ -68,6 +68,7 @@ class PostDetailViewModel: ObservableObject {
     // MARK: - Persistence Layer
 
     private(set) var feedPersistence: FeedPersistenceActor?
+    private let engagementWrites = FeedEngagementWrites(feedCache: SharedFeedCache())
 
     init(
         postService: PostServiceProviding = PostService.shared,
@@ -320,6 +321,10 @@ class PostDetailViewModel: ObservableObject {
         current.isLiked = nowLiked
         current.likes += nowLiked ? 1 : -1
         post = current
+        // stores-09, #18939 — write the optimistic state through to EVERY copy
+        // of this post (detail key, feed, bookmarks…, its GRDB row), in the
+        // order of the gestures: the write takes its rank before any await.
+        engagementWrites.like(postId: current.id, isLiked: nowLiked, likes: current.likes, persistence: feedPersistence)
         let cmid = ClientMutationId.generate()
         let payload = ToggleLikePostPayload(
             clientMutationId: cmid,
@@ -328,16 +333,6 @@ class PostDetailViewModel: ObservableObject {
         )
         do {
             try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
-            // stores-09 — write the optimistic state through to EVERY cache key
-            // holding this post (detail key, feed, bookmarks…), not just RAM.
-            let newLikes = current.likes
-            let postId = current.id
-            Task.detached(priority: .utility) {
-                await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
-                    $0.isLiked = nowLiked
-                    $0.likes = newLikes
-                }
-            }
             // R5 — roll back the optimistic like if the outbox exhausts its
             // retry budget (server permanently rejects). Without this the toggle
             // stays stuck "liked" forever even though the server never accepted it.
@@ -349,6 +344,7 @@ class PostDetailViewModel: ObservableObject {
             restoreLike(isLiked: wasLiked, likes: priorLikes)
             FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
         }
+        await engagementWrites.settled()
     }
 
     /// Applique le compteur ABSOLU du serveur au post affiché. `isLiked` n'est
@@ -369,13 +365,7 @@ class PostDetailViewModel: ObservableObject {
         guard var current = post else { return }
         current.isLiked = isLiked
         current.likes = likes
-        let postId = current.id
-        Task.detached(priority: .utility) {
-            await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
-                $0.isLiked = isLiked
-                $0.likes = likes
-            }
-        }
+        engagementWrites.like(postId: current.id, isLiked: isLiked, likes: likes, persistence: feedPersistence)
         post = current
     }
 

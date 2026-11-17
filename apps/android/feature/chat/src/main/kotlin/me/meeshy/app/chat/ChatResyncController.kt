@@ -16,11 +16,16 @@ import timber.log.Timber
 /**
  * Rattrape ce qu'un fil resté ouvert a manqué pendant une coupure (miroir de
  * `ConversationViewModel.syncMissedMessages`, iOS) : à chaque (re)connexion de la socket et à chaque
- * trou de séquence (`gapDetected`) on relit la conversation depuis son dernier message serveur connu.
+ * trou de séquence (`gapDetected`) on relit la conversation — sa fenêtre récente, puis l'écart jusqu'à
+ * son dernier message serveur connu.
  *
- * La relecture est [MessageRepository.refresh] : un balayage `after=<dernier message serveur>` fusionné
- * champ à champ, en ajout seulement. Elle ne purge rien, ne touche ni les envois optimistes en vol ni
- * les colonnes locales, et ne réécrit pas une ligne inchangée : la liste n'a donc ni doublon ni
+ * La relecture est [MessageRepository.refresh] (#18915) : la fenêtre récente d'abord, en requête
+ * conditionnelle (un 304 sans corps quand rien n'a changé), fusionnée champ à champ — une modification,
+ * une suppression, une réaction ou un accusé manqués pendant la coupure atteignent ainsi les messages
+ * DÉJÀ détenus —, puis, seulement si la page ne rejoint pas le dernier message serveur connu, un
+ * balayage `after=` qui comble l'écart en ajout seulement. Elle n'élague, parmi les messages détenus
+ * avant elle, que ceux que la page ne sert plus ; elle ne touche ni les envois optimistes en vol ni les
+ * colonnes locales, et ne réécrit pas une ligne inchangée : la liste n'a donc ni doublon ni
  * clignotement (#12799). Les déclencheurs rapprochés (connexion + trou dans la même rafale) se
  * fondent en UNE relecture ; un déclencheur arrivé pendant une relecture en provoque une seule de plus.
  */

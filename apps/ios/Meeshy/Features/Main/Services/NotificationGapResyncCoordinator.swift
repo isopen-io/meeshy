@@ -25,19 +25,24 @@ final class NotificationGapResyncCoordinator {
     static let shared = NotificationGapResyncCoordinator()
 
     private let debounce: TimeInterval
-    private let resync: @Sendable @concurrent () async -> Void
+    private let resync: @Sendable @concurrent () async -> Bool
     private let gapPublisher: AnyPublisher<Int64, Never>
     private let reconnectPublisher: AnyPublisher<Void, Never>
     private let isAuthenticated: @MainActor () -> Bool
     private var cancellables = Set<AnyCancellable>()
     private var debounceTask: Task<Void, Never>?
 
+    /// Une resync qui a RELU la liste servie (#18916). Le cache et le compteur
+    /// sont à jour ; une cloche OUVERTE, elle, ne relit que sur ce signal — sa
+    /// catégorie a sa propre requête, et `notification:new` n'est pas rejoué.
+    let resynced = PassthroughSubject<Void, Never>()
+
     init(
         gapPublisher: AnyPublisher<Int64, Never> = SyncSeqTracker.shared.gapDetected.publisher,
         reconnectPublisher: AnyPublisher<Void, Never> = MessageSocketManager.shared.didReconnect.eraseToAnyPublisher(),
         debounce: TimeInterval = 0.3,
         isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated },
-        resync: @escaping @Sendable () async -> Void = NotificationGapResyncCoordinator.defaultResync
+        resync: @escaping @Sendable () async -> Bool = NotificationGapResyncCoordinator.defaultResync
     ) {
         self.gapPublisher = gapPublisher
         self.reconnectPublisher = reconnectPublisher
@@ -94,7 +99,8 @@ final class NotificationGapResyncCoordinator {
         let delay = debounce
         debounceTask = Task { [weak self] in
             guard await cancellableSleep(for: .seconds(delay)), !Task.isCancelled, self != nil else { return }
-            await work()
+            guard await work() else { return }
+            self?.resynced.send(())
         }
     }
 
@@ -111,13 +117,14 @@ final class NotificationGapResyncCoordinator {
     /// reconnect réessaiera ; l'échec est journalisé pour rester diagnosticable.
     /// Le compteur est demandé même quand l'écriture cache échoue : les deux
     /// lectures sont indépendantes, et une pastille juste vaut mieux qu'aucune.
-    static let defaultResync: @Sendable @concurrent () async -> Void = {
+    /// Rend `true` quand la liste servie a été relue, cache écrit ou non.
+    static let defaultResync: @Sendable @concurrent () async -> Bool = {
         let response: NotificationListResponse
         do {
             response = try await NotificationService.shared.list(limit: 30)
         } catch {
             Logger.notifResync.error("Notification gap resync fetch failed, cache left stale: \(error.localizedDescription, privacy: .public)")
-            return
+            return false
         }
         do {
             try await CacheCoordinator.shared.notifications.save(response.data, for: "all")
@@ -125,6 +132,7 @@ final class NotificationGapResyncCoordinator {
             Logger.notifResync.error("Notification cache not replaced after resync: \(error.localizedDescription, privacy: .public)")
         }
         await NotificationGapResyncCoordinator.refreshUnreadCount()
+        return true
     }
 
     /// Le saut d'acteur, nommé : `defaultResync` est une closure `@Sendable`

@@ -10,17 +10,21 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.StatusEntryFold
 import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
+import me.meeshy.sdk.status.toStatusEntry
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 
 /**
  * Observateurs decoratifs de la liste : catalogue de categories, frappe,
- * anneaux de story et humeur. Tous tournent dans le [scope] du ViewModel.
+ * anneaux de story et humeur (peinte du cache, puis suivie en direct). Tous tournent dans le [scope] du ViewModel.
  */
 internal class ConversationListObservers(
     private val scope: CoroutineScope,
@@ -31,6 +35,8 @@ internal class ConversationListObservers(
     private val storyRepository: StoryRepository,
     private val statusBarCache: StatusBarCache,
     private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
+    /** #18930 — the realtime mood deltas; `null`: the row moods stay as the cache painted them. */
+    private val socialSocketManager: SocialSocketManager? = null,
 ) {
 
     /** Corpus vivant des categories : re-seme par le cache, plie par les evenements socket. */
@@ -58,6 +64,7 @@ internal class ConversationListObservers(
         observeTyping()
         observeStoryGroups()
         paintMoodStatusesFromCache()
+        observeMoodStatuses()
     }
 
     /** Adopte le nouveau catalogue ; un pli changé depuis un autre appareil s'applique à la mémoire de session. */
@@ -72,6 +79,35 @@ internal class ConversationListObservers(
         val statuses = statusBarCache.load(StatusFeedMode.FRIENDS).valueOrNull.orEmpty()
         if (statuses != state.value.moodStatuses) {
             state.update { it.copy(moodStatuses = statuses) }
+        }
+    }
+
+    /**
+     * #18930 — iso iOS (`StatusViewModel.subscribeToSocketEvents`, que la liste lit en direct) : une humeur créée,
+     * modifiée ou supprimée repeint les humeurs des lignes sans relancer la liste, par le pli que la barre applique
+     * ([StatusEntryFold]). Un delta qui ne change rien laisse l'état tel quel.
+     */
+    private fun observeMoodStatuses() {
+        val social = socialSocketManager ?: return
+        scope.launch {
+            social.statusCreated.collect { payload ->
+                payload.status.toStatusEntry()?.let { entry -> foldMoods { StatusEntryFold.onCreated(it, entry) } }
+            }
+        }
+        scope.launch {
+            social.statusUpdated.collect { payload ->
+                payload.status.toStatusEntry()?.let { entry -> foldMoods { StatusEntryFold.onUpdated(it, entry) } }
+            }
+        }
+        scope.launch {
+            social.statusDeleted.collect { payload -> foldMoods { StatusEntryFold.onDeleted(it, payload.statusId) } }
+        }
+    }
+
+    private fun foldMoods(fold: (List<StatusEntry>) -> List<StatusEntry>) {
+        state.update { current ->
+            val next = fold(current.moodStatuses)
+            if (next === current.moodStatuses) current else current.copy(moodStatuses = next)
         }
     }
 

@@ -11,10 +11,14 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
@@ -109,6 +113,44 @@ class ChatForwardControllerTest {
 
         r.controller.close()
         assertThat(r.forward).isNull()
+    }
+
+    /**
+     * #18932 — the thread followed the WHOLE conversation list for the picker, open or not: every emission decoded it, and
+     * every stale one revalidated it. It is collected only while the picker is open now.
+     */
+    @Test
+    fun `the conversation list is collected only while the picker is open`() = runTest {
+        val r = rig()
+        var collectors = 0
+        val stream = MutableStateFlow<CacheResult<List<ApiConversation>>>(CacheResult.Fresh(conversations, 0L))
+            .onStart { collectors += 1 }
+            .onCompletion { collectors -= 1 }
+        r.controller.followConversationsWhileOpen { stream }
+        advanceUntilIdle()
+        assertThat(collectors).isEqualTo(0)
+
+        r.controller.open("m1")
+        advanceUntilIdle()
+        assertThat(collectors).isEqualTo(1)
+
+        r.controller.close()
+        advanceUntilIdle()
+        assertThat(collectors).isEqualTo(0)
+    }
+
+    /** #18932 — never a bounded read: an open picker finds a conversation far below the most recent ones. */
+    @Test
+    fun `an open picker finds a conversation far below the most recent ones`() = runTest {
+        val r = rig()
+        val many = (1..60).map { group("g$it", "Groupe $it") } + group("old", "Archive lointaine")
+        r.controller.followConversationsWhileOpen { flowOf(CacheResult.Fresh(many, 0L)) }
+        r.controller.open("m1")
+        advanceUntilIdle()
+
+        r.controller.onQueryChange("lointaine")
+
+        assertThat(r.forward?.targets?.map { it.conversationId }).containsExactly("old")
     }
 
     @Test

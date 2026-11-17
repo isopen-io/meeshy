@@ -1,0 +1,94 @@
+{
+  "composant": "MeeshyLockedRow",
+  "cle": "K37",
+  "note": "Vecteurs de parité (fiche K37 § 03, § 10). Rien de vrai derrière le pointillé : la rangée ne reçoit que trois textes.",
+  "formes": [
+    {
+      "forme": "row",
+      "rayon": 20,
+      "hauteurMin": 58,
+      "glyphe": false
+    },
+    {
+      "forme": "tile",
+      "rayon": 24,
+      "hauteurMin": 0,
+      "glyphe": true
+    },
+    {
+      "forme": "inline",
+      "rayon": 0,
+      "hauteurMin": 0,
+      "glyphe": false
+    }
+  ],
+  "mesures": {
+    "trait": 1.5,
+    "tiret": 5,
+    "creux": 4.4,
+    "cadenas": 22,
+    "cadenasInline": 16,
+    "cible": 44,
+    "glypheTuile": 28
+  },
+  "etats": [
+    {
+      "ouvert": false,
+      "cadenas": true,
+      "pointille": true
+    },
+    {
+      "ouvert": true,
+      "cadenas": false,
+      "pointille": false
+    }
+  ],
+  "geste": [
+    {
+      "aGeste": true,
+      "enCours": false,
+      "fait": false,
+      "actif": true
+    },
+    {
+      "aGeste": true,
+      "enCours": true,
+      "fait": false,
+      "actif": false
+    },
+    {
+      "aGeste": true,
+      "enCours": false,
+      "fait": true,
+      "actif": false
+    },
+    {
+      "aGeste": false,
+      "enCours": false,
+      "fait": false,
+      "actif": false
+    }
+  ],
+  "ouverture": [
+    {
+      "enOuverture": false,
+      "dejaJouee": false,
+      "etape": "repos"
+    },
+    {
+      "enOuverture": true,
+      "dejaJouee": false,
+      "etape": "joue"
+    },
+    {
+      "enOuverture": true,
+      "dejaJouee": true,
+      "etape": "repos"
+    },
+    {
+      "enOuverture": false,
+      "dejaJouee": true,
+      "etape": "repos"
+    }
+  ]
+}

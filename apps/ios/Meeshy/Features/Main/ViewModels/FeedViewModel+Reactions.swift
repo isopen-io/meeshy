@@ -25,37 +25,21 @@ extension FeedViewModel {
         // that was lost when offline. Mirrors PostDetailViewModel.likePost and
         // this VM's own toggleLikeComment; the dispatcher sends POST/DELETE
         // /posts/:id/like per `liked`.
-        let liked = posts[index].isLiked
+        let liked = post.isLiked
         let cmid = ClientMutationId.generate()
         let payload = ToggleLikePostPayload(
             clientMutationId: cmid,
             postId: postId,
             liked: liked
         )
+        // stores-09, #18939 — every copy of the post (detail key, bookmarks,
+        // reels, its GRDB row), not just "main-feed" via debouncedCacheSave, and
+        // in the order of the gestures: the write takes its rank HERE, before
+        // any await, so a quick like then unlike can never land reversed.
+        engagementWrites.like(postId: postId, isLiked: liked, likes: post.likes, persistence: feedPersistence)
         do {
             try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
             debouncedCacheSave()
-
-            // stores-09 — patch every cache key holding this post (detail key,
-            // bookmarks…), not just "main-feed" via debouncedCacheSave.
-            // `post`, pas `posts[index]` : le fil a pu changer pendant l'attente, et l'indice désigner un
-            // autre post — ou plus aucun.
-            let newLikes = post.likes
-            Task.detached(priority: .utility) { [feedCache = self.feedCache] in
-                await feedCache.patchEverywhere(itemId: postId) {
-                    $0.isLiked = liked
-                    $0.likes = newLikes
-                }
-            }
-
-            // Sync optimistic like state to GRDB so the feed cache matches.
-            if let persistence = feedPersistence {
-                let count = newLikes
-                Task.detached(priority: .utility) {
-                    try? await persistence.updateLikeCount(postId: postId, count: count, isLikedByMe: liked)
-                }
-            }
-
             // R7 — roll back the optimistic like if the outbox exhausts its
             // retry budget (server permanently rejects). Without this the toggle
             // stays stuck "liked" forever even though the server never accepted it.
@@ -66,6 +50,7 @@ extension FeedViewModel {
             // Roll back optimistic state if the outbox refuses the row.
             restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
         }
+        await engagementWrites.settled()
     }
 
     /// Pose en tête le post que l'on vient de publier — ou le REMPLACE si l'écho `post:created` l'a déjà
@@ -87,12 +72,7 @@ extension FeedViewModel {
         revert.isLiked = isLiked
         revert.likes = likes
         posts[i] = revert
-        Task.detached(priority: .utility) { [feedCache = self.feedCache] in
-            await feedCache.patchEverywhere(itemId: postId) {
-                $0.isLiked = isLiked
-                $0.likes = likes
-            }
-        }
+        engagementWrites.like(postId: postId, isLiked: isLiked, likes: likes, persistence: feedPersistence)
         debouncedCacheSave()
     }
 

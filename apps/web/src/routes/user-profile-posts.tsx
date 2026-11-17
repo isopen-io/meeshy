@@ -107,7 +107,8 @@ export function ProfilePostsPanel({
   }, [announce, cardsNow, language, models, posts.isFetchingNextPage]);
 
   return (
-    <div data-profile-posts ref={postsRef} className="grid gap-3">
+    /* `minmax(0, 1fr)` : la largeur d'une carte de réel naît de sa hauteur ; en piste `auto` elle élargissait la colonne (320×568, #18879). */
+    <div data-profile-posts ref={postsRef} className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <ProfileStatsBand language={language} stats={stats} filter={filter} onFilter={onFilter} />
       {posts.isError ? (
         <ProfilePostsError language={language} onRetry={() => void posts.refetch()} />

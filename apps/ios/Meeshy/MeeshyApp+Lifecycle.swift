@@ -11,6 +11,7 @@ import os
 extension MeeshyApp {
     /// Branché une fois, depuis `init()` : avant que la moindre fenêtre ne monte.
     static func installApplicationLifecycleHooks() {
+        RevokedSessionPurge.install()
         AppLifecycleHooks.shared.install(
             authentication: AuthManager.shared.$isAuthenticated.eraseToAnyPublisher(),
             isAuthenticated: { AuthManager.shared.isAuthenticated },

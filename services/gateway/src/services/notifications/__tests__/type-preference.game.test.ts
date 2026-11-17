@@ -19,7 +19,7 @@ describe('notification.gameEnabled', () => {
 
   it('ne ferme rien d’autre : ni les messages, ni les réactions, ni le retour d’un contact', () => {
     const off = prefs({ gameEnabled: false });
-    for (const type of ['new_message', 'message_reaction', 'contact_recently_active', 'level_up', 'achievement_unlocked'] as const) {
+    for (const type of ['new_message', 'message_reaction', 'contact_recently_active'] as const) {
       expect(isNotificationTypeEnabledByPreference(off, type)).toBe(true);
     }
   });
@@ -29,6 +29,35 @@ describe('notification.gameEnabled', () => {
       expect(isNotificationTypeEnabledByPreference(prefs({}), type)).toBe(true);
       const legacy = { ...prefs({}), gameEnabled: undefined } as unknown as NotificationPreference;
       expect(isNotificationTypeEnabledByPreference(legacy, type)).toBe(true);
+    }
+  });
+});
+
+/**
+ * Les exploits du Jeu — rang atteint, palier de Flamme, haut fait — sont des
+ * notifications du JEU : « Jeu » coupé ne reçoit rien (décision porteur du
+ * 2026-11-10, #17368). Ils passaient par le `default: return true` : l'utilisateur
+ * qui avait coupé le Jeu recevait encore leur ligne ET leur push (#18910).
+ */
+describe('notification.gameEnabled — les exploits du Jeu (#17368, #18910)', () => {
+  const EXPLOITS = ['level_up', 'streak_milestone', 'achievement_unlocked'] as const;
+
+  it('coupée, elle ferme le rang atteint, le palier de Flamme et le haut fait', () => {
+    for (const type of EXPLOITS) expect(isNotificationTypeEnabledByPreference(prefs({ gameEnabled: false }), type)).toBe(false);
+  });
+
+  it('activée, ou ABSENTE d’un document antérieur : les exploits sont reçus', () => {
+    const legacy = { ...prefs({}), gameEnabled: undefined } as unknown as NotificationPreference;
+    for (const type of EXPLOITS) {
+      expect(isNotificationTypeEnabledByPreference(prefs({ gameEnabled: true }), type)).toBe(true);
+      expect(isNotificationTypeEnabledByPreference(legacy, type)).toBe(true);
+    }
+  });
+
+  it('ne ferme toujours ni les messages ni les mentions', () => {
+    const off = prefs({ gameEnabled: false });
+    for (const type of ['new_message', 'user_mentioned', 'message_reply'] as const) {
+      expect(isNotificationTypeEnabledByPreference(off, type)).toBe(true);
     }
   });
 });

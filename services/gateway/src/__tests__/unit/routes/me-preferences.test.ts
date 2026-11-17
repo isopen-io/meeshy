@@ -94,6 +94,12 @@ jest.mock('../../../utils/withMutationLog', () => ({
 
 import { userPreferencesRoutes } from '../../../routes/me/preferences/index';
 import { createPreferenceRouter } from '../../../routes/me/preferences/preference-router-factory';
+import { PREFERENCE_REGISTRY } from '../../../routes/me/preferences/preference-registry';
+
+// Le montage de PRODUCTION de `privacy` porte son rangement hérité (`index.ts`) :
+// c'est lui qui garde la lecture-puis-écriture, là où les catégories JSON
+// fusionnent dans la base (#18910).
+const PRIVACY_STORAGE = PREFERENCE_REGISTRY.privacy.storage;
 
 // ─── Preference defaults and schemas from shared (real values) ────────────────
 
@@ -309,7 +315,7 @@ async function buildCategoryAppWith(
     }
   });
 
-  const router = createPreferenceRouter(category, PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS);
+  const router = createPreferenceRouter(category, PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, PRIVACY_STORAGE);
   await app.register(router, { prefix: `/me/preferences/${category}` });
   await app.ready();
   return app;
@@ -615,7 +621,7 @@ describe('PUT /me/preferences/privacy', () => {
     appInspect.addHook('preHandler', async (req) => {
       (req as unknown as Record<string, unknown>).auth = { userId: USER_ID };
     });
-    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS);
+    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, PRIVACY_STORAGE);
     await appInspect.register(router, { prefix: '/me/preferences/privacy' });
     await appInspect.ready();
 
@@ -707,7 +713,7 @@ describe('PUT /me/preferences/privacy', () => {
     appDup.addHook('preHandler', async (req) => {
       (req as unknown as Record<string, unknown>).auth = { userId: USER_ID };
     });
-    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS);
+    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, PRIVACY_STORAGE);
     await appDup.register(router, { prefix: '/me/preferences/privacy' });
     await appDup.ready();
 
@@ -768,7 +774,7 @@ describe('PATCH /me/preferences/privacy', () => {
     appInspect.addHook('preHandler', async (req) => {
       (req as unknown as Record<string, unknown>).auth = { userId: USER_ID };
     });
-    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS);
+    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, PRIVACY_STORAGE);
     await appInspect.register(router, { prefix: '/me/preferences/privacy' });
     await appInspect.ready();
 
@@ -801,7 +807,7 @@ describe('PATCH /me/preferences/privacy', () => {
     appDefaults.addHook('preHandler', async (req) => {
       (req as unknown as Record<string, unknown>).auth = { userId: USER_ID };
     });
-    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS);
+    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, PRIVACY_STORAGE);
     await appDefaults.register(router, { prefix: '/me/preferences/privacy' });
     await appDefaults.ready();
 
@@ -1001,7 +1007,7 @@ describe('createPreferenceRouter — socket emission best-effort', () => {
     appNoSocket.addHook('preHandler', async (req) => {
       (req as unknown as Record<string, unknown>).auth = { userId: USER_ID };
     });
-    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS);
+    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, PRIVACY_STORAGE);
     await appNoSocket.register(router, { prefix: '/me/preferences/privacy' });
     await appNoSocket.ready();
 
@@ -1026,7 +1032,7 @@ describe('createPreferenceRouter — socket emission best-effort', () => {
     appNoHandler.addHook('preHandler', async (req) => {
       (req as unknown as Record<string, unknown>).auth = { userId: USER_ID };
     });
-    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS);
+    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, PRIVACY_STORAGE);
     await appNoHandler.register(router, { prefix: '/me/preferences/privacy' });
     await appNoHandler.ready();
 

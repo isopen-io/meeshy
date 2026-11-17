@@ -28,14 +28,17 @@ final class CommunityCreateViewModel: ObservableObject, CommunityCreateModeling 
     private let userService: UserServiceProviding
     private let currentUserId: @MainActor () -> String
     private let appearanceDefaults: UserDefaults
+    private let myCommunities: MyCommunitiesWrites
 
     init(
         communityService: CommunityServiceProviding = CommunityService.shared,
         userService: UserServiceProviding = UserService.shared,
         currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
-        appearanceDefaults: UserDefaults = .standard
+        appearanceDefaults: UserDefaults = .standard,
+        myCommunities: MyCommunitiesWrites = .live
     ) {
         self.appearanceDefaults = appearanceDefaults
+        self.myCommunities = myCommunities
         self.communityService = communityService
         self.userService = userService
         self.currentUserId = currentUserId
@@ -89,6 +92,8 @@ final class CommunityCreateViewModel: ObservableObject, CommunityCreateModeling 
                 )
             }
 
+            // #18935 — la bande Communautés et le partage la voient aussitôt.
+            await myCommunities.add(apiCommunity)
             CommunityLocalAppearance.writeEmoji(selectedEmoji, communityId: apiCommunity.id, to: appearanceDefaults)
             var community = apiCommunity.toCommunity()
             community.emoji = CommunityLocalAppearance.read(communityId: apiCommunity.id, from: appearanceDefaults).emoji ?? ""

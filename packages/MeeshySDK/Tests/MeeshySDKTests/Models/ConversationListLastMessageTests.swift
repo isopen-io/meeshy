@@ -136,12 +136,29 @@ final class ConversationListLastMessageTests: XCTestCase {
         XCTAssertTrue(persisted[0].userState.isPinned, "l'état propre au ViewModel, lui, est bien persisté")
     }
 
+    /// #18933 — ce témoin FIGEAIT la perte : il affirmait que la ligne du cache
+    /// (« conv-1 », que le moteur avait écrite) disparaissait sous l'instantané
+    /// du ViewModel. Le ViewModel retire, le moteur ajoute : elle reste.
     func test_viewModelPersist_keepsARowTheCacheDoesNotKnowYet() {
         let fresh = makeRow(id: "new-dm", lastMessageId: "m-9")
         let persisted = ConversationListLastMessage.persisting([fresh], over: [makeRow()])
 
-        XCTAssertEqual(persisted.map(\.id), ["new-dm"])
-        XCTAssertEqual(persisted[0].lastMessageId, "m-9")
+        XCTAssertEqual(Set(persisted.map(\.id)), ["new-dm", "conv-1"],
+                       "la ligne que le moteur a écrite reste dans le cache, à côté de celle que la liste ajoute")
+        XCTAssertEqual(persisted.first { $0.id == "new-dm" }?.lastMessageId, "m-9")
+    }
+
+    func test_viewModelPersist_dropsOnlyTheRowsTheListRetired() {
+        let kept = makeRow(id: "a")
+        let left = makeRow(id: "b")
+        let bornDuringTheDebounce = makeRow(id: "x")
+
+        let persisted = ConversationListLastMessage.persisting(
+            [kept, left], over: [kept, left, bornDuringTheDebounce], retiring: ["b"]
+        )
+
+        XCTAssertEqual(Set(persisted.map(\.id)), ["a", "x"],
+                       "une ligne retirée ne revient pas, même par un instantané plus ancien que son retrait")
     }
 
     func test_viewModelPersist_ordersRowsByTheOwnedTimestamp() {

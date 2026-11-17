@@ -253,6 +253,44 @@ export async function niveauxParmi(
 }
 
 /**
+ * Ce que `sujet` ACCORDE à chacun des `autres` — le sens du lecteur de
+ * {@link accordsEntre}, pour un éventail (« En commun », #19200 : le cercle que
+ * le lecteur donne à un ami en commun, jamais celui que la cible lui donne).
+ * Même lecture et même projection du rattrapage ; `PUBLIC` à défaut de lien.
+ */
+export async function accordsDonnesParmi(
+  prisma: RelationLevelDb,
+  sujet: string,
+  candidats: ReadonlyArray<string>
+): Promise<ReadonlyMap<string, RelationLevel>> {
+  const autres = [...new Set(candidats)].filter((id) => id && id !== sujet);
+  if (!sujet || autres.length === 0) return new Map();
+
+  const [lues, demandes]: [ReadonlyMap<string, UserRelationRow>, Acceptance[]] = await Promise.all([
+    lignesParmi(prisma, sujet, autres),
+    prisma.friendRequest.findMany({
+      where: {
+        status: 'accepted',
+        OR: [
+          { senderId: sujet, receiverId: { in: autres } },
+          { senderId: { in: autres }, receiverId: sujet },
+        ],
+      },
+      select: ACCEPTANCE_SELECT,
+    }),
+  ]);
+  const acceptations = acceptationsParAutre(sujet, demandes);
+
+  return new Map(
+    autres.map((id) => {
+      const served = servedRow(lues.get(id) ?? null, sujet, id, acceptations.get(id));
+      if (!served) return [id, 'PUBLIC' as RelationLevel] as const;
+      return [id, parseRelationLevel(served.userLowId === sujet ? served.grantedByLow : served.grantedByHigh)] as const;
+    })
+  );
+}
+
+/**
  * Deux comptes sont-ils AMIS — un lien d'au moins `FRIEND` ? Projection de
  * {@link niveauEffectif}, signature conservée pour ses appelants historiques.
  */

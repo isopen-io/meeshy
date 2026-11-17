@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
@@ -8,6 +8,8 @@ import type { SharedLocation } from '@/lib/api/shared-locations';
 import { metersToPixels, screenPoint, tilesCovering, TILE_SIZE, type MapView } from '@/lib/map/slippy';
 
 import { Avatar } from './avatar';
+import { MeeshyAvatarMorph } from './kit/meeshy-avatar-morph';
+import { MeeshyMapPin } from './kit/meeshy-map-pin';
 
 /**
  * **LA CARTE DES POSITIONS PARTAGÉES, SA VUE** (#16984) — le web REÇOIT les positions de
@@ -45,15 +47,25 @@ export type SharedLocationsMapViewProps = {
   readonly onRetry: () => void;
   readonly onZoom: (delta: 1 | -1) => void;
   readonly onPan: (dx: number, dy: number) => void;
+  /** La personne choisie (la fiche qui a ouvert la carte, ou l'épingle touchée) ; absente, aucune. */
+  readonly selectedUserId?: string | null;
+  /** Sans lui, l'épingle est une image nommée ; avec lui, un bouton qui choisit la personne. */
+  readonly onSelect?: (userId: string) => void;
+  /** Ce qui se dit de la personne choisie, posé SOUS la carte et non par-dessus : la carte reste manipulable. */
+  readonly detail?: ReactNode;
 };
 
 const TILE_URL = (z: number, x: number, y: number): string => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 /** Les libellés SANS paramètre : `translateCircles` exige les siens, et une union de clés ne les lui donne pas. */
 type PlainKey = 'positions.failed' | 'positions.retry' | 'positions.offline' | 'positions.map.a11y' | 'positions.zoomIn' | 'positions.zoomOut' | 'positions.attribution' | 'positions.empty' | 'positions.list.title' | 'positions.cannotEmit';
-const PIN_SIZE = 40;
+const PIN_SIZE = 56;
+const PIN_AVATAR = 48;
 /** Sous ce diamètre le cercle ne se voit pas : l'épingle suffit (position exacte). */
 const MIN_VISIBLE_BLUR = 16;
 const KEY_PAN_PIXELS = 80;
+/** Un bouton posé sur la carte (épingle, zoom) garde son toucher : la carte capture le pointeur pour glisser, et un
+ * pointeur capturé enverrait le clic à la carte, jamais au bouton. Glisser part donc du fond de carte. */
+const keepsItsTouch = (event: { stopPropagation(): void }): void => event.stopPropagation();
 
 export function rowText({ language, location, person, formatTime }: { readonly language: InterfaceLanguage; readonly location: SharedLocation; readonly person: SharedLocationPerson; readonly formatTime: (iso: string) => string }): string {
   const params = { name: person.name ?? translateCircles(language, 'positions.someone'), time: formatTime(location.expiresAt) };
@@ -65,7 +77,21 @@ export function rowText({ language, location, person, formatTime }: { readonly l
   return byPrecision[location.precision]();
 }
 
-function Pin({ location, text, person, view }: { readonly location: SharedLocation; readonly text: string; readonly person: SharedLocationPerson; readonly view: MapView }) {
+function Pin({
+  location,
+  text,
+  person,
+  view,
+  selected,
+  onSelect,
+}: {
+  readonly location: SharedLocation;
+  readonly text: string;
+  readonly person: SharedLocationPerson;
+  readonly view: MapView;
+  readonly selected: boolean;
+  readonly onSelect: ((userId: string) => void) | undefined;
+}) {
   const at = screenPoint(location, view);
   if (at.x < 0 || at.y < 0 || at.x > view.width || at.y > view.height) return null;
   const blur = Math.round(metersToPixels(location.radiusMeters, location.latitude, view.zoom) * 2);
@@ -83,32 +109,35 @@ function Pin({ location, text, person, view }: { readonly location: SharedLocati
             height: blur,
             backgroundColor: 'var(--color-brand-softer)',
             border: '1px solid var(--color-brand)',
-            opacity: 0.7,
+            opacity: selected ? 0.9 : 0.7,
           }}
         />
       ) : null}
       <span
-        role="img"
-        aria-label={text}
         data-shared-location-pin={location.userId}
+        onPointerDown={keepsItsTouch}
         className="absolute grid place-items-center"
-        style={{ left: at.x - PIN_SIZE / 2, top: at.y - PIN_SIZE / 2, width: PIN_SIZE, height: PIN_SIZE }}
+        style={{ left: at.x - PIN_SIZE / 2, top: at.y - PIN_SIZE / 2, width: PIN_SIZE, height: PIN_SIZE, zIndex: selected ? 1 : 0 }}
       >
-        <Avatar
-          initials={person.initials}
-          color="var(--color-brand)"
-          size={PIN_SIZE}
-          {...(person.presence === undefined ? {} : { presence: person.presence })}
-          {...(person.avatar === undefined ? {} : { src: person.avatar })}
-          {...(person.name === null ? {} : { name: person.name })}
-          redundant
-        />
+        <MeeshyMapPin label={text} isSelected={selected} precision="exact" {...(onSelect === undefined ? {} : { onPress: () => onSelect(location.userId) })}>
+          <MeeshyAvatarMorph id={location.userId} size={PIN_AVATAR}>
+            <Avatar
+              initials={person.initials}
+              color="var(--color-brand)"
+              size={PIN_AVATAR}
+              {...(person.presence === undefined ? {} : { presence: person.presence })}
+              {...(person.avatar === undefined ? {} : { src: person.avatar })}
+              {...(person.name === null ? {} : { name: person.name })}
+              redundant
+            />
+          </MeeshyAvatarMorph>
+        </MeeshyMapPin>
       </span>
     </>
   );
 }
 
-export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan }: SharedLocationsMapViewProps) {
+export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null }: SharedLocationsMapViewProps) {
   const t = (key: PlainKey): string => translateCircles(language, key);
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const rows = locations.map((location) => ({ location, person: personOf(location.userId) })).map((row) => ({ ...row, text: rowText({ language, ...row, formatTime }) }));
@@ -180,9 +209,9 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           />
         ))}
         {rows.map(({ location, person, text }) => (
-          <Pin key={location.userId} location={location} text={text} person={person} view={view} />
+          <Pin key={location.userId} location={location} text={text} person={person} view={view} selected={selectedUserId === location.userId} onSelect={onSelect} />
         ))}
-        <div className="absolute right-2 top-2 grid gap-2">
+        <div className="absolute right-2 top-2 grid gap-2" onPointerDown={keepsItsTouch}>
           {zoomButton(1, 'positions.zoomIn', '+')}
           {zoomButton(-1, 'positions.zoomOut', '−')}
         </div>
@@ -190,6 +219,7 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           {t('positions.attribution')}
         </small>
       </div>
+      {detail}
       {status === 'failed' ? (
         <div role="alert" className="flex flex-wrap items-center gap-2">
           <p className="text-body" style={{ color: 'var(--color-ink)' }}>

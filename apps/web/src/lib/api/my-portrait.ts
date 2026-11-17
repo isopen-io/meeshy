@@ -1,4 +1,6 @@
-import type { QueryClient } from '@tanstack/react-query';
+import { partialMatchKey, type QueryClient } from '@tanstack/react-query';
+
+import { LIVE_CACHE_ROOT, writeLive } from './live-cache-journal';
 
 /**
  * **UN PORTRAIT ET UN NOM, PARTOUT OÙ LE CACHE EN GARDE UNE COPIE** (#8886,
@@ -127,6 +129,12 @@ function repaint(value: unknown, update: ProfileRepaint): unknown {
   return entries.every(([key, next]) => next === value[key]) ? value : Object.fromEntries(entries);
 }
 
+/**
+ * Repeint chaque requête qui porte une copie de l'utilisateur. Sous la racine
+ * des conversations, par le journal des écritures vives (#19082) : une
+ * relecture de la liste ou d'un fil partie avant la repeinture la rejoue sur sa
+ * réponse, calculée sur ce qu'elle sert, au lieu de rendre l'ancien portrait.
+ */
 export function repaintProfile(queryClient: QueryClient, update: ProfileRepaint): void {
   queryClient
     .getQueryCache()
@@ -134,7 +142,9 @@ export function repaintProfile(queryClient: QueryClient, update: ProfileRepaint)
     .forEach((query) => {
       const current: unknown = query.state.data;
       const next = repaint(current, update);
-      if (next !== current) queryClient.setQueryData(query.queryKey, next);
+      if (next === current) return;
+      if (partialMatchKey(query.queryKey, LIVE_CACHE_ROOT)) writeLive(queryClient, query.queryKey, (data: unknown) => repaint(data, update));
+      else queryClient.setQueryData(query.queryKey, next);
     });
 }
 

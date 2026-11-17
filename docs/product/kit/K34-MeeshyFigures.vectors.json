@@ -1,0 +1,109 @@
+{
+  "composant": "MeeshyFigures",
+  "cle": "K34",
+  "note": "Vecteurs de parité (fiche K34 § 10). Polices 48 / 34 / 24 ; sous 360 px une bande de quatre passe en compact ; la courbe reste dans son cadre (marge de 3).",
+  "tailles": [
+    {
+      "taille": "hero",
+      "police": 48
+    },
+    {
+      "taille": "large",
+      "police": 34
+    },
+    {
+      "taille": "compact",
+      "police": 24
+    }
+  ],
+  "bandes": [
+    {
+      "nombre": 2,
+      "largeur": 390,
+      "filets": 1,
+      "taille": "large"
+    },
+    {
+      "nombre": 3,
+      "largeur": 390,
+      "filets": 2,
+      "taille": "large"
+    },
+    {
+      "nombre": 4,
+      "largeur": 390,
+      "filets": 3,
+      "taille": "large"
+    },
+    {
+      "nombre": 4,
+      "largeur": 340,
+      "filets": 3,
+      "taille": "compact"
+    },
+    {
+      "nombre": 1,
+      "largeur": 390,
+      "filets": 0,
+      "taille": "large"
+    }
+  ],
+  "courbes": [
+    {
+      "points": [
+        0,
+        5,
+        10
+      ],
+      "largeur": 72,
+      "hauteur": 28,
+      "y": [
+        25,
+        14,
+        3
+      ]
+    },
+    {
+      "points": [
+        4,
+        4
+      ],
+      "largeur": 72,
+      "hauteur": 28,
+      "y": [
+        14,
+        14
+      ]
+    },
+    {
+      "points": [
+        1
+      ],
+      "largeur": 72,
+      "hauteur": 28,
+      "y": []
+    }
+  ],
+  "parts": [
+    {
+      "part": 0,
+      "largeur": 100,
+      "rempli": 0
+    },
+    {
+      "part": 0.01,
+      "largeur": 100,
+      "rempli": 4
+    },
+    {
+      "part": 0.5,
+      "largeur": 100,
+      "rempli": 50
+    },
+    {
+      "part": 2,
+      "largeur": 100,
+      "rempli": 100
+    }
+  ]
+}

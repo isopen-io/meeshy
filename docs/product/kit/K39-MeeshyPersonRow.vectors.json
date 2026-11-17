@@ -1,0 +1,39 @@
+{
+  "composant": "MeeshyPersonRow",
+  "cle": "K39",
+  "note": "Vecteurs de parité (fiche K39 § 10). Avatar de 44 (36 compact, 56 large) ; marge de début 18 ; écart 14 ; filet en retrait = marge + avatar + écart ; atténuée : avatar à 40 %.",
+  "tailles": [
+    {
+      "taille": "compact",
+      "avatar": 36,
+      "retraitFilet": 68
+    },
+    {
+      "taille": "regular",
+      "avatar": 44,
+      "retraitFilet": 76
+    },
+    {
+      "taille": "large",
+      "avatar": 56,
+      "retraitFilet": 88
+    }
+  ],
+  "tenues": [
+    {
+      "tenue": "normal",
+      "opaciteAvatar": 1,
+      "fantome": false
+    },
+    {
+      "tenue": "muted",
+      "opaciteAvatar": 0.4,
+      "fantome": false
+    },
+    {
+      "tenue": "ghost",
+      "opaciteAvatar": 1,
+      "fantome": true
+    }
+  ]
+}

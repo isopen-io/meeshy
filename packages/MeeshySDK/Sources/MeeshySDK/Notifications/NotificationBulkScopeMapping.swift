@@ -42,7 +42,8 @@ public enum NotificationBulkScopeMapping {
     ///
     /// `contextKey == "friendRequestId"` tombe dans ce cas : `NotificationReadScope`
     /// n'a pas de branche pour cette clé de contexte, et la fabriquer depuis
-    /// `.types([...])` marquerait lues des lignes d'une AUTRE demande.
+    /// `.types([...])` marquerait lues des lignes d'une AUTRE demande. Elle se
+    /// rejoue à part, par `friendRequestId(from:)` (#19104).
     public static func readScope(from payload: NotificationBulkScopePayload) -> NotificationReadScope? {
         switch payload.kind {
         case "all":
@@ -60,6 +61,16 @@ public enum NotificationBulkScopeMapping {
         default:
             return nil
         }
+    }
+
+    /// La demande d'ami nommée par un prédicat `read-bulk` de portée `context`
+    /// et de clé `friendRequestId` (réponse à une demande, ici ou ailleurs) —
+    /// la seule clé de contexte que `NotificationReadScope` ne porte pas. `nil`
+    /// pour toute autre forme (#19104).
+    public static func friendRequestId(from payload: NotificationBulkScopePayload) -> String? {
+        guard payload.kind == "context", payload.contextKey == "friendRequestId",
+              let value = payload.contextValue, !value.isEmpty else { return nil }
+        return value
     }
 
     /// La purge en masse n'a qu'UNE forme (`{kind:'read'}`) : elle retire les

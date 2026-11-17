@@ -4,6 +4,7 @@ import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
 
 /**
  * **LE PORT DES RÉGLAGES D'USAGE** (#5563) — `GET`/`PATCH me.preferences`,
@@ -63,7 +64,7 @@ import type { ApiResult, HttpTransport } from './http';
  * lecteur qu'il est caché quand il ne l'est pas.
  */
 
-export const APP_PREFERENCES_QUERY_KEY = ['me', 'app-preferences'] as const;
+export { APP_PREFERENCES_QUERY_KEY };
 
 export type AppPreferencesDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
@@ -230,11 +231,10 @@ export async function patchAppPreferences(deps: AppPreferencesDeps, patch: Prefe
  * arrière sur échec, `:74` la valeur SERVIE) — un réglage changé ici n'attend
  * jamais une relecture pour s'afficher.
  *
- * Ce que la fenêtre coûte : aucun événement socket ne porte
- * `['me', 'app-preferences']` (vérifié sur `socket.ts`). Un réglage changé
- * depuis un AUTRE appareil met jusqu'à 30 min à arriver dans cet onglet — ce
- * qui est exactement la situation où le lecteur vient de le changer lui-même
- * ailleurs, et a déjà vu le résultat là-bas.
+ * Ce qui la rend sûre face à un AUTRE appareil : `user:preferences-updated
+ * { userId, category }`, que la passerelle émet pour chaque catégorie écrite,
+ * périme cette requête (`conversation-preferences-sync.ts`, #18914) — le
+ * réglage arrive à la relecture qui suit, sans attendre la fenêtre.
  */
 export const APP_PREFERENCES_STALE_TIME = 30 * 60_000;
 

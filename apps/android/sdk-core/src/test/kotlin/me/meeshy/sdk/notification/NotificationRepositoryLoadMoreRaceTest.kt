@@ -92,4 +92,33 @@ class NotificationRepositoryLoadMoreRaceTest {
         assertThat(repo.ids()).containsExactly("f1", "f2").inOrder()
         assertThat(repo.hasMoreStream.value).isTrue()
     }
+
+    /**
+     * #19141 (D3) — sans curseur (passerelle antérieure à #4901), une page demandée par RANG ne continue que la liste
+     * qu'elle prolonge : une arrivée en tête pendant le vol décale les rangs, la page est jetée, et le défilement suivant
+     * repart de la nouvelle fin, sans trou ni doublon.
+     */
+    @Test
+    fun `sans curseur, une page par rang en vol est jetee si une arrivee decale la liste, le defilement suivant repart de la nouvelle fin`() =
+        runTest {
+            coEvery { api.list(any(), any(), any(), any()) } returns page(row("n1"), row("n2"), hasMore = true)
+            coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 2)
+            val repo = NotificationRepository(api).also { it.refresh() }
+            val gate = CompletableDeferred<ApiResponse<List<ApiNotification>>>()
+            coEvery { api.list(2, any(), any(), null) } coAnswers { gate.await() }
+
+            val loading = async { repo.loadMore() }
+            runCurrent()
+            repo.prependLive(row("n9"))
+            gate.complete(page(row("n3"), hasMore = true))
+            loading.await()
+
+            assertThat(repo.ids()).containsExactly("n9", "n1", "n2").inOrder()
+            assertThat(repo.hasMoreStream.value).isTrue()
+
+            coEvery { api.list(3, any(), any(), null) } returns page(row("n3"), hasMore = false)
+            repo.loadMore()
+
+            assertThat(repo.ids()).containsExactly("n9", "n1", "n2", "n3").inOrder()
+        }
 }

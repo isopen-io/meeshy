@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atomes du kit K33 échelle de cercles, K35 lecteur d'onde, K37 rangée verrouillée, K51 marque de traduction, K53 stepper, K38 squelette (lot #18884). -->
+    <string name="kit_circle_scale_value">%1$d of %2$d</string>
+    <string name="kit_stepper_position">%1$d of %2$d</string>
+    <string name="kit_stepper_at_minimum">Minimum reached</string>
+    <string name="kit_stepper_at_maximum">Maximum reached</string>
+    <string name="kit_stepper_milestone_done">done</string>
+    <string name="kit_stepper_milestone_current">in progress</string>
+    <string name="kit_stepper_milestone_todo">to do</string>
+    <string name="kit_wave_player_play">Play</string>
+    <string name="kit_wave_player_pause">Pause</string>
+    <string name="kit_wave_player_replay">Replay</string>
+    <string name="kit_wave_player_buffering">Loading</string>
+    <string name="kit_wave_player_unavailable">Unavailable</string>
+    <string name="kit_wave_player_position">%1$s of %2$s</string>
+    <string name="kit_locked_row_locked">locked</string>
+    <string name="kit_locked_row_unlocked">unlocked</string>
+    <string name="kit_translation_mark_translated">Translated</string>
+    <string name="kit_translation_mark_translated_from">Translated from %1$s</string>
+    <string name="kit_translation_mark_original">Original</string>
+    <string name="kit_translation_mark_original_from">Original in %1$s</string>
+    <string name="kit_translation_mark_show_translation">Show translation</string>
+    <string name="kit_translation_mark_show_original">Show original</string>
+    <string name="kit_translation_mark_value_original">original shown</string>
+    <string name="kit_translation_mark_value_translated">translation shown</string>
+</resources>

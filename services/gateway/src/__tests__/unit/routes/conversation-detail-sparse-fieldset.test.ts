@@ -404,7 +404,7 @@ describe('#4173 / #10736 — les préférences du lecteur ne sont chargées que 
     const prisma = makePrisma();
     prisma.conversation.findFirst.mockResolvedValue({
       ...ROW(),
-      userPreferences: [{ isPinned: false, appearance: { v: 1, background: { kind: 'builtin', id: 'maille' }, accent: 'corail', animate: true }, clearHistoryBefore: null }],
+      userPreferences: [{ isPinned: false, appearance: { v: 1, background: { kind: 'builtin', id: 'maille' }, accent: 'corail', animate: true }, clearHistoryBefore: null, readingMode: 'focal' }],
     });
     const app = await buildApp(prisma);
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}` });
@@ -412,7 +412,10 @@ describe('#4173 / #10736 — les préférences du lecteur ne sont chargées que 
     expect((selectOf(prisma).userPreferences as { where: unknown }).where).toEqual({ userId: USER_ID });
     const served = res.json().data.userPreferences;
     expect(served[0].appearance.accent).toBe('corail');
-    expect(served[0]).not.toHaveProperty('clearHistoryBefore');
+    // #18925 — l'effacement d'historique du lecteur sort, comme sur la ligne de liste ;
+    // le mode de lecture reste sur sa propre surface.
+    expect(served[0]).toHaveProperty('clearHistoryBefore', null);
+    expect(served[0]).not.toHaveProperty('readingMode');
     await app.close();
   });
 

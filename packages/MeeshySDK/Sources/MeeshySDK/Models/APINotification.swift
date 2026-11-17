@@ -101,6 +101,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return "\(actorName) a rejoint Meeshy"
         case .contactRecentlyActive:
             return String(format: String(localized: "notification.contactRecentlyActive.fallbackTitle", defaultValue: "%@ était sur Meeshy récemment", bundle: .main), actorName)
+        case .relationAcquaintance:
+            return String(format: String(localized: "notification.relationAcquaintance.fallbackTitle", defaultValue: "%@ est maintenant une Connaissance", bundle: .main), actorName)
         case .deviceBattery: return String(format: String(localized: "notification.deviceBattery.fallbackTitle", defaultValue: "Batterie de %@", bundle: .main), actorName)
         case .deviceUnreachable: return String(format: String(localized: "notification.deviceUnreachable.fallbackTitle", defaultValue: "Téléphone de %@", bundle: .main), actorName)
         case .gameDuoInvited:
@@ -147,22 +149,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming:
             return "Appel de \(actorName)"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
-            if let content, !content.isEmpty {
-                return "\(actorName) \(content)"
-            }
-            let emoji = metadata?.emoji ?? metadata?.reactionEmoji
-            if notificationType != .commentLike, socialProseKind == "MOOD" {
-                return moodReactionFallbackTitle(actorName: actorName, emoji: emoji)
-            }
-            let typeLabel: String = {
-                if notificationType == .storyReaction || metadata?.postType == "STORY" { return "story" }
-                if notificationType == .commentLike { return "commentaire" }
-                return "publication"
-            }()
-            if let emoji {
-                return "\(actorName) a reagi \(emoji) a votre \(typeLabel)"
-            }
-            return "\(actorName) a aime votre \(typeLabel)"
+            return likeFallbackTitle(actorName: actorName)
         case .commentReaction:
             let emoji = metadata?.emoji ?? metadata?.reactionEmoji
             if let emoji {
@@ -189,6 +176,14 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return "\(actorName) a publie une nouvelle publication"
         case .friendNewMood:
             return "\(actorName) a partage une humeur"
+        case .friendContentReaction:
+            return String(format: String(localized: "notification.friendContent.reaction.fallbackTitle", defaultValue: "%@ a réagi à une publication", bundle: .main), actorName)
+        case .friendContentShare:
+            return String(format: String(localized: "notification.friendContent.share.fallbackTitle", defaultValue: "%@ a partagé une publication", bundle: .main), actorName)
+        case .friendContentRepost:
+            return String(format: String(localized: "notification.friendContent.repost.fallbackTitle", defaultValue: "%@ a republié une publication", bundle: .main), actorName)
+        case .friendContentQuote:
+            return String(format: String(localized: "notification.friendContent.quote.fallbackTitle", defaultValue: "%@ a cité une publication", bundle: .main), actorName)
         case .postRepost:
             return String(format: repostFallbackTitleFormat, actorName)
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:
@@ -256,7 +251,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         // the entity. Media-only content (e.g. a photo story) shows no body text:
         // the thumbnail carries the visual and the context line already states
         // « Votre story · 📷 Photo », so a body fallback would just triplicate it.
-        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost:
+        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost,
+             .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote:
             return metadata?.postPreview
         case .commentLike, .commentReaction:
             return metadata?.commentPreview
@@ -289,7 +285,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .postComment, .legacyPostComment, .storyNewComment, .friendStoryComment, .storyThreadReply,
              .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost,
              .commentLike, .commentReaction, .commentReply,
-             .friendNewStory, .friendNewPost, .friendNewMood:
+             .friendNewStory, .friendNewPost, .friendNewMood,
+             .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote:
             return decoratedSocialContext
         default:
             return (subtitle?.isEmpty == false) ? subtitle : nil
@@ -388,6 +385,27 @@ extension APINotification {
         case "MOOD": return String(localized: "notification.repost.fallbackTitle.mood", defaultValue: "%@ a republié votre humeur", bundle: .main)
         default: return String(localized: "notification.repost.fallbackTitle.post", defaultValue: "%@ a republié votre publication", bundle: .main)
         }
+    }
+
+    /// Le repli d'un « J'aime » ou d'une réaction posée sur un contenu : la phrase servie d'abord, puis
+    /// l'humeur, puis l'emoji sur la nature du contenu, sinon « a aimé ».
+    private func likeFallbackTitle(actorName: String) -> String {
+        if let content, !content.isEmpty {
+            return "\(actorName) \(content)"
+        }
+        let emoji = metadata?.emoji ?? metadata?.reactionEmoji
+        if notificationType != .commentLike, socialProseKind == "MOOD" {
+            return moodReactionFallbackTitle(actorName: actorName, emoji: emoji)
+        }
+        let typeLabel: String = {
+            if notificationType == .storyReaction || metadata?.postType == "STORY" { return "story" }
+            if notificationType == .commentLike { return "commentaire" }
+            return "publication"
+        }()
+        if let emoji {
+            return "\(actorName) a reagi \(emoji) a votre \(typeLabel)"
+        }
+        return "\(actorName) a aime votre \(typeLabel)"
     }
 
     /// #10526 — une réaction à un mood sans phrase servie dit « votre humeur »,

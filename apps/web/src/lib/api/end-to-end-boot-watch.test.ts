@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { canSendPlaintext } from '@/lib/end-to-end-regime-ledger';
 
 import { messagesQueryKey } from './messages';
-import { appQueryClient, endToEndCacheWatch } from './query-client';
+import { appCacheHooks, appQueryClient } from './query-client';
 import { sessionStore } from './session';
 
 /**
@@ -12,11 +12,11 @@ import { sessionStore } from './session';
  * peut-être jamais), `realtime.ts` laissait une fenêtre où la file d'envoi
  * relancée au démarrage lisait un registre aveugle à un fil e2ee déjà en cache.
  * La surveillance est demandée avec le client, dans son propre morceau
- * (`endToEndCacheWatch`). Ce témoin n'importe PAS `realtime.ts`.
+ * (`appCacheHooks`). Ce témoin n'importe PAS `realtime.ts`.
  */
 describe('au démarrage, avant le temps réel', () => {
   test('un fil e2ee mis en cache scelle déjà l’envoi', async () => {
-    await endToEndCacheWatch;
+    await appCacheHooks;
     const id = 'c-boot-sealed';
     appQueryClient.setQueryData(messagesQueryKey(id), {
       pages: [{ messages: [{ id: 'e1', conversationId: id, messageType: 'text', content: '', isEncrypted: true, encryptionMode: 'e2ee' }], hasOlder: false, nextCursor: null }],
@@ -38,7 +38,7 @@ describe('au changement de compte', () => {
   const signIn = (id: string) => sessionStore.getState().establish({ user: user(id), token: `t-${id}`, sessionToken: `s-${id}`, expiresIn: 86_400 });
 
   test('le fil e2ee du compte qui revient scelle encore son envoi', async () => {
-    await endToEndCacheWatch;
+    await appCacheHooks;
     signIn('alice-12986');
     appQueryClient.setQueryData(messagesQueryKey('c-x'), {
       pages: [{ messages: [{ id: 'e1', conversationId: 'c-x', messageType: 'text', content: '', isEncrypted: true, encryptionMode: 'e2ee' }], hasOlder: false, nextCursor: null }],

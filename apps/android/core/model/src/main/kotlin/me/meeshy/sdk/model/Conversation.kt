@@ -325,11 +325,12 @@ data class ApiConversationPreferences(
      * ([applyRemote]) — the port of iOS `ConversationUserState.version` and of
      * web's `UserConversationPreferences.version`.
      *
-     * `GET /conversations` does NOT serve it (`conversationUserPreferencesSelect`,
-     * `services/gateway/src/routes/conversations/core.ts`), so a row hydrated from
-     * REST lands here at the `0` default — the same baseline the two other clients
-     * use for an absent snapshot, and the reason the gateway starts its first
-     * upsert at version 1 rather than the schema default 0.
+     * `GET /conversations` serves it on `userPreferences[0]` since #18925
+     * (`conversationUserPreferencesSelect`, `services/gateway/src/routes/conversations/core-selects.ts`),
+     * with `mentionsOnly`, `orderInCategory` and `clearHistoryBefore`. A gateway that
+     * does not serve it yet leaves a row hydrated from REST at the `0` default — the
+     * same baseline the two other clients use for an absent snapshot, and the reason
+     * the gateway starts its first upsert at version 1 rather than the schema default 0.
      */
     val version: Int = 0,
     /** Masque les messages antérieurs à cet instant (effacement d'historique) ; `null` = rien de masqué. */

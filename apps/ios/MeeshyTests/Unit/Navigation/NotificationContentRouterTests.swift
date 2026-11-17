@@ -271,6 +271,68 @@ final class NotificationContentRouterTests: XCTestCase {
                                                        commentId: nil, parentCommentId: nil))
     }
 
+    // MARK: - #14235 — l'activité relayée d'un proche ouvre la publication relayée
+
+    private let relayedTypes: [MeeshyNotificationType] = [
+        .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote,
+    ]
+
+    /// Une réaction ou un partage relayés visent le contenu LUI-MÊME : sa surface suit le discriminant servi.
+    func test_surface_relayedReactionOrShare_followsTheDiscriminantTheGatewayServes() {
+        for type: MeeshyNotificationType in [.friendContentReaction, .friendContentShare] {
+            XCTAssertEqual(NotificationContentRouter.surface(postType: "REEL", notificationType: type, storyLifecycleHint: false),
+                           .reel, type.rawValue)
+            XCTAssertEqual(NotificationContentRouter.surface(postType: "STORY", notificationType: type, storyLifecycleHint: false),
+                           .story, type.rawValue)
+        }
+    }
+
+    /// Revue N4 — une republication ou une citation relayée ouvre la REPUBLICATION, toujours un post. La passerelle
+    /// sert le `postType` de l'ORIGINAL (il nomme, dans le titre, ce qui a été republié) : le suivre ouvrait l'écran
+    /// des stories sur un post sans échéance.
+    func test_surface_relayedRepostOrQuote_opensThePost_whateverTheOriginalWas() {
+        for type: MeeshyNotificationType in [.friendContentRepost, .friendContentQuote] {
+            for original in ["STORY", "MOOD", "REEL", "STATUS"] {
+                XCTAssertEqual(NotificationContentRouter.surface(postType: original, notificationType: type, storyLifecycleHint: true),
+                               .post, "\(type.rawValue) d'un original \(original)")
+            }
+        }
+    }
+
+    private func appSource(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Les branches `case … :` dont le corps est la décision sociale unique (`openSocialNotification`).
+    private func socialBranchLabels(in source: String) -> [String] {
+        source.components(separatedBy: "case .").dropFirst().compactMap { segment in
+            guard let colon = segment.range(of: ":\n") else { return nil }
+            let label = String(segment[..<colon.lowerBound])
+            let body = String(segment[colon.upperBound...].prefix(80))
+            return body.contains("openSocialNotification(ctx)") ? "." + label : nil
+        }
+    }
+
+    /// Le toucher d'une activité relayée rouvrait la LISTE des notifications : le type, inconnu,
+    /// tombait dans la branche système. Sur iPhone comme sur iPad, il passe désormais par la branche
+    /// sociale, qui ouvre `context.postId` sur la surface que nomme `metadata.postType`.
+    func test_navigators_routeEveryRelayedActivityThroughTheSocialBranch_onIPhoneAndIPad() throws {
+        for path in ["Meeshy/Features/Main/Views/RootNotificationNavigator.swift",
+                     "Meeshy/Features/Main/Views/iPadRootView+Navigation.swift"] {
+            let social = socialBranchLabels(in: try appSource(path)).joined(separator: ",")
+            XCTAssertFalse(social.isEmpty, "branche sociale introuvable dans \(path)")
+            for type in relayedTypes {
+                XCTAssertTrue(social.contains(".\(String(describing: type))"), "\(type.rawValue) ne passe pas par la branche sociale de \(path)")
+            }
+        }
+    }
+
     func test_ephemeralRoute_friendNewStory_keepsTheStoryTarget() {
         let route = NotificationContentRouter.ephemeralRoute(
             postId: "story-1", notificationType: .friendNewStory, context: moodContext,

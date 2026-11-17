@@ -578,9 +578,12 @@ const PENDING_CLIENT_ENTRIES = {
   'e2Ee.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot web' },
   // « Mes adresses » (serveur-mes-adresses, chantier #18857) : la passerelle sert la lecture, l'écriture et l'ordre des
   // adresses personnelles avant la face Liens web (#18880), qui les appellera.
-  'users.meAddresses': { issue: 18880, reason: 'GET|POST /users/me/addresses — lire et créer mes adresses, face Liens web' },
   'users.meAddressesById': { issue: 18880, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens web' },
   'users.meAddressesOrder': { issue: 18880, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens web' },
+  // « En commun » (#19234, servi par la PR #19231) : la passerelle sert les communautés, les amis et les médias
+  // partagés de la fiche d'un autre — chacun gardé par son cercle — avant le lot CLIENTS qui les affichera. La face
+  // web de la fiche de relation est #19180, et son drapeau d'allumage est #19230.
+  'users.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — nos communautés, nos amis et nos médias en commun, lus par la fiche d’un autre (web, iOS, Android)' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

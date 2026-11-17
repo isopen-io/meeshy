@@ -67,15 +67,12 @@ const ASYMETRIES: readonly {
       'audio:translation-ready',
       'audio:translations-completed',
       'audio:translations-progressive',
-      'comment:media-updated',
       'comment:reaction-added',
       'comment:reaction-removed',
-      'conversation:deleted',
       'conversation:join-error',
       'conversation:joined',
       'conversation:left',
       'conversation:participant-unbanned',
-      'conversation:restored',
       'conversation:stats',
       'e2ee:envelope',
       'heartbeat:ack',
@@ -84,8 +81,6 @@ const ASYMETRIES: readonly {
       'location:live-updated',
       'mention:created',
       'participant:rights-updated',
-      'status:created',
-      'status:deleted',
       'status:reacted',
       'status:unreacted',
       'story:translation-updated',
@@ -117,10 +112,10 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['android', 'ios'],
+    absents: ['ios'],
     raison:
-      "l'effectif d'une communauté en temps réel (#18766) : la passerelle et le web le portent ; iOS (#18767) et "
-      + 'Android (#18768) le liront sur le modèle de `community:updated` — dette mesurée, chacune son issue.',
+      "l'effectif d'une communauté en temps réel (#18766) : la passerelle, le web et Android (#18768) le portent ; "
+      + 'iOS (#18767) le lira sur le modèle de `community:updated` — dette mesurée, son issue.',
     events: ['community:member-joined', 'community:member-left', 'community:member-role-updated'],
   },
   {

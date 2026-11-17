@@ -20,7 +20,6 @@ const ptCallJoin = {
   'callJoin.detail.loading': 'Carregando a chamada',
   'callJoin.detail.notFound.title': 'Chamada não encontrada',
   'callJoin.detail.notFound.body': 'Esta chamada não existe mais ou não está disponível para você.',
-  'callJoin.detail.joining': 'Conectando à chamada…',
   'keypad.title': 'Teclado',
   'keypad.open': 'Discar um número',
   'keypad.input.placeholder': 'Número ou nome',

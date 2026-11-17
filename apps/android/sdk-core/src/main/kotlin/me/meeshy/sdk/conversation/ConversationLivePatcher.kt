@@ -20,6 +20,8 @@ import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ParticipantUnbannedEvent
+import me.meeshy.sdk.model.conversationlist.ConversationLiveFacet
+import me.meeshy.sdk.model.conversationlist.ConversationLiveFacets
 import me.meeshy.sdk.model.conversationlist.ConversationLivePatch
 import me.meeshy.sdk.model.conversationlist.ConversationPreviewOnSend
 import me.meeshy.sdk.model.conversationlist.LastMessageFacet
@@ -56,6 +58,8 @@ class ConversationLivePatcher @Inject constructor(
     private val session: SessionRepository,
     private val readerLabel: ReaderLabelProvider,
     private val openConversations: OpenConversationLookup = OpenConversationLookup.None,
+    /** #18926 — every live write is journaled for the list sweep in flight, so its page cannot undo it. */
+    private val journal: ConversationLiveJournal = ConversationLiveJournal(),
 ) {
     private val discoveries: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -231,7 +235,7 @@ class ConversationLivePatcher @Inject constructor(
         if (conversationId.isBlank()) return
         database.withTransaction {
             conversationDao.deleteByIds(listOf(conversationId))
-            messageDao.clearConversation(conversationId)
+            database.clearThreadCache(conversationId)
         }
     }
 
@@ -255,6 +259,7 @@ class ConversationLivePatcher @Inject constructor(
             database.withTransaction {
                 if (conversationDao.find(conversationId) == null) {
                     conversationDao.upsertAll(listOf(entityOf(fetched, now, previous = null)))
+                    journal.record(conversationId, ConversationLiveFacet.entries.toSet())
                 }
             }
             runCatching { LocalSearchIndex(SearchIndexDao(database)).indexConversation(fetched) }
@@ -275,7 +280,10 @@ class ConversationLivePatcher @Inject constructor(
             val current = runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull()
                 ?: return@withTransaction Known.PRESENT
             val next = transform(current)
-            if (next != current) conversationDao.upsertAll(listOf(entityOf(next, row.cachedAt, previous = row)))
+            if (next != current) {
+                conversationDao.upsertAll(listOf(entityOf(next, row.cachedAt, previous = row)))
+                journal.record(conversationId, ConversationLiveFacets.changed(current, next))
+            }
             Known.PRESENT
         }
 

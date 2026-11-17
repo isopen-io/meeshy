@@ -1,5 +1,6 @@
 import { NOTIFICATION_CLICKED_MESSAGE } from '@/lib/notifications/tap-navigation';
 
+import { consumeCallAnswerConfirmation } from './call-answer-confirmation';
 import type { ActiveCall, CallStoreApi } from './call-store';
 
 /**
@@ -10,9 +11,11 @@ import type { ActiveCall, CallStoreApi } from './call-store';
  *
  * L'intention arrive par deux portes : l'adresse d'un onglet NEUF
  * (`?repondre=<id>`, retirée aussitôt pour qu'un rechargement ne redécroche
- * rien), ou le message qu'un onglet DÉJÀ OUVERT reçoit du worker. Elle expire
- * avec la sonnerie : un appel qui sonne plus tard n'est pas celui qu'on a
- * accepté.
+ * rien), ou le message qu'un onglet DÉJÀ OUVERT reçoit du worker. Seul le
+ * MESSAGE vaut consentement : une adresse se compose à la main, elle ne
+ * décroche que si le worker a posé sa confirmation (`call-answer-confirmation.ts`,
+ * #18907) — sinon l'appel sonne et attend un toucher. L'intention expire avec
+ * la sonnerie : un appel qui sonne plus tard n'est pas celui qu'on a accepté.
  *
  * Et la notification suit l'appel : dès qu'il quitte la sonnerie dans
  * l'application (décroché, refusé, terminé), celle du worker est retirée.
@@ -32,6 +35,8 @@ export type CallAnswerIntentEnvironment = {
   readonly accept: () => void;
   readonly closeRinging: (callId: string) => void;
   readonly now: () => number;
+  /** Le worker a-t-il posé la confirmation de cet appel ? La lit ET la consomme. */
+  readonly confirm: (callId: string) => Promise<boolean>;
 };
 
 export function answerCallIdFromSearch(search: string): string | null {
@@ -71,7 +76,12 @@ export function listenCallAnswerIntents(env: CallAnswerIntentEnvironment): () =>
   const fromSearch = answerCallIdFromSearch(env.search);
   if (fromSearch !== null) {
     env.forgetParam();
-    remember(fromSearch);
+    void env
+      .confirm(fromSearch)
+      .catch(() => false)
+      .then((confirmed) => {
+        if (confirmed) remember(fromSearch);
+      });
   }
 
   env.container?.addEventListener('message', (event) => {
@@ -108,5 +118,6 @@ export async function listenCallAnswerIntentsInBrowser(): Promise<void> {
         .catch(() => undefined);
     },
     now: () => Date.now(),
+    confirm: (callId) => consumeCallAnswerConfirmation({ callId, now: Date.now(), indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB }),
   });
 }

@@ -197,7 +197,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
                 .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }   // iOS 16–17
                 .trackScrollContentOffset { scrollRelay.offset = -$0 }                            // iOS 18+ (preference path is dead there)
                 .refreshable {
-                    await viewModel.loadInitial()
+                    await viewModel.refresh()
                 }
             }
         }

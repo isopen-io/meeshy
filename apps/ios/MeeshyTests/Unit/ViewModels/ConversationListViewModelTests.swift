@@ -3328,6 +3328,49 @@ final class ConversationListViewModelTests: XCTestCase {
                        "Two persists separated by > debounce window must each save")
     }
 
+    // MARK: - #18933 — l'instantané ne retire que ce que la liste a retiré
+
+    /// Une conversation née pendant l'absence, réhydratée par le moteur PENDANT
+    /// l'anti-rebond, n'est plus effacée du cache par l'instantané planifié
+    /// avant elle : le ViewModel retire, le moteur ajoute.
+    func test_schedulePersist_aRowTheEngineAddsDuringTheDebounce_staysInTheCache() async throws {
+        let store = await CacheCoordinator.shared.conversations
+        await store.invalidate(for: "list")
+        let shown = makeConversation(id: "conv-18933-shown")
+        try await store.save([shown], for: "list")
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.setConversations([shown])
+        sut.persistCallCount = 0
+
+        sut.schedulePersist(debounce: 0.05)
+        try await store.save([shown, makeConversation(id: "conv-18933-born")], for: "list")
+        await waitUntil { sut.persistCallCount == 1 }
+
+        let cached = await store.loadIgnoringExpiry(for: "list")?.items.map(\.id) ?? []
+        await store.invalidate(for: "list")
+        XCTAssertEqual(Set(cached), ["conv-18933-shown", "conv-18933-born"],
+                       "la ligne écrite par le moteur pendant l'attente reste dans le cache")
+    }
+
+    func test_schedulePersist_aRowTheListRemoved_leavesTheCache() async throws {
+        let store = await CacheCoordinator.shared.conversations
+        await store.invalidate(for: "list")
+        let kept = makeConversation(id: "conv-18933-kept")
+        let left = makeConversation(id: "conv-18933-left")
+        try await store.save([kept, left], for: "list")
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.setConversations([kept, left])
+        sut.persistCallCount = 0
+
+        let index = try XCTUnwrap(sut.conversations.firstIndex { $0.id == left.id })
+        sut.dropConversationLeftByMe(at: index)
+        await waitUntil { sut.persistCallCount == 1 }
+
+        let cached = await store.loadIgnoringExpiry(for: "list")?.items.map(\.id) ?? []
+        await store.invalidate(for: "list")
+        XCTAssertEqual(cached, ["conv-18933-kept"], "une ligne que la liste retire quitte aussi le cache")
+    }
+
     // MARK: - loadMore: cursor-based pagination
 
     func test_loadMore_initialFetch_setsCursorAndStateFromResponse() async {

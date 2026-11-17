@@ -393,17 +393,18 @@ try {
       check(freshErrors.length === 0, `${label} : aucune erreur de page au rappel depuis un onglet neuf — ${JSON.stringify(freshErrors)}`);
       await fresh.close();
 
-      /* Et quand le navigateur laisse partir le son, l'onglet neuf compose seul
-         dès sa connexion prête, sans question. */
+      /* Une adresse se compose à la main (#18907) : même quand le navigateur laisse
+         partir le son, elle ne compose JAMAIS seule, et le nom qu'elle porte
+         (`appelant=`) n'est pas lu — l'invite dit celui de la conversation. */
       const allowed = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
       const allowedPage = await allowed.newPage();
       allowedPage.setDefaultTimeout(10_000);
-      await allowedPage.goto(`${BASE}/c/c-kwame?rappeler=audio&appelant=${encodeURIComponent('Kwame Mensah')}`, { waitUntil: 'load' });
-      const direct = await allowedPage.waitForSelector('[data-call-screen]', { timeout: 8000 }).then(() => true, () => false);
-      const directScreen = direct ? await allowedPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')) : null;
+      await allowedPage.goto(`${BASE}/c/c-kwame?rappeler=audio&appelant=${encodeURIComponent('Maman')}&groupe=1`, { waitUntil: 'load' });
+      const forgedPrompt = await allowedPage.waitForSelector('[data-call-back-prompt]', { timeout: 8000 }).then(() => true, () => false);
+      const forgedName = forgedPrompt ? await allowedPage.$eval('[data-call-back-prompt]', (el) => el.getAttribute('aria-label')) : null;
       check(
-        direct && directScreen === 'Appel avec Kwame Mensah' && (await allowedPage.$('[data-call-back-prompt]')) === null,
-        `${label} : son autorisé, l'onglet neuf rappelle Kwame Mensah sans question (${directScreen})`,
+        forgedPrompt && forgedName === 'Rappeler Kwame Mensah ?' && (await allowedPage.$('[data-call-screen]')) === null,
+        `${label} : son autorisé, une adresse forgée ne compose rien et ne choisit pas le nom (${forgedName})`,
       );
       await allowed.close();
     }

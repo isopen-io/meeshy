@@ -15,6 +15,9 @@
 /** GET /api/v1/users/:id */
 export const byId = (id: string): string => `/api/v1/users/${encodeURIComponent(id)}`;
 
+/** GET /api/v1/users/:id/in-common */
+export const byIdInCommon = (id: string): string => `/api/v1/users/${encodeURIComponent(id)}/in-common`;
+
 /** GET /api/v1/users/:userId/affiliate-token */
 export const byUserIdAffiliateToken = (userId: string): string => `/api/v1/users/${encodeURIComponent(userId)}/affiliate-token`;
 

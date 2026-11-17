@@ -53,6 +53,7 @@ function prismaWith(tokens: Token[]) {
       update: jest.fn(async () => ({})),
       deleteMany: jest.fn(),
     },
+    userSession: { findMany: jest.fn(async () => [{ id: 'live-session' }]) },
   };
 }
 

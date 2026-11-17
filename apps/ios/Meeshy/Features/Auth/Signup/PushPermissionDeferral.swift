@@ -97,8 +97,13 @@ enum PushPermissionPrompt {
     /// de sa raison, et ferait grossir un fichier déjà hors budget — ce que la
     /// interdit.
     ///
-    /// - `.registration` : on REPORTE. L'alerte système tomberait sur un écran
-    ///   sans conversation ni contact, et un refus posé là est définitif.
+    /// - `.registration` : on REPORTE tant que la fenêtre système n'a pas servi.
+    ///   L'alerte tomberait sur un écran sans conversation ni contact, et un
+    ///   refus posé là est définitif. Une permission DÉJÀ tranchée n'a rien à
+    ///   garder : l'appareil se déclare à APNs tout de suite (ios-systeme-5,
+    ///   #19104) — la déconnexion du compte précédent a effacé le jeton, et
+    ///   sans cela le nouveau compte ne recevait aucun push avant son premier
+    ///   envoi acquitté.
     /// - `.login` / `.restored` / `nil` : le compte a déjà de quoi notifier —
     ///   SAUF si l'onboarding garde la fenêtre pour sa carte 5 (#7915) : on
     ///   reporte alors aussi, au lieu de la tirer par-dessus la carte Langues.
@@ -108,16 +113,22 @@ enum PushPermissionPrompt {
         gate: (any OnboardingPushPermissionGating)? = nil,
         request: (() async -> Void)? = nil
     ) async {
-        guard origin == .registration else {
-            await requestUnlessHeld(
-                reportPending: origin == .login ? false : deferral.isPending,
-                deferral: deferral,
-                gate: gate ?? OnboardingPushPermissionGate(),
-                request: request ?? { await requestIfNeeded() }
-            )
-            return
+        await requestUnlessHeld(
+            reportPending: reportPending(origin: origin, deferral: deferral),
+            deferral: deferral,
+            gate: gate ?? OnboardingPushPermissionGate(),
+            request: request ?? { await requestIfNeeded() }
+        )
+    }
+
+    /// Une inscription porte son propre report : la porte garde la fenêtre à
+    /// elle seule, sans interroger l'onboarding.
+    private static func reportPending(origin: SessionOrigin?, deferral: any PushPermissionDeferring) -> Bool {
+        switch origin {
+        case .registration: return true
+        case .login: return false
+        case .restored, nil: return deferral.isPending
         }
-        deferral.postpone()
     }
 
     /// Le démarrage à froid avec une session restaurée (#7915). Il ignorait le

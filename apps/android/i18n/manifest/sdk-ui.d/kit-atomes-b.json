@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "kit_circle_scale_value",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_stepper_position",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_stepper_at_minimum",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_stepper_at_maximum",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_stepper_milestone_done",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_stepper_milestone_current",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_stepper_milestone_todo",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_wave_player_play",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_wave_player_pause",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_wave_player_replay",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_wave_player_buffering",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_wave_player_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_wave_player_position",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_locked_row_locked",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_locked_row_unlocked",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_translation_mark_translated",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_translation_mark_translated_from",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_translation_mark_original",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_translation_mark_original_from",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_translation_mark_show_translation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_translation_mark_show_original",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_translation_mark_value_original",
+          "status": "android-only"
+        },
+        {
+          "androidName": "kit_translation_mark_value_translated",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

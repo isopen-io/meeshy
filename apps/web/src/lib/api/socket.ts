@@ -14,13 +14,11 @@ import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
 import type { SocketAuth, SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
-import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
-import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
 import { deletedAccountOf, deletedAccountOfRevocation, ownDeletedAccount } from './account-deleted';
 import { attachmentStatusDetailsQueryKey } from './attachments';
 import { guestAccessEndOfSocketError, type GuestAccessEnd } from './guest-access-end';
-import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './conversations';
+import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY, requestFullConversationRead } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentDeleted, decodeAttachmentDeletedEvent } from './realtime-attachment-deleted';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
@@ -32,43 +30,25 @@ import {
   isMessageDeletedEvent,
   isMessageEditedEvent,
 } from './realtime-message-mutations';
-import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
+import { applyMessageHiddenForMe, applyMessageRestoredForMe, isMessageHiddenForMeEvent, isMessageRestoredForMeEvent } from './realtime-message-hidden';
 import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
-import { applyConversationGone, conversationGoneOf } from './realtime-conversation-gone';
+import { applyMemberCountChange, memberCountChangeOf, type MembershipChange } from './realtime-member-count';
+import { applyConversationGone, conversationGoneOf, viewerConversationOf } from './realtime-conversation-gone';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
-import {
-  applyMediaAltTranslation,
-  applyMediaCaptionTranslation,
-  applyPostCreated,
-  applyPostDeleted,
-  applyPostReactionEvent,
-  applyPostTranslation,
-  applyPostUpdated,
-  applyServedBookmark,
-  applyServedLike,
-  applyServedRepost,
-  applyStoryChanged,
-} from './feed-realtime';
-/* LES DEUX CLÉS DU REJEU SOCIAL (#18641) — `feed-realtime.ts` ci-dessus tire
-   déjà `./feed` et `./stories` : les nommer ici n'ajoute AUCUN poids au chunk
-   `realtime`, seulement la capacité de les périmer. */
+/* LES DEUX CLÉS DU REJEU SOCIAL (#18641) — `feed-realtime.ts` (branché par
+   `realtime-social.ts`) tire déjà `./feed` et `./stories` : les nommer ici
+   n'ajoute AUCUN poids au chunk `realtime`, seulement la capacité de les
+   périmer. */
 import { FEED_QUERY_KEY } from './feed';
-import { STORY_TRAY_QUERY_KEY } from './stories';
+import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { MY_PROFILE_QUERY_KEY } from './me-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
-import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
+import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY, type NotificationsDeps } from './notifications';
 import { bindPublicationRoomTransport } from './publication-rooms';
-import {
-  applyNotificationCounts,
-  applyNotificationDeleted,
-  applyNotificationDeletedBulk,
-  applyNotificationNew,
-  applyNotificationRead,
-  applyNotificationReadBulk,
-  notificationIdOf,
-} from './notifications-realtime';
+import { createNotificationLiveHandlers } from './notifications-live';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -97,8 +77,9 @@ import {
   isMessageExpiredEvent,
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
-import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp } from './realtime-thread-catch-up';
+import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp, relaunchConversationList } from './realtime-thread-catch-up';
 import { viewerRoleUpdatedListener } from './realtime-viewer-role';
+import { bindSocialRealtime } from './realtime-social';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
 
@@ -148,7 +129,11 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  *   « Découvrir » la compterait trop tard ;
  * - **les MESSAGES FAVORIS** (#7378) parce qu'un `message:starred` posé depuis
  *   un AUTRE appareil dans l'intervalle n'a atteint aucun socket, et que
- *   l'étoile du fil mentirait jusqu'à la prochaine relecture.
+ *   l'étoile du fil mentirait jusqu'à la prochaine relecture ;
+ * - **le PROFIL du lecteur** (#18914) parce qu'aucun événement n'atteint ses
+ *   propres sockets quand il change de langue, de nom ou de photo ailleurs :
+ *   la session suit `GET /me` (`served-profile-session.ts`), et cette relecture
+ *   est ce qui la ramène sans attendre ses trente minutes de fraîcheur.
  *
  * Les deux familles de la cloche sont NOMMÉES plutôt que leur racine
  * `['notifications']` balayée : c'est refuser d'emporter la prochaine requête
@@ -166,17 +151,8 @@ const CATCH_UP_PERSONAL_FAMILIES: readonly (readonly unknown[])[] = [
   NOTIFICATION_COUNTS_QUERY_KEY,
   FRIENDS_QUERY_PREFIX,
   STARRED_MESSAGES_QUERY_ROOT,
+  MY_PROFILE_QUERY_KEY,
 ];
-
-/** Les notifications qui annoncent l'ARRIVÉE d'un message — jamais une
- * réaction ni une édition, qui nomment un message que le fil peut ne pas avoir
- * chargé sans qu'il manque quoi que ce soit (#9291). */
-const MESSAGE_ARRIVAL_NOTIFICATIONS: ReadonlySet<string> = new Set([
-  'new_message',
-  'message_reply',
-  'user_mentioned',
-  'mention',
-]);
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {
   if (typeof payload !== 'object' || payload === null) return false;
@@ -185,16 +161,6 @@ function isTypingEvent(payload: unknown): payload is TypingEvent {
 }
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-
-/** `PostLikedEventData` / `PostUnlikedEventData` (`@meeshy/shared/types/post`),
- * réduits aux trois champs que le fil lit — validés, jamais crus sur parole. */
-type PostLikeEvent = { readonly postId: string; readonly userId: string; readonly likeCount: number };
-
-function isPostLikeEvent(payload: unknown): payload is PostLikeEvent {
-  if (typeof payload !== 'object' || payload === null) return false;
-  const p = payload as Record<string, unknown>;
-  return typeof p.postId === 'string' && typeof p.userId === 'string' && isFiniteNumber(p.likeCount);
-}
 
 /**
  * `message:pending-delivered` (#7223) — charge INLINE, aucun type exporté
@@ -211,20 +177,6 @@ function isPendingMessagesDeliveredEvent(payload: unknown): payload is PendingMe
     isFiniteNumber(p.count) &&
     Array.isArray(p.conversationIds) &&
     p.conversationIds.every((id) => typeof id === 'string')
-  );
-}
-
-/** `PostBookmarkedEventData` — PERSONNEL (émis aux seuls sockets de l'auteur
- * du geste), donc `bookmarked` décrit toujours le lecteur. */
-type PostBookmarkEvent = { readonly postId: string; readonly bookmarked: boolean; readonly bookmarkCount?: number };
-
-function isPostBookmarkEvent(payload: unknown): payload is PostBookmarkEvent {
-  if (typeof payload !== 'object' || payload === null) return false;
-  const p = payload as Record<string, unknown>;
-  return (
-    typeof p.postId === 'string' &&
-    typeof p.bookmarked === 'boolean' &&
-    (p.bookmarkCount === undefined || isFiniteNumber(p.bookmarkCount))
   );
 }
 
@@ -270,6 +222,8 @@ export type RealtimeDeps = {
   readonly onAccountDeleted?: (accountId: string) => void;
   /** `conversation:closed` / `conversation:obsoleted` (#14645) : le fil ouvert de cette conversation se referme. */
   readonly onConversationGone?: (conversationId: string) => void;
+  /** Le transport de la cloche : la notification arrivée sur le fil OUVERT se marque lue par lui (#18907). Absent : elle reste non lue. */
+  readonly notificationsApi?: NotificationsDeps;
   /** Le compte de la session qui a OUVERT la connexion — seul nommable (audit #10237) ; `null` pour un invité. */
   readonly account?: string | null;
   /** Horloge INJECTABLE (motif `perform-send.ts`) — jamais `Date.now()` lu
@@ -571,11 +525,24 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     if (isMessageHiddenForMeEvent(payload)) applyMessageHiddenForMe(deps.queryClient, payload, deps.viewerId());
   };
 
-  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
-  const onParticipantDeparture = (payload: unknown): void => {
-    const ended = viewerMembershipEndedOf(payload, deps.viewerId());
-    if (ended !== null) applyViewerMembershipEnded(deps.queryClient, ended);
+  /** L'effectif d'un groupe (#18914) : posé tel que servi, repli ±1 sur une passerelle antérieure. Règle : `realtime-member-count.ts`. */
+  const applyMembershipCount = (payload: unknown, change: MembershipChange): void => {
+    const counted = memberCountChangeOf(payload, change);
+    if (counted !== null) applyMemberCountChange(deps.queryClient, counted);
   };
+
+  const onParticipantJoined = (payload: unknown): void => applyMembershipCount(payload, 'joined');
+
+  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
+  const onParticipantDeparture =
+    (change: Exclude<MembershipChange, 'joined'>) =>
+    (payload: unknown): void => {
+      const ended = viewerMembershipEndedOf(payload, deps.viewerId());
+      if (ended !== null) applyViewerMembershipEnded(deps.queryClient, ended);
+      applyMembershipCount(payload, change);
+    };
+  const onParticipantLeft = onParticipantDeparture('left');
+  const onParticipantBanned = onParticipantDeparture('banned');
 
   /** `conversation:closed` / `-obsoleted` (#14645) — ligne, détail et messages partent. Règle : `realtime-conversation-gone.ts`. */
   const onConversationGone = (payload: unknown): void => {
@@ -583,6 +550,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     if (id === null) return;
     deps.onConversationGone?.(id);
     applyConversationGone(deps.queryClient, id);
+  };
+
+  /** `conversation:deleted` (#18914) — supprimée POUR MOI sur un autre appareil : ligne, fiche et fil partent, le fil ouvert se referme. */
+  const onConversationDeletedForMe = (payload: unknown): void => {
+    const id = viewerConversationOf(payload, deps.viewerId());
+    if (id === null) return;
+    deps.onConversationGone?.(id);
+    applyConversationGone(deps.queryClient, id);
+  };
+
+  /** `conversation:restored` (#18914) — restaurée pour moi : la liste se relit EN ENTIER, `updatedAt` n'ayant pas bougé. */
+  const onConversationRestoredForMe = (payload: unknown): void => {
+    if (viewerConversationOf(payload, deps.viewerId()) === null) return;
+    requestFullConversationRead(deps.queryClient);
+    relaunchConversationList(deps.queryClient);
+  };
+
+  /** `message:restored-for-me` (#18914) — le fil de chaque conversation nommée se relit. Règle : `realtime-message-hidden.ts`. */
+  const onMessageRestoredForMe = (payload: unknown): void => {
+    if (isMessageRestoredForMeEvent(payload)) applyMessageRestoredForMe(deps.queryClient, payload, deps.viewerId());
   };
 
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
@@ -658,203 +645,6 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
-   * `comment:added` (#7151) — LA LISTE DES COMMENTAIRES SUIT LE FIL EN DIRECT.
-   *
-   * L'événement existait depuis toujours côté passerelle ; mesuré avant ce lot,
-   * `grep -rn "comment:added"` sur `src/` rendait VIDE. La règle vit dans
-   * `realtime-apply.ts` (idempotence, réconciliation de l'optimiste, garde de
-   * forme) : **cette ligne la BRANCHE**.
-   *
-   * Sans elle, le couple serait « écrit, testé, et jamais activé » — la forme
-   * exacte que #7142 vient de coûter au dépôt sur une autre surface. Un
-   * mécanisme dont la valeur n'atteint aucun lecteur n'a corrigé personne.
-   */
-  /**
-   * `comment:added` (#7151) — LA LISTE DES COMMENTAIRES SUIT LE FIL EN DIRECT.
-   *
-   * `import()`, JAMAIS statique — D-98 : « un écouteur temps réel n'IMPORTE pas
-   * le cache qu'il met à jour ». Mesuré : l'import statique portait le chunk
-   * `realtime` à 5,05 Ko pour un plafond de 5 ; garder la seule GARDE ici le
-   * laissait encore à 5,01. La règle ENTIÈRE — forme et application — vit donc
-   * avec le cache, et cette ligne ne fait que router.
-   */
-  const onCommentAdded = (payload: unknown): void => {
-    void import('./publication-comments').then(({ applyCommentAdded }) => {
-      applyCommentAdded(deps.queryClient, payload);
-    });
-  };
-
-  /**
-   * `comment:updated` / `comment:deleted` / `comment:liked` / `comment:unliked`
-   * (#7227, W8) — LE FIL DE COMMENTAIRES SUIT LA PASSERELLE EN DIRECT, même
-   * motif que `comment:added` juste au-dessus : la règle (garde de forme,
-   * réécriture pure sur `commentsQueryKey`) vit dans `publication-comments.ts`
-   * (D-40), ces lignes ne font que BRANCHER, par `import()` (D-98, chunk
-   * `realtime` plafonné à 5 Ko).
-   */
-  const onCommentUpdated = (payload: unknown): void => {
-    void import('./publication-comments').then(({ applyCommentUpdated }) => {
-      applyCommentUpdated(deps.queryClient, payload);
-    });
-  };
-
-  const onCommentDeleted = (payload: unknown): void => {
-    void import('./publication-comments').then(({ applyCommentDeleted }) => {
-      applyCommentDeleted(deps.queryClient, payload);
-    });
-  };
-
-  const onCommentLikeChanged =
-    (liked: boolean) =>
-    (payload: unknown): void => {
-      void import('./publication-comments').then(({ applyCommentLikeEvent }) => {
-        applyCommentLikeEvent(deps.queryClient, payload, deps.viewerId(), liked);
-      });
-    };
-  const onCommentLiked = onCommentLikeChanged(true);
-  const onCommentUnliked = onCommentLikeChanged(false);
-
-  /**
-   * `comment:translation-updated` (#7394) — LE PRISME SUIT LE PIPELINE EN
-   * DIRECT SUR UN COMMENTAIRE, jumeau de `post:translation-updated` (#7383).
-   * Il n'était écouté NULLE PART : un commentaire écrit hors de la langue du
-   * lecteur restait dans celle de son auteur jusqu'à la relecture du fil. La
-   * loi (garde de forme, fusion par langue, caisse du fil) vit avec le cache
-   * dans `publication-comments.ts` ; cette ligne ne fait que BRANCHER, par
-   * `import()` comme ses quatre voisines (D-98).
-   */
-  const onCommentTranslationUpdated = (payload: unknown): void => {
-    void import('./publication-comments').then(({ applyCommentTranslation }) => {
-      applyCommentTranslation(deps.queryClient, payload);
-    });
-  };
-
-  /**
-   * `story:reacted` / `story:unreacted` (#7227, W8) — LE RAIL SUIT LES
-   * RÉACTIONS EN DIRECT. La règle (compte ABSOLU, garde « jamais le cœur
-   * d'un autre ») vit dans `reaction-realtime.ts` — SÉPARÉ de
-   * `story-reactions.ts` (le port du GESTE, importé STATIQUEMENT par le
-   * lecteur, chunk `story_reader` déjà serré) — ; `import()`, même motif que
-   * `comment:added`.
-   */
-  const onStoryReactionChanged =
-    (plan: 'add' | 'remove') =>
-    (payload: unknown): void => {
-      void import('./reaction-realtime').then(({ applyStoryReactionEvent }) => {
-        applyStoryReactionEvent(deps.queryClient, payload, { viewerId: deps.viewerId(), plan });
-      });
-    };
-  const onStoryReacted = onStoryReactionChanged('add');
-  const onStoryUnreacted = onStoryReactionChanged('remove');
-
-  /**
-   * `story:*`/`status:updated` (#5652, #6080, #16541) — LE RAIL SUIT LE FIL EN DIRECT : une
-   * invalidation du plateau par famille, jamais une reconstruction locale du corpus
-   * (`groupStoriesByAuthor` reste le SEUL site qui regroupe, D-14) ; seul le
-   * réglage des commentaires se pose (`feed-realtime.ts#applyStoryChanged`).
-   */
-  const onStoryChanged = (payload?: unknown): void => {
-    applyStoryChanged(deps.queryClient, payload);
-  };
-  /* `story:viewed` (#7116, revue) — le plateau comme ci-dessus, ET le compte
-     des vues de l'auteur + sa feuille ouverte (`publication-views-realtime.ts`,
-     `import()` : D-98, motif `story:reacted`). */
-  const onStoryViewed = (payload: unknown): void => {
-    onStoryChanged();
-    void import('./publication-views-realtime').then(({ applyStoryViewedEvent }) => {
-      applyStoryViewedEvent(deps.queryClient, payload);
-    });
-  };
-
-  /**
-   * `post:liked` / `post:unliked` / `post:bookmarked` (#6278, D-47) — LE FIL
-   * SUIT LES GESTES EN DIRECT, par les DEUX mêmes fonctions pures que
-   * l'optimiste (`lib/feed/interactions.ts`). Le compte diffusé est ABSOLU et
-   * remplace l'estimation ; « aimé par moi » ne bascule que pour un geste du
-   * LECTEUR (un autre de ses appareils) — le « j'aime » d'un autre ne remplit
-   * jamais son cœur. Miroir `FeedView.swift:1331-1357`.
-   *
-   * **ET LES RÉELS, ET LA FICHE (#7227, W8)** — la MÊME carte, servie par un
-   * fil de Réels (`ReelsViewModel.swift:117-128` : SEULS les likes et la
-   * suppression y sont câblés, jamais `postCreated`/`postUpdated`) ou par
-   * `/post/$post`. Les caisses vivent au registre (`card-caches.ts`, #7341 :
-   * le hashtag, le profil et les enregistrées aussi), atteint par
-   * `feed-realtime.ts#applyServedLike`, site UNIQUE partagé avec
-   * `post:reaction-added`/`post:reaction-removed` : cet écouteur ne tient que
-   * le branchement (D-98), et deux boucles recopiées ne peuvent plus diverger
-   * d'une caisse.
-   */
-  const onPostLikeChanged =
-    (on: boolean) =>
-    (payload: unknown): void => {
-      if (!isPostLikeEvent(payload)) return;
-      applyServedLike(deps.queryClient, {
-        postId: payload.postId,
-        on,
-        byViewer: payload.userId === deps.viewerId(),
-        likeCount: payload.likeCount,
-      });
-    };
-  const onPostLiked = onPostLikeChanged(true);
-  const onPostUnliked = onPostLikeChanged(false);
-
-  /**
-   * `post:created` / `post:updated` / `post:deleted` (#7182) — LE FLUX APPREND
-   * CE QUI ARRIVE. Ces trois événements étaient MUETS ici pendant que leurs
-   * sept cousins (`post:liked`, `post:bookmarked`, les quatre `story:*`,
-   * `comment:added`) étaient écoutés : une publication d'un ami n'atteignait
-   * jamais le fil sans rechargement.
-   *
-   * Les lois vivent dans `feed-realtime.ts` — réconciliation par cmid,
-   * idempotence, insertion en tête, préservation de l'état du lecteur — et
-   * un écouteur ne tient QUE le branchement (D-98). L'import est STATIQUE et
-   * c'est MESURÉ : `feed-realtime.ts` ne tient aucune requête, et le rendre
-   * différé coûtait PLUS que le module lui-même (5,10 Ko contre 5,01 pour le
-   * chunk `realtime` — trois `import()` et leur table de dépendances).
-   */
-  const onPostCreated = (payload: unknown): void => {
-    applyPostCreated(deps.queryClient, payload);
-  };
-
-  const onPostUpdated = (payload: unknown): void => {
-    applyPostUpdated(deps.queryClient, payload);
-  };
-
-  const onPostDeleted = (payload: unknown): void => {
-    applyPostDeleted(deps.queryClient, payload);
-  };
-
-  /**
-   * `post:bookmarked` — **ET LES RÉELS, ET LA FICHE (#7227, W8)**. Cet écho
-   * n'écrivait que le Flux pendant que le geste LOCAL tenait plusieurs
-   * caisses (`feed-gestures.ts#performPostGesture`) et qu'iOS réconcilie son
-   * pager (`ReelsViewModel.swift:139-163`) : un favori posé depuis un AUTRE
-   * appareil n'atteignait ni le pager ni la fiche. Les caisses vivent au
-   * registre (`card-caches.ts`, #7341), atteint par
-   * `feed-realtime.ts#applyServedBookmark`, à côté de ses jumelles du cœur —
-   * cet écouteur ne tient que le branchement (D-98).
-   */
-  const onPostBookmarked = (payload: unknown): void => {
-    if (!isPostBookmarkEvent(payload)) return;
-    applyServedBookmark(deps.queryClient, {
-      postId: payload.postId,
-      on: payload.bookmarked,
-      bookmarkCount: payload.bookmarkCount,
-    });
-  };
-
-  /**
-   * `post:reposted` (#6278 c) — LE COMPTE DE L'ORIGINAL SUIT le repost d'un
-   * AUTRE lecteur ; le mien est déjà posé par l'optimiste. La loi (extraction
-   * de `repost.repostOf.repostCount`, garde de forme) vit dans
-   * `feed-realtime.ts#applyServedRepost` — cet écouteur ne tient que le
-   * branchement (D-98).
-   */
-  const onPostReposted = (payload: unknown): void => {
-    applyServedRepost(deps.queryClient, payload);
-  };
-
-  /**
    * `message:starred` (#7378) — LE FAVORI D'UN MESSAGE, posé ou retiré sur un
    * AUTRE appareil (ou l'écho de ce geste-ci). PERSONNEL : la passerelle
    * n'émet que vers `user:<id>`. La loi (l'étoile du fil, la ligne de l'écran
@@ -867,94 +657,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
-   * `post:reaction-added` / `post:reaction-removed` (#7227, W8) — GARDÉS au
-   * ❤️, miroir EXACT d'iOS (`FeedView.swift:1307-1325`). Le ❤️ sur un
-   * POST/REEL part en pratique par `post:liked`/`post:unliked`
-   * (`PostReactionHandler.ts:106-123`) ; les emojis NON-❤️ n'ont AUCUN champ
-   * côté `FeedPost` — la règle (garde + application, feed/reels/détail) vit
-   * dans `feed-realtime.ts`, importé STATIQUEMENT (D-98 mesure déjà le coût
-   * de ce module dans le chunk `realtime` pour `post:created/updated/deleted`,
-   * un `import()` de plus n'ajouterait rien).
-   */
-  const onPostReactionChanged = (payload: unknown): void => {
-    applyPostReactionEvent(deps.queryClient, payload, deps.viewerId());
-  };
-
-  /**
-   * `post:translation-updated` (#7383) et `media:caption-translation-updated`
-   * (#6280, #7382) — LE PRISME SUIT LE PIPELINE EN DIRECT, sur CHAQUE écran
-   * qui montre la carte. Le texte d'une publication n'était écouté NULLE PART
-   * (iOS l'écoute sur le Flux, la fiche, le profil et les stories), et la
-   * légende d'un média n'atteignait que le Flux (`updateFeed`, disparu) : sa
-   * charge porte pourtant `postId` depuis sa naissance — c'est la garde locale
-   * qui ne le lisait pas.
-   *
-   * **Et `media:alt-translation-updated` depuis #7392** — le TROISIÈME contenu
-   * d'un média, qui n'avait AUCUN auditeur sur aucun client alors que la
-   * passerelle le diffuse depuis #6737. C'est la chaîne qu'un lecteur d'écran
-   * PRONONCE : la laisser muette revenait à faire élire une traduction par le
-   * pipeline, la ranger, la pousser sur le fil — et n'en rien afficher.
-   *
-   * Les lois vivent dans `feed-realtime.ts` (validation, fusion par langue,
-   * registre des caisses) ; ces écouteurs ne tiennent que le branchement
-   * (D-98). TROIS contenus, trois cartes de traduction, jamais mélangées.
-   */
-  const onPostTranslationUpdated = (payload: unknown): void => {
-    applyPostTranslation(deps.queryClient, payload);
-  };
-
-  const onMediaCaptionTranslationUpdated = (payload: unknown): void => {
-    applyMediaCaptionTranslation(deps.queryClient, payload);
-  };
-
-  const onMediaAltTranslationUpdated = (payload: unknown): void => {
-    applyMediaAltTranslation(deps.queryClient, payload);
-  };
-
-  /**
    * `notification:*` (#6288) — LA CLOCHE SUIT LA PASSERELLE SANS RELIRE : les
-   * règles vivent dans `notifications-realtime.ts`, ces lignes les branchent.
-   *
-   * Le DÉDOUBLONNAGE de `notification:new` vit ICI, sur la connexion : une
-   * notification dont aucune liste n'est en cache (cloche jamais ouverte) ne
-   * peut pas être reconnue par le cache, et le compte l'avancerait à chaque
-   * rediffusion. La mémoire est BORNÉE — une session longue ne doit rien
-   * retenir d'autre que les derniers identifiants vus.
+   * règles vivent dans `notifications-realtime.ts`, le câblage de la connexion
+   * dans `notifications-live.ts` (le budget de ce fichier est plein).
    */
-  const seenNotifications = new Set<string>();
-  const SEEN_NOTIFICATIONS_CAP = 200;
-  const onNotificationNew = (payload: unknown): void => {
-    const notification = decodeRealtimeNotification(payload);
-    if (notification === null || seenNotifications.has(notification.id)) return;
-    seenNotifications.add(notification.id);
-    if (seenNotifications.size > SEEN_NOTIFICATIONS_CAP) {
-      const oldest = seenNotifications.values().next().value;
-      if (oldest !== undefined) seenNotifications.delete(oldest);
-    }
-    applyNotificationNew(deps.queryClient, notification);
-    /* LA CLOCHE SONNE, LE FIL SUIT (#9291) — la notification d'un message
-       absent du fil ouvert le relit. */
-    const { conversationId, messageId } = notification.context;
-    if (MESSAGE_ARRIVAL_NOTIFICATIONS.has(notification.type) && conversationId !== undefined && messageId !== undefined) {
-      catchUpThreadMessage(deps.queryClient, { conversationId, messageId });
-    }
-    /* LA BANNIÈRE IN-APP (#8727) — seulement devant un onglet VISIBLE : un
-       onglet caché reçoit le push système, et une bannière posée pendant
-       l'absence surgirait, périmée, au retour. */
-    if (typeof document !== 'undefined' && !document.hidden) offerInAppBanner(notification, { pathname: window.location.pathname });
-  };
-  const onNotificationRead = (payload: unknown): void => applyNotificationRead(deps.queryClient, payload);
-  const onNotificationReadBulk = (payload: unknown): void => applyNotificationReadBulk(deps.queryClient, payload);
-  /* Un id supprimé qui revient est une notification RÉÉCRITE (édition :
-     `notification:deleted` puis `notification:new`, même identité) — la
-     mémoire de dédoublonnage l'oublie pour la laisser reprendre sa place. */
-  const onNotificationDeleted = (payload: unknown): void => {
-    const id = notificationIdOf(payload);
-    if (id !== null) seenNotifications.delete(id);
-    applyNotificationDeleted(deps.queryClient, payload);
-  };
-  const onNotificationDeletedBulk = (payload: unknown): void => applyNotificationDeletedBulk(deps.queryClient, payload);
-  const onNotificationCounts = (payload: unknown): void => applyNotificationCounts(deps.queryClient, payload);
+  const notificationLive = createNotificationLiveHandlers({ queryClient: deps.queryClient, now: deps.now, notificationsApi: deps.notificationsApi });
 
   /**
    * `friend-request:*` (#6321) — LES DEMANDES D'AMITIÉ SUIVENT LA PASSERELLE :
@@ -1007,9 +714,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * `participants-writes.ts:420`) et le legacy l'écoutait déjà
    * (`presence.service.ts:150`) : ce câblage restaure une PARITÉ, il n'ouvre
    * pas un périmètre.
+   *
+   * La LISTE seule (`exact`, #18914) : la racine préfixe aussi la fiche et les
+   * pages du fil ouvert, qu'une conversation NEUVE ne change pas.
    */
   const onConversationNew = (): void => {
-    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY, exact: true });
   };
 
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
@@ -1101,6 +811,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        à la reconnexion. */
     void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY, exact: true });
     void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+    /* ET LES HUMEURS (#18914) — le corpus `?scope=statuses` que le rail et les
+       pastilles d'avatar lisent ; nommé exactement, jamais la racine `['stories']`. */
+    void deps.queryClient.invalidateQueries({ queryKey: STATUS_MOODS_QUERY_KEY, exact: true });
     /* ET LES CATEGORIES DE CONVERSATION (#18641) — `['conversation-categories']`
        est une RACINE A PART, jamais couverte par le prefixe `['conversations']`
        ci-dessus : TanStack compare les cles ELEMENT PAR ELEMENT, et le premier
@@ -1122,6 +835,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   const onViewerRoleUpdated = viewerRoleUpdatedListener(deps.queryClient, deps.viewerId); /* #15987 — `realtime-viewer-role.ts` */
+  /* Les publications, les stories et leurs commentaires (#18914) — `realtime-social.ts`. */
+  const unbindSocial = bindSocialRealtime({ socket, queryClient: deps.queryClient, viewerId: deps.viewerId });
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_NEW, onMessageNew);
   socket.on<unknown>(SERVER_EVENTS.TYPING_START, onTypingStart);
@@ -1147,10 +862,14 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
-  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
-  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_RESTORED, onConversationRestoredForMe);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME, onMessageRestoredForMe);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1158,38 +877,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
-  socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
-  socket.on<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
-  socket.on<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
-  socket.on<unknown>(SERVER_EVENTS.COMMENT_LIKED, onCommentLiked);
-  socket.on<unknown>(SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked);
-  socket.on<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
-  socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
-  socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
-  socket.on<unknown>(SERVER_EVENTS.STATUS_UPDATED, onStoryChanged);
-  socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
-  socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryViewed);
-  socket.on<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
-  socket.on<unknown>(SERVER_EVENTS.STORY_UNREACTED, onStoryUnreacted);
-  socket.on<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
-  socket.on<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
-  socket.on<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
-  socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
-  socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
-  socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
-  socket.on<unknown>(SERVER_EVENTS.POST_REPOSTED, onPostReposted);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
-  socket.on<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
-  socket.on<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
-  socket.on<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
-  socket.on<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
-  socket.on<unknown>(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, onMediaAltTranslationUpdated);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, notificationLive.onNew);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, notificationLive.onRead);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, notificationLive.onReadBulk);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, notificationLive.onDeleted);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, notificationLive.onDeletedBulk);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, notificationLive.onCounts);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_NEW, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
@@ -1220,6 +914,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     },
     destroy: () => {
       publicationRooms.detach();
+      unbindSocial();
       unknownRows.dispose();
       for (const handle of typingTimers.values()) clearTimeoutFn(handle);
       typingTimers.clear();
@@ -1249,10 +944,14 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
-      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
-      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_RESTORED, onConversationRestoredForMe);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME, onMessageRestoredForMe);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1260,38 +959,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
-      socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
-      socket.off<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
-      socket.off<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
-      socket.off<unknown>(SERVER_EVENTS.COMMENT_LIKED, onCommentLiked);
-      socket.off<unknown>(SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked);
-      socket.off<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
-      socket.off<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
-      socket.off<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
-      socket.off<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
-      socket.off<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
-      socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
-      socket.off<unknown>(SERVER_EVENTS.STATUS_UPDATED, onStoryChanged);
-      socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
-      socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryViewed);
-      socket.off<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
-      socket.off<unknown>(SERVER_EVENTS.STORY_UNREACTED, onStoryUnreacted);
-      socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
-      socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
-      socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
-      socket.off<unknown>(SERVER_EVENTS.POST_REPOSTED, onPostReposted);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
-      socket.off<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
-      socket.off<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
-      socket.off<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
-      socket.off<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
-      socket.off<unknown>(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, onMediaAltTranslationUpdated);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, notificationLive.onNew);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, notificationLive.onRead);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, notificationLive.onReadBulk);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, notificationLive.onDeleted);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, notificationLive.onDeletedBulk);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, notificationLive.onCounts);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_NEW, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);

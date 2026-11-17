@@ -73,6 +73,9 @@ import { getReferralCode } from './referral-code';
 // Adresses personnelles publiées sur la fiche (#18863)
 import { meAddressRoutes } from './me-addresses';
 
+// « En commun » : communautés, amis et médias partagés, gardés par le cercle (#19200)
+import { getUserInCommon } from './in-common';
+
 /**
  * Main user routes registration
  * Aggregates all user-related routes from modular files
@@ -93,6 +96,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   await getUserById(fastify);
   await getUserByEmail(fastify);
   await getUserByIdDedicated(fastify);
+  await getUserInCommon(fastify);
   await getUserByPhone(fastify);
 
   // Contact change routes — surface unifiée d'abord (#4341), anciennes
