@@ -9,7 +9,18 @@ const wire = (overrides: Record<string, unknown> = {}) => ({ id: 'a1', title: 'S
 
 describe('mes adresses, lues sur le serveur', () => {
   test('une adresse servie est décodée avec son glyphe et ses clics', () => {
-    expect(decodeMyAddress(wire())).toEqual({ id: 'a1', title: 'Site', url: 'https://aissandiaye.studio', glyph: 'site', position: 0, isShown: true, clicks: 12 });
+    expect(decodeMyAddress(wire())).toEqual({ id: 'a1', title: 'Site', url: 'https://aissandiaye.studio/', glyph: 'site', position: 0, isShown: true, clicks: 12 });
+  });
+
+  test('une adresse qui n’est pas un site web public n’est jamais dessinée en lien', () => {
+    expect(decodeMyAddress(wire({ url: 'javascript:alert(1)' }))).toBeNull();
+    expect(decodeMyAddress(wire({ url: 'data:text/html,<script>alert(1)</script>' }))).toBeNull();
+    expect(decodeMyAddress(wire({ url: 'http://localhost:3000/admin' }))).toBeNull();
+    expect(decodeMyAddress(wire({ url: 'https://user:pass@site.example' }))).toBeNull();
+  });
+
+  test('une adresse servie sans schéma ne devient pas un chemin interne à l’application', () => {
+    expect(decodeMyAddress(wire({ url: 'aissandiaye.studio/music' }))?.url).toBe('https://aissandiaye.studio/music');
   });
 
   test('un glyphe inconnu retombe sur le site, une ligne sans url est écartée', () => {

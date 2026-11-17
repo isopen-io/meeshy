@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { GlyphSvg } from '@/components/glyph';
+import { LINKS_GLYPHS } from '@/components/glyphs-links';
 import type { MyAddress } from '@/lib/api/my-addresses';
 import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 
@@ -49,6 +51,17 @@ describe('mes adresses', () => {
     expect(html).toContain('Musique');
     expect(html).toContain('soundcloud.com/aissa');
     expect(html).toMatch(/<a[^>]*href="https:\/\/soundcloud.com\/aissa"[^>]*rel="noopener noreferrer"/);
+  });
+
+  test('chaque adresse porte le glyphe que son propriétaire a choisi', () => {
+    const glyph = (name: keyof typeof LINKS_GLYPHS) => renderToStaticMarkup(<GlyphSvg glyph={LINKS_GLYPHS[name]} size={16} />);
+    const site = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address()]} />);
+    const music = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address({ glyph: 'music' })]} />);
+    const photos = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address({ glyph: 'photos' })]} />);
+    expect(site).toContain(glyph('globeHemisphereWest'));
+    expect(music).toContain(glyph('vinylRecord'));
+    expect(photos).toContain(glyph('camera'));
+    expect(music).not.toContain(glyph('globeHemisphereWest'));
   });
 
   test('une adresse masquée sur la fiche reste dans la liste de son propriétaire', () => {

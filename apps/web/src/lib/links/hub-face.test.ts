@@ -1,6 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { addressHost, hubFigure } from './hub-face';
+import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
+
+import { addressHost, hubFigure, hubFigureCaption } from './hub-face';
+
+beforeAll(async () => {
+  await Promise.all([loadLinkFamiliesCatalog('fr'), loadLinkFamiliesCatalog('en')]);
+});
 
 describe('la face Liens', () => {
   test('une adresse se lit sans schéma ni « www. », sans barre finale', () => {
@@ -13,5 +19,14 @@ describe('la face Liens', () => {
     expect(hubFigure('fr', 1284)?.replace(/\s/gu, ' ')).toBe('1 284');
     expect(hubFigure('fr', null)).toBeNull();
     expect(hubFigure('fr', 0)).toBe('0');
+  });
+
+  test('le mot sous le chiffre s’accorde au nombre, dans la langue de l’interface', () => {
+    expect(hubFigureCaption('fr', 'tracking', 1)).toBe('clic');
+    expect(hubFigureCaption('fr', 'tracking', 1284)).toBe('clics');
+    expect(hubFigureCaption('fr', 'community', 1)).toBe('communauté');
+    expect(hubFigureCaption('fr', 'share', 1)).toBe('arrivée');
+    expect(hubFigureCaption('en', 'tracking', 1)).toBe('click');
+    expect(hubFigureCaption('en', 'tracking', 0)).toBe('clicks');
   });
 });
