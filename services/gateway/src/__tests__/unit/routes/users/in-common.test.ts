@@ -448,6 +448,53 @@ describe('les médias des conversations partagées', () => {
   });
 });
 
+describe('une conversation rendue obsolète ou supprimée pour moi ne sort pas par la fiche', () => {
+  const scopeStore = () => {
+    store = baseStore('ACQUAINTANCE');
+    store.conversations = [
+      { id: 'k1', encryptionMode: null, isActive: true },
+      { id: 'k4', encryptionMode: null, isActive: false, deletedAt: new Date('2026-06-02') },
+      { id: 'k5', encryptionMode: null, isActive: true },
+    ];
+    store.participants = [
+      participant(V, 'k1'),
+      participant(T, 'k1'),
+      participant(V, 'k4'),
+      participant(T, 'k4'),
+      { ...participant(V, 'k5'), deletedForMe: new Date('2026-06-02') },
+      participant(T, 'k5'),
+    ];
+  };
+
+  it('ni ses pièces ni leurs nombres', async () => {
+    scopeStore();
+    store.attachments = [attachment('k1', 'image/jpeg'), attachment('k4', 'image/jpeg'), attachment('k5', 'video/mp4')];
+    await build();
+    const media = (await get(T, '?parts=media')).body.data.parts.media;
+    expect(media.items.map((i: AnyRow) => i.conversationId)).toEqual(['k1']);
+    expect(media.counts).toEqual({ image: 1, video: 0, audio: 0, file: 0, link: 0 });
+  });
+
+  it('ni ses liens ni leur nombre', async () => {
+    scopeStore();
+    const text = (id: string, conversationId: string, content: string): AnyRow => ({
+      ...message(conversationId),
+      id,
+      content,
+      messageSource: 'user',
+    });
+    store.messages = [
+      text('65c00000000000000000aa01', 'k1', 'https://ok.example'),
+      text('65c00000000000000000aa02', 'k4', 'https://obsolete.example'),
+      text('65c00000000000000000aa03', 'k5', 'https://supprimee.example'),
+    ];
+    await build();
+    const media = (await get(T, '?parts=media&mediaKind=link')).body.data.parts.media;
+    expect(media.links.map((l: AnyRow) => l.domain)).toEqual(['ok.example']);
+    expect(media.counts.link).toBe(1);
+  });
+});
+
 describe('les liens des conversations partagées — l’onglet « Liens » de la planche', () => {
   const linkStore = () => {
     store = baseStore('ACQUAINTANCE');
