@@ -126,11 +126,6 @@ export interface AttachmentTranslation {
 export type AttachmentTranslations = Record<string, AttachmentTranslation>;
 
 /**
- * Type helper pour extraire une traduction spécifique
- */
-export type TranslationForLanguage<T extends AttachmentTranslations, L extends keyof T> = T[L];
-
-/**
  * Langues supportées (ISO 639-1)
  */
 export type SupportedLanguage =
@@ -147,24 +142,6 @@ export type SupportedLanguage =
   | 'hi'  // Hindi
   | 'ko'  // Coréen
   | string; // Autres langues
-
-/**
- * Type pour un attachment avec transcription et traductions
- */
-export interface AttachmentWithAudio {
-  id: string;
-  messageId?: string;
-  fileName: string;
-  fileUrl: string;
-  duration?: number;
-
-  // Nouvelles propriétés JSON
-  transcription?: AttachmentTranscription;
-  translations?: AttachmentTranslations;
-  metadata?: Record<string, unknown>;
-
-  createdAt: Date;
-}
 
 /**
  * Helper pour vérifier si une traduction existe pour une langue

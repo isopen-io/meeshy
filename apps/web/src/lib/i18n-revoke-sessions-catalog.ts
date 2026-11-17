@@ -57,8 +57,6 @@ export function loadRevokeSessionsCatalog(language: InterfaceLanguage): Promise<
   return request;
 }
 
-export const isRevokeSessionsCatalogLoaded = (language: InterfaceLanguage): boolean => loaded.has(language);
-
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 export function translateRevokeSessions<K extends RevokeSessionsCatalogKey>(language: InterfaceLanguage, key: K, ...params: TranslateRevokeSessionsArgs<K>): string;

@@ -53,17 +53,12 @@ export function AuthTitle({ gradient }: { gradient: 'login' | 'brand' }) {
  * LE PIED DE MARQUE — mêmes constantes que `institutional/brand-signature.tsx`
  * (`brandVersionLine`, `BRAND_CREDIT`, `BRAND_SIGNATURE_MASK_PATH`, § `lib/brand.ts`,
  * et la version par `__APP_VERSION__`, le littéral que `vite.config.ts` LIT
- * dans `package.json` — jamais une chaîne recopiée),
- * un rendu LOCAL plutôt qu'une reprise du composant lui-même : ce fichier
- * compile son JSX vers `react/jsx-runtime` (le défaut de l'application),
- * `brand-signature.tsx` vers `preact/jsx-runtime` — sa pragma de tête, requise
- * par son second consommateur `preact-render-to-string`. Les deux ALIAS vers
- * le même module au runtime (D-2, `vite.config.ts`), mais portent des types de
- * retour distincts que TypeScript refuse de composer en JSX. Les VALEURS
- * restent la source unique ; seul le RENDU est dupliqué, par la frontière de
- * pragma, pas par choix.
+ * dans `package.json` — jamais une chaîne recopiée), mais un rendu LOCAL
+ * plutôt qu'une reprise de `BrandSignature`. Plus rien ne l'impose : les deux
+ * fichiers compilent désormais leur JSX vers le même runtime. Les VALEURS
+ * restent la source unique ; le RENDU dupliqué est une dette (#7633).
  *
- * ⚠ NE PAS ÉCRIRE LE NOM DE CETTE PRAGMA ICI, MÊME ENTRE GUILLEMETS (revue de
+ * ⚠ NE PAS ÉCRIRE LE NOM D'UNE PRAGMA DE RUNTIME JSX ICI, MÊME ENTRE GUILLEMETS (revue de
  * #5555, défaut 9). Le transpileur de bun cherche la directive dans TOUT
  * commentaire du fichier, pas seulement en tête : la mentionner dans cette
  * explication la rendait ACTIVE, avec pour valeur le reste de la ligne

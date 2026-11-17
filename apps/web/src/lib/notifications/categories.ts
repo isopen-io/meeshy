@@ -1,8 +1,8 @@
 /**
  * **LES CATÉGORIES DE LA CLOCHE** (#6288) — miroir de `NotificationCategory`
- * (`packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationListView.swift:8-131`)
+ * (`packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationCategory.swift`)
  * et de `MeeshyNotificationType.accentHex`
- * (`packages/MeeshySDK/Sources/MeeshySDK/Models/NotificationModels.swift:236-272`).
+ * (`packages/MeeshySDK/Sources/MeeshyCore/Models/MeeshyNotificationType.swift`).
  *
  * **Une catégorie est un FILTRE SERVEUR, jamais un tri local d'une page.** iOS
  * charge trente lignes « toutes catégories » puis les filtre en mémoire, et ne

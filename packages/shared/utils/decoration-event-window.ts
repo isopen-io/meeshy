@@ -27,7 +27,6 @@ export const MONTHS_AFTER_EVENT = 1;
 export const GENERATED_WINDOW_REFERENCE = '2026-11-06T00:00:00Z';
 
 export const EVENT_RECURRENCES = ['yearly', 'none'] as const;
-export type EventRecurrence = (typeof EVENT_RECURRENCES)[number];
 
 export type EventDate = { readonly month: number; readonly day: number };
 

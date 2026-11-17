@@ -114,10 +114,3 @@ export const STORY_FONT_FAMILIES: Readonly<Record<StoryFontStyle, StoryFontFamil
 export function storyFontStack(style: StoryFontStyle): string {
   return `'${STORY_FONT_FAMILIES[style].css}', var(--font-native)`;
 }
-
-/** La somme des treize fichiers — ce que `budgets.json › story_fonts` borne
- * dans le `dist/`, et qu'aucun lecteur ne paie en entier. */
-export const STORY_FONTS_TOTAL_BYTES = STORY_FONT_STYLES.reduce(
-  (total, style) => total + STORY_FONT_FAMILIES[style].bytes,
-  0,
-);

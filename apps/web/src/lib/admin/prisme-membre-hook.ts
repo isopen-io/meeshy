@@ -3,9 +3,9 @@ import { useMemo } from 'react';
 import { prismeDuMembre, type LanguesDuMembre, type PrismeMembre } from './prisme-membre';
 
 /**
- * **LE PRISME DU MEMBRE, À IDENTITÉ STABLE, RANG 4 COMPRIS** (#8005) — le jumeau de
- * `usePrismeDuMembre` (`lib/view/use-prisme-membre.ts`) qui porte aussi la locale de
- * l'appareil du membre.
+ * **LE PRISME DU MEMBRE, À IDENTITÉ STABLE, RANG 4 COMPRIS** (#6862, #8005) — le SEUL
+ * hook du prisme d'un membre administré : il porte aussi la locale de l'appareil du
+ * membre (son jumeau à trois rangs, `usePrismeDuMembre`, est retiré — #7633).
  *
  * `prismeDuMembre` est PUR et rend un TABLEAU : construit dans le corps d'un composant,
  * il changerait d'identité à CHAQUE rendu, et ce tableau descend jusqu'aux rangées

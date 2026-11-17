@@ -91,7 +91,6 @@ export type OpsContainerStats = z.infer<typeof opsContainerStatsSchema>;
 export type OpsContainerNetwork = z.infer<typeof opsContainerNetworkSchema>;
 export type OpsContainerPort = z.infer<typeof opsContainerPortSchema>;
 export type OpsContainer = z.infer<typeof opsContainerSchema>;
-export type OpsContainersFile = z.infer<typeof opsContainersFileSchema>;
 export type OpsContainersView = z.infer<typeof opsContainersViewSchema>;
 export type ContainerState = (typeof CONTAINER_STATES)[number];
 export type ContainerHealth = (typeof CONTAINER_HEALTHS)[number];

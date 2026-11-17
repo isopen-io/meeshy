@@ -93,8 +93,6 @@ export function FaceRamp({
   );
 }
 
-export default FaceRamp;
-
 /**
  * LE VISAGE ET SON CONTOUR ÉQUIPÉ (#10946) — celui que la conversation sert avec
  * ses participants (`AuthorRingsContext`). Un composant à part : la rampe reste
