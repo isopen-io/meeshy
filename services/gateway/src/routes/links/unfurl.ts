@@ -43,6 +43,12 @@ import {
   loadTrackingLinkUnfurlSource,
   type TrackingLinkUnfurlSource
 } from '../../services/linkUnfurl/trackingLink';
+import {
+  composePersonUnfurl,
+  isPersonHandle,
+  loadPersonUnfurlSource,
+  type PersonUnfurlSource
+} from '../../services/linkUnfurl/person';
 
 export const LINK_UNFURL_RATE_LIMIT_MAX = 60;
 export const LINK_UNFURL_CACHE_TTL_MS = 5 * 60_000;
@@ -261,6 +267,62 @@ export function registerLinkUnfurlRoute(
     const unfurl = composeAffiliateUnfurl({
       source,
       token,
+      acceptLanguage: request.headers['accept-language'],
+      origin,
+      now: new Date()
+    });
+    return reply
+      .code(200)
+      .headers(RESPONSE_HEADERS)
+      .type('text/html; charset=utf-8')
+      .send(renderLinkUnfurlPage(unfurl));
+  });
+
+  const personRows = new BoundedTtlCache<string, PersonUnfurlSource | null>({
+    maxSize: LINK_UNFURL_CACHE_MAX,
+    ttlMs: LINK_UNFURL_CACHE_TTL_MS
+  });
+
+  const readPerson = async (handle: string): Promise<PersonUnfurlSource | null> => {
+    if (!isPersonHandle(handle)) return null;
+    const key = handle.toLowerCase();
+    const cached = personRows.get(key);
+    if (cached !== undefined) return cached;
+    const row = await loadPersonUnfurlSource(prisma, handle);
+    personRows.set(key, row);
+    return row;
+  };
+
+  /**
+   * `GET /people/:username/og` — la page que lisent les robots d'aperçu quand on colle
+   * `https://meeshy.me/u/<pseudo>` ou `https://meeshy.me/@<pseudo>` (#18865) : la carte de
+   * profil au niveau PUBLIC, jamais plus (`services/linkUnfurl/person.ts`).
+   */
+  fastify.get<{ Params: { username: string } }>('/people/:username/og', {
+    schema: {
+      description: 'Aperçu d’une fiche pour les robots d’aperçu des messageries (#18865). Carte de profil au niveau PUBLIC : nom, pseudo, bannière sinon avatar, bio, ville si son cercle est public. Toujours 200 : un pseudo inconnu, un compte désactivé ou caché de la recherche rend l’aperçu générique de Meeshy.',
+      tags: ['links'],
+      summary: 'Aperçu d’une fiche pour les robots',
+      params: {
+        type: 'object',
+        required: ['username'],
+        properties: { username: { type: 'string' } }
+      },
+      response: {
+        200: { description: 'Document HTML portant les balises Open Graph et Twitter Card', type: 'string' },
+        429: errorResponseSchema
+      }
+    },
+    config: { rateLimit: unfurlRateLimit('person-unfurl') }
+  }, async (request, reply: FastifyReply) => {
+    const { username } = request.params;
+    const source = await readPerson(username).catch((error: unknown) => {
+      logWarn(fastify.log, 'Person unfurl read failed — serving the generic preview', error);
+      return null;
+    });
+    const unfurl = composePersonUnfurl({
+      source,
+      handle: username,
       acceptLanguage: request.headers['accept-language'],
       origin,
       now: new Date()

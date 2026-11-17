@@ -172,7 +172,7 @@ describe('Une fiche vivante se déplie en carte de profil au niveau Public', () 
   });
 
   it('sans bio, dit la promesse de Meeshy', async () => {
-    const { reponse } = await page(fiche({ bio: '   ' }));
+    const { reponse } = await page(fiche({ bio: '   ', city: null }));
     expect(meta(reponse.body, 'og:description')).toBe('Écris dans ta langue, lis dans la tienne : Meeshy traduit chaque message en temps réel.');
   });
 
