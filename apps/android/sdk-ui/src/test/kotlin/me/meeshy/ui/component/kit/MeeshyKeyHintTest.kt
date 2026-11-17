@@ -94,4 +94,31 @@ class MeeshyKeyHintTest {
         )
         assertThat(MeeshyKeyLegendRule.rulesBefore(items)).containsExactly(false, true, false).inOrder()
     }
+
+    @Test
+    fun `une commande eteinte ne montre pas son raccourci, comme sous un isEnabled faux sur iOS`() {
+        val on = MeeshyKeyHintRecipe.resolve(cmdM, MeeshyKeyHintContext.Free, MeeshyKeyHintSize.Regular, hasKeyboard = true, isPressed = false, reduceMotion = false)
+        val off = MeeshyKeyHintRecipe.resolve(
+            cmdM, MeeshyKeyHintContext.Free, MeeshyKeyHintSize.Regular, hasKeyboard = true, isPressed = false, reduceMotion = false, isEnabled = false,
+        )
+        assertThat(on.isRendered).isTrue()
+        assertThat(off.isRendered).isFalse()
+    }
+
+    @Test
+    fun `seul un clavier a touches branche et deplie promet un raccourci, une configuration inconnue n'en promet aucun`() {
+        val undefined = 0
+        val noKeys = 1
+        val qwerty = 2
+        val twelveKey = 3
+        val hiddenUndefined = 0
+        val hiddenNo = 1
+        val hiddenYes = 2
+        assertThat(MeeshyKeyHintRule.hasHardwareKeyboard(keyboard = qwerty, hardKeyboardHidden = hiddenNo)).isTrue()
+        assertThat(MeeshyKeyHintRule.hasHardwareKeyboard(keyboard = qwerty, hardKeyboardHidden = hiddenUndefined)).isTrue()
+        assertThat(MeeshyKeyHintRule.hasHardwareKeyboard(keyboard = qwerty, hardKeyboardHidden = hiddenYes)).isFalse()
+        assertThat(MeeshyKeyHintRule.hasHardwareKeyboard(keyboard = undefined, hardKeyboardHidden = hiddenNo)).isFalse()
+        assertThat(MeeshyKeyHintRule.hasHardwareKeyboard(keyboard = noKeys, hardKeyboardHidden = hiddenNo)).isFalse()
+        assertThat(MeeshyKeyHintRule.hasHardwareKeyboard(keyboard = twelveKey, hardKeyboardHidden = hiddenNo)).isFalse()
+    }
 }

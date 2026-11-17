@@ -159,4 +159,26 @@ class MeeshyButtonTest {
         assertThat(MeeshyButtonHoldRule.isHeld(MeeshyButtonHoldState.Idle)).isFalse()
         assertThat(MeeshyButtonHoldRule.isHeld(MeeshyButtonHoldState.Refused)).isFalse()
     }
+
+    @Test
+    fun `hold - la loi rapporte chaque bord une seule fois, et une annulation vaut un doigt leve`() {
+        val law = MeeshyButtonHoldLaw()
+        assertThat(law.press()).isTrue()
+        assertThat(law.press()).isNull()
+        assertThat(law.isHeld).isTrue()
+        assertThat(law.release()).isFalse()
+        assertThat(law.release()).isNull()
+        assertThat(law.cancel()).isNull()
+        assertThat(law.press()).isTrue()
+        assertThat(law.cancel()).isFalse()
+        assertThat(law.isHeld).isFalse()
+    }
+
+    @Test
+    fun `hold - l'action du lecteur d'ecran bascule selon la loi, pas selon l'etat que l'hote renvoie`() {
+        val law = MeeshyButtonHoldLaw()
+        assertThat(law.toggle()).isTrue()
+        assertThat(law.toggle()).isFalse()
+        assertThat(law.toggle()).isTrue()
+    }
 }

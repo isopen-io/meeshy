@@ -129,4 +129,11 @@ class MeeshyBadgeTest {
         assertThat(MeeshyBadgeRecipe.DOT_DP).isEqualTo(6)
         assertThat(MeeshyBadgeRecipe.LEADING_GAP_DP).isEqualTo(5)
     }
+
+    @Test
+    fun `marges laterales 6 8 10 12 par hauteur comme la fiche, et aucune pour un disque`() {
+        assertThat(MeeshyBadgeSize.entries.map { resolve(size = it).horizontalPaddingDp }).containsExactly(6, 8, 10, 12).inOrder()
+        assertThat(resolve(content = MeeshyBadgeContentShape.Digit).horizontalPaddingDp).isEqualTo(0)
+        assertThat(resolve(content = MeeshyBadgeContentShape.Digit, isMultiLine = true).horizontalPaddingDp).isEqualTo(8)
+    }
 }
