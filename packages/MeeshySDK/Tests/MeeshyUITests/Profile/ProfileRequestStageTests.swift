@@ -70,6 +70,22 @@ final class ProfileRequestStageTests: XCTestCase {
         XCTAssertEqual(stage, .received(note: nil))
     }
 
+    /// Planche `Etat-Erreur` vue 2 : une demande qui n'est pas partie remet le bouton comme avant et le dit.
+    func test_resolve_envoiRate_sansDemande_estNonPartie() {
+        let stage = ProfileRequestStage.resolve(connection: .none, request: nil, justAccepted: false, sendFailed: true)
+
+        XCTAssertEqual(stage, .unsent)
+    }
+
+    /// L'échec d'un envoi précédent ne survit pas à une demande partie ensuite.
+    func test_resolve_envoiRate_puisDemandeEnvoyee_estEnvoyee() {
+        let stage = ProfileRequestStage.resolve(
+            connection: .pendingSent(requestId: "r1"), request: nil, justAccepted: false, sendFailed: true
+        )
+
+        XCTAssertEqual(stage, .sent(sentAt: nil))
+    }
+
     @MainActor
     func test_pendingRequest_litLaDemandeParLaFiche() async {
         let social = StubProfileSocialActions()

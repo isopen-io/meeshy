@@ -86,18 +86,21 @@ extension UserProfileSheet {
     }
 
     var requestStage: ProfileRequestStage {
-        ProfileRequestStage.resolve(connection: connectionStatus, request: pendingRequest, justAccepted: justAccepted)
+        ProfileRequestStage.resolve(connection: connectionStatus, request: pendingRequest, justAccepted: justAccepted,
+                                    sendFailed: requestUnsent)
     }
 
     @ViewBuilder
     private var connectionControls: some View {
         let name = displayUser.resolvedDisplayName
         switch requestStage {
-        case .open:
+        case .open, .unsent:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
                                 linked: $relationLinked) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                    ProfileFriendRequestCard(tint: accentTint) { note in Task { await sendConnectionRequest(message: note) } }
+                    ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent) { note in
+                        Task { await sendConnectionRequest(message: note) }
+                    }
                     ProfileLockedCapabilities(level: .public, tint: accentTint)
                 }
             }

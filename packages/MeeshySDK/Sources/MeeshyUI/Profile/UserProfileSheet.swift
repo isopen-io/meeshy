@@ -41,6 +41,8 @@ public struct UserProfileSheet: View {
     @State var pendingRequest: FriendRequest?
     /// Acceptée sur cette fiche : « Vous êtes amis » reste à l'écran le temps qu'on la lise (planche `Etat-Demande`).
     @State var justAccepted = false
+    /// La dernière demande n'est pas partie (planche `Etat-Erreur` vue 2) : la carte le dit et propose « Réessayer ».
+    @State var requestUnsent = false
 
     public let dependencies: UserProfileDependencies
 
@@ -355,11 +357,12 @@ public struct UserProfileSheet: View {
 
     func sendConnectionRequest(message: String? = nil) async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
+        requestUnsent = false
         guard let requestId = await connectionActions.sendRequest(to: userId, message: message) else {
-            HapticFeedback.error()
-            postToast(String(localized: "profile.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module), isSuccess: false)
+            requestUnsent = true
             return
         }
+        requestUnsent = false
         pendingRequestId = requestId
         connectionStatus = .pendingSent(requestId: requestId)
         HapticFeedback.success()

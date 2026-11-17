@@ -3,18 +3,21 @@ import MeeshySDK
 
 /// L'étape d'une demande d'ami vue depuis la fiche d'un autre (planche `Etat-Demande`) : aucune, envoyée (depuis la
 /// date servie, si le cache la garde), reçue (avec le mot de l'émetteur, rogné), acceptée à l'instant sur cette fiche
-/// (« Vous êtes amis »), ou déjà amis. Une demande d'un autre identifiant ne prête ni sa date ni son mot.
+/// (« Vous êtes amis »), ou déjà amis. Une demande d'un autre identifiant ne prête ni sa date ni son mot. Une demande
+/// qui n'est pas partie (planche `Etat-Erreur` vue 2) remet la carte d'ouverture et le dit.
 nonisolated enum ProfileRequestStage: Equatable, Sendable {
     case open
+    case unsent
     case sent(sentAt: Date?)
     case received(note: String?)
     case accepted
     case connected
 
-    static func resolve(connection: ConnectionStatus, request: FriendRequest?, justAccepted: Bool) -> ProfileRequestStage {
+    static func resolve(connection: ConnectionStatus, request: FriendRequest?, justAccepted: Bool,
+                        sendFailed: Bool = false) -> ProfileRequestStage {
         switch connection {
         case .none:
-            return .open
+            return sendFailed ? .unsent : .open
         case .pendingSent(let requestId):
             return .sent(sentAt: matching(request, requestId)?.createdAt)
         case .pendingReceived(let requestId):
