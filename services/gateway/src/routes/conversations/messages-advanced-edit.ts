@@ -205,7 +205,7 @@ export function registerEditMessagePutRoute(
       );
 
       if (!existingMessage) {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
@@ -572,7 +572,7 @@ export function registerEditMessagePutRoute(
       // le rendre en 500 ferait retenter un client qui n'a rien à retenter.
       // Même traduction que sur le sibling `PATCH /messages/:messageId`.
       if ((error as { code?: string })?.code === 'P2025') {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
       // Décision 2026-11-01 — sans clé maîtresse, un texte au repos ne se rescelle pas : refusé, jamais écrit en clair.
       if (isServerAtRestUnavailable(error)) {
@@ -685,7 +685,7 @@ export function registerEditMessagePatchRoute(
       );
 
       if (!message) {
-        return sendNotFound(reply, 'Message introuvable');
+        return sendNotFound(reply, 'Message introuvable', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
@@ -934,7 +934,7 @@ export function registerEditMessagePatchRoute(
       // été supprimé entre la lecture et l'écriture. Ce n'est pas une panne, et
       // le rendre en 500 ferait retenter un client qui n'a rien à retenter.
       if ((error as { code?: string })?.code === 'P2025') {
-        return sendNotFound(reply, 'Message introuvable');
+        return sendNotFound(reply, 'Message introuvable', { code: 'MESSAGE_NOT_FOUND' });
       }
       if (isServerAtRestUnavailable(error)) {
         return sendError(reply, 503, error.message, { code: error.code });

@@ -257,7 +257,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       }
 
       if (error.message === 'Message not found') {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       if (error.message === 'Cannot react to a system message') {

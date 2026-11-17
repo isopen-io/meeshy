@@ -174,7 +174,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       );
 
       if (!message) {
-        return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
+        return sendNotFound(reply, 'Message not found or you are not authorized to modify it', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
@@ -226,7 +226,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         }
         return admission.reason === 'edit-window-expired'
           ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
-          : sendNotFound(reply, 'Message not found or you are not authorized to modify it');
+          : sendNotFound(reply, 'Message not found or you are not authorized to modify it', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`) : un
@@ -311,7 +311,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       });
 
       if (editResult.count === 0) {
-        return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
+        return sendNotFound(reply, 'Message not found or you are not authorized to modify it', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
@@ -538,7 +538,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       );
 
       if (!message) {
-        return sendNotFound(reply, 'Message non trouvé');
+        return sendNotFound(reply, 'Message non trouvé', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle.
