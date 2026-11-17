@@ -86,6 +86,9 @@ class NotificationRepository @Inject constructor(
 
     /** Change à chaque remplacement COMPLET de la liste « all » (révalidation, [replaceAll]) : un vol qui l'a lue avant se jette. */
     private val listVersion = AtomicLong(0)
+
+    /** Ce que le temps réel a posé pendant qu'une relecture REST était en vol : la relecture ne l'efface pas. */
+    private val liveArrivals = NotificationLiveArrivals()
     private val persistScope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var lastPersisted: PersistedNotifications? = null
 
@@ -174,8 +177,14 @@ class NotificationRepository @Inject constructor(
             return
         }
         if (current.any { it.id == notification.id }) return
-        _notificationsCache.value = NotificationCachePatch.insertingAtHead(current, notification)
-        if (!notification.state.isRead) _unreadCount.update { it + 1 }
+        liveArrivals.arrived(notification.id)
+        // Atomique : une relecture qui écrit entre la lecture de [current] et ici ne se fait pas écraser par l'ancienne liste.
+        var inserted = false
+        _notificationsCache.update { latest ->
+            inserted = latest != null && latest.none { it.id == notification.id }
+            if (inserted) NotificationCachePatch.insertingAtHead(latest.orEmpty(), notification) else latest
+        }
+        if (inserted && !notification.state.isRead) _unreadCount.update { it + 1 }
     }
 
     /**
@@ -304,6 +313,7 @@ class NotificationRepository @Inject constructor(
      * that correction, since their own partial cache cannot recompute the true unread count.
      */
     fun applyCounts(unread: Int) {
+        liveArrivals.counted()
         _unreadCount.value = unread
     }
 
@@ -635,17 +645,25 @@ class NotificationRepository @Inject constructor(
      * relance `transformLatest` de [notificationsStream], qui annule le bloc en cours — un
      * `unreadCount()` demandé après la liste était annulé 3 ms après l'envoi (#13354).
      */
-    private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}) = coroutineScope {
+    private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}): Unit = coroutineScope {
+        val startedEpoch = epoch
+        val startedGeneration = liveArrivals.generation()
         val count = async { unreadCount() }
         val page = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }
         val countResult = count.await()
-        if (countResult is NetworkResult.Success) _unreadCount.value = countResult.data
+        // Le compte a changé pendant le vol : ces réponses sont celles du précédent, elles ne s'écrivent chez personne.
+        if (startedEpoch != epoch) return@coroutineScope
+        // Le temps réel a parlé pendant le vol (notification:new, notification:counts) : sa valeur est plus récente que
+        // celle que le serveur a calculée avant.
+        if (countResult is NetworkResult.Success && liveArrivals.generation() == startedGeneration) {
+            _unreadCount.value = countResult.data
+        }
         when (page) {
             is NetworkResult.Success -> {
                 _hasMore.value = page.data.pagination?.hasMore ?: false
                 _nextCursor.value = page.data.pagination?.nextCursor
                 listVersion.incrementAndGet()
-                _notificationsCache.value = page.data.data
+                _notificationsCache.update { current -> liveArrivals.mergedInto(page.data.data, current, startedGeneration) }
                 _notificationsSyncedAt.value = clock.nowMillis()
             }
             is NetworkResult.Failure -> onError(Exception(page.error.message))
