@@ -124,6 +124,24 @@
     }
   },
   {
+    "_label": "port-443-explicite-normalise",
+    "input": "https://meeshy.me:443/post/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "POST"
+    }
+  },
+  {
+    "_label": "identifiants-vides-normalises",
+    "input": "https://@meeshy.me/reel/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "REEL"
+    }
+  },
+  {
     "_label": "refus-01",
     "input": "https://evil.example/post/66f0c0ffee0000000000c0de",
     "expected": null
@@ -231,6 +249,11 @@
   {
     "_label": "refus-22",
     "input": "",
+    "expected": null
+  },
+  {
+    "_label": "mot-de-passe-seul",
+    "input": "https://:secret@meeshy.me/post/66f0c0ffee0000000000c0de",
     "expected": null
   }
 ]
