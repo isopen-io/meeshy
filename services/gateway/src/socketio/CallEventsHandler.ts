@@ -2040,7 +2040,7 @@ export class CallEventsHandler {
             calleeUserIds: memberUserIds,
             foregroundUserIds,
             conversationType: initiatedEvent.conversationType ?? 'direct',
-            isGroup: initiatedEvent.conversationType === 'group',
+            isGroup: (initiatedEvent.conversationType ?? 'direct') !== 'direct',
           });
         }
       } catch (error) {

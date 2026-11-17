@@ -13,9 +13,10 @@ const call = (overrides: Partial<Parameters<typeof mayReadCallSession>[1]> = {})
 });
 
 const prismaWith = (rows: { member?: object | null; standing?: { bannedAt: Date | null } | null }) => {
-  const findFirst = jest.fn<any>(async (args: { where: { isActive?: boolean } }) =>
-    args.where.isActive === true ? (rows.member ?? null) : (rows.standing ?? null)
-  );
+  const findFirst = jest.fn<any>(async (args: { where: { conversationId: string; userId: string; isActive?: boolean } }) => {
+    if (args.where.conversationId !== 'conv-1' || args.where.userId !== USER) return null;
+    return args.where.isActive === true ? (rows.member ?? null) : (rows.standing ?? null);
+  });
   return { prisma: { participant: { findFirst } } as never, findFirst };
 };
 
