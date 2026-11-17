@@ -27,11 +27,12 @@ import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native
 export const HAPTIC_CUES = {
   light: [10],
   medium: [20],
+  rigid: [30],
   success: [14, 48, 22],
 } as const satisfies Readonly<Record<string, readonly number[]>>;
 
 export type HapticCue = keyof typeof HAPTIC_CUES;
-export type ImpactStrength = Extract<HapticCue, 'light' | 'medium'>;
+export type ImpactStrength = Extract<HapticCue, 'light' | 'medium' | 'rigid'>;
 
 /** Ce qui JOUE un retour : la vibration du navigateur par défaut, un plugin natif demain. */
 export type HapticsDriver = {
@@ -60,6 +61,7 @@ type NativeCue = { readonly method: 'impact' | 'notification'; readonly options:
 const NATIVE_CUES: Readonly<Record<HapticCue, NativeCue>> = {
   light: { method: 'impact', options: { style: 'LIGHT' } },
   medium: { method: 'impact', options: { style: 'MEDIUM' } },
+  rigid: { method: 'impact', options: { style: 'HEAVY' } },
   success: { method: 'notification', options: { type: 'SUCCESS' } },
 };
 
