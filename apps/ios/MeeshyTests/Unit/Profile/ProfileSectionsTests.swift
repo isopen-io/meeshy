@@ -389,6 +389,14 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(face.contains(".accessibilityAddTraits(.isHeader)"), "« Actions » est le titre de la face pour VoiceOver")
     }
 
+    func test_actionsHeader_sitsOnTheLivingBannerOfTheKit_asAVeilOfThePlancheHeight() throws {
+        let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
+        XCTAssertTrue(face.contains("MeeshyLivingBanner(tint: accent, mode: .veil, height: Self.headerHeight)"),
+                      "le dégradé et les orbes de la planche sont la bannière K27, jamais redessinés (loi 12)")
+        XCTAssertFalse(face.contains("LinearGradient("), "aucun dégradé redessiné sur place")
+        XCTAssertEqual(ProfileActionsFace.headerHeight, 150, "la hauteur de l'en-tête de Moi-Actions")
+    }
+
     // MARK: - Publications (K49)
 
     func test_publicationTiles_onAnEmptyCacheWhileLoading_areThreeSkeletons_neverASpinner() {
