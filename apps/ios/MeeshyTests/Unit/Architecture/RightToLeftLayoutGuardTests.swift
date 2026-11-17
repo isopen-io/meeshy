@@ -41,9 +41,7 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
 
     /// Fichiers dont les flèches ET les chevrons décrivent une timeline ou une
     /// géométrie — jamais une direction de lecture.
-    private static let directionalByDesign: Set<String> = [
-        "ClipTimingBar.swift",
-    ]
+    private static let directionalByDesign: Set<String> = []
 
     private func repoRoot() -> URL {
         URL(fileURLWithPath: #filePath)

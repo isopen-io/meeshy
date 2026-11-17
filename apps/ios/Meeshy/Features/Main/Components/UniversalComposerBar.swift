@@ -46,9 +46,6 @@ struct UniversalComposerBar: View {
     /// la rangée d'outils, angle intérieur haut-droit. `nil` = aucun repli.
     var foldControl: ComposerFoldControl? = nil
 
-    /// Called when clipboard content exceeds 2000 chars (creates a clipboard_content attachment)
-    var onClipboardContent: ((ClipboardContent) -> Void)? = nil
-
     /// Émis quand l'utilisateur dépose ou colle du contenu dans la bande du
     /// composer. Chaque `.file` pointe un fichier DÉJÀ copié dans notre
     /// conteneur : l'hôte en devient propriétaire (il le déplace ou le
@@ -371,7 +368,6 @@ struct UniversalComposerBar: View {
 
     @State var isMinimized: Bool = false
     @State var dragOffsetY: CGFloat = 0
-    @State var clipboardContent: ClipboardContent? = nil
 
     @State var showEphemeralPicker = false
     /// Le petit panneau des effets du message, ouvert par la baguette (#7967).

@@ -108,6 +108,7 @@ type Scenario = {
   readonly communityId: string | null;
   readonly community?: CommunityRow | null;
   readonly communityLookupFails?: boolean;
+  readonly conversation?: { readonly type: string; readonly encryptionMode: string | null };
 };
 
 const legacyUser = () => ({
@@ -132,7 +133,10 @@ const communityFindFirst = (scenario: Scenario) => jest.fn(async ({ where }: { w
 const buildService = (scenario: Scenario) => {
   const prisma = {
     conversation: {
-      findUnique: jest.fn(async () => ({ id: CONVERSATION_ID, type: 'group', communityId: scenario.communityId })),
+      findUnique: jest.fn(async () => ({
+        id: CONVERSATION_ID, type: scenario.conversation?.type ?? 'group',
+        encryptionMode: scenario.conversation?.encryptionMode ?? null, communityId: scenario.communityId,
+      })),
       findFirst: jest.fn(async () => ({ id: CONVERSATION_ID, identifier: 'salon', type: 'group', communityId: scenario.communityId })),
       update: jest.fn(async () => ({ id: CONVERSATION_ID, lastMessageAt: new Date() })),
     },
@@ -275,6 +279,49 @@ describe('MessagingService — le pont ConversationMember hérité suit la loi d
 
     expect(prisma.participant.create).toHaveBeenCalledTimes(1);
     expect(prisma.community.findFirst).not.toHaveBeenCalled();
+    expect(response.success).toBe(true);
+  });
+});
+
+describe('MessagingService — le pont hérité suit aussi la loi d’entrée d’un nouveau membre (audit #19080, E1, #16188)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resetParticipantLookupCache();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ language: 'fr' }) }) as never;
+    mockHandleNewMessage.mockResolvedValue(undefined);
+    mockUpdateOnNewMessage.mockResolvedValue({ messageCount: 1, participantCount: 2 });
+    mockFindExistingTrackingLink.mockResolvedValue(null);
+    mockExtractMentions.mockReturnValue([]);
+    mockResolveUsernames.mockResolvedValue(new Map());
+    mockValidateMentionPermissions.mockResolvedValue({ isValid: true, validUserIds: [], invalidUsernames: [], errors: [] });
+    mockMarkMessagesAsRead.mockResolvedValue(undefined);
+    mockGetUnreadCount.mockResolvedValue(0);
+  });
+
+  it('ne recrée pas un troisième membre dans un tête-à-tête chiffré de bout en bout', async () => {
+    const { service, prisma } = buildService({ communityId: null, conversation: { type: 'direct', encryptionMode: 'e2ee' } });
+
+    const response = await service.handleMessage(request, LEGACY_USER_ID);
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(response.success).toBe(false);
+  });
+
+  it('ne recrée aucun second membre dans une conversation externe', async () => {
+    const { service, prisma } = buildService({ communityId: null, conversation: { type: 'external', encryptionMode: null } });
+
+    const response = await service.handleMessage(request, LEGACY_USER_ID);
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(response.success).toBe(false);
+  });
+
+  it('recrée la participation héritée d’un tête-à-tête en clair, comme avant (contrôle)', async () => {
+    const { service, prisma } = buildService({ communityId: null, conversation: { type: 'direct', encryptionMode: null } });
+
+    const response = await service.handleMessage(request, LEGACY_USER_ID);
+
+    expect(prisma.participant.create).toHaveBeenCalledTimes(1);
     expect(response.success).toBe(true);
   });
 });

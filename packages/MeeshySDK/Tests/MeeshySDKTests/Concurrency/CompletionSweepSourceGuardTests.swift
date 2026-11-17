@@ -5,7 +5,6 @@ final class CompletionSweepSourceGuardTests: XCTestCase {
     private static let lockFree: [String] = [
         "MeeshySDK/Utils/MediaFormat+Duration.swift",
         "MeeshySDK/Utils/ThumbHash.swift",
-        "MeeshySDK/Cache/ThumbnailPrefetcher.swift",
         "MeeshySDK/Cache/DiskCacheStore.swift",
         "MeeshySDK/Cache/DecodedBitmapStore.swift",
         "MeeshySDK/Cache/CacheCoordinator.swift",

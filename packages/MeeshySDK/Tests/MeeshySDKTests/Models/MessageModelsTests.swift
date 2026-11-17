@@ -534,29 +534,6 @@ final class MessageModelsTests: XCTestCase {
 
     // MARK: - SharedContact
 
-    func testSharedContactInit() {
-        let contact = SharedContact(fullName: "Jean Dupont", phoneNumbers: ["+33612345678"], emails: ["jean@example.com"])
-        XCTAssertEqual(contact.fullName, "Jean Dupont")
-        XCTAssertEqual(contact.phoneNumbers, ["+33612345678"])
-        XCTAssertEqual(contact.emails, ["jean@example.com"])
-    }
-
-    func testSharedContactCodableRoundtrip() throws {
-        let original = SharedContact(id: "sc1", fullName: "Marie Martin", phoneNumbers: ["+33698765432"], emails: [])
-        let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(SharedContact.self, from: data)
-        XCTAssertEqual(decoded.id, "sc1")
-        XCTAssertEqual(decoded.fullName, "Marie Martin")
-        XCTAssertEqual(decoded.phoneNumbers, ["+33698765432"])
-        XCTAssertTrue(decoded.emails.isEmpty)
-    }
-
-    func testSharedContactDefaultEmptyArrays() {
-        let contact = SharedContact(fullName: "Solo Name")
-        XCTAssertTrue(contact.phoneNumbers.isEmpty)
-        XCTAssertTrue(contact.emails.isEmpty)
-    }
-
     // MARK: - APIMessage.postReplyTo (snapshot figé du post cité)
 
     func test_apiMessage_decodesPostReplyTo_story_withShareCount() throws {

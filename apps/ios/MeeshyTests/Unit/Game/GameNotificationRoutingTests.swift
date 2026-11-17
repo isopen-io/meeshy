@@ -115,7 +115,7 @@ final class GameNotificationRoutingTests: XCTestCase {
     // MARK: - La carte de navigation du jeu (#9564, amendement n° 4)
 
     @MainActor
-    private static let gameRoutes: [Route] = [.progression, .progressionDashboard, .progressionNotebook, .progressionRules(rule: nil)]
+    private static let gameRoutes: [Route] = [.progression, .progressionNotebook, .progressionRules(rule: nil)]
         + ProgressionConcept.allCases.map { .progressionConcept($0) }
         + GamePage.allCases.map { .gamePage($0) }
         + ProgressionSection.allCases.map { .progressionSection($0) }
