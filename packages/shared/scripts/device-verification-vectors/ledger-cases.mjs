@@ -486,4 +486,17 @@ caseDefs.push(
     expect: { effective: ['4:1', '5:777', '9:909'], addedBy: { '5:777': 'parrain', '9:909': '5:777' },
       emission: { confirmed: true, mayAdmit: true, deadGenerations: ['1:4211', '2:9054', '3:15022'],
         changed: ['A 5:777 par 5:777 #1', 'A 9:909 par 9:909 #1', 'A 5:777 par 9:909 #2', 'A 9:909 par 5:777 #2', 'A 4:1 par 4:1 #1', 'A 5:777 par 4:1 #2', 'A 4:1 par 5:777 #6', 'T 1:4211 par 5:777 #3', 'T 2:9054 par 5:777 #4', 'T 3:15022 par 5:777 #5'] } } },
+  // ---- relecture v5, V5-1 (NEUF-1) : une approbation POSTHUME signée par la clé de Q, retirée, ne fait admettre personne. N, capturé par P à la
+  // course, a rejoint A ; le voleur a signé avec la clé de Q (approuvée par distraction puis retirée par A) une approbation de P et une pierre
+  // tombale de C. Jugée avec membres(A, ∅), qui ignore la pierre tombale de Q, P était admis par A : aucune ancre étrangère, N admettait et
+  // transmettait tout. Jugée avec membres(A, mortes \ {clé(P)}), P est une ancre ÉTRANGÈRE de N.
+  { name: 'NEUF-1-approbation-posthume-d-une-cle-retiree-vue-de-N', description: 'V5-1 : P (voleur, ancre de N) est approuvé par Q APRÈS le retrait de Q par A ; depuis A, sur le registre de N, les pierres tombales comptent : Q est mort, donc P n’est pas admis par A — P est une ancre étrangère de N, qui n’admet personne. N reste confirmé (A et P l’admettent tous deux) : c’est l’ancre étrangère qui l’arrête. C est mort chez N (pierre tombale posthume de Q, comptée : Q était admis à ce rang) — le résidu du § 11', local: LOCAL(N),
+    emission: {},
+    messages: [msg('self', [self(N, T0 + 400), sponsorship(P, N, T0 + 410, 2, 6), sponsorship(A, N, T0 + 510, 3, 6)]),
+      msg(P, [self(P, T0 + 300), appr(Q, P, T0 + 610, 2, 2), appr(A, P, T0 + 611, 3, 2), appr(B, P, T0 + 612, 4, 2), appr(C, P, T0 + 613, 5, 2), appr(N, P, T0 + 700, 6, 2),
+        q5.self, q5.sponsor, appr(P, Q, T0 + 600, 3, 2)], [tomb(C, Q, T0 + 601, 4)]),
+      msg(A, [...g.A, appr(Q, A, T0 + 40, 4, 2), appr(N, A, T0 + 520, 6, 3), ...g.B, ...g.C, q5.self, q5.sponsor], [tomb(Q, A, T0 + 50, 5)])],
+    expect: { effective: ['1:4211', '2:9054', '4:1', '5:777'], addedBy: { '1:4211': 'parrain', '5:777': 'parrain', '2:9054': '1:4211' }, foreignAnchors: ['5:777'],
+      emission: { confirmed: true, mayAdmit: false, deadGenerations: ['3:15022', '6:801'],
+        changed: ['A 4:1 par 4:1 #1', 'A 5:777 par 4:1 #2', 'A 1:4211 par 4:1 #3', 'T 6:801 par 1:4211 #5'] } } },
 );

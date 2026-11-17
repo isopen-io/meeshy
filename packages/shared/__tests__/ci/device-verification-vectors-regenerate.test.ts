@@ -41,6 +41,7 @@ const EMISSION_CASES = [
   'X2-l-approbation-de-la-racine-arrive-vue-de-D',
   'X2-l-enfant-confirme-avec-le-plus-ancien-vue-de-D',
   'X4-le-voleur-a-tue-mes-appareils-chez-N-vue-de-N',
+  'NEUF-1-approbation-posthume-d-une-cle-retiree-vue-de-N',
 ];
 
 const sha256 = (path: string): string => createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -175,13 +176,13 @@ describe('vecteurs de l’ajout d’appareil par code : comparaison et registre 
     expect([...read].filter((byte) => byte >= 240 && byte < 252).length).toBeGreaterThan(1);
   });
 
-  it('le registre porte 84 cas, 8 + 12 vecteurs de signature, et ses attendus d’émission marqués « en revue »', () => {
+  it('le registre porte 85 cas, 8 + 12 vecteurs de signature, et ses attendus d’émission marqués « en revue »', () => {
     const ledger = readJson('trust-ledger-v1.cases.json') as {
       readonly signatures: { readonly positives: readonly unknown[]; readonly negatives: readonly unknown[] };
       readonly expectedFields: Record<string, string>;
       readonly cases: readonly { readonly name: string; readonly emissionInput?: unknown; readonly emissionStatus?: string; readonly expected: Record<string, unknown> }[];
     };
-    expect(ledger.cases.length).toBe(84);
+    expect(ledger.cases.length).toBe(85);
     expect(ledger.signatures.positives.length).toBe(8);
     expect(ledger.signatures.negatives.length).toBe(12);
     const emission = ledger.cases.filter((entry) => entry.emissionInput !== undefined);

@@ -1,5 +1,5 @@
 {
-  "_doc": "Registre de confiance de mes appareils (spec 2026-11-17, v5, § 6). Chaque entrée est SIGNÉE (XEdDSA, libsignal) par la clé d’identité de son auteur ; une entrée compte sans égard à qui l’a relayée. État effectif calculé depuis soi ; ancres = moi et, de proche en proche, les sujets des approbations « sponsor » des ancres (F = 0) ; ailleurs F(x) = plus petit fromSeq des approbations de x qui comptent ; pierre tombale par CLÉ, comptée si son auteur est moi ou admis à un rang ≥ F_admis. v4 : une COPIE (ma clé sous une autre place) n’est jamais effective ; une entrée d’un auteur non admis va en RÉSERVE (sans effet, bornée) ; une ancre ÉTRANGÈRE (qu’une autre de mes ancres vivantes n’admet pas) est signalée ; un message `raw` est le clair tel qu’il arrive, à analyser en JSON STRICT. v5 : dans un contenu, « reçue le plus tôt » (éviction de la réserve) suit l’ordre total ; les cas `emission-*`, `X1-*`, `X2-*`, `X4-*` portent aussi ce que l’appareil TRANSMET et s’il peut ADMETTRE (`expectedFields.emission`), attendus marqués « en revue » (`emissionStatus`). Attendus écrits à la main ; chaque cas est rejoué dans tous les ordres d’arrivée (au-delà de 6 contenus reçus : l’ordre inverse, chaque rotation et 24 ordres d’une graine fixe) et en double. Les signatures sont FIXES : XEdDSA est aléatoire, le script reprend celles de ce fichier quand elles se vérifient.",
+  "_doc": "Registre de confiance de mes appareils (spec 2026-11-17, v5, § 6). Chaque entrée est SIGNÉE (XEdDSA, libsignal) par la clé d’identité de son auteur ; une entrée compte sans égard à qui l’a relayée. État effectif calculé depuis soi ; ancres = moi et, de proche en proche, les sujets des approbations « sponsor » des ancres (F = 0) ; ailleurs F(x) = plus petit fromSeq des approbations de x qui comptent ; pierre tombale par CLÉ, comptée si son auteur est moi ou admis à un rang ≥ F_admis. v4 : une COPIE (ma clé sous une autre place) n’est jamais effective ; une entrée d’un auteur non admis va en RÉSERVE (sans effet, bornée) ; une ancre ÉTRANGÈRE (qu’une autre de mes ancres vivantes n’admet pas) est signalée ; un message `raw` est le clair tel qu’il arrive, à analyser en JSON STRICT. Relecture v5 (V5-1) : les ancres étrangères et « confirmé » se jugent pierres tombales comptées (cas `NEUF-1-…`). v5 : dans un contenu, « reçue le plus tôt » (éviction de la réserve) suit l’ordre total ; les cas `emission-*`, `X1-*`, `X2-*`, `X4-*` portent aussi ce que l’appareil TRANSMET et s’il peut ADMETTRE (`expectedFields.emission`), attendus marqués « en revue » (`emissionStatus`). Attendus écrits à la main ; chaque cas est rejoué dans tous les ordres d’arrivée (au-delà de 6 contenus reçus : l’ordre inverse, chaque rotation et 24 ordres d’une graine fixe) et en double. Les signatures sont FIXES : XEdDSA est aléatoire, le script reprend celles de ce fichier quand elles se vérifient.",
   "signing": {
     "algorithm": "XEdDSA (libsignal PrivateKey.sign / PublicKey.verify ; iOS generateSignature / verifySignature ; Android calculateSignature / verifySignature ; web signWithIdentity / verifyWithIdentity), clé d’identité de l’AUTEUR (33 octets, 0x05), signature de 64 octets en base64 canonique dans `sig`",
     "inscription": "LP(utf8(\"meeshy-device-trust:v1|inscription\")) ‖ LP(ascii(userId)) ‖ gen(moi) ‖ u64(approvedAt) ‖ u64(seq = 1)",
@@ -35,13 +35,13 @@
     "countedTombstonesLimit": 256
   },
   "expectedFields": {
-    "foreignAnchors": "mes ancres (vivantes ou mortes, `dead`) qu’une AUTRE de mes ancres vivantes n’admet pas : l’appareil n’admet personne ; vivante, il alerte « s’est d’abord confirmé avec n° … » ; morte, il se réinitialise",
+    "foreignAnchors": "mes ancres (vivantes ou mortes, `dead`) qu’une AUTRE de mes ancres vivantes n’admet pas, jugée PIERRES TOMBALES COMPTÉES (z ∉ membres(y, mortes \\ {clé(z)}), relecture v5, V5-1 ; seules les ancres mortes et celles de ma chaîne finale) : l’appareil n’admet personne ; vivante, il alerte « s’est d’abord confirmé avec n° … » ; morte, il se réinitialise",
     "cloneGenerations": "places qui portent MA clé sous une autre place que la mienne et qu’une approbation qui compterait vise : jamais effectives, alerte « clé copiée »",
     "approvalsBlocked": "plus de 256 pierres tombales COMPTÉES : l’appareil refuse d’ajouter une approbation",
     "reserved": "nombre d’entrées en réserve (auteurs non admis) après le rejeu",
     "rawMessages": "un message `{ \"raw\": \"…\" }` est le clair reçu, à analyser avec l’analyseur JSON strict avant tout",
     "emissionStatus": "« en revue » : `confirmed`, `mayAdmit` et `transmits` suivent le texte v5 du § 6.4, du § 4.8 et du § 6.1 (« confirmé »), en relecture adversariale (#19183) ; une plateforme ne les livre pas tant que le statut ne tombe pas. `deadGenerations` est une projection de l’état du § 6.2 (les générations nommées dans mon registre dont la clé est morte), que la référence d’évaluation rejoue ; ce qu’en fait le § 4.6 (aucune comparaison avec elles) est en revue avec le reste",
-    "emission": "v5 (§ 6.4, § 4.8) — seulement dans les cas qui portent `emissionInput` : `confirmed` (chacune de mes ancres vivantes autres que moi m’admet, sur mon registre), `mayAdmit` (membre ∧ confirmé ∧ aucune ancre étrangère ∧ non retiré ∧ approbations non bloquées), `deadGenerations` (générations nommées dans mon registre dont la clé est morte : aucune comparaison avec elles), `transmits.changed` (ce que l’appareil transmet : hors quarantaine, les entrées retenues ; en quarantaine, ses entrées et les pierres tombales retenues dont l’auteur est vivant ; jamais la réserve) et, si `emissionInput.joinerHead` est donné, `transmits.verifiedAsJoiner` (ses entrées de rang ≤ joinerHead : le ledger(verified) de celui qui rejoint). Chaque entrée y est désignée par { kind, subject, author, seq }, dans l’ordre total"
+    "emission": "v5 (§ 6.4, § 4.8) — seulement dans les cas qui portent `emissionInput` : `confirmed` (chacune de mes ancres vivantes autres que moi m’admet : moi ∈ membres(y, mortes), sur mon registre — relecture V5-1), `mayAdmit` (membre ∧ confirmé ∧ aucune ancre étrangère ∧ non retiré ∧ approbations non bloquées), `deadGenerations` (générations nommées dans mon registre dont la clé est morte : aucune comparaison avec elles ; chacune désignée par { deviceId, registrationId, identityKey }, dans l’ordre des générations), `transmits.changed` (ce que l’appareil transmet : hors quarantaine, les entrées retenues ; en quarantaine, ses entrées et les pierres tombales retenues dont l’auteur est vivant ; jamais la réserve) et, si `emissionInput.joinerHead` est donné, `transmits.verifiedAsJoiner` (ses entrées de rang ≤ joinerHead : le ledger(verified) de celui qui rejoint). Chaque entrée y est désignée par { kind, subject, author, seq }, `subject` et `author` étant des générations { deviceId, registrationId, identityKey } — une même place peut porter une clé morte et une vivante —, dans l’ordre total"
   },
   "bounds": {
     "deviceId": "1…127",
@@ -23825,54 +23825,122 @@
         "confirmed": true,
         "mayAdmit": false,
         "deadGenerations": [
-          "2:9054",
-          "3:15022",
-          "6:801"
+          {
+            "deviceId": 2,
+            "registrationId": 9054,
+            "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+          },
+          {
+            "deviceId": 3,
+            "registrationId": 15022,
+            "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+          },
+          {
+            "deviceId": 6,
+            "registrationId": 801,
+            "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+          }
         ],
         "transmits": {
           "changed": [
             {
               "kind": "approval",
-              "subject": "4:1",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "5:777",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 3
             },
             {
               "kind": "revocation",
-              "subject": "6:801",
-              "author": "1:4211",
+              "subject": {
+                "deviceId": 6,
+                "registrationId": 801,
+                "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 5
             },
             {
               "kind": "revocation",
-              "subject": "2:9054",
-              "author": "5:777",
+              "subject": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
+              "author": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
               "seq": 3
             }
           ],
           "verifiedAsJoiner": [
             {
               "kind": "approval",
-              "subject": "4:1",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "5:777",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 2
             }
           ]
@@ -24051,52 +24119,116 @@
           "changed": [
             {
               "kind": "approval",
-              "subject": "15:1515",
-              "author": "15:1515",
+              "subject": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
+              "author": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "15:1515",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 3
             }
           ],
           "verifiedAsJoiner": [
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 2
             }
           ]
@@ -24316,64 +24448,144 @@
           "changed": [
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "1:4211",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "2:9054",
-              "author": "2:9054",
+              "subject": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
+              "author": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "2:9054",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "2:9054",
-              "author": "1:4211",
+              "subject": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "3:15022",
-              "author": "3:15022",
+              "subject": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
+              "author": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "3:15022",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "3:15022",
-              "author": "1:4211",
+              "subject": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 3
             },
             {
               "kind": "approval",
-              "subject": "4:1",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 2
             }
           ],
           "verifiedAsJoiner": [
             {
               "kind": "approval",
-              "subject": "4:1",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 1
             }
           ]
@@ -24606,62 +24818,142 @@
           "changed": [
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "1:4211",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "2:9054",
-              "author": "2:9054",
+              "subject": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
+              "author": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "2:9054",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "2:9054",
-              "author": "1:4211",
+              "subject": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "3:15022",
-              "author": "3:15022",
+              "subject": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
+              "author": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "3:15022",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "3:15022",
-              "author": "1:4211",
+              "subject": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 3
             },
             {
               "kind": "approval",
-              "subject": "4:1",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "1:4211",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "4:1",
-              "author": "1:4211",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 4
             }
           ]
@@ -24835,14 +25127,30 @@
           "changed": [
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 2
             }
           ]
@@ -25024,44 +25332,100 @@
           "changed": [
             {
               "kind": "approval",
-              "subject": "15:1515",
-              "author": "15:1515",
+              "subject": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
+              "author": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "15:1515",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 3
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "15:1515",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
               "seq": 2
             }
           ]
@@ -25284,56 +25648,128 @@
           "changed": [
             {
               "kind": "approval",
-              "subject": "15:1515",
-              "author": "15:1515",
+              "subject": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
+              "author": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "15:1515",
-              "author": "16:1616",
+              "subject": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
+              "author": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
               "seq": 3
             },
             {
               "kind": "approval",
-              "subject": "16:1616",
-              "author": "15:1515",
+              "subject": {
+                "deviceId": 16,
+                "registrationId": 1616,
+                "identityKey": "BVLIgG+PnA0VQTcvYw2WCOnC7bsLW7fXxQ6Il5qTiH9f"
+              },
+              "author": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "15:1515",
-              "author": "17:1717",
+              "subject": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
+              "author": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
               "seq": 3
             },
             {
               "kind": "approval",
-              "subject": "17:1717",
-              "author": "15:1515",
+              "subject": {
+                "deviceId": 17,
+                "registrationId": 1717,
+                "identityKey": "BVKA7hRNS8SMfzsLwD6e+zCx3bMAdZNTeX2kCFr6n6Jx"
+              },
+              "author": {
+                "deviceId": 15,
+                "registrationId": 1515,
+                "identityKey": "BQmOO0tFBvTSsOJ0kuOdmqkPE5F1azq4r1wyAOD0fy1U"
+              },
               "seq": 3
             }
           ]
@@ -25551,70 +25987,697 @@
         "confirmed": true,
         "mayAdmit": true,
         "deadGenerations": [
-          "1:4211",
-          "2:9054",
-          "3:15022"
+          {
+            "deviceId": 1,
+            "registrationId": 4211,
+            "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+          },
+          {
+            "deviceId": 2,
+            "registrationId": 9054,
+            "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+          },
+          {
+            "deviceId": 3,
+            "registrationId": 15022,
+            "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+          }
         ],
         "transmits": {
           "changed": [
             {
               "kind": "approval",
-              "subject": "5:777",
-              "author": "5:777",
+              "subject": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "author": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "9:909",
-              "author": "9:909",
+              "subject": {
+                "deviceId": 9,
+                "registrationId": 909,
+                "identityKey": "BbkMsujg67MXGsLW6uitj/DZIb1RqkAN1HZ4IH8i7wom"
+              },
+              "author": {
+                "deviceId": 9,
+                "registrationId": 909,
+                "identityKey": "BbkMsujg67MXGsLW6uitj/DZIb1RqkAN1HZ4IH8i7wom"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "5:777",
-              "author": "9:909",
+              "subject": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "author": {
+                "deviceId": 9,
+                "registrationId": 909,
+                "identityKey": "BbkMsujg67MXGsLW6uitj/DZIb1RqkAN1HZ4IH8i7wom"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "9:909",
-              "author": "5:777",
+              "subject": {
+                "deviceId": 9,
+                "registrationId": 909,
+                "identityKey": "BbkMsujg67MXGsLW6uitj/DZIb1RqkAN1HZ4IH8i7wom"
+              },
+              "author": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "4:1",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 1
             },
             {
               "kind": "approval",
-              "subject": "5:777",
-              "author": "4:1",
+              "subject": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
               "seq": 2
             },
             {
               "kind": "approval",
-              "subject": "4:1",
-              "author": "5:777",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
               "seq": 6
             },
             {
               "kind": "revocation",
-              "subject": "1:4211",
-              "author": "5:777",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
               "seq": 3
             },
             {
               "kind": "revocation",
-              "subject": "2:9054",
-              "author": "5:777",
+              "subject": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
+              "author": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
               "seq": 4
             },
             {
               "kind": "revocation",
-              "subject": "3:15022",
-              "author": "5:777",
+              "subject": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
+              "author": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "seq": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "NEUF-1-approbation-posthume-d-une-cle-retiree-vue-de-N",
+      "description": "V5-1 : P (voleur, ancre de N) est approuvé par Q APRÈS le retrait de Q par A ; depuis A, sur le registre de N, les pierres tombales comptent : Q est mort, donc P n’est pas admis par A — P est une ancre étrangère de N, qui n’admet personne. N reste confirmé (A et P l’admettent tous deux) : c’est l’ancre étrangère qui l’arrête. C est mort chez N (pierre tombale posthume de Q, comptée : Q était admis à ce rang) — le résidu du § 11",
+      "local": {
+        "userId": "6745a1b2c3d4e5f601234567",
+        "generation": {
+          "deviceId": 4,
+          "registrationId": 1,
+          "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+        },
+        "root": false
+      },
+      "emissionInput": {},
+      "emissionStatus": "en revue",
+      "messages": [
+        {
+          "from": "self",
+          "approvals": [
+            {
+              "deviceId": 4,
+              "registrationId": 1,
+              "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo",
+              "approvedBy": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "approvedAt": 1790000000400,
+              "method": "self",
+              "seq": 1,
+              "sig": "lOtWgBcDlVq/gQHchRLV8AIT/T8l+rAc3kxXIrJZXwtv37rT9GhS/Pb0LCXx0OVunpmR1qCk3N4k8iZpCBMggQ=="
+            },
+            {
+              "deviceId": 5,
+              "registrationId": 777,
+              "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+              "approvedBy": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "approvedAt": 1790000000410,
+              "method": "sas",
+              "seq": 2,
+              "fromSeq": 6,
+              "sponsor": true,
+              "sig": "yuJHRxalrGf1rC7SQuYEjbXvKaSQaTWX1MWcGvVipxztgMNiul4WTKqd6tEIyJFFw0nAB4lgdbW8zWwvsok4iQ=="
+            },
+            {
+              "deviceId": 1,
+              "registrationId": 4211,
+              "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+              "approvedBy": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "approvedAt": 1790000000510,
+              "method": "sas",
+              "seq": 3,
+              "fromSeq": 6,
+              "sponsor": true,
+              "sig": "cqF3U/yzNNjZM0yJMWWCjyB1bAsZqdpfi4J4EIo4OUk0oqKBS7k14p5d9k7Mwltr4V9loprxPlWruXitYGPmhQ=="
+            }
+          ],
+          "revocations": []
+        },
+        {
+          "from": {
+            "deviceId": 5,
+            "registrationId": 777,
+            "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+          },
+          "approvals": [
+            {
+              "deviceId": 5,
+              "registrationId": 777,
+              "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+              "approvedBy": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "approvedAt": 1790000000300,
+              "method": "self",
+              "seq": 1,
+              "sig": "mpgX2rHqwVPj2gCJTUPgJ9aC6XHaQIEebLmIdxNYuXJ/8zlyMNnrSahhtgTq7V09gy/myqCK6PuR8xxQ7jm2iw=="
+            },
+            {
+              "deviceId": 6,
+              "registrationId": 801,
+              "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
+              "approvedBy": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "approvedAt": 1790000000610,
+              "method": "sas",
+              "seq": 2,
+              "fromSeq": 2,
+              "sig": "0/1oo/r1G60b5L1YYkjotPQhnR31KevwImSlWyIcYNnwGmrwehFVw+dMcgbD/mnY4bCCJ8DqatNoOfuOmw/liQ=="
+            },
+            {
+              "deviceId": 1,
+              "registrationId": 4211,
+              "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+              "approvedBy": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "approvedAt": 1790000000611,
+              "method": "sas",
+              "seq": 3,
+              "fromSeq": 2,
+              "sig": "07DA59MTJHXoxm4t/LdIFeH1YESFrXB1R4TgZGaOWFdRO0eU6b3x6PzMS275JqZucxl+cSYnTaqvNyZvgRsfgg=="
+            },
+            {
+              "deviceId": 2,
+              "registrationId": 9054,
+              "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+              "approvedBy": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "approvedAt": 1790000000612,
+              "method": "sas",
+              "seq": 4,
+              "fromSeq": 2,
+              "sig": "edR3ZEjdM+TsdL6SCqzEkJ0+nuMiI4NCDdCsxoPMW29Qm9NNJwM7QDfgDSlfrjlV0ZtCnt/ST/wfRpn6w4rOiA=="
+            },
+            {
+              "deviceId": 3,
+              "registrationId": 15022,
+              "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR",
+              "approvedBy": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "approvedAt": 1790000000613,
+              "method": "sas",
+              "seq": 5,
+              "fromSeq": 2,
+              "sig": "LlrYdmfDm+yA0wSN1I3bcbzV3ZWTIhJqovQaAvUWFs8byjlTCWShS3nySzbPTb00JZDyIYloOqPtNDYvZNXVhA=="
+            },
+            {
+              "deviceId": 4,
+              "registrationId": 1,
+              "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo",
+              "approvedBy": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "approvedAt": 1790000000700,
+              "method": "sas",
+              "seq": 6,
+              "fromSeq": 2,
+              "sig": "+VnywzMpL/ibC9b0cMc2a6puuM/ceOz0bQokPNgxBUapkJ0W/SHC1cZYsOxK4MY+2YMtZ0h3iTWgwuGVRQIjhg=="
+            },
+            {
+              "deviceId": 6,
+              "registrationId": 801,
+              "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
+              "approvedBy": {
+                "deviceId": 6,
+                "registrationId": 801,
+                "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+              },
+              "approvedAt": 1790000000035,
+              "method": "self",
+              "seq": 1,
+              "sig": "o8WuDU58RsxH2TBzDo9pPJffuwcLz87LVppl5yC9rRmrn9bQF2oG5D3joBq1xeIuHgIxRZWkYi0D4iGovIxWAg=="
+            },
+            {
+              "deviceId": 1,
+              "registrationId": 4211,
+              "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+              "approvedBy": {
+                "deviceId": 6,
+                "registrationId": 801,
+                "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+              },
+              "approvedAt": 1790000000039,
+              "method": "sas",
+              "seq": 2,
+              "fromSeq": 4,
+              "sponsor": true,
+              "sig": "lEdBfSB+L1hpR8uiPAy2Zu0rt03dXAQMKngw99JKVycBr5hAwDB+cuYfLuID3whTwhnNXxiP6OE7yLa1ixgPBA=="
+            },
+            {
+              "deviceId": 5,
+              "registrationId": 777,
+              "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+              "approvedBy": {
+                "deviceId": 6,
+                "registrationId": 801,
+                "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+              },
+              "approvedAt": 1790000000600,
+              "method": "sas",
+              "seq": 3,
+              "fromSeq": 2,
+              "sig": "NS2JRTa6IWerZ0D3SM1fqTT4MVGBG401po/w2xxaj4TMlm3DuLRWNFv3aHMQwh5vYY3WwHbGN4YpsoVhKNHXBA=="
+            }
+          ],
+          "revocations": [
+            {
+              "deviceId": 3,
+              "registrationId": 15022,
+              "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR",
+              "revokedBy": {
+                "deviceId": 6,
+                "registrationId": 801,
+                "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+              },
+              "revokedAt": 1790000000601,
+              "seq": 4,
+              "sig": "nMD2FIhVXytDChSVMiaBzr/o+5+SBDtzISbJGVfkyx8GKTJD+aWXzaA0wgGjflIpkMOB1TgHtXqC1Fj4WI9TCQ=="
+            }
+          ]
+        },
+        {
+          "from": {
+            "deviceId": 1,
+            "registrationId": 4211,
+            "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+          },
+          "approvals": [
+            {
+              "deviceId": 1,
+              "registrationId": 4211,
+              "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+              "approvedBy": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "approvedAt": 1790000000000,
+              "method": "self",
+              "seq": 1,
+              "sig": "CYdhqgPVpuchpfGqZ924NuuhdklFmNPAy1bYa0VPxCR3CaBIiRDAPDfFQESjKf8qk2c2d2gAic5e+R8xtiW6AQ=="
+            },
+            {
+              "deviceId": 2,
+              "registrationId": 9054,
+              "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+              "approvedBy": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "approvedAt": 1790000000010,
+              "method": "sas",
+              "seq": 2,
+              "fromSeq": 2,
+              "sig": "psGWz2wQmwFHnCcjYONirpeIYTLchGrrWReaaK98YG8YfvlIDWBLu9IgyGydgB5NbZeSmmAVHSg0vrUQSuWIBg=="
+            },
+            {
+              "deviceId": 3,
+              "registrationId": 15022,
+              "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR",
+              "approvedBy": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "approvedAt": 1790000000020,
+              "method": "sas",
+              "seq": 3,
+              "fromSeq": 2,
+              "sig": "p0aAyEq1HfdDsob4/ffv+CpNLZ/65EsbcU1eTRSikb57lm7Xx1egX3xxrLEy/yRD6c5c5ejj9NGHdqiW2BPmAg=="
+            },
+            {
+              "deviceId": 6,
+              "registrationId": 801,
+              "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
+              "approvedBy": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "approvedAt": 1790000000040,
+              "method": "sas",
+              "seq": 4,
+              "fromSeq": 2,
+              "sig": "AtTbBVN97dscKsUkMEvHZEnKyl2W8ZPL074mH2ZUkosHKUFy2RJVz2O9ZiKmsOMO1sPT8+cE3Hp6Iuf9EcBECA=="
+            },
+            {
+              "deviceId": 4,
+              "registrationId": 1,
+              "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo",
+              "approvedBy": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "approvedAt": 1790000000520,
+              "method": "sas",
+              "seq": 6,
+              "fromSeq": 3,
+              "sig": "xgRAkrVL1TojbOPaQ5p/w27PdB23e+KZL8ISCe4rqktIVqLS5uWhQnsMLCo0IDMPoRCQYrXB4XZ6z+EYagYtBg=="
+            },
+            {
+              "deviceId": 2,
+              "registrationId": 9054,
+              "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+              "approvedBy": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
+              "approvedAt": 1790000000005,
+              "method": "self",
+              "seq": 1,
+              "sig": "q5gH9bNFHOTz69pVhulq6LiVcW+7Ugucz5hnnx1MBEgma3yoJrDvyt/9THSBSTUZNmxN/VpDIgMMRVjOfui6Dg=="
+            },
+            {
+              "deviceId": 1,
+              "registrationId": 4211,
+              "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+              "approvedBy": {
+                "deviceId": 2,
+                "registrationId": 9054,
+                "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3"
+              },
+              "approvedAt": 1790000000009,
+              "method": "sas",
+              "seq": 2,
+              "fromSeq": 2,
+              "sponsor": true,
+              "sig": "2cHd+O9Q3e0YnrjMLEooIpUgGn4Plw+Vj3Oy+DrwjtHf4g9u2qp6y0ZAQwNKy6sRcM3INk8ta2cnj/71b1oVDw=="
+            },
+            {
+              "deviceId": 3,
+              "registrationId": 15022,
+              "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR",
+              "approvedBy": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
+              "approvedAt": 1790000000015,
+              "method": "self",
+              "seq": 1,
+              "sig": "PjxFxhIT3f5zahS3N2+I/eADmZPTmZrgd0QOFLuYSo/SmQvuU1ri3eLVquYMhtRWKtIrTR4Prf9koUuKsSJEDQ=="
+            },
+            {
+              "deviceId": 1,
+              "registrationId": 4211,
+              "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+              "approvedBy": {
+                "deviceId": 3,
+                "registrationId": 15022,
+                "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+              },
+              "approvedAt": 1790000000019,
+              "method": "sas",
+              "seq": 2,
+              "fromSeq": 3,
+              "sponsor": true,
+              "sig": "5y8z4zozNDKCtD+7yVqmM8tMb8Fiia/ZkrNKt6WwRASFdptCd/WHnfKi8D1FHJDv3AXLFzn7r8npUFqimHMZCw=="
+            },
+            {
+              "deviceId": 6,
+              "registrationId": 801,
+              "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
+              "approvedBy": {
+                "deviceId": 6,
+                "registrationId": 801,
+                "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+              },
+              "approvedAt": 1790000000035,
+              "method": "self",
+              "seq": 1,
+              "sig": "o8WuDU58RsxH2TBzDo9pPJffuwcLz87LVppl5yC9rRmrn9bQF2oG5D3joBq1xeIuHgIxRZWkYi0D4iGovIxWAg=="
+            },
+            {
+              "deviceId": 1,
+              "registrationId": 4211,
+              "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+              "approvedBy": {
+                "deviceId": 6,
+                "registrationId": 801,
+                "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+              },
+              "approvedAt": 1790000000039,
+              "method": "sas",
+              "seq": 2,
+              "fromSeq": 4,
+              "sponsor": true,
+              "sig": "lEdBfSB+L1hpR8uiPAy2Zu0rt03dXAQMKngw99JKVycBr5hAwDB+cuYfLuID3whTwhnNXxiP6OE7yLa1ixgPBA=="
+            }
+          ],
+          "revocations": [
+            {
+              "deviceId": 6,
+              "registrationId": 801,
+              "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
+              "revokedBy": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "revokedAt": 1790000000050,
+              "seq": 5,
+              "sig": "hHwudULN3b88UX/g3n6HIaBw18z7NA9ER77AjHumlNj4+jGtdM+BbRk5Qlmzfoau5rS7M+15MwittJU/tYsCAw=="
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "effective": [
+          {
+            "deviceId": 1,
+            "registrationId": 4211,
+            "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+            "addedBy": "parrain"
+          },
+          {
+            "deviceId": 2,
+            "registrationId": 9054,
+            "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+            "addedBy": "1:4211"
+          },
+          {
+            "deviceId": 4,
+            "registrationId": 1,
+            "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo",
+            "addedBy": null
+          },
+          {
+            "deviceId": 5,
+            "registrationId": 777,
+            "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+            "addedBy": "parrain"
+          }
+        ],
+        "conflicts": [],
+        "revokedSelf": false,
+        "sponsorsRevoked": [],
+        "foreignAnchors": [
+          {
+            "deviceId": 5,
+            "registrationId": 777,
+            "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+            "dead": false
+          }
+        ],
+        "cloneGenerations": [],
+        "proposed": [],
+        "refusedContents": 0,
+        "overBound": [],
+        "cloneAlerts": [],
+        "approvalsBlocked": false,
+        "reserved": 0,
+        "confirmed": true,
+        "mayAdmit": false,
+        "deadGenerations": [
+          {
+            "deviceId": 3,
+            "registrationId": 15022,
+            "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR"
+          },
+          {
+            "deviceId": 6,
+            "registrationId": 801,
+            "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+          }
+        ],
+        "transmits": {
+          "changed": [
+            {
+              "kind": "approval",
+              "subject": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "seq": 1
+            },
+            {
+              "kind": "approval",
+              "subject": {
+                "deviceId": 5,
+                "registrationId": 777,
+                "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "seq": 2
+            },
+            {
+              "kind": "approval",
+              "subject": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
+              "author": {
+                "deviceId": 4,
+                "registrationId": 1,
+                "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo"
+              },
+              "seq": 3
+            },
+            {
+              "kind": "revocation",
+              "subject": {
+                "deviceId": 6,
+                "registrationId": 801,
+                "identityKey": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US"
+              },
+              "author": {
+                "deviceId": 1,
+                "registrationId": 4211,
+                "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr"
+              },
               "seq": 5
             }
           ]
@@ -27847,6 +28910,12 @@
       },
       {
         "signer": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo",
+        "signedSha256": "30b9dac512cfbc6ba28ee26da447f9b4eeca6cb45580dba687b519198bbbbbff",
+        "variant": 0,
+        "sig": "cqF3U/yzNNjZM0yJMWWCjyB1bAsZqdpfi4J4EIo4OUk0oqKBS7k14p5d9k7Mwltr4V9loprxPlWruXitYGPmhQ=="
+      },
+      {
+        "signer": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo",
         "signedSha256": "4f0fb44b4eba3a0c2f8c8e986c35542e4f8a0abb4cec5771b7d412b918466c08",
         "variant": 0,
         "sig": "yfj7r3LDRKF17/53tw2JGg50wf9GrjwE9KYxCA0dbIZngrfrAHB9fz4gzCqaxQtOnMuh/Eq33LaCidv+53Uxjg=="
@@ -28531,9 +29600,21 @@
       },
       {
         "signer": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
+        "signedSha256": "ba432157eb17775dce1fafdf324efebbfea988da0a3a48d1f89451ba95e3a599",
+        "variant": 0,
+        "sig": "NS2JRTa6IWerZ0D3SM1fqTT4MVGBG401po/w2xxaj4TMlm3DuLRWNFv3aHMQwh5vYY3WwHbGN4YpsoVhKNHXBA=="
+      },
+      {
+        "signer": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
         "signedSha256": "beabef8d3d8889995d933206879b7eb866f0c89c3e6ab7caf47d5fea7370ff6b",
         "variant": 0,
         "sig": "aajmbGyfHHbsspyNFEfVkV7YmlBe5+4c/w3Dt0XZ/cqQ7NtaxGeieqAlLwkSa3Z/nRe5g+UMRiaPklGNrPXuBQ=="
+      },
+      {
+        "signer": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
+        "signedSha256": "ccdec74afce8745b59db6e6a8fac91accb5eb790974a65b3c449d156a9620b0d",
+        "variant": 0,
+        "sig": "nMD2FIhVXytDChSVMiaBzr/o+5+SBDtzISbJGVfkyx8GKTJD+aWXzaA0wgGjflIpkMOB1TgHtXqC1Fj4WI9TCQ=="
       },
       {
         "signer": "BZshRPwUPCrwz8CPmUhJsU9SGEUh0SSkix2JXzQtt7US",
@@ -30223,6 +31304,12 @@
       },
       {
         "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+        "signedSha256": "16d2c69f5b94bce26b0ba0a9d91466f138c810df87c4598abaefdb0d3e1545a2",
+        "variant": 0,
+        "sig": "07DA59MTJHXoxm4t/LdIFeH1YESFrXB1R4TgZGaOWFdRO0eU6b3x6PzMS275JqZucxl+cSYnTaqvNyZvgRsfgg=="
+      },
+      {
+        "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
         "signedSha256": "1b100bd06f35dba5c4c6352dc27449217fe97b66cef8ffc7ef7ad5a598183fcc",
         "variant": 0,
         "sig": "OtddReTT/HCcuf1AqGqEVagownAgKbQK+rWLxmuidHdsclQXHSNRT1edrMwjYkXw/zzVdoBJDhn19Sr+j9XDiQ=="
@@ -30295,6 +31382,12 @@
       },
       {
         "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+        "signedSha256": "a0e8be5cfb99997f0bfbf4458ffe3e509a2b2df8a96bd0341b228be5735d5e50",
+        "variant": 0,
+        "sig": "0/1oo/r1G60b5L1YYkjotPQhnR31KevwImSlWyIcYNnwGmrwehFVw+dMcgbD/mnY4bCCJ8DqatNoOfuOmw/liQ=="
+      },
+      {
+        "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
         "signedSha256": "a3790712f97130ff8e7a08a06c4714886012a056643dc7bf882e4104e1375974",
         "variant": 0,
         "sig": "hoJqo1b0k/is8SMZ/tkZqFQGa8szyZMURoOZhHZP1DNTYYztassvAIzUWETVztOw9vI+lxEp4tW/BG/W2KOGjw=="
@@ -30325,9 +31418,27 @@
       },
       {
         "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+        "signedSha256": "c521d5b8359a236fa0af203aceb991c01d380d3c26d498be6470ab311510154b",
+        "variant": 0,
+        "sig": "edR3ZEjdM+TsdL6SCqzEkJ0+nuMiI4NCDdCsxoPMW29Qm9NNJwM7QDfgDSlfrjlV0ZtCnt/ST/wfRpn6w4rOiA=="
+      },
+      {
+        "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
         "signedSha256": "ca25265ef9c9a93fb6e417bb2dd478d934ffac7b74443007908cedcd85284ed6",
         "variant": 0,
         "sig": "Uhf2HUl5hOG0fTx4MORTJAiCVN+SyD/p9DvmBwS0H1eHSVcsGFixG1c3WTz30fAEf0IeABVyOS+zwwTqSuKQhQ=="
+      },
+      {
+        "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+        "signedSha256": "cc1833d49507f674d9120662fee258fa1d68a90ba978d6a527c70fa21ab0cd81",
+        "variant": 0,
+        "sig": "LlrYdmfDm+yA0wSN1I3bcbzV3ZWTIhJqovQaAvUWFs8byjlTCWShS3nySzbPTb00JZDyIYloOqPtNDYvZNXVhA=="
+      },
+      {
+        "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+        "signedSha256": "cce157b24307c310fe5aa889e2e73172109a65618a25b07219b47d6c8eb848bb",
+        "variant": 0,
+        "sig": "+VnywzMpL/ibC9b0cMc2a6puuM/ceOz0bQokPNgxBUapkJ0W/SHC1cZYsOxK4MY+2YMtZ0h3iTWgwuGVRQIjhg=="
       },
       {
         "signer": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",

@@ -309,7 +309,9 @@ export function ingest(local, store, message, log) {
  * - admis = solveFrom(moi, ∅) ; une pierre tombale compte si son auteur est moi, ou un admis à un rang ≥ F_admis(auteur) ; elle vise une CLÉ ;
  * - effectifs = solveFrom(moi, mortes) ; conflits = places qui portent au moins deux clés parmi effectifs ∪ copies réclamées ; s'il y en a,
  *   recalcul avec mortes ∪ ces clés, sauf MA CLÉ ; une COPIE (ma clé sous une autre place) n'est jamais effective et lève « clé copiée » ;
- * - ancres ÉTRANGÈRES : mes ancres (vivantes ou mortes) qu'une AUTRE de mes ancres vivantes n'admet pas (son point fixe, sur MON registre) :
+ * - ancres ÉTRANGÈRES (v5, relecture V5-1) : z ∈ ancres(moi, ∅), avec clé(z) ∈ mortes ou z ∈ ancres(moi, M final), est étrangère si une
+ *   ancre VIVANTE y ≠ z donne z ∉ membres(y, mortes \ {clé(z)}) — les pierres tombales COMPTENT : une approbation posthume signée par la clé
+ *   d'un appareil retiré n'admet personne. Jugée en v5 avec membres(y, ∅), elle faisait admettre l'appareil du voleur (NEUF-1) ;
  *   cet appareil n'admet personne tant qu'il en a une ; morte, il se réinitialise.
  */
 export function evaluate(local, store) {
@@ -337,9 +339,9 @@ export function evaluate(local, store) {
     return counting.length ? slot(counting[0].approvedBy) : null;
   };
   const liveAnchors = revokedSelf ? [] : [...eff.anchors.values()].filter((y) => gid(y) !== me);
-  const admittedBy = new Map(liveAnchors.map((y) => [gid(y), solveFrom(y, approvals, new Set()).members]));
+  const admits = (y, z) => solveFrom(y, approvals, new Set([...dead].filter((k) => k !== z.identityKey))).members.has(gid(z));
   const foreignAnchors = revokedSelf ? [] : [...admitted.anchors.values()]
-    .filter((z) => gid(z) !== me && liveAnchors.some((y) => gid(y) !== gid(z) && !admittedBy.get(gid(y)).has(gid(z))))
+    .filter((z) => gid(z) !== me && (dead.has(z.identityKey) || eff.anchors.has(gid(z))) && liveAnchors.some((y) => gid(y) !== gid(z) && !admits(y, z)))
     .map((z) => ({ ...genOf(z), dead: dead.has(z.identityKey) }))
     .sort(cmpGen);
   return {
@@ -373,12 +375,13 @@ export const permutationsOf = (items) => (items.length <= 1 ? [items] : items.fl
  * - transmises : hors quarantaine, les entrées RETENUES (auteur admis : tout sauf la réserve) ; en quarantaine (ancre étrangère), mes entrées
  *   et les pierres tombales retenues dont la clé de l'auteur n'est pas morte ;
  * - verifiedAsJoiner(head) : mes entrées de rang ≤ head (le ledger(verified) de celui qui REJOINT) ;
- * - confirmé : chacune de mes ancres vivantes autres que moi m'admet (moi ∈ membres(y, ∅), sur MON registre) ;
+ * - confirmé : chacune de mes ancres vivantes autres que moi m'admet (moi ∈ membres(y, mortes), sur MON registre ; relecture V5-1) ;
  * - peutAdmettre : membre ∧ confirmé ∧ aucune ancre étrangère ∧ non retiré ∧ approbations non bloquées ;
  * - deadGenerations : générations nommées dans mon registre dont la clé est morte — aucune comparaison avec elles.
+ * Une entrée et une génération y sont désignées par leur place ET leur clé : une même place peut porter une clé morte et une vivante.
  * La fonction d'évaluation n'est pas touchée : les ancres vivantes sont recalculées ici comme `evaluate` les calcule.
  */
-export const entryRef = (e) => ({ kind: isTomb(e) ? 'revocation' : 'approval', subject: slot(e), author: slot(authorOf(e)), seq: e.seq });
+export const entryRef = (e) => ({ kind: isTomb(e) ? 'revocation' : 'approval', subject: genOf(e), author: genOf(authorOf(e)), seq: e.seq });
 export function emissionOf(local, store, { joinerHead } = {}) {
   const v = evaluate(local, store);
   const me = gid(local.generation);
@@ -391,7 +394,7 @@ export function emissionOf(local, store, { joinerHead } = {}) {
     eff = solveFrom(local.generation, approvals, new Set([...dead, ...conflictKeys]));
   }
   const liveAnchors = v.revokedSelf ? [] : [...eff.anchors.values()].filter((y) => gid(y) !== me);
-  const confirmed = !v.revokedSelf && liveAnchors.every((y) => solveFrom(y, approvals, new Set()).members.has(me));
+  const confirmed = !v.revokedSelf && liveAnchors.every((y) => solveFrom(y, approvals, dead).members.has(me));
   const member = !v.revokedSelf && (v.effective.length > 1 || (local.root === true && v.effective.length === 1));
   const quarantined = v.foreignAnchors.length > 0;
   const retained = entries.filter((e) => v.admittedIds.has(gid(authorOf(e))));
@@ -402,7 +405,7 @@ export function emissionOf(local, store, { joinerHead } = {}) {
   return {
     confirmed,
     mayAdmit: member && confirmed && !quarantined && !v.revokedSelf && !v.approvalsBlocked,
-    deadGenerations: [...new Set([...known.values()].filter((g) => dead.has(g.identityKey) && gid(g) !== me).map(slot))].sort(),
+    deadGenerations: [...known.values()].filter((g) => dead.has(g.identityKey) && gid(g) !== me).map(genOf).sort(cmpGen),
     transmits: {
       changed: [...changed].sort(cmpEntry).map(entryRef),
       ...(joinerHead !== undefined ? { verifiedAsJoiner: entries.filter((e) => mine(e) && e.seq <= joinerHead).sort(cmpEntry).map(entryRef) } : {}),
