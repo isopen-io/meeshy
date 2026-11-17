@@ -40,6 +40,17 @@ final class NotificationCategoryFilteringTests: XCTestCase {
         }
     }
 
+    /// #14235 — l'activité relayée d'un proche et la Connaissance née toute seule ne sont plus des
+    /// notifications système : la cloche les range là où vit leur contenu.
+    func test_lActiviteRelayeeEtLaConnaissance_quittentSysteme_pourLeurFamille() {
+        for type: MeeshyNotificationType in [.friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote] {
+            XCTAssertTrue(NotificationCategory.social.matchingTypes.contains(type), type.rawValue)
+            XCTAssertFalse(NotificationCategory.system.matchingTypes.contains(type), type.rawValue)
+        }
+        XCTAssertTrue(NotificationCategory.contacts.matchingTypes.contains(.relationAcquaintance))
+        XCTAssertTrue(NotificationCategory.social.serverQuery.types.contains("friend_content_share"))
+    }
+
     func test_lesTypesQueLeWebRangeaitSeul_ontEnfinLeurCategorie() {
         XCTAssertTrue(NotificationCategory.reactions.matchingTypes.contains(.commentReaction))
         XCTAssertTrue(NotificationCategory.social.matchingTypes.contains(.storyNewComment))

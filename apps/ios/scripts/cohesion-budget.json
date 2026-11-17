@@ -204,7 +204,7 @@
     "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift::AuthManager.refreshSession": 83,
     "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardLayoutEngine.swift::MessageCardLayoutEngine.layout": 298,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessage+MeeshyMessage.swift::APIMessage.toMessage": 262,
-    "packages/MeeshySDK/Sources/MeeshySDK/Models/APINotification.swift::APINotification.formattedTitle": 166,
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/APINotification.swift::APINotification.formattedTitle": 161,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3Migration.swift::CanvasV3.migratedScene": 291,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3Migration.swift::StoryEffects.init": 150,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationModels.swift::APIConversation.toConversation": 163,

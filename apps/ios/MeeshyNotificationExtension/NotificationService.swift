@@ -339,10 +339,9 @@ class NotificationService: UNNotificationServiceExtension {
              "story_new_comment",
              "story_thread_reply",
              "friend_story_comment",
-             // Friend content fan-out (Phase 4F)
-             "friend_new_story",
-             "friend_new_post",
-             "friend_new_mood":
+             // Friend content fan-out (Phase 4F), and a friend's relayed activity (#14068-#14072)
+             "friend_new_story", "friend_new_post", "friend_new_mood",
+             "friend_content_reaction", "friend_content_share", "friend_content_repost", "friend_content_quote":
             category = NotificationPayloadHelpers.socialCategoryIdentifier(
                 type: rawType,
                 postId: content.userInfo["postId"] as? String
@@ -438,6 +437,7 @@ class NotificationService: UNNotificationServiceExtension {
         "comment_like", "comment_reply", "comment_reaction",
         "story_new_comment", "story_thread_reply", "friend_story_comment",
         "friend_new_story", "friend_new_post", "friend_new_mood",
+        "friend_content_reaction", "friend_content_share", "friend_content_repost", "friend_content_quote",
     ]
 
     /// Fire-and-forget prefetch of the post referenced by a SOCIAL notification.
@@ -553,7 +553,8 @@ class NotificationService: UNNotificationServiceExtension {
         "comment_like", "comment_reply", "comment_reaction",
         "story_new_comment", "story_thread_reply", "friend_story_comment",
         "friend_new_story", "friend_new_post", "friend_new_mood",
-        "friend_request", "contact_request", "contact_joined", "contact_recently_active",
+        "friend_content_reaction", "friend_content_share", "friend_content_repost", "friend_content_quote",
+        "friend_request", "contact_request", "contact_joined", "contact_recently_active", "relation_acquaintance",
         // Le jeu (#9490) : un duo vient d'un ami, dont l'avatar dit QUI. La ligue et la saison n'ont pas d'acteur.
         "game_duo_invited", "game_duo_accepted"
     ]
