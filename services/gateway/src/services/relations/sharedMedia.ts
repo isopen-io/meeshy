@@ -51,11 +51,16 @@ export const sharedMediaKindOf = (mimeType: string): SharedMediaKind => {
   return found ?? 'file';
 };
 
-const kindWhere = (kind: SharedMediaKind | undefined): Record<string, unknown> => {
-  if (!kind) return {};
-  if (kind !== 'file') return { mimeType: { startsWith: MIME_PREFIX[kind] } };
-  return { NOT: Object.values(MIME_PREFIX).map((prefix) => ({ mimeType: { startsWith: prefix } })) };
+const KIND_WHERE: Readonly<Record<SharedMediaKind, Record<string, unknown>>> = {
+  image: { mimeType: { startsWith: 'image/' } },
+  video: { mimeType: { startsWith: 'video/' } },
+  audio: { mimeType: { startsWith: 'audio/' } },
+  file: {
+    NOT: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }, { mimeType: { startsWith: 'audio/' } }],
+  },
 };
+
+const kindWhere = (kind: SharedMediaKind | undefined): Record<string, unknown> => (kind ? KIND_WHERE[kind] : {});
 
 const SHARED_MEDIA_SELECT = {
   id: true,
