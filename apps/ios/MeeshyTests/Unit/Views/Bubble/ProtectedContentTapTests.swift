@@ -517,6 +517,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         ("Main/Views/MediaReplyComposerBar.swift", "Réponse en cours"),
         ("Main/Components/MediaHub/ConversationMediaHubView.swift", "Hub de médias"),
         ("Main/Views/ConversationView+ViewOnceExit.swift", "Plein écran d'un lieu"),
+        ("Main/Components/MessageOverlayMenu.swift", "Aperçu d'appui long"),
     ]
 
     private static let decisionFile = URL(fileURLWithPath: #filePath)
