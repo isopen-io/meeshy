@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
@@ -44,6 +45,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  * s'écrit en clair ; ce qui est fermé devient une rangée verrouillée (K37) qui nomme le cercle qui l'ouvre, sans jamais porter
  * la donnée protégée. Le contenu vient de [VitrineAsCircle], donc de la loi d'accès partagée.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun VitrineAsCircleSheet(onDismiss: () -> Unit) {
     var level by rememberSaveable { mutableStateOf(RelationLevel.PUBLIC) }
