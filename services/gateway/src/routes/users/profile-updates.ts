@@ -5,7 +5,7 @@
  */
 import { normalizeCityInput } from '@meeshy/shared/utils/profile-city';
 import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
-import { announceProfileAccentChange } from './profile-accent';
+import { announceProfileAccentToPartners } from './profile-accent';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
@@ -366,15 +366,16 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
-      if (body.profileAccentColor !== undefined) {
-        announceProfileAccentChange(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
+      const accentChanged = body.profileAccentColor !== undefined;
+      if (accentChanged) {
+        announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
       }
 
       // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
       // `user:<moi>` seulement. Les partenaires ont `user:updated` ci-dessus, et sa
       // charge publique ; une écriture qui ne touche aucun champ de l'instantané
-      // (bio, ville, réglages) ne diffuse rien.
-      if (langChanged || nameChanged) {
+      // (bio, ville, réglages) ne diffuse rien. L'accent (#19201) en est un.
+      if (langChanged || nameChanged || accentChanged) {
         announceOwnProfileUpdated(fastify, updatedUser);
       }
 

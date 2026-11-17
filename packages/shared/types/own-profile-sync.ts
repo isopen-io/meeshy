@@ -28,7 +28,7 @@
  *
  * @see schema.prisma model User (`systemLanguage`, `regionalLanguage`,
  * `customDestinationLanguage`, `displayName`, `firstName`, `lastName`,
- * `username`, `avatar`, `banner`, `updatedAt`)
+ * `username`, `avatar`, `banner`, `profileAccentColor`, `updatedAt`)
  */
 import { z } from 'zod';
 
@@ -43,6 +43,7 @@ export const OWN_PROFILE_FIELDS = [
   'username',
   'avatar',
   'banner',
+  'profileAccentColor',
 ] as const;
 
 export type OwnProfileField = (typeof OWN_PROFILE_FIELDS)[number];
@@ -63,6 +64,12 @@ export const ownProfileSnapshotSchema = z.object({
   username: z.string(),
   avatar: z.string().nullable(),
   banner: z.string().nullable(),
+  /**
+   * #19201 — la couleur d'accent de la vitrine (`PROFILE_ACCENT_HEXES`), `null` = accent calculé.
+   * OPTIONNELLE pour la trame d'un serveur d'avant : une clé ABSENTE ne dit rien de l'accent, et le
+   * client garde le sien ; la passerelle d'aujourd'hui la pose toujours.
+   */
+  profileAccentColor: z.string().nullable().optional(),
 });
 
 export type OwnProfileSnapshot = z.infer<typeof ownProfileSnapshotSchema>;
