@@ -23,6 +23,9 @@ export type UnfurlCopy = {
   readonly imageAlt: string;
   readonly openInvitation: string;
   readonly openMeeshy: string;
+  /** « Amani Diallo (@amani) sur Meeshy » : la carte d'une fiche (#18865). */
+  readonly personOnMeeshy: (person: string) => string;
+  readonly openProfile: string;
 };
 
 const NBSP = '\u00A0';
@@ -40,6 +43,8 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     imageAlt: 'Meeshy — chacun écrit dans sa langue, chacun lit dans la sienne',
     openInvitation: 'Ouvrir l’invitation',
     openMeeshy: 'Ouvrir Meeshy',
+    personOnMeeshy: (person) => `${person} sur Meeshy`,
+    openProfile: 'Ouvrir la fiche',
   },
   en: {
     locale: 'en_US',
@@ -53,6 +58,8 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     imageAlt: 'Meeshy — everyone writes in their language, everyone reads in theirs',
     openInvitation: 'Open the invitation',
     openMeeshy: 'Open Meeshy',
+    personOnMeeshy: (person) => `${person} on Meeshy`,
+    openProfile: 'Open the profile',
   },
   es: {
     locale: 'es_ES',
@@ -66,6 +73,8 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     imageAlt: 'Meeshy — cada uno escribe en su idioma y lee en el suyo',
     openInvitation: 'Abrir la invitación',
     openMeeshy: 'Abrir Meeshy',
+    personOnMeeshy: (person) => `${person} en Meeshy`,
+    openProfile: 'Abrir el perfil',
   },
   pt: {
     locale: 'pt_BR',
@@ -79,6 +88,8 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     imageAlt: 'Meeshy — cada um escreve no seu idioma e lê no seu',
     openInvitation: 'Abrir o convite',
     openMeeshy: 'Abrir o Meeshy',
+    personOnMeeshy: (person) => `${person} no Meeshy`,
+    openProfile: 'Abrir o perfil',
   },
   de: {
     locale: 'de_DE',
@@ -92,6 +103,8 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     imageAlt: 'Meeshy — jeder schreibt in seiner Sprache, jeder liest in seiner',
     openInvitation: 'Einladung öffnen',
     openMeeshy: 'Meeshy öffnen',
+    personOnMeeshy: (person) => `${person} auf Meeshy`,
+    openProfile: 'Profil öffnen',
   },
   it: {
     locale: 'it_IT',
@@ -105,6 +118,8 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     imageAlt: 'Meeshy — ognuno scrive nella sua lingua e legge nella sua',
     openInvitation: 'Apri l’invito',
     openMeeshy: 'Apri Meeshy',
+    personOnMeeshy: (person) => `${person} su Meeshy`,
+    openProfile: 'Apri il profilo',
   },
   ar: {
     locale: 'ar_AR',
@@ -118,6 +133,8 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     imageAlt: 'Meeshy — يكتب كلٌّ بلغته ويقرأ بلغته',
     openInvitation: 'افتح الدعوة',
     openMeeshy: 'افتح Meeshy',
+    personOnMeeshy: (person) => `${person} على Meeshy`,
+    openProfile: 'افتح الملف الشخصي',
   },
 };
 
