@@ -245,4 +245,77 @@ final class MyCommunitiesTests: XCTestCase {
         XCTAssertEqual(sut.communities.map(\.id), ["c3"])
         XCTAssertEqual(cached, ["c3"])
     }
+
+    // MARK: - La bande est celle du compte CONNECTÉ (#18935)
+
+    /// La source vit le temps du processus et `@Published` rejoue sa valeur à la
+    /// liste recréée : sans oubli au changement de compte, le compte B voyait la
+    /// bande du compte A — et hors ligne, rien ne la remplaçait.
+    func test_accountChange_offline_neverShowsThePreviousAccountsStrip() async throws {
+        let store = try await seed(["c-of-A"])
+        let accounts = PassthroughSubject<String?, Never>()
+        let service = MockCommunityService()
+        service.listResult = .failure(URLError(.notConnectedToInternet))
+        let sut = MyCommunities(
+            service: service, communityUpdates: Empty().eraseToAnyPublisher(),
+            accountChanges: accounts.eraseToAnyPublisher(),
+            accountSettled: { await store.invalidate(for: "list") }
+        )
+        await sut.load()
+        XCTAssertEqual(sut.communities.map(\.id), ["c-of-A"])
+
+        accounts.send("user-B")
+        let shownAtTheSwitch = sut.communities.map(\.id)
+        await sut.accountReload?.value
+
+        XCTAssertEqual(shownAtTheSwitch, [], "la bande du compte A s'efface dans le tour de la bascule")
+        XCTAssertEqual(sut.communities.map(\.id), [], "hors ligne, rien du compte A ne revient sous le compte B")
+    }
+
+    func test_signOut_dropsTheStripWithoutReadingAnything() async throws {
+        let store = try await seed(["c-of-A"])
+        let accounts = PassthroughSubject<String?, Never>()
+        let service = MockCommunityService()
+        let sut = MyCommunities(
+            service: service, communityUpdates: Empty().eraseToAnyPublisher(),
+            accountChanges: accounts.eraseToAnyPublisher(), accountSettled: {}
+        )
+        await sut.load()
+
+        accounts.send(nil)
+
+        await store.invalidate(for: "list")
+        XCTAssertEqual(sut.communities.map(\.id), [])
+        XCTAssertNil(sut.accountReload, "personne n'est connecté : rien ne se relit")
+        XCTAssertEqual(service.listCallCount, 0)
+    }
+
+    /// La réponse du compte quitté arrive APRÈS la bascule : elle ne se publie
+    /// pas sous le compte entrant, et ne se grave pas dans son cache.
+    func test_accountChange_whileTheNetworkAnswers_dropsTheLeavingAccountsAnswer() async throws {
+        let store = await CacheCoordinator.shared.communities
+        await store.invalidate(for: "list")
+        let accounts = PassthroughSubject<String?, Never>()
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "c-of-A")]))
+        service.onList = {
+            service.onList = nil
+            service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "c-of-B")]))
+            accounts.send("user-B")
+        }
+        let sut = MyCommunities(
+            service: service, communityUpdates: Empty().eraseToAnyPublisher(),
+            accountChanges: accounts.eraseToAnyPublisher(), accountSettled: {}
+        )
+
+        await sut.refresh()
+        let afterTheLeavingAnswer = sut.communities.map(\.id)
+        await sut.accountReload?.value
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(afterTheLeavingAnswer, [], "la réponse du compte quitté ne se publie pas sous le suivant")
+        XCTAssertEqual(sut.communities.map(\.id), ["c-of-B"], "le compte entrant relit sa propre bande")
+        XCTAssertEqual(cached, ["c-of-B"], "le cache du compte entrant ne garde que sa liste")
+    }
 }
