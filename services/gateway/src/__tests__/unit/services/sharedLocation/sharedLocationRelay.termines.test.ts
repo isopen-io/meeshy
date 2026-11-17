@@ -11,6 +11,7 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
 import {
   endSharedLocationOfAccount,
+  refreshSharedLocationBetween,
   sharedLocationEndedFor,
   startSharedLocation,
   stopSharedLocation,
@@ -141,6 +142,26 @@ describe('la loi relue à chaque lecture, et le compte qui part', () => {
     await m.lier(EMETTEUR, AMI, 'ACQUAINTANCE');
 
     expect(await sharedLocationEndedFor(m.deps, AMI)).toEqual([]);
+  });
+
+  it('monté à Ami pendant le partage, servi par la relation qui change : sa fin lui est dite comme aux autres', async () => {
+    const m = monde();
+    await demarrer(m);
+    await m.lier(EMETTEUR, CONNAISSANCE, 'FRIEND');
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: CONNAISSANCE });
+    m.avancer(7 * MINUTE + 13_000);
+    await stopSharedLocation(m.deps, EMETTEUR);
+
+    expect(await sharedLocationEndedFor(m.deps, CONNAISSANCE)).toEqual([{ userId: EMETTEUR, endedAt: iso(T0 + 7 * MINUTE + 13_000), circle: 'FRIEND' }]);
+  });
+
+  it('jamais servi, monté à Ami APRÈS la fin : rien ne lui est dit', async () => {
+    const m = monde();
+    await demarrer(m);
+    await stopSharedLocation(m.deps, EMETTEUR);
+    await m.lier(EMETTEUR, CONNAISSANCE, 'FRIEND');
+
+    expect(await sharedLocationEndedFor(m.deps, CONNAISSANCE)).toEqual([]);
   });
 
   it('l\'émetteur purgé : rien n\'est dit, et sa trace part avec lui', async () => {
