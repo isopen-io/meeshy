@@ -7,9 +7,12 @@ import me.meeshy.core.e2ee.content.E2eeContent
 import me.meeshy.core.e2ee.device.E2eeDirectoryClient
 import me.meeshy.core.e2ee.open.E2eeOpenOutcome
 import me.meeshy.core.e2ee.seal.E2eeMessageSealer
+import me.meeshy.core.e2ee.seal.E2eeSealException
 import me.meeshy.core.e2ee.session.E2eeSessionCipher
 import me.meeshy.core.e2ee.store.E2eeDeviceAddress
+import me.meeshy.core.e2ee.store.E2eeLocalDevice
 import me.meeshy.core.e2ee.store.E2eeLocalIdentity
+import me.meeshy.core.e2ee.store.isSameAccount
 import me.meeshy.core.e2ee.vault.InMemoryRecordBackend
 import me.meeshy.core.e2ee.vault.TransactionalRecordVault
 import me.meeshy.core.e2ee.wire.E2eeSealedMessage
@@ -76,6 +79,43 @@ class E2eeOwnAccountCaseTest {
         val result = runCatching { sealer.sealAndDeliver(content, alice.uppercase()) { sealed -> sealedFor += sealed } }
 
         assertThat(result.isFailure).isTrue()
+        assertThat(sealedFor).isEmpty()
+    }
+
+    /** Audit de #19077, P8 — ces témoins tombent si « moi » redevient une égalité sensible à la casse. */
+    @Test
+    fun myAccount_isRecognisedInAnyCase_andNoOtherAccountIs() {
+        val me = E2eeLocalDevice(alice, 1, 4242)
+
+        assertThat(isSameAccount(alice.uppercase(), alice)).isTrue()
+        assertThat(me.isMe(alice.uppercase())).isTrue()
+        assertThat(me.isMe("64f0c0ffee0000000000bbbb")).isFalse()
+    }
+
+    /** Audit de #19077, P8 — une session qui nomme mon compte dans une autre casse ne réinitialise jamais mon identité. */
+    @Test
+    fun aSessionNamingMyAccountInAnotherCase_neverWipesMyIdentity() = runTest {
+        val server = FakeE2eeServer()
+        val phone = E2eeTestDevice(server, alice).enroll()
+
+        val again = phone.registrar.ensureEnrolled(alice.uppercase())
+
+        assertThat(again.device.deviceId).isEqualTo(phone.enrolled.device.deviceId)
+        assertThat(again.identity.registrationId).isEqualTo(phone.enrolled.identity.registrationId)
+        assertThat(again.identity.identityKeyBase64).isEqualTo(phone.enrolled.identity.identityKeyBase64)
+    }
+
+    /** Audit de #19077, P8 — un correspondant qui est MOI, dans la même casse, est refusé avant tout scellement. */
+    @Test
+    fun aPeerThatIsMeInTheSameCase_isRefused_beforeAnythingIsSealed() = runTest {
+        val server = FakeE2eeServer()
+        val phone = E2eeTestDevice(server, alice).enroll()
+        val sealedFor = mutableListOf<E2eeSealedMessage>()
+        val content = E2eeContent.compose("à moi-même", null, null, conversation, "cid_me", 1L)
+
+        val result = runCatching { phone.sealer.sealAndDeliver(content, alice) { sealed -> sealedFor += sealed } }
+
+        assertThat(result.exceptionOrNull()).isInstanceOf(E2eeSealException.InvalidPeer::class.java)
         assertThat(sealedFor).isEmpty()
     }
 }

@@ -307,7 +307,7 @@ private fun EncryptionSwitchAnnouncementEffect(announcer: EncryptionSwitchAnnoun
 
 /** #18975 — un envoi chiffré qui n'a pas pu partir se dit, traduit ; son texte est déjà revenu dans le composeur. */
 @Composable
-private fun EndToEndSendRefusalEffect(refusals: Int) {
+internal fun EndToEndSendRefusalEffect(refusals: Int) {
     val context = LocalContext.current
     val notice = stringResource(R.string.chat_e2ee_send_not_sent)
     LaunchedEffect(refusals) {

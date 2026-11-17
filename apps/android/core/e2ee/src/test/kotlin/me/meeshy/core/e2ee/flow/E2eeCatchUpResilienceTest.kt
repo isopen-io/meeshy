@@ -44,10 +44,23 @@ class E2eeCatchUpResilienceTest {
         override fun commit(changes: Map<RecordId, ByteArray?>, clearFirst: Boolean) = inner.commit(changes, clearFirst)
     }
 
-    private fun poisonedOpener(device: E2eeTestDevice, backend: InMemoryRecordBackend, poisoned: RecordId): E2eeEnvelopeOpener {
-        val vault = TransactionalRecordVault(OneRecordDoesNotOpen(backend, poisoned))
-        return E2eeEnvelopeOpener(device.enrolled.device, E2eeSessionCipher(device.enrolled.device.address, device.enrolled.identity, vault), device.session, vault)
+    /** Un stockage dont UN enregistrement fait lever une `Error` : une panique que le pont JNI rend en `AssertionError` sans cause. */
+    private class OneRecordPanics(private val inner: InMemoryRecordBackend, private val poisoned: RecordId) : RecordBackend {
+        override fun load(kind: RecordKind, key: String): ByteArray? {
+            if (RecordId(kind, key) == poisoned) throw AssertionError("libsignal panic")
+            return inner.load(kind, key)
+        }
+
+        override fun keys(kind: RecordKind): List<String> = inner.keys(kind)
+
+        override fun commit(changes: Map<RecordId, ByteArray?>, clearFirst: Boolean) = inner.commit(changes, clearFirst)
     }
+
+    private fun poisonedOpener(device: E2eeTestDevice, backend: InMemoryRecordBackend, poisoned: RecordId): E2eeEnvelopeOpener =
+        openerOver(device, TransactionalRecordVault(OneRecordDoesNotOpen(backend, poisoned)))
+
+    private fun openerOver(device: E2eeTestDevice, vault: TransactionalRecordVault): E2eeEnvelopeOpener =
+        E2eeEnvelopeOpener(device.enrolled.device, E2eeSessionCipher(device.enrolled.device.address, device.enrolled.identity, vault), device.session, vault)
 
     @Test
     fun aSessionRecordThatDoesNotOpen_makesTheEnvelopeWait_neverEscapesAsAnError() = runTest {
@@ -83,6 +96,28 @@ class E2eeCatchUpResilienceTest {
         val outcomes = opener.catchUp()
 
         assertThat(outcomes.filterIsInstance<E2eeOpenOutcome.Opened>().map { it.content.text }).containsExactly("c1")
+        assertThat(server.mailbox.map { it.second.senderUserId }).containsExactly(alice)
+    }
+
+    /** Audit de #19077, P1 — une `Error` levée en ouvrant UNE enveloppe la fait attendre seule ; le rattrapage des autres continue. */
+    @Test
+    fun anErrorWhileOpeningOneEnvelope_defersItAlone_andTheCatchUpOfEveryoneElseGoesOn() = runTest {
+        val server = FakeE2eeServer()
+        val a = E2eeTestDevice(server, alice).enroll()
+        val c = E2eeTestDevice(server, carol).enroll()
+        val backend = InMemoryRecordBackend()
+        val b = E2eeTestDevice(server, bob, backend).enroll()
+        send(a, bob, "a1")
+        b.opener.catchUp()
+        send(a, bob, "a2")
+        send(c, bob, "c1", conversationWithCarol)
+        val panicking = RecordId(RecordKind.SESSION, "$alice.${a.enrolled.device.deviceId}")
+        val opener = openerOver(b, TransactionalRecordVault(OneRecordPanics(backend, panicking)))
+
+        val outcomes = opener.catchUp()
+
+        assertThat(outcomes.filterIsInstance<E2eeOpenOutcome.Opened>().map { it.content.text }).containsExactly("c1")
+        assertThat(outcomes.filterIsInstance<E2eeOpenOutcome.Deferred>()).hasSize(1)
         assertThat(server.mailbox.map { it.second.senderUserId }).containsExactly(alice)
     }
 

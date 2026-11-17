@@ -60,6 +60,13 @@ public object E2eePlaintextReader {
     public const val CONTENT_VERSION: Long = 1
     public const val SIGNAL_VERSION: Long = 1
 
+    /**
+     * La profondeur d'imbrication la plus grande qu'un clair peut avoir (audit de #19077, P1) : un contenu en a 1, un signal
+     * 2. Au-delà, le clair est illisible AVANT toute analyse — un pair ne fait jamais déborder la pile du lecteur. Le contrat
+     * commun ne borne pas encore la profondeur : cette borne y est proposée (#19112).
+     */
+    public const val MAX_DEPTH: Int = 64
+
     /** La sonde (`E2EEPayloadKind.of`) : un signal si et seulement si `s` est un ENTIER JSON ; tout le reste est un message. */
     public fun payloadOf(plaintext: ByteArray): E2eePayloadKind = payloadOf(parse(plaintext))
 
