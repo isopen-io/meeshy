@@ -250,29 +250,80 @@ describe('l’ouverture rend le verdict d’iOS, et une version future ne se per
  * WEBX-06 (contre-analyse web du 2026-11-17, #18906) : le JSON d'une version
  * future se gardait sans son remplissage par `/ +$/`, qui tentait chaque départ
  * dans la suite d'espaces et échouait au `\n` final — 0,8 s pour 48 Ko, sous le
- * verrou du coffre de l'appareil. Le meilleur de cinq ouvertures borne le temps
- * sans dépendre d'un ramasse-miettes ou d'un premier passage du compilateur.
+ * verrou du coffre de l'appareil.
+ *
+ * Le témoin garde la LINÉARITÉ, pas une durée (#19241). Une borne absolue
+ * (« moins de 5 ms ») mesurait la machine : la couverture d'une CI chargée la
+ * franchissait (6,6 ms) sans qu'aucun code ne change. Il compare donc deux
+ * ouvertures à octets égaux : un clair de 32 Kio de remplissage contre 64
+ * clairs de 512 octets. Linéaire, le grand ne coûte pas plus que les petits,
+ * que leur coût fixe alourdit même (0,8 mesuré) ; quadratique, il coûte jusqu'à
+ * 64 fois plus (50 mesuré sur l'analyseur d'avant 0c86fdd377). La borne, 8,
+ * laisse un facteur 6 à 8 de part et d'autre. Les deux mesures alternent,
+ * pour que la charge de la machine et l'instrumentation pèsent sur les deux ;
+ * un échauffement laisse le compilateur optimiser les deux chemins ; et seul le
+ * meilleur essai de chacune compte, qu'un ramasse-miettes ou une préemption ne
+ * peut qu'allonger. Le délai de 60 s ne sert qu'à l'analyseur quadratique (près
+ * d'une seconde par ouverture de 32 Kio) : il échoue sur la borne, pas sur le
+ * délai.
  */
 describe('l’ouverture reste linéaire, quel que soit ce qui suit le remplissage (WEBX-06)', () => {
   const origin: E2EEEnvelopeOrigin = { conversationId: 'c1', senderUserId: 'u', senderDeviceId: 1 };
-  const fastestOf = (times: number, run: () => void): number =>
-    Math.min(
-      ...Array.from({ length: times }, () => {
-        const start = performance.now();
-        run();
-        return performance.now() - start;
-      }),
-    );
-
-  it.each([
+  const LARGE_PADDING = 32 * 1024;
+  const SMALL_PADDING = 512;
+  const SMALLS_PER_LARGE = LARGE_PADDING / SMALL_PADDING;
+  const MAX_COST_GROWTH_PER_BYTE = 8;
+  const WARMUP_ROUNDS = 3;
+  const MEASURED_ROUNDS = 15;
+  const futureVersions = [
     ['un message', '{"conversationId":"c1","sentAt":1,"v":2}'],
     ['un signal', '{"active":true,"conversationId":"c1","kind":"typing","s":2,"sentAt":1}'],
-  ])('%s d’une version future, suivi de 64 Kio d’espaces puis d’un \\n, s’ouvre en moins de 5 ms et garde son seul JSON', (_label, json) => {
-    const plaintext = utf8(`${json}${' '.repeat(64 * 1024)}\n`);
+  ] as const;
 
-    expect(openE2EEPlaintext(plaintext, origin)).toMatchObject({ verdict: 'future-version', version: 2, json });
-    expect(fastestOf(5, () => openE2EEPlaintext(plaintext, origin))).toBeLessThan(5);
+  const paddedThenNewline = (json: string, spaces: number): Uint8Array => utf8(`${json}${' '.repeat(spaces)}\n`);
+  const elapsed = (run: () => void): number => {
+    const start = performance.now();
+    run();
+    return performance.now() - start;
+  };
+
+  /** Le meilleur essai de chaque côté, l'ordre des deux mesures alternant d'une manche à l'autre. */
+  const fastestInterleaved = (large: () => void, smalls: () => void): { readonly large: number; readonly smalls: number } => {
+    const rounds = Array.from({ length: WARMUP_ROUNDS + MEASURED_ROUNDS }, (_, round) => {
+      if (round % 2 === 0) {
+        const largeTime = elapsed(large);
+        return { large: largeTime, smalls: elapsed(smalls) };
+      }
+      const smallsTime = elapsed(smalls);
+      return { large: elapsed(large), smalls: smallsTime };
+    }).slice(WARMUP_ROUNDS);
+    return {
+      large: Math.min(...rounds.map((round) => round.large)),
+      smalls: Math.min(...rounds.map((round) => round.smalls)),
+    };
+  };
+
+  it.each(futureVersions)('%s d’une version future, suivi de 64 Kio d’espaces puis d’un \\n, garde son seul JSON', (_label, json) => {
+    expect(openE2EEPlaintext(paddedThenNewline(json, 64 * 1024), origin)).toMatchObject({ verdict: 'future-version', version: 2, json });
   });
+
+  it.each(futureVersions)(
+    '%s d’une version future : à octets égaux, 32 Kio de remplissage ne coûtent pas plus que 64 fois 512 octets',
+    (_label, json) => {
+      const large = paddedThenNewline(json, LARGE_PADDING);
+      const small = paddedThenNewline(json, SMALL_PADDING);
+
+      const fastest = fastestInterleaved(
+        () => openE2EEPlaintext(large, origin),
+        () => Array.from({ length: SMALLS_PER_LARGE }, () => openE2EEPlaintext(small, origin)),
+      );
+
+      expect(fastest.large / fastest.smalls, `32 Kio en ${fastest.large} ms, 64 × 512 o en ${fastest.smalls} ms`).toBeLessThan(
+        MAX_COST_GROWTH_PER_BYTE,
+      );
+    },
+    60_000,
+  );
 });
 
 /**
