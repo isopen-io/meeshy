@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="links_face_profile_tag">Mon lien de profil</string>
-    <string name="links_face_profile_hint">Ouvre ma vitrine, vue Public</string>
     <string name="links_face_copy">Copier</string>
     <string name="links_face_qr">QR</string>
     <string name="links_face_send">Envoyer</string>

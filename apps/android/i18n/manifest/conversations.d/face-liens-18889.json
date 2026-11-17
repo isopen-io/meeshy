@@ -9,10 +9,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "links_face_profile_hint",
-          "status": "android-only"
-        },
-        {
           "androidName": "links_face_copy",
           "status": "android-only"
         },
