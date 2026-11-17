@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import MeeshySDK
 @testable import Meeshy
 import MeeshySDK
@@ -102,7 +103,7 @@ final class WidgetDataManagerTests: XCTestCase {
         let (sut, defaults, dirs) = try makeWipeSUT()
         let keys = [
             "recent_conversations", "conversation_snapshots", "favorite_contacts",
-            "widget_last_updated", "unread_count", "pending_mark_read",
+            "widget_last_updated", "unread_count", "pending_mark_read", "my_profile_link",
         ]
         for key in keys { defaults.set(Data("seed".utf8), forKey: key) }
         // Clés d'ENVIRONNEMENT — le wipe ne doit PAS les toucher.
@@ -473,6 +474,55 @@ final class WidgetDataManagerTests: XCTestCase {
             title: title,
             isPinned: isPinned
         )
+    }
+
+    // MARK: - #18873 — « Mon lien » (planche `Hors-App`)
+
+    func test_publishProfileLink_writesTheShortAddressTheWidgetEncodes() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+
+        sut.publishProfileLink(username: "aissa")
+
+        let data = try XCTUnwrap(defaults.data(forKey: "my_profile_link"), "le widget lit cette clé")
+        let decoded = try JSONDecoder().decode(WidgetProfileLink.self, from: data)
+        XCTAssertEqual(decoded.url, "https://meeshy.me/@aissa")
+        XCTAssertEqual(decoded.displayText, "meeshy.me/@aissa")
+    }
+
+    func test_publishProfileLink_withoutAHandle_removesTheLink_neverInventsOne() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+        sut.publishProfileLink(username: "aissa")
+
+        sut.publishProfileLink(username: nil)
+
+        XCTAssertNil(defaults.object(forKey: "my_profile_link"))
+        XCTAssertNil(WidgetProfileLink(username: "  "))
+    }
+
+    func test_followProfileLink_publishesEachAccountsHandle_andDropsItWhenSignedOut() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+        let usernames = PassthroughSubject<String?, Never>()
+        sut.followProfileLink(usernames.eraseToAnyPublisher())
+
+        usernames.send("leo.m")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        let data = try XCTUnwrap(defaults.data(forKey: "my_profile_link"))
+        XCTAssertEqual(try JSONDecoder().decode(WidgetProfileLink.self, from: data).displayText, "meeshy.me/@leo.m")
+
+        usernames.send(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertNil(defaults.object(forKey: "my_profile_link"))
+    }
+
+    func test_widgetMirror_readsTheSameKeyAndFields() throws {
+        let widget = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("MeeshyWidgets/MyProfileLinkWidget.swift")
+        let source = try String(contentsOf: widget, encoding: .utf8)
+        XCTAssertTrue(source.contains("\"my_profile_link\""))
+        XCTAssertTrue(source.contains("let url: String"))
+        XCTAssertTrue(source.contains("let displayText: String"))
+        XCTAssertTrue(source.contains("WidgetDeepLink.myLinks"), "un appui ouvre mes liens")
     }
 
     func test_publishFavoriteContacts_writesInCorrectKey() throws {

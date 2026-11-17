@@ -18,6 +18,19 @@ struct WidgetConversation: Codable, Identifiable {
     let accentColor: String
 }
 
+/// « Mon lien » (planche `Hors-App`, #18873) : l'adresse que le QR du widget encode, et sa forme courte affichée.
+/// Miroir : `ProfileLinkCard` (`MeeshyWidgets/MyProfileLinkWidget.swift`).
+struct WidgetProfileLink: Codable, Equatable {
+    let url: String
+    let displayText: String
+
+    init?(username: String?) {
+        guard let link = ProfileLink(username: username) else { return nil }
+        self.url = link.url.absoluteString
+        self.displayText = link.displayText
+    }
+}
+
 struct WidgetFavoriteContact: Codable, Identifiable {
     let id: String
     let name: String
@@ -123,6 +136,8 @@ final class WidgetDataManager: NotificationWidgetSink {
     private let conversationsKey = "recent_conversations"
     private let unreadCountKey = "unread_count"
     private let favoritesKey = "favorite_contacts"
+    private let profileLinkKey = "my_profile_link"
+    private var profileLinkObservation: AnyCancellable?
     private let lastUpdatedKey = "widget_last_updated"
     /// Store keyé `[id: ConversationSnapshotPayload]` — résolution Local-First
     /// des détails de conversation pour la NSE + les widgets.
@@ -269,7 +284,7 @@ final class WidgetDataManager: NotificationWidgetSink {
     func wipeAll() {
         if let defaults = sharedDefaults {
             let accountKeys = [
-                conversationsKey, snapshotsKey, favoritesKey, lastUpdatedKey,
+                conversationsKey, snapshotsKey, favoritesKey, profileLinkKey, lastUpdatedKey,
                 unreadCountKey, WidgetActionFlusher.pendingMarkReadKey,
                 ShareDirectorySnapshot.defaultsKey,
             ]
@@ -508,6 +523,30 @@ final class WidgetDataManager: NotificationWidgetSink {
               let data = encoder.encodeOrLog(favorites, field: "widget favorites", logger: Logger.widgetData) else { return }
 
         writingToSharedContainer { defaults.set(data, forKey: favoritesKey) }
+    }
+
+    /// « Mon lien » : l'adresse courte de MON profil, que le widget montre en QR sans ouvrir l'app. Un compte sans
+    /// pseudo — ou aucun compte — la retire : le widget dit alors d'ouvrir Meeshy, il n'invente rien.
+    func publishProfileLink(username: String?) {
+        guard let defaults = sharedDefaults else { return }
+        let key = profileLinkKey
+        if let link = WidgetProfileLink(username: username),
+           let data = encoder.encodeOrLog(link, field: "widget profile link", logger: Logger.widgetData) {
+            writingToSharedContainer { defaults.set(data, forKey: key) }
+        } else {
+            writingToSharedContainer { defaults.removeObject(forKey: key) }
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: "MyProfileLink")
+    }
+
+    /// Suit le pseudo du compte connecté : le widget « Mon lien » change avec le compte et le pseudo.
+    func followProfileLink(_ usernames: AnyPublisher<String?, Never>) {
+        profileLinkObservation = usernames
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] username in
+                MainActor.assumeIsolated { self?.publishProfileLink(username: username) }
+            }
     }
 
     func publishUnreadCount(_ count: Int) {

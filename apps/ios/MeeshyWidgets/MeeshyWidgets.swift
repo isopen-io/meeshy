@@ -10,6 +10,7 @@ struct MeeshyWidgetBundle: WidgetBundle {
         UnreadCountWidget()
         QuickReplyWidget()
         FavoriteContactsWidget()
+        MyProfileLinkWidget()
         OutboxLiveActivity()
         CallLiveActivity()
         VoicePlaybackLiveActivity()

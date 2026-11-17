@@ -9,6 +9,9 @@ enum WidgetDeepLink {
         url(host: "conversation", id: id)
     }
 
+    /// « Mon lien » : un appui ouvre mes liens (`DeepLinkRouter` : `links` → `.userLinks`).
+    static let myLinks = URL(string: "meeshy://links")
+
     static func contact(_ id: String) -> URL? {
         url(host: "contact", id: id)
     }

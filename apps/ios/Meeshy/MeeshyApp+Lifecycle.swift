@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 import os
 
@@ -109,6 +110,9 @@ extension MeeshyApp {
             DeepLinkRouter.shared.replayShareLinkAwaitingAccount()
         case .startNotificationCoordinators:
             NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
+            WidgetDataManager.shared.followProfileLink(
+                AuthManager.shared.$currentUser.map { $0?.username }.eraseToAnyPublisher()
+            )
             NotificationCoordinator.shared.start()
             NotificationGapResyncCoordinator.shared.start()
         case .startCache:

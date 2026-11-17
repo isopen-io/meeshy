@@ -1,0 +1,160 @@
+import WidgetKit
+import SwiftUI
+import CoreImage.CIFilterBuiltins
+
+// ============================================================================
+// MARK: - « Mon lien » (planche `Hors-App`, vue 3, #18873)
+// ============================================================================
+//
+// Mon QR prêt à être montré sans ouvrir l'app, avec l'adresse courte de mon profil. L'app publie l'adresse dans le
+// groupe d'app (`WidgetDataManager.publishProfileLink`) ; sans compte ni pseudo, le widget le dit et n'invente rien.
+// Le nombre de visites du jour que la planche montre attend sa donnée : le widget s'en passe tant qu'elle manque.
+
+struct MyProfileLinkWidget: Widget {
+    let kind: String = MyProfileLinkKeys.kind
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: MyProfileLinkProvider()) { entry in
+            MyProfileLinkWidgetView(entry: entry)
+        }
+        .configurationDisplayName(String(localized: "widget.myLink.title", defaultValue: "My link"))
+        .description(String(localized: "widget.myLink.description", defaultValue: "Your profile QR, ready to show without opening the app"))
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+enum MyProfileLinkKeys {
+    static let kind = "MyProfileLink"
+    static let defaultsKey = "my_profile_link"
+}
+
+/// Le miroir de `WidgetProfileLink` (app) : l'adresse complète que le QR encode, et sa forme courte affichée.
+struct ProfileLinkCard: Codable, Equatable {
+    let url: String
+    let displayText: String
+}
+
+struct MyProfileLinkEntry: TimelineEntry {
+    let date: Date
+    let card: ProfileLinkCard?
+
+    static let sample = ProfileLinkCard(url: "https://meeshy.me/@aissa", displayText: "meeshy.me/@aissa")
+}
+
+struct MyProfileLinkProvider: TimelineProvider {
+    func placeholder(in context: Context) -> MyProfileLinkEntry {
+        MyProfileLinkEntry(date: Date(), card: MyProfileLinkEntry.sample)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (MyProfileLinkEntry) -> Void) {
+        let card = context.isPreview ? MyProfileLinkEntry.sample : loadCard()
+        completion(MyProfileLinkEntry(date: Date(), card: card))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<MyProfileLinkEntry>) -> Void) {
+        completion(Timeline(entries: [MyProfileLinkEntry(date: Date(), card: loadCard())], policy: .never))
+    }
+
+    /// Pas de repli fabriqué : une lecture morte doit se VOIR (même règle que les favoris).
+    private func loadCard() -> ProfileLinkCard? {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedKeys.suiteName),
+              let data = defaults.data(forKey: MyProfileLinkKeys.defaultsKey) else { return nil }
+        return try? JSONDecoder().decode(ProfileLinkCard.self, from: data)
+    }
+}
+
+/// Le QR d'une adresse, en pixels nets : CoreImage, à l'échelle entière, sans lissage.
+enum ProfileLinkQR {
+    static func image(for text: String) -> CGImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(text.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)) else { return nil }
+        return CIContext().createCGImage(output, from: output.extent)
+    }
+}
+
+struct MyProfileLinkWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: MyProfileLinkEntry
+
+    var body: some View {
+        Group {
+            if let card = entry.card {
+                if family == .systemSmall { small(card) } else { medium(card) }
+            } else {
+                signedOut
+            }
+        }
+        .widgetURL(WidgetDeepLink.myLinks)
+        .containerBackground(.background, for: .widget)
+    }
+
+    private func small(_ card: ProfileLinkCard) -> some View {
+        VStack(spacing: 6) {
+            qr(card)
+            Text(card.displayText)
+                .font(.caption2.monospaced())
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label(card))
+    }
+
+    private func medium(_ card: ProfileLinkCard) -> some View {
+        HStack(spacing: 16) {
+            qr(card)
+            VStack(alignment: .leading, spacing: 6) {
+                Label(String(localized: "widget.myLink.title", defaultValue: "My link"), systemImage: "qrcode")
+                    .font(.headline)
+                    .foregroundStyle(WidgetColors.brandPrimary)
+                Text(card.displayText)
+                    .font(.subheadline.monospaced())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(String(localized: "widget.myLink.hint", defaultValue: "Scan with any camera"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label(card))
+    }
+
+    @ViewBuilder
+    private func qr(_ card: ProfileLinkCard) -> some View {
+        if let image = ProfileLinkQR.image(for: card.url) {
+            Image(decorative: image, scale: 1)
+                .interpolation(.none)
+                .resizable()
+                .aspectRatio(1, contentMode: .fit)
+                .padding(6)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.white))
+        } else {
+            Image(systemName: "qrcode")
+                .resizable()
+                .aspectRatio(1, contentMode: .fit)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var signedOut: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "qrcode")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text(String(localized: "widget.myLink.signedOut", defaultValue: "Open Meeshy to show your QR here"))
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func label(_ card: ProfileLinkCard) -> String {
+        String(format: String(localized: "widget.myLink.a11y", defaultValue: "My profile QR, %@"), card.displayText)
+    }
+}
