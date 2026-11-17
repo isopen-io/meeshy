@@ -48,7 +48,8 @@ extension MeeshyUser {
             activation: activation,
             profileDecor: profileDecor,
             addresses: addresses,
-            city: city, cityCircle: cityCircle
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor
         )
     }
 
@@ -81,7 +82,8 @@ extension MeeshyUser {
             activation: activation,
             profileDecor: profileDecor,
             addresses: addresses,
-            city: city, cityCircle: cityCircle
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor
         )
     }
 }

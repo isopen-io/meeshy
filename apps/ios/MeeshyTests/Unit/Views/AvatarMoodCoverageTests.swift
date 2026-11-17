@@ -42,7 +42,7 @@ final class AvatarMoodCoverageTests: XCTestCase {
 
     func test_profileView_mountsTheAvatarThatCarriesMyMood() throws {
         XCTAssertTrue(
-            try stripped("Meeshy/Features/Profile/Views/ProfileView.swift").contains("ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)"),
+            try stripped("Meeshy/Features/Profile/Views/ProfileView.swift").contains("ProfileOwnAvatar(user: user, accentColor: shownAccentHex, isEditing: isEditing)"),
             "l'écran de mon profil peint mon avatar par ProfileOwnAvatar — sans lui, mon humeur manque sur le seul écran qui me présente"
         )
     }

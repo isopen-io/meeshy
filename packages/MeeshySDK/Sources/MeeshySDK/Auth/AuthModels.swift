@@ -569,6 +569,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// Le cercle à partir duquel ma ville se lit, servi à MOI seul (`nil` = moi seul). Lu par `ProfileCity`.
     public let cityCircle: String?
 
+    /// La couleur d'accent CHOISIE de la vitrine (#19201, iOS #19391) : une teinte de `ProfileAccent.tones` en
+    /// `#RRGGBB`. `nil` = automatique, un ancien serveur, ou une valeur hors liste : l'accent se calcule comme avant.
+    public let profileAccentColor: String?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -597,7 +601,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         profileDecor: ServedProfileDecor? = nil,
         addresses: ServedProfileAddresses? = nil,
         city: String? = nil,
-        cityCircle: String? = nil
+        cityCircle: String? = nil,
+        profileAccentColor: String? = nil
     ) {
         self.id = id
         self.username = username
@@ -641,6 +646,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.addresses = addresses
         self.city = city
         self.cityCircle = cityCircle
+        self.profileAccentColor = profileAccentColor
     }
 
     /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
@@ -674,7 +680,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             activation: activation,
             profileDecor: decor,
             addresses: addresses,
-            city: city, cityCircle: cityCircle
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor
         )
     }
 
@@ -723,7 +730,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             activation: activation,
             profileDecor: profileDecor,
             addresses: addresses,
-            city: city, cityCircle: cityCircle
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor
         )
     }
 

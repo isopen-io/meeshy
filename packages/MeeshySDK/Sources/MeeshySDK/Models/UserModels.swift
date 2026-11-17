@@ -13,6 +13,8 @@ public struct UpdateProfileRequest: Encodable {
     public var city: String?
     /// Le cercle qui lit la ville, en valeur de l'échelle (`FRIEND`…) ; `nil` = inchangé.
     public var cityCircle: String?
+    /// L'accent choisi de la vitrine (#19201, iOS #19391) : `nil` = inchangé (omis), `.automatic` part en `null`.
+    public var profileAccentColor: ProfileAccentChoice?
 
     private static func validateLanguageCode(_ code: String?) -> String? {
         guard let code = code?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
@@ -29,7 +31,8 @@ public struct UpdateProfileRequest: Encodable {
     public init(firstName: String? = nil, lastName: String? = nil, displayName: String? = nil,
                 bio: String? = nil, systemLanguage: String? = nil, regionalLanguage: String? = nil,
                 customDestinationLanguage: String? = nil, voicePublic: Bool? = nil,
-                city: String? = nil, cityCircle: RelationLevel? = nil) {
+                city: String? = nil, cityCircle: RelationLevel? = nil,
+                profileAccentColor: ProfileAccentChoice? = nil) {
         self.firstName = firstName
         self.lastName = lastName
         self.displayName = displayName
@@ -50,6 +53,7 @@ public struct UpdateProfileRequest: Encodable {
         self.voicePublic = voicePublic
         self.city = city.map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(ProfileCity.maxLength)) }
         self.cityCircle = cityCircle?.rawValue
+        self.profileAccentColor = profileAccentColor
     }
 }
 

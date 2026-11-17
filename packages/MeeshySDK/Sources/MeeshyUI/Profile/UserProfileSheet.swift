@@ -131,9 +131,11 @@ public struct UserProfileSheet: View {
     var accentTint: Color { Color(hex: resolvedAccent) }
 
     /// La couleur du PROFIL (#10754) — avatar sans photo, bannière de design — et non
-    /// l'accent de l'écran d'où la fiche s'ouvre : la même source que ma propre fiche.
+    /// l'accent de l'écran d'où la fiche s'ouvre : la même source que ma propre fiche. La teinte qu'il a
+    /// CHOISIE d'abord (#19391), l'accent calculé quand le serveur n'en sert pas.
     var profileAccent: String {
-        DynamicColorGenerator.profileAccentHex(userId: displayUser.userId, name: displayUser.resolvedDisplayName)
+        ProfileAccent.hex(chosen: displayUser.profileAccentColor, userId: displayUser.userId,
+                          name: displayUser.resolvedDisplayName)
     }
 
     /// Introuvable, privé ou il m'a bloqué (loi 9) : le décor et la présence se taisent, la fiche rend « Personne ici ».

@@ -187,3 +187,112 @@ nonisolated enum ProfileCityCopy {
         return String(format: format, CircleLevelNames.title(of: circle))
     }
 }
+
+/// « Couleur d'accent » en édition (planche `Moi-Edition`, #19391) : les sept teintes de la liste et « Automatique » en
+/// pastilles du kit (K07). La bannière au-dessus suit chaque choix, et la phrase dit la teinte qu'elle prend.
+struct ProfileAccentSection: View {
+    @Binding var choice: ProfileAccentChoice
+    let userId: String?
+    let name: String
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private var previewColor: Color { ProfileAccent.color(chosen: choice.wire, userId: userId, name: name) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            ProfileSectionHeader(icon: "paintpalette.fill", title: ProfileAccentCopy.title, color: previewColor)
+            MeeshyColorDots(ProfileAccentCopy.dots, selection: ProfileAccentCopy.dotId(of: choice),
+                            label: ProfileAccentCopy.title, size: .s32, tone: .theme,
+                            onSelect: { id in choice = ProfileAccentCopy.choice(forDot: id) })
+                .padding(.horizontal, MeeshySpacing.sm)
+                .accessibilityIdentifier("profile.accent.dots")
+            preview
+        }
+    }
+
+    private var preview: some View {
+        HStack(spacing: MeeshySpacing.md) {
+            Circle()
+                .fill(previewColor)
+                .frame(width: MeeshySpacing.smPlus, height: MeeshySpacing.smPlus)
+                .accessibilityHidden(true)
+            Text(ProfileAccentCopy.preview(of: choice))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundStyle(theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(LinearGradient(colors: [previewColor.opacity(MeeshyOpacity.medium),
+                                              previewColor.opacity(MeeshyOpacity.subtle)],
+                                     startPoint: .leading, endPoint: .trailing))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .stroke(previewColor.opacity(MeeshyOpacity.strong), lineWidth: MeeshyBorder.regular)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("profile.accent.preview")
+    }
+}
+
+/// Les mots et les pastilles de l'accent de ma vitrine (#19391). L'identifiant d'une pastille est la clé de sa teinte,
+/// `automatic` pour l'accent calculé.
+nonisolated enum ProfileAccentCopy {
+    static let automaticDot = "automatic"
+
+    static var title: String {
+        String(localized: "profile.accent.title", defaultValue: "Couleur d'accent", bundle: .main)
+    }
+
+    static var automaticName: String {
+        String(localized: "profile.accent.automatic", defaultValue: "Automatique", bundle: .main)
+    }
+
+    /// Les sept teintes dans l'ordre de la planche, puis « Automatique ».
+    static var dots: [MeeshyColorDot] {
+        let tones: [MeeshyColorDot] = ProfileAccent.tones.map { tone in
+            MeeshyColorDot(id: tone.key, fill: .solid(tone.color), name: name(of: tone))
+        }
+        let automatic = MeeshyColorDot(id: automaticDot, fill: .gradient(ProfileAccent.automaticGradient),
+                                       name: automaticName, systemImage: "wand.and.stars")
+        return tones + [automatic]
+    }
+
+    static func dotId(of choice: ProfileAccentChoice) -> String {
+        guard case .tone(let tone) = choice else { return automaticDot }
+        return tone.key
+    }
+
+    /// Une pastille inconnue vaut « Automatique » : jamais une teinte hors liste.
+    static func choice(forDot id: String) -> ProfileAccentChoice {
+        guard let tone = ProfileAccent.tones.first(where: { $0.key == id }) else { return .automatic }
+        return .tone(tone)
+    }
+
+    /// « Aperçu en direct : ta bannière est en Violet ».
+    static func preview(of choice: ProfileAccentChoice) -> String {
+        guard case .tone(let tone) = choice else {
+            return String(localized: "profile.accent.preview.automatic",
+                          defaultValue: "Aperçu en direct : ta bannière prend sa couleur automatique", bundle: .main)
+        }
+        let format = String(localized: "profile.accent.preview", defaultValue: "Aperçu en direct : ta bannière est en %@",
+                            bundle: .main)
+        return String(format: format, name(of: tone))
+    }
+
+    static func name(of tone: ProfileAccent.Tone) -> String {
+        switch tone.key {
+        case "violet": return String(localized: "profile.accent.tone.violet", defaultValue: "Violet", bundle: .main)
+        case "turquoise": return String(localized: "profile.accent.tone.turquoise", defaultValue: "Turquoise", bundle: .main)
+        case "coral": return String(localized: "profile.accent.tone.coral", defaultValue: "Corail", bundle: .main)
+        case "amber": return String(localized: "profile.accent.tone.amber", defaultValue: "Ambre", bundle: .main)
+        case "blue": return String(localized: "profile.accent.tone.blue", defaultValue: "Bleu", bundle: .main)
+        case "green": return String(localized: "profile.accent.tone.green", defaultValue: "Vert", bundle: .main)
+        default: return String(localized: "profile.accent.tone.raspberry", defaultValue: "Framboise", bundle: .main)
+        }
+    }
+}

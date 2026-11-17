@@ -150,7 +150,8 @@ extension UserUpdatedEvent {
             lastName: hasNameGroup ? lastName : user.lastName,
             displayName: hasNameGroup ? displayName : user.displayName,
             avatar: avatar.applied(to: user.avatar),
-            banner: banner.applied(to: user.banner)
+            banner: banner.applied(to: user.banner),
+            profileAccentColor: profileAccentColor.applied(to: user.profileAccentColor)
         )
         let unchanged = repainted.username == user.username
             && repainted.firstName == user.firstName
@@ -158,6 +159,7 @@ extension UserUpdatedEvent {
             && repainted.displayName == user.displayName
             && repainted.avatar == user.avatar
             && repainted.banner == user.banner
+            && repainted.profileAccentColor == user.profileAccentColor
         return unchanged ? nil : repainted
     }
 
@@ -188,6 +190,7 @@ extension UserUpdatedEvent: Equatable {
             && lhs.hasNameGroup == rhs.hasNameGroup
             && lhs.avatar == rhs.avatar
             && lhs.banner == rhs.banner
+            && lhs.profileAccentColor == rhs.profileAccentColor
     }
 }
 
@@ -207,11 +210,13 @@ extension Array {
 }
 
 extension MeeshyUser {
-    /// Copie du compte avec les six champs PUBLICS que porte `user:updated`
-    /// remplacés — tout le reste recopié (`MeeshyUser` n'a que des `let`).
+    /// Copie du compte avec les sept champs PUBLICS que porte `user:updated`
+    /// remplacés (l'accent choisi depuis #19391) — tout le reste recopié
+    /// (`MeeshyUser` n'a que des `let`).
     func repaintingPublicProfile(
         username: String, firstName: String?, lastName: String?,
-        displayName: String?, avatar: String?, banner: String?
+        displayName: String?, avatar: String?, banner: String?,
+        profileAccentColor: String?
     ) -> MeeshyUser {
         MeeshyUser(
             id: id, username: username, email: email,
@@ -242,7 +247,8 @@ extension MeeshyUser {
             activation: activation,
             profileDecor: profileDecor,
             addresses: addresses,
-            city: city, cityCircle: cityCircle
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor
         )
     }
 }

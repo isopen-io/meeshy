@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Verrouille les trois mécanismes purs de `saveProfile` :
@@ -308,5 +309,79 @@ final class ProfileViewSaveProfileTests: XCTestCase {
         XCTAssertEqual(merged.declaredCity, "Porto")
         XCTAssertEqual(merged.declaredCityCircle, .public)
     }
-}
 
+    // MARK: - L'accent de ma vitrine (#19391)
+
+    private func tone(_ key: String) throws -> ProfileAccent.Tone {
+        try XCTUnwrap(ProfileAccent.tones.first { $0.key == key })
+    }
+
+    func test_accentEditToSend_theAccentIHold_sendsNothing() throws {
+        let user = makeFullUser().withProfileAccent("#A855F7")
+        let violet = try tone("violet")
+        XCTAssertNil(ProfileView.accentEditToSend(.tone(violet), original: user))
+        XCTAssertNil(ProfileView.accentEditToSend(.automatic, original: makeFullUser()))
+    }
+
+    func test_accentEditToSend_aNewToneOrAutomatic_isSent() throws {
+        let user = makeFullUser().withProfileAccent("#A855F7")
+        let green = try tone("green")
+        XCTAssertEqual(ProfileView.accentEditToSend(.tone(green), original: user), .tone(green))
+        XCTAssertEqual(ProfileView.accentEditToSend(.automatic, original: user), .automatic)
+    }
+
+    func test_vitrineAccentHex_whileChoosing_paintsTheChoiceLive() throws {
+        let user = makeFullUser().withProfileAccent("#A855F7")
+        XCTAssertEqual(ProfileView.vitrineAccentHex(of: user, choosing: nil), "A855F7", "au repos, l'accent tenu")
+        let coral = try tone("coral")
+        XCTAssertEqual(ProfileView.vitrineAccentHex(of: user, choosing: .tone(coral)), "FF6B6B")
+        let computed = DynamicColorGenerator.profileAccentHex(userId: "u1", name: "Alice")
+        XCTAssertEqual(ProfileView.vitrineAccentHex(of: user, choosing: .automatic), computed)
+        XCTAssertNil(ProfileView.vitrineAccentHex(of: nil, choosing: .automatic))
+    }
+
+    func test_applyingProfileEdits_carriesTheChosenAccent() {
+        let updated = makeFullUser().withProfileAccent("#3498DB").applyingProfileEdits(bio: "Nouvelle bio")
+        XCTAssertEqual(updated.profileAccentColor, "#3498DB")
+    }
+
+    func test_mergingServerUser_aResponseWithoutTheAccent_keepsTheOptimisticOne() {
+        let merged = ProfileView.mergingServerUser(makeFullUser(), onto: makeFullUser().withProfileAccent("#F8B500"))
+        XCTAssertEqual(merged.profileAccentColor, "#F8B500")
+    }
+
+    func test_mergingServerUser_aResponseWithTheAccent_serverWins() {
+        let server = makeFullUser().withProfileAccent("#FF2E63")
+        let merged = ProfileView.mergingServerUser(server, onto: makeFullUser().withProfileAccent("#F8B500"))
+        XCTAssertEqual(merged.profileAccentColor, "#FF2E63")
+    }
+
+    func test_accentDots_areTheSevenTonesThenAutomatic_eachNamed() {
+        let dots = ProfileAccentCopy.dots
+        XCTAssertEqual(dots.map(\.id), ProfileAccent.tones.map(\.key) + [ProfileAccentCopy.automaticDot])
+        XCTAssertTrue(dots.allSatisfy { !($0.name ?? "").isEmpty }, "VoiceOver dit le nom de chaque teinte, jamais son code")
+        XCTAssertEqual(Set(dots.compactMap(\.name)).count, dots.count, "deux pastilles ne portent pas le même nom")
+    }
+
+    func test_accentDot_roundTripsWithTheChoice() throws {
+        let violet = try tone("violet")
+        XCTAssertEqual(ProfileAccentCopy.dotId(of: .tone(violet)), "violet")
+        XCTAssertEqual(ProfileAccentCopy.choice(forDot: "violet"), .tone(violet))
+        XCTAssertEqual(ProfileAccentCopy.dotId(of: .automatic), ProfileAccentCopy.automaticDot)
+        XCTAssertEqual(ProfileAccentCopy.choice(forDot: ProfileAccentCopy.automaticDot), .automatic)
+        XCTAssertEqual(ProfileAccentCopy.choice(forDot: "inconnue"), .automatic, "jamais une teinte hors liste")
+    }
+
+    func test_accentPreview_saysTheToneTheBannerTakes() throws {
+        let violet = try tone("violet")
+        let format = Bundle.main.localizedString(forKey: "profile.accent.preview", value: nil, table: nil)
+        XCTAssertEqual(ProfileAccentCopy.preview(of: .tone(violet)), String(format: format, ProfileAccentCopy.name(of: violet)))
+        XCTAssertNotEqual(ProfileAccentCopy.preview(of: .automatic), ProfileAccentCopy.preview(of: .tone(violet)))
+    }
+
+    func test_profileView_mountsTheAccentSection_andPaintsTheBannerWithIt() throws {
+        let profile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Views/ProfileView.swift"))
+        XCTAssertTrue(profile.contains("ProfileAccentSection(choice: $accentChoice"), "« Couleur d'accent » vit dans l'édition de ma vitrine")
+        XCTAssertTrue(profile.contains("ProfileOwnBanner(user: user, accentColor: shownAccentHex"), "la bannière prend l'aperçu en direct")
+    }
+}

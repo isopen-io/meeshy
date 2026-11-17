@@ -9,7 +9,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         lhs.avatarURL == rhs.avatarURL &&
         lhs.bannerURL == rhs.bannerURL &&
         lhs.profileDecor == rhs.profileDecor &&
-        lhs.city == rhs.city
+        lhs.city == rhs.city &&
+        lhs.profileAccentColor == rhs.profileAccentColor
     }
 
     public var id: String { userId ?? participantId ?? username }
@@ -44,6 +45,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
     public let profileDecor: ServedProfileDecor?
     /// La ville déclarée que le serveur m'a servie (#18862, #19388) — seulement si son cercle m'ouvre ; `nil` = rien.
     public let city: String?
+    /// L'accent qu'il a CHOISI pour sa vitrine (#19201, #19391), une teinte de la liste ; `nil` = automatique.
+    public let profileAccentColor: String?
 
     public init(
         userId: String? = nil, username: String, displayName: String? = nil,
@@ -57,7 +60,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         voiceSampleDurationMs: Int? = nil, voiceQuality: Double? = nil,
         participantId: String? = nil, isAnonymous: Bool = false,
         profileDecor: ServedProfileDecor? = nil,
-        city: String? = nil
+        city: String? = nil,
+        profileAccentColor: String? = nil
     ) {
         self.userId = userId
         self.participantId = participantId
@@ -83,6 +87,7 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         self.voiceQuality = voiceQuality
         self.profileDecor = profileDecor
         self.city = ProfileCity.normalized(city)
+        self.profileAccentColor = ProfileAccent.tone(wire: profileAccentColor)?.wire
     }
 
     public var resolvedDisplayName: String {
@@ -215,7 +220,8 @@ extension ProfileSheetUser {
             voiceSampleDurationMs: user.voiceSampleDurationMs,
             voiceQuality: user.voiceQuality,
             profileDecor: user.profileDecor,
-            city: user.declaredCity
+            city: user.declaredCity,
+            profileAccentColor: user.profileAccentColor
         )
     }
 }

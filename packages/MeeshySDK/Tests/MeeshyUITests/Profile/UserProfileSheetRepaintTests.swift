@@ -46,5 +46,13 @@ final class UserProfileSheetRepaintTests: XCTestCase {
         XCTAssertNil(ProfileSheetUser.from(user: MeeshyUser(id: "u-bob", username: "bob")).city)
         XCTAssertNil(ProfileSheetUser.from(user: MeeshyUser(id: "u-bob", username: "bob", city: "  ")).city)
     }
-}
 
+    /// #19391 — l'accent qu'il a choisi se lit sur sa fiche, survit à un repeint, et une valeur hors liste n'est rien.
+    func test_chosenAccent_isCarriedToTheSheet_andSurvivesARepaint() throws {
+        let loaded = MeeshyUser(id: "u-bob", username: "bob", profileAccentColor: "#4ecdc4")
+        XCTAssertEqual(ProfileSheetUser.from(user: loaded).profileAccentColor, "#4ECDC4")
+        let repainted = try XCTUnwrap(UserProfileSheet.repaintedProfile(loaded, with: try event(userId: "u-bob")))
+        XCTAssertEqual(ProfileSheetUser.from(user: repainted).profileAccentColor, "#4ECDC4")
+        XCTAssertNil(ProfileSheetUser.from(user: MeeshyUser(id: "u-bob", username: "bob", profileAccentColor: "#123456")).profileAccentColor)
+    }
+}

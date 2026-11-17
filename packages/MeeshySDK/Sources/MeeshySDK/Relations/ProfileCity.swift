@@ -69,7 +69,8 @@ extension MeeshyUser {
             activation: activation,
             profileDecor: profileDecor,
             addresses: addresses,
-            city: ProfileCity.normalized(city), cityCircle: circle?.rawValue
+            city: ProfileCity.normalized(city), cityCircle: circle?.rawValue,
+            profileAccentColor: profileAccentColor
         )
     }
 

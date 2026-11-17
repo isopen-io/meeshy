@@ -22,6 +22,8 @@ struct ProfileView: View {
     @State private var bio = ""
     @State private var city = ""
     @State private var cityCircle: RelationLevel?
+    /// L'accent de ma vitrine tel que je le choisis en édition (#19391) ; la bannière le prend en direct.
+    @State private var accentChoice: ProfileAccentChoice = .automatic
     @State private var systemLanguage = ""
     @State private var regionalLanguage = ""
     @State private var customDestinationLanguage = ""
@@ -315,9 +317,9 @@ struct ProfileView: View {
         case .vitrine:
             vitrineFace
         case .links:
-            ProfileLinksFace(user: user, accentColor: accentColor, onOpen: { router.push($0) })
+            ProfileLinksFace(user: user, accentColor: shownAccentHex, onOpen: { router.push($0) })
         case .actions:
-            ProfileActionsFace(user: user, stats: stats, accentColor: accentColor,
+            ProfileActionsFace(user: user, stats: stats, accentColor: shownAccentHex,
                                canShare: ProfileLink(username: user?.username) != nil,
                                canSetMood: statusComposer != nil,
                                onAction: { perform($0) }, prefs: UserPreferencesManager.shared)
@@ -337,6 +339,8 @@ struct ProfileView: View {
             username: user?.username, accentColor: accentColor
         )
         if isEditing {
+            ProfileAccentSection(choice: $accentChoice, userId: user?.id,
+                                 name: user?.displayName ?? user?.username ?? "")
             ProfileContactSection(
                 email: user?.email, isEmailVerified: user?.emailVerifiedAt != nil,
                 phoneNumber: user?.phoneNumber, isPhoneVerified: user?.phoneVerifiedAt != nil,
@@ -439,7 +443,7 @@ struct ProfileView: View {
     private var avatarBlock: some View {
         ZStack(alignment: .bottomTrailing) {
             photoButton(user?.avatar) {
-                ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)
+                ProfileOwnAvatar(user: user, accentColor: shownAccentHex, isEditing: isEditing)
                 .overlay(
                     Circle()
                         .stroke(theme.backgroundGradient, lineWidth: 4)
@@ -503,8 +507,13 @@ struct ProfileView: View {
         Locale(identifier: Bundle.main.preferredLocalizations.first ?? "fr")
     }
 
+    /// L'accent de ma bannière et de mon avatar ; en édition, celui que je suis en train de choisir (#19391).
+    private var shownAccentHex: String {
+        Self.vitrineAccentHex(of: user, choosing: isEditing ? accentChoice : nil) ?? accentColor
+    }
+
     private var bannerImage: some View {
-        ProfileOwnBanner(user: user, accentColor: user?.profileAccentHex ?? accentColor, isDark: theme.mode.isDark)
+        ProfileOwnBanner(user: user, accentColor: shownAccentHex, isDark: theme.mode.isDark)
             .task(id: user?.profileDecor) { await servedAppearance.load(decor: user?.profileDecor) }
     }
 
@@ -624,6 +633,7 @@ struct ProfileView: View {
         bio = user?.bio ?? ""
         city = user?.declaredCity ?? ""
         cityCircle = user?.declaredCityCircle
+        accentChoice = ProfileAccentChoice(wire: user?.profileAccentColor)
         systemLanguage = user?.systemLanguage ?? "fr"
         regionalLanguage = user?.regionalLanguage ?? ""
         customDestinationLanguage = user?.customDestinationLanguage ?? ""
@@ -720,9 +730,11 @@ struct ProfileView: View {
         )
         let cityEdit = Self.cityEditToSend(typed: city, circle: cityCircle, original: original)
         let changesCity = cityEdit.city != nil || cityEdit.circle != nil
-        authManager.currentUser = changesCity
+        let accentEdit = Self.accentEditToSend(accentChoice, original: original)
+        let withCity = changesCity
             ? optimistic.withDeclaredCity(ProfileCity.normalized(city), circle: cityCircle)
             : optimistic
+        authManager.currentUser = accentEdit.map { withCity.withProfileAccent($0.wire) } ?? withCity
         setEditing(false)
         HapticFeedback.success()
 
@@ -735,7 +747,8 @@ struct ProfileView: View {
             regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
             customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage),
             city: cityEdit.city,
-            cityCircle: cityEdit.circle
+            cityCircle: cityEdit.circle,
+            profileAccentColor: accentEdit
         )
 
         // Offline path — persist the request to SettingsActionQueue so it
