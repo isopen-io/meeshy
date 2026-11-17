@@ -29,8 +29,13 @@ internal suspend fun MeeshyDatabase.forgetThreadSync(conversationId: String) {
     syncMetaDao().delete(ThreadSyncKey.gapOf(conversationId))
 }
 
-/** Empties a thread's cached messages AND forgets its sync keys (#19050). Runs inside the caller's transaction. */
+/**
+ * Empties a thread's cached messages AND forgets its sync keys (#19050), their child rows with them — the retained
+ * translations, transcriptions and audio tracks, the edit history (audit A3, [MessageChildRows]). Runs inside the caller's
+ * transaction.
+ */
 internal suspend fun MeeshyDatabase.clearThreadCache(conversationId: String) {
+    MessageChildRows.delete(this, messageDao().retentionKeysForConversation(conversationId))
     messageDao().clearConversation(conversationId)
     forgetThreadSync(conversationId)
 }

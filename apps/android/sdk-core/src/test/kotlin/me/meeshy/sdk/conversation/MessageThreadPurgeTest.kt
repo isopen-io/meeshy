@@ -8,6 +8,7 @@ import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import me.meeshy.core.database.entity.MessageTranslationEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiMessage
@@ -23,7 +24,9 @@ import retrofit2.Response
 /**
  * What leaves the device with a thread or a message (audit of #19046 / #19115):
  * - A2 — the revalidation runs in a job of its own, out of reach of the screen: a thread purged during its flight
- *   (« Supprimer pour moi », « Quitter ») must not come back from its page, its keys included.
+ *   (« Supprimer pour moi », « Quitter ») must not come back from its page, its keys included;
+ * - A3 — a message the recent window declares gone, and every message of a purged thread, leave with their child rows:
+ *   a retained translation keeps the text of the message it translates.
  */
 @RunWith(RobolectricTestRunner::class)
 class MessageThreadPurgeTest {
@@ -45,6 +48,12 @@ class MessageThreadPurgeTest {
         clock,
         regime = EndToEndRegimeKeeper(EndToEndRegimeLedger.None, database),
     )
+
+    private suspend fun MessageCollaboratorHarness.retainTranslation(messageId: String) =
+        database.messageTranslationDao().upsertText(MessageTranslationEntity(messageId, "fr", "texte traduit", "en", null, null, 1L))
+
+    private suspend fun MessageCollaboratorHarness.retainedTranslations(messageId: String) =
+        database.messageTranslationDao().textsFor(listOf(messageId))
 
     @Test
     fun `a thread purged while its revalidation flies stays purged, its messages and its key included`() =
@@ -74,6 +83,33 @@ class MessageThreadPurgeTest {
             assertThat(harness.database.messageDao().listForConversation(CONVERSATION)).isEmpty()
             assertThat(harness.database.syncMetaDao().lastSyncedAt(KEY)).isNull()
         }
+
+    @Test
+    fun `a message the recent window declares gone leaves with its retained translation`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1))
+        harness.seedSynced(message("m2", T2))
+        harness.retainTranslation("m2")
+        val api = mockk<MessageApi> {
+            coEvery { listConditional(CONVERSATION, any()) } returns page(message("m1", T1))
+            coEvery { listAfter(CONVERSATION, any(), any()) } returns nothingAfter
+        }
+
+        harness.repository(api).refresh(CONVERSATION)
+
+        assertThat(harness.database.messageDao().find("m2")).isNull()
+        assertThat(harness.retainedTranslations("m2")).isEmpty()
+    }
+
+    @Test
+    fun `a purged thread leaves with the retained translations of its messages`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1))
+        harness.retainTranslation("m1")
+
+        harness.database.withTransaction { harness.database.clearThreadCache(CONVERSATION) }
+
+        assertThat(harness.database.messageDao().find("m1")).isNull()
+        assertThat(harness.retainedTranslations("m1")).isEmpty()
+    }
 
     private companion object {
         const val CONVERSATION = "c1"

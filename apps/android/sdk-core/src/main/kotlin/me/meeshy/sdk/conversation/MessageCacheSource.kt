@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.core.database.dao.MessageKeys
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
@@ -396,7 +397,9 @@ internal class MessageCacheSource(
             page = served,
         ).toHashSet()
         if (gone.isEmpty()) return
-        erasures?.recordRemovedRows(candidates.filter { it.id in gone })
+        val removed = candidates.filter { it.id in gone }
+        erasures?.recordRemovedRows(removed)
+        MessageChildRows.delete(database, removed.map { MessageKeys(it.id, it.serverId, it.conversationId) })
         gone.chunked(DELETE_CHUNK).forEach { messageDao.deleteByIds(it) }
     }
 
