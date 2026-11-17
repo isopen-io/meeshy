@@ -14,7 +14,7 @@ enum RevokedSessionPurge {
     /// Branché une fois, depuis `MeeshyApp.init()`.
     static func install(
         sessionInvalidated: AnyPublisher<Void, Never> = AuthManager.shared.sessionInvalidated.eraseToAnyPublisher(),
-        purge: @escaping @MainActor () -> Void = { purgeRevokedSession() }
+        purge: @escaping @MainActor () -> Void = { RevokedSessionPurge.purgeRevokedSession() }
     ) {
         subscription = sessionInvalidated.sink { _ in purge() }
     }
