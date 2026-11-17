@@ -89,7 +89,16 @@ internal fun ProfileActionsFace(
             displayName = input.displayName,
             offered = access.offers(ProfileRelationAction.LOCATION),
         )
-        ProfileWhereMapAction(userId = input.userId, displayName = input.displayName, callbacks = callbacks)
+        ProfileWhereMapAction(
+            userId = input.userId,
+            displayName = input.displayName,
+            access = ProfileWhereMapAccess(
+                canMessage = plan.canMessage,
+                offersCall = access.offersCall(plan, callbacks),
+                offersLocation = access.offers(ProfileRelationAction.LOCATION),
+            ),
+            callbacks = callbacks,
+        )
         PhoneSections(input)
         CardSection(input, onOpenCircle, onShareProfile)
         NotOpenSection(locked)
@@ -99,6 +108,13 @@ internal fun ProfileActionsFace(
 
 private fun Map<ProfileRelationAction, ProfileActionAccess>.offers(action: ProfileRelationAction): Boolean =
     this[action] is ProfileActionAccess.Offered
+
+/** Appeler : la fiche le permet, l'hôte sait appeler, et le cercle l'ouvre — la même règle pour la face et pour la carte. */
+private fun Map<ProfileRelationAction, ProfileActionAccess>.offersCall(
+    plan: ProfileActionPlan,
+    callbacks: ProfileActionCallbacks,
+): Boolean =
+    plan.offersCall && callbacks.onCall != null && offers(ProfileRelationAction.CALL)
 
 private fun Map<ProfileRelationAction, ProfileActionAccess>.lockedRows(): List<Pair<ProfileRelationAction, RelationLevel>> =
     ProfileRelationAction.entries.mapNotNull { action ->
@@ -151,7 +167,7 @@ private fun TalkSection(
     val callTitle = stringResource(R.string.fiche_action_call)
     val videoTitle = stringResource(R.string.fiche_action_video)
     val onCall = callbacks.onCall
-    val offersCall = plan.offersCall && onCall != null && access.offers(ProfileRelationAction.CALL)
+    val offersCall = access.offersCall(plan, callbacks)
     val tiles = buildList<@Composable (MeeshyLabeledActionSize) -> Unit> {
         if (plan.canMessage) {
             add { size ->

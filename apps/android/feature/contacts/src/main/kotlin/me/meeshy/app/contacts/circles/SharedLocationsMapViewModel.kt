@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -58,8 +59,14 @@ class SharedLocationsMapViewModel internal constructor(
         }
     }
 
-    /** Quand le serveur a servi cette position pour la dernière fois ; `null` : inconnue, la feuille n'affirme aucune fraîcheur. */
-    fun updatedAtMillis(userId: String): Long? = live.byUser.value[userId]?.updatedAtMillis
+    /**
+     * Quand le serveur a servi chaque position pour la dernière fois ; une personne absente : inconnue, la feuille n'affirme
+     * aucune fraîcheur. Un FLUX à part des épingles : une position reservie au même endroit ne change aucune épingle (la
+     * carte ne se redessine pas), mais elle rajeunit la fraîcheur que la feuille affiche.
+     */
+    val updatedAt: StateFlow<Map<String, Long>> = live.byUser
+        .map { byUser -> byUser.mapValues { it.value.updatedAtMillis } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, live.byUser.value.mapValues { it.value.updatedAtMillis })
 
     /** À l'apparition : le monde fait foi, une fin survenue carte fermée s'efface partout. */
     fun appeared() {

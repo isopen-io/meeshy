@@ -117,6 +117,7 @@ internal fun LocationMapScreen(
     viewModel: SharedLocationsMapViewModel = hiltViewModel(),
 ) {
     val pins by viewModel.pins.collectAsStateWithLifecycle()
+    val updatedAt by viewModel.updatedAt.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) { viewModel.appeared() }
     val reduceMotion = LocalReduceMotion.current
     var selectedId by rememberSaveable { mutableStateOf(focusUserId) }
@@ -155,7 +156,7 @@ internal fun LocationMapScreen(
             displayName = displayName,
             pins = pins,
             selected = selected,
-            updatedAtMillis = selected?.let { viewModel.updatedAtMillis(it.userId) },
+            updatedAtMillis = selected?.let { updatedAt[it.userId] },
             actions = actions,
             onDirections = { openDirections(context, it) },
             onSelect = { selectedId = it },
