@@ -115,6 +115,26 @@ enum LocationMapCopy {
         String(format: String(localized: "locationMap.pin.label", defaultValue: "%1$@, %2$@", bundle: .main), name, precisionWord(precision))
     }
 
+    // MARK: - « Où il est », sur la fiche
+
+    static var openMap: String { String(localized: "locationMap.where.open", defaultValue: "Voir sur la carte", bundle: .main) }
+
+    /// Sous le lieu : « Précision quartier · encore 42 min ». Un partage échu ne dit plus de durée.
+    static func whereDetail(_ precision: SharedLocationPrecision, window: SharedLocationWindow) -> String {
+        guard !window.isOver else { return precisionPill(precision) }
+        return String(format: String(localized: "locationMap.where.detail", defaultValue: "%1$@ · %2$@", bundle: .main),
+                      precisionPill(precision), remaining(window))
+    }
+
+    static func shareMineWith(_ name: String) -> String {
+        String(format: String(localized: "locationMap.where.shareWith", defaultValue: "Partager ma position avec %@", bundle: .main), name)
+    }
+
+    static func whereLabel(name: String, place: String, detail: String) -> String {
+        String(format: String(localized: "locationMap.where.label", defaultValue: "%1$@ est à %2$@, %3$@", bundle: .main),
+               name, place, detail)
+    }
+
     // MARK: - Mes proches
 
     static var nearbyTitle: String { String(localized: "locationMap.nearby.title", defaultValue: "Mes proches", bundle: .main) }

@@ -26,6 +26,63 @@ struct ProfileLocationMapAction: View {
     }
 }
 
+/// La position servie d'une fiche, à sa place : l'action « Carte » de « Parler », ou la section « Où il est ».
+/// Rien quand la place demandée n'est pas celle que la fiche résout.
+struct ProfileWhereSlot: View {
+    let map: ProfileLocationMap?
+    let request: ProfileLocationMapRequest?
+    let tint: Color
+    let isDisabled: Bool
+    let placement: ProfileWherePlacement
+
+    /// Tout se lit dans le corps de la fiche ; la place ne reçoit que des valeurs.
+    static func of(_ sheet: UserProfileSheet, _ placement: ProfileWherePlacement) -> ProfileWhereSlot {
+        let onCall: (() -> Void)? = sheet.offersCall ? { sheet.requestCall(isVideo: false) } : nil
+        return ProfileWhereSlot(map: sheet.locationMap, request: ProfileBesideTheMap.request(of: sheet, onCall: onCall),
+                                tint: sheet.accentTint, isDisabled: sheet.isInteractionDisabled, placement: placement)
+    }
+
+    var body: some View {
+        if let map, let request, map.placement(for: request.userId) == placement {
+            switch placement {
+            case .action: ProfileLocationMapAction(map: map, request: request, tint: tint)
+            case .card: ProfileWhereSection(map: map, request: request).disabled(isDisabled)
+            case .none: EmptyView()
+            }
+        }
+    }
+}
+
+/// « Où il est » (#18872, planche Autre-Actions) : la carte de la position servie que l'app dessine (K43), qui ouvre la
+/// carte en plein écran par « Voir sur la carte » ou ⌘M. Elle remplace l'action « Carte » de « Parler ».
+struct ProfileWhereSection: View {
+    let map: ProfileLocationMap
+    let request: ProfileLocationMapRequest
+
+    @State private var isOpen = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            MeeshySectionHeader(title: Self.title)
+            if let preview = map.preview {
+                preview(request, { isOpen = true })
+            }
+        }
+        .background {
+            Button(ProfileLocationMapAction.hint) { isOpen = true }
+                .keyboardShortcut("m", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
+        .fullScreenCover(isPresented: $isOpen) { map.destination(request) }
+    }
+
+    static var title: String {
+        String(localized: "profile.relation.section.where", defaultValue: "Où il est", bundle: .module)
+    }
+}
+
 /// La carte comme action (#18872) : ce que la fiche remet à la carte, et la même fiche posée à côté de la carte sur
 /// iPad (planche iPad-Split) ; l'hôte lui retire « Carte », déjà ouverte.
 enum ProfileBesideTheMap {

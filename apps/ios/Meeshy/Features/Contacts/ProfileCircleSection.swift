@@ -93,8 +93,10 @@ struct ProfileCircleSection: View {
     }
 
     /// Proposée dès Ami, la ligne reste tant qu'un partage court vers la personne : « Arrêter » ne part jamais avant lui.
+    /// Quand la personne me partage sa position, « Partager ma position » vit dans « Où il est » (planche Autre-Actions).
     private var showsSharedLocation: Bool {
-        sharing.showsRow(for: viewModel.userId, offered: viewModel.offersSharedLocation)
+        !ProfileWhereCard.isShown(for: viewModel.userId)
+            && sharing.showsRow(for: viewModel.userId, offered: viewModel.offersSharedLocation)
     }
 
     private func row(_ level: RelationLevel) -> some View {

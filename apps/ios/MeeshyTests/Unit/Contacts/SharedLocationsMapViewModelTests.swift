@@ -465,4 +465,21 @@ final class BloodLocationRecorderTests: XCTestCase {
 
         XCTAssertEqual(service.recorded.count, 2)
     }
+
+    // MARK: - « Où il est » sur la face Actions (planche Autre-Actions)
+
+    func test_whereDetail_saysThePrecisionThenTheTimeLeft() {
+        let window = SharedLocationWindow(deadline: t0.addingTimeInterval(42 * 60), now: t0)
+
+        let detail = LocationMapCopy.whereDetail(.neighborhood, window: window)
+
+        XCTAssertTrue(detail.hasPrefix(LocationMapCopy.precisionPill(.neighborhood)))
+        XCTAssertTrue(detail.hasSuffix(LocationMapCopy.remaining(window)))
+    }
+
+    func test_whereDetail_ofAnEndedShare_neverSaysATimeLeft() {
+        let window = SharedLocationWindow(deadline: t0.addingTimeInterval(-5), now: t0)
+
+        XCTAssertEqual(LocationMapCopy.whereDetail(.city, window: window), LocationMapCopy.precisionPill(.city))
+    }
 }

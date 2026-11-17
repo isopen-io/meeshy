@@ -17,6 +17,7 @@ extension UserProfileSheet {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
             talkSection
             circleSection
+            ProfileWhereSlot.of(self, .card)
             profileCardSection
             safetySection
         }
@@ -53,16 +54,10 @@ extension UserProfileSheet {
                     labeledAction(.call) { requestCall(isVideo: false) }
                     labeledAction(.video) { requestCall(isVideo: true) }
                 }
-                if let locationMap, let request = locationMapRequest, locationMap.isOffered(request.userId) {
-                    ProfileLocationMapAction(map: locationMap, request: request, tint: accentTint)
-                }
+                ProfileWhereSlot.of(self, .action)
             }
             .disabled(isInteractionDisabled)
         }
-    }
-
-    private var locationMapRequest: ProfileLocationMapRequest? {
-        ProfileBesideTheMap.request(of: self, onCall: offersCall ? { requestCall(isVideo: false) } : nil)
     }
 
     static var writeRequestHint: String {
@@ -83,7 +78,7 @@ extension UserProfileSheet {
         onCall != nil && !isCurrentUser && !isInteractionDisabled
     }
 
-    private func requestCall(isVideo: Bool) {
+    func requestCall(isVideo: Bool) {
         guard let request = ProfileCallRequest(
             userId: displayUser.userId,
             displayName: displayUser.resolvedDisplayName,

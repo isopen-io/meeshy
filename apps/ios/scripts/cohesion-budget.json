@@ -323,7 +323,6 @@
     "MeeshyUI::StickerPickerView": 1612,
     "MeeshyUI::StoryCanvasUIView": 6542,
     "MeeshyUI::StoryComposerViewModel": 4357,
-    "MeeshyUI::TimelineViewModel": 1502,
-    "MeeshyUI::UserProfileSheet": 1505
+    "MeeshyUI::TimelineViewModel": 1502
   }
 }

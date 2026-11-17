@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import MeeshySDK
 @testable import MeeshyUI
 
@@ -26,5 +27,25 @@ final class ProfileBesideTheMapTests: XCTestCase {
                                      dependencies: ProfileDependencyDoubles.make())
 
         XCTAssertNil(ProfileBesideTheMap.request(of: sheet, onCall: nil))
+    }
+
+    func test_placement_withoutAServedPosition_showsNothing() {
+        let map = ProfileLocationMap(isOffered: { _ in false }, destination: { _ in AnyView(EmptyView()) },
+                                     preview: { _, _ in AnyView(EmptyView()) })
+
+        XCTAssertEqual(map.placement(for: peer), .none)
+    }
+
+    func test_placement_whenTheAppDrawsWhereTheyAre_replacesTheMapActionByTheSection() {
+        let map = ProfileLocationMap(isOffered: { _ in true }, destination: { _ in AnyView(EmptyView()) },
+                                     preview: { _, _ in AnyView(EmptyView()) })
+
+        XCTAssertEqual(map.placement(for: peer), .card)
+    }
+
+    func test_placement_forAHostWithoutPreview_keepsTheMapAction() {
+        let map = ProfileLocationMap(isOffered: { _ in true }, destination: { _ in AnyView(EmptyView()) })
+
+        XCTAssertEqual(map.placement(for: peer), .action)
     }
 }

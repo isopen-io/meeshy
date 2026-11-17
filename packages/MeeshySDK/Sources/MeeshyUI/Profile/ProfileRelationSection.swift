@@ -123,13 +123,36 @@ public struct ProfileLocationMapRequest {
 /// Ce que l'app fournit : si la carte d'une personne a quelque chose à montrer (une position servie), et la carte
 /// elle-même. Sans emplacement, la fiche ne propose pas « Carte » : le SDK ne connaît ni positions ni magasin.
 public struct ProfileLocationMap {
+    /// La carte « Où il est » de la face Actions (planche Autre-Actions) : ce que l'app sait de la position servie,
+    /// et de quoi ouvrir la carte en plein écran.
+    public typealias Preview = (_ request: ProfileLocationMapRequest, _ openMap: @escaping () -> Void) -> AnyView
+
     public let isOffered: (_ userId: String) -> Bool
     public let destination: (ProfileLocationMapRequest) -> AnyView
+    /// Sans elle, la fiche propose « Carte » dans « Parler » (K32) ; avec elle, la section « Où il est » la remplace.
+    public let preview: Preview?
 
     public init(isOffered: @escaping (_ userId: String) -> Bool,
-                destination: @escaping (ProfileLocationMapRequest) -> AnyView) {
+                destination: @escaping (ProfileLocationMapRequest) -> AnyView,
+                preview: Preview? = nil) {
         self.isOffered = isOffered
         self.destination = destination
+        self.preview = preview
+    }
+
+    func placement(for userId: String) -> ProfileWherePlacement {
+        ProfileWherePlacement.resolve(isOffered: isOffered(userId), hasPreview: preview != nil)
+    }
+}
+
+/// Où la fiche d'un autre range sa position servie : nulle part sans position, la section « Où il est » quand l'app
+/// sait la dessiner, sinon l'action « Carte » de « Parler ».
+nonisolated enum ProfileWherePlacement: Equatable, Sendable {
+    case none, action, card
+
+    static func resolve(isOffered: Bool, hasPreview: Bool) -> ProfileWherePlacement {
+        guard isOffered else { return .none }
+        return hasPreview ? .card : .action
     }
 }
 

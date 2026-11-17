@@ -536,10 +536,14 @@ struct ProfileSheetEnvironment: ViewModifier {
                 ProfileSlot.view(.pill, userId: userId, displayName: displayName)
             })
             .environment(\.profileLocationMap, ProfileLocationMap(
-                isOffered: { userId in SharedLocationsLiveHolder.live().byUser[userId] != nil },
+                isOffered: { userId in ProfileWhereCard.isShown(for: userId) },
                 destination: { request in
                     ProfileSlot.view(.locationMap, userId: request.userId, displayName: request.displayName,
                                      mapRequest: request)
+                },
+                preview: { request, openMap in
+                    ProfileSlot.view(.whereTheyAre, userId: request.userId, displayName: request.displayName,
+                                     openMap: openMap)
                 }
             ))
             .environment(\.profileLoading, LiveProfileLoading())
@@ -551,12 +555,12 @@ struct ProfileSheetEnvironment: ViewModifier {
 /// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case banner, relation, pill, locationMap
+    case banner, relation, pill, locationMap, whereTheyAre
 
     static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false),
-                     mapRequest: ProfileLocationMapRequest? = nil) -> AnyView {
+                     mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil) -> AnyView {
         AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked,
-                                   mapRequest: mapRequest))
+                                   mapRequest: mapRequest, openMap: openMap))
     }
 }
 
@@ -566,6 +570,7 @@ private struct ProfileSlotContent: View {
     let displayName: String
     @Binding var linked: Bool
     let mapRequest: ProfileLocationMapRequest?
+    let openMap: (() -> Void)?
 
     var body: some View {
         switch slot {
@@ -581,6 +586,8 @@ private struct ProfileSlotContent: View {
             PersonLocationMapScreen(userId: userId, displayName: displayName,
                                     onWrite: mapRequest?.onWrite, onCall: mapRequest?.onCall,
                                     profile: mapRequest?.profile)
+        case .whereTheyAre:
+            ProfileWhereCard(userId: userId, displayName: displayName, openMap: openMap ?? {})
         }
     }
 }
