@@ -114,3 +114,32 @@ final class ProfileSharedConversationAccessTests: XCTestCase {
         XCTAssertEqual(ProfileSharedConversationAccess.resolve(isBlockedByMe: true, isUnavailable: true), .closed)
     }
 }
+
+/// #18873 — planche `Etat-Introuvable` : « Chercher quelqu'un » puis « Scanner un QR » quand l'app les offre,
+/// « Retour » sinon ; jamais un écran sans sortie.
+final class ProfileUnavailableExitTests: XCTestCase {
+
+    func test_resolve_lesDeuxOfferts_chercherPuisScanner() {
+        let exits = ProfileUnavailableExit.resolve(canSearch: true, canScan: true)
+
+        XCTAssertEqual(exits.primary, .search)
+        XCTAssertEqual(exits.secondary, .scan)
+    }
+
+    func test_resolve_unSeulOffert_retourEnSecond() {
+        let searchOnly = ProfileUnavailableExit.resolve(canSearch: true, canScan: false)
+        let scanOnly = ProfileUnavailableExit.resolve(canSearch: false, canScan: true)
+
+        XCTAssertEqual(searchOnly.primary, .search)
+        XCTAssertEqual(searchOnly.secondary, .back)
+        XCTAssertEqual(scanOnly.primary, .scan)
+        XCTAssertEqual(scanOnly.secondary, .back)
+    }
+
+    func test_resolve_rienDOffert_retourSeulement() {
+        let exits = ProfileUnavailableExit.resolve(canSearch: false, canScan: false)
+
+        XCTAssertEqual(exits.primary, .back)
+        XCTAssertNil(exits.secondary)
+    }
+}

@@ -16,7 +16,7 @@ extension UserProfileSheet {
 
     /// « Personne ici » : la croix de la fiche, et rien d'autre de la fiche.
     var unavailableLayout: some View {
-        ProfileUnavailableView(onBack: { closeSheet() })
+        ProfileUnavailableView(requestedUsername: user.username, onBack: { closeSheet() })
             .overlay(alignment: .topLeading) { closeButton }
     }
 
@@ -144,27 +144,61 @@ struct ProfileCacheFallbackBanner: View {
 }
 
 /// Introuvable, privé, ou il m'a bloqué : le même écran pour les trois (loi 9), sans rien de lui — ni nom, ni photo,
-/// ni bannière. Rien ne dit qu'on est bloqué.
+/// ni bannière. Rien ne dit qu'on est bloqué. L'adresse demandée — celle que je connaissais déjà — se lit barrée, et
+/// les sorties de l'app (chercher, scanner) remplacent « Retour » quand elle les offre.
 struct ProfileUnavailableView: View {
+    var requestedUsername: String?
     let onBack: () -> Void
+    @Environment(\.profileUnavailableExits) private var exits
     @ResolvedThemePalette private var theme
+    @State private var scannerShown = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: MeeshySpacing.xxl)
-            MeeshyStateBlock(
-                kind: .empty,
-                title: ProfileStatesCopy.unavailableTitle,
-                message: ProfileStatesCopy.unavailableMessage,
-                primary: MeeshyStateBlockAction(title: ProfileStatesCopy.back, perform: onBack),
-                art: .none,
-                tint: theme.textMuted,
-                systemImage: "person.crop.circle.badge.questionmark"
-            )
-            Spacer()
+        let plan = ProfileUnavailableExit.resolve(canSearch: exits?.search != nil, canScan: exits?.scanner != nil)
+        return ScrollView(showsIndicators: false) {
+            VStack(spacing: MeeshySpacing.xl) {
+                Spacer(minLength: MeeshySpacing.xxl * 2)
+                MeeshyStateBlock(
+                    kind: .empty,
+                    title: ProfileStatesCopy.unavailableTitle,
+                    message: ProfileStatesCopy.unavailableMessage,
+                    primary: action(plan.primary),
+                    secondary: plan.secondary.map { action($0) },
+                    art: .none,
+                    tint: theme.textMuted,
+                    systemImage: "person.crop.circle.badge.questionmark"
+                )
+                if let link = ProfileLink(username: requestedUsername) {
+                    MeeshyTicket(title: ProfileStatesCopy.requestedAddress, code: link.displayText, tint: theme.textMuted,
+                                 systemImage: "link", size: .compact, kind: .struck,
+                                 label: ProfileStatesCopy.requestedAddressLabel(link.displayText))
+                        .padding(.horizontal, MeeshySpacing.xl)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.backgroundPrimary)
+        .sheet(isPresented: $scannerShown) {
+            if let scanner = exits?.scanner {
+                scanner({ onBack() })
+            }
+        }
+    }
+
+    private func action(_ exit: ProfileUnavailableExit) -> MeeshyStateBlockAction {
+        switch exit {
+        case .search:
+            return MeeshyStateBlockAction(title: ProfileStatesCopy.searchSomeone, systemImage: "magnifyingglass") {
+                exits?.search?()
+                onBack()
+            }
+        case .scan:
+            return MeeshyStateBlockAction(title: ProfileStatesCopy.scanQR, systemImage: "qrcode.viewfinder") {
+                scannerShown = true
+            }
+        case .back:
+            return MeeshyStateBlockAction(title: ProfileStatesCopy.back, perform: onBack)
+        }
     }
 }
 
@@ -218,6 +252,23 @@ enum ProfileStatesCopy {
 
     static var unavailableTitle: String {
         String(localized: "profile.state.unavailable.title", defaultValue: "Personne ici", bundle: .module)
+    }
+
+    static var requestedAddress: String {
+        String(localized: "profile.state.unavailable.requested", defaultValue: "Adresse demandée", bundle: .module)
+    }
+
+    static func requestedAddressLabel(_ address: String) -> String {
+        String(format: String(localized: "profile.state.unavailable.requestedLabel",
+                              defaultValue: "Adresse demandée, introuvable : %@", bundle: .module), address)
+    }
+
+    static var searchSomeone: String {
+        String(localized: "profile.state.unavailable.search", defaultValue: "Chercher quelqu'un", bundle: .module)
+    }
+
+    static var scanQR: String {
+        String(localized: "profile.state.unavailable.scan", defaultValue: "Scanner un QR", bundle: .module)
     }
 
     static var unavailableMessage: String {
