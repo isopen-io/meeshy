@@ -544,7 +544,8 @@ export default defineConfig({
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
-    ...(forCapacitor ? [] : [runtimeConfigPrefetch(), prerenderLanding()]),
+    ...(forCapacitor ? [] : [prerenderLanding()]),
+    ...(forCapacitor ? [] : [runtimeConfigPrefetch()]),
     ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets(), shellApiPreconnect()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
