@@ -29,14 +29,6 @@ enum ShareSubject {
         }
     }
 
-    /// Les messages source, dans l'ordre — vides pour un contenu qui n'en vient pas.
-    var sourceMessages: [Message] {
-        switch self {
-        case .messages(let messages, _, _): return messages
-        case .piece(let message, _, _, _): return [message]
-        case .text, .link, .card, .incoming: return []
-        }
-    }
 
     /// Les pièces venues d'une autre app, dans l'ordre d'envoi.
     var incomingMediaIds: [String] {

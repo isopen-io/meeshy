@@ -23,6 +23,7 @@ import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirro
 import { RelationWeeklyJob } from './relation-weekly';
 import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
 import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement';
+import { deviceTrustRuntime } from '../services/e2ee/device-trust-runtime';
 import { purgeExpiredExternalPeers } from '../services/external-conversation/peer-retention';
 import { externalConversationsEnabled } from '../services/external-conversation/external-conversation-flag';
 import { EmailService } from '../services/EmailService';
@@ -74,6 +75,8 @@ export class BackgroundJobsManager {
   private obsoletePurgeInterval: NodeJS.Timeout | null = null;
   /** Les enveloppes E2EE jamais accusées s'effacent à 30 jours (#3706) : une requête, sans état. */
   private envelopeSweepInterval: NodeJS.Timeout | null = null;
+  /** Les messages de comparaison (#19156) vivent dix minutes : une requête toutes les dix minutes, sans état. */
+  private verificationSweepInterval: NodeJS.Timeout | null = null;
   /** #17120 — le filet de l'index TTL : les numéros d'amis WhatsApp échus s'effacent, une requête toutes les heures. */
   private externalPeerSweepInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
@@ -154,6 +157,15 @@ export class BackgroundJobsManager {
     };
     this.envelopeSweepInterval = guardedInterval({ name: 'e2ee-envelope-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesEnveloppes });
     this.envelopeSweepInterval.unref();
+
+    // #19156 — un message de comparaison vit dix minutes : il disparaît au plus tard dix minutes après son échéance.
+    const balayerLesComparaisons = () => {
+      deviceTrustRuntime(this.prismaClient).relay.sweep()
+        .then((n) => { if (n > 0) logger.info(`${n} expired e2ee device verification message(s) swept`); })
+        .catch((err) => logger.error('E2EE device verification sweep failed', err));
+    };
+    this.verificationSweepInterval = guardedInterval({ name: 'e2ee-verification-sweep', everyMs: 10 * 60 * 1000, logger, run: balayerLesComparaisons });
+    this.verificationSweepInterval.unref();
 
     const balayerLesNumerosEchus = () => {
       purgeExpiredExternalPeers(this.prismaClient, new Date())
@@ -281,6 +293,10 @@ export class BackgroundJobsManager {
     if (this.envelopeSweepInterval) {
       clearInterval(this.envelopeSweepInterval);
       this.envelopeSweepInterval = null;
+    }
+    if (this.verificationSweepInterval) {
+      clearInterval(this.verificationSweepInterval);
+      this.verificationSweepInterval = null;
     }
 
     if (this.geoCacheInterval) {

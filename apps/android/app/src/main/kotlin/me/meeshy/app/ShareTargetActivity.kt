@@ -39,7 +39,7 @@ import javax.inject.Inject
  *
  * Unlike iOS's extension, this runs in the SAME process as the rest of Meeshy — no separate
  * App Group session read, no dedicated offline relay: la feuille de partage unique
- * ([me.meeshy.app.chat.IncomingShareScreen], #13476) reuses the app's own session and the existing outbox for durability on a failed send, and a
+ * ([me.meeshy.app.chat.IncomingShareSheetHost], #13476) reuses the app's own session and the existing outbox for durability on a failed send, and a
  * shared image/video enqueues through the same [me.meeshy.sdk.media.MediaUploadQueue] the chat
  * composer's own attachment picker uses.
  */

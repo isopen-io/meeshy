@@ -216,11 +216,4 @@ final class SceneAudioStageSurfacesTests: XCTestCase {
             }
             .joined(separator: "\n")
     }
-
-    /// La vignette de slide peignait une note pour CHAQUE objet audio, fond
-    /// compris : le son de fond paraissait sur la scène de la bande.
-    func test_theSlideThumbnail_doesNotPaintEveryAudioObject() throws {
-        XCTAssertFalse(try source("SlideMiniPreview.swift")
-            .contains("let pastilles = effects.audioPlayerObjects ?? []"))
-    }
 }

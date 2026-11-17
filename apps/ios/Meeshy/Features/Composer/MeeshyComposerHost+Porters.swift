@@ -26,10 +26,6 @@ extension MeeshyComposerHost {
         nonmutating set { mediaPorterStore.porters = newValue }
     }
 
-    /// **Ce que le MODÈLE peint**, relevé pour la règle pure — la seule source
-    /// qui connaisse les objets d'une scène, le fichier de chacun, et le fait
-    /// qu'un fichier soit peint par PLUSIEURS objets.
-    var mediaCensus: ComposerCanvasCensus { .of(viewModel.slides) }
 
     var documentLocalMedia: [ComposerDocumentMedia] {
         get { mediaPorterStore.localMedia }

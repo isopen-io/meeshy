@@ -1,0 +1,155 @@
+/* L'ACTION LIBELLÉE (K32, #18876) — le disque est celui de K02 (`MeeshyGlassButtonFace`),
+   le verre celui de K01 : rien n'est dessiné ici, hors le libellé, la valeur et l'anneau
+   d'attente. Cible de 76 × 88 au moins. Seules la transformation et l'opacité s'animent.
+   Chaque valeur chiffrée vient de `meeshy-labeled-action-recipe.ts` (`--kit-action-*`). */
+@layer components {
+  .kit-action {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-inline-size: var(--kit-action-w);
+    min-block-size: var(--kit-action-h);
+    color: var(--color-ios-ink);
+  }
+
+  .kit-action__hit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    inline-size: 100%;
+    min-block-size: var(--kit-action-h);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    opacity: var(--kit-action-opacity);
+    touch-action: manipulation;
+  }
+
+  .kit-action__hit:focus-visible {
+    outline: 2px solid var(--kit-action-tint);
+    outline-offset: 2px;
+    border-radius: 14px;
+  }
+
+  .kit-action__disc {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--kit-action-disc);
+    block-size: var(--kit-action-disc);
+  }
+
+  .kit-action__disc .kit-btn__glyph {
+    opacity: var(--kit-action-glyph-opacity);
+  }
+
+  .kit-action[data-kind='active'] .kit-btn__fill {
+    background-color: var(--kit-action-tint);
+  }
+
+  .kit-action[data-featured] .kit-action__disc {
+    transform: scale(1.5);
+    margin-block: 1.125rem;
+  }
+
+  .kit-action__ring {
+    position: absolute;
+    inset: -3px;
+    border: 2px solid transparent;
+    border-block-start-color: var(--kit-action-tint);
+    border-radius: var(--ios-radius-full);
+    animation: kit-action-spin 900ms linear infinite;
+  }
+
+  .kit-action__title {
+    margin-block-start: var(--kit-action-title-gap);
+    max-inline-size: 100%;
+    font-size: var(--kit-action-title);
+    font-weight: var(--kit-action-title-weight);
+    line-height: 1.25;
+    text-align: center;
+    text-wrap: balance;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--kit-action-title-lines);
+    overflow: hidden;
+  }
+
+  .kit-action__value {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--kit-action-value-h);
+    margin-block-start: var(--kit-action-value-gap);
+    padding-inline: 8px;
+    border-radius: var(--ios-radius-full);
+    font-size: var(--kit-action-value);
+    font-weight: var(--kit-action-value-weight);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kit-action__value[data-tone='accent'] {
+    background-color: var(--kit-action-tint);
+    color: var(--color-ios-on-brand);
+  }
+
+  .kit-action__value[data-tone='quiet'] {
+    background-color: var(--color-ios-fill);
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-action__menu {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+  }
+
+  .kit-action-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kit-action-grid-row-gap);
+    min-inline-size: 0;
+  }
+
+  .kit-action-grid__row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--kit-action-grid-gap);
+  }
+
+  .kit-action-grid__row > .kit-action {
+    flex: 0 0 calc((100% - (var(--kit-action-grid-columns) - 1) * var(--kit-action-grid-gap)) / var(--kit-action-grid-columns));
+    min-inline-size: 0;
+  }
+
+  .kit-action-grid__danger {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--kit-action-grid-gap);
+    padding: 10px;
+    border-radius: 18px;
+    background-color: color-mix(in srgb, var(--color-error) 10%, transparent);
+  }
+
+  @keyframes kit-action-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-action__ring {
+      animation: none;
+    }
+
+    .kit-action[data-featured] .kit-action__disc {
+      transform: none;
+    }
+  }
+}

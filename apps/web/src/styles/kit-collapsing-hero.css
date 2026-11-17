@@ -1,0 +1,160 @@
+/* LE HÉROS REPLIABLE (K28, #18876) — un seul avatar et un seul titre voyagent de la
+   bannière vers la barre ; seuls `transform` et `opacity` changent pendant le geste, la
+   hauteur est un `clip-path`. Le verre de la barre vient de K01 (`MeeshyGlass`), jamais
+   dessiné ici. Chaque valeur chiffrée vient de `meeshy-collapsing-hero-recipe.ts`
+   (`--kit-hero-*`), recalculée par le seul héros. */
+@layer components {
+  .kit-hero {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    z-index: 2;
+    block-size: var(--kit-hero-identity);
+    pointer-events: none;
+    color: var(--color-ios-ink);
+  }
+
+  .kit-hero__banner {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    block-size: calc(var(--kit-hero-h) + var(--kit-hero-stretch));
+    clip-path: inset(0 0 0 0 round 0 0 var(--kit-hero-radius) var(--kit-hero-radius));
+    opacity: var(--kit-hero-banner);
+    pointer-events: auto;
+  }
+
+  .kit-hero__glass {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    block-size: var(--kit-hero-h);
+    opacity: var(--kit-hero-glass);
+    border-end-start-radius: var(--kit-hero-radius);
+    border-end-end-radius: var(--kit-hero-radius);
+  }
+
+  .kit-hero[data-variant='bar'] .kit-hero__glass,
+  .kit-hero[data-variant='capsule'] .kit-hero__glass {
+    opacity: 1;
+  }
+
+  .kit-hero__slot {
+    position: absolute;
+    inset-block-start: max(var(--safe-top, 0px), 0.75rem);
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-inline-size: var(--kit-hero-target);
+    min-block-size: var(--kit-hero-target);
+    pointer-events: auto;
+    transform: translateX(var(--kit-hero-shift));
+  }
+
+  .kit-hero__slot[data-slot='leading'] {
+    inset-inline-start: 1rem;
+  }
+
+  .kit-hero__slot[data-slot='trailing'] {
+    inset-inline-end: 1rem;
+    transform: translateX(calc(-1 * var(--kit-hero-shift)));
+  }
+
+  .kit-hero__slot:dir(rtl) {
+    transform: translateX(calc(-1 * var(--kit-hero-shift)));
+  }
+
+  .kit-hero__slot[data-slot='trailing']:dir(rtl) {
+    transform: translateX(var(--kit-hero-shift));
+  }
+
+  .kit-hero__slot .kit-btn__fill,
+  .kit-hero__slot .kit-btn__veil {
+    opacity: var(--kit-hero-disc);
+  }
+
+  .kit-hero__avatar {
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0;
+    inline-size: var(--kit-hero-avatar);
+    block-size: var(--kit-hero-avatar);
+    pointer-events: auto;
+    transform: translate(var(--kit-hero-avatar-x), var(--kit-hero-avatar-y));
+  }
+
+  .kit-hero__avatar:dir(rtl) {
+    transform: translate(calc(-1 * var(--kit-hero-avatar-x)), var(--kit-hero-avatar-y));
+  }
+
+  .kit-hero__title {
+    position: absolute;
+    inset-inline-start: 0;
+    inset-inline-end: 1rem;
+    inset-block-start: 0;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    font-family: var(--font-display, inherit);
+    font-size: var(--kit-hero-title);
+    font-weight: 800;
+    line-height: 1.15;
+    pointer-events: auto;
+    transform: translate(var(--kit-hero-title-x), var(--kit-hero-title-y));
+  }
+
+  .kit-hero__title:dir(rtl) {
+    transform: translate(calc(-1 * var(--kit-hero-title-x)), var(--kit-hero-title-y));
+  }
+
+  .kit-hero__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kit-hero__subtitle {
+    color: var(--accent, var(--color-ios-brand));
+    font-family: var(--ios-font-body, inherit);
+    font-size: var(--kit-hero-subtitle);
+    font-weight: 600;
+  }
+
+  .kit-hero__bar-hit {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    z-index: 2;
+    block-size: var(--kit-hero-h);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .kit-hero__bar-hit:focus-visible {
+    outline: 2px solid var(--accent, var(--color-ios-brand));
+    outline-offset: -4px;
+  }
+
+  .kit-hero-page {
+    position: relative;
+    block-size: 100%;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .kit-hero-page__hero {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    block-size: 0;
+  }
+
+  .kit-hero-page__content {
+    padding-block-start: var(--kit-hero-identity);
+  }
+}

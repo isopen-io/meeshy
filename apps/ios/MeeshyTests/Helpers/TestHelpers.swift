@@ -191,45 +191,6 @@ extension XCTestCase {
 
 // MemoryLeakTracker: use XCTestCase.addTeardownBlock directly in test methods instead of this class.
 
-// MARK: - Test Data Cleanup
-
-class TestDataCleaner {
-    static func cleanupTestData() {
-        // Clear UserDefaults
-        if let bundleID = Bundle.main.bundleIdentifier {
-            UserDefaults.standard.removePersistentDomain(forName: bundleID)
-        }
-        // Note: Keychain and cache cleanup should be performed via their respective service instances in tearDown
-    }
-}
-
-// MARK: - Network Simulation
-
-class NetworkSimulator {
-    enum NetworkCondition {
-        case normal
-        case slow
-        case veryWeak
-        case offline
-
-        var delay: TimeInterval {
-            switch self {
-            case .normal: return 0.1
-            case .slow: return 1.0
-            case .veryWeak: return 3.0
-            case .offline: return 0.0
-            }
-        }
-    }
-
-    static func simulateNetworkCondition(_ condition: NetworkCondition) async {
-        if condition == .offline {
-            return
-        }
-        try? await Task.sleep(nanoseconds: UInt64(condition.delay * 1_000_000_000))
-    }
-}
-
 // MARK: - JSON Helpers
 
 extension XCTestCase {
@@ -251,20 +212,6 @@ extension XCTestCase {
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(object)
         return String(data: data, encoding: .utf8) ?? ""
-    }
-}
-
-// MARK: - Concurrency Helpers
-
-actor TestActor {
-    var value: Int = 0
-
-    func increment() {
-        value += 1
-    }
-
-    func getValue() -> Int {
-        return value
     }
 }
 

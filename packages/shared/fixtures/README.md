@@ -47,3 +47,7 @@ Lus par les 3 plateformes : shared/web (Jest, import direct), iOS (XCTest, resso
   (`E2EEContent.swift`, `E2EESignal.swift`), jamais générés par la loi TS (`types/e2ee-content.ts`). Rejoués par
   `__tests__/e2ee-content.test.ts` ; iOS et Android les rejouent par chemin relatif (mode d'emploi :
   `e2ee-content/README.md`).
+
+## `e2ee-device-verification/` (#18906, #19153)
+
+- La COMPARAISON d'un appareil par code court : `sas-v1.vectors.json` (RFC 5869 A.1/A.3, codes et accusés, propriétés, négatifs, options en carré), `sas-emoji-v1.json` (table des 64 emoji dérivée de Matrix, Apache-2.0, **modifiée par Meeshy**, texte de licence `LICENSE-sas-emoji.txt`) et `upstream/` (la table amont, copie conforme, et son `NOTICE.md`, pour régénérer sans réseau). **Générés** par `node scripts/generate-device-verification-vectors.mjs` ; `--check` compare à l'octet (témoin `__tests__/ci/device-verification-vectors-regenerate.test.ts`). Clés de TEST seulement. Rejoués par la référence TS, la passerelle, le SDK iOS, `:core:e2ee` Android et le web, par chemin relatif ; détail dans le README du dossier. Le registre de confiance (`trust-ledger-v1.cases.json`, § 6) arrivera par le même script avec le lot 0b, après la contre-relecture de son texte. Spécification : `docs/superpowers/specs/2026-11-17-e2ee-ajout-appareil-par-code.md`.

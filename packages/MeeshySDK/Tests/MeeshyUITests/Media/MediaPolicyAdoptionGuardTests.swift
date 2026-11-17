@@ -11,7 +11,6 @@ import XCTest
 final class MediaPolicyAdoptionGuardTests: XCTestCase {
 
     private static let declaredApart: [String: String] = [
-        "apps/ios/Meeshy/Features/Main/Components/OverlayAudioPlayer.swift": "piste audio seule : ni décodeur vidéo ni images d'avance",
         "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyAudioEditorView.swift": "piste audio seule",
         "packages/MeeshySDK/Sources/MeeshyUI/Media/PlaybackLoopQueue.swift": "le successeur recopie l'élément courant d'un lecteur DÉJÀ adopté, dont la file suit la politique",
     ]

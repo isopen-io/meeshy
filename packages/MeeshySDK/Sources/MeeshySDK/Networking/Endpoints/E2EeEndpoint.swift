@@ -17,6 +17,8 @@ public enum E2EeEndpoint: MeeshyEndpoint, Sendable {
     case devicesByDeviceId(deviceId: String)
     case devicesByDeviceIdKeys(deviceId: String)
     case devicesSelfPrekeyCount
+    case devicesSelfVerifications
+    case devicesSelfVerificationsAck
     case envelopes
     case envelopesAck
     case keysByUserId(userId: String)
@@ -29,6 +31,8 @@ public enum E2EeEndpoint: MeeshyEndpoint, Sendable {
         case .devicesByDeviceId(let deviceId): return "/api/v1/e2ee/devices/\(deviceId)"
         case .devicesByDeviceIdKeys(let deviceId): return "/api/v1/e2ee/devices/\(deviceId)/keys"
         case .devicesSelfPrekeyCount: return "/api/v1/e2ee/devices/self/prekey-count"
+        case .devicesSelfVerifications: return "/api/v1/e2ee/devices/self/verifications"
+        case .devicesSelfVerificationsAck: return "/api/v1/e2ee/devices/self/verifications/ack"
         case .envelopes: return "/api/v1/e2ee/envelopes"
         case .envelopesAck: return "/api/v1/e2ee/envelopes/ack"
         case .keysByUserId(let userId): return "/api/v1/e2ee/keys/\(userId)"
