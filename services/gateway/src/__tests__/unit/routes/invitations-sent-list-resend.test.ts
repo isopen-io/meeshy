@@ -13,6 +13,8 @@
  */
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 jest.mock('../../../utils/logger', () => ({
   ...(jest.requireActual('../../../utils/logger') as object),
@@ -345,5 +347,38 @@ describe('POST /invitations/email — l’ancien chemin', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('INVITATION_OPTED_OUT');
     expect(sendInvitationEmail).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Le lien « Ne plus recevoir d'invitation » visait `/invitations/opt-out`, qu'aucune route
+ * de `apps/web` ne déclare : l'invité tombait sur « introuvable », l'empreinte n'était
+ * jamais écrite et le parrain pouvait le relancer. Ce témoin lit la table des routes du web
+ * (`apps/web/src/routes/route-table.tsx`, le seul endroit qui connaît les adresses).
+ */
+describe('#19207 — chaque lien de l’e-mail d’invitation mène à une page que le web sert', () => {
+  const ROUTE_TABLE = resolve(__dirname, '../../../../../../apps/web/src/routes/route-table.tsx');
+  const servedPatterns = (): readonly RegExp[] =>
+    [...readFileSync(ROUTE_TABLE, 'utf8').matchAll(/pattern:\s*'([^']+)'/g)].map(([, pattern]) =>
+      new RegExp(`^${pattern.replace(/\$[A-Za-z]+/g, '[^/]+')}/?$`));
+  const isServedPage = (link: string): boolean => servedPatterns().some((pattern) => pattern.test(new URL(link).pathname));
+
+  it('la table des routes du web est lisible et reconnaît le lien d’inscription', () => {
+    expect(isServedPage('https://meeshy.me/signup/affiliate/aff_invite1')).toBe(true);
+    expect(isServedPage('https://meeshy.me/une/adresse/inconnue')).toBe(false);
+  });
+
+  it('aucun e-mail envoyé ou relancé ne porte une adresse que le web ne sert pas', async () => {
+    const { app, sendInvitationEmail } = await buildApp(store());
+    await app.inject({ method: 'POST', url: '/invitations/email', payload: { email: 'nouveau@example.com' } });
+    await app.inject({ method: 'POST', url: `/invitations/email/${INVITATION_ID}/resend` });
+    await app.close();
+
+    expect(sendInvitationEmail).toHaveBeenCalledTimes(2);
+    const links = sendInvitationEmail.mock.calls.flatMap((call) => {
+      const data = (call as unknown as [{ downloadUrl: string; optOutUrl?: string }])[0];
+      return [data.downloadUrl, data.optOutUrl].filter((link): link is string => link !== undefined);
+    });
+    expect(links.filter((link) => !isServedPage(link))).toEqual([]);
   });
 });
