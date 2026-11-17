@@ -61,3 +61,39 @@ export async function bodyWithoutActorName(params: {
   const someone = await params.someone();
   return params.body.replace(pattern, someone);
 }
+
+/**
+ * Les DEUX lignes de texte de la bannière sous `showSenderName:false` : le corps ET le sous-titre. Le sous-titre
+ * porte l'action sociale, où l'auteur du contenu est fusionné (« a répondu dans une story de Alice ») — quand
+ * l'auteur est l'acteur, son nom s'y lit sur l'écran verrouillé sous le titre neutre (#19210). Un seul site pour la
+ * création et pour le remplacement d'une notification réécrite ; `someone` est résolu une fois au plus.
+ */
+export async function bannerTextsWithoutActorName(params: {
+  readonly body: string;
+  readonly subtitle: string | undefined;
+  readonly actor: PushActorIdentity | undefined;
+  readonly showSenderName: boolean;
+  readonly someone: () => Promise<string>;
+}): Promise<{ readonly body: string; readonly subtitle: string | undefined }> {
+  let someone: Promise<string> | undefined;
+  const mask = (text: string): Promise<string> => bodyWithoutActorName({
+    body: text,
+    actor: params.actor,
+    showSenderName: params.showSenderName,
+    someone: () => (someone ??= params.someone()),
+  });
+  return {
+    body: await mask(params.body),
+    subtitle: params.subtitle === undefined ? undefined : await mask(params.subtitle),
+  };
+}
+
+/** L'acteur tel qu'une ligne `Notification` relue le porte (JSON) — seuls les champs qui le NOMMENT. */
+export function pushActorOfRow(actor: unknown): PushActorIdentity | undefined {
+  if (actor === null || typeof actor !== 'object') return undefined;
+  const read = (key: string): string | null => {
+    const value = (actor as Record<string, unknown>)[key];
+    return typeof value === 'string' ? value : null;
+  };
+  return { username: read('username'), displayName: read('displayName'), avatar: read('avatar') };
+}

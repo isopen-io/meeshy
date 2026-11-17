@@ -147,7 +147,7 @@ import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { guardedInterval } from '../../utils/guarded-timer';
 import { ACTOR_CONTENT_TYPES, refusesActorContent } from './blocked-actor-content';
 import { isSecurityEmailType } from './security-types';
-import { bodyWithoutActorName, senderIdentityPushFields } from './senderIdentityPushFields';
+import { bannerTextsWithoutActorName, pushActorOfRow, senderIdentityPushFields } from './senderIdentityPushFields';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -759,6 +759,10 @@ export class NotificationService {
     return true;
   }
 
+  private mutedConversationOf(userId: string, type: NotificationType): (conversationId: string) => Promise<boolean> {
+    return (conversationId) => this.isConversationMutedFor(userId, conversationId, type);
+  }
+
   /** Ce qu'un éventail batch emprunte à l'instance — fermé sur `this` à CHAQUE appel (jamais mis en cache : `fanout-delegation.test.ts`, #7093). */
   private fanoutDependencies(): FanoutDependencies {
     return {
@@ -1083,15 +1087,17 @@ export class NotificationService {
           // GW7 — préférences de confidentialité du banner : showPreview:false
           // remplace le corps par un libellé générique localisé (et supprime le
           // subtitle, porteur d'aperçus) ; showSenderName:false remplace le
-          // titre (nom de l'acteur) par un titre neutre.
+          // titre par un titre neutre et le nom de l'acteur, dans le corps
+          // comme dans le subtitle, par « Quelqu'un ».
           const showPreview = notifPrefs ? notifPrefs.showPreview ?? true : false;
           const showSenderName = notifPrefs ? notifPrefs.showSenderName ?? true : false;
           // Corps générique localisé dans la langue du DESTINATAIRE — résolue
           // paresseusement quand l'appelant ne l'a pas fournie (réponses,
           // réactions, mentions…), jamais un 'fr' codé en dur.
-          const pushBody = showPreview
-            ? truncateByCodePoints(await bodyWithoutActorName({ body: params.content, actor: params.actor, showSenderName, someone: async () => notificationString(await recipientLang(), 'someone') }), 200)
-            : notificationString(await recipientLang(), 'push.private');
+          const banner = showPreview
+            ? await bannerTextsWithoutActorName({ body: params.content, subtitle: pushSubtitle, actor: params.actor, showSenderName, someone: async () => notificationString(await recipientLang(), 'someone') })
+            : null;
+          const pushBody = banner ? truncateByCodePoints(banner.body, 200) : notificationString(await recipientLang(), 'push.private');
 
           // F1/D-L1 (#7218) — badge d'icône = CONVERSATIONS non lues (hors
           // muettes), comme iOS/web-v2 ; `computeConversationUnreadBadge`.
@@ -1121,9 +1127,9 @@ export class NotificationService {
               // MÊME phrase d'action que le subtitle — on garde le corps (seul
               // champ rendu par les trois plateformes) et on laisse tomber le
               // subtitle. Cf. `dedupePushSubtitle`.
-              ...(showPreview
+              ...(banner
                 ? (() => {
-                    const deduped = dedupePushSubtitle({ subtitle: pushSubtitle, body: pushBody });
+                    const deduped = dedupePushSubtitle({ subtitle: banner.subtitle, body: pushBody });
                     return deduped ? { subtitle: deduped } : {};
                   })()
                 : {}),
@@ -3432,8 +3438,7 @@ export class NotificationService {
         )
       );
 
-      const audience = await reproducedPushAudience(row, async (conversationId) =>
-        this.isConversationMutedFor(userId, conversationId, row.type as NotificationType));
+      const audience = await reproducedPushAudience(row, this.mutedConversationOf(userId, row.type as NotificationType));
       if (audience === 'replace') replacements.push({ row, title, subtitle: socketPayload.subtitle, stale });
       if (audience === 'revoke') revoked.push(stale);
     }
@@ -3458,10 +3463,13 @@ export class NotificationService {
    * de CONTRÔLE part alors en repli, APRÈS lui — il n'a rien posé qu'elle
    * puisse effacer.
    *
-   * En SÉRIE, sur la file d'appareil, et jamais attendu par l'appelant :
-   * l'édition d'un post réécrit une audience entière par lots de 200, et le
-   * geste qui l'a demandée ne doit pas payer APNs. Un envoi qui lève n'emporte
-   * pas les suivants.
+   * Jamais attendu par l'appelant : l'édition d'un post réécrit une audience
+   * entière par lots de 200, et le geste qui l'a demandée ne doit pas payer
+   * APNs. La file `bulk` parcourt l'audience en série (pic d'un envoi) et
+   * confie chaque remplacement à la file du COMPTE destinataire, celle de sa
+   * révocation de lecture (#19211) : une lecture enfilée pendant l'envoi part
+   * APRÈS lui, et retire la bannière qu'il vient de poser. Un envoi qui lève
+   * n'emporte pas les suivants.
    */
   private async pushReproducedNotifications(
     replacements: readonly ReproducedNotificationPush[]
@@ -3469,31 +3477,36 @@ export class NotificationService {
     if (!this.pushService) return;
 
     for (const replacement of replacements) {
-      const delivered = await this.pushReproducedNotification(replacement).catch((error) => {
-        notificationLogger.warn('reproduced notification push failed — rewrite already durable', {
-          notificationId: replacement.row.id,
-          error: error instanceof Error ? error.message : String(error),
+      await this.deviceLanes.schedule(accountDeviceLane(replacement.row.userId as string), async () => {
+        const handled = await this.pushReproducedNotification(replacement).catch((error) => {
+          notificationLogger.warn('reproduced notification push failed — rewrite already durable', {
+            notificationId: replacement.row.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return false;
         });
-        return false;
+        if (!handled) await sendNotificationRevocationPushes({ pushService: this.pushService, revoked: [replacement.stale] });
       });
-      if (!delivered) await sendNotificationRevocationPushes({ pushService: this.pushService, revoked: [replacement.stale] });
     }
   }
 
+  /** `true` quand la bannière d'avant est remplacée ou qu'il n'y en a pas ; `false` ⇒ la révoquer. */
   private async pushReproducedNotification(replacement: ReproducedNotificationPush): Promise<boolean> {
     const { row, title, subtitle } = replacement;
     const userId = row.userId as string;
 
     // GW7 — mêmes substitutions de confidentialité que le push de création :
     // `showPreview:false` remplace le corps par un libellé générique localisé,
-    // `showSenderName:false` neutralise le titre. Une bannière de remplacement
-    // qui les ignorerait rendrait en clair ce que la première avait masqué.
+    // `showSenderName:false` neutralise le titre et le nom de l'acteur dans le
+    // corps comme dans le subtitle (#19210). Une bannière de remplacement qui
+    // les ignorerait rendrait en clair ce que la première avait masqué.
     const prefs = await this.loadNotificationPrefs(userId);
     const showPreview = prefs ? prefs.showPreview ?? true : false;
     const showSenderName = prefs ? prefs.showSenderName ?? true : false;
-    const body = showPreview
-      ? truncateByCodePoints((row.content as string | null) ?? '', 200)
-      : notificationString(await this.resolveRecipientLang(userId), 'push.private');
+    const banner = showPreview
+      ? await bannerTextsWithoutActorName({ body: (row.content as string | null) ?? '', subtitle, actor: pushActorOfRow(row.actor), showSenderName, someone: async () => notificationString(await this.resolveRecipientLang(userId), 'someone') })
+      : null;
+    const body = banner ? truncateByCodePoints(banner.body, 200) : notificationString(await this.resolveRecipientLang(userId), 'push.private');
 
     // D-L1 (#7218) — même projection que le push de création (conversations
     // non lues, hors muettes) ; voir `computeConversationUnreadBadge`.
@@ -3508,6 +3521,13 @@ export class NotificationService {
       : undefined;
 
     const category = pushCategoryForNotificationType(row.type as NotificationType);
+    // La ligne RELUE juste avant l'envoi (#19211) : lue, mise en sourdine ou
+    // retirée depuis l'annonce, elle ne re-sonne pas — la bannière d'avant est
+    // révoquée au lieu d'être remplacée.
+    const live = await this.prisma.notification.findUnique({ where: { id: row.id as string } });
+    if (!live) return false;
+    const liveAudience = await reproducedPushAudience(live, this.mutedConversationOf(userId, live.type as NotificationType));
+    if (liveAudience !== 'replace') return liveAudience === 'none';
     const results = await this.pushService!.sendToUser({
       userId,
       // Jamais `voip` : une notification ordinaire livrée à PushKit ferait
@@ -3515,7 +3535,7 @@ export class NotificationService {
       types: ['apns', 'fcm'],
       payload: {
         title: showSenderName ? title : 'Meeshy',
-        ...(showPreview && subtitle ? { subtitle } : {}),
+        ...(banner?.subtitle ? { subtitle: banner.subtitle } : {}),
         body,
         ...(link ? { link } : {}),
         // `data.replacesNotificationId` annule la bannière d'AVANT ; la

@@ -5,7 +5,11 @@
  * - Une file par COMPTE pour ce que déclenche une lecture : une étape lente d'un compte — APNs à 10 s derrière son
  *   disjoncteur — ne retarde plus la lecture de tous les autres.
  * - La file `bulk` pour les retraits et réécritures de masse, qui gardent leurs deux invariants : le pic reste à un
- *   envoi, et l'ordre d'enfilement est l'ordre d'envoi (la révocation précède le remplacement de la même bannière).
+ *   envoi, et l'ordre d'enfilement est l'ordre d'envoi.
+ * - Une étape `bulk` qui touche la bannière d'UN compte (le remplacement d'une notification réécrite) attend sa propre
+ *   étape sur la file de ce compte : elle s'ordonne alors avec la révocation de lecture du même compte, et le pic de
+ *   la file `bulk` reste à un envoi. Une étape n'attend JAMAIS une étape de sa propre file : elle attendrait sa propre
+ *   fin.
  *
  * Chaque file est BORNÉE : au-delà de `maxPending` étapes en attente, la nouvelle est abandonnée et signalée — une
  * bannière laissée en place, jamais une mémoire qui enfle. Une file vidée est oubliée.
@@ -34,18 +38,20 @@ export class DeviceWorkLanes {
     return this.lanes.size;
   }
 
-  schedule(name: string, work: () => Promise<void>): void {
+  /** La promesse rendue est tenue quand l'étape est passée — réussie, échouée ou abandonnée — et ne rejette jamais. */
+  schedule(name: string, work: () => Promise<void>): Promise<void> {
     const lane = this.lanes.get(name) ?? { tail: Promise.resolve(), pending: 0 };
     if (lane.pending >= this.options.maxPending) {
       this.options.onDrop(name);
-      return;
+      return Promise.resolve();
     }
     lane.pending += 1;
     lane.tail = lane.tail
       .then(work)
-      .catch((error: unknown) => this.options.onError(name, error))
+      .catch((error: unknown) => { this.options.onError(name, error); })
       .finally(() => this.settle(name, lane));
     this.lanes.set(name, lane);
+    return lane.tail;
   }
 
   async drain(): Promise<void> {

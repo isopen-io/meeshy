@@ -89,6 +89,22 @@ describe('DeviceWorkLanes — une file par compte, bornée (#18910)', () => {
     expect(after).toHaveBeenCalledTimes(1);
   });
 
+  it('schedule rend une promesse tenue quand SON étape est passée — réussie, échouée ou abandonnée — sans jamais rejeter', async () => {
+    const { subject } = lanes(1);
+    const gate = deferred();
+    const done: string[] = [];
+    const first = subject.schedule('user:a', () => gate.promise.then(() => { done.push('first'); }));
+    const dropped = subject.schedule('user:a', async () => { done.push('never'); });
+    const failing = subject.schedule('user:b', async () => { throw new Error('apns down'); });
+
+    await expect(dropped).resolves.toBeUndefined();
+    await expect(failing).resolves.toBeUndefined();
+    expect(done).toEqual([]);
+    gate.release();
+    await first;
+    expect(done).toEqual(['first']);
+  });
+
   it('une file vidée est oubliée : aucun compte ne reste en mémoire après son dernier envoi', async () => {
     const { subject } = lanes();
     subject.schedule('user:a', async () => undefined);

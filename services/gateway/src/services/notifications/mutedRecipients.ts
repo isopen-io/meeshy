@@ -38,6 +38,22 @@ import { notificationLogger } from '../../utils/logger-enhanced';
  * `_loadReadReceiptOptOuts` (« everyone stays visible »),
  * `PrivacyPreferencesService.fetchFromDatabase`.
  */
+const MUTE_PIERCING_TYPES: ReadonlySet<string> = new Set([
+  'user_mentioned',
+  'added_to_conversation',
+  'removed_from_conversation',
+  'member_promoted',
+  'member_demoted',
+  'member_role_changed',
+]);
+
+/**
+ * La colonne ADRESSÉ du tableau ci-dessus, lisible depuis une ligne déjà écrite : un chemin qui juge une notification
+ * EXISTANTE (le remplacement d'une notification réécrite) n'applique la sourdine qu'à ce que la création lui aurait
+ * soumis. Une mention poussée malgré la sourdine ne perd pas sa bannière quand l'auteur édite son message (#19212).
+ */
+export const respectsConversationMute = (type: string): boolean => !MUTE_PIERCING_TYPES.has(type);
+
 export async function filterMutedRecipients(
   prisma: PrismaClient,
   conversationId: string,
