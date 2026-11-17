@@ -57,7 +57,7 @@ import { filterMutedRecipients } from './mutedRecipients';
 import { conversationUnreadOf } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { retractNotificationRows } from './retractNotificationRows';
-import { BadgeSyncCoalescer, pushedBannersReadSince, sendBadgeSyncToIos } from './readElsewhereSync';
+import { BadgeSyncDebouncer, pushedBannersReadSince, sendBadgeSyncToIos } from './readElsewhereSync';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
 import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
 import { reproducedPushAudience } from './reproducedPushAudience';
@@ -3050,20 +3050,17 @@ export class NotificationService {
     }
   }
 
-  private readonly badgeSync = new BadgeSyncCoalescer();
+  private readonly badgeSync = new BadgeSyncDebouncer((userId) =>
+    this.queueDeviceWork(() => sendBadgeSyncToIos({ prisma: this.prisma, pushService: this.pushService, userId })));
 
   /**
    * #18910 — une conversation lue défait aussi ce que le TÉLÉPHONE affiche : les bannières lues dont un push est
    * parti sont révoquées (Android n'a pas de pastille sans bannière), et l'iPhone reçoit un push « badge seul »
-   * avec le total recalculé, coalescé par compte (`BadgeSyncCoalescer`).
+   * avec le total recalculé une fois la lecture écrite (`BadgeSyncDebouncer`).
    */
   private async settleDevicesAfterRead(userId: string, conversationId: string, since: string): Promise<void> {
     this.revokeDeliveredPushes(await pushedBannersReadSince(this.prisma, { userId, conversationId, since }));
-    if (!this.badgeSync.claim(userId)) return;
-    this.queueDeviceWork(async () => {
-      this.badgeSync.release(userId);
-      await sendBadgeSyncToIos({ prisma: this.prisma, pushService: this.pushService, userId });
-    });
+    this.badgeSync.schedule(userId);
   }
 
   /**
@@ -3605,11 +3602,12 @@ export class NotificationService {
   }
 
   /**
-   * Attend que la file d'appareil soit vide. Sert aux TESTS et à un arrêt
-   * propre : rien du chemin nominal ne l'appelle — c'est précisément l'intérêt
-   * de la file.
+   * Déclenche les synchronisations de pastille en attente, puis attend que la
+   * file d'appareil soit vide. Sert aux TESTS et à un arrêt propre : rien du
+   * chemin nominal ne l'appelle — c'est précisément l'intérêt de la file.
    */
   async flushPendingRevocations(): Promise<void> {
+    this.badgeSync.flush();
     await this.deviceQueue;
   }
 

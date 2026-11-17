@@ -62,23 +62,45 @@ export async function pushedBannersReadSince(
 }
 
 /**
- * L'anti-rebond par compte : une synchronisation déjà EN FILE absorbe les
- * lectures qui arrivent avant son tour — elle calcule le total à son exécution,
- * donc voit leur effet. Trois conversations lues d'affilée = un seul push.
+ * Fenêtre de l'anti-rebond, en millisecondes. La cascade « messages lus →
+ * notifications lues » part AVANT l'écriture du curseur de lecture
+ * (`MessageReadStatusService.markMessagesAsRead`), et le total se compte sur ce
+ * curseur : lu aussitôt, il compterait encore la conversation qu'on vient de
+ * lire, et ce chiffre périmé resterait sur l'icône jusqu'au prochain push.
  */
-export class BadgeSyncCoalescer {
-  private readonly pending = new Set<string>();
+export const BADGE_SYNC_DEBOUNCE_MS = 2_000;
 
-  /** `true` si l'appelant doit mettre une synchronisation en file ; `false` si une l'est déjà. */
-  claim(userId: string): boolean {
-    if (this.pending.has(userId)) return false;
-    this.pending.add(userId);
-    return true;
+/**
+ * L'anti-rebond par compte : la synchronisation part une fois la fenêtre
+ * écoulée depuis la DERNIÈRE lecture, et calcule le total à ce moment-là. Trois
+ * conversations lues d'affilée, même à une seconde d'intervalle, font un seul
+ * push, au chiffre d'après la dernière. Les minuteries ne retiennent pas le
+ * processus (`unref`) ; `flush` les déclenche toutes sur-le-champ (arrêt
+ * propre, tests).
+ */
+export class BadgeSyncDebouncer {
+  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  constructor(private readonly run: (userId: string) => void) {}
+
+  schedule(userId: string): void {
+    const previous = this.timers.get(userId);
+    if (previous !== undefined) clearTimeout(previous);
+    const timer = setTimeout(() => this.fire(userId), BADGE_SYNC_DEBOUNCE_MS);
+    timer.unref?.();
+    this.timers.set(userId, timer);
   }
 
-  /** À appeler quand la synchronisation commence : une lecture ultérieure en rouvre une. */
-  release(userId: string): void {
-    this.pending.delete(userId);
+  flush(): void {
+    [...this.timers.entries()].forEach(([userId, timer]) => {
+      clearTimeout(timer);
+      this.fire(userId);
+    });
+  }
+
+  private fire(userId: string): void {
+    this.timers.delete(userId);
+    this.run(userId);
   }
 }
 
