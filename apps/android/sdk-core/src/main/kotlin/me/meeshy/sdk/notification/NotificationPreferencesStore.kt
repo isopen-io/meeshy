@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.updateAndGet
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.notificationPreferencesFromStorage
 import me.meeshy.sdk.model.storageValue
@@ -38,6 +39,20 @@ public interface NotificationPreferencesStore {
      * ignore every toggle the user turned off. A store without disk returns [preferences].
      */
     public suspend fun awaitHydrated(): UserNotificationPreferences = preferences.value
+
+    /**
+     * Applique [transform] à ce que le disque porte ET l'écrit, puis rend le bloc écrit — jamais à
+     * [preferences], qui n'avance qu'APRÈS l'écriture : une seconde bascule lue sur lui écraserait
+     * la première. Le défaut est séquentiel (lecture puis écriture) : un magasin durable le surcharge
+     * par une écriture atomique, et l'appelant qui enchaîne plusieurs `update` les sérialise lui-même.
+     */
+    public suspend fun update(
+        transform: (UserNotificationPreferences) -> UserNotificationPreferences,
+    ): UserNotificationPreferences {
+        val updated = transform(awaitHydrated())
+        setPreferences(updated)
+        return updated
+    }
 }
 
 /** Volatile [NotificationPreferencesStore] — for tests and previews. */
@@ -50,6 +65,10 @@ public class InMemoryNotificationPreferencesStore(
     override suspend fun setPreferences(preferences: UserNotificationPreferences) {
         _preferences.value = preferences
     }
+
+    override suspend fun update(
+        transform: (UserNotificationPreferences) -> UserNotificationPreferences,
+    ): UserNotificationPreferences = _preferences.updateAndGet(transform)
 }
 
 /**
@@ -74,6 +93,15 @@ public class DataStoreNotificationPreferencesStore(
 
     override suspend fun awaitHydrated(): UserNotificationPreferences =
         notificationPreferencesFromStorage(dataStore.data.first()[KEY])
+
+    override suspend fun update(
+        transform: (UserNotificationPreferences) -> UserNotificationPreferences,
+    ): UserNotificationPreferences {
+        val written = dataStore.edit { prefs ->
+            prefs[KEY] = transform(notificationPreferencesFromStorage(prefs[KEY])).storageValue
+        }
+        return notificationPreferencesFromStorage(written[KEY])
+    }
 
     private companion object {
         private val KEY = stringPreferencesKey("notification_preferences")
