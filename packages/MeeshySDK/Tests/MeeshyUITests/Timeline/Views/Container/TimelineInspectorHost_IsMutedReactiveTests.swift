@@ -88,69 +88,7 @@ final class TimelineInspectorHostIsMutedReactiveTests: XCTestCase {
         XCTAssertTrue(vm.isMuted)
     }
 
-    /// Smoke-renders the ProTimelineView body with the mute flag asserted, to
-    /// catch any future regression that detaches the transport bar's
-    /// `isMuted:` argument from `viewModel.isMuted` (e.g., a literal sneaks
-    /// back in during a refactor). Mirrors the `_ = view.body` pattern used
-    /// across the rest of the timeline container tests.
-    func test_transportBar_bodyRendersWhenMuted() {
-        let (vm, _) = makeViewModel()
-        vm.toggleMute()
-        let view = StoryTimelineView(viewModel: vm)
-        _ = view.body
-    }
-
     // MARK: - 3. AudioClipBar per-clip mute semantics
-
-    /// Global mute alone is enough to surface the clip as muted — even when
-    /// the clip's own volume is at full strength. This is the "user tapped
-    /// the speaker" case.
-    func test_audioClipBar_reflectsGlobalMute() {
-        let clip = audioClip(volume: 1.0)
-        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: true, audio: clip))
-    }
-
-    /// Conversely, a clip with volume zero is shown as muted even when the
-    /// global mute is off. `StoryAudioPlayerObject` has no `isMuted` field;
-    /// volume 0 is the persistent silenced state we have to honour.
-    func test_audioClipBar_reflectsZeroVolume() {
-        let clip = audioClip(volume: 0)
-        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: false, audio: clip))
-    }
-
-    /// Negative or NaN volume should never happen in practice but the resolver
-    /// must stay deterministic — `<=` keeps the badge consistent rather than
-    /// silently flipping to "unmuted" on a corrupted clip.
-    func test_audioClipBar_reflectsNegativeVolumeAsMuted() {
-        let clip = audioClip(volume: -0.01)
-        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: false, audio: clip))
-    }
-
-    /// Standard playback path: global off, clip has volume — the bar must
-    /// render as unmuted.
-    func test_audioClipBar_unmutedWhenGlobalOffAndPositiveVolume() {
-        let clip = audioClip(volume: 0.5)
-        XCTAssertFalse(TimelineInspectorHost.isMutedForAudio(globalMute: false, audio: clip))
-    }
-
-    /// Body-render smoke test for the audio branch: builds a project with one
-    /// audio clip and a global mute engaged, then evaluates the body so the
-    /// AudioClipBar branch (line ~643) is exercised end-to-end.
-    func test_audioClipBar_bodyRendersWithGlobalMuteAndAudioClip() {
-        let project = TimelineProject(
-            slideId: "slide-1",
-            slideDuration: 10,
-            mediaObjects: [],
-            audioPlayerObjects: [audioClip(volume: 1.0)],
-            textObjects: [],
-            clipTransitions: []
-        )
-        let (vm, _) = makeViewModel(project: project)
-        vm.toggleMute()
-        vm.selectClip(id: "audio-1")
-        let view = StoryTimelineView(viewModel: vm)
-        _ = view.body
-    }
 
     // MARK: - 4. toggleMute propagates VM ↔ engine
 

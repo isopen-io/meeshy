@@ -41,24 +41,3 @@ public nonisolated enum ComposerControlMetrics {
     /// les outils qu'elle est censée dégager.
     public static let bottomOverlayClearance: CGFloat = 96
 }
-
-extension View {
-    /// Porte la zone de contact à ≥ 44×44 pt sans toucher au RENDU : la pastille
-    /// garde son diamètre visuel, seule la boîte de layout qui la porte est
-    /// élargie, et les interstices voisins sont réduits d'autant
-    /// (`ComposerControlMetrics.groupSpacing` / `.columnSpacing`).
-    ///
-    /// Élargir la boîte plutôt que déborder par un `.background` est le seul
-    /// procédé qui étende réellement le hit-test : SwiftUI ne teste pas les
-    /// couches de fond au-delà de la frame de la vue primaire.
-    ///
-    /// La forme de contact est un rectangle plein et non le cercle inscrit : sur
-    /// une pastille circulaire, les coins gagnés restent dans la boîte du
-    /// contrôle, et à interstice nul deux voisins sont jointifs sans jamais se
-    /// recouvrir.
-    func composerHitTarget() -> some View {
-        frame(minWidth: ComposerControlMetrics.hitDiameter,
-              minHeight: ComposerControlMetrics.hitDiameter)
-            .contentShape(Rectangle())
-    }
-}

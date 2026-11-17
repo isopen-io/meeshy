@@ -68,7 +68,7 @@ const ATTACHMENT_STREAM_PREFIX = attachmentsEndpoints.fileByWildcard('');
  * la passerelle — `tus-handler.ts` (`path.join(year, month, userId, nom)`) et
  * `UploadProcessor.generateFilePath` : `YYYY/MM/…`. C'est la même forme que la
  * migration 013 reconnaît, et la même que le legacy emploie pour réparer une
- * adresse héritée (`apps/web/utils/attachment-url.ts`).
+ * adresse héritée (`legacy-web-final:apps/web/utils/attachment-url.ts`).
  */
 const STORAGE_KEY_PATH_PATTERN = /^\/\d{4}\/\d{2}\//;
 
@@ -153,7 +153,7 @@ function storageKeyOfLegacyUrl(fileUrl: string): string | null {
  * LA MÊME FORME SANS SON HÔTE — `/2026/09/<id>/photo.png`. Une barre initiale
  * n'en fait pas une ROUTE : posée derrière la base, elle rend l'adresse que la
  * console de staging montrait. Le legacy la répare au même titre
- * (`apps/web/utils/attachment-url.ts`, § « chemin de date »).
+ * (`legacy-web-final:apps/web/utils/attachment-url.ts`, § « chemin de date »).
  *
  * UN CHEMIN QUI PORTE DÉJÀ LA ROUTE DE FLUX rend sa CLÉ, pas `null` (#7022) —
  * c'est `storageKeyOfStreamRoute` qui la lui prend. Le risque que l'ancienne

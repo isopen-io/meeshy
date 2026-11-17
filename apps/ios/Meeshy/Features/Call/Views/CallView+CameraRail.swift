@@ -84,31 +84,3 @@ struct CallZoomLensCapsule: View {
         }
     }
 }
-
-/// Les libellés des commandes de MA caméra — mêmes mots que les boutons du
-/// (…) (`CallView+Pill.swift`), qui les portent quand aucune vignette ne
-/// montre mon image.
-enum CallMyImageCopy {
-    static var flip: String {
-        String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
-    }
-
-    static var flipHint: String {
-        String(localized: "call.control.flipCamera.hint", defaultValue: "Bascule entre la caméra avant et arrière", bundle: .main)
-    }
-
-    static func video(isEnabled: Bool, isPaused: Bool) -> String {
-        if isPaused {
-            return String(localized: "call.control.video.paused", defaultValue: "Vidéo en pause (connexion faible)", bundle: .main)
-        }
-        return CallControlsCopy.cameraLabel(isEnabled: isEnabled)
-    }
-
-    static var videoPausedHint: String {
-        String(localized: "call.control.video.paused.hint", defaultValue: "Touchez pour éteindre la caméra. La vidéo reprend automatiquement si la connexion s'améliore.", bundle: .main)
-    }
-
-    static var cameraPicker: String {
-        String(localized: "call.control.camera", defaultValue: "Choisir la caméra", bundle: .main)
-    }
-}

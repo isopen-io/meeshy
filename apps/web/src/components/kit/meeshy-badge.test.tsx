@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { kitMount } from '@/test-support/kit-mount';
+import { kitMount, spokenText } from '@/test-support/kit-mount';
 
 import { MeeshyBadge, MeeshyBadgeAnchor, meeshyBadgeCountSpoken, meeshyBadgeCountText, meeshyBadgeRecipe, type MeeshyBadgeSize } from './meeshy-badge';
 
@@ -112,8 +112,28 @@ describe('MeeshyBadge — le composant', () => {
   test('100 non lus : « 99+ » à l’œil, le vrai nombre à la voix', () => {
     const container = mount(<MeeshyBadge content={{ count: 100 }} label="100 non lus" />);
     const node = container.querySelector('[data-kit-badge]');
-    expect(node?.textContent).toBe('99+');
-    expect(node?.getAttribute('aria-label')).toBe('100 non lus');
+    expect(node === null ? '' : spokenText(node)).toBe('100 non lus');
+    expect(node?.getAttribute('aria-label')).toBeNull();
+    expect(node?.querySelector('[data-kit-badge-content]')?.textContent).toBe('99+');
+  });
+
+  test('sans label, le compte se dit par son vrai nombre', () => {
+    const container = mount(<MeeshyBadge content={{ count: 150 }} />);
+    const node = container.querySelector('[data-kit-badge]');
+    expect(node === null ? '' : spokenText(node)).toBe('150');
+  });
+
+  test('un glyphe seul inerte se dit par son nom, pas par un aria-label qu’ARIA interdit sur un span', () => {
+    const container = mount(<MeeshyBadge content={{ glyph: true }} leading={{ glyph: <i>l</i> }} label="Vérifié" />);
+    const node = container.querySelector('[data-kit-badge]');
+    expect(node === null ? '' : spokenText(node)).toBe('Vérifié');
+    expect(node?.getAttribute('aria-label')).toBeNull();
+  });
+
+  test('un mot sans label se lit tel quel, une seule fois', () => {
+    const container = mount(<MeeshyBadge content={{ label: 'Vérifié' }} />);
+    const node = container.querySelector('[data-kit-badge]');
+    expect(node === null ? '' : spokenText(node)).toBe('Vérifié');
   });
 
   test('inerte : un texte sans rôle ; avec onPress : un bouton nommé', () => {

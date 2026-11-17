@@ -17,7 +17,6 @@ enum ConversationMediaHubCopy {
     static var goToMessage: String { String(localized: "media_hub.go_to_message", defaultValue: "Aller au message", bundle: .main) }
     static var openPlace: String { String(localized: "media_hub.open_place", defaultValue: "Ouvrir dans Plans", bundle: .main) }
     static var placeFallback: String { String(localized: "media_hub.place.fallback", defaultValue: "Lieu partagé", bundle: .main) }
-    static var allLoaded: String { String(localized: "media_hub.all_loaded", defaultValue: "Tout est chargé", bundle: .main) }
 
     static func searchLabel(_ segment: String) -> String {
         String(format: String(localized: "media_hub.search.label", defaultValue: "Rechercher dans %@", bundle: .main), segment)

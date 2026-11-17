@@ -453,7 +453,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * NLLB et les pistes TTS d'une pièce jointe, qui arrivent par le même retard
    * de pipeline (`emitAttachmentUpdated.ts:77`, une émission par enrichissement).
    * L'inventaire des `socket.on` de ce module ne le portait pas — le legacy
-   * l'écoute (`apps/web/hooks/queries/use-socket-cache-sync.ts:1565`) — si bien
+   * l'écoute (`legacy-web-final:apps/web/hooks/queries/use-socket-cache-sync.ts:1565`) — si bien
    * qu'un vocal reçu restait MUET, sans transcription et sans drapeau de langue,
    * jusqu'à ce qu'on quitte et rouvre le fil.
    *
