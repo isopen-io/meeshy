@@ -76,6 +76,28 @@ final class ProfileSheetLoaderTests: XCTestCase {
         XCTAssertEqual(data.storedStatsUserIds, ["u-bob"])
     }
 
+    /// #18937 — au-delà des cinq minutes de fraîcheur, la fiche se peint depuis le cache SANS
+    /// squelette, puis se revalide : le réseau ne s'interroge qu'une fois le profil déjà à l'écran.
+    func test_open_staleCacheBeyondTheFreshWindow_paintsItThenRevalidatesWithoutTheLoadingState() async {
+        let (sut, data) = makeSUT(
+            cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 360),
+            fetchedProfile: .success(makeUser(displayName: "Bob à jour"))
+        )
+        var shownWhileFetching: String?
+        var loadingWhileFetching: Bool?
+        data.onFetchProfile = {
+            shownWhileFetching = sut.profile?.displayName
+            loadingWhileFetching = sut.isLoadingProfile
+        }
+
+        await sut.open(userId: "u-bob", username: "bob", using: data)
+
+        XCTAssertEqual(shownWhileFetching, "Bob en cache", "le profil du cache est à l'écran avant la réponse")
+        XCTAssertEqual(loadingWhileFetching, false, "un cache peint ne repasse jamais par le squelette")
+        XCTAssertEqual(data.fetchProfileCallCount, 1, "un profil périmé se revalide à l'ouverture")
+        XCTAssertEqual(sut.profile?.displayName, "Bob à jour")
+    }
+
     func test_open_synchronizationFails_keepsTheCachedProfileAndStatsOnScreen() async {
         let (sut, data) = makeSUT(
             cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 900),
@@ -277,9 +299,13 @@ final class MockProfileSheetData: ProfileLoading {
 
     func cachedProfile(for key: String) async -> CacheResult<[MeeshyUser]> { cachedProfileResult }
 
+    /// Appelé à l'entrée de `fetchProfile`, avant la réponse : ce que la fiche montre pendant le vol.
+    var onFetchProfile: (() -> Void)?
+
     func fetchProfile(handle: String) async throws -> MeeshyUser {
         fetchProfileCallCount += 1
         fetchedProfileHandles.append(handle)
+        onFetchProfile?()
         return try fetchProfileResult.get()
     }
 
