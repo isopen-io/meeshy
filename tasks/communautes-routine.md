@@ -475,3 +475,10 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - `dev` (60 commits) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests verts ; `check_house_rules.sh` 42 règles tenues, `check_cohesion_budget.sh` et `check_test_registration.sh` verts, `check-accent-color-hardcoding.mjs` conforme.
 - Les runs de l'ancienne tête sont annulés, ci.yml / ios.yml / ios-sdk relancés sur la nouvelle.
 - Prochain lot recommandé : fusionner #19297 dès que la CI iOS est verte (la tranche 4 web reste rouge tant que #19370 est ouverte : fusion à faire valider par Jacques), puis la suppression d'une communauté (#16857).
+
+## 2026-11-17 — réveil 23:38 UTC
+
+- Début du run : #19297 (#18767) ouverte, dernière poussée à 21:41, donc inactive : run consacré à la mener à la fusion.
+- État trouvé : la CI iOS SDK de `8521abb25` a enfin tourné et rendu un VRAI rouge du lot : `CommunityMemberEventsTests.swift:14` — `static let joinedPayload: [String: Any]` refusé par Swift 6 (« not concurrency-safe, non-Sendable »). Corrigé en propriété calculée. Deux tranches gateway encore en file d'attente depuis 21:41.
+- `dev` (50 commits) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests verts ; `check_house_rules.sh`, `check_cohesion_budget.sh`, `check_test_registration.sh`, `check-accent-color-hardcoding.mjs` verts.
+- Prochain lot recommandé : fusionner #19297 dès que la CI iOS SDK est verte sur la nouvelle tête, puis la suppression d'une communauté (#16857).

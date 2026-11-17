@@ -11,10 +11,12 @@ struct CommunityMemberEventsTests {
         try JSONDecoder().decode(T.self, from: JSONSerialization.data(withJSONObject: payload))
     }
 
-    private static let joinedPayload: [String: Any] = [
-        "communityId": "c1", "userId": "u-new", "role": "member", "via": "invited",
-        "memberCount": 13, "at": "2026-11-17T10:00:00.000Z",
-    ]
+    private static var joinedPayload: [String: Any] {
+        [
+            "communityId": "c1", "userId": "u-new", "role": "member", "via": "invited",
+            "memberCount": 13, "at": "2026-11-17T10:00:00.000Z",
+        ]
+    }
 
     private static func held(id: String = "c1", memberCount: Int = 12) -> MeeshyCommunity {
         MeeshyCommunity(
