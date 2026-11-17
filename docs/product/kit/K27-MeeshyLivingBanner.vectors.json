@@ -1,0 +1,24 @@
+{
+  "composant": "MeeshyLivingBanner",
+  "cle": "K27",
+  "note": "Vecteurs de parité (fiche K27 § 10). Parallaxe : ±15° donnent ±12 px à l'orbe proche et ±6 px à contresens à la lointaine ; au-delà, ça plafonne ; à plat, décalage nul.",
+  "parallaxe": [
+    { "degres": 0, "proche": 0, "lointaine": 0 },
+    { "degres": 15, "proche": 12, "lointaine": -6 },
+    { "degres": -15, "proche": -12, "lointaine": 6 },
+    { "degres": 7.5, "proche": 6, "lointaine": -3 },
+    { "degres": 40, "proche": 12, "lointaine": -6 },
+    { "degres": -90, "proche": -12, "lointaine": 6 }
+  ],
+  "arrets": [
+    { "theme": "sombre", "parts": [0.72, 0.34, 0], "proche": 0.75, "lointaine": 0.70 },
+    { "theme": "clair", "parts": [0.52, 0.20, 0], "proche": 0.50, "lointaine": 0.40 }
+  ],
+  "repli": [
+    { "collapse": 0, "hauteur": 318, "fondu": 1 },
+    { "collapse": 1, "hauteur": 96, "fondu": 0 },
+    { "collapse": 0.5, "hauteur": 207, "fondu": 0.5 },
+    { "collapse": 3, "hauteur": 96, "fondu": 0 },
+    { "collapse": -1, "hauteur": 318, "fondu": 1 }
+  ]
+}
