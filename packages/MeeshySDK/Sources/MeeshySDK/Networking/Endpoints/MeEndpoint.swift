@@ -19,6 +19,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case categoriesReorder
     case consents
     case consentsByPurpose(purpose: String)
+    case contactExchange
     case deleteAccount
     case deleteAccountCancel
     case deleteAccountConfirm
@@ -93,6 +94,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .categoriesReorder: return "/api/v1/me/categories/reorder"
         case .consents: return "/api/v1/me/consents"
         case .consentsByPurpose(let purpose): return "/api/v1/me/consents/\(purpose)"
+        case .contactExchange: return "/api/v1/me/contact-exchange"
         case .deleteAccount: return "/api/v1/me/delete-account"
         case .deleteAccountCancel: return "/api/v1/me/delete-account/cancel"
         case .deleteAccountConfirm: return "/api/v1/me/delete-account/confirm"

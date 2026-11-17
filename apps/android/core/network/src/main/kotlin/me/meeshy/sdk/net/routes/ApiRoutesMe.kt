@@ -19,6 +19,7 @@ public object ApiRoutesMe {
     public const val CATEGORIES_REORDER: String = "me/categories/reorder"
     public const val CONSENTS: String = "me/consents"
     public const val CONSENTS_BY_PURPOSE: String = "me/consents/{purpose}"
+    public const val CONTACT_EXCHANGE: String = "me/contact-exchange"
     public const val DELETE_ACCOUNT: String = "me/delete-account"
     public const val DELETE_ACCOUNT_CANCEL: String = "me/delete-account/cancel"
     public const val DELETE_ACCOUNT_CONFIRM: String = "me/delete-account/confirm"

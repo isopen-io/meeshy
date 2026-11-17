@@ -33,6 +33,9 @@ export const consents = '/api/v1/me/consents';
 /** PUT /api/v1/me/consents/:purpose */
 export const consentsByPurpose = (purpose: string): string => `/api/v1/me/consents/${encodeURIComponent(purpose)}`;
 
+/** POST /api/v1/me/contact-exchange */
+export const contactExchange = '/api/v1/me/contact-exchange';
+
 /** DELETE /api/v1/me/delete-account */
 export const deleteAccount = '/api/v1/me/delete-account';
 

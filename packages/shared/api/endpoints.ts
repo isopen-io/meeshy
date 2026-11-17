@@ -42,6 +42,7 @@ import * as authGroup from './endpoints/auth.js';
 import * as bringGroup from './endpoints/bring.js';
 import * as callsGroup from './endpoints/calls.js';
 import * as communitiesGroup from './endpoints/communities.js';
+import * as contactExchangeGroup from './endpoints/contact-exchange.js';
 import * as contactsGroup from './endpoints/contacts.js';
 import * as conversationsGroup from './endpoints/conversations.js';
 import * as directoryGroup from './endpoints/directory.js';
@@ -108,6 +109,7 @@ export const API_ENDPOINTS = {
   bring: bringGroup,
   calls: callsGroup,
   communities: communitiesGroup,
+  contactExchange: contactExchangeGroup,
   contacts: contactsGroup,
   conversations: conversationsGroup,
   directory: directoryGroup,
@@ -404,6 +406,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/communities/check-identifier/:identifier',
   '/api/v1/communities/mine',
   '/api/v1/communities/search',
+  '/api/v1/contact-exchange/:token/accept',
   '/api/v1/contacts/resolve',
   '/api/v1/conversations',
   '/api/v1/conversations/:conversationId/active-call',
@@ -519,6 +522,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/me/categories/reorder',
   '/api/v1/me/consents',
   '/api/v1/me/consents/:purpose',
+  '/api/v1/me/contact-exchange',
   '/api/v1/me/delete-account',
   '/api/v1/me/delete-account/cancel',
   '/api/v1/me/delete-account/confirm',
@@ -1091,6 +1095,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/communities/check-identifier/:identifier': ['GET'],
   '/api/v1/communities/mine': ['GET'],
   '/api/v1/communities/search': ['GET'],
+  '/api/v1/contact-exchange/:token/accept': ['POST'],
   '/api/v1/contacts/resolve': ['POST'],
   '/api/v1/conversations': ['GET', 'POST'],
   '/api/v1/conversations/:conversationId/active-call': ['GET'],
@@ -1206,6 +1211,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/me/categories/reorder': ['POST'],
   '/api/v1/me/consents': ['GET'],
   '/api/v1/me/consents/:purpose': ['PUT'],
+  '/api/v1/me/contact-exchange': ['POST'],
   '/api/v1/me/delete-account': ['DELETE'],
   '/api/v1/me/delete-account/cancel': ['GET'],
   '/api/v1/me/delete-account/confirm': ['GET'],
