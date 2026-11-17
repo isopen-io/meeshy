@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-import { prismeDuMembre } from '@/lib/admin/prisme-membre';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { usePrismeDuMembre } from './use-prisme-membre';
+import { prismeDuMembre } from './prisme-membre';
+import { usePrismeDuMembreComplet } from './prisme-membre-hook';
 
 /**
- * **L'IDENTITÉ DU PRISME, MESURÉE** (#6862, revue-correction) — pas déduite du
+ * **L'IDENTITÉ DU PRISME, MESURÉE** (#6862, revue-correction ; rang 4 depuis #8005) — pas déduite du
  * code, ni affirmée par un commentaire : un `useMemo` oublié ne casse RIEN
  * d'observable, il rend seulement le fil moins fluide, et aucun témoin de DOM
  * ne peut le voir.
@@ -32,13 +32,13 @@ afterEach(() => {
   mounter.unmountAll();
 });
 
-const MEMBRE = { systemLanguage: 'de', regionalLanguage: 'es', customDestinationLanguage: 'it' };
+const MEMBRE = { systemLanguage: 'de', regionalLanguage: 'es', customDestinationLanguage: 'it', deviceLocale: 'ja' };
 
 const vus: unknown[] = [];
 
 function Sonde({ membre }: { readonly membre: typeof MEMBRE }) {
   const [, redessine] = useState(0);
-  const prisme = usePrismeDuMembre(membre);
+  const prisme = usePrismeDuMembreComplet(membre);
   vus.push(prisme.languages);
 
   return (
@@ -57,10 +57,10 @@ describe('le prisme du membre garde son identité entre deux rendus', () => {
 
     expect(vus.length).toBeGreaterThan(1);
     expect(Object.is(vus[0], vus[vus.length - 1])).toBe(true);
-    expect(host.textContent).toBe('de › es › it');
+    expect(host.textContent).toBe('de › es › it › ja');
   });
 
-  test('un OBJET `membre` neuf au contenu IDENTIQUE non plus — la clé est faite des trois rangs', async () => {
+  test('un OBJET `membre` neuf au contenu IDENTIQUE non plus — la clé est faite des quatre rangs', async () => {
     vus.length = 0;
     const host = await mounter.mount(<Sonde membre={MEMBRE} />);
     await mounter.rerender(host, <Sonde membre={{ ...MEMBRE }} />);
@@ -81,6 +81,15 @@ describe('le prisme du membre garde son identité entre deux rendus', () => {
     const host = await mounter.mount(<Sonde membre={MEMBRE} />);
     await mounter.rerender(host, <Sonde membre={{ ...MEMBRE, systemLanguage: 'pt' }} />);
 
-    expect(host.textContent).toBe('pt › es › it');
+    expect(host.textContent).toBe('pt › es › it › ja');
+  });
+
+  test('le RANG 4 changé rend bien un prisme neuf — la locale de l’appareil du membre est dans la clé', async () => {
+    vus.length = 0;
+    const host = await mounter.mount(<Sonde membre={MEMBRE} />);
+    await mounter.rerender(host, <Sonde membre={{ ...MEMBRE, deviceLocale: 'ko' }} />);
+
+    expect(host.textContent).toBe('de › es › it › ko');
+    expect(Object.is(vus[0], vus[vus.length - 1])).toBe(false);
   });
 });

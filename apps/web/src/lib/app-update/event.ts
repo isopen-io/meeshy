@@ -2,7 +2,7 @@
  * L'ÉVÉNEMENT DE LA MISE À JOUR — SEUL, dans un module SANS dépendance (#6936).
  *
  * C'est l'API que la v2 reprend du legacy
- * (`apps/web/utils/service-worker.ts` : `notifyUpdateAvailable` le dispatche,
+ * (`legacy-web-final:apps/web/utils/service-worker.ts` : `notifyUpdateAvailable` le dispatche,
  * `SystemStatusBanner` l'écoute), et ses DEUX bouts vivent dans des chunks
  * différents : le magasin d'annonce est dans le SOCLE (la coquille lit son
  * portillon), le contrôleur qui inscrit le worker est CHARGÉ À LA DEMANDE après

@@ -123,7 +123,7 @@ const leadsToEmailLinkSecret = (raw: string): boolean => {
 /**
  * Clampe `returnUrl` à un chemin MÊME-ORIGINE, jamais une URL absolue ni un
  * schéma alternatif — même doctrine que le legacy
- * (`apps/web/app/auth/magic-link/validate/page.tsx:94-97` : « returnUrl is
+ * (`legacy-web-final:apps/web/app/auth/magic-link/validate/page.tsx:94-97` : « returnUrl is
  * attacker-controlled … clamp it to a same-origin path »). `null` ⇒ refusé.
  *
  * Rejette aussi les blancs et caractères de contrôle (#6743) : le parseur

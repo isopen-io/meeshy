@@ -15,9 +15,8 @@
 import { GameMedal } from '@/components/game/medal';
 import { GameRarityLine } from '@/components/game-rarity';
 import { GameTouch } from '@/components/game-touch';
-import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
-import { milestoneGlyph } from '@/components/milestone-glyph';
 import { medalOfAxis } from '@/lib/game/medal';
 import { rarityRim, visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -33,7 +32,6 @@ import {
   reachedAtLabel,
   tierDotLabel,
   tierListLabel,
-  type ProgressionGlyph,
 } from '@/lib/view/progression';
 import {
   type EngagementAxisProgress,
@@ -74,15 +72,10 @@ export const BRAND = 'var(--color-ios-brand)';
 export const STREAK_TINT = 'var(--color-warn)';
 /** L'ambre des Meeshes — la même famille que les badges, distincte de la marque. */
 export const MEESH_TINT = 'var(--color-warn)';
-/** L'argent de la PIÈCE Meesh (#6427) — dérivé de `MeeshyColors.meeshSilver`, jamais recopié. */
-export const MEESH_COIN_TINT = 'var(--ios-meesh-silver)';
 export const UNLOCKED_TINT = 'var(--color-ok)';
 export const INK = 'var(--color-ios-ink)';
 export const INK_2 = 'var(--color-ios-ink-2)';
 export const CARD = 'var(--color-ios-card)';
-
-/** Les glyphes d'axe — la table unique que la ligne de notification d'un badge lit aussi (`milestone-glyph.ts`, #8727). */
-export const axisGlyph = (name: ProgressionGlyph): GlyphShape => milestoneGlyph(name);
 
 export function Card({ tint, children, className }: { tint: string; children: React.ReactNode; className?: string }) {
   return (
@@ -94,24 +87,6 @@ export function Card({ tint, children, className }: { tint: string; children: Re
       }}
     >
       {children}
-    </div>
-  );
-}
-
-export function SectionTitle({ glyph, title, tint, trailing, id }: { glyph: GlyphShape; title: string; tint: string; trailing?: string; id: string }) {
-  return (
-    <div className="flex items-center gap-2 px-1">
-      <span style={{ color: tint }}>
-        <GlyphSvg glyph={glyph} size={13} />
-      </span>
-      <h2 id={id} className="flex-1 text-check font-bold tracking-[0.08em] uppercase" style={{ color: tint }}>
-        {title}
-      </h2>
-      {trailing !== undefined ? (
-        <span className="text-check font-semibold" style={{ color: INK_2 }}>
-          {trailing}
-        </span>
-      ) : null}
     </div>
   );
 }

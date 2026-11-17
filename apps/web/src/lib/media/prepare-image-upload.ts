@@ -147,5 +147,3 @@ export const browserImagePreparer: ImagePreparer = createImagePreparer((job) => 
 export const prepareImageForUpload = browserImagePreparer.prepare;
 
 export const transcodeRefusedImage = browserImagePreparer.transcode;
-
-export const prepareUploads = browserImagePreparer.prepareUploads;
