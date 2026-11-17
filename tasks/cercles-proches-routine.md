@@ -1317,7 +1317,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Audit adversarial avant PR : BLOQUANT au premier passage (un `INVALID` « ajoute quelqu'un » renvoyait le web vers
   l'envoi avec position, et la vérification n'était pas atomique avec la prise du pointeur). Corrigé dans le lot, avec
   les points non bloquants (terme prolongé, précision relevée, « pas de partage » vidé à l'aveugle). Restent ouverts en
-  #19288 : une projection inchangée ressservie, et une fenêtre étroite où une position peut reculer d'un pas.
+  #19288 : une projection inchangée resservie, et une fenêtre étroite où une position peut reculer d'un pas.
 - Gates locaux : passerelle `sharedLocation/` + porte socket 122 verts (témoins rouges prouvés par mutation), `tsc` vert ;
   web `src/lib/shared-locations/` 140 verts + suites qui citent le partage 117 verts, `tsc` vert ; gardes
   `packages/shared/__tests__/ci` 215 verts sur l'arbre fusionné avec `dev`.
