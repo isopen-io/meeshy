@@ -28,9 +28,14 @@ public struct MeeshyReorderHandle: View {
     private let isEnabled: Bool
     private let onDrag: ((CGFloat) -> Void)?
     private let onDrop: ((CGFloat) -> Void)?
+    private let onCancel: (() -> Void)?
+    private let onStep: ((MeeshyReorderDirection) -> Void)?
+
+    @GestureState private var isDragging = false
 
     public init(label: String, phase: MeeshyReorderPhase = .rest) {
-        self.init(label: label, phase: phase, edge: .trailing, isEnabled: true, onDrag: nil, onDrop: nil)
+        self.init(label: label, phase: phase, edge: .trailing, isEnabled: true, onDrag: nil, onDrop: nil,
+                  onCancel: nil, onStep: nil)
     }
 
     init(label: String,
@@ -38,13 +43,17 @@ public struct MeeshyReorderHandle: View {
          edge: MeeshyReorderHandleEdge,
          isEnabled: Bool,
          onDrag: ((CGFloat) -> Void)?,
-         onDrop: ((CGFloat) -> Void)?) {
+         onDrop: ((CGFloat) -> Void)?,
+         onCancel: (() -> Void)?,
+         onStep: ((MeeshyReorderDirection) -> Void)?) {
         self.label = label
         self.phase = phase
         self.edge = edge
         self.isEnabled = isEnabled
         self.onDrag = onDrag
         self.onDrop = onDrop
+        self.onCancel = onCancel
+        self.onStep = onStep
     }
 
     public var body: some View {
@@ -56,15 +65,40 @@ public struct MeeshyReorderHandle: View {
             .frame(width: CGFloat(recipe.handleWidth), height: CGFloat(recipe.handleHeight))
             .contentShape(Rectangle())
             .opacity(isEnabled ? 1 : MeeshyOpacity.medium)
-            .gesture(drag)
+            .gesture(drag, including: onDrag == nil ? .subviews : .all)
+            .adaptiveOnChange(of: isDragging) { was, now in if was && !now { onCancel?() } }
+            .modifier(MeeshyReorderKeys(isEnabled: isEnabled && onStep != nil, onStep: { onStep?($0) }))
             .accessibilityLabel(label)
             .accessibilityAddTraits(.isButton)
     }
 
     private var drag: some Gesture {
-        DragGesture(minimumDistance: 2)
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .updating($isDragging) { _, state, _ in state = true }
             .onChanged { value in if isEnabled { onDrag?(value.translation.height) } }
             .onEnded { value in if isEnabled { onDrop?(value.translation.height) } }
+    }
+}
+
+/// Le clavier (iOS 17+, iPad) de la poignée : ↑ et ↓ déplacent d'un rang, par le
+/// même déplacement que la voix. La poignée éteinte ne prend pas le focus.
+private struct MeeshyReorderKeys: ViewModifier {
+    let isEnabled: Bool
+    let onStep: (MeeshyReorderDirection) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content
+                .focusable(isEnabled)
+                .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+                    guard isEnabled else { return .ignored }
+                    onStep(press.key == .upArrow ? .up : .down)
+                    return .handled
+                }
+        } else {
+            content
+        }
     }
 }
 
@@ -202,7 +236,9 @@ public struct MeeshyReorderList<Item, Row: View>: View {
                 draggedID = identifier
                 offset = translation
             },
-            onDrop: { translation in drop(index: index, translation: translation) })
+            onDrop: { translation in drop(index: index, translation: translation) },
+            onCancel: { cancelDrag(identifier: identifier) },
+            onStep: { direction in voiceMove(index: index, direction: direction, item: item) })
         let context = MeeshyReorderRowContext(rank: index, count: items.count, phase: current, isPending: isPending, handle: handle)
         row(item, context)
             .overlay(accentBorder(recipe: recipe))
@@ -216,8 +252,14 @@ public struct MeeshyReorderList<Item, Row: View>: View {
                 Color.clear.onAppear { heights[identifier] = proxy.size.height }
                     .adaptiveOnChange(of: proxy.size.height) { _, new in heights[identifier] = new }
             })
-            .accessibilityAction(named: Text(verbatim: labels.moveUp)) { voiceMove(index: index, direction: .up, item: item) }
-            .accessibilityAction(named: Text(verbatim: labels.moveDown)) { voiceMove(index: index, direction: .down, item: item) }
+            .accessibilityActions {
+                ForEach(MeeshyReorder.voiceDirections(index: index, count: items.count, isActive: isActive,
+                                                      isPending: isPending), id: \.self) { direction in
+                    Button(direction == .up ? labels.moveUp : labels.moveDown) {
+                        voiceMove(index: index, direction: direction, item: item)
+                    }
+                }
+            }
     }
 
     @ViewBuilder
@@ -252,10 +294,16 @@ public struct MeeshyReorderList<Item, Row: View>: View {
         announce(index: destination, item: items[index])
     }
 
+    private func cancelDrag(identifier: String) {
+        guard draggedID == identifier else { return }
+        draggedID = nil
+        offset = 0
+    }
+
     private func voiceMove(index: Int, direction: MeeshyReorderDirection, item: Item) {
-        let allowed = direction == .up ? MeeshyReorder.canMoveUp(index: index, count: items.count)
-                                       : MeeshyReorder.canMoveDown(index: index, count: items.count)
-        guard isActive, allowed, !pendingIDs.contains(id(item)) else { return }
+        let offered = MeeshyReorder.voiceDirections(index: index, count: items.count, isActive: isActive,
+                                                    isPending: pendingIDs.contains(id(item)))
+        guard offered.contains(direction) else { return }
         let destination = MeeshyReorder.destination(forIndex: index, direction: direction)
         onMove(index, destination)
         announce(index: destination, item: item)

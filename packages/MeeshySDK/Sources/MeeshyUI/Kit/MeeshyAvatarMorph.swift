@@ -107,7 +107,19 @@ public struct MeeshyAvatarMorph<Content: View, Ring: View, Badge: View>: View {
         .overlay(alignment: .bottomTrailing) {
             if !badgeTravels { badge.frame(width: badgeSide, height: badgeSide).transition(.opacity) }
         }
-        .onAppear { onArrive?() }
+        .task { await arrive() }
+    }
+
+    private func arrive() async {
+        guard let onArrive else { return }
+        let end = MeeshyAvatarMorphEnd(center: .zero, diameter: size)
+        let recipe = MeeshyAvatarMorphRecipe.resolve(from: end, to: end, path: path, progress: nil,
+                                                     reduceMotion: reduceMotion || !isEnabled, hasScope: scope != nil)
+        let delay = recipe.arrivalDelayMilliseconds
+        if delay > 0 {
+            do { try await Task.sleep(for: .milliseconds(delay)) } catch { return }
+        }
+        onArrive()
     }
 }
 

@@ -20,6 +20,7 @@ public struct MeeshyMediaGrid<Content: View>: View {
     private let content: (MeeshyMediaGridItem, CGSize) -> Content
 
     @State private var width: Double = 0
+    @State private var requestedCount: Int?
 
     public init(label: String,
                 items: [MeeshyMediaGridItem],
@@ -80,9 +81,9 @@ public struct MeeshyMediaGrid<Content: View>: View {
         return HStack(alignment: .top, spacing: CGFloat(gap)) {
             ForEach(Array(placed.enumerated()), id: \.offset) { _, indexes in
                 LazyVStack(spacing: CGFloat(gap)) {
-                    ForEach(indexes, id: \.self) { index in
-                        tile(shown[index], ratio: MeeshyMediaGridRecipe.clampedAspect(shown[index].aspect), width: tileWidth)
-                            .onAppear { reachEndIfNeeded(index: index, count: shown.count, columns: count) }
+                    ForEach(indexes.map { MeeshyMediaGridEntry(index: $0, item: shown[$0]) }) { entry in
+                        tile(entry.item, ratio: MeeshyMediaGridRecipe.clampedAspect(entry.item.aspect), width: tileWidth)
+                            .onAppear { reachEndIfNeeded(index: entry.index, count: shown.count, columns: count) }
                     }
                 }
             }
@@ -98,7 +99,10 @@ public struct MeeshyMediaGrid<Content: View>: View {
     }
 
     private func reachEndIfNeeded(index: Int, count: Int, columns: Int) {
-        guard let onReachEnd, MeeshyMediaGridRecipe.shouldReachEnd(index: index, count: count, columns: columns) else { return }
+        guard let onReachEnd,
+              let marker = MeeshyMediaGridRecipe.reachEndRequest(index: index, count: count, columns: columns,
+                                                                 lastRequestedCount: requestedCount) else { return }
+        requestedCount = marker
         onReachEnd()
     }
 }
@@ -234,6 +238,12 @@ public struct MeeshyMediaTile<Content: View>: View {
         .frame(height: 26)
         .background(Capsule().fill(Color.black.opacity(MeeshyOpacity.strong)))
     }
+}
+
+private struct MeeshyMediaGridEntry: Identifiable {
+    let index: Int
+    let item: MeeshyMediaGridItem
+    var id: String { item.id }
 }
 
 private struct MeeshyMediaTileStyle<Content: View>: ButtonStyle {

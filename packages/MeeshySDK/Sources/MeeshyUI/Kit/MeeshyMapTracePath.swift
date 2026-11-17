@@ -36,22 +36,26 @@ public nonisolated struct MeeshyMapTracePath: Sendable, Equatable {
     public let points: [CGPoint]
     public let length: Double
     private let cumulative: [Double]
+    private let receivedIndexes: [Int]
 
     public static func resolve(points: [CGPoint], kind: MeeshyMapTraceKind) -> MeeshyMapTracePath? {
-        let usable = points.filter { $0.x.isFinite && $0.y.isFinite }
+        let usable = points.indices.filter { points[$0].x.isFinite && points[$0].y.isFinite }
         guard usable.count >= 2, let first = usable.first, let last = usable.last else { return nil }
-        let effective = kind == .link ? [first, last] : usable
+        let drawn = kind == .link ? [first, last] : usable
+        let effective = drawn.map { points[$0] }
         let cumulative = effective.indices.reduce(into: [Double]()) { result, index in
             result.append(index == 0 ? 0 : (result.last ?? 0) + distance(effective[index - 1], effective[index]))
         }
-        return MeeshyMapTracePath(points: effective, length: cumulative.last ?? 0, cumulative: cumulative)
+        return MeeshyMapTracePath(points: effective, length: cumulative.last ?? 0, cumulative: cumulative,
+                                  receivedIndexes: drawn)
     }
 
-    /// La part du chemin parcourue jusqu'à un des points reçus (de 0 à 1).
+    /// La part du chemin parcourue jusqu'à un des points REÇUS (de 0 à 1) ; rien pour
+    /// un point que le tracé ne passe pas (non fini, ou intermédiaire d'un `link`).
     public func fraction(ofPointAt index: Int) -> Double? {
-        guard points.indices.contains(index) else { return nil }
-        guard length > 0 else { return index == 0 ? 0 : 1 }
-        return cumulative[index] / length
+        guard let drawnIndex = receivedIndexes.firstIndex(of: index) else { return nil }
+        guard length > 0 else { return drawnIndex == 0 ? 0 : 1 }
+        return cumulative[drawnIndex] / length
     }
 
     /// Le point posé à une fraction du chemin, bornée de 0 à 1.

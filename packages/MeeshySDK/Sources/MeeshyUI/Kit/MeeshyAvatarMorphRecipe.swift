@@ -122,6 +122,11 @@ public nonisolated struct MeeshyAvatarMorphRecipe: Sendable, Equatable {
         return startScale + (endScale - startScale) * t
     }
 
+    /// Quand l'arrivée se dit : au bout du voyage, tout de suite sous le fondu.
+    public var arrivalDelayMilliseconds: Int {
+        mode == .crossfade ? 0 : durationMilliseconds
+    }
+
     public static func clamped(progress: Double) -> Double {
         progress.isFinite ? min(max(progress, 0), 1) : 0
     }

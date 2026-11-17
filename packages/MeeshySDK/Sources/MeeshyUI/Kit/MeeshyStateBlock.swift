@@ -74,6 +74,10 @@ public struct MeeshyStateBlock<Glyph: View>: View {
             }
             .accessibilityElement(children: .contain)
             .onAppear { announceIfNeeded(recipe) }
+            .adaptiveOnChange(of: kind) { old, new in
+                guard MeeshyStateBlockRecipe.announcesTransition(from: old, to: new) else { return }
+                announceIfNeeded(recipe)
+            }
         } else {
             Color.clear.frame(width: 0, height: 0).onAppear { assertMissingExit() }
         }

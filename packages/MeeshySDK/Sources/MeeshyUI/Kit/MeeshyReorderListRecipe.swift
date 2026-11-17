@@ -19,7 +19,7 @@ public nonisolated enum MeeshyReorderHandleEdge: String, Sendable, Equatable, Ca
     case leading
 }
 
-public nonisolated enum MeeshyReorderDirection: Sendable, Equatable {
+public nonisolated enum MeeshyReorderDirection: Sendable, Equatable, Hashable {
     case up
     case down
 }
@@ -58,6 +58,15 @@ public nonisolated enum MeeshyReorder {
 
     public static func destination(forIndex index: Int, direction: MeeshyReorderDirection) -> Int {
         direction == .up ? index - 1 : index + 1
+    }
+
+    /// Les directions que la voix et le clavier offrent à une rangée : celles qui
+    /// la déplacent vraiment. Aucune pour une liste éteinte ou une rangée en attente.
+    public static func voiceDirections(index: Int, count: Int, isActive: Bool, isPending: Bool) -> [MeeshyReorderDirection] {
+        guard isActive, !isPending else { return [] }
+        return [MeeshyReorderDirection.up, .down].filter { direction in
+            direction == .up ? canMoveUp(index: index, count: count) : canMoveDown(index: index, count: count)
+        }
     }
 }
 

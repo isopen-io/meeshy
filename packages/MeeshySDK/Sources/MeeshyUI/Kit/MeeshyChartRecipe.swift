@@ -117,6 +117,12 @@ public nonisolated struct MeeshyChartRecipe: Sendable, Equatable {
         return min(max(Int(x / width * Double(count)), 0), count - 1)
     }
 
+    /// Sans `selection`, le graphique est en lecture seule : son geste de choix ne
+    /// s'arme pas, le défilement de l'hôte passe à travers.
+    public static func armsSelectionGesture(hasSelection: Bool) -> Bool {
+        hasSelection
+    }
+
     /// L'entrée d'un tracé : une courbe douce, posée d'emblée sous mouvement réduit.
     public static func entryAnimation(reduce: Bool) -> Animation? {
         reduce ? nil : .spring(response: 0.48, dampingFraction: 1)

@@ -103,7 +103,7 @@ public nonisolated struct MeeshyStateBlockRecipe: Sendable, Equatable {
             kind: kind,
             tone: tone(of: kind),
             defaultSystemImage: systemImage(of: kind),
-            announcesOnAppear: kind == .error || kind == .offline,
+            announcesOnAppear: announces(kind),
             hapticOnEnter: kind == .error,
             showsArt: drawsArt,
             showsHalo: drawsArt && isDark && !reduceTransparency,
@@ -136,6 +136,17 @@ public nonisolated struct MeeshyStateBlockRecipe: Sendable, Equatable {
         case .offline: return "wifi.slash"
         case .success: return "checkmark.circle"
         }
+    }
+
+    /// Les genres qui s'annoncent : une erreur, un passage hors ligne.
+    public static func announces(_ kind: MeeshyStateBlockKind) -> Bool {
+        kind == .error || kind == .offline
+    }
+
+    /// Un bloc qui change de genre sur place s'annonce si le nouveau genre s'annonce,
+    /// jamais deux fois pour le même genre.
+    public static func announcesTransition(from old: MeeshyStateBlockKind, to new: MeeshyStateBlockKind) -> Bool {
+        old != new && announces(new)
     }
 
     /// Les fantômes d'une image : de 1 à 4 silhouettes.

@@ -137,7 +137,8 @@ public struct MeeshyChart<Center: View>: View {
                 .opacity(shown == 1 ? 1 : 0.4)
                 .animation(MeeshyChartRecipe.entryAnimation(reduce: reduceMotion), value: shown)
                 .contentShape(Rectangle())
-                .gesture(selectionGesture(width: Double(proxy.size.width)))
+                .gesture(selectionGesture(width: Double(proxy.size.width)),
+                         including: MeeshyChartRecipe.armsSelectionGesture(hasSelection: selection != nil) ? .all : .subviews)
         }
         .frame(height: CGFloat(recipe.plotHeight))
     }

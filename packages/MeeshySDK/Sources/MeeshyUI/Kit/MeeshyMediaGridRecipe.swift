@@ -147,6 +147,14 @@ public nonisolated struct MeeshyMediaGridRecipe: Sendable, Equatable {
         return count > 0 && index >= count - rows
     }
 
+    /// La demande de suite, UNE par page : rend le compte à retenir quand la suite
+    /// est à demander, rien si elle l'a déjà été pour ce compte. Une page qui ne
+    /// vient pas ne se redemande pas au défilement : la reprise est à l'hôte.
+    public static func reachEndRequest(index: Int, count: Int, columns: Int, lastRequestedCount: Int?) -> Int? {
+        guard lastRequestedCount != count, shouldReachEnd(index: index, count: count, columns: columns) else { return nil }
+        return count
+    }
+
     public static func resolve(layout: MeeshyMediaGridLayout,
                                shape: MeeshyMediaTileShape,
                                columns: Int,

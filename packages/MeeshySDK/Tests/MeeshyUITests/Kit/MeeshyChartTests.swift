@@ -107,8 +107,8 @@ struct MeeshyChartTests {
 
     @Test("sans selection, le graphique ne prend aucun geste : le défilement de l'hôte passe à travers")
     func gesture_onlyWithASelection() {
-        #expect(MeeshyChartRecipe.gestureMask(hasSelection: false) == .subviews)
-        #expect(MeeshyChartRecipe.gestureMask(hasSelection: true) == .all)
+        #expect(!MeeshyChartRecipe.armsSelectionGesture(hasSelection: false))
+        #expect(MeeshyChartRecipe.armsSelectionGesture(hasSelection: true))
     }
 
     @Test("garde de source : aucun clic, lien, pays, filleul ni cercle dans les signatures")
