@@ -15,7 +15,7 @@ class LocationMapRulesTest {
     @Test
     fun `la distance entre deux points est la distance au sol en metres`() {
         val meters = LocationMapRules.distanceMeters(48.8566, 2.3522, 48.8606, 2.3376)
-        assertThat(meters).isWithin(15.0).of(1_130.0)
+        assertThat(meters).isWithin(15.0).of(1_157.0)
         assertThat(LocationMapRules.distanceMeters(10.0, 10.0, 10.0, 10.0)).isEqualTo(0.0)
     }
 
