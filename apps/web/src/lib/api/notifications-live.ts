@@ -3,7 +3,8 @@ import type { QueryClient } from '@tanstack/react-query';
 import { inAppBannerStore, offerInAppBanner, readsOnArrival, retractInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
-import { performMarkNotificationRead } from './notifications-actions';
+import { findNotification } from './notifications-cache';
+import { performReadOnArrival } from './notifications-actions';
 import type { NotificationsDeps } from './notifications';
 import {
   applyNotificationCounts,
@@ -41,7 +42,7 @@ const SEEN_NOTIFICATIONS_CAP = 200;
 const REWRITE_WINDOW_MS = 5_000;
 const REWRITES_CAP = 50;
 
-type Rewrite = { readonly at: number; readonly wasShowing: boolean };
+type Rewrite = { readonly at: number; readonly wasShowing: boolean; readonly wasUnread: boolean };
 
 export type NotificationLiveHandlers = {
   readonly onNew: (payload: unknown) => void;
@@ -61,6 +62,19 @@ export function createNotificationLiveHandlers(deps: {
   const now = deps.now ?? Date.now;
   const seenNotifications = new Set<string>();
   const recentlyDeleted = new Map<string, Rewrite>();
+  /* La DERNIÈRE vie connue de chaque id (arrivée ou suppression) : une lecture à l'arrivée dont le POST échoue ne rend
+     sa ligne non lue que si rien ne l'a touchée depuis. Bornée comme le dédoublonnage — un id oublié vaut « touché ». */
+  const lives = new Map<string, symbol>();
+  const markLife = (id: string): symbol => {
+    const life = Symbol(id);
+    lives.delete(id);
+    lives.set(id, life);
+    if (lives.size > SEEN_NOTIFICATIONS_CAP) {
+      const oldest = lives.keys().next().value;
+      if (oldest !== undefined) lives.delete(oldest);
+    }
+    return life;
+  };
 
   const takeRewrite = (id: string): Rewrite | null => {
     const deleted = recentlyDeleted.get(id);
@@ -77,7 +91,8 @@ export function createNotificationLiveHandlers(deps: {
       const oldest = seenNotifications.values().next().value;
       if (oldest !== undefined) seenNotifications.delete(oldest);
     }
-    applyNotificationNew(queryClient, notification, { rewrite: rewrite !== null });
+    const life = markLife(notification.id);
+    const counted = applyNotificationNew(queryClient, notification, { rewrite: rewrite !== null });
     /* LA CLOCHE SONNE, LE FIL SUIT (#9291) — la notification d'un message
        absent du fil ouvert le relit. */
     const { conversationId, messageId } = notification.context;
@@ -94,7 +109,16 @@ export function createNotificationLiveHandlers(deps: {
        (le geste optimiste de la cloche : la ligne, la pastille, la passerelle) au lieu de rester non lue sur tous les
        appareils jusqu'à la prochaine ouverture du fil. Onglet visible seulement ; jamais un appel ni une pastille. */
     if (notificationsApi !== undefined && readsOnArrival(notification, location)) {
-      void performMarkNotificationRead({ id: notification.id, deps: { ...notificationsApi, queryClient }, counted: true });
+      /* Ce que la pastille compte pour cette ligne : l'arrivée qui vient de l'avancer, une ligne déjà connue non lue,
+         ou — pour une réécriture, que ni la suppression ni le retour n'ont comptés — l'état non lu d'avant l'édition. */
+      const known = findNotification(queryClient, notification.id);
+      const countedUnread = rewrite !== null ? rewrite.wasUnread : counted || known?.state.isRead === false;
+      void performReadOnArrival({
+        id: notification.id,
+        deps: { ...notificationsApi, queryClient },
+        counted: countedUnread,
+        stillLive: () => lives.get(notification.id) === life,
+      });
       return;
     }
     /* Une RÉÉCRITURE ne redescend pas : la bannière reprend sa place, remplacée en place par le texte édité,
@@ -112,7 +136,12 @@ export function createNotificationLiveHandlers(deps: {
     const id = notificationIdOf(payload);
     if (id !== null) {
       seenNotifications.delete(id);
-      recentlyDeleted.set(id, { at: now(), wasShowing: inAppBannerStore.getState().current?.id === id });
+      markLife(id);
+      recentlyDeleted.set(id, {
+        at: now(),
+        wasShowing: inAppBannerStore.getState().current?.id === id,
+        wasUnread: findNotification(queryClient, id)?.state.isRead === false,
+      });
       if (recentlyDeleted.size > REWRITES_CAP) {
         const oldest = recentlyDeleted.keys().next().value;
         if (oldest !== undefined) recentlyDeleted.delete(oldest);

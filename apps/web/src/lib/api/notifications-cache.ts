@@ -132,6 +132,18 @@ function rankSlot(pages: readonly Page[], rank: number): { readonly page: number
   return lastPage === undefined || lastPage.hasMore ? null : { page: last, index: lastPage.notifications.length };
 }
 
+/**
+ * Rend à UNE ligne son état non lu, à sa place (#18907) — le retour arrière CIBLÉ de la lecture à l'arrivée, qui ne
+ * restaure jamais l'instantané de toute la cloche : un instantané pris avant un POST lent effacerait ce qui est arrivé
+ * pendant (une notification d'une autre conversation, une suppression). La ligne non lue revient dans chaque catégorie
+ * qui l'accepte — « Non lues » comprise, qu'elle avait quittée —, à son rang `createdAt`.
+ */
+export function restoreNotificationUnread(queryClient: QueryClient, notification: NotificationRecord): void {
+  const unread: NotificationRecord = { ...notification, state: { ...notification.state, isRead: false } };
+  updateLists(queryClient, (data) => mapNotifications(data, (rows) => rows.map((n) => (n.id === unread.id && n.state.isRead ? unread : n))));
+  insertNotificationByCreatedAt(queryClient, unread);
+}
+
 /** `ofType` : le type des lignes que `total` compte — `byType` compte, comme la passerelle, TOUTES les lignes d'un type, lues ou non. */
 export function adjustNotificationCounts(
   queryClient: QueryClient,

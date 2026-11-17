@@ -5,6 +5,7 @@ import {
   findNotification,
   markNotificationsRead,
   removeNotifications,
+  restoreNotificationUnread,
   restoreNotifications,
   snapshotNotifications,
   unreadNotificationIds,
@@ -39,27 +40,46 @@ import {
 
 export type NotificationActionDeps = NotificationsDeps & { readonly queryClient: QueryClient };
 
-/**
- * `counted` : l'appelant SAIT que le compte local tient cette notification pour non lue — la connexion qui vient de
- * l'ajouter à l'arrivée (#18907). Sans liste en cache (cloche jamais ouverte), la ligne est introuvable, mais la
- * pastille l'a comptée : sans ce drapeau elle resterait à +1 jusqu'à l'écho `notification:counts`.
- */
-export async function performMarkNotificationRead(params: {
-  readonly id: string;
-  readonly deps: NotificationActionDeps;
-  readonly counted?: boolean;
-}): Promise<boolean> {
+export async function performMarkNotificationRead(params: { readonly id: string; readonly deps: NotificationActionDeps }): Promise<boolean> {
   const { id, deps } = params;
   const known = findNotification(deps.queryClient, id);
   if (known?.state.isRead === true) return true;
 
   const snapshot = snapshotNotifications(deps.queryClient);
   markNotificationsRead(deps.queryClient, (n) => n.id === id);
-  if (known !== undefined || params.counted === true) adjustNotificationCounts(deps.queryClient, { unread: -1 });
+  if (known !== undefined) adjustNotificationCounts(deps.queryClient, { unread: -1 });
 
   const result = await postNotificationRead(deps, id);
   if (!result.ok) restoreNotifications(deps.queryClient, snapshot);
   return result.ok;
+}
+
+/**
+ * **LA LECTURE À L'ARRIVÉE N'EST PAS UN GESTE** (#18907) — une notification arrivée sur le fil ouvert se marque lue
+ * sans que personne ne l'ait demandé, et son POST peut durer : rien ne le sépare de la suite du fil. Elle ne prend donc
+ * AUCUN instantané global (son retour arrière effacerait ce qui est arrivé pendant), et n'annule que ce qu'elle a fait :
+ * - `counted` : l'arrivée a été comptée dans les non-lues (sinon rien à décompter — réécriture, ligne déjà lue) ;
+ * - 404 : la passerelle n'a plus la ligne (supprimée pour tous, réaction retirée) — rien ne revient ;
+ * - autre échec : CETTE ligne redevient non lue, et seulement si `stillLive()` dit que rien ne l'a supprimée ou
+ *   réécrite depuis. iOS (`markConsumedOnArrival`) n'annule rien : l'écho `notification:counts` recale le compte.
+ */
+export async function performReadOnArrival(params: {
+  readonly id: string;
+  readonly deps: NotificationActionDeps;
+  readonly counted: boolean;
+  readonly stillLive: () => boolean;
+}): Promise<boolean> {
+  const { id, deps, counted } = params;
+  const before = findNotification(deps.queryClient, id);
+  markNotificationsRead(deps.queryClient, (n) => n.id === id);
+  if (counted) adjustNotificationCounts(deps.queryClient, { unread: -1 });
+
+  const result = await postNotificationRead(deps, id);
+  if (result.ok) return true;
+  if (result.status === 404 || !params.stillLive()) return false;
+  if (before !== undefined && !before.state.isRead) restoreNotificationUnread(deps.queryClient, before);
+  if (counted) adjustNotificationCounts(deps.queryClient, { unread: 1 });
+  return false;
 }
 
 /**
