@@ -44,7 +44,7 @@ struct MeeshyFiguresTests {
             let expected = (row["y"] as? [Any] ?? []).compactMap { ($0 as? NSNumber)?.doubleValue }
             #expect(drawn.map(\.y) == expected, "\(row)")
         }
-        for series in [[], [1], [1, 2], [-3, -1, -2, 0, 4, 2, 9], [0, 0, 0], Array(repeat: 5.0, count: 31),
+        for series in [[], [1], [1, 2], [-3, -1, -2, 0, 4, 2, 9], [0, 0, 0], Array(repeating: 5.0, count: 31),
                        (0..<31).map { Double($0 % 7) - 3 }, [.nan, 1, .infinity]] as [[Double]] {
             for point in MeeshyFiguresRecipe.sparkPoints(series, width: 72, height: 28) {
                 #expect(point.x >= 0 && point.x <= 72, "\(series)")
