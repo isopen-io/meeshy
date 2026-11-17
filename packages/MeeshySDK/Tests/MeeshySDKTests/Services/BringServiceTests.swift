@@ -136,6 +136,34 @@ final class BringServiceTests: XCTestCase {
         XCTAssertFalse(decoded.talkieBlocked)
     }
 
+    // MARK: - Les nouveautés d'une personne (#19433, serveur #19434)
+
+    func test_personSettings_newsNotifyAbsent_isNotServed() throws {
+        let old = try JSONDecoder().decode(RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false}"#.utf8))
+        XCTAssertNil(old.newsNotify)
+        XCTAssertNil(old.isSubscribed(.news))
+    }
+
+    func test_personSettings_newsNotifyServed_isRead() throws {
+        let served = try JSONDecoder().decode(
+            RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false,"newsNotify":true}"#.utf8))
+        XCTAssertEqual(served.newsNotify, true)
+        XCTAssertEqual(served.isSubscribed(.news), true)
+    }
+
+    func test_setNewsNotify_putsOnlyThatField() async throws {
+        let (service, api) = makeSUT()
+        api.stub("/relations/u1/settings", result: APIResponse<RelationPersonSettings>(
+            success: true, data: RelationPersonSettings(userId: "u1", bringBlocked: false, newsNotify: false), error: nil))
+
+        let served = try await service.setSubscribed(.news, userId: "u1", subscribed: false)
+
+        XCTAssertEqual(api.lastRequest?.method, "PUT")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?.keys.sorted(), ["newsNotify"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["newsNotify"] as? Bool, false)
+        XCTAssertEqual(served.newsNotify, false)
+    }
+
     // MARK: - Pushes
 
     func test_ringPush_isReadIntoTheSameShapeAsTheSocket() {

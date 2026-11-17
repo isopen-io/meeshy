@@ -171,24 +171,30 @@ public enum BringSendOutcome: Sendable, Equatable {
 /// préférences de RÉCEPTION (`bringBlocked`, #13936 ; `talkieBlocked`, #13935), ouvertes par défaut, et les partages
 /// de MON écoute (`listeningCategoryShared`, accordé dès Proche ; `listeningTitleShared`, accordé au rituel du Sang),
 /// REFUSÉS par défaut (#16803). Un champ absent (serveur plus ancien) vaut sa valeur par défaut.
+///
+/// Les ABONNEMENTS (#19433, serveur #19434) n'ont pas de défaut côté client : `nil` = le serveur ne les sert pas
+/// encore, et l'écran ne montre pas l'interrupteur — jamais un état inventé.
 public struct RelationPersonSettings: Decodable, Sendable, Equatable {
     public let userId: String
     public let bringBlocked: Bool
     public let talkieBlocked: Bool
     public let listeningCategoryShared: Bool
     public let listeningTitleShared: Bool
+    /// Être prévenu des nouveautés de CETTE personne, en exception au cran par cercle (#14062) ; `nil` = non servi.
+    public let newsNotify: Bool?
 
     public init(userId: String, bringBlocked: Bool, talkieBlocked: Bool = false,
-                listeningCategoryShared: Bool = false, listeningTitleShared: Bool = false) {
+                listeningCategoryShared: Bool = false, listeningTitleShared: Bool = false, newsNotify: Bool? = nil) {
         self.userId = userId
         self.bringBlocked = bringBlocked
         self.talkieBlocked = talkieBlocked
         self.listeningCategoryShared = listeningCategoryShared
         self.listeningTitleShared = listeningTitleShared
+        self.newsNotify = newsNotify
     }
 
     private enum CodingKeys: String, CodingKey {
-        case userId, bringBlocked, talkieBlocked, listeningCategoryShared, listeningTitleShared
+        case userId, bringBlocked, talkieBlocked, listeningCategoryShared, listeningTitleShared, newsNotify
     }
 
     public init(from decoder: Decoder) throws {
@@ -198,6 +204,14 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
         talkieBlocked = (try? c.decodeIfPresent(Bool.self, forKey: .talkieBlocked)) ?? false
         listeningCategoryShared = (try? c.decodeIfPresent(Bool.self, forKey: .listeningCategoryShared)) ?? false
         listeningTitleShared = (try? c.decodeIfPresent(Bool.self, forKey: .listeningTitleShared)) ?? false
+        newsNotify = try? c.decodeIfPresent(Bool.self, forKey: .newsNotify)
+    }
+
+    /// L'abonnement servi, ou `nil` quand le serveur ne le sert pas.
+    public func isSubscribed(_ subscription: RelationSubscription) -> Bool? {
+        switch subscription {
+        case .news: return newsNotify
+        }
     }
 
     public func isBlocked(_ setting: RelationReceptionSetting) -> Bool {
@@ -220,6 +234,13 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
 /// qu'au rituel du Sang.
 public enum RelationShareGrant: String, Sendable, Equatable, CaseIterable {
     case listeningCategory = "listeningCategoryShared"
+}
+
+/// Un ABONNEMENT que je pose pour une personne (#19433) : être prévenu de ce qu'elle fait, en exception au cran par
+/// cercle. `rawValue` est le champ du corps de `PUT /relations/:userId/settings`, écrit seul (corps strict) ; il ne
+/// s'écrit que si le serveur l'a servi.
+public enum RelationSubscription: String, Sendable, Equatable, CaseIterable {
+    case news = "newsNotify"
 }
 
 /// Une préférence de RÉCEPTION posée pour une personne : ouverte par défaut, coupée par un blocage que l'autre ne
