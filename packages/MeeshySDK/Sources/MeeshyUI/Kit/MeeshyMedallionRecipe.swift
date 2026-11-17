@@ -50,6 +50,12 @@ public nonisolated enum MeeshyMedallionState: String, Sendable, Equatable, CaseI
     case locked
 }
 
+/// Une onde à un instant : l'échelle de l'anneau (1 au bord) et son opacité.
+public nonisolated struct MeeshyMedallionWave: Sendable, Equatable {
+    public let scale: Double
+    public let opacity: Double
+}
+
 /// **La recette de K45 en VALEURS** : diamètre, rayon, glyphe, fond, décors. Le
 /// médaillon n'est jamais interactif : aucune cible, aucun état pressé, aucun geste.
 public nonisolated struct MeeshyMedallionRecipe: Sendable, Equatable {
@@ -70,6 +76,21 @@ public nonisolated struct MeeshyMedallionRecipe: Sendable, Equatable {
     public static let maximumWaves = 3
     public static let valueMaximumLength = 3
     public static let lockedOutline: Double = 1.5
+    /// Une onde : un anneau de 2 qui part du bord à 50 % et s'éteint à 2,4 fois le
+    /// diamètre, en 2,4 s ; les ondes se décalent d'une part égale de la période.
+    public static let waveStroke: Double = 2
+    public static let wavePeriodSeconds: Double = 2.4
+    public static let waveStartOpacity: Double = 0.5
+    public static let waveEndScale: Double = 2.4
+
+    /// L'onde `index` sur `count` après `elapsed` secondes : son échelle et son opacité.
+    public static func wave(index: Int, count: Int, elapsed: Double) -> MeeshyMedallionWave {
+        let share = count > 0 ? Double(min(max(index, 0), count - 1)) / Double(count) : 0
+        let turns = (elapsed.isFinite ? elapsed : 0) / wavePeriodSeconds + share
+        let progress = turns - turns.rounded(.down)
+        return MeeshyMedallionWave(scale: 1 + (waveEndScale - 1) * progress,
+                                   opacity: waveStartOpacity * (1 - progress))
+    }
 
     /// La valeur est figée au diamètre (pas au Dynamic Type) : un à trois caractères.
     public static func valueFont(size: CGFloat) -> Font {

@@ -53,6 +53,14 @@ public extension MeeshyMotion {
         }
     }
 
+    /// L'animation d'une boucle (`pulse`, `float`) selon qu'elle tourne : `nil`
+    /// quand elle s'arrête ou qu'elle est réduite, pour que le changement d'état
+    /// coupe la répétition au lieu de la relancer.
+    nonisolated static func loopAnimation(_ token: MeeshyMotionToken, isRunning: Bool, reduce: Bool) -> Animation? {
+        guard isRunning, !reduce else { return nil }
+        return animation(token, reduce: false)
+    }
+
     /// Le retour à jouer pour un jeton : celui de la table, ou celui que l'hôte
     /// impose ; `none` et un hôte désactivé ne jouent rien.
     nonisolated static func hapticToPlay(for token: MeeshyMotionToken,
@@ -100,9 +108,11 @@ private struct MeeshyMotionModifier<Value: Equatable>: ViewModifier {
     let token: MeeshyMotionToken
     let value: Value
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     func body(content: Content) -> some View {
-        content.animation(MeeshyMotion.animation(token, reduce: reduceMotion), value: value)
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+        return content.animation(MeeshyMotion.animation(token, reduce: reduce), value: value)
     }
 }

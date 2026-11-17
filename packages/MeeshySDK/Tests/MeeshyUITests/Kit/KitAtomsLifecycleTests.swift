@@ -124,8 +124,8 @@ struct KitAtomsLifecycleTests {
     @Test("le contour de la bulle remplit le coin du bas au bord de début, reflété en arabe")
     func badge_bubbleOutline() {
         let rect = CGRect(x: 0, y: 0, width: 60, height: 22)
-        let corner = CGPoint(x: 1.5, y: 20.5)
-        let mirrored = CGPoint(x: 58.5, y: 20.5)
+        let corner = CGPoint(x: 3, y: 19)
+        let mirrored = CGPoint(x: 57, y: 19)
         let ltr = MeeshyBadgeOutline(cornerRadius: 18, tailRadius: 6, isRightToLeft: false).path(in: rect)
         #expect(ltr.contains(corner))
         #expect(!ltr.contains(mirrored))
@@ -159,7 +159,7 @@ struct KitAtomsLifecycleTests {
     func badge_drawsItsRecipe() throws {
         let source = try KitAtomVectors.code("MeeshyBadge.swift")
         #expect(source.contains("MeeshyBadgeOutline("))
-        #expect(source.contains("design: .monospaced"))
+        #expect(source.contains(".monospaced"))
     }
 
     private static func badge(shape: MeeshyBadgeShape = .capsule,

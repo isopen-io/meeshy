@@ -22,7 +22,11 @@ public struct MeeshyNote<Action: View>: View {
     private let action: Action
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @State private var width: Double = 390
     @State private var announcedKind: MeeshyNoteKind?
 
@@ -101,6 +105,7 @@ public struct MeeshyNote<Action: View>: View {
                 reading(recipe: recipe, tone: tone)
                 action.frame(minHeight: CGFloat(recipe.actionTapHeight))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 reading(recipe: recipe, tone: tone)
@@ -246,7 +251,11 @@ private struct MeeshyNoteDot: View {
     let tone: Color
     let pulsing: Bool
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     @State private var isBeating = false
 
     var body: some View {
@@ -259,11 +268,15 @@ private struct MeeshyNoteDot: View {
                     .frame(width: size, height: size)
                     .scaleEffect(isBeating ? 2.2 : 1)
                     .opacity(isBeating ? 0 : 1)
-                    .animation(MeeshyMotion.animation(.pulse, reduce: reduceMotion), value: isBeating)
+                    .animation(MeeshyMotion.loopAnimation(.pulse, isRunning: isBeating, reduce: reduceMotion),
+                               value: isBeating)
             )
-            .onAppear { isBeating = pulsing && !reduceMotion }
+            .onAppear { isBeating = shouldBeat }
+            .adaptiveOnChange(of: shouldBeat) { _, beat in isBeating = beat }
             .onDisappear { isBeating = false }
     }
+
+    private var shouldBeat: Bool { pulsing && !reduceMotion }
 }
 
 /// Les couleurs des sens de la note : la seule traduction sens vers couleur.
