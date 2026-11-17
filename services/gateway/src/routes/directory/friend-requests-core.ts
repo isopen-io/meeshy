@@ -20,6 +20,8 @@ import {
   type Resultat,
 } from './friend-request-parties';
 import { trancherDemande } from './friend-request-answer';
+import { detectContentLanguage } from '../../utils/content-language';
+import { FriendRequestMessageTranslationService } from '../../services/friend-requests/FriendRequestMessageTranslationService';
 import { retirerDemande } from './friend-request-withdraw';
 
 export { INCLUDE_PARTIES, clauseHorsBlocage, filtreStatut, servirParties } from './friend-request-parties';
@@ -125,6 +127,11 @@ export async function envoyerDemande(
   // aval, et `emitFriendRequestNew` est un « c'est arrivé » qu'un client ne
   // peut pas appliquer deux fois sans dommage. Le 410 d'un résultat disparu
   // reste rendu par le `catch` de la route (`friend-requests.ts`).
+  // #19361 — la langue du mot est détectée ICI, dans l'écriture de la ligne :
+  // la réponse 201 et la première liste la portent déjà, la traduction suit.
+  const mot = params.message ? SecuritySanitizer.sanitizeText(params.message) : undefined;
+  const langueDuMot = mot && mot.trim() !== '' ? detectContentLanguage(mot) : undefined;
+
   const { result: demande, replayed } = await withMutationVerdict({
     request,
     fastify,
@@ -137,7 +144,8 @@ export async function envoyerDemande(
       data: {
         senderId: emetteurId,
         receiverId: receveurId,
-        message: params.message ? SecuritySanitizer.sanitizeText(params.message) : undefined,
+        message: mot,
+        messageOriginalLanguage: langueDuMot,
         targetLevel: niveau,
       },
       include: INCLUDE_PARTIES,
@@ -159,6 +167,15 @@ export async function envoyerDemande(
       receiverId: receveurId,
       friendRequestId: demande.id,
       senderId: emetteurId,
+    });
+  }
+
+  if (mot && langueDuMot && !replayed) {
+    void FriendRequestMessageTranslationService.maybeShared(fastify.prisma)?.trigger({
+      friendRequestId: demande.id,
+      receiverId: receveurId,
+      message: mot,
+      sourceLanguage: langueDuMot,
     });
   }
 

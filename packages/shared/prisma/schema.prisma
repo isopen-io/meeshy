@@ -2077,6 +2077,13 @@ model FriendRequest {
   receiverId  String    @db.ObjectId
   /// Message optionnel accompagnant la demande d'amitié
   message     String?
+  /// Langue DÉTECTÉE du `message` à l'envoi (#19361). `null` : pas de mot, ou
+  /// une ligne antérieure à la traduction des demandes.
+  messageOriginalLanguage String?
+  /// Traductions du `message`, rangées par le translator (#19361) :
+  /// `{ "<langue>": { text, translationModel, confidenceScore, createdAt } }`.
+  /// Jamais servie brute : `servirParties` en descend le Prisme du DESTINATAIRE.
+  messageTranslations Json?
   /// pending, accepted, rejected, blocked
   status      String    @default("pending")
   /// When the request was accepted/rejected
