@@ -64,8 +64,10 @@ struct MeeshyChartTests {
     @Test("la hauteur de tracé dépend du genre : 26 pour la bande, 104 pour l'anneau, 52 par étage d'entonnoir")
     func heights_followTheVectors() throws {
         for row in try KitAtomVectors.rows(Self.file, "hauteurs") {
-            let kind = try #require(MeeshyChartKind(rawValue: try #require(row["genre"] as? String)))
-            let size = try #require(MeeshyChartSize(rawValue: try #require(row["taille"] as? String)))
+            let kindName = try #require(row["genre"] as? String)
+            let kind = try #require(MeeshyChartKind(rawValue: kindName))
+            let sizeName = try #require(row["taille"] as? String)
+            let size = try #require(MeeshyChartSize(rawValue: sizeName))
             let count = try #require(row["points"] as? Int)
             let recipe = MeeshyChartRecipe.resolve(kind: kind, size: size, pointCount: count)
             #expect(recipe.plotHeight == row["hauteur"] as? Double, "\(row)")
