@@ -100,16 +100,23 @@ public struct ProfileConnectedBadge: View {
 
 /// Ce que la fiche remet à la carte : qui, et ce que la carte peut rendre à la fiche (écrire, appeler).
 public struct ProfileLocationMapRequest {
+    /// Ce qui rend la même fiche à côté de la carte ; l'hôte lui retire « Carte » (`profileLocationMap` à `nil`).
+    public typealias Profile = () -> UserProfileSheet
+
     public let userId: String
     public let displayName: String
     public let onWrite: (() -> Void)?
     public let onCall: (() -> Void)?
+    /// La fiche elle-même, à poser à côté de la carte quand la place le permet (planche iPad-Split) ; sans « Carte ».
+    public let profile: Profile?
 
-    public init(userId: String, displayName: String, onWrite: (() -> Void)?, onCall: (() -> Void)?) {
+    public init(userId: String, displayName: String, onWrite: (() -> Void)?, onCall: (() -> Void)?,
+                profile: Profile? = nil) {
         self.userId = userId
         self.displayName = displayName
         self.onWrite = onWrite
         self.onCall = onCall
+        self.profile = profile
     }
 }
 

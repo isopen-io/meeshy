@@ -579,7 +579,8 @@ private struct ProfileSlotContent: View {
                 .id(userId)
         case .locationMap:
             PersonLocationMapScreen(userId: userId, displayName: displayName,
-                                    onWrite: mapRequest?.onWrite, onCall: mapRequest?.onCall)
+                                    onWrite: mapRequest?.onWrite, onCall: mapRequest?.onCall,
+                                    profile: mapRequest?.profile)
         }
     }
 }

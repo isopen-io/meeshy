@@ -17,6 +17,8 @@ struct PersonLocationMapScreen: View {
     let displayName: String
     var onWrite: (() -> Void)?
     var onCall: (() -> Void)?
+    /// La fiche entière, posée à gauche de la carte sur iPad (planche iPad-Split) ; sans elle, la feuille de la carte.
+    var profile: ProfileLocationMapRequest.Profile?
 
     @StateObject private var model = SharedLocationsMapViewModel()
     @StateObject private var places = LocationPlaceNamer()
@@ -45,7 +47,14 @@ struct PersonLocationMapScreen: View {
             Group {
                 if sizeClass == .regular {
                     HStack(spacing: 0) {
-                        sidePanel.frame(width: 360)
+                        if let profile {
+                            profile()
+                                .environment(\.profileLocationMap, nil)
+                                .modifier(ProfileSheetEnvironment())
+                                .frame(width: 400)
+                        } else {
+                            sidePanel.frame(width: 360)
+                        }
                         Divider()
                         mapStage
                     }
@@ -113,13 +122,19 @@ struct PersonLocationMapScreen: View {
     private var legend: some View {
         VStack {
             Spacer()
-            HStack(spacing: MeeshySpacing.md) {
+            HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
                 if let pin {
                     MeeshyBadge(.label(LocationMapCopy.precisionPill(pin.precision)), leading: .systemImage("circle.dashed"),
                                 surface: .glass, size: .s36)
                 }
                 MeeshyKeyLegend(items: legendItems, container: .glassBar)
                 Spacer()
+                if profile != nil, pin != nil {
+                    sheetContent
+                        .padding(.top, MeeshySpacing.lg)
+                        .frame(maxWidth: 380)
+                        .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl), tone: .deep)
+                }
             }
             .padding(MeeshySpacing.lg)
         }

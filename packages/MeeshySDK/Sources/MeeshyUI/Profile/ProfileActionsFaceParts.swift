@@ -26,6 +26,35 @@ struct ProfileLocationMapAction: View {
     }
 }
 
+/// La carte comme action (#18872) : ce que la fiche remet à la carte, et la même fiche posée à côté de la carte sur
+/// iPad (planche iPad-Split) ; l'hôte lui retire « Carte », déjà ouverte.
+enum ProfileBesideTheMap {
+    static func request(of sheet: UserProfileSheet, onCall: (() -> Void)?) -> ProfileLocationMapRequest? {
+        guard let userId = sheet.resolvedUserId, !userId.isEmpty, !sheet.isCurrentUser else { return nil }
+        return ProfileLocationMapRequest(userId: userId, displayName: sheet.displayUser.resolvedDisplayName,
+                                         onWrite: sheet.isInteractionDisabled ? nil : { sheet.openConversation() },
+                                         onCall: onCall,
+                                         profile: { view(of: sheet) })
+    }
+
+    static func view(of sheet: UserProfileSheet) -> UserProfileSheet {
+        UserProfileSheet(
+            user: sheet.user,
+            onDismiss: sheet.onDismiss,
+            onNavigateToConversation: sheet.onNavigateToConversation,
+            onSendMessage: sheet.onSendMessage,
+            moodEmoji: sheet.moodEmoji,
+            onMoodTap: nil,
+            presenceProvider: sheet.presenceProvider,
+            storyRingState: sheet.storyRingState,
+            onViewStory: sheet.onViewStory,
+            postsContent: sheet.postsContent,
+            onCall: sheet.onCall,
+            dependencies: sheet.dependencies
+        )
+    }
+}
+
 // MARK: - Bloquer, signaler
 
 /// Bloquer (ou débloquer) et signaler, séparés en bas de la face Actions, en couleur d'erreur (K40 destructif).

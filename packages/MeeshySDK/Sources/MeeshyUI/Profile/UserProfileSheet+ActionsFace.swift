@@ -61,13 +61,8 @@ extension UserProfileSheet {
         }
     }
 
-    // MARK: - La carte comme action (#18872)
-
     private var locationMapRequest: ProfileLocationMapRequest? {
-        guard let userId = resolvedUserId, !userId.isEmpty, !isCurrentUser else { return nil }
-        return ProfileLocationMapRequest(userId: userId, displayName: displayUser.resolvedDisplayName,
-                                         onWrite: isInteractionDisabled ? nil : { openConversation() },
-                                         onCall: offersCall ? { requestCall(isVideo: false) } : nil)
+        ProfileBesideTheMap.request(of: self, onCall: offersCall ? { requestCall(isVideo: false) } : nil)
     }
 
     static var writeRequestHint: String {
