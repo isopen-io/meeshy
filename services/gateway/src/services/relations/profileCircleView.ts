@@ -10,8 +10,10 @@
  * toujours) : la fiche les couvre toutes, aucune lecture n'est économisable.
  * Une lecture qui échoue LÈVE : l'appelant ferme.
  */
+import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import {
   profileFieldOpen,
+  profileFieldServed,
   resolveProfileCircleView,
   type ProfileCircleView,
   type ProfileGatedField,
@@ -63,25 +65,20 @@ const GATED_FIELDS: readonly ProfileGatedField[] = ['country', 'timezone'];
 /** La colonne de la ligne que porte chaque champ gardé. */
 const COLUMN_OF = { country: 'registrationCountry', timezone: 'timezone' } as const satisfies Record<ProfileGatedField, string>;
 
-type GatedColumns = { registrationCountry?: string | null; timezone?: string | null };
+export type GatedColumns = { registrationCountry?: string | null; timezone?: string | null };
 
 /**
- * Retire de la ligne les champs que le cercle du lecteur ne ouvre pas. Soi garde
- * les siens ; un lecteur sans compte n'en reçoit aucun ; une ligne qui n'en porte
- * aucun ne coûte aucune lecture. Le champ fermé est RETIRÉ, jamais rendu `null` :
- * `null` dirait « la personne n'en a pas », ce que le cercle n'a pas à savoir.
+ * Retire de la ligne les champs que la présence SERVIE ne laisse pas partir : le
+ * pays suit « en ligne », le fuseau la présence détaillée. La visibilité est
+ * celle que `resolvePresenceVisibility` vient de rendre pour CE lecteur — cercle,
+ * préférences de la cible, désactivation, blocage, rôle — et la MÊME décide de
+ * `isOnline` / `lastActiveAt` : aucun second verdict ne peut ouvrir l'heure locale
+ * d'une personne qui a caché sa présence. Le champ fermé est RETIRÉ, jamais rendu
+ * `null` : `null` dirait « la personne n'en a pas », ce que le lecteur n'a pas à savoir.
  */
-export async function withCircleGatedFields<T extends GatedColumns & { readonly id?: unknown }>(
-  prisma: PairAccessDb,
-  viewerId: string | undefined,
-  row: T,
-): Promise<T> {
-  const carried = GATED_FIELDS.filter((field) => row[COLUMN_OF[field]] != null);
-  if (carried.length === 0 || (viewerId && viewerId === String(row.id))) return row;
-  const view = viewerId ? await readProfileCircleView(prisma, { viewerId, targetId: String(row.id) }) : null;
-  const closed = carried.filter((field) => !view || !profileFieldOpen(view, field));
+export function withPresenceGatedFields<T extends GatedColumns>(row: T, visibility: PresenceVisibility): T {
   const kept = { ...row };
-  for (const field of closed) delete kept[COLUMN_OF[field]];
+  for (const field of GATED_FIELDS) if (!profileFieldServed(visibility, field)) delete kept[COLUMN_OF[field]];
   return kept;
 }
 

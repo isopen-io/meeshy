@@ -20,9 +20,18 @@
  *
  * ## Fuseau et pays d'inscription
  *
- * Ils ne sont pas des capacités mais des CHAMPS de la fiche : leur plancher est
- * celui d'une feature existante (`PROFILE_FIELD_FEATURE`), pour ne créer aucune
- * feature de la loi — donc aucun miroir Swift ou Kotlin de plus à tenir.
+ * Ils ne sont pas des capacités mais des CHAMPS de la fiche, et leur valeur part
+ * avec la présence SERVIE (`profileFieldServed`) : le pays avec « en ligne », le
+ * fuseau — l'heure locale — avec la présence détaillée. Ce n'est pas un second
+ * verdict de cercle : c'est `resolvePresenceVisibility`, qui lit aussi les
+ * préférences de la cible (`showOnlineStatus`, `showLastSeen`) et sa
+ * désactivation. Le plancher que la fiche ANNONCE (`PROFILE_FIELD_FEATURE`) reste
+ * celui de ces deux features, pour ne créer aucune feature de la loi — donc aucun
+ * miroir Swift ou Kotlin de plus à tenir.
+ *
+ * Ce fichier interroge `presence.online` / `presence.detailed` pour ANNONCER un
+ * état (`open` / `locked`) ; il est inscrit à ce titre dans la garde
+ * `presence-visibility-viewer-aware-guard.test.ts`. Aucun champ servi n'en dépend.
  */
 
 import {
@@ -32,15 +41,15 @@ import {
 } from './relation-levels.js';
 import { resolveRelationAccess, type RelationAgeClass } from './relation-access.js';
 import { grantReaches, relationRungAfter, type RelationLevel, type RelationRequestLevel } from '../types/relation.js';
-import { PRESENCE_DETAILED_FEATURE, PRESENCE_ONLINE_FEATURE } from './presence-visibility.js';
+import type { PresenceVisibility } from './presence-visibility.js';
 
 /**
  * Les capacités que la fiche annonce, dans l'ordre où elle les montre, et la
  * feature de la loi dont chacune est le verdict. Le nom est celui du client.
  */
 export const PROFILE_CAPABILITY_FEATURE = {
-  presence: PRESENCE_ONLINE_FEATURE,
-  presenceDetailed: PRESENCE_DETAILED_FEATURE,
+  presence: 'presence.online',
+  presenceDetailed: 'presence.detailed',
   game: 'game.basic',
   gameSparks: 'game.sparksGlory',
   directMessage: 'dm.direct',
@@ -66,8 +75,8 @@ export const PROFILE_CAPABILITIES = Object.keys(PROFILE_CAPABILITY_FEATURE) as r
 
 /** Les champs de fiche gardés par un cercle : la feature dont le plancher les ouvre. */
 export const PROFILE_FIELD_FEATURE = {
-  country: PRESENCE_ONLINE_FEATURE,
-  timezone: PRESENCE_DETAILED_FEATURE,
+  country: 'presence.online',
+  timezone: 'presence.detailed',
 } as const satisfies Readonly<Record<string, RelationFeature>>;
 
 export type ProfileGatedField = keyof typeof PROFILE_FIELD_FEATURE;
@@ -145,7 +154,7 @@ const missingFor = (input: ProfileCircleViewInput, level: RelationLevel, isSelf:
 
 export const resolveProfileCircleView = (input: ProfileCircleViewInput): ProfileCircleView => {
   const isSelf = Boolean(input.viewerId) && input.viewerId === input.targetId;
-  const level = verdictOf(input, PRESENCE_ONLINE_FEATURE).effectiveLevel;
+  const level = verdictOf(input, 'presence.online').effectiveLevel;
   const capabilities = Object.fromEntries(
     PROFILE_CAPABILITIES.flatMap((key) => {
       const feature = PROFILE_CAPABILITY_FEATURE[key];
@@ -165,7 +174,20 @@ export const resolveProfileCircleView = (input: ProfileCircleViewInput): Profile
   };
 };
 
-/** Un champ gardé par un cercle est-il ouvert à ce lecteur ? */
+/**
+ * Un champ gardé part-il vers ce lecteur ? La réponse est la présence SERVIE
+ * (`resolvePresenceVisibility`) : le pays avec « en ligne », le fuseau avec la
+ * présence détaillée. Une cible qui cache sa présence, ou un compte désactivé,
+ * ne laisse donc partir ni l'un ni l'autre, quel que soit le cercle.
+ */
+export const profileFieldServed = (visibility: PresenceVisibility, field: ProfileGatedField): boolean =>
+  field === 'country' ? visibility.showOnline : visibility.showLastSeenTimestamp;
+
+/**
+ * Ce que le CERCLE ouvre, sans les préférences de la cible : l'annonce de la fiche
+ * et « Voir comme ». Jamais la porte d'une valeur servie à un lecteur réel —
+ * celle-là est {@link profileFieldServed}.
+ */
 export const profileFieldOpen = (view: ProfileCircleView, field: ProfileGatedField): boolean => {
   const capability = field === 'country' ? view.capabilities.presence : view.capabilities.presenceDetailed;
   return capability?.state === 'open';

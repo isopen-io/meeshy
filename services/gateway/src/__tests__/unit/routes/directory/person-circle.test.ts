@@ -55,7 +55,7 @@ function prismaDouble(row: ReturnType<typeof lien> | null, cible: Cible = {}) {
         (args?.where?.blockedUserIds ? [] : args?.where?.id?.in ?? []).map((id: string) => ({ id, role: 'USER', birthDate: null, isActive: true, deletedAt: null, deactivatedAt: null })),
       ),
       findFirst: jest.fn<any>(async (args?: any) =>
-        args?.where?.blockedUserIds
+        args?.where?.blockedUserIds || args?.where?.OR
           ? null
           : {
               id: CIBLE,
