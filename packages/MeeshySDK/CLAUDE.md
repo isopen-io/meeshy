@@ -192,7 +192,7 @@ Le SDK fournit les types API et la communication temps reel pour le prisme lingu
 - `APITextTranslation` : Traduction brute depuis l'API (id, messageId, sourceLanguage, targetLanguage, translatedContent, translationModel, confidenceScore)
 - `APIMessage.translations: [APITextTranslation]?` : Traductions pre-chargees avec le message via REST
 
-**Model App** (`Features/Main/ViewModels/ConversationViewModel.swift`) :
+**Model App** (`apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`) :
 - `MessageTranslation` : Type domain cote app (pas dans le SDK) pour les traductions en cache dans le ViewModel
 
 **Socket** (`Sockets/MessageSocketManager.swift`) :
