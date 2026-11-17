@@ -1036,6 +1036,7 @@ describe('PushNotificationService', () => {
           bundleId: true,
           apnsEnvironment: true,
           appVersion: true,
+          sessionId: true,
         },
       });
     });
