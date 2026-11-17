@@ -36,7 +36,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   return { PrismaClient: jest.fn(() => mockPrisma) };
 });
 
-const mockComputeBadge = jest.fn<Promise<number>, [unknown, string]>();
+const mockComputeBadge = jest.fn<(prisma: unknown, userId: string) => Promise<number>>();
 jest.mock('../../../services/notifications/conversationUnreadBadge', () => ({
   computeConversationUnreadBadge: (prisma: unknown, userId: string) => mockComputeBadge(prisma, userId),
 }));
