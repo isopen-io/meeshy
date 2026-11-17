@@ -1,7 +1,7 @@
 /**
  * LE FANTÔME GLOBAL MASQUE AUSSI LE PARTAGE TEMPORAIRE (#19203). Un compte en fantôme
  * (`User.locationGhostAt`) ne sert sa position à personne — ni par le direct, ni au
- * rattrapage, ni parmi les partages terminés —, comme un partage en pause : ceux qu'il
+ * rattrapage —, comme un partage en pause : ceux qu'il
  * servait reçoivent la fin dès l'entrée, et la sortie rétablit les diffusions SANS
  * republier une position antérieure : seule la position suivante repart.
  *
@@ -77,13 +77,36 @@ describe('le fantôme global — le partage temporaire ne sert plus personne (#1
     expect(m.emissions.some((e) => e.event === SERVER_EVENTS.SHARED_LOCATION_CHANGED)).toBe(false);
   });
 
-  it('en fantôme, un partage terminé ne s\'annonce pas parmi les partages terminés', async () => {
+  it('un partage terminé AVANT le fantôme reste parmi les partages terminés : la liste ne trahit pas le fantôme', async () => {
     const m = monde();
     await demarrer(m);
     await stopSharedLocation(m.deps, EMETTEUR);
-    await enFantome(m);
+    m.avancer(HEURE);
+    const avant = await sharedLocationEndedFor(m.deps, AMI);
 
-    expect(await sharedLocationEndedFor(m.deps, AMI)).toEqual([]);
+    await m.ecrireCompte(EMETTEUR, { locationGhostAt: new Date(T0 + HEURE) });
+    await reflectSharedLocationGhost(m.deps, EMETTEUR, 'entered');
+
+    expect(avant).toHaveLength(1);
+    expect(await sharedLocationEndedFor(m.deps, AMI)).toEqual(avant);
+  });
+
+  it('entrer en fantôme pendant un partage le range parmi les terminés, comme un arrêt', async () => {
+    const arret = monde();
+    await demarrer(arret);
+    arret.avancer(60_000);
+    await stopSharedLocation(arret.deps, EMETTEUR);
+
+    const fantome = monde();
+    await demarrer(fantome);
+    fantome.avancer(60_000);
+    await fantome.ecrireCompte(EMETTEUR, { locationGhostAt: new Date(T0 + 60_000) });
+    await reflectSharedLocationGhost(fantome.deps, EMETTEUR, 'entered');
+
+    const termines = await sharedLocationEndedFor(arret.deps, AMI);
+    expect(termines).toHaveLength(1);
+    expect(await sharedLocationEndedFor(fantome.deps, AMI)).toEqual(termines);
+    expect(await sharedLocationEndedFor(fantome.deps, SANG)).toEqual(await sharedLocationEndedFor(arret.deps, SANG));
   });
 
   it('sortir du fantôme ne republie rien : ni événement, ni position ancienne au rattrapage', async () => {
@@ -120,6 +143,7 @@ describe('le fantôme global — le partage temporaire ne sert plus personne (#1
     expect(evenements(m, PROCHE)).toEqual([SERVER_EVENTS.SHARED_LOCATION_CHANGED]);
     expect(evenements(m, SANG)).toEqual([SERVER_EVENTS.SHARED_LOCATION_CHANGED]);
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items.map((item) => item.latitude)).toEqual([PLUS_LOIN.latitude]);
+    expect(await sharedLocationEndedFor(m.deps, AMI)).toEqual([]);
   });
 
   it('un fantôme retiré sans en être entré (réglage répété) ne masque pas le partage en cours', async () => {
