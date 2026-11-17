@@ -19,11 +19,7 @@ enum StoryEntryMetrics {
     static let avatarContext: AvatarContext = .storyTray
     static var avatar: CGFloat { avatarContext.size }
     static var ring: CGFloat { avatarContext.ringSize }
-    static var ringWidthAccented: CGFloat { avatarContext.ringWidth * 2 }
-    static var ringWidthQuiet: CGFloat { avatarContext.ringWidth }
     static var badge: CGFloat { avatarContext.badgeSize }
-    static let badgeGlyph: CGFloat = MeeshyFont.title3Size
-    static let createGlyph: CGFloat = MeeshyIconSize.lg
     static let labelWidth: CGFloat = 96
     static let labelFontSize: CGFloat = 10
     static let labelSpacing: CGFloat = 5

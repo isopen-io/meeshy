@@ -287,7 +287,6 @@
     <string name="kit_progress_ring_busy">En curso</string>
     <string name="language_strip_more">Otros idiomas</string>
     <string name="lentille_mode_menu_selected">seleccionado</string>
-    <string name="live_location_duration_title">Duración del uso compartido</string>
     <string name="live_location_sharing_by">%1$s está compartiendo su ubicación</string>
     <string name="live_location_stop">Detener</string>
     <string name="location_fullscreen_directions">Indicaciones</string>

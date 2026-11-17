@@ -1,0 +1,264 @@
+/* LA RANGÉE VERROUILLÉE (K37, #18875) — un fantôme : bord pointillé, encre atténuée, un
+   cadenas. Aucun fond (on voit le sol à travers), aucune matière, ni flou ni masque ni
+   ombre : la rangée ne contient jamais la chose, un flou se capture et se devine. Chaque
+   mesure vient de `meeshy-locked-row-recipe.ts`, posée en propriétés `--kit-locked-*`.
+   Au repos : aucun mouvement. À l'ouverture, seules `opacity` et `transform` jouent. */
+@layer components {
+  .kit-locked {
+    --kit-locked-ink: var(--kit-locked-tint, var(--accent, var(--color-ios-brand)));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-block-size: var(--kit-locked-min-h);
+    padding: 10px 14px;
+    border: var(--kit-locked-stroke) dashed var(--color-ios-hairline);
+    border-radius: var(--kit-locked-radius);
+    background: transparent;
+    color: var(--color-ios-ink-3);
+    font: inherit;
+    text-align: start;
+  }
+
+  .kit-locked[data-border='solid'] {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--kit-locked-ink) 45%, transparent);
+    color: var(--color-ios-ink);
+  }
+
+  .kit-locked[data-border='none'] {
+    min-block-size: 0;
+    padding: 0;
+    border: 0;
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .kit-locked[data-form='tile'] {
+    position: relative;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    aspect-ratio: 1;
+    min-block-size: 0;
+    gap: 6px;
+  }
+
+  button.kit-locked,
+  .kit-locked__press {
+    cursor: pointer;
+    transition: transform 120ms var(--motion-pulse);
+  }
+
+  button.kit-locked:active,
+  .kit-locked__press:active {
+    transform: scale(var(--kit-locked-pressed));
+  }
+
+  button.kit-locked:focus-visible,
+  .kit-locked__press:focus-visible,
+  .kit-locked__action:focus-visible {
+    outline: 2px solid var(--kit-locked-ink);
+    outline-offset: 3px;
+  }
+
+  .kit-locked__header {
+    cursor: pointer;
+    justify-content: space-between;
+  }
+
+  .kit-locked__body {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+  }
+
+  .kit-locked__lock {
+    display: inline-flex;
+    flex: none;
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-locked[data-form='tile'] .kit-locked__lock {
+    position: absolute;
+    inset-block-start: 12px;
+    inset-inline-end: 12px;
+  }
+
+  .kit-locked__lock svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .kit-locked__glyph {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--kit-locked-glyph);
+    block-size: var(--kit-locked-glyph);
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-locked[data-open] .kit-locked__glyph {
+    color: var(--kit-locked-ink);
+  }
+
+  .kit-locked__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-inline-size: 0;
+  }
+
+  .kit-locked[data-border='none'] .kit-locked__text {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .kit-locked__title {
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--color-ios-ink-3);
+    overflow-wrap: anywhere;
+  }
+
+  .kit-locked[data-border='none'] .kit-locked__title {
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  .kit-locked__requirement {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--kit-locked-ink);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  .kit-locked__requirement[data-placement='chip'] {
+    min-block-size: var(--kit-locked-chip);
+    padding-inline: 12px;
+    border: 1px solid color-mix(in srgb, var(--kit-locked-ink) 45%, transparent);
+    border-radius: var(--ios-radius-full);
+  }
+
+  .kit-locked__trailing {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+  }
+
+  .kit-locked__action {
+    flex: none;
+    min-block-size: var(--kit-locked-action);
+    min-inline-size: var(--kit-locked-action);
+    padding-inline: 18px;
+    border: 1px solid color-mix(in srgb, var(--kit-locked-ink) 62%, transparent);
+    border-radius: var(--ios-radius-full);
+    background-color: color-mix(in srgb, var(--kit-locked-ink) 14%, transparent);
+    color: var(--color-ios-ink);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    opacity: var(--kit-locked-action-opacity);
+  }
+
+  .kit-locked__action[data-pending] {
+    border-style: dashed;
+  }
+
+  .kit-locked__action:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .kit-locked[data-unlocking] {
+    animation: kit-locked-open var(--kit-locked-unlock) var(--motion-morph) both;
+  }
+
+  .kit-locked[data-unlocking] .kit-locked__lock {
+    animation: kit-locked-snap var(--kit-locked-unlock) var(--motion-morph) both;
+  }
+
+  .kit-locked-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .kit-locked__stack {
+    display: inline-flex;
+    flex: none;
+    flex-direction: column;
+  }
+
+  .kit-locked__chevron {
+    flex: none;
+    transition: transform var(--motion-reduced-duration) var(--motion-reduced);
+  }
+
+  .kit-locked__chevron[data-expanded] {
+    transform: rotate(180deg);
+  }
+
+  .kit-locked-group__items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-inline-start: 14px;
+  }
+}
+
+@keyframes kit-locked-open {
+  from {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.85;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes kit-locked-snap {
+  from {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.3);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-locked[data-unlocking],
+  .kit-locked[data-unlocking] .kit-locked__lock {
+    animation: none;
+  }
+
+  button.kit-locked,
+  .kit-locked__press,
+  .kit-locked__chevron {
+    transition: none;
+  }
+}

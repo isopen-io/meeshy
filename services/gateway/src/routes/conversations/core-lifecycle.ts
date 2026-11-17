@@ -57,6 +57,7 @@ import { directLookupWheres, firstFound } from '../../services/conversations/dir
 import {
   decideCreationRegime,
   directReopeningFor,
+  nascentPairRefusal,
   nascentRegime,
   nascentRegimeDeps,
   sealReopenedDirect,
@@ -66,6 +67,7 @@ import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest
 import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
+import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 import { activeMembershipOf } from '../communities/serialization';
 import {
   composeConversationUpdate,
@@ -190,6 +192,11 @@ export function registerCreateConversationRoute(
       // et ne contient pas de valeurs null/undefined/empty
       const uniqueParticipantIds = [...new Set(participantIds)]
         .filter((id: any) => id && id !== userId && typeof id === 'string' && id.trim().length > 0);
+
+      const pairRefusal = nascentPairRefusal({ conversationType: type, mode: regime.mode, inviteeCount: uniqueParticipantIds.length });
+      if (pairRefusal) {
+        return refuseCreationRegime(reply, pairRefusal);
+      }
 
       // #14644 (C) — un groupe peut n'avoir que son créateur (audits, recueils
       // d'avis extérieurs) : il n'a alors aucun membre dont tirer un titre, il
@@ -567,6 +574,9 @@ export function registerCreateConversationRoute(
 }
 
 function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusal) {
+  if (refusal === 'end-to-end-not-a-pair') {
+    return sendError(reply, 409, E2EE_DIRECT_NOT_A_PAIR_MESSAGE, { code: E2EE_ERROR_CODES.DIRECT_NOT_A_PAIR });
+  }
   if (refusal === 'end-to-end-direct-only') {
     return sendError(reply, 400, 'End-to-end encryption can only be chosen at creation for a direct conversation for now', {
       code: ENCRYPTION_MODE_UNSUPPORTED_CODE,

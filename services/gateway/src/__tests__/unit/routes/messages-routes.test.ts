@@ -187,10 +187,11 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   errorResponseSchema: { type: 'object' },
 }));
 jest.mock('@meeshy/shared/types', () => ({
-  ErrorCode: { USER_BLOCKED: 'USER_BLOCKED', NEWCOMER_SLOW_MODE: 'NEWCOMER_SLOW_MODE' },
+  ErrorCode: { USER_BLOCKED: 'USER_BLOCKED', NEWCOMER_SLOW_MODE: 'NEWCOMER_SLOW_MODE', MESSAGE_SEND_RETRYABLE: 'MESSAGE_SEND_RETRYABLE' },
   ErrorMessages: {
     USER_BLOCKED: { en: 'User is blocked' },
     NEWCOMER_SLOW_MODE: { fr: 'Mode lent', en: 'Slow mode' },
+    MESSAGE_SEND_RETRYABLE: { fr: 'Renvoyez-le', en: 'Send it again' },
   },
 }));
 jest.mock('@meeshy/shared/utils/errors', () => ({

@@ -31,7 +31,7 @@ import { ConversationViewingHandler } from './handlers/ConversationViewingHandle
 import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
 import type { AfterReadDepartureTracker } from './AfterReadDepartureTracker';
 import { createAfterReadDepartureTracker } from './afterReadDepartureWiring';
-import { e2eeSignalHandlerDeps, listenE2EESignals } from './handlers/E2EESignalHandler';
+import { listenE2EEDeviceChannels } from './handlers/E2EEDeviceChannels';
 import { listenCircleLive } from './handlers/circleLiveHandlers';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
@@ -1974,8 +1974,8 @@ export class MeeshySocketIOManager {
       this.afterReadDepartures.listen(socket);
       // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
       listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
-      // #13142 — la porte unique des signaux chiffrés d'une conversation e2ee.
-      listenE2EESignals(socket, e2eeSignalHandlerDeps({ prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
+      // #13142, #19156 — les signaux chiffrés d'une conversation e2ee et la confirmation d'un appareil par code.
+      listenE2EEDeviceChannels(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers });
       // #13935, #13934 — le talkie et l'écoute partagée, tronquée lecteur par lecteur.
       listenCircleLive(socket, { prisma: this.prisma, io: this.io, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers });
 

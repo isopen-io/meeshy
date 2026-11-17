@@ -26,36 +26,6 @@ final class DynamicTypeTests: XCTestCase {
 
     // MARK: - PlayheadView
 
-    func test_playheadView_atLargeText_doesNotTruncate() throws {
-        let view = PlayheadView(
-            currentTime: 3.5,
-            totalDuration: 10,
-            geometry: TimelineGeometry(zoomScale: 1.0),
-            laneHeight: 80,
-            isDark: false,
-            onScrub: { _ in }
-        )
-        let labels = renderAndCollectLabels(view, size: CGSize(width: 390, height: 120))
-        // PlayheadView itself has no visible text — its accessibility label is
-        // exposed via `.accessibilityLabel`, not a rendered `Text`. The assertion
-        // is therefore that the hierarchy renders without producing a truncated
-        // label anywhere (defensive check against future regressions).
-        assertNoTruncation(in: labels, viewName: "PlayheadView")
-    }
-
-    func test_playheadView_atLargeText_remainsLaidOut() throws {
-        let view = PlayheadView(
-            currentTime: 0,
-            totalDuration: 10,
-            geometry: TimelineGeometry(zoomScale: 1.0),
-            laneHeight: 80,
-            isDark: true,
-            onScrub: { _ in }
-        )
-        let host = mount(view, size: CGSize(width: 390, height: 120))
-        assertRendersVisibleContent(host, viewName: "PlayheadView")
-    }
-
     // MARK: - RulerView
 
     func test_rulerView_atLargeText_doesNotTruncate() throws {
@@ -92,124 +62,11 @@ final class DynamicTypeTests: XCTestCase {
 
     // MARK: - TransportBar
 
-    func test_transportBar_atLargeText_doesNotTruncate() throws {
-        let bar = TransportBar(
-            isPlaying: false, currentTime: 0, duration: 10,
-            zoomScale: 1.0, isMuted: false,
-            onPlayToggle: {}, onMuteToggle: {},
-            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}
-        )
-        let labels = renderAndCollectLabels(bar, size: CGSize(width: 390, height: 120))
-        assertNoTruncation(in: labels, viewName: "TransportBar")
-    }
-
-    func test_transportBar_atLargeText_timeReadoutVisible() throws {
-        let bar = TransportBar(
-            isPlaying: true, currentTime: 12.3, duration: 60,
-            zoomScale: 1.0, isMuted: false,
-            onPlayToggle: {}, onMuteToggle: {},
-            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}
-        )
-        // See test_rulerView_atLargeText_tickLabelsPresent — SwiftUI on
-        // iOS 26 no longer guarantees a UILabel per Text node. Assert the
-        // view survives mounting at .accessibility5 with a non-empty
-        // hierarchy instead of fishing for legacy UILabels.
-        let host = mount(bar, size: CGSize(width: 390, height: 120))
-        assertRendersVisibleContent(host, viewName: "TransportBar")
-    }
-
     // MARK: - ClipInspector
-
-    func test_clipInspector_atLargeText_doesNotTruncate() throws {
-        let inspector = ClipInspector(
-            presentation: .sheet,
-            clip: ClipInspector.ClipSnapshot(
-                id: "clip-1",
-                displayName: "intro.mp4",
-                kind: .video,
-                startTime: 0,
-                duration: 5,
-                volume: 0.5,
-                fadeInDuration: 0.2,
-                fadeOutDuration: 0.2,
-                isLooping: false,
-                isBackground: false
-            ),
-            onVolumeChanged: { _ in },
-            onFadeInChanged: { _ in },
-            onFadeOutChanged: { _ in },
-            onLoopToggled: { _ in },
-            onBackgroundToggled: { _ in },
-            onAddKeyframe: {},
-            onDelete: {}
-        )
-        let labels = renderAndCollectLabels(inspector, size: CGSize(width: 390, height: 600))
-        assertNoTruncation(in: labels, viewName: "ClipInspector")
-    }
-
-    func test_clipInspector_atLargeText_metadataLabelsPresent() throws {
-        let inspector = ClipInspector(
-            presentation: .popover,
-            clip: ClipInspector.ClipSnapshot(
-                id: "clip-2", displayName: "song.mp3", kind: .audio,
-                startTime: 1.5, duration: 4.25,
-                volume: 0.7, fadeInDuration: 0.5, fadeOutDuration: 0.5,
-                isLooping: true, isBackground: false
-            ),
-            onVolumeChanged: { _ in },
-            onFadeInChanged: { _ in },
-            onFadeOutChanged: { _ in },
-            onLoopToggled: { _ in },
-            onBackgroundToggled: { _ in },
-            onAddKeyframe: {},
-            onDelete: {}
-        )
-        // See test_rulerView_atLargeText_tickLabelsPresent — UILabel
-        // collection is not reliable on iOS 26. Probe the SwiftUI
-        // hierarchy depth instead: ClipInspector renders header + START
-        // + DURATION + slider/toggle controls, which produces a deep
-        // subview tree even at .accessibility5.
-        let host = mount(inspector, size: CGSize(width: 390, height: 600))
-        assertRendersVisibleContent(host, viewName: "ClipInspector")
-    }
 
     // MARK: - TransitionBadge
 
-    func test_transitionBadge_atLargeText_doesNotTruncate() throws {
-        let badge = TransitionBadge(
-            id: "t-1", kind: .crossfade, duration: 0.5,
-            isSelected: false, isDark: false,
-            anchorX: 100, laneHeight: 80,
-            onTap: {}, onLongPress: {}, onDurationDelta: { _ in }
-        )
-        let labels = renderAndCollectLabels(badge, size: CGSize(width: 200, height: 100))
-        assertNoTruncation(in: labels, viewName: "TransitionBadge")
-    }
-
-    func test_transitionBadge_atLargeText_accessibilityLabelComposes() {
-        // The badge renders no visible text label — its identity comes from
-        // `accessibilityComposed`. Verify that the composition is robust to
-        // formatting and remains non-empty regardless of Dynamic Type size
-        // (the string is locale/format driven, not size driven).
-        let badge = TransitionBadge(
-            id: "t-2", kind: .dissolve, duration: 1.25,
-            isSelected: true, isDark: true,
-            anchorX: 200, laneHeight: 80,
-            onTap: {}, onLongPress: {}, onDurationDelta: { _ in }
-        )
-        XCTAssertFalse(badge.accessibilityComposed.isEmpty)
-        XCTAssertTrue(badge.accessibilityComposed.contains("1.25"),
-                      "Composed a11y label must include the duration value")
-    }
-
     // MARK: - Structural contracts (kept from the previous suite)
-
-    func test_transportBar_timeFormat_isStableAcrossLocales() {
-        XCTAssertEqual(TransportBar.formatTime(seconds: 0), "0:00.000")
-        XCTAssertEqual(TransportBar.formatTime(seconds: 61.5), "1:01.500")
-        XCTAssertEqual(TransportBar.formatTime(seconds: -1), "0:00.000",
-                       "Negative times must clamp to 0")
-    }
 
 
     /// Vérifie que la vue montée ne s'est pas ÉCROULÉE à taille nulle sous

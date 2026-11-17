@@ -346,7 +346,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
-        "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",  // 2
         // Cohésion de `AudioPostComposerView` : la carte d'état, la zone de rognage et le
@@ -503,9 +502,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         // dans un catalogue de langue source française. Entrées au catalogue,
         // traduites en sept locales, littéraux réalignés sur le `fr`.
         "apps/ios/Meeshy/Features/Main/Components/SecurityVerificationView.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Views/Cells/TopLevelCommentCell.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/Cells/ReplyCell.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/Cells/LoadMoreRepliesCell.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift",  // 1
         // 2026-11-01 — le mode se choisit à la création : les mots d'un mode,
@@ -556,7 +552,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+PostActions.swift",
         "apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift",  // 16
         "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16
         "apps/ios/Meeshy/Features/Contacts/CallsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift",  // 15
@@ -586,7 +581,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/AttachmentLoadingTile.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Components/MessageActionsMenu.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift",  // 13
         "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
@@ -653,7 +647,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         // #13913 — le refus d'un document et le plafond de durée ont quitté le
         // collage et la limite pour la table des variantes, avec leurs clés.
         "apps/ios/Meeshy/Features/Composer/ComposerFormatVariant.swift",
-        "apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
         "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift",  // 2

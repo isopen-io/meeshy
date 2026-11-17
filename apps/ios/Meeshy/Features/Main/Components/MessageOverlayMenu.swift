@@ -812,12 +812,6 @@ private struct ShownAndTouchable: ViewModifier {
 // MARK: - Ce que le fil sert pour ce message
 
 extension MessageOverlayMenu {
-    /// #9010 — l'aperçu joue la piste que la bulle sert ; l'original seulement
-    /// quand l'hôte n'en a élu aucune.
-    static func previewAudioTrack(for attachment: MessageAttachment, served: [String: ServedAudioTrack]) -> ServedAudioTrack {
-        served[attachment.id] ?? .original(of: attachment)
-    }
-
     /// **Ce que le fil sert pour CE message** (#9259) : la sélection du
     /// drapeau (`ConversationViewModel.bubbleLanguageSelections`), ses
     /// écrivains, les pistes qu'elle élit et le mode de lecture du fil — lus

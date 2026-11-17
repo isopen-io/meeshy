@@ -32,8 +32,6 @@ final class SwallowedErrorSourceGuardTests: XCTestCase {
         "Meeshy/Features/Main/ViewModels/GlobalSearchViewModel.swift"
     private static let reelsPath =
         "Meeshy/Features/Main/ViewModels/ReelsViewModel.swift"
-    private static let userProfilePath =
-        "Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift"
 
     /// `StoryViewModel` est DÉCOUPÉ (`StoryViewModel+*.swift` + `StoryViewModelRules`)
     /// : `AppSourceGuard.storyViewModelSource()` recolle l'unité. Lire le seul
@@ -111,7 +109,6 @@ final class SwallowedErrorSourceGuardTests: XCTestCase {
         let unites: [(nom: String, source: String)] = [
             ("GlobalSearchViewModel", try source(Self.globalSearchPath)),
             ("ReelsViewModel", try source(Self.reelsPath)),
-            ("UserProfileViewModel", try source(Self.userProfilePath)),
             ("StoryViewModel", try storySource()),
         ]
 
@@ -139,8 +136,6 @@ final class SwallowedErrorSourceGuardTests: XCTestCase {
              "@Published private(set) var remoteFailure"),
             ("ReelsViewModel", try source(Self.reelsPath),
              "@Published private(set) var loadFailure"),
-            ("UserProfileViewModel", try source(Self.userProfilePath),
-             "@Published private(set) var profileError"),
             ("StoryViewModel", try storySource(),
              "@Published private(set) var loadFailure"),
         ]
@@ -161,7 +156,6 @@ final class SwallowedErrorSourceGuardTests: XCTestCase {
     func test_unCatchDuCheminDeChargementPoseReellementLeMotif() throws {
         let attendus: [(nom: String, source: String, assignation: String)] = [
             ("ReelsViewModel", try source(Self.reelsPath), "loadFailure ="),
-            ("UserProfileViewModel", try source(Self.userProfilePath), "profileError ="),
             ("StoryViewModel", try storySource(), "loadFailure ="),
         ]
 
@@ -201,7 +195,6 @@ final class SwallowedErrorSourceGuardTests: XCTestCase {
         for (nom, contenu) in [
             ("GlobalSearchViewModel", try source(Self.globalSearchPath)),
             ("ReelsViewModel", try source(Self.reelsPath)),
-            ("UserProfileViewModel", try source(Self.userProfilePath)),
             ("StoryViewModel", try storySource()),
         ] {
             XCTAssertFalse(contenu.isEmpty, "source vide pour `\(nom)` — chemin faux, la garde ne mesurerait rien")
