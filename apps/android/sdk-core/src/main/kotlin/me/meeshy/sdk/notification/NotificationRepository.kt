@@ -89,6 +89,13 @@ class NotificationRepository @Inject constructor(
 
     /** Ce que le temps réel a posé pendant qu'une relecture REST était en vol : la relecture ne l'efface pas. */
     private val liveArrivals = NotificationLiveArrivals()
+
+    /**
+     * Rend ATOMIQUES la vérification « le compte et la liste sont-ils ceux du départ ? » et l'écriture qui la suit : une
+     * resynchro (fil IO), une page (fil principal) et [clear] (déconnexion) ne s'intercalent plus entre les deux. Sans
+     * lui, la page d'un compte qui part pouvait se poser chez le suivant, et un curseur se poser sur une autre tête.
+     */
+    private val listWrites = Any()
     private val persistScope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var lastPersisted: PersistedNotifications? = null
 
@@ -210,11 +217,13 @@ class NotificationRepository @Inject constructor(
             scopedLists[scope] = items
             return
         }
-        listVersion.incrementAndGet()
-        _hasMore.value = hasMore
-        _nextCursor.value = nextCursor
-        _notificationsCache.value = items
-        _notificationsSyncedAt.value = clock.nowMillis()
+        synchronized(listWrites) {
+            listVersion.incrementAndGet()
+            _hasMore.value = hasMore
+            _nextCursor.value = nextCursor
+            _notificationsCache.value = items
+            _notificationsSyncedAt.value = clock.nowMillis()
+        }
     }
 
     /**
@@ -405,7 +414,7 @@ class NotificationRepository @Inject constructor(
                 notificationApi.list(if (ancre === null) current.size else null, PAGE_SIZE, null, ancre)
             }
         ) {
-            is NetworkResult.Success -> {
+            is NetworkResult.Success -> synchronized(listWrites) {
                 if (startedEpoch != epoch || startedVersion != listVersion.get()) return NetworkResult.Success(Unit)
                 _notificationsCache.update { latest -> latest?.plus(result.data.data) }
                 _hasMore.value = result.data.pagination?.hasMore ?: false
@@ -651,23 +660,27 @@ class NotificationRepository @Inject constructor(
         val count = async { unreadCount() }
         val page = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }
         val countResult = count.await()
-        // Le compte a changé pendant le vol : ces réponses sont celles du précédent, elles ne s'écrivent chez personne.
-        if (startedEpoch != epoch) return@coroutineScope
-        // Le temps réel a parlé pendant le vol (notification:new, notification:counts) : sa valeur est plus récente que
-        // celle que le serveur a calculée avant.
-        if (countResult is NetworkResult.Success && liveArrivals.generation() == startedGeneration) {
-            _unreadCount.value = countResult.data
-        }
-        when (page) {
-            is NetworkResult.Success -> {
-                _hasMore.value = page.data.pagination?.hasMore ?: false
-                _nextCursor.value = page.data.pagination?.nextCursor
-                listVersion.incrementAndGet()
-                _notificationsCache.update { current -> liveArrivals.mergedInto(page.data.data, current, startedGeneration) }
-                _notificationsSyncedAt.value = clock.nowMillis()
+        val failure = synchronized(listWrites) {
+            // Le compte a changé pendant le vol : ces réponses sont celles du précédent, elles ne s'écrivent chez personne.
+            if (startedEpoch != epoch) return@coroutineScope
+            // Le temps réel a parlé pendant le vol (notification:new, notification:counts) : sa valeur est plus récente
+            // que celle que le serveur a calculée avant.
+            if (countResult is NetworkResult.Success && liveArrivals.generation() == startedGeneration) {
+                _unreadCount.value = countResult.data
             }
-            is NetworkResult.Failure -> onError(Exception(page.error.message))
+            when (page) {
+                is NetworkResult.Success -> {
+                    listVersion.incrementAndGet()
+                    _hasMore.value = page.data.pagination?.hasMore ?: false
+                    _nextCursor.value = page.data.pagination?.nextCursor
+                    _notificationsCache.update { current -> liveArrivals.mergedInto(page.data.data, current, startedGeneration) }
+                    _notificationsSyncedAt.value = clock.nowMillis()
+                    null
+                }
+                is NetworkResult.Failure -> Exception(page.error.message)
+            }
         }
+        failure?.let(onError)
     }
 
     /**
@@ -677,13 +690,15 @@ class NotificationRepository @Inject constructor(
      * account's cached notifications or unread count.
      */
     fun clear() {
-        _notificationsCache.value = null
-        _notificationsSyncedAt.value = null
-        _unreadCount.value = 0
-        _hasMore.value = false
-        _nextCursor.value = null
-        scopedLists.clear()
-        epoch += 1
+        synchronized(listWrites) {
+            _notificationsCache.value = null
+            _notificationsSyncedAt.value = null
+            _unreadCount.value = 0
+            _hasMore.value = false
+            _nextCursor.value = null
+            scopedLists.clear()
+            epoch += 1
+        }
         lastPersisted = null
         hydrated = false
         if (store !== NoNotificationCacheStore) {
