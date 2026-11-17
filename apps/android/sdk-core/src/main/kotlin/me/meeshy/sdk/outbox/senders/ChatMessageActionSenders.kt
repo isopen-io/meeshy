@@ -56,17 +56,21 @@ private const val STATUS_NOT_FOUND = 404
 private const val STATUS_GONE = 410
 private const val SYNTHETIC_NOT_FOUND = "HTTP_404"
 
-private suspend fun refreshOf(repository: MessageRepository, row: OutboxEntity, conversationOf: (String) -> String?) {
-    conversationOf(row.payload)?.let { repository.refresh(it) }
+/**
+ * #18953 — un geste ne change qu'UN message : son retour arrière (ou la confirmation d'une restauration) relit ce message
+ * par son id, comme les gestes de #18915, jamais la fenêtre de la conversation et ses pages au-delà — une lecture qui
+ * tombait sur le réseau au moment même où l'utilisateur agissait. Une charge illisible ne relit rien.
+ */
+private suspend fun MessageRepository.refreshNamed(conversationId: String?, messageId: String) {
+    conversationId?.let { refreshMessage(it, messageId) }
 }
 
-private fun conversationOfHiding(json: Json): (String) -> String? = { raw ->
-    runCatching { json.decodeFromString<MessageHidingPayload>(raw) }.getOrNull()?.conversationId
-}
+private fun Json.hidingConversation(raw: String): String? =
+    runCatching { decodeFromString<MessageHidingPayload>(raw) }.getOrNull()?.conversationId
 
 /**
  * `HIDE_FOR_ME` : « supprimer pour moi ». L'effet local (la bulle devient une pierre tombale) est déjà posé ; un refus
- * définitif la relève et relit la fenêtre, pour que l'écran dise ce que le serveur sait.
+ * définitif la relève et relit CE message, pour que l'écran dise ce que le serveur sait.
  */
 public class HideForMeHandler @Inject constructor(
     private val messageApi: MessageChatRestApi,
@@ -79,13 +83,14 @@ public class HideForMeHandler @Inject constructor(
 
     override suspend fun onExhausted(row: OutboxEntity) {
         messageRepository.markUndeleted(row.targetId)
-        refreshOf(messageRepository, row, conversationOfHiding(json))
+        messageRepository.refreshNamed(json.hidingConversation(row.payload), row.targetId)
     }
 }
 
 /**
- * `RESTORE_FOR_ME` : le message masqué revient chez moi ; un refus définitif relit CE message par son id (#18915) — la
- * vérité du serveur gagne, où qu'il soit dans le fil : relire la conversation n'en lit que la fenêtre récente.
+ * `RESTORE_FOR_ME` : le message masqué revient chez moi — accepté, il se relit par son id (#18953) ; un refus définitif
+ * relit CE message aussi (#18915) — la vérité du serveur gagne, où qu'il soit dans le fil : relire la conversation n'en
+ * lit que la fenêtre récente.
  */
 public class RestoreForMeHandler @Inject constructor(
     private val messageApi: MessageChatRestApi,
@@ -95,16 +100,16 @@ public class RestoreForMeHandler @Inject constructor(
 
     override suspend fun send(row: OutboxEntity): SendResult {
         val result = acknowledged { messageApi.restoreForMe(row.targetId) }.toSendResult()
-        if (result == SendResult.Success) refreshOf(messageRepository, row, conversationOfHiding(json))
+        if (result == SendResult.Success) messageRepository.refreshNamed(json.hidingConversation(row.payload), row.targetId)
         return result
     }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        conversationOfHiding(json)(row.payload)?.let { messageRepository.refreshMessage(it, row.targetId) }
+        messageRepository.refreshNamed(json.hidingConversation(row.payload), row.targetId)
     }
 }
 
-/** `REMOVE_ATTACHMENT` : efface UNE pièce ; un refus relit le message pour que la pièce revienne à sa place. */
+/** `REMOVE_ATTACHMENT` : efface UNE pièce ; un refus relit son message, par son id, pour que la pièce revienne à sa place. */
 public class RemoveAttachmentHandler @Inject constructor(
     private val mediaApi: MediaApi,
     private val messageRepository: MessageRepository,
@@ -115,15 +120,14 @@ public class RemoveAttachmentHandler @Inject constructor(
         acknowledged { mediaApi.delete(row.targetId) }.toIdempotentSendResult()
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        refreshOf(messageRepository, row) { raw ->
-            runCatching { json.decodeFromString<RemoveAttachmentPayload>(raw) }.getOrNull()?.conversationId
-        }
+        runCatching { json.decodeFromString<RemoveAttachmentPayload>(row.payload) }.getOrNull()
+            ?.let { messageRepository.refreshMessage(it.conversationId, it.messageId) }
     }
 }
 
 /**
  * `MODERATION_DELETE` : le retrait d'un message par la modération, avec son motif. Un refus définitif relève la pierre
- * tombale posée localement et relit la fenêtre.
+ * tombale posée localement et relit CE message.
  */
 public class ModerationDeleteHandler @Inject constructor(
     private val removals: ContentRemovalClient,
@@ -138,9 +142,8 @@ public class ModerationDeleteHandler @Inject constructor(
 
     override suspend fun onExhausted(row: OutboxEntity) {
         messageRepository.markUndeleted(row.targetId)
-        refreshOf(messageRepository, row) { raw ->
-            runCatching { json.decodeFromString<ModerationDeletePayload>(raw) }.getOrNull()?.conversationId
-        }
+        val conversationId = runCatching { json.decodeFromString<ModerationDeletePayload>(row.payload) }.getOrNull()?.conversationId
+        messageRepository.refreshNamed(conversationId, row.targetId)
     }
 }
 

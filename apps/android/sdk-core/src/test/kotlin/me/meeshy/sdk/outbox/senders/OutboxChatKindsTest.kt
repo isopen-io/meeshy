@@ -78,22 +78,25 @@ class OutboxChatKindsTest {
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
     }
 
+    /** #18953 — the gesture changed one message: that message is read back by its id, never the conversation's window. */
     @Test
-    fun `a refused hide lifts the tombstone and rereads the conversation`() = runTest {
+    fun `a refused hide lifts the tombstone and rereads the message it named`() = runTest {
         HideForMeHandler(messageApi, messages, senderJson).onExhausted(outboxRow(OutboxKind.HIDE_FOR_ME, "m1", hiding))
 
         coVerify(exactly = 1) { messages.markUndeleted("m1") }
-        coVerify(exactly = 1) { messages.refresh("c1") }
+        coVerify(exactly = 1) { messages.refreshMessage("c1", "m1") }
+        coVerify(exactly = 0) { messages.refresh(any()) }
     }
 
     @Test
-    fun `restore for me succeeds then rereads the conversation to bring the message back`() = runTest {
+    fun `restore for me succeeds then rereads the message it named to bring it back`() = runTest {
         coEvery { messageApi.restoreForMe("m1") } returns ack
 
         val result = RestoreForMeHandler(messageApi, messages, senderJson).send(outboxRow(OutboxKind.RESTORE_FOR_ME, "m1", hiding))
 
         assertThat(result).isEqualTo(SendResult.Success)
-        coVerify(exactly = 1) { messages.refresh("c1") }
+        coVerify(exactly = 1) { messages.refreshMessage("c1", "m1") }
+        coVerify(exactly = 0) { messages.refresh(any()) }
     }
 
     @Test
@@ -123,12 +126,13 @@ class OutboxChatKindsTest {
     }
 
     @Test
-    fun `a refused attachment removal rereads the conversation so the piece comes back`() = runTest {
+    fun `a refused attachment removal rereads its message so the piece comes back`() = runTest {
         val row = outboxRow(OutboxKind.REMOVE_ATTACHMENT, "a1", encodedPayload(RemoveAttachmentPayload("c1", "m1")))
 
         RemoveAttachmentHandler(mediaApi, messages, senderJson).onExhausted(row)
 
-        coVerify(exactly = 1) { messages.refresh("c1") }
+        coVerify(exactly = 1) { messages.refreshMessage("c1", "m1") }
+        coVerify(exactly = 0) { messages.refresh(any()) }
     }
 
     @Test
@@ -144,13 +148,14 @@ class OutboxChatKindsTest {
     }
 
     @Test
-    fun `a refused moderation delete lifts the tombstone and rereads the conversation`() = runTest {
+    fun `a refused moderation delete lifts the tombstone and rereads the message it named`() = runTest {
         val row = outboxRow(OutboxKind.MODERATION_DELETE, "m1", encodedPayload(ModerationDeletePayload("c1", "spam")))
 
         ModerationDeleteHandler(removals, messages, senderJson).onExhausted(row)
 
         coVerify(exactly = 1) { messages.markUndeleted("m1") }
-        coVerify(exactly = 1) { messages.refresh("c1") }
+        coVerify(exactly = 1) { messages.refreshMessage("c1", "m1") }
+        coVerify(exactly = 0) { messages.refresh(any()) }
     }
 
     @Test

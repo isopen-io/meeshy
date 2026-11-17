@@ -2,19 +2,27 @@ package me.meeshy.sdk.outbox.senders
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.serialization.json.JsonNull
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.conversation.ChatMutationAdmission
 import me.meeshy.sdk.conversation.EndToEndRegimeKeeper
 import me.meeshy.sdk.conversation.MessageCollaboratorHarness
+import me.meeshy.sdk.conversation.MessageMutationsRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.runHarnessTest
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CursorPagination
 import me.meeshy.sdk.model.MessagesApiResponse
 import me.meeshy.sdk.net.api.MessageApi
+import me.meeshy.sdk.net.api.MessageChatRestApi
+import me.meeshy.sdk.outbox.OutboxChatLanes
 import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.SendResult
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -117,6 +125,102 @@ class ExhaustedMessageGestureTest {
         assertThat(harness.cachedMessage("m1").deletedAt).isNull()
         assertThat(harness.cachedMessage("m1").content).isEqualTo("bonjour")
     }
+
+    // — #18953: the four other gestures read the message they touched back by its id, never the conversation's window —
+
+    private fun MessageCollaboratorHarness.mutations(repo: MessageRepository) = MessageMutationsRepository(outbox, repo, senderJson)
+
+    private fun MessageApi.readTheMessageAlone(id: String) {
+        coVerify(exactly = 1) { listAround(CONVERSATION, id, any()) }
+        coVerify(exactly = 0) { listConditional(any(), any()) }
+    }
+
+    @Test
+    fun `a hide refused for good gives the old message back its text, read by its id alone`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1, content = "bonjour"))
+        harness.seedSynced(message("m9", T9))
+        val api = gateway(served = message("m1", T1, content = "bonjour"))
+        val repo = harness.repository(api)
+        harness.mutations(repo).hideForMe(CONVERSATION, "m1")
+        assertThat(harness.cachedMessage("m1").deletedAt).isNotNull()
+
+        HideForMeHandler(mockk(relaxed = true), repo, senderJson).onExhausted(harness.exhausted(OutboxChatLanes.PERSONAL_HIDING))
+
+        assertThat(harness.cachedMessage("m1").deletedAt).isNull()
+        assertThat(harness.cachedMessage("m1").content).isEqualTo("bonjour")
+        api.readTheMessageAlone("m1")
+    }
+
+    @Test
+    fun `a moderation removal refused for good gives the old message back its text, read by its id alone`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(message("m1", T1, content = "bonjour"))
+            harness.seedSynced(message("m9", T9))
+            val api = gateway(served = message("m1", T1, content = "bonjour"))
+            val repo = harness.repository(api)
+            harness.mutations(repo).moderationDelete(CONVERSATION, "m1", "spam")
+            assertThat(harness.cachedMessage("m1").deletedAt).isNotNull()
+
+            ModerationDeleteHandler(mockk(relaxed = true), repo, senderJson)
+                .onExhausted(harness.exhausted(OutboxChatLanes.CONTENT_REMOVAL))
+
+            assertThat(harness.cachedMessage("m1").deletedAt).isNull()
+            assertThat(harness.cachedMessage("m1").content).isEqualTo("bonjour")
+            api.readTheMessageAlone("m1")
+        }
+
+    @Test
+    fun `an attachment removal refused for good gives the piece back, its message read by its id alone`() =
+        runHarnessTest { harness ->
+            val piece = ApiMessageAttachment(id = "a1", mimeType = "image/jpeg", fileUrl = "https://cdn.example/a1.jpg")
+            harness.seedSynced(message("m1", T1))
+            harness.seedSynced(message("m9", T9))
+            val api = gateway(served = message("m1", T1).copy(attachments = listOf(piece)))
+            val repo = harness.repository(api)
+            harness.mutations(repo).removeAttachment(CONVERSATION, "m1", "a1")
+
+            RemoveAttachmentHandler(mockk(relaxed = true), repo, senderJson)
+                .onExhausted(harness.exhausted(OutboxChatLanes.CONTENT_REMOVAL))
+
+            assertThat(harness.cachedMessage("m1").attachments.map { it.id }).containsExactly("a1")
+            api.readTheMessageAlone("m1")
+        }
+
+    /** The hidden row left the cache with the server's `message:hidden-for-me`: the accepted restore reads it back by its id. */
+    @Test
+    fun `a restore the server accepts brings the old message back, read by its id alone`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m9", T9))
+        val api = gateway(served = message("m1", T1, content = "bonjour"))
+        val chat = mockk<MessageChatRestApi> {
+            coEvery { restoreForMe("m1", any()) } returns ApiResponse(success = true, data = JsonNull)
+        }
+        val repo = harness.repository(api)
+        harness.mutations(repo).restoreForMe(CONVERSATION, "m1")
+        val row = harness.outbox.deliverable(OutboxChatLanes.PERSONAL_HIDING).single()
+
+        val result = RestoreForMeHandler(chat, repo, senderJson).send(row)
+
+        assertThat(result).isEqualTo(SendResult.Success)
+        assertThat(harness.cachedMessage("m1").content).isEqualTo("bonjour")
+        api.readTheMessageAlone("m1")
+    }
+
+    @Test
+    fun `a hide its restore cancels while still queued gives the message back, read by its id alone`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(message("m1", T1, content = "bonjour"))
+            harness.seedSynced(message("m9", T9))
+            val api = gateway(served = message("m1", T1, content = "bonjour"))
+            val mutations = harness.mutations(harness.repository(api))
+            mutations.hideForMe(CONVERSATION, "m1")
+
+            val admission = mutations.restoreForMe(CONVERSATION, "m1")
+
+            assertThat(admission).isEqualTo(ChatMutationAdmission.CANCELLED_OUT)
+            assertThat(harness.cachedMessage("m1").deletedAt).isNull()
+            assertThat(harness.cachedMessage("m1").content).isEqualTo("bonjour")
+            api.readTheMessageAlone("m1")
+        }
 
     private companion object {
         const val CONVERSATION = "c1"
