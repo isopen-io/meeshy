@@ -108,7 +108,8 @@ class PushNotificationPipeline @Inject constructor(
         } else {
             NotificationChannelIds.forPayload(payload)
         }
-        val notificationId = MessageNotificationId.of(payload.type, payload.conversationId, payload.notificationId)
+        val ephemeral = (payload.ephemeralDuration ?: 0) > 0
+        val notificationId = MessageNotificationId.of(payload.type, payload.conversationId, payload.notificationId, ephemeral)
         val groupKey = PushGrouping.groupKey(payload, preferences)
         val badge = PushBadgePolicy.badge(payload, preferences, localUnread(payload.unreadCount))
 
