@@ -42,11 +42,73 @@ final class CallWindowPresenterTests: XCTestCase {
         func touched() {}
     }
 
+    private final class RecordingClearing: CallScreenClearing {
+        var cleared = 0
+        func clearForCall() { cleared += 1 }
+    }
+
     private func makeSUT(
-        viewing: RecordingViewing = RecordingViewing()
+        viewing: RecordingViewing = RecordingViewing(),
+        clearing: RecordingClearing = RecordingClearing()
     ) -> (sut: CallWindowPresenter, hosting: RecordingHosting) {
         let hosting = RecordingHosting()
-        return (CallWindowPresenter(hosting: hosting, viewing: viewing), hosting)
+        return (CallWindowPresenter(hosting: hosting, viewing: viewing, clearing: clearing), hosting)
+    }
+
+    // MARK: - Un appel ferme claviers et feuilles (#19240)
+
+    func test_apply_callScreenShown_clearsKeyboardsAndSheets() {
+        let clearing = RecordingClearing()
+        let (sut, _) = makeSUT(clearing: clearing)
+
+        sut.apply(manager: CallManager.shared, visible: true)
+
+        XCTAssertEqual(clearing.cleared, 1)
+    }
+
+    func test_apply_reducedThenExpandedSameCall_clearsOnlyOnce() {
+        let clearing = RecordingClearing()
+        let (sut, _) = makeSUT(clearing: clearing)
+        let manager = CallManager.shared
+
+        sut.apply(manager: manager, visible: true)
+        sut.apply(manager: manager, visible: false)
+        sut.apply(manager: manager, visible: true)
+
+        XCTAssertEqual(clearing.cleared, 1)
+    }
+
+    func test_apply_noForegroundScene_clearsNothingUntilTheScreenShows() {
+        let clearing = RecordingClearing()
+        let (sut, hosting) = makeSUT(clearing: clearing)
+        hosting.hasForegroundScene = false
+
+        sut.apply(manager: CallManager.shared, visible: true)
+        XCTAssertEqual(clearing.cleared, 0)
+
+        hosting.hasForegroundScene = true
+        sut.retryPendingShow()
+        XCTAssertEqual(clearing.cleared, 1)
+    }
+
+    func test_isSheet_closesSheetsAndPopovers_keepsCoversAndAlerts() {
+        for style in [UIModalPresentationStyle.pageSheet, .formSheet, .automatic, .popover] {
+            XCTAssertTrue(CallScreenSheets.isSheet(style, isAlert: false), "\(style.rawValue)")
+        }
+        XCTAssertFalse(CallScreenSheets.isSheet(.fullScreen, isAlert: false))
+        XCTAssertFalse(CallScreenSheets.isSheet(.overFullScreen, isAlert: false))
+        XCTAssertFalse(CallScreenSheets.isSheet(.custom, isAlert: false))
+        XCTAssertFalse(CallScreenSheets.isSheet(.automatic, isAlert: true))
+    }
+
+    func test_firstSheetIndex_sheetAboveAFullScreenCover_closesOnlyTheSheet() {
+        let chain: [(style: UIModalPresentationStyle, isAlert: Bool)] = [(.fullScreen, false), (.pageSheet, false)]
+        XCTAssertEqual(CallScreenSheets.firstSheetIndex(in: chain), 1)
+    }
+
+    func test_firstSheetIndex_onlyCovers_closesNothing() {
+        let chain: [(style: UIModalPresentationStyle, isAlert: Bool)] = [(.fullScreen, false), (.overFullScreen, false)]
+        XCTAssertNil(CallScreenSheets.firstSheetIndex(in: chain))
     }
 
     // MARK: - L'écran d'appel fait quitter la conversation (#9065)

@@ -609,5 +609,15 @@ final class VoIPPushManagerTests: XCTestCase {
         let mark = try XCTUnwrap(source.range(of: "GroupCallMeshCoordinator.shared.markGroupConversation(groupConversationId", range: report.upperBound..<source.endIndex))
         XCTAssertTrue(source[report.upperBound..<mark.lowerBound].contains("if let groupConversationId"))
     }
+
+    func test_parseIsVideo_readsTheStringOfAPNsAndTheBoolOfAnOlderGateway() {
+        XCTAssertTrue(VoIPPushManager.parseIsVideo("true"))
+        XCTAssertTrue(VoIPPushManager.parseIsVideo("TRUE"))
+        XCTAssertTrue(VoIPPushManager.parseIsVideo(true))
+        XCTAssertFalse(VoIPPushManager.parseIsVideo("false"))
+        XCTAssertFalse(VoIPPushManager.parseIsVideo(false))
+        XCTAssertFalse(VoIPPushManager.parseIsVideo(nil))
+        XCTAssertFalse(VoIPPushManager.parseIsVideo(1))
+    }
 }
 
