@@ -9,6 +9,7 @@ import { PeerAvatar } from './peer-avatar';
 import { FeedActionsRow, type CommentHandler, type GestureHandler, type RepostHandler, type ShareHandler } from './feed-actions-row';
 import { ModelPostMenu, type PostMenuHost } from './feed-post-menu';
 import { FeedRepostEmbed } from './feed-repost-embed';
+import { PostContentLinkCard } from './content-link-cards';
 import { PersonName } from './person-name';
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
 import { FeedMediaMosaic } from './feed-media-mosaic';
@@ -671,6 +672,13 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   const body = feedCardBody(model);
   const soleMedia = body.visual && model.scene === undefined && model.media.length === 1 ? model.media[0] : undefined;
   const bodyText = model.text !== undefined && soleMedia?.caption === model.text.full ? undefined : model.text;
+  /* LA CARTE DU PREMIER LIEN DE CONTENU DU TEXTE (#19334) — sous le texte, à la
+     place de la façade vidéo d'iOS ; sous le visuel quand le texte y est peint
+     en légende. L'ORIGINAL, jamais la traduction : une URL ne se traduit pas. */
+  const linkCard =
+    model.text === undefined ? null : (
+      <PostContentLinkCard className="px-3" postId={model.id} text={model.text.original} trackingLinks={model.text.trackingLinks} />
+    );
 
   return (
     <article
@@ -692,6 +700,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
           <FeedPostText postId={model.id} text={bodyText} mentions={model.validatedMentions} />
         </FeedPostOpenZone>
       ) : null}
+      {bodyText === undefined ? null : linkCard}
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
           doit plus rester nu sous son texte (D-78) : `body.visual` porte donc
           sur `model.scene` autant que sur `model.media.length`. */}
@@ -706,6 +715,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
           />
         </div>
       ) : null}
+      {bodyText === undefined ? linkCard : null}
       {/* LA PUBLICATION CITÉE (#6278 c) — miroir `FeedPostCard.swift:822-910`,
           APRÈS le visuel (`:668-678`). Sa propre porte (`/post/<original>`)
           reste HORS de `FeedPostOpenZone` : deux `<a>` de destinations

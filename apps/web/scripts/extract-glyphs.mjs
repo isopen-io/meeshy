@@ -1123,6 +1123,23 @@ emit({
 });
 
 /**
+ * LE JEU DE LA CARTE DE CONTENU (#19334) — la carte vivante d'un lien Meeshy
+ * vers une publication, un réel, une story ou une humeur, posée sous le texte
+ * d'une bulle ou d'une publication. Ses pastilles de TYPE reprennent les tracés
+ * de la feuille d'envoi (`article`, `film-strip`, `circle-dashed`), sa ligne de
+ * statistiques ceux de la carte du fil (`heart-fill`, `chat-circle`, `bookmark`,
+ * `bookmark-fill`) : mêmes notions, mêmes icônes. Un jeu à part plutôt que les
+ * deux autres en entier, que le fil ne charge jamais. `eye`, `smiley`,
+ * `fill-play` et `link-simple` restent au SOCLE, où ils vivent déjà.
+ */
+emit({
+  ids: ['article', 'film-strip', 'circle-dashed', 'heart-fill', 'chat-circle', 'bookmark', 'bookmark-fill'],
+  output: join(HERE, '../src/components/glyphs-content-card.ts'),
+  constant: 'CONTENT_CARD_GLYPHS',
+  role: "LE JEU DE LA CARTE DE CONTENU (#19334) : les pastilles de type et la ligne de statistiques, charge avec la bulle et la carte du fil, jamais dans le socle.",
+});
+
+/**
  * LE JEU D'ECRAN DE L'ADMINISTRATION (#8876) — le kit (`components/admin/*`)
  * et le menu groupe. Charge avec les routes `/adm` et `/admin`, jamais dans
  * le socle : un lecteur qui n'ouvre jamais l'administration ne paie pas un

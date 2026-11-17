@@ -31,6 +31,7 @@ import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptWriteRestriction from './catalog-pt-write-restriction';
 import ptConversationCard from './catalog-pt-conversation-card';
+import ptContentCard from './catalog-pt-content-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
 import ptQuote from './catalog-pt-quote';
@@ -1086,6 +1087,7 @@ const pt = {
   ...ptGallery,
   ...ptMessageCard,
   ...ptConversationCard,
+  ...ptContentCard,
   ...ptStoriesMine,
   'settings.tools.sounds': 'Meus sons',
   'settings.section.packs': 'Pacotes e downloads',

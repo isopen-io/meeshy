@@ -1,7 +1,7 @@
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
-import { segmentText, type TextSegment } from '@meeshy/shared/utils/text-segments';
 
 import { internalPathOf, type InternalLinkContext } from './internal-link';
+import { writtenHrefsOf } from './written-hrefs';
 
 /**
  * **LES ADRESSES D'UNE CONVERSATION DANS UN MESSAGE** (#8099) — ce qui fait
@@ -61,14 +61,6 @@ export type ConversationLinkContext = InternalLinkContext & {
   readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
 };
 
-const hrefsOf = (segments: readonly TextSegment[]): readonly string[] =>
-  segments.flatMap((segment): readonly string[] => {
-    if (segment.kind === 'emphasis') return hrefsOf(segment.children);
-    if (segment.kind === 'url') return [segment.href];
-    if (segment.kind === 'tracked-link' && segment.url !== null) return [segment.url];
-    return [];
-  });
-
 /**
  * Les conversations qu'un texte désigne, dans l'ordre du texte, chacune une
  * fois, au plus {@link CONVERSATION_CARDS_PER_MESSAGE}.
@@ -76,12 +68,7 @@ const hrefsOf = (segments: readonly TextSegment[]): readonly string[] =>
 export function conversationLinksIn(text: string, context: ConversationLinkContext): readonly ConversationLinkTarget[] {
   if (!text.includes('/')) return [];
   const appPathOrJoin = (path: string): boolean => context.isAppPath(path) || SHARE_PATH.test(path);
-  const segments = segmentText(text, {
-    hashtags: false,
-    mentions: [],
-    ...(context.trackingLinks === undefined ? {} : { trackingLinks: context.trackingLinks }),
-  });
-  const targets = hrefsOf(segments).flatMap((href) => {
+  const targets = writtenHrefsOf(text, context.trackingLinks).flatMap((href) => {
     const path = internalPathOf(href, { origins: context.origins, isAppPath: appPathOrJoin });
     const target = path === null ? null : conversationLinkOfPath(path);
     return target === null ? [] : [target];

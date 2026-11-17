@@ -14,6 +14,7 @@ import {
   PLAY_DIAMETER_MULTI,
   PLAY_DIAMETER_SOLO,
   soloVideoSlot,
+  videoDurationLabel,
 } from '@/lib/view/media-grid-layout';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { handOffVideoPosition } from '@/lib/view/video-handoff';
@@ -25,11 +26,8 @@ import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 
 /** `duration` en MILLISECONDES (même convention que `VoiceAttachment`) → `m:ss`. */
-const durationLabelOf = (durationMs: number | undefined): string | undefined => {
-  if (durationMs === undefined) return undefined;
-  const seconds = Math.round(durationMs / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-};
+const durationLabelOf = (durationMs: number | undefined): string | undefined =>
+  durationMs === undefined ? undefined : videoDurationLabel(durationMs);
 
 /**
  * LE REPLI D'UNE PIÈCE VIDÉO SANS FICHIER (#6193, déménagé ici #6221 étape 4)

@@ -7,6 +7,7 @@ import type { repliesInfiniteOptions } from './comment-replies';
 import type { communityMembersQueryOptions } from './community-members';
 import type { communityPostsInfiniteOptions } from './community-posts';
 import type { mediaHubInfiniteOptions } from './conversation-media-hub';
+import type { contentLinkTargetQueryOptions } from './content-card';
 import type { conversationMembersQueryOptions } from './conversation-members';
 import type { conversationQuery, conversationsInfiniteOptions } from './conversations';
 import type { feedInfiniteOptions } from './feed';
@@ -74,4 +75,6 @@ export type PersistedShapes = {
   readonly 'hashtags/:tag': CachedBy<typeof hashtagInfiniteOptions>;
   readonly 'communities/:id/posts': CachedBy<typeof communityPostsInfiniteOptions>;
   readonly 'communities/:id/members': CachedBy<typeof communityMembersQueryOptions>;
+  /** Ce qu'un lien suivi désigne (#19334) — un jeton ne change jamais de cible, sa résolution se garde. */
+  readonly 'content-link-targets/:token': CachedBy<typeof contentLinkTargetQueryOptions>;
 };

@@ -26,7 +26,7 @@ import { ConversationLinkCard } from './conversation-link-card';
  */
 /** Les origines de l'environnement — aucune hors navigateur (rendu serveur
  * des témoins, prérendu) : les hôtes Meeshy connus restent reconnus. */
-const pageOrigins = (): readonly string[] =>
+export const pageOrigins = (): readonly string[] =>
   typeof window === 'undefined' ? [] : [publicWebOrigin(window.location.origin), window.location.origin];
 
 export function ConversationLinkCards({
@@ -37,10 +37,11 @@ export function ConversationLinkCards({
   readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
 }) {
   const targets = useMemo(() => conversationLinksIn(text, { origins: pageOrigins(), isAppPath, trackingLinks }), [text, trackingLinks]);
-  return targets.length === 0 ? null : <CardsHost targets={targets} />;
+  return targets.length === 0 ? null : <ConversationCardsHost targets={targets} />;
 }
 
-function CardsHost({ targets }: { readonly targets: readonly ConversationLinkTarget[] }) {
+/** L'hôte des cartes de conversation déjà élues — partagé avec `MessageLinkCards`. */
+export function ConversationCardsHost({ targets }: { readonly targets: readonly ConversationLinkTarget[] }) {
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
   const accountLanguage = useStore(sessionStore, (state) =>
     state.session.status === 'authenticated' ? (state.session.user.systemLanguage ?? null) : null,

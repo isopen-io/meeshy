@@ -31,6 +31,7 @@ import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enWriteRestriction from './catalog-en-write-restriction';
 import enConversationCard from './catalog-en-conversation-card';
+import enContentCard from './catalog-en-content-card';
 import enStoriesMine from './catalog-en-stories-mine';
 import enContactCard from './catalog-en-contact-card';
 import enQuote from './catalog-en-quote';
@@ -1082,6 +1083,7 @@ const en = {
   ...enGallery,
   ...enMessageCard,
   ...enConversationCard,
+  ...enContentCard,
   ...enStoriesMine,
   'settings.tools.sounds': 'My sounds',
   'settings.section.packs': 'Packs and downloads',

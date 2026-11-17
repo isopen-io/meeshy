@@ -49,7 +49,7 @@ import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard }
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
 import { LongMessageText } from './long-message-text';
-import { ConversationLinkCards } from './conversation-link-cards';
+import { MessageLinkCards } from './message-link-cards';
 import { SystemNotice } from './system-notice';
 import { linkRenderingOf } from '@/lib/view/sender-links';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
@@ -616,7 +616,7 @@ export const FocalRow = memo(function FocalRow({
           plainTextHidden
         />
       ) : null}
-      {links === 'plain' ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
+      {links === 'plain' ? null : <MessageLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
     </>
   );
 

@@ -31,6 +31,7 @@ import esStudioChrome from './catalog-es-studio-chrome';
 import esEphemeral from './catalog-es-ephemeral';
 import esWriteRestriction from './catalog-es-write-restriction';
 import esConversationCard from './catalog-es-conversation-card';
+import esContentCard from './catalog-es-content-card';
 import esStoriesMine from './catalog-es-stories-mine';
 import esContactCard from './catalog-es-contact-card';
 import esQuote from './catalog-es-quote';
@@ -1082,6 +1083,7 @@ const es = {
   ...esGallery,
   ...esMessageCard,
   ...esConversationCard,
+  ...esContentCard,
   ...esStoriesMine,
   'settings.tools.sounds': 'Mis sonidos',
   'settings.section.packs': 'Paquetes y descargas',
