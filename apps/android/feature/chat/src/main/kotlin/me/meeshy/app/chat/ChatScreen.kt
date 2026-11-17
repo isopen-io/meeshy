@@ -82,7 +82,8 @@ fun ChatScreen(
     ChatShellEffects(viewModel, remember(viewModel) { ChatLifecycleHooks() }, leave)
     ChatWindowCaptureShield(remember(state.messages) { ChatCaptureShield.shields(state.messages.map { it.exitOffer }) })
     EncryptionSwitchAnnouncementEffect(remember(viewModel) { viewModel.controllers.find<EncryptionSwitchAnnouncementController>() })
-    EndToEndSendRefusalEffect(state.endToEndSendRefusals)
+    val endToEndSendRefusals by viewModel.endToEndSendRefusals.collectAsStateWithLifecycle()
+    EndToEndSendRefusalEffect(endToEndSendRefusals)
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
     val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 

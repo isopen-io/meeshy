@@ -111,8 +111,6 @@ data class ChatUiState(
     val directPeerUserId: String? = null,
     /** #14591 — cet appareil chiffre et lit le bout en bout (pile libsignal prête à servir le fil). */
     val endToEndAvailable: Boolean = false,
-    /** #18975 — combien d'envois chiffrés n'ont pas pu partir : chaque échec se dit, traduit, et son texte revient au composeur. */
-    val endToEndSendRefusals: Int = 0,
     /** Mirrors the same `networkConditionMonitor` reading already threaded into
      * `toBubbles` (the per-message hourglass) — feeds the scroll-to-bottom control's
      * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS

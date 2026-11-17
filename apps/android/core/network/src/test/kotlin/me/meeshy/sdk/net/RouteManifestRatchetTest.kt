@@ -138,8 +138,10 @@ class RouteManifestRatchetTest {
          * partage Android se recale sur la liste que la passerelle sert).
          * 133 : plus `GET`/`POST /e2ee/devices/self/verifications` et `POST /e2ee/devices/self/verifications/ack` (#19080,
          * vérification d'appareil E2EE servie par la passerelle) ; #19189 les portera.
+         * 138 : plus les cinq routes « Mes adresses » sous `/users/me/addresses` (lecture, création, modification,
+         * suppression, ordre — lot `serveur-mes-adresses` de #18857) ; la face Liens Android (#18889) les portera.
          */
-        const val TO_PORT_CEILING = 133
+        const val TO_PORT_CEILING = 138
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
