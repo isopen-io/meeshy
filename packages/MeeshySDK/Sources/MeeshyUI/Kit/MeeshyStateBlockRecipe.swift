@@ -69,6 +69,7 @@ public nonisolated struct MeeshyStateBlockRecipe: Sendable, Equatable {
     public static let messageMaxWidth: Double = 310
     public static let titleMaxLines = 2
     public static let maxGhostCount = 4
+    public static let maxConsequences = 4
 
     public let kind: MeeshyStateBlockKind
     public let tone: MeeshyStateBlockTone
@@ -136,6 +137,24 @@ public nonisolated struct MeeshyStateBlockRecipe: Sendable, Equatable {
         case .offline: return "wifi.slash"
         case .success: return "checkmark.circle"
         }
+    }
+
+    /// Le glyphe du disque : celui que l'hôte nomme (« Personne ici », « Bloqué »), sinon celui du genre.
+    public static func glyph(of kind: MeeshyStateBlockKind, override: String?) -> String {
+        guard let override, !override.isEmpty else { return systemImage(of: kind) }
+        return override
+    }
+
+    /// Les lignes-conséquences : le succès dit ce qui est fait, le refus ce qui est fermé (« Il ne peut plus
+    /// t'écrire ») ; au plus quatre, et aucun autre genre n'en porte.
+    public static func shownConsequences(_ lines: [String], kind: MeeshyStateBlockKind) -> [String] {
+        guard kind == .success || kind == .denied else { return [] }
+        return Array(lines.filter { !$0.isEmpty }.prefix(maxConsequences))
+    }
+
+    /// Le glyphe d'une ligne-conséquence : une coche pour ce qui est fait, un tiret pour ce qui est fermé.
+    public static func consequenceSystemImage(of kind: MeeshyStateBlockKind) -> String {
+        kind == .denied ? "minus.circle" : "checkmark"
     }
 
     /// Les genres qui s'annoncent : une erreur, un passage hors ligne.

@@ -117,6 +117,24 @@ struct MeeshyStateBlockTests {
         #expect(!MeeshyStateBlockRecipe.announcesTransition(from: .error, to: .success))
     }
 
+    @Test("le glyphe nommé par l'hôte remplace celui du genre ; vide, il ne remplace rien")
+    func glyph_overrideWinsWhenNamed() {
+        #expect(MeeshyStateBlockRecipe.glyph(of: .denied, override: "nosign") == "nosign")
+        #expect(MeeshyStateBlockRecipe.glyph(of: .denied, override: nil) == "lock")
+        #expect(MeeshyStateBlockRecipe.glyph(of: .empty, override: "") == "tray")
+    }
+
+    @Test("le refus dit ce qui est fermé comme le succès dit ce qui est fait ; au plus quatre lignes, aucune ailleurs")
+    func consequences_belongToSuccessAndDenied() {
+        let lines = ["a", "b", "", "c", "d", "e"]
+        #expect(MeeshyStateBlockRecipe.shownConsequences(lines, kind: .denied) == ["a", "b", "c", "d"])
+        #expect(MeeshyStateBlockRecipe.shownConsequences(lines, kind: .success) == ["a", "b", "c", "d"])
+        #expect(MeeshyStateBlockRecipe.shownConsequences(lines, kind: .error).isEmpty)
+        #expect(MeeshyStateBlockRecipe.shownConsequences(lines, kind: .offline).isEmpty)
+        #expect(MeeshyStateBlockRecipe.consequenceSystemImage(of: .denied) == "minus.circle")
+        #expect(MeeshyStateBlockRecipe.consequenceSystemImage(of: .success) == "checkmark")
+    }
+
     @Test("garde de source : le bloc ne sait ni lien, ni fiche, ni permission, ni réseau")
     func source_isAnAgnosticAtom() throws {
         try KitAssemblyGuards.assertAgnostic(["MeeshyStateBlock.swift", "MeeshyStateBlockRecipe.swift"])

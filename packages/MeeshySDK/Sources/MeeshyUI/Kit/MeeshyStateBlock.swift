@@ -20,6 +20,7 @@ public struct MeeshyStateBlock<Glyph: View>: View {
     private let isOverContent: Bool
     private let announces: Bool
     private let label: String?
+    private let systemImage: String?
     private let glyph: Glyph
 
     @Environment(\.colorScheme) private var colorScheme
@@ -40,6 +41,7 @@ public struct MeeshyStateBlock<Glyph: View>: View {
                 isOverContent: Bool = false,
                 announces: Bool = true,
                 label: String? = nil,
+                systemImage: String? = nil,
                 @ViewBuilder glyph: () -> Glyph) {
         self.kind = kind
         self.title = title
@@ -49,10 +51,11 @@ public struct MeeshyStateBlock<Glyph: View>: View {
         self.art = art
         self.size = size
         self.tint = tint
-        self.consequences = kind == .success ? Array(consequences.prefix(4)) : []
+        self.consequences = MeeshyStateBlockRecipe.shownConsequences(consequences, kind: kind)
         self.isOverContent = isOverContent
         self.announces = announces
         self.label = label
+        self.systemImage = systemImage
         self.glyph = glyph()
     }
 
@@ -127,7 +130,8 @@ public struct MeeshyStateBlock<Glyph: View>: View {
         let color = toneColor(recipe)
         let isDark = colorScheme == .dark
         return HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: recipe.defaultSystemImage).foregroundStyle(color)
+            Image(systemName: MeeshyStateBlockRecipe.glyph(of: kind, override: systemImage)).foregroundStyle(color)
+                .accessibilityHidden(true)
             Text(verbatim: title)
                 .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
@@ -172,7 +176,7 @@ public struct MeeshyStateBlock<Glyph: View>: View {
         Circle()
             .strokeBorder(color, style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [4, 3]))
             .frame(width: CGFloat(MeeshyStateBlockRecipe.glyphDiameter), height: CGFloat(MeeshyStateBlockRecipe.glyphDiameter))
-            .overlay(Image(systemName: recipe.defaultSystemImage)
+            .overlay(Image(systemName: MeeshyStateBlockRecipe.glyph(of: kind, override: systemImage))
                 .font(MeeshyFont.relative(CGFloat(MeeshyStateBlockRecipe.glyphSize)))
                 .foregroundStyle(color))
             .offset(y: floats && !reduceMotion ? -CGFloat(MeeshyStateBlockRecipe.glyphFloat) : 0)
@@ -200,7 +204,7 @@ public struct MeeshyStateBlock<Glyph: View>: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 ForEach(Array(consequences.enumerated()), id: \.offset) { _, line in
                     Label { Text(verbatim: line).meeshyScaledFont(MeeshyFont.labelSize) } icon: {
-                        Image(systemName: "checkmark").foregroundStyle(color)
+                        Image(systemName: MeeshyStateBlockRecipe.consequenceSystemImage(of: kind)).foregroundStyle(color)
                     }
                 }
             }
@@ -269,9 +273,10 @@ extension MeeshyStateBlock where Glyph == EmptyView {
                 consequences: [String] = [],
                 isOverContent: Bool = false,
                 announces: Bool = true,
-                label: String? = nil) {
+                label: String? = nil,
+                systemImage: String? = nil) {
         self.init(kind: kind, title: title, message: message, primary: primary, secondary: secondary, art: art,
                   size: size, tint: tint, consequences: consequences, isOverContent: isOverContent,
-                  announces: announces, label: label, glyph: { EmptyView() })
+                  announces: announces, label: label, systemImage: systemImage, glyph: { EmptyView() })
     }
 }
