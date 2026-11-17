@@ -18,24 +18,32 @@ import javax.inject.Singleton
 /**
  * « Mes adresses » de la face Liens, cache-first : la dernière liste lue se peint d'abord ([cached]), puis [refresh] la revalide
  * en silence. Un serveur qui ne les sert pas encore (404) rend une liste VIDE — la section n'apparaît simplement pas ; un échec
- * réseau rend `null` et garde la liste d'avant (hors ligne, « inconnu » n'est pas « aucune »). Vidée à la déconnexion.
+ * réseau rend `null` et garde la liste d'avant (hors ligne, « inconnu » n'est pas « aucune »). Vidée à la déconnexion, et une
+ * lecture partie avant la déconnexion ne remplit jamais le cache du compte suivant : chaque [clear] ouvre une nouvelle époque.
  */
 @Singleton
 class MyAddressesRepository @Inject constructor(
     private val api: MyAddressesApi,
 ) : PerAccountCache {
 
-    private val held = AtomicReference<List<MyAddress>?>(null)
+    private data class Held(val epoch: Long = 0, val addresses: List<MyAddress>? = null)
 
-    fun cached(): List<MyAddress>? = held.get()
+    private val held = AtomicReference(Held())
 
-    suspend fun refresh(): List<MyAddress>? = when (val result = apiCall { api.list() }) {
-        is NetworkResult.Success -> MyAddresses.decode(result.data.addresses).also { held.set(it) }
-        is NetworkResult.Failure -> if (result.error.httpStatus == NOT_FOUND) emptyList<MyAddress>().also { held.set(it) } else null
+    fun cached(): List<MyAddress>? = held.get().addresses
+
+    suspend fun refresh(): List<MyAddress>? {
+        val epoch = held.get().epoch
+        val read: List<MyAddress> = when (val result = apiCall { api.list() }) {
+            is NetworkResult.Success -> MyAddresses.decode(result.data.addresses)
+            is NetworkResult.Failure -> if (result.error.httpStatus == NOT_FOUND) emptyList() else return null
+        }
+        val kept = held.updateAndGet { if (it.epoch == epoch) it.copy(addresses = read) else it }
+        return read.takeIf { kept.epoch == epoch }
     }
 
     override suspend fun clear() {
-        held.set(null)
+        held.updateAndGet { Held(epoch = it.epoch + 1) }
     }
 
     private companion object {

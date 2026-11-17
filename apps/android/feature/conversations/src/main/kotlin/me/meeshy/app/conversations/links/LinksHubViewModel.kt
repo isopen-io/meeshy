@@ -8,6 +8,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.link.LinkStatsRepository
@@ -32,8 +34,8 @@ data class LinksHubUiState(
 /**
  * Le hub « Mes liens » : les quatre cartes se peignent d'abord du dernier tableau en cache, puis les
  * quatre sources se rechargent EN PARALLÈLE ([LinkStatsRepository.load]). Une source qui échoue garde
- * son ancien chiffre — jamais un zéro inventé. Mon lien de profil vient de la session (aucune attente) et « Mes adresses » se
- * peignent du cache avant de se revalider ; un échec garde la liste d'avant.
+ * son ancien chiffre — jamais un zéro inventé. Mon lien de profil SUIT la session (aucune attente, et un pseudo changé change
+ * le QR sans rechargement) ; « Mes adresses » se peignent du cache avant de se revalider ; un échec garde la liste d'avant.
  */
 @HiltViewModel
 class LinksHubViewModel @Inject constructor(
@@ -55,6 +57,12 @@ class LinksHubViewModel @Inject constructor(
     private var job: Job? = null
 
     init {
+        viewModelScope.launch {
+            session.currentUser
+                .map { LinksProfileLink.from(it?.username) }
+                .distinctUntilChanged()
+                .collect { link -> _state.update { it.copy(profileLink = link) } }
+        }
         refresh()
     }
 
@@ -71,7 +79,6 @@ class LinksHubViewModel @Inject constructor(
                 it.copy(
                     figures = merged,
                     isRefreshing = false,
-                    profileLink = LinksProfileLink.from(session.currentUser.value?.username) ?: it.profileLink,
                     addresses = served ?: it.addresses,
                 )
             }
