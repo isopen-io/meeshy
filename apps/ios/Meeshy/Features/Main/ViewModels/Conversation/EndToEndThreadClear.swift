@@ -14,6 +14,8 @@ import MeeshySDK
 /// sur la ligne que la cellule rend, au même titre que l'état de la visite.
 /// Une instance par conversation ouverte (`ConversationDependencies`).
 final class EndToEndThreadClear {
+    /// Ce que le coffre sait des messages du fil : le clair adopté, ou ce qui le
+    /// retient (IOS-04).
     @Published private(set) var adopted: [String: E2EEPlaintextEntry] = [:]
     /// Le verdict de la couche appareil des messages hybrides (#14369), lu au même coffre.
     let hybrid = HybridThreadIntegrity()
@@ -42,13 +44,15 @@ final class EndToEndThreadClear {
 
     /// Repose sur une ligne du magasin le clair adopté pour elle, rejugé à SA
     /// place sur la ligne telle qu'elle est maintenant. Une ligne chiffrée sans
-    /// clair recevable rend le littéral, jamais le texte que le serveur y a
-    /// écrit (audit #12916) ; rien ne change pour un message en clair.
+    /// clair recevable dit POURQUOI (IOS-04, #18947) — en attente, en attente
+    /// d'approbation, à mettre à jour, illisible —, jamais le texte que le
+    /// serveur y a écrit (audit #12916) ni le littéral `[Encrypted]` qui
+    /// confondait les quatre ; rien ne change pour un message en clair.
     func apply(to message: inout MeeshyMessage, conversationId: String) {
         guard EndToEndThreadPlaintexts.awaitsPlaintext(message) else { return }
-        guard let entry = adopted[message.id],
-              let readable = EndToEndThreadPlaintexts.adoption(of: entry, by: message, conversationId: conversationId) else {
-            message.content = E2EEWire.contentPlaceholder
+        let entry = adopted[message.id]
+        guard let entry, let readable = EndToEndThreadPlaintexts.adoption(of: entry, by: message, conversationId: conversationId) else {
+            message.content = EndToEndWithheldNotice.of(message, entry: entry).text
             return
         }
         message = readable

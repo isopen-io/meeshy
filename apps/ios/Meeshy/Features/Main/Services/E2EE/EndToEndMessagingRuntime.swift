@@ -327,6 +327,8 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
             Logger.e2ee.info("e2ee envelope opened message=\(message.messageId, privacy: .public)")
         case .undecryptable(let messageId, _):
             Logger.e2ee.warning("e2ee envelope undecryptable message=\(messageId, privacy: .public)")
+        case .awaitingUpgrade(let messageId, _):
+            Logger.e2ee.warning("e2ee envelope kept for a newer version message=\(messageId, privacy: .public)")
         case .notForThisDevice(let envelopeId):
             Logger.e2ee.info("e2ee envelope for another device id=\(envelopeId, privacy: .public)")
         case .deferred(let envelopeId):

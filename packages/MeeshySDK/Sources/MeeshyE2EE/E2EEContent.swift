@@ -87,18 +87,39 @@ public struct E2EEContent: Codable, Equatable, Sendable {
     }
 
     /// Refuse une version que cet appareil ne sait pas lire : un message d'une
-    /// version future ne s'affiche jamais à moitié.
+    /// version future ne s'affiche jamais à moitié. La version se lit AVANT
+    /// toute autre clé (contrat #18940, verdict `future-version`) : une version
+    /// future se reconnaît quelle que soit sa forme, pour être GARDÉE et relue
+    /// après la mise à jour (IOS-04) ; une version absente, non entière ou
+    /// antérieure à la première rend le contenu illisible.
     public static func decoded(from data: Data) throws -> E2EEContent {
-        let content = try JSONDecoder().decode(E2EEContent.self, from: data)
-        guard content.v == currentVersion else { throw E2EEContentError.unsupportedVersion(content.v) }
-        return content
+        let version = try JSONDecoder().decode(VersionProbe.self, from: data).v
+        guard version == currentVersion else {
+            throw version > currentVersion ? E2EEContentError.unsupportedVersion(version) : E2EEContentError.invalidVersion(version)
+        }
+        return try JSONDecoder().decode(E2EEContent.self, from: data)
+    }
+
+    private struct VersionProbe: Decodable {
+        let v: Int
     }
 }
 
 public enum E2EEContentError: Error, Equatable {
+    /// Une version FUTURE : un appareil à jour la lira.
     case unsupportedVersion(Int)
+    /// Une version qui n'a jamais existé (zéro, négative) : illisible.
+    case invalidVersion(Int)
     /// Le serveur présente ce chiffré dans une autre conversation que la sienne.
     case misattributed
     /// Le serveur présente ce chiffré sous un autre expéditeur que son auteur.
     case misattributedAuthor
+}
+
+extension E2EEContentError {
+    /// La version future qu'annonce ce refus, s'il en annonce une.
+    var futureVersion: Int? {
+        guard case .unsupportedVersion(let version) = self else { return nil }
+        return version
+    }
 }

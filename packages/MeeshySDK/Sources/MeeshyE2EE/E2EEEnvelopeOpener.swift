@@ -34,9 +34,14 @@ public enum E2EEOpenOutcome: Equatable, Sendable {
     /// La base ou le verrou ont refusé (suspension, base occupée) : rien n'a
     /// été décidé, l'enveloppe reste sur le serveur et se rouvrira au rattrapage.
     case deferred(envelopeId: String)
-    /// libsignal l'a refusée (rejeu, session inconnue, version future) : la
-    /// ligne locale le dit, rien ne repart en clair, aucun renvoi n'est demandé.
+    /// libsignal l'a refusée (rejeu, session inconnue), ou son clair n'est pas
+    /// à sa place : la ligne locale le dit, rien ne repart en clair, aucun
+    /// renvoi n'est demandé.
     case undecryptable(messageId: String, conversationId: String)
+    /// Ouverte et authentifiée, mais écrite dans une version (ou une forme) que
+    /// cet appareil ne lit pas encore (IOS-04, #18947) : ses octets clairs sont
+    /// gardés, scellés, et se relisent après la mise à jour.
+    case awaitingUpgrade(messageId: String, conversationId: String)
     /// Un SIGNAL authentifié (#13142), rangé dans la boîte des signaux : l'app
     /// l'applique selon `E2EESignalAuthority`, puis le règle. Réglé, il revient
     /// tel quel (une copie croisée de la même enveloppe) et ne se rejoue pas.
@@ -45,7 +50,7 @@ public enum E2EEOpenOutcome: Equatable, Sendable {
     public var messageId: String? {
         switch self {
         case .opened(let message): message.messageId
-        case .undecryptable(let messageId, _): messageId
+        case .undecryptable(let messageId, _), .awaitingUpgrade(let messageId, _): messageId
         case .notForThisDevice, .deferred, .signal: nil
         }
     }
@@ -53,7 +58,7 @@ public enum E2EEOpenOutcome: Equatable, Sendable {
     public var conversationId: String? {
         switch self {
         case .opened(let message): message.conversationId
-        case .undecryptable(_, let conversationId): conversationId
+        case .undecryptable(_, let conversationId), .awaitingUpgrade(_, let conversationId): conversationId
         case .signal(let received): received.conversationId
         case .notForThisDevice, .deferred: nil
         }
@@ -137,20 +142,12 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
                         throw E2EEOpenError.unapprovedOwnDevice
                     }
                 }
-                if E2EEPayloadKind.of(plaintext) == .signal {
-                    return .signal(try Self.receivedSignal(plaintext, in: envelope, transaction: transaction))
-                }
-                let content = try E2EEContent.decoded(from: plaintext)
-                guard content.belongs(to: envelope.conversationId) else { throw E2EEContentError.misattributed }
-                guard content.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId) else {
-                    throw E2EEContentError.misattributedAuthor
-                }
-                try E2EEPlaintextRecords.save(.readable(content, senderUserId: envelope.senderUserId), for: envelope.messageId, in: transaction)
-                return .message(content)
+                return try Self.read(plaintext, in: envelope, transaction: transaction)
             }
             switch opened {
             case .message(let content): return outcome(of: .readable(content, senderUserId: envelope.senderUserId), envelope)
             case .signal(let received): return .signal(received)
+            case .kept(let kept): return outcome(of: .awaitsUpgrade(kept), envelope)
             }
         } catch {
             // La socket et le rattrapage peuvent ouvrir la même enveloppe en même
@@ -171,6 +168,48 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
     private enum Opened {
         case message(E2EEContent)
         case signal(E2EEReceivedSignal)
+        /// Authentifié, illisible par CETTE version : gardé pour la suivante.
+        case kept(E2EEKeptPlaintext)
+    }
+
+    /// Ce que devient le clair, DANS la transaction de son déchiffrement. Un
+    /// message que cette version ne lit pas (version future, forme inconnue) et
+    /// un signal d'une version future sont GARDÉS, et la transaction se valide :
+    /// le ratchet avance, le message suivant s'ouvre, et ce clair-ci se relit
+    /// après la mise à jour (IOS-04, #18947 ; contrat #18940). Un clair mal
+    /// placé reste un verdict : garder ce qu'un serveur a déplacé n'a pas de sens.
+    private static func read(_ plaintext: Data, in envelope: E2EEServedEnvelope, transaction: any E2EERecordTransaction) throws -> Opened {
+        if E2EEPayloadKind.of(plaintext) == .signal {
+            do {
+                return .signal(try receivedSignal(plaintext, in: envelope, transaction: transaction))
+            } catch E2EESignalError.unsupportedVersion(let version) {
+                return .kept(try keep(plaintext, version: version, isSignal: true, of: envelope, in: transaction))
+            }
+        }
+        let content: E2EEContent
+        do {
+            content = try E2EEContent.decoded(from: plaintext)
+        } catch {
+            let version = (error as? E2EEContentError)?.futureVersion
+            return .kept(try keep(plaintext, version: version, isSignal: false, of: envelope, in: transaction))
+        }
+        guard content.belongs(to: envelope.conversationId) else { throw E2EEContentError.misattributed }
+        guard content.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId) else {
+            throw E2EEContentError.misattributedAuthor
+        }
+        try E2EEPlaintextRecords.save(.readable(content, senderUserId: envelope.senderUserId), for: envelope.messageId, in: transaction)
+        return .message(content)
+    }
+
+    private static func keep(
+        _ plaintext: Data, version: Int?, isSignal: Bool, of envelope: E2EEServedEnvelope, in transaction: any E2EERecordTransaction
+    ) throws -> E2EEKeptPlaintext {
+        let kept = E2EEKeptPlaintext(
+            bytes: E2EEPadding.unpadded(plaintext), version: version, isSignal: isSignal,
+            conversationId: envelope.conversationId, senderUserId: envelope.senderUserId, senderDeviceId: envelope.senderDeviceId
+        )
+        try E2EEPlaintextRecords.save(.awaitsUpgrade(kept), for: envelope.messageId, in: transaction)
+        return kept
     }
 
     /// Un signal ne se range que s'il est à SA place : la conversation de
@@ -221,13 +260,14 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         return outcomes
     }
 
-    /// Une enveloppe ouverte, ou définitivement illisible, s'efface du serveur ;
-    /// celle d'une autre génération reste, pour le balayage de 30 jours.
+    /// Une enveloppe ouverte, gardée pour une version future, ou définitivement
+    /// illisible, s'efface du serveur ; celle d'une autre génération reste,
+    /// pour le balayage de 30 jours.
     private func acknowledge(_ opened: [(E2EEServedEnvelope, E2EEOpenOutcome)]) async {
         let ids = opened.compactMap { envelope, outcome -> String? in
             switch outcome {
             case .notForThisDevice, .deferred: nil
-            case .opened, .undecryptable, .signal: envelope.id
+            case .opened, .undecryptable, .awaitingUpgrade, .signal: envelope.id
             }
         }
         guard !ids.isEmpty else { return }
@@ -245,6 +285,8 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
                 messageId: envelope.messageId, conversationId: envelope.conversationId,
                 senderUserId: senderUserId, senderDeviceId: envelope.senderDeviceId, content: content
             ))
+        case .awaitsUpgrade:
+            return .awaitingUpgrade(messageId: envelope.messageId, conversationId: envelope.conversationId)
         case .undecryptable:
             return .undecryptable(messageId: envelope.messageId, conversationId: envelope.conversationId)
         }
