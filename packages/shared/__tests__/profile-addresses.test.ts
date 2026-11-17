@@ -6,6 +6,7 @@ import {
   normalizeAddressTitle,
   normalizeAddressUrl,
   servedAddresses,
+  addressesSeenAs,
   type AddressColumns,
 } from '../utils/profile-addresses';
 import { RELATION_LEVELS } from '../types/relation';
@@ -118,5 +119,17 @@ describe('servedAddresses : une adresse ne part que vers le cercle choisi', () =
   it('sans lien de suivi, pas de trackedPath', () => {
     const [servie] = servedAddresses([adresse()], { isSelf: false, viewerLevel: 'PUBLIC' });
     expect('trackedPath' in servie).toBe(false);
+  });
+});
+
+describe('addressesSeenAs : « Voir comme » rend ce que lirait un lecteur du cercle', () => {
+  it('filtre sur le cercle et retire le réglage', () => {
+    const own = servedAddresses(
+      [adresse({ id: 'p', circle: 'PUBLIC' }), adresse({ id: 'a', circle: 'FRIEND', position: 1 }), adresse({ id: 's', circle: 'BLOOD', position: 2 })],
+      { isSelf: true, viewerLevel: 'PUBLIC' },
+    );
+    const vues = addressesSeenAs(own, 'FRIEND');
+    expect(vues.map((v) => v.id)).toEqual(['p', 'a']);
+    expect(vues.every((v) => !('circle' in v))).toBe(true);
   });
 });

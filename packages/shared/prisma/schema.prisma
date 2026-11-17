@@ -131,6 +131,8 @@ model User {
   city                      String?
   /// Cercle (RelationLevel) à partir duquel la ville se lit ; null = la personne seule.
   cityCircle                String?
+  /// Adresses personnelles publiées sur la fiche (#18863).
+  profileAddresses          ProfileAddress[]
   email                     String   @unique
   phoneNumber               String?
   /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
@@ -2665,6 +2667,29 @@ model TrackingLink {
 
   clicks  TrackingLinkClick[]
   creator User?               @relation("TrackingLinkCreator", fields: [createdBy], references: [id])
+}
+
+/// Adresse personnelle publiée sur la fiche (#18863) : une déclaration de son propriétaire,
+/// servie au seul cercle (`RelationLevel`) qu'il a choisi. Le compteur de clics n'est pas une
+/// colonne : il se lit sur le `TrackingLink` désigné par `trackingToken`.
+model ProfileAddress {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  title         String
+  url           String
+  glyph         String   @default("site")
+  /// Cercle à partir duquel l'adresse se lit ; une valeur illisible ferme.
+  circle        String
+  position      Int      @default(0)
+  isShown       Boolean  @default(true)
+  /// Jeton du lien de suivi (`/l/<token>`) ; null = clics non comptés.
+  trackingToken String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, position])
 }
 
 /// Clic sur un lien de tracking

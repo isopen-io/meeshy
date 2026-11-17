@@ -6,6 +6,8 @@ import { gateProfilePresence } from './presence-gate';
 import { servedProfileDecor, servedProfileDecorJsonSchema } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { withServedCity } from './profile-city';
+import { withServedAddresses } from './profile-addresses';
+import { isFieldServed } from '../../utils/sparse-fieldset';
 import { targetHasBlockedViewer } from './profile-block-gate';
 import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
 
@@ -119,6 +121,22 @@ export const publicProfileSchema = {
     // (`withServedCity`) ; `cityCircle` (le réglage) ne part qu'à lui-même.
     city: { type: 'string' },
     cityCircle: { type: 'string', nullable: true },
+    // #18863 : les adresses personnelles servies au cercle choisi par chacune (`withServedAddresses`) ;
+    // absent quand rien n'est servi. `circle` ne part qu'à leur propriétaire.
+    addresses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          url: { type: 'string' },
+          glyph: { type: 'string' },
+          trackedPath: { type: 'string' },
+          circle: { type: 'string' },
+        },
+      },
+    },
     // #10632 / #10932 : le contour d'avatar, la bannière de design et le cadre de bannière ÉQUIPÉS (additif).
     profileDecor: servedProfileDecorJsonSchema,
   },
@@ -217,6 +235,7 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
     timezone: ['timezone'],
     city: ['city', 'cityCircle'],
     cityCircle: ['cityCircle'],
+    addresses: [],
     profileDecor: ['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame'],
   },
 };
@@ -321,5 +340,7 @@ export async function servirProfilPublic(
   // Garder D'ABORD, composer ensuite : la garde lit `isOnline`,
   // `lastActiveAt` et `deactivatedAt` sur la ligne chargée.
   const gated = await gateProfilePresence(fastify, request, user);
-  return buildPublicProfile(await withServedCity(fastify, request, gated)) as unknown as Record<string, unknown>;
+  const withCity = await withServedCity(fastify, request, gated);
+  const composed = isFieldServed(fields, 'addresses') ? await withServedAddresses(fastify, request, withCity) : withCity;
+  return buildPublicProfile(composed) as unknown as Record<string, unknown>;
 }

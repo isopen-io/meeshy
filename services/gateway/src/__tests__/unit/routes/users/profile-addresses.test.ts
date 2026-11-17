@@ -53,7 +53,7 @@ jest.mock('../../../../services/TrackingLinkService', () => ({
 }));
 
 import { meAddressRoutes } from '../../../../routes/users/me-addresses';
-import { getUserById } from '../../../../routes/users/profile';
+import { getUserByUsername } from '../../../../routes/users/profile';
 
 type Row = {
   id: string; userId: string; title: string; url: string; glyph: string; circle: string;
@@ -98,7 +98,7 @@ async function monter(): Promise<FastifyInstance> {
     req.authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId: viewerId, registeredUser: { id: viewerId, role: 'USER' } };
   });
   app.decorate('prisma', prisma() as never);
-  await app.register(async (i) => { await meAddressRoutes(i); await getUserById(i); }, { prefix: '/api/v1' });
+  await app.register(async (i) => { await meAddressRoutes(i); await getUserByUsername(i); }, { prefix: '/api/v1' });
   await app.ready();
   return app;
 }
