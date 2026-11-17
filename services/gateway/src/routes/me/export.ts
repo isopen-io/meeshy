@@ -26,6 +26,8 @@ import { exportReadingActivity } from './export-reading';
 import { relationsExportSchema } from './export-relations';
 import { exportRelations } from '../../services/relations/relationExport';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
+import { ADDRESS_MAX_COUNT } from '@meeshy/shared/utils/profile-addresses';
+import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
@@ -641,11 +643,19 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               lastLoginAt: true,
               lastLoginIp: true,
               lastLoginLocation: true,
+              // #18863 — les adresses de fiche, masquées comprises, avec le cercle choisi pour chacune.
+              profileAddresses: {
+                select: PROFILE_ADDRESS_EXPORT_SELECT,
+                orderBy: { position: 'asc' },
+                take: ADDRESS_MAX_COUNT,
+              },
             },
           });
 
           // Les adresses de plus de 12 mois ne se servent plus, purge armée ou non.
-          exportData.profile = user ? withoutExpiredConnectionTraces(user, new Date()) : user;
+          exportData.profile = user
+            ? await withExportedAddresses(fastify.prisma, userId, withoutExpiredConnectionTraces(user, new Date()))
+            : user;
         }
 
         // Calculée UNE fois, réutilisée par `messages` et `reactions` : une

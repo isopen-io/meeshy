@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { ADDRESS_MAX_COUNT, isAddressCircle, servedAddresses, type AddressColumns, type ServedAddress } from '@meeshy/shared/utils/profile-addresses';
 import { readProfileCircleView } from '../../services/relations/profileCircleView';
-import { ownedAddressLinks } from '../../services/profile-addresses/address-links';
+import { leadsTo, ownedAddressLinks } from '../../services/profile-addresses/address-links';
 import { profileViewerId } from './profile-block-gate';
 
 /**
@@ -12,8 +12,9 @@ import { profileViewerId } from './profile-block-gate';
  * reçoit que celles de son cercle, sans cercle, position ni clics. Aucune lecture de relation
  * quand aucune adresse n'en dépend (toutes publiques, ou lecteur sans compte). Une lecture qui
  * échoue lève : l'appelant ferme. Aucune adresse ⇒ le champ est ABSENT (ancien contrat intact).
- * Un lien de suivi ne se sert que s'il est encore celui du propriétaire et ouvert : sinon
- * l'adresse part DIRECTE, jamais vers un `/l/<jeton>` mort ou repris par un autre compte.
+ * Un lien de suivi ne se sert que s'il est encore celui du propriétaire, ouvert, et qu'il mène
+ * à l'URL affichée : sinon l'adresse part DIRECTE, jamais vers un `/l/<jeton>` mort, repris par
+ * un autre compte ou redirigé depuis « Mes liens » ailleurs que ce que le lecteur lit.
  */
 export async function withServedAddresses<T extends { id: string }>(
   fastify: FastifyInstance,
@@ -34,7 +35,10 @@ export async function withServedAddresses<T extends { id: string }>(
     ? (await readProfileCircleView(fastify.prisma, { viewerId, targetId })).level
     : 'PUBLIC';
   const links = await ownedAddressLinks(fastify.prisma, targetId, rows.flatMap((r) => (r.trackingToken ? [r.trackingToken] : [])));
-  const linked = rows.map((r) => (r.trackingToken && links.get(r.trackingToken)?.isOpen ? r : { ...r, trackingToken: null }));
+  const linked = rows.map((r) => {
+    const link = r.trackingToken ? links.get(r.trackingToken) : undefined;
+    return leadsTo(link, r.url) && link.isOpen ? r : { ...r, trackingToken: null };
+  });
   const addresses = servedAddresses(linked, { isSelf, viewerLevel });
   return addresses.length === 0 ? row : { ...row, addresses };
 }
