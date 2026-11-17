@@ -145,7 +145,7 @@ export function VitrinePreview({
         {translate(language, 'userProfile.vitrine.seenBy', { level: relationLevelLabel(language, level) })}
       </p>
       <header className="flex items-center gap-4">
-        <Avatar initials={initialsOf(name)} color={accent} size={64} name={name} />
+        <Avatar initials={initialsOf(name)} color={accent} size={64} name={name} {...(profile.avatar === null ? {} : { src: profile.avatar })} />
         <div className="min-w-0">
           <h1 className="truncate text-screen font-bold">{name}</h1>
           <p className="truncate text-caption">@{profile.username}</p>
