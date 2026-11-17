@@ -1,6 +1,6 @@
 import '@/styles/kit-ticket.css';
 import '@/styles/kit-motion.css';
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { impact } from '@/lib/view/haptics';
 
@@ -49,26 +49,45 @@ const CHECK = (
   </svg>
 );
 
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+type Faces = { readonly front: RefObject<HTMLDivElement | null>; readonly back: RefObject<HTMLDivElement | null> };
+
+/** Le côté qui devient inerte ne garde jamais le focus : s'il l'avait, il passe au côté montré. Un focus hors du billet n'est pas volé. */
+const handOverFocus = (hidden: HTMLElement | null, shown: HTMLElement | null): void => {
+  if (hidden === null || shown === null || !hidden.contains(document.activeElement)) return;
+  (shown.querySelector<HTMLElement>(FOCUSABLE) ?? shown).focus();
+};
+
 /**
  * Le retournement : `isFlipped` en est la seule cause. Le verso n'est construit qu'au premier
  * retournement (le conteneur existe, inerte, son contenu non). Au retournement, un tic rigide
- * à la tranche, une fois, et le mot du côté s'annonce poliment.
+ * à la tranche, une fois, le mot du côté s'annonce poliment, et le focus qui était sur le côté
+ * caché passe au côté montré — avant toute peinture, avant que l'inertie ne le jette.
  */
-function useFlip(isFlipped: boolean, hasBack: boolean, labels: MeeshyTicketFlipLabels | undefined) {
+function useFlip(isFlipped: boolean, hasBack: boolean, labels: MeeshyTicketFlipLabels | undefined, faces: Faces) {
   const flipped = isFlipped && hasBack;
   const [hasFlipped, setHasFlipped] = useState(flipped);
   const [said, setSaid] = useState('');
   const previous = useRef(flipped);
-  useEffect(() => {
+  const front = labels?.front;
+  const back = labels?.back;
+  useLayoutEffect(() => {
     if (flipped) setHasFlipped(true);
     if (previous.current === flipped) return;
     previous.current = flipped;
-    setSaid(labels === undefined ? '' : flipped ? labels.back : labels.front);
+    handOverFocus(flipped ? faces.front.current : faces.back.current, flipped ? faces.back.current : faces.front.current);
+    setSaid((flipped ? back : front) ?? '');
+  }, [flipped, front, back, faces]);
+  const turns = useRef(flipped);
+  useEffect(() => {
+    if (turns.current === flipped) return;
+    turns.current = flipped;
     if (prefersReducedMotion()) return;
     const timer = window.setTimeout(() => impact('rigid'), MEESHY_TICKET_MEASURE.flipMidpointMs);
     return () => window.clearTimeout(timer);
-  }, [flipped, labels]);
-  return { flipped, hasFlipped, said };
+  }, [flipped]);
+  return { flipped, hasFlipped: hasFlipped || flipped, said };
 }
 
 /**
@@ -109,7 +128,10 @@ export const MeeshyTicket = memo(function MeeshyTicket({
   if ((kind === 'ghost' || kind === 'struck') && (statusLabel === undefined || statusLabel === '')) throw new Error('MeeshyTicket : un billet fantôme ou barré demande le mot écrit de son état.');
   const [isPressed, setPressed] = useState(false);
   const recipe = meeshyTicketRecipe({ size, kind, tint, isSelected, isPressed, isDragging, isFlipped: isFlipped && back !== undefined, reduceMotion: prefersReducedMotion() });
-  const { flipped, hasFlipped, said } = useFlip(isFlipped, has(back), flipLabels);
+  const frontFace = useRef<HTMLDivElement>(null);
+  const backFace = useRef<HTMLDivElement>(null);
+  const faces = useRef<Faces>({ front: frontFace, back: backFace }).current;
+  const { flipped, hasFlipped, said } = useFlip(isFlipped, has(back), flipLabels, faces);
   const isLoading = recipe.kind === 'loading';
   const phrase = label ?? [title, code, figure === undefined ? undefined : `${figure}${figureCaption === undefined ? '' : ` ${figureCaption}`}`, statusLabel, isSelected === true ? selectedLabel : undefined].filter((part): part is string => part !== undefined && part !== '').join(', ');
   const classes = ['kit-ticket', ...(className === undefined ? [] : [className])].join(' ');
@@ -132,7 +154,7 @@ export const MeeshyTicket = memo(function MeeshyTicket({
       data-code-tinted={codeTinted === true ? '' : undefined}
     >
       <div className="kit-ticket__faces">
-        <div className="kit-ticket__face kit-ticket__front" data-kit-ticket-front="" aria-hidden={flipped ? 'true' : undefined} {...(flipped ? { inert: true } : {})}>
+        <div ref={frontFace} tabIndex={-1} className="kit-ticket__face kit-ticket__front" data-kit-ticket-front="" aria-hidden={flipped ? 'true' : undefined} {...(flipped ? { inert: true } : {})}>
           {onPress === undefined ? null : (
             <button
               type="button"
@@ -196,7 +218,7 @@ export const MeeshyTicket = memo(function MeeshyTicket({
           )}
         </div>
         {has(back) ? (
-          <div className="kit-ticket__face kit-ticket__back" data-kit-ticket-back="" aria-hidden={flipped ? undefined : 'true'} {...(flipped ? {} : { inert: true })}>
+          <div ref={backFace} tabIndex={-1} className="kit-ticket__face kit-ticket__back" data-kit-ticket-back="" aria-hidden={flipped ? undefined : 'true'} {...(flipped ? {} : { inert: true })}>
             {hasFlipped ? back : null}
           </div>
         ) : null}

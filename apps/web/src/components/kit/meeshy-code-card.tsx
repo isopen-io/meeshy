@@ -155,7 +155,8 @@ const has = (slot: ReactNode): boolean => slot !== undefined && slot !== null &&
 
 /**
  * Une carte à code : verre de K01, plaque claire, matrice, légende. Sans `payload` : le
- * squelette à la taille finale de la carte. Prête : la matrice le remplace en fondu, rien ne
+ * squelette à la taille finale de la carte. Un payload que l'encodeur refuse ne fait pas
+ * attendre : aucune matrice, aucun squelette. Prête : la matrice le remplace en fondu, rien ne
  * bouge autour. Incliner ne re-rend ni l'hôte ni les voisins. Avec `onPress` : un bouton
  * nommé (l'hôte décide quoi en faire, par exemple agrandir une miniature).
  */
@@ -165,7 +166,7 @@ export const MeeshyCodeCard = memo(function MeeshyCodeCard({ payload, label, cap
   const recipe = meeshyCodeCardRecipe({ style, size, tilt, tint, modules: matrix?.size, reduceMotion: systemReducedMotion() });
   useTilt(ref, recipe.tilt);
   const isPressable = onPress !== undefined;
-  const isWaiting = face === 'code' && recipe.style !== 'reticle' && (payload === undefined || matrix === null);
+  const isWaiting = face === 'code' && recipe.style !== 'reticle' && payload === undefined;
   const classes = ['kit-code-card', ...(className === undefined ? [] : [className])].join(' ');
   const showsCode = face === 'code' && recipe.style !== 'reticle' && matrix !== null && payload !== undefined && !recipe.isRefused;
   const inner = (

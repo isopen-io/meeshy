@@ -1,5 +1,5 @@
 import '@/styles/kit-person-row.css';
-import { memo, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react';
 
 import {
   MEESHY_PERSON_ROW_MEASURE,
@@ -92,9 +92,17 @@ function Actions({ side, actions, onPerformed }: { readonly side: Side; readonly
   );
 }
 
-function useSwipe(hasLeading: boolean, hasTrailing: boolean) {
+const SWIPE_CLICK_WINDOW_MS = 400;
+
+/**
+ * Le balayage : il ouvre un bord, une autre rangée balayée ou un toucher ailleurs le referme.
+ * Le clic qui TERMINE un balayage n'est pas un appui ; ouverte, un toucher sur la rangée la
+ * referme au lieu de la presser.
+ */
+function useSwipe(hasLeading: boolean, hasTrailing: boolean, wrap: RefObject<HTMLDivElement | null>) {
   const [open, setOpen] = useState<Side | null>(null);
   const start = useRef<{ readonly x: number; readonly y: number } | null>(null);
+  const swipedAt = useRef<number | null>(null);
   const close = useRef(() => setOpen(null));
   useEffect(() => {
     const current = close.current;
@@ -103,6 +111,15 @@ function useSwipe(hasLeading: boolean, hasTrailing: boolean) {
       closers.delete(current);
     };
   }, []);
+  useEffect(() => {
+    if (open === null) return;
+    const onOutside = (event: Event): void => {
+      if (event.target instanceof Node && wrap.current?.contains(event.target) === true) return;
+      setOpen(null);
+    };
+    document.addEventListener('pointerdown', onOutside);
+    return () => document.removeEventListener('pointerdown', onOutside);
+  }, [open, wrap]);
   const settle = (side: Side | null): void => {
     setOpen(side);
     if (side !== null) closeOthers(close.current);
@@ -118,6 +135,7 @@ function useSwipe(hasLeading: boolean, hasTrailing: boolean) {
       const dx = event.clientX - from.x;
       const isHorizontal = Math.abs(dx) > Math.abs(event.clientY - from.y) * 1.5;
       if (!isHorizontal || Math.abs(dx) < MEESHY_PERSON_ROW_MEASURE.swipeThreshold) return;
+      swipedAt.current = event.timeStamp;
       const isRtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
       const side: Side = (dx < 0) !== isRtl ? 'trailing' : 'leading';
       if (open === side) return settle(null);
@@ -131,7 +149,16 @@ function useSwipe(hasLeading: boolean, hasTrailing: boolean) {
       if (event.key === 'Escape' && open !== null) settle(null);
     },
   };
-  return { open, settle, handlers };
+  /** Vrai quand le clic reçu n'est pas un appui : la fin d'un balayage, ou la fermeture d'une rangée ouverte. */
+  const interceptsPress = (event: { readonly timeStamp: number }): boolean => {
+    const swiped = swipedAt.current;
+    swipedAt.current = null;
+    if (swiped !== null && event.timeStamp - swiped < SWIPE_CLICK_WINDOW_MS) return true;
+    if (open === null) return false;
+    settle(null);
+    return true;
+  };
+  return { open, settle, handlers, interceptsPress };
 }
 
 /**
@@ -170,7 +197,8 @@ export const MeeshyPersonRow = memo(function MeeshyPersonRow({
   const [isPressed, setPressed] = useState(false);
   const leading = orderedActions(leadingActions);
   const ending = orderedActions(trailingActions);
-  const { open, settle, handlers } = useSwipe(leading.length > 0, ending.length > 0);
+  const wrap = useRef<HTMLDivElement>(null);
+  const { open, settle, handlers, interceptsPress } = useSwipe(leading.length > 0, ending.length > 0, wrap);
   const secondLine = isPending === true && statusLine !== undefined ? statusLine : preview ?? subtitle;
   const recipe = meeshyPersonRowRecipe({ size, state, selection, hasSubtitle: secondLine !== undefined && secondLine !== '', hasMeta: meta !== undefined, isPressed, isPending, hasOnPress: onPress !== undefined, divider });
   const phrase = label ?? spokenPhrase([title, levelLabel, secondLine, meta, metaDetail]);
@@ -178,7 +206,7 @@ export const MeeshyPersonRow = memo(function MeeshyPersonRow({
   const checked = selection === undefined ? undefined : 'single' in selection ? selection.single : selection.multiple;
   const hasEnd = trailing !== undefined && trailing !== null;
   return (
-    <div className={className === undefined ? 'kit-person-wrap' : `kit-person-wrap ${className}`} data-kit-person-wrap="" {...handlers}>
+    <div ref={wrap} className={className === undefined ? 'kit-person-wrap' : `kit-person-wrap ${className}`} data-kit-person-wrap="" {...handlers}>
       <div className="kit-person-swipe" data-open={open ?? undefined}>
         <Actions side="leading" actions={leading} onPerformed={() => settle(null)} />
         <div
@@ -200,7 +228,9 @@ export const MeeshyPersonRow = memo(function MeeshyPersonRow({
               role={checked === undefined ? undefined : isSingle ? 'radio' : 'checkbox'}
               aria-checked={checked}
               aria-label={phrase}
-              onClick={onPress}
+              onClick={(event) => {
+                if (!interceptsPress(event)) onPress();
+              }}
               onPointerDown={() => setPressed(true)}
               onPointerUp={() => setPressed(false)}
               onPointerLeave={() => setPressed(false)}

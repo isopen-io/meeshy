@@ -1,5 +1,5 @@
 import '@/styles/kit-group-card.css';
-import { Children, Fragment, memo, useState, type ReactNode } from 'react';
+import { Children, Fragment, memo, useId, useState, type ReactNode } from 'react';
 
 import { MeeshyGlass } from './meeshy-glass-tone';
 import { MeeshySectionHeader } from './meeshy-section-header';
@@ -84,8 +84,10 @@ export const MeeshyGroupCard = memo(function MeeshyGroupCard({
 }: MeeshyGroupCardProps) {
   if (onPress !== undefined && (label === undefined || label === '')) throw new Error('MeeshyGroupCard : onPress demande un label, le nom dit de la carte.');
   const [isPressed, setPressed] = useState(false);
+  const overlineId = useId();
   const recipe = meeshyGroupCardRecipe({ surface, layout, size, tail, tint, dividerInset, isPressed, isHighlighted, isLocked });
-  const showsHeader = (overline !== undefined && overline !== '') || has(headerTrailing);
+  const hasOverline = overline !== undefined && overline !== '';
+  const showsHeader = hasOverline || has(headerTrailing);
   const classes = ['kit-group', ...(className === undefined ? [] : [className])].join(' ');
   const attributes = {
     className: classes,
@@ -103,7 +105,8 @@ export const MeeshyGroupCard = memo(function MeeshyGroupCard({
     'data-locked': isLocked === true ? '' : undefined,
     'data-pressed': isPressed && recipe.isActionable ? '' : undefined,
     role: 'group',
-    'aria-label': overline === undefined || overline === '' ? label : undefined,
+    'aria-label': hasOverline ? undefined : label,
+    'aria-labelledby': hasOverline ? overlineId : undefined,
     'aria-disabled': isLocked === true ? ('true' as const) : undefined,
   };
   const inner = (
@@ -134,7 +137,13 @@ export const MeeshyGroupCard = memo(function MeeshyGroupCard({
       ) : null}
       {showsHeader ? (
         <div className="kit-group__header" data-kit-group-header="">
-          {overline === undefined || overline === '' ? <span /> : <MeeshySectionHeader form="overline" title={overline} />}
+          {hasOverline ? (
+            <div id={overlineId} className="kit-group__overline">
+              <MeeshySectionHeader form="overline" title={overline} />
+            </div>
+          ) : (
+            <span />
+          )}
           {has(headerTrailing) ? <div className="kit-group__header-trailing">{headerTrailing}</div> : null}
         </div>
       ) : null}

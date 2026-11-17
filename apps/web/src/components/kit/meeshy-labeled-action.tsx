@@ -1,7 +1,7 @@
 import '@/styles/kit-labeled-action.css';
-import { Children, cloneElement, Fragment, isValidElement, memo, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { Children, cloneElement, Fragment, isValidElement, memo, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement, type ReactNode, type RefObject } from 'react';
 
-import { MeeshyGlassButtonFace, type MeeshyGlassButtonKind } from './meeshy-glass-button';
+import { MEESHY_GLASS_BUTTON_LONG_PRESS, MEESHY_GLASS_BUTTON_LONG_PRESS_SHORTCUTS, MeeshyGlassButtonFace, type MeeshyGlassButtonKind } from './meeshy-glass-button';
 import {
   MEESHY_LABELED_ACTION_MEASURE,
   meeshyActionGridRecipe,
@@ -44,6 +44,83 @@ export type MeeshyLabeledActionProps = {
   readonly className?: string | undefined;
 };
 
+const MENU_FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Le pressage d'une action libellée n'est que l'état de la face : jamais l'action elle-même. */
+const toggleState = (kind: MeeshyGlassButtonKind | undefined): boolean | undefined => (kind === 'active' ? true : kind === 'normal' ? false : undefined);
+
+/**
+ * Le menu de l'appui long : fermé au repos, ouvert par l'appui tenu 500 ms (au doigt), le clic
+ * droit ou Maj+F10 / la touche Menu (au clavier) — comme K02. Le relâcher qui suit un appui
+ * tenu ne joue pas l'action. Ouvert, le focus entre dans le menu ; Échap le referme et rend
+ * le focus au bouton ; choisir un élément ou toucher ailleurs le referme.
+ */
+function useActionMenu(hasMenu: boolean, isEnabled: boolean, button: RefObject<HTMLButtonElement | null>, root: RefObject<HTMLDivElement | null>, panel: RefObject<HTMLDivElement | null>) {
+  const [isOpen, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const origin = useRef<{ readonly x: number; readonly y: number } | null>(null);
+  const longFired = useRef(false);
+  const stop = (): void => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+    origin.current = null;
+  };
+  useEffect(() => stop, []);
+  useEffect(() => {
+    if (!isOpen) return;
+    panel.current?.querySelector<HTMLElement>(MENU_FOCUSABLE)?.focus();
+    const onOutside = (event: Event): void => {
+      if (event.target instanceof Node && root.current?.contains(event.target) === true) return;
+      setOpen(false);
+    };
+    document.addEventListener('pointerdown', onOutside);
+    return () => document.removeEventListener('pointerdown', onOutside);
+  }, [isOpen, panel, root]);
+  const opens = hasMenu && isEnabled;
+  const close = (returnFocus: boolean): void => {
+    setOpen(false);
+    if (returnFocus) button.current?.focus();
+  };
+  return {
+    isOpen: hasMenu && isOpen,
+    close,
+    consumesClick: (): boolean => {
+      if (!longFired.current) return false;
+      longFired.current = false;
+      return true;
+    },
+    handlers: {
+      onPointerDown: (event: PointerEvent): void => {
+        longFired.current = false;
+        if (!opens || event.button > 0) return;
+        stop();
+        origin.current = { x: event.clientX, y: event.clientY };
+        timer.current = setTimeout(() => {
+          timer.current = null;
+          longFired.current = true;
+          setOpen(true);
+        }, MEESHY_GLASS_BUTTON_LONG_PRESS.durationMs);
+      },
+      onPointerMove: (event: PointerEvent): void => {
+        const from = origin.current;
+        if (from !== null && Math.hypot(event.clientX - from.x, event.clientY - from.y) > MEESHY_GLASS_BUTTON_LONG_PRESS.maxMovement) stop();
+      },
+      onPointerEnd: stop,
+      onContextMenu: (event: MouseEvent): void => {
+        if (!opens) return;
+        event.preventDefault();
+        stop();
+        setOpen(true);
+      },
+      onKeyDown: (event: KeyboardEvent): void => {
+        if (!opens || !((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu')) return;
+        event.preventDefault();
+        setOpen(true);
+      },
+    },
+  };
+}
+
 /**
  * Une action libellée : le disque de K02 (muet), le libellé visible, une valeur facultative
  * et une pastille, dans UN seul bouton. Toucher le libellé ou la valeur fait ce que fait le
@@ -74,7 +151,13 @@ export const MeeshyLabeledAction = memo(function MeeshyLabeledAction({
 }: MeeshyLabeledActionProps) {
   if (title === '') throw new Error('MeeshyLabeledAction : le libellé est obligatoire — aucune action n’est un glyphe seul.');
   const hintId = useId();
+  const menuId = useId();
   const [isPressed, setPressed] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const hasMenu = menu !== undefined && menu !== null;
+  const actionMenu = useActionMenu(hasMenu, disabled !== true, buttonRef, rootRef, panelRef);
   const recipe = meeshyLabeledActionRecipe({ kind, size, isPending, isFeatured, isEnabled: disabled !== true, hasValue: value !== undefined, valueKind });
   const hasValue = value !== undefined && value !== '';
   if (isLoading === true && !hasValue) {
@@ -88,7 +171,12 @@ export const MeeshyLabeledAction = memo(function MeeshyLabeledAction({
   const isActive = recipe.kind === 'active';
   const stateWord = isPending === true ? words?.pending : disabled === true ? words?.unavailable : isActive ? words?.active : undefined;
   const press = (): void => {
+    if (actionMenu.consumesClick()) return;
     if (recipe.isActionable) onPress();
+  };
+  const release = (): void => {
+    setPressed(false);
+    actionMenu.handlers.onPointerEnd();
   };
   return (
     <div
@@ -100,21 +188,33 @@ export const MeeshyLabeledAction = memo(function MeeshyLabeledAction({
       data-pending={isPending === true ? '' : undefined}
       data-featured={isFeatured === true ? '' : undefined}
       data-pressed={isPressed && recipe.isActionable ? '' : undefined}
+      ref={rootRef}
     >
       <button
+        ref={buttonRef}
         type="button"
         className="kit-action__hit"
         data-kit-action-hit=""
         aria-label={label}
-        aria-pressed={kind === undefined ? undefined : isActive}
+        aria-pressed={toggleState(kind)}
         aria-busy={isPending === true ? true : undefined}
         aria-disabled={disabled === true ? true : undefined}
         aria-describedby={disabled === true && hint !== undefined ? hintId : undefined}
+        aria-haspopup={hasMenu ? 'menu' : undefined}
+        aria-expanded={hasMenu ? actionMenu.isOpen : undefined}
+        aria-controls={actionMenu.isOpen ? menuId : undefined}
+        aria-keyshortcuts={hasMenu ? MEESHY_GLASS_BUTTON_LONG_PRESS_SHORTCUTS : undefined}
         onClick={press}
-        onPointerDown={() => setPressed(true)}
-        onPointerUp={() => setPressed(false)}
-        onPointerLeave={() => setPressed(false)}
-        onPointerCancel={() => setPressed(false)}
+        onPointerDown={(event) => {
+          setPressed(true);
+          actionMenu.handlers.onPointerDown(event);
+        }}
+        onPointerMove={actionMenu.handlers.onPointerMove}
+        onPointerUp={release}
+        onPointerLeave={release}
+        onPointerCancel={release}
+        onContextMenu={actionMenu.handlers.onContextMenu}
+        onKeyDown={actionMenu.handlers.onKeyDown}
       >
         <span className="kit-action__disc">
           <MeeshyGlassButtonFace glyph={glyph} kind={recipe.kind} size={recipe.size} pressed={isPressed && recipe.isActionable} disabled={disabled === true} badge={badge} />
@@ -136,11 +236,24 @@ export const MeeshyLabeledAction = memo(function MeeshyLabeledAction({
           {hint}
         </span>
       ) : null}
-      {menu === undefined || menu === null ? null : (
-        <div className="kit-action__menu" data-menu-label={menuLabel}>
+      {actionMenu.isOpen ? (
+        <div
+          ref={panelRef}
+          id={menuId}
+          className="kit-action__menu"
+          role="group"
+          aria-label={menuLabel ?? title}
+          data-kit-action-menu=""
+          onClick={() => actionMenu.close(false)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            actionMenu.close(true);
+          }}
+        >
           {menu}
         </div>
-      )}
+      ) : null}
     </div>
   );
 });

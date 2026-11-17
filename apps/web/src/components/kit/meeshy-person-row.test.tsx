@@ -156,6 +156,16 @@ describe('MeeshyPersonRow — balayage doublé', () => {
     expect(presses).toBe(1);
   });
 
+  test('ouverte, un toucher ailleurs que sur elle la referme', () => {
+    const log: string[] = [];
+    const container = mount(<MeeshyPersonRow title="Léo" trailingActions={actions(log)} onPress={() => {}} />);
+    swipe(container.querySelector('[data-kit-person-hit]') as HTMLElement, 200, 100);
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 5, clientY: 5 }));
+    });
+    expect(container.querySelector('.kit-person-swipe')?.hasAttribute('data-open')).toBe(false);
+  });
+
   test('deux actions au plus par bord, le destructif en dernier', () => {
     const log: string[] = [];
     const three = [...actions(log), { title: 'Bloquer', glyph: <svg />, perform: () => {} }];

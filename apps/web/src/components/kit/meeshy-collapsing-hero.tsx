@@ -41,7 +41,8 @@ const has = (slot: ReactNode): boolean => slot !== undefined && slot !== null &&
 /**
  * Un héros qui se replie : six emplacements, deux hauteurs, UN avatar et UN titre (un `h1`,
  * lu une fois avec son sous-titre) qui voyagent de la bannière vers la barre. La barre de
- * verre vient de K01. Replié, la barre est un bouton nommé qui rend la main à l'hôte. Seules
+ * verre vient de K01. Replié, la barre est un bouton nommé qui rend la main à l'hôte — sans
+ * `backToTopLabel`, aucun bouton : jamais un bouton muet. Seules
  * des transformations et des opacités changent pendant le geste.
  */
 export const MeeshyCollapsingHero = memo(function MeeshyCollapsingHero({
@@ -95,7 +96,7 @@ export const MeeshyCollapsingHero = memo(function MeeshyCollapsingHero({
         <span className="kit-hero__name">{title}</span>
         {subtitle === undefined ? null : <span className="kit-hero__subtitle">{subtitle}</span>}
       </h1>
-      {recipe.barOwnsIdentity && onCollapsedTap !== undefined ? <button type="button" className="kit-hero__bar-hit" data-kit-hero-bar-hit="" aria-label={backToTopLabel} onClick={onCollapsedTap} /> : null}
+      {recipe.barOwnsIdentity && onCollapsedTap !== undefined && backToTopLabel !== undefined && backToTopLabel !== '' ? <button type="button" className="kit-hero__bar-hit" data-kit-hero-bar-hit="" aria-label={backToTopLabel} onClick={onCollapsedTap} /> : null}
     </header>
   );
 });

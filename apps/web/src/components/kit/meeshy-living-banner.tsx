@@ -48,12 +48,13 @@ const setParallax = (node: HTMLElement, degrees: number): void => {
  * La parallaxe et le « se voit » : posés sur l'élément, jamais dans l'état React — flotter ou
  * s'incliner ne re-rend ni les emplacements ni l'hôte. Le pointeur fin pilote la parallaxe ;
  * `deviceorientation` seulement si l'hôte a déjà la permission (la bannière n'en demande
- * jamais). Hors écran, le capteur s'arrête et le flottement se met en pause.
+ * jamais). Hors écran, le capteur s'arrête et le flottement se met en pause. Une bannière montée
+ * en chargement n'a pas encore de décor : le capteur part quand le décor arrive.
  */
-function useLiving(ref: RefObject<HTMLDivElement | null>, motion: MeeshyLivingBannerMotion, isMuted: boolean, allowsDeviceTilt: boolean): void {
+function useLiving(ref: RefObject<HTMLDivElement | null>, motion: MeeshyLivingBannerMotion, isMuted: boolean, allowsDeviceTilt: boolean, isLoading: boolean): void {
   useEffect(() => {
     const node = ref.current;
-    if (node === null) return;
+    if (node === null || isLoading) return;
     let isVisible = true;
     const runs = (): boolean => meeshyBannerSensorRuns({ motion, isVisible, isMuted, reducedMotion: systemReducedMotion() });
     const onPointer = (event: PointerEvent): void => {
@@ -82,7 +83,7 @@ function useLiving(ref: RefObject<HTMLDivElement | null>, motion: MeeshyLivingBa
       node.removeEventListener('pointerleave', onLeave);
       if (listensToDevice) window.removeEventListener('deviceorientation', onOrientation);
     };
-  }, [ref, motion, isMuted, allowsDeviceTilt]);
+  }, [ref, motion, isMuted, allowsDeviceTilt, isLoading]);
 }
 
 /**
@@ -107,7 +108,7 @@ export const MeeshyLivingBanner = memo(function MeeshyLivingBanner({
   className,
 }: MeeshyLivingBannerProps) {
   const ref = useRef<HTMLDivElement>(null);
-  useLiving(ref, motion, isMuted, allowsDeviceTilt);
+  useLiving(ref, motion, isMuted, allowsDeviceTilt, isLoading);
   const recipe = meeshyLivingBannerRecipe({ tint, mode, scheme, hasImage: image !== undefined, isMuted, motion, reducedMotion: systemReducedMotion(), height, collapse });
   const classes = ['kit-banner', ...(className === undefined ? [] : [className])].join(' ');
   if (isLoading) {

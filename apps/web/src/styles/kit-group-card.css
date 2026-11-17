@@ -142,6 +142,11 @@
     padding: var(--kit-group-footer-pad);
   }
 
+  .kit-group__overline {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
   .kit-group__header-trailing {
     display: flex;
     align-items: center;
