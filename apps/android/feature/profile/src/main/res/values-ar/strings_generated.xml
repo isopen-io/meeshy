@@ -14,7 +14,6 @@
     <string name="profile_action_send_message">إرسال رسالة</string>
     <string name="profile_activity_title">النشاط</string>
     <string name="profile_avatar_edit">تعديل صورة الملف الشخصي</string>
-    <string name="profile_back">رجوع</string>
     <string name="profile_bio_label">نبذة</string>
     <string name="profile_bio_placeholder">عرّفنا بنفسك...</string>
     <string name="profile_blocked_by_me">لقد حظرت هذا المستخدم</string>
@@ -36,10 +35,7 @@
     <string name="profile_decor_shop">المزيد في المتجر</string>
     <string name="profile_decor_subtitle">ظاهران للجميع على ملفك الشخصي</string>
     <string name="profile_decor_title">الإطار والبانر</string>
-    <string name="profile_detail_country">البلد</string>
-    <string name="profile_detail_system_language">اللغة الأساسية</string>
     <string name="profile_display_name_label">الاسم المعروض</string>
-    <string name="profile_e2ee">مشفّرة من طرف إلى طرف</string>
     <string name="profile_e2ee_enabled">التشفير من طرف إلى طرف مفعّل</string>
     <string name="profile_edit">تعديل</string>
     <string name="profile_email">البريد الإلكتروني</string>
@@ -51,7 +47,6 @@
     <string name="profile_language_none">لا شيء</string>
     <string name="profile_language_primary">اللغة الأساسية</string>
     <string name="profile_language_regional">اللغة الإقليمية</string>
-    <string name="profile_language_unset">غير محدّد</string>
     <string name="profile_last_name_label">اسم العائلة</string>
     <string name="profile_loadFailed_message">تعذّر تحميل هذا الملف الشخصي.</string>
     <string name="profile_name_min_characters">%1$d أحرف على الأقل.</string>
@@ -104,7 +99,6 @@
     <string name="profile_toast_unblock_failed">تعذّر إلغاء الحظر</string>
     <string name="profile_toast_user_blocked">تم حظر المستخدم</string>
     <string name="profile_toast_user_unblocked">تم إلغاء حظر المستخدم</string>
-    <string name="profile_unknown">غير معروف</string>
     <string name="profile_username">اسم المستخدم</string>
     <string name="profile_verified">موثّق</string>
     <string name="profile_view_posts">المنشورات</string>
