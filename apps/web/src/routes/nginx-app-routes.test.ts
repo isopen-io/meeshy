@@ -16,11 +16,15 @@ import { ROUTES } from './route-table';
 
 const NGINX = readFileSync(new URL('../../nginx.conf', import.meta.url), 'utf8');
 
-const firstSegment = (pattern: string): string | null => /^\/([^/]+)/.exec(pattern)?.[1] ?? null;
+/** `/@$username` (#18878) : le premier segment est un PRÉFIXE suivi d'un paramètre ; nginx le dit `@[^/]+`. */
+const firstSegment = (pattern: string): string | null => {
+  const segment = /^\/([^/]+)/.exec(pattern)?.[1] ?? null;
+  return segment !== null && segment.startsWith('@$') ? '@[^/]+' : segment;
+};
 
 describe('nginx.conf — la table des adresses de l’application', () => {
   test('le miroir porte exactement le premier segment de chaque route', () => {
-    const mirror = /map \$uri \$meeshy_app_route \{[\s\S]*?~\^\/\(([a-z|-]+)\)\(\/\|\$\) 1;/.exec(NGINX)?.[1];
+    const mirror = /map \$uri \$meeshy_app_route \{[\s\S]*?~\^\/\(([a-z|@\[\]^/+-]+)\)\(\/\|\$\) 1;/.exec(NGINX)?.[1];
     const declared = [...new Set(Object.values(ROUTES).map((route) => firstSegment(route.pattern)).filter((segment) => segment !== null))].sort();
     expect(mirror?.split('|').sort()).toEqual(declared);
   });
