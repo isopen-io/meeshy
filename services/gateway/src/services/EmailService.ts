@@ -37,6 +37,7 @@ import { emailBaseStyles } from './email/base-styles';
 import { formatInTimeZone, safeTimeZone } from '../utils/time-zone-format';
 import { claimWarningFor } from './email/claim-warning';
 import { emailMayLeave, registeredEmailRecipientLookup, type RecipientAddressLookup } from './email/recipient-policy';
+import { invitationOptOutParts } from './email/invitationOptOut';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -595,13 +596,9 @@ export class EmailService {
     const avatarHtml = data.senderAvatar
       ? `<img src="${data.senderAvatar}" alt="${this.escapeHtml(data.senderName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
       : '';
-    const optOutHtml = data.optOutUrl
-      ? `<p style="font-size:12px;color:#888;text-align:center"><a href="${data.optOutUrl}">Ne plus recevoir d'invitation a Meeshy</a></p>`
-      : '';
-    const optOutText = data.optOutUrl ? `\n\nNe plus recevoir d'invitation : ${data.optOutUrl}` : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>💬 ${this.escapeHtml(data.senderName)} vous invite sur Meeshy !</h1></div><div class="content"><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px"><strong>${this.escapeHtml(data.senderName)}</strong> vous invite a rejoindre Meeshy, la plateforme de messagerie multilingue.</p><p style="font-size:14px;color:#666">Communiquez sans barrieres linguistiques avec la traduction automatique en temps reel.</p></div><div style="text-align:center"><a href="${data.downloadUrl}" class="button">Rejoindre Meeshy</a></div>${optOutHtml}<p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${data.senderName} vous invite sur Meeshy !\n\nRejoignez la plateforme de messagerie multilingue.\n\nRejoindre : ${data.downloadUrl}${optOutText}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>💬 ${this.escapeHtml(data.senderName)} vous invite sur Meeshy !</h1></div><div class="content"><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px"><strong>${this.escapeHtml(data.senderName)}</strong> vous invite a rejoindre Meeshy, la plateforme de messagerie multilingue.</p><p style="font-size:14px;color:#666">Communiquez sans barrieres linguistiques avec la traduction automatique en temps reel.</p></div><div style="text-align:center"><a href="${data.downloadUrl}" class="button">Rejoindre Meeshy</a></div>${invitationOptOutParts(data.optOutUrl).html}<p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${data.senderName} vous invite sur Meeshy !\n\nRejoignez la plateforme de messagerie multilingue.\n\nRejoindre : ${data.downloadUrl}${invitationOptOutParts(data.optOutUrl).text}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: `${data.senderName} vous invite sur Meeshy`, html, text, trackingType: 'invitation', trackingLang: data.language });
   }

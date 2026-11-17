@@ -356,6 +356,12 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // qu'il a masqué de sa vue (historique effacé, messages supprimés pour lui)
   // ne lui est pas retraduit. Un invité sans compte n'a rien à masquer.
   'message-translation/ArrivalHistoryBackfill.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #19200 — « En commun », rubrique Liens : la fenêtre de compte et la page des messages porteurs
+  // de liens. Deux lectures, aucune application TEXTUELLE : le masquage personnel du lecteur
+  // (historique effacé, messages supprimés pour lui) est JUGÉ en mémoire, ligne par ligne, par
+  // `hiddenFromReader` sur `loadPersonalHistoryHidingByConversation` — marqueurs exigés par
+  // `IN_MEMORY_HIDING_SURFACES`. La fenêtre de compte compte donc ce que la page sert.
+  'relations/sharedLinks.ts': { kind: 'applies', reads: 2, applications: 0 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -783,6 +789,8 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
    * vert quand on retire le filtre (cycle 62 bis). Un marqueur doit tomber avec
    * ce qu'il garde.
    */
+  'relations/sharedLinks.ts': ['loadPersonalHistoryHidingByConversation(', 'hiddenFromReader('],
+
   'ConversationBridgeService.ts': [
     'loadPersonalHistoryHidingByUser(',
     'exclusiveFloorMsFor(',
