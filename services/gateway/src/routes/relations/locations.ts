@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { parseSharedLocationIncludes, SHARED_LOCATION_CIRCLES } from '@meeshy/shared/types/shared-location';
+import { readRestVersionClaim, upgradeRequirementFor } from '../../middleware/app-version-floor';
 import { bloodLocationDepsOf } from '../../services/bloodLocation/bloodLocationDeps';
 import { bloodLocationEnabledFor } from '../../services/bloodLocation/bloodLocationFlag';
 import { bloodLocationMapFor } from '../../services/bloodLocation/bloodLocationMap';
@@ -105,8 +106,9 @@ export function parseBbox(raw: unknown): SharedLocationBbox | undefined | null {
  * sur la position SERVIE. Le direct passe ensuite par `location:share-changed`.
  *
  * `include=blood,ended` (#19202, additif) en fait la carte de tous mes proches en UN appel : le
- * dernier point de chaque Sang qui me l'a consenti (derrière le drapeau de la position du Sang,
- * jugé comme l'historique) et les partages qui me visaient, terminés depuis moins d'un jour.
+ * dernier point de chaque Sang qui me l'a consenti (derrière le drapeau de la position du Sang et
+ * le plancher de version des routes de cercles, jugé comme l'historique — sous le plancher, le
+ * champ manque au lieu de refuser toute la carte) et les partages qui me visaient, terminés depuis moins d'un jour.
  */
 export function registerRelationLocations(fastify: FastifyInstance): void {
   const reads = relationLimiter(fastify, 'rel:locations:u', 120);
@@ -137,7 +139,7 @@ export function registerRelationLocations(fastify: FastifyInstance): void {
           snapshot: () => sharedLocationSnapshotFor(relay, readerId, { bbox }),
           blood: () => bloodLocationMapFor(bloodLocationDepsOf({ prisma: fastify.prisma, io: undefined }), readerId),
           ended: () => sharedLocationEndedFor(relay, readerId),
-          bloodEnabled: bloodLocationEnabledFor(readerId),
+          bloodEnabled: bloodLocationEnabledFor(readerId) && upgradeRequirementFor(readRestVersionClaim(request.headers)) === null,
         },
         { bbox, include: parseSharedLocationIncludes(query?.include) },
       );
