@@ -66,7 +66,7 @@ final class NotificationBulkRepublicationTests: XCTestCase {
         ]
 
         NotificationToastManager.shared.handleNotificationReadBulk(
-            makeReadBulk(NotificationBulkScopePayload(kind: "context", contextKey: "friendRequestId", contextValue: "fr-1"))
+            makeReadBulk(NotificationBulkScopePayload(kind: "context", contextKey: "communityId", contextValue: "co-1"))
         )
 
         XCTAssertTrue(
@@ -75,6 +75,20 @@ final class NotificationBulkRepublicationTests: XCTestCase {
             "`.types([...])` marquerait lues les lignes d'une autre demande"
         )
         cancellables.removeAll()
+    }
+
+    /// Revue N3 (#19104) — une demande d'ami lue ailleurs ne se repeint pas par les ids relevés dans le cache :
+    /// la cloche montée reçoit le PRÉDICAT, qui atteint aussi les lignes des pages au-delà du cache.
+    func test_handleNotificationReadBulk_friendRequestScope_publishesThePredicateToTheMountedBell() {
+        var requests: [String] = []
+        let cancellable = NotificationToastManager.shared.friendRequestNotificationsRead.sink { requests.append($0) }
+
+        NotificationToastManager.shared.handleNotificationReadBulk(
+            makeReadBulk(NotificationBulkScopePayload(kind: "context", contextKey: "friendRequestId", contextValue: "fr-1"))
+        )
+
+        XCTAssertEqual(requests, ["fr-1"])
+        cancellable.cancel()
     }
 
     func test_handleNotificationReadBulk_allScope_republishesNoPartialScope() {

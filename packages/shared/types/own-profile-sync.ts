@@ -24,7 +24,14 @@
  * peut en ajouter) : ce schéma les ignore.
  *
  * Les schémas zod restent hors du baril (`types/index.ts`) : on les importe
- * par `@meeshy/shared/types/own-profile-sync`.
+ * par `@meeshy/shared/types/own-profile-sync`. La liste des champs et la règle
+ * d'arbitrage vivent dans `own-profile-sync-order.ts`, SANS zod, et sont
+ * réexportées ici ; ce module y déclare aussi le contrat en types explicites,
+ * que les deux schémas ci-dessous SATISFONT. Un client web importe de là,
+ * jamais d'ici (la garde `apps/web/src/lib/no-classic-zod.test.ts` y veille).
+ * Les types exportés ICI restent ceux qu'infère zod : la passerelle compile
+ * sans `strictNullChecks`, où l'inférence rend optionnels les champs nuls — un
+ * type explicite y refuserait `safeParse(…).data`.
  *
  * @see schema.prisma model User (`systemLanguage`, `regionalLanguage`,
  * `customDestinationLanguage`, `displayName`, `firstName`, `lastName`,
@@ -32,27 +39,15 @@
  */
 import { z } from 'zod';
 
-/** Les champs de l'instantané, dans l'ordre où le Prisme puis l'affichage les lisent. */
-export const OWN_PROFILE_FIELDS = [
-  'systemLanguage',
-  'regionalLanguage',
-  'customDestinationLanguage',
-  'displayName',
-  'firstName',
-  'lastName',
-  'username',
-  'avatar',
-  'banner',
-] as const;
+import type {
+  OwnProfileSnapshot as OwnProfileSnapshotContract,
+  ProfileUpdatedEventData as ProfileUpdatedEventDataContract,
+} from './own-profile-sync-order.js';
 
-export type OwnProfileField = (typeof OWN_PROFILE_FIELDS)[number];
+export { OWN_PROFILE_FIELDS, ownProfileSnapshotIsStale } from './own-profile-sync-order.js';
+export type { OwnProfileField } from './own-profile-sync-order.js';
 
-/**
- * `null` veut dire EFFACÉ, comme sur la ligne : la langue secondaire ou la
- * destination retirées, le nom affiché qui retombe sur « Prénom Nom », la photo
- * ou la bannière ôtées. `systemLanguage`, `firstName`, `lastName` et `username`
- * sont requis en base, donc jamais nuls.
- */
+/** Le schéma de l'instantané (`own-profile-sync-order.ts` en déclare le type), que la passerelle valide. */
 export const ownProfileSnapshotSchema = z.object({
   systemLanguage: z.string().min(1),
   regionalLanguage: z.string().nullable(),
@@ -63,7 +58,7 @@ export const ownProfileSnapshotSchema = z.object({
   username: z.string(),
   avatar: z.string().nullable(),
   banner: z.string().nullable(),
-});
+}) satisfies z.ZodType<OwnProfileSnapshotContract>;
 
 export type OwnProfileSnapshot = z.infer<typeof ownProfileSnapshotSchema>;
 
@@ -72,21 +67,6 @@ export const profileUpdatedEventDataSchema = z.object({
   /** `User.updatedAt` de l'écriture, ISO 8601 — le même instant que sert `GET /me`. */
   updatedAt: z.iso.datetime({ offset: true }),
   profile: ownProfileSnapshotSchema,
-});
+}) satisfies z.ZodType<ProfileUpdatedEventDataContract>;
 
 export type ProfileUpdatedEventData = z.infer<typeof profileUpdatedEventDataSchema>;
-
-/**
- * Un instantané reçu est PÉRIMÉ quand l'instant qu'il porte est STRICTEMENT
- * antérieur à celui du profil que l'appareil tient déjà (une relecture de
- * `GET /me` arrivée après l'écriture, ou un événement plus récent). On n'écarte
- * que ce qu'on PROUVE plus ancien : rien de connu, ou un instant illisible, et
- * l'instantané s'applique. Le même instant s'applique aussi — c'est l'écho de
- * la réponse du `PATCH` sur l'appareil qui l'a fait, identique à ce qu'il tient.
- */
-export function ownProfileSnapshotIsStale(knownUpdatedAt: string | null | undefined, incomingUpdatedAt: string): boolean {
-  const known = knownUpdatedAt ? Date.parse(knownUpdatedAt) : Number.NaN;
-  const incoming = Date.parse(incomingUpdatedAt);
-  if (Number.isNaN(known) || Number.isNaN(incoming)) return false;
-  return incoming < known;
-}

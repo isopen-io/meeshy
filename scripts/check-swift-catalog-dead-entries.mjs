@@ -609,6 +609,9 @@ const PENDING_CLIENT_ENTRIES = {
   'UsersEndpoint.meAddresses': { issue: 18871, reason: 'GET|POST /users/me/addresses — lire et créer mes adresses, face Liens iOS' },
   'UsersEndpoint.meAddressesById': { issue: 18871, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens iOS' },
   'UsersEndpoint.meAddressesOrder': { issue: 18871, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens iOS' },
+  // « En commun » (chantier #18857, PR #19231) : la passerelle sert les communautés, les amis et les médias en commun de
+  // la fiche d'un autre avant les clients (#19234), qui les liront.
+  'UsersEndpoint.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — nos communautés, nos amis et nos médias en commun, lus par la fiche iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;

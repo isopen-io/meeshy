@@ -10,11 +10,10 @@ import Combine
 @MainActor
 final class NotificationRewriteRevocationTests: XCTestCase {
 
-    private var cancellables: Set<AnyCancellable> = []
-
-    private func socialEvent(id: String, isRead: Bool? = nil) throws -> SocketNotificationEvent {
+    private func socialEvent(id: String, isRead: Bool? = nil, conversationId: String? = nil) throws -> SocketNotificationEvent {
         let state = isRead.map { ", \"state\": { \"isRead\": \($0), \"createdAt\": \"2026-11-01T10:00:00.000Z\" }" } ?? ""
-        let json = "{ \"id\": \"\(id)\", \"userId\": \"u1\", \"type\": \"post_comment\", \"content\": \"Superbe\"\(state) }"
+        let context = conversationId.map { ", \"context\": { \"conversationId\": \"\($0)\" }" } ?? ""
+        let json = "{ \"id\": \"\(id)\", \"userId\": \"u1\", \"type\": \"post_comment\", \"content\": \"Superbe\"\(state)\(context) }"
         return try JSONDecoder().decode(SocketNotificationEvent.self, from: Data(json.utf8))
     }
 
@@ -59,16 +58,72 @@ final class NotificationRewriteRevocationTests: XCTestCase {
         manager.dismissToast()
         let unreadBefore = NotificationCoordinator.shared.inAppNotificationUnread
         var arrivals: [String] = []
-        var arrivedRead: [String] = []
-        manager.newNotificationReceived.sink { arrivals.append($0.id) }.store(in: &cancellables)
-        manager.notificationArrivedRead.sink { arrivedRead.append($0) }.store(in: &cancellables)
+        var quiet: [APINotification] = []
+        var bag = Set<AnyCancellable>()
+        manager.newNotificationReceived.sink { arrivals.append($0.id) }.store(in: &bag)
+        manager.notificationArrivedQuietly.sink { quiet.append($0) }.store(in: &bag)
 
         manager.handleNewNotification(try socialEvent(id: "rw-read-1", isRead: true))
 
         XCTAssertNil(manager.currentToast)
         XCTAssertEqual(NotificationCoordinator.shared.inAppNotificationUnread, unreadBefore)
         XCTAssertEqual(arrivals, [])
-        XCTAssertEqual(arrivedRead, ["rw-read-1"])
+        XCTAssertEqual(quiet.map(\.id), ["rw-read-1"])
+        XCTAssertEqual(quiet.first?.isRead, true)
+    }
+
+    /// Une notification déjà lue arrivée sur la conversation OUVERTE n'est pas relue : la lecture à l'arrivée
+    /// (`notificationMarkedRead`, `POST /read`) ne concerne que ce qui attend encore (#19104, revue N7).
+    func test_handleNewNotification_aNotificationArrivingRead_onTheOpenConversation_isNotReadAgain() throws {
+        let manager = NotificationToastManager.shared
+        manager.onConversationOpened("rw-open-conv")
+        defer { manager.onConversationClosed("rw-open-conv") }
+        var markedRead: [String] = []
+        var quiet: [String] = []
+        var bag = Set<AnyCancellable>()
+        manager.notificationMarkedRead.sink { markedRead.append($0) }.store(in: &bag)
+        manager.notificationArrivedQuietly.sink { quiet.append($0.id) }.store(in: &bag)
+
+        manager.handleNewNotification(try socialEvent(id: "rw-read-open", isRead: true, conversationId: "rw-open-conv"))
+
+        XCTAssertEqual(markedRead, [])
+        XCTAssertEqual(quiet, ["rw-read-open"])
+    }
+
+    /// Revue N1 — l'édition d'une notification NON LUE (`deleted` puis `new`, même id) reprend son rang sans
+    /// rien rejouer : ni compte (la suppression ne l'a pas décomptée), ni bannière, ni haptique, ni annonce
+    /// d'arrivée — et la cloche montée reçoit la ligne pour la ranger.
+    func test_handleNewNotification_anUnreadRewrite_neitherCountsNorShowsNorAnnouncesAnArrival() throws {
+        let manager = NotificationToastManager.shared
+        defer { manager.dismissToast() }
+        manager.dismissToast()
+        var arrivals: [String] = []
+        var quiet: [APINotification] = []
+        var bag = Set<AnyCancellable>()
+        manager.newNotificationReceived.sink { arrivals.append($0.id) }.store(in: &bag)
+        manager.notificationArrivedQuietly.sink { quiet.append($0) }.store(in: &bag)
+
+        manager.handleNotificationDeleted(NotificationDeletedEvent(notificationId: "rw-unread-1"))
+        let unreadBefore = NotificationCoordinator.shared.inAppNotificationUnread
+        manager.handleNewNotification(try socialEvent(id: "rw-unread-1", isRead: false))
+
+        XCTAssertNil(manager.currentToast, "une édition ne fait pas redescendre la bannière")
+        XCTAssertEqual(NotificationCoordinator.shared.inAppNotificationUnread, unreadBefore, "ni ne compte une seconde fois")
+        XCTAssertEqual(arrivals, [])
+        XCTAssertEqual(quiet.map(\.id), ["rw-unread-1"])
+        XCTAssertEqual(quiet.first?.isRead, false)
+    }
+
+    func test_takeRecentRevocation_isARewriteOnlyWithinTheWindow_andOnlyOnce() {
+        let manager = NotificationToastManager.shared
+        let now = Date()
+        manager.recentRevocations["rw-window-fresh"] = now.addingTimeInterval(-1)
+        manager.recentRevocations["rw-window-stale"] = now.addingTimeInterval(-(NotificationToastManager.rewriteWindow + 1))
+
+        XCTAssertTrue(manager.takeRecentRevocation("rw-window-fresh", now: now))
+        XCTAssertFalse(manager.takeRecentRevocation("rw-window-fresh", now: now), "une réécriture ne se consomme qu'une fois")
+        XCTAssertFalse(manager.takeRecentRevocation("rw-window-stale", now: now))
+        XCTAssertFalse(manager.takeRecentRevocation("rw-window-never", now: now))
     }
 
     /// Corrigée dans les 2 s de son envoi, une notification était prise pour un
@@ -88,7 +143,8 @@ final class NotificationRewriteRevocationTests: XCTestCase {
     func test_handleNotificationDeletedBulk_announcesThePurge_evenWithNothingCached() throws {
         let manager = NotificationToastManager.shared
         var purges = 0
-        manager.readNotificationsPurged.sink { purges += 1 }.store(in: &cancellables)
+        var bag = Set<AnyCancellable>()
+        manager.readNotificationsPurged.sink { purges += 1 }.store(in: &bag)
         let event = try JSONDecoder().decode(NotificationDeletedBulkEvent.self, from: Data(#"{"scope":{"kind":"read"}}"#.utf8))
 
         manager.handleNotificationDeletedBulk(event)
