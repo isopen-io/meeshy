@@ -100,7 +100,8 @@ const socketMessage = (id: string, conversationId = 'c-a'): SocketIOMessage =>
     createdAt: '2026-11-17T10:00:05.000Z',
   }) as unknown as SocketIOMessage;
 
-const accepted = (method: string) => routedTransport((req) => (req.method === method ? { ok: true, status: 200, data: {} } : undefined)).transport;
+/** `201` pour une réaction NEUVE : un `200` dit « elle existait déjà », et `performReaction` défait alors son +1. */
+const answering = (method: string, status = 200) => routedTransport((req) => (req.method === method ? { ok: true, status, data: {} } : undefined)).transport;
 
 /**
  * Le fil OUVERT, tel que l'application l'observe : la fenêtre aplatie par
@@ -144,8 +145,25 @@ const seedList = (queryClient: QueryClient, rows: readonly Conversation[]): void
 
 const servedRow = (queryClient: QueryClient, id: string): Message | undefined => threadOf(queryClient, 'c-a')?.messages.find((m) => m.id === id);
 
+const DELETION = { messageId: 'm-1', conversationId: 'c-a', deletedAt: '2026-11-17T10:00:00.000Z' } as const;
+
 describe('WEB-04 — une écriture temps réel survit à une relecture EN VOL', () => {
-  test('message:deleted pendant la relecture du fil : le message ne ressuscite pas, et l’observateur ne le revoit jamais vivant', async () => {
+  test('message:deleted pendant la relecture du fil : le message ne ressuscite pas', async () => {
+    const queryClient = liveQueryClient();
+    const victim = localMessage({ id: 'm-1', senderId: 'u-other', content: 'à supprimer' });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([victim]));
+    const inFlight = deferred<MessagesPage>();
+    const { stop } = openThread(queryClient, () => inFlight.promise);
+
+    applyMessageDeleted(queryClient, DELETION);
+    inFlight.resolve(pageOf([victim]));
+    await settle(queryClient);
+
+    expect(servedRow(queryClient, 'm-1')?.deletedAt).toBeDefined();
+    stop();
+  });
+
+  test('l’observateur ne revoit jamais la rangée vivante après la pierre tombale', async () => {
     const queryClient = liveQueryClient();
     const victim = localMessage({ id: 'm-1', senderId: 'u-other', content: 'à supprimer' });
     queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([victim]));
@@ -157,11 +175,10 @@ describe('WEB-04 — une écriture temps réel survit à une relecture EN VOL', 
       seen.push(first?.deletedAt === undefined || first.deletedAt === null ? 'vivant' : 'tombe');
     });
 
-    applyMessageDeleted(queryClient, { messageId: 'm-1', conversationId: 'c-a', deletedAt: '2026-11-17T10:00:00.000Z' });
+    applyMessageDeleted(queryClient, DELETION);
     inFlight.resolve(pageOf([victim]));
     await settle(queryClient);
 
-    expect(servedRow(queryClient, 'm-1')?.deletedAt).toBeDefined();
     expect(seen).toContain('tombe');
     expect(seen.slice(seen.indexOf('tombe'))).not.toContain('vivant');
     unwatch();
@@ -304,6 +321,35 @@ describe('WEB-04 — une écriture temps réel survit à une relecture EN VOL', 
     stop();
   });
 
+  test('l’écho de MA réaction, reçu pendant la relecture, survit à une réponse partie avant elle', async () => {
+    reactionStore.setState({ mine: {} });
+    const queryClient = liveQueryClient();
+    const message = localMessage({ id: 'm-1', senderId: 'u-other', reactionSummary: {} });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([message]));
+    const inFlight = deferred<MessagesPage>();
+    const { stop } = openThread(queryClient, () => inFlight.promise);
+    const echo: Record<string, unknown> = {
+      messageId: 'm-1',
+      conversationId: 'c-a',
+      participantId: 'p-viewer',
+      userId: 'u-viewer',
+      emoji: '❤️',
+      action: 'add',
+      aggregation: { emoji: '❤️', count: 1, participantIds: ['p-viewer'] },
+      timestamp: '2026-11-17T10:00:01.000Z',
+    };
+    if (!isMessageReactionUpdate(echo)) throw new Error('charge de réaction invalide');
+
+    await performReaction({ conversationId: 'c-a', messageId: 'm-1', emoji: '❤️', deps: { source: 'gateway', transport: answering('POST', 201), queryClient } });
+    applyMessageReactionUpdate(queryClient, echo, 'u-viewer');
+    inFlight.resolve(pageOf([message]));
+    await settle(queryClient);
+
+    expect(servedRow(queryClient, 'm-1')?.reactionSummary).toEqual({ '❤️': 1 });
+    reactionStore.setState({ mine: {} });
+    stop();
+  });
+
   test('un message reçu puis masqué pour moi pendant la relecture du fil ne revient ni sur-le-champ ni à la réponse', async () => {
     const queryClient = liveQueryClient();
     const older = localMessage({ id: 'm-0', senderId: 'u-other' });
@@ -314,7 +360,7 @@ describe('WEB-04 — une écriture temps réel survit à une relecture EN VOL', 
     applyMessageNew(queryClient, createOutboxStore(), socketMessage('m-x'));
     const received = servedRow(queryClient, 'm-x');
     if (received === undefined) throw new Error('le message reçu doit être dans le fil');
-    await performDeleteForMe({ queryClient, conversationId: 'c-a', messages: [received], transport: accepted('DELETE') });
+    await performDeleteForMe({ queryClient, conversationId: 'c-a', messages: [received], transport: answering('DELETE') });
 
     expect(servedRow(queryClient, 'm-x')).toBeUndefined();
     inFlight.resolve(pageOf([older, received]));
@@ -334,7 +380,7 @@ describe('le journal ne se rejoue que sur la réponse, et la garde jusqu’à el
     const { stop } = openList(queryClient, () => inFlight.promise);
 
     applyConversationUnreadUpdated(queryClient, conversationStore, { conversationId: 'c-a', unreadCount: 0 });
-    await performDeparture({ conversationId: 'c-b', kind: 'leave', online: true, deps: { source: 'gateway', transport: accepted('POST'), queryClient } });
+    await performDeparture({ conversationId: 'c-b', kind: 'leave', online: true, deps: { source: 'gateway', transport: answering('POST'), queryClient } });
     inFlight.resolve(listPage([row({ unreadCount: 5 })]));
     await settle(queryClient);
 
@@ -365,8 +411,8 @@ describe('le journal ne se rejoue que sur la réponse, et la garde jusqu’à el
     const inFlight = deferred<MessagesPage>();
     const { stop } = openThread(queryClient, () => inFlight.promise);
 
-    applyMessageDeleted(queryClient, { messageId: 'm-1', conversationId: 'c-a', deletedAt: '2026-11-17T10:00:00.000Z' });
-    await performReaction({ conversationId: 'c-a', messageId: 'm-2', emoji: '❤️', deps: { source: 'gateway', transport: accepted('POST'), queryClient } });
+    applyMessageDeleted(queryClient, DELETION);
+    await performReaction({ conversationId: 'c-a', messageId: 'm-2', emoji: '❤️', deps: { source: 'gateway', transport: answering('POST', 201), queryClient } });
     inFlight.resolve(pageOf([victim, liked]));
     await settle(queryClient);
 
@@ -383,7 +429,7 @@ describe('le journal ne se rejoue que sur la réponse, et la garde jusqu’à el
     const inFlight = deferred<MessagesPage>();
     const { stop } = openThread(queryClient, () => inFlight.promise);
 
-    await performReaction({ conversationId: 'c-a', messageId: 'm-react', emoji: '❤️', deps: { source: 'gateway', transport: accepted('POST'), queryClient } });
+    await performReaction({ conversationId: 'c-a', messageId: 'm-react', emoji: '❤️', deps: { source: 'gateway', transport: answering('POST', 201), queryClient } });
     inFlight.resolve(pageOf([localMessage({ ...message, reactionSummary: { '❤️': 2 } })]));
     await settle(queryClient);
 

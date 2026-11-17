@@ -250,17 +250,12 @@ export function patchThreadMessages(
   updater: ThreadMessagesUpdater,
   options: LiveWriteOptions = {},
 ): void {
-  for (const { queryKey } of queryClient.getQueryCache().findAll({ queryKey: messagesQueryKey(conversationId) })) {
-    writeLive<MessagesInfiniteData>(
-      queryClient,
-      queryKey,
-      (data) => {
-        if (data === undefined || !Array.isArray(data.pages)) return data;
-        return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
-      },
-      options,
-    );
-  }
+  const patched = (data: MessagesInfiniteData | undefined): MessagesInfiniteData | undefined =>
+    data === undefined || !Array.isArray(data.pages) ? data : { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: messagesQueryKey(conversationId) })
+    .forEach((query) => writeLive(queryClient, query.queryKey, patched, options));
 }
 
 /**
@@ -268,7 +263,8 @@ export function patchThreadMessages(
  * fenêtres ancrées autour d'un message (`messages-window.ts`), qui vivent sous
  * le MÊME préfixe : une réaction, une traduction ou une consommation reçue
  * pendant qu'on lit un message ancien doit atteindre la rangée qu'on lit.
- * C'est pourquoi `patchThreadMessages` écrit par PRÉFIXE (`setQueriesData`).
+ * C'est pourquoi `patchThreadMessages` écrit par PRÉFIXE, chaque requête par le
+ * journal des écritures vives (`live-cache-journal.ts`, #18914).
  */
 function threadWindowsOf(queryClient: QueryClient, conversationId: string): readonly MessagesInfiniteData[] {
   return queryClient
@@ -347,19 +343,20 @@ export function upsertThreadMessage(
   /* LA FENÊTRE ANCRÉE (#7420) n'accueille que des REMPLACEMENTS : un message
      neuf est plus récent qu'elle, il appartient au présent — l'y poser
      ouvrirait un trou entre sa dernière page et lui. */
-  const windows = queryClient.getQueryCache().findAll({ queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 });
-  for (const { queryKey } of windows) {
-    writeLive<MessagesInfiniteData>(queryClient, queryKey, (data) => {
-      if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
-      return {
-        ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          messages: page.messages.map((m) => (matches(m) ? mergedThreadRow(m, message) : m)),
-        })),
-      };
-    });
-  }
+  const replacedInWindow = (data: MessagesInfiniteData | undefined): MessagesInfiniteData | undefined => {
+    if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
+    return {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        messages: page.messages.map((m) => (matches(m) ? mergedThreadRow(m, message) : m)),
+      })),
+    };
+  };
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 })
+    .forEach((query) => writeLive(queryClient, query.queryKey, replacedInWindow));
 
   writeLive<MessagesInfiniteData>(queryClient, messagesQueryKey(conversationId), (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
