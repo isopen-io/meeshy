@@ -148,6 +148,8 @@ describe('isPreviewRobot', () => {
     'WhatsApp/2.23.20.0 A',
     'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
     'curl/8.4.0',
+    'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+    'Facebot',
     '',
   ])('reconnaît %s', (ua) => {
     expect(isPreviewRobot(ua)).toBe(true);
@@ -157,6 +159,7 @@ describe('isPreviewRobot', () => {
     BROWSER,
     'Meeshy/1.42 (iPhone; iOS 26.0) CFNetwork/1568 Darwin/25.0.0',
     'okhttp/4.12.0',
+    'Mozilla/5.0 (Linux; Android 10; CUBOT X30) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
   ])("laisse passer l'application et les navigateurs : %s", (ua) => {
     expect(isPreviewRobot(ua)).toBe(false);
   });

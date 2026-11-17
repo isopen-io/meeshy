@@ -5,12 +5,13 @@
  * « Mon lien » à chaque partage.
  *
  * Une requête SANS agent est traitée comme un robot : aucun navigateur ni aucune application
- * Meeshy n'en envoie. Les bibliothèques HTTP des applications (`okhttp` d'Android,
+ * Meeshy n'en envoie. « bot » ne se lit qu'en mot ou suivi d'une version : un téléphone CUBOT
+ * n'est pas un robot. Les bibliothèques HTTP des applications (`okhttp` d'Android,
  * `CFNetwork` d'iOS) ne sont jamais visées.
  */
 const PREVIEW_ROBOT = new RegExp(
   [
-    'bot\\b', 'bot/', 'crawler', 'spider', 'slurp', 'preview', 'externalhit', 'facebookcatalog',
+    '(?:^|[^a-z])bot\\b', 'bot/', 'facebot', 'crawler', 'spider', 'slurp', 'preview', 'externalhit', 'facebookcatalog',
     'whatsapp', 'telegram', 'slack', 'discord', 'linkedin', 'embedly', 'skypeuripreview',
     'vkshare', 'pinterest', 'snapchat', 'iframely', 'outbrain', 'quora link',
     'curl/', 'wget/', 'python-requests', 'python-urllib', 'go-http-client', 'node-fetch', 'undici', 'headlesschrome',
