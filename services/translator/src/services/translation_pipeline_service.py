@@ -19,6 +19,8 @@ from enum import Enum
 from collections import OrderedDict
 import base64
 
+from .job_webhook import admitted_webhook_url, send_job_webhook
+
 # Configuration du logging
 logger = logging.getLogger(__name__)
 
@@ -428,7 +430,7 @@ class TranslationPipelineService:
             source_language=source_language,
             target_languages=target_languages,
             generate_voice_clone=generate_voice_clone,
-            webhook_url=webhook_url,
+            webhook_url=admitted_webhook_url(webhook_url),
             priority=priority,
             callback_metadata=callback_metadata or {},
             mobile_transcription=mobile_transcription
@@ -442,7 +444,10 @@ class TranslationPipelineService:
         # Ajouter à la queue de processing
         await self._job_queue.put(job.id)
 
-        logger.info(f"[PIPELINE] 📋 Job créé: {job.id} (langues: {target_languages})")
+        logger.info(
+            f"[PIPELINE] 📋 Job créé: {job.id} (langues: {target_languages}, "
+            f"webhook={'yes' if job.webhook_url else 'none'})"
+        )
 
         return job
 
@@ -771,32 +776,16 @@ class TranslationPipelineService:
             job.steps_completed.append(step)
 
     async def _send_webhook(self, job: TranslationJob):
-        """Envoie un callback webhook"""
+        """Envoie le callback webhook via le garde de #18772 (jamais d'exception)."""
         if not job.webhook_url:
             return
-
-        try:
-            import aiohttp
-
-            payload = {
-                "event": "translation_completed" if job.status == JobStatus.COMPLETED else "translation_failed",
-                "job": job.to_dict(),
-                "metadata": job.callback_metadata
-            }
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    job.webhook_url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    if response.status >= 400:
-                        logger.warning(f"[PIPELINE] Webhook failed: {response.status}")
-                    else:
-                        logger.info(f"[PIPELINE] Webhook envoyé: {job.webhook_url}")
-
-        except Exception as e:
-            logger.error(f"[PIPELINE] Erreur webhook: {e}")
+        job_view = {key: value for key, value in job.to_dict().items() if key != "webhook_url"}
+        payload = {
+            "event": "translation_completed" if job.status == JobStatus.COMPLETED else "translation_failed",
+            "job": job_view,
+            "metadata": job.callback_metadata
+        }
+        await send_job_webhook(job.webhook_url, payload)
 
     def _generate_job_id(self, user_id: str) -> str:
         """Génère un ID unique pour un job"""
