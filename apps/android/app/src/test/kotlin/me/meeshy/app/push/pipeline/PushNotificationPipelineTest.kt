@@ -186,6 +186,53 @@ class PushNotificationPipelineTest {
         assertThat(child().number).isEqualTo(2)
     }
 
+    private fun inConversation(conversationId: String, id: String, unread: String) = push(
+        "type" to "new_message",
+        "notificationId" to id,
+        "conversationId" to conversationId,
+        "title" to "Alice",
+        "body" to "Salut",
+        "unreadCount" to unread,
+    )
+
+    private fun banners(): List<Notification> = active().map { it.notification }.filter { !it.isSummary() }
+
+    @Test
+    fun `la pastille de l icone compte les messages de chaque banniere et non le total de conversations non lues`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(inConversation("c1", "n1", unread = "1"))
+        pipeline.renderNow(inConversation("c2", "n2", unread = "2"))
+        pipeline.renderNow(inConversation("c3", "n3", unread = "3"))
+
+        assertThat(banners().sumOf { it.number }).isEqualTo(3)
+        assertThat(active().filter { it.notification.isSummary() }.map { it.notification.number }).containsExactly(0, 0, 0)
+    }
+
+    @Test
+    fun `un nouveau message d une conversation ne change pas le nombre des bannieres des autres`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(inConversation("c1", "n1", unread = "1"))
+        pipeline.renderNow(inConversation("c2", "n2", unread = "2"))
+        pipeline.renderNow(inConversation("c3", "n3", unread = "3"))
+        val before = active().filter { !it.notification.isSummary() }.associate { it.id to it.notification.number }
+
+        pipeline.renderNow(inConversation("c1", "n4", unread = "3"))
+
+        val after = active().filter { !it.notification.isSummary() }.associate { it.id to it.notification.number }
+        assertThat(after.getValue("c1".hashCode())).isEqualTo(2)
+        assertThat(after - "c1".hashCode()).isEqualTo(before - "c1".hashCode())
+    }
+
+    @Test
+    fun `pastilles coupees le nombre de chaque banniere et de chaque resume reste nul`() = runTest {
+        val pipeline = pipeline(preferences = UserNotificationPreferences(notificationBadgeEnabled = false))
+        pipeline.renderNow(inConversation("c1", "n1", unread = "4"))
+        pipeline.renderNow(inConversation("c1", "n2", unread = "5"))
+        pipeline.renderNow(inConversation("c2", "n3", unread = "6"))
+
+        assertThat(active().map { it.notification.number }).containsExactly(0, 0, 0, 0)
+    }
+
     @Test
     fun `un message ephemere expire avec sa duree`() = runTest {
         pipeline().renderNow(message("n1", "ephemeralDuration" to "30"))
