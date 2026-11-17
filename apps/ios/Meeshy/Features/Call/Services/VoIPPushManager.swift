@@ -329,11 +329,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // Backend sends `isVideo` as a string ("true"/"false") because APNs
         // payloads are Record<string,string>, but older builds may still send
         // it as a Bool. Accept both for forward compatibility.
-        let isVideo: Bool = {
-            if let b = data["isVideo"] as? Bool { return b }
-            if let s = data["isVideo"] as? String { return s.lowercased() == "true" }
-            return false
-        }()
+        let isVideo = Self.parseIsVideo(data["isVideo"])
 
         // Per-user TURN credentials carried in the push payload — required so
         // RTCPeerConnection is built with TURN BEFORE the SDP answer is
@@ -356,6 +352,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         let displayName = resolvedName
 
         logger.info("VoIP push received: callId=\(callId), caller=\(displayName), isVideo=\(isVideo), iceServers=\(iceServers?.count ?? 0)")
+        let groupConversationId = Self.groupConversationToMark(data)
 
         // PushKit delivers this on .main (configured in register()). We are
         // guaranteed to be on the main thread but the function is nonisolated,
@@ -370,6 +367,9 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 iceServers: iceServers,
                 conversationId: conversationId
             )
+            if let groupConversationId {
+                GroupCallMeshCoordinator.shared.markGroupConversation(groupConversationId, title: nil)
+            }
         }
 
         // Async: attempt to resolve a better name from the conversations cache
@@ -386,6 +386,13 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     }
 
     // MARK: - Payload Parsers
+
+    /// `isVideo` voyage en chaîne (`"true"`/`"false"`, APNs ne porte que des
+    /// chaînes) ; une passerelle ancienne l'envoie en booléen.
+    nonisolated static func parseIsVideo(_ raw: Any?) -> Bool {
+        if let flag = raw as? Bool { return flag }
+        return (raw as? String)?.lowercased() == "true"
+    }
 
     /// Decode the JSON-encoded `iceServers` field carried by VoIP pushes.
     /// Returns nil when the field is missing, empty, or unparsable — callers
@@ -410,6 +417,17 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             }
             return IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
         }
+    }
+
+    /// La conversation d'un appel que le push dit de groupe — `isGroup` (une
+    /// invitation fait d'un duo un groupe) ou une conversation qui n'est pas
+    /// directe. Un appelé réveillé par push ne reçoit jamais `call:initiated` :
+    /// sans ce marquage, chaque offre irait au pair principal (#19238).
+    nonisolated static func groupConversationToMark(_ data: [AnyHashable: Any]) -> String? {
+        guard let conversationId = data["conversationId"] as? String, !conversationId.isEmpty else { return nil }
+        let flagged = (data["isGroup"] as? Bool) ?? ((data["isGroup"] as? String)?.lowercased() == "true")
+        let notDirect = (data["conversationType"] as? String).map { !$0.isEmpty && $0 != "direct" } ?? false
+        return flagged || notDirect ? conversationId : nil
     }
 
     // MARK: - Caller Name Resolution

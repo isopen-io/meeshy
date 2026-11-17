@@ -57,14 +57,14 @@ const STRANGER = '507f1f77bcf86cd799439103';
 const CALL_ID = '507f1f77bcf86cd799439111';
 const CONV_ID = '507f1f77bcf86cd799439112';
 
-const callSession = () => ({
+const callSession = (conversationType = 'group') => ({
   id: CALL_ID,
   conversationId: CONV_ID,
   initiatorId: CALLER,
   mode: 'sfu',
   metadata: { type: 'audio' },
   initiator: { id: CALLER, username: 'caller', displayName: 'Caller', avatar: null },
-  conversation: { type: 'group', title: 'Équipe' },
+  conversation: { type: conversationType, title: 'Équipe' },
   participants: [],
 });
 
@@ -154,6 +154,29 @@ describe('call:initiate — « Appels hors contacts » dans un appel de groupe',
     await initiate();
 
     expect(pushedUserIds(sendToUser).sort()).toEqual([FRIEND, STRANGER].sort());
+  });
+
+  it("dit à chaque appelé réveillé par push que l'appel est de groupe", async () => {
+    const { initiate, sendToUser } = makeHarness(makePrisma(openCallRingTables()));
+
+    await initiate();
+
+    expect(sendToUser).toHaveBeenCalled();
+    for (const [push] of sendToUser.mock.calls as Array<[{ payload: { data: Record<string, string> } }]>) {
+      expect(push.payload.data).toMatchObject({ conversationType: 'group', isGroup: 'true' });
+    }
+  });
+
+  it("dit aussi l'appel de groupe dans une conversation publique, qui réunit plusieurs personnes", async () => {
+    mockInitiateCall.mockResolvedValue(callSession('public'));
+    const { initiate, sendToUser } = makeHarness(makePrisma(openCallRingTables()));
+
+    await initiate();
+
+    expect(sendToUser).toHaveBeenCalled();
+    for (const [push] of sendToUser.mock.calls as Array<[{ payload: { data: Record<string, string> } }]>) {
+      expect(push.payload.data).toMatchObject({ conversationType: 'public', isGroup: 'true' });
+    }
   });
 
   it("n'annonce pas d'appel manqué au non-contact qui n'a pas sonné", async () => {

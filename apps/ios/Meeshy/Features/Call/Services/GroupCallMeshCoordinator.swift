@@ -270,6 +270,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
 
     func consume(signal: CallSignalPayload, callId: String) -> Bool {
         guard let host, callId == host.groupCallId else { return false }
+        inferGroupFromOffer(signal, host: host)
         let destination = GroupSignalRouting.destination(
             from: signal.from,
             localUserId: host.groupLocalUserId,
@@ -287,6 +288,17 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
             receive(incoming, from: userId)
             return true
         }
+    }
+
+    /// Un appel direct n'a qu'un pair qui m'offre : l'offre d'un AUTRE membre du
+    /// même appel, mon principal déjà désigné, prouve que l'appel est de groupe
+    /// (#19238) — même preuve que le tiers de `handleParticipantJoined`.
+    private func inferGroupFromOffer(_ signal: CallSignalPayload, host: any GroupCallHostProviding) {
+        guard !isGroupCall, signal.type == GroupCallSignalKind.offer.rawValue,
+              let conversationId = host.groupConversationId,
+              let primary = primaryUserId, !primary.isEmpty,
+              let from = signal.from, !from.isEmpty, from != primary, from != host.groupLocalUserId else { return }
+        markGroupConversation(conversationId, title: nil)
     }
 
     private func receive(_ signal: GroupCallIncomingSignal, from userId: String) {
