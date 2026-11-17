@@ -51,7 +51,7 @@ fun interface CallCameraChoices {
 }
 
 /**
- * « Choisir la caméra » (iOS `CameraPicker`) : ouvert par la pilule ou par la rangée de ma caméra, il se
+ * « Choisir la caméra » (comme sur iOS) : ouvert par la pilule ou par la rangée de ma caméra, il se
  * referme à la fin de l'appel. Le choix lui-même passe par l'écran (`CallViewModel.selectCamera`), qui tient
  * le miroir de mon aperçu.
  */

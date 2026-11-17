@@ -5,7 +5,7 @@ Target architecture for the native Android rebuild, designed up-front from the
 hardened against a SOTA peer review (`tasks/architecture-review.md`).
 
 This document is the contract: feature code is written against it, not around
-it. Audience: senior mobile engineers. Companions: `decisions.md` (ADR-001..023),
+it. Audience: senior mobile engineers. Companions: `decisions.md` (ADR-001..033),
 `tasks/feature-parity.md` (696-capability catalogue), `tasks/architecture-review.md`.
 
 ---
@@ -19,12 +19,12 @@ it. Audience: senior mobile engineers. Companions: `decisions.md` (ADR-001..023)
 | G3 | Offline-first — reads always work, writes queue and replay | One durable, lane-partitioned outbox. |
 | G4 | Charte graphique preserved without compromise | Design system locked (§13) + screenshot-tested. |
 | G5 | Phone + tablet + foldable + ChromeOS, one binary | Adaptive layouts (WindowSizeClass) from day one. |
-| G6 | 60 fps hot lists, cold start ≤ 1 s to interactive | Skippable composables, Paging 3, baseline profiles, macrobenchmark gate. |
+| G6 | 60 fps hot lists, cold start ≤ 1 s to interactive | Skippable composables, Paging 3, a Baseline Profile dumped from real cold starts, release-build measurement on a device. |
 | G7 | Don't inherit iOS tech debt | §16 lists what is explicitly *not* ported. |
 | G8 | **Secure messenger, not just a secure app** | Explicit threat model + real E2EE protocol (§8). |
 | G9 | **Operable in production** | Observability + remote kill-switches are infrastructure (§12). |
 
-Platform: `minSdk 26`, `targetSdk 35`, Kotlin 2.x, Compose (Material 3),
+Platform: `minSdk 26`, `targetSdk 36`, Kotlin 2.x, Compose (Material 3),
 single-Activity, Android only (no Compose-Multiplatform / desktop target).
 
 ---
@@ -36,78 +36,98 @@ with god objects (`ConversationViewModel` 2840 LOC). Android mirrors the SDK
 idea, adds feature modules, and — per review §6.1 — splits the data SDK so it is
 not a module-level monolith.
 
+The graph below is the one the `build.gradle.kts` files declare (re-read on
+2026-11-17, #18966). `settings.gradle.kts` is its index; a module that is not
+included there does not exist.
+
 ```
-                          ┌─────────┐
-                          │  :app   │  Application, MainActivity, NavHost,
-                          └────┬────┘  Hilt assembly, adaptive Scaffold,
-                               │        FCM service, widgets, share-target
-        ┌──────────────────────┤
-   ┌────▼─────┐  …14×    ┌──────▼─────┐
-   │:feature: │          │ :feature:  │
-   │  auth    │          │   chat     │
-   └────┬─────┘          └──────┬─────┘
-        └───────────┬───────────┘
-              ┌─────▼──────┐      ┌────────────┐
-              │  :sdk-ui   │─────▶│  :sdk-core │  repositories, domain/use-cases,
-              └─────┬──────┘      │            │  SWR engine, outbox, sync engine,
-                    │             └──┬───┬───┬─┘  MessageStateMachine, LanguageResolver
-                    │     ┌──────────┘   │   └──────────┐
-            ┌───────▼───┐ │ ┌────────────▼┐ ┌───────────▼──┐ ┌─────────────┐
-            │:core:     │ │ │:core:network│ │:core:database│ │:core:crypto │
-            │ designsys?│ │ │ Retrofit/   │ │ Room / FTS5  │ │ E2EE,       │
-            └───────────┘ │ │ OkHttp/skt  │ └──────────────┘ │ libsignal   │
-                          │ └─────────────┘ ┌──────────────┐ └─────────────┘
-                          └────────────────▶│:core:datastore│
-                                             └──────────────┘
-                          ┌────────────┐
-                          │:core:common│  dispatchers, Result, Clock, logging
-                          └────────────┘
-        ┌───────────────┐
-        │:macrobenchmark│  cold-start + jank gate, baseline-profile generator
-        └───────────────┘
+:app ─┬─▶ :feature:{auth, calls, chat, community, contacts, conversations,
+      │              feed, game, notifications, profile, reels, settings, stories}
+      ├─▶ :feature:kit            (debugImplementation only — the component catalogue)
+      ├─▶ :sdk-ui ─api─▶ :sdk-core
+      ├─▶ :sdk-core
+      └─▶ :core:{common, datastore}       (+ :core:database for unit tests)
+
+:feature:*  ─▶ :sdk-ui, :sdk-core          (auth, calls, chat, game also ─▶ :core:common)
+:feature:kit ─▶ :sdk-ui only
+
+the four feature → feature edges admitted by ADR-033:
+  :feature:profile ─▶ :feature:contacts
+  :feature:reels   ─▶ :feature:stories, :feature:feed
+  :feature:stories ─▶ :feature:feed
+
+:sdk-core ─api─▶ :core:{model, network, e2ee}
+          ─impl─▶ :core:{common, crypto, database, datastore}
+
+:core:network  ─api─▶ :core:model   ─impl─▶ :core:{common, datastore}
+:core:database ─impl─▶ :core:{model, datastore}
+:core:datastore ─api─▶ :core:model
+:core:crypto    ─api─▶ :core:model
+:core:e2ee      ─api─▶ :core:model
+:core:model, :core:common  — leaves, depend on no project
 ```
 
 **Modules**
 
-- **`:core:common`** — `CoroutineDispatchers`, `MeeshyResult`/error model,
-  `Clock` + server-time offset, Timber facade, pure utils. No Android-UI deps.
+- **`:core:common`** — `CoroutineDispatchers`, error recording, best-effort
+  and bounded-resolution helpers, keyed debounce: pure utils. No Android-UI deps.
 - **`:core:model`** — pure domain models & DTOs (`kotlinx.serialization`) plus
   `LanguageResolver` (the Prisme resolution the models implement). Depends on
-  nothing — the base of the graph.
-- **`:core:network`** — Retrofit/OkHttp (one HTTP client), the two Socket.IO
-  wrappers, `MeeshyConfig`, interceptors, certificate pinning, correlation-ID
-  propagation. Two `Json` instances (lenient + strict — §8.6).
+  nothing — the base of the graph; compiled on a bare JVM by
+  `scripts/jvm-check`.
+- **`:core:network`** — Retrofit/OkHttp (`MeeshyApi`, the authenticated client,
+  plus `MediaHttpClient` for media hops), `MeeshyConfig`, interceptors,
+  certificate pinning, the token stores. The Socket.IO client is not here: it
+  lives in `:sdk-core` (`socket/SocketManager`). Its lenient `Json` is the one
+  `:sdk-core` also provides; a strict decoder for crypto/auth (§8.6) is a
+  target, not a separate instance today.
 - **`:core:database`** — Room DB, DAOs, FTS5, migrations. Single source of truth.
 - **`:core:datastore`** — `DataStore` (preferences) + `EncryptedSharedPreferences`
   wrappers; per-user namespacing.
-- **`:core:crypto`** — E2EE: `libsignal` bindings, X3DH/Double Ratchet, Sender
-  Keys, the session/key stores, key-distribution orchestration. Isolated so the
-  security-audit surface is one small module.
+- **`:core:crypto`** — the crypto primitives (X25519, Ed25519, HKDF-SHA256,
+  AES-GCM, streaming seal) and the key store / pre-key bundle factory, isolated
+  so the security-audit surface stays small.
+- **`:core:e2ee`** — the per-device libsignal E2EE (ADR-030), Kotlin mirror of
+  `packages/MeeshySDK/Sources/MeeshyE2EE`. No `android.*` import in `src/main`:
+  it compiles and tests on a bare JVM; Keystore sealing and transport live in
+  `:sdk-core`, behind its interfaces.
 - **`:sdk-core`** — the domain SDK: repositories, use-cases, the SWR engine
   (`CacheResult`/`cacheFirstFlow`), the outbox, `ConversationSyncEngine`,
   `MessageStateMachine`, `NotificationCoordinator`, `DynamicColorGenerator`.
-  `explicitApi()`, publishable, no Compose.
+  No Compose.
 - **`:sdk-ui`** — the Compose **design system** + reusable UI (charte graphique,
-  primitives, the Message Bubble family). `explicitApi()`.
+  primitives, the Message Bubble family).
 - Navigation has no module of its own: the routes and the graphs live in `:app`
   (`navigation/Routes.kt`, `NavBackChrome`, `navigation/graph/`); the planned
   `:core:navigation` was never populated and was removed (#18901).
-- **`:feature:*`** — one module per domain: `auth`, `conversations`, `chat`,
-  `feed`, `stories`, `calls`, `communities`, `contacts`, `profile`, `settings`,
-  `notifications`, `search`, `links`, `media`.
+- **`:feature:*`** — one module per domain: `auth`, `calls`, `chat`, `community`,
+  `contacts`, `conversations`, `feed`, `game`, `notifications`, `profile`,
+  `reels`, `settings`, `stories`. Search, links and media have no module: they
+  live in the feature that owns the screen (`:feature:conversations` for the
+  global search and the links hub, `:sdk-ui` for media primitives).
+- **`:feature:kit`** — the debug-only catalogue of the planche components
+  (`debugImplementation`), never shipped in a release build.
 - **`:app`** — `Application`, single `MainActivity`, `NavHost`, Hilt assembly,
-  adaptive `Scaffold`, FCM `Service`, widgets, share-target, deep links.
-- **`:macrobenchmark`** — cold-start / scroll-jank benchmarks, baseline-profile
-  generation (run in CI — §17).
+  adaptive `Scaffold`, FCM `Service`, widgets, share-target, deep links, and the
+  Baseline Profile (`app/src/main/baseline-prof.txt`). There is no
+  `:macrobenchmark` module: the profile is regenerated from an ART dump of real
+  cold starts on a device by `scripts/startup-profile/profman_to_baseline.py`,
+  never by hand.
 
-**Dependency rules** (enforced by a `build-logic/` convention plugin):
-1. `:feature:*` → `:sdk-core`, `:sdk-ui`, `:core:common`.
-   **Never feature → feature.**
-2. `:sdk-core` → `:core:{network,database,datastore,crypto,common}`.
-   `:sdk-ui` → `:sdk-core`. `:core:crypto` → `:core:{database,common}` only.
+**Dependency rules**
+1. `:feature:*` → `:sdk-core`, `:sdk-ui`, optionally `:core:common`.
+   **No feature → feature edge except the four admitted by ADR-033**, each one a
+   feature consuming a screen section another feature owns. The graph stays
+   acyclic. `scripts/check-feature-edges.sh` enforces it against
+   `scripts/feature-edges-allowlist.txt` and the ADR (job « Graphe des modules »
+   of `android.yml`) — a script, not a `build-logic/` convention plugin, which
+   the repository never had.
+2. `:sdk-core` → `:core:{model,network,e2ee}` (api) and
+   `:core:{common,crypto,database,datastore}` (implementation).
+   `:sdk-ui` → `:sdk-core` (api). Every `:core:*` module depends at most on
+   `:core:{model,common,datastore}`.
 3. No upward edges; only `:app` sees the whole graph.
-4. `api` vs `implementation` is deliberate; version-catalog bundles; Gradle
-   configuration cache + remote build cache enabled.
+4. `api` vs `implementation` is deliberate; version-catalog bundles.
 
 ---
 
@@ -345,10 +365,11 @@ on media-URL resolution retained.
 
 ## 9. Navigation & adaptive layout
 
-- **Single Activity**, Navigation-Compose, **type-safe `@Serializable` routes**;
-  each `:feature:*` contributes a nav sub-graph, registered by `:app`
-  (`navigation/graph/`); cross-feature contracts are `:sdk-core` interfaces
-  bound by Hilt (`CallLauncher`) or `CompositionLocal`s provided by `:app`.
+- **Single Activity**, Navigation-Compose, string routes declared once in
+  `:app` (`navigation/Routes.kt`); every nav graph lives in `:app`
+  (`navigation/graph/`), the features expose screens and never a sub-graph;
+  cross-feature contracts are `:sdk-core` interfaces bound by Hilt or
+  `CompositionLocal`s provided by `:app` (`startup/AppLocalsProvider.kt`).
 - **Overlays** (feed, radial menu, call pill, toasts, banners) in a Compose
   overlay layer (`Box` + `zIndex`) above the `NavHost`.
 - **Adaptive (G5), first-class from day one.** `:app` hosts a
@@ -371,7 +392,8 @@ on media-URL resolution retained.
   `flatMapLatest`/`debounce` replace cancel-on-change tasks.
 - The Swift-6 strict-concurrency workaround class does not exist on Android —
   idiomatic Kotlin, no ported scars.
-- Cold start: `androidx.startup` lazy initializers; verified by macrobenchmark.
+- Cold start: `androidx.startup` lazy initializers; measured on a release build
+  on a real device (#13287).
 
 ---
 
@@ -390,9 +412,11 @@ on media-URL resolution retained.
 - Coil 3, 3-tier progressive images (ThumbHash → thumbnail → full), bounded
   memory cache. Decorative animation via `graphicsLayer` gated on
   reduce-motion + battery. Socket translation events burst-coalesced (~80 ms).
-- **Gated, not asserted**: a `:macrobenchmark` module enforces cold-start ≤ 1 s
-  and message-scroll jank in CI; **LeakCanary** + `StrictMode` in debug;
-  baseline profiles generated in CI (§17); Compose compiler metrics tracked.
+- **Measured, not asserted**: cold start and scroll jank are measured on a
+  release build on a real device (#13287); **LeakCanary** + `StrictMode` in
+  debug; the Baseline Profile is regenerated from an ART dump of real cold
+  starts (`scripts/startup-profile/profman_to_baseline.py`, §2); Compose
+  compiler metrics tracked.
   Budget: < 150 MB typical RSS.
 - R8 full-mode + resource shrinking; App Bundle + per-ABI splits (libsignal /
   stream-webrtc ship large native `.so`s — §18).
@@ -538,8 +562,9 @@ single implementations · dead/placeholder code → built properly or omitted.
 - `kotlinx.serialization` round-trip tests with real gateway payloads; **strict
   decoding verified for crypto/auth** (§8.6).
 - Room migration + DAO instrumented tests.
-- **`:macrobenchmark`** — cold start, message-list scroll jank; **generates the
-  baseline profile in CI** (so it never goes stale). LeakCanary in debug.
+- **Baseline Profile** — regenerated on a device from an ART dump of real cold
+  starts (`scripts/startup-profile/profman_to_baseline.py`), never by hand;
+  there is no `:macrobenchmark` module. LeakCanary in debug.
 - **CI/CD (ADR-023)**: a CI matrix; `lint` + `detekt` + `ktlint` gates;
   Compose-compiler-metrics check; signing/secrets management; **Play tracks**
   internal → closed → open → production with **staged rollout %**; dependency
@@ -576,16 +601,16 @@ single implementations · dead/placeholder code → built properly or omitted.
 
 ## 19. Build order
 
-`Phase 2` Module graph + convention plugins + Hilt + type-safe nav skeleton +
+`Phase 2` Module graph + Hilt + type-safe nav skeleton +
 adaptive scaffold + observability + CI/CD bootstrap →
 `Phase 3` SDK foundation — SWR cache first, then the lane-partitioned outbox,
 sync engine (`seq`/gap), sockets (after the WS spike), push; **E2EE gated behind
 ADR-018..020 + the threat model** →
 `Phase 4` design system + `:sdk-ui` primitives (Roborazzi baseline) →
 `Phase 5` feature slices: Auth → Conversations → Chat → Feed → Stories → Calls →
-Communities / Contacts / Profile / Settings / Notifications / Search / Links /
-Media →
-`Phase 6` integration, deep links, adaptive verification, macrobenchmark gate,
+Community / Contacts / Profile / Settings / Notifications / Reels / Game (search
+and links inside Conversations, media primitives inside `:sdk-ui` — §2) →
+`Phase 6` integration, deep links, adaptive verification, device measurement,
 final diff audit.
 
 Each phase leaves the build green and the app runnable.

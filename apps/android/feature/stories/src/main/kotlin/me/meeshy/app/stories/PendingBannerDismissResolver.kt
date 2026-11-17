@@ -3,7 +3,7 @@ package me.meeshy.app.stories
 import kotlin.math.abs
 
 /**
- * Décide si un glissement sur la bannière de publication en attente l'écarte (iOS `PendingBannerDismissResolver`) : vers le
+ * Décide si un glissement sur la bannière de publication en attente l'écarte (comme sur iOS) : vers le
  * haut, la gauche ou la droite — les trois directions qu'on essaie naturellement — au-delà de [DEFAULT_THRESHOLD_DP] ; vers le
  * bas, rien (réservé : un glissé descendant dans la bannière ne fait rien de surprenant).
  */

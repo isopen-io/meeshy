@@ -12,7 +12,6 @@
     <string name="feed_action_repost">Repartager</string>
     <string name="feed_action_send">Envoyer</string>
     <string name="feed_action_share">Partager</string>
-    <string name="feed_action_view_profile">Voir le profil</string>
     <string name="feed_caption_collapse">moins</string>
     <string name="feed_caption_expand">plus…</string>
     <string name="feed_carousel_a11y_position">Média %1$d sur %2$d</string>
@@ -74,14 +73,8 @@
         <item quantity="many">%1$d j\'aime</item>
         <item quantity="other">%1$d j\'aime</item>
     </plurals>
-    <plurals name="feed_post_stat_replies">
-        <item quantity="one">%1$d réponse</item>
-        <item quantity="many">%1$d réponses</item>
-        <item quantity="other">%1$d réponses</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d enregistrements</string>
     <string name="feed_post_stat_shares">%1$d partages</string>
-    <string name="feed_quote_cancel">Annuler</string>
     <string name="feed_quote_submit">Repartager</string>
     <string name="feed_reel">Réel</string>
     <string name="feed_reel_card_a11y">Réel de %1$s</string>
@@ -178,9 +171,7 @@
     <string name="post_comments_reply_badge">Répondre</string>
     <string name="post_comments_reply_error">Impossible d\'envoyer la réponse</string>
     <string name="post_comments_replying_to">En réponse à %1$s</string>
-    <string name="post_comments_send">Envoyer</string>
     <string name="post_comments_send_error">Impossible d\'envoyer le commentaire</string>
-    <string name="post_comments_sending">Envoi…</string>
     <string name="post_comments_title">Commentaires</string>
     <plurals name="post_comments_view_replies">
         <item quantity="one">Voir %1$d réponse</item>

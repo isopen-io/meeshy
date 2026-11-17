@@ -70,7 +70,7 @@ internal fun StoryTextStyle.labelRes(): Int = when (this) {
  * Styling controls for the [element] being edited. On the scene-first composer each [section]
  * is a row of the options panel that replaces the keyboard under the style bar (#13835) — the
  * bar's OK ends the editing, so no « Terminé » rides in a scrolling row. Without a [section],
- * the single row of iOS `TextEditFloatingBubbles`, with its « Terminé » when [onDone] is given.
+ * the single row of the iOS text bar, with its « Terminé » when [onDone] is given.
  * Pure glue: each affordance forwards its choice to a ViewModel intent whose logic is
  * unit-tested; selection highlighting reads straight off the element.
  */
