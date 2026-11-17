@@ -68,7 +68,7 @@ export async function performAttachmentReaction(params: {
           },
     );
   const apply = (d: 1 | -1): void => {
-    patchThreadMessages(queryClient, conversationId, onPiece(d));
+    patchThreadMessages(queryClient, conversationId, onPiece(d), { relative: true });
     patchMediaHubMessages(queryClient, conversationId, onPiece(d));
   };
   apply(delta);

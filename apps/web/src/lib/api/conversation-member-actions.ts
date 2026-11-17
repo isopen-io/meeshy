@@ -97,8 +97,8 @@ function editMembers(
   );
   if (delta === 0) return;
   const shift = (c: Conversation): Conversation => ({ ...c, memberCount: Math.max(0, (c.memberCount ?? 0) + delta) });
-  patchConversation(queryClient, conversationId, shift);
-  patchConversationDetail(queryClient, conversationId, shift);
+  patchConversation(queryClient, conversationId, shift, { relative: true });
+  patchConversationDetail(queryClient, conversationId, shift, { relative: true });
 }
 
 function requestOf(conversationId: string, action: MemberAction): HttpRequest {

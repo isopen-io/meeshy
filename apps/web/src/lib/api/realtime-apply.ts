@@ -28,7 +28,6 @@ import {
 import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Message, Participant } from './types';
 import { applyEncryptionAnnounced, encryptionAnnounced } from './realtime-encryption-regime';
-import { keepLiveListOverFetch, keepLiveMessageOverFetch } from './realtime-thread-catch-up';
 import { purgeViewOnceIn, sealViewOnceIn } from './view-once-seal';
 
 /* Le puits de `conversation:updated` vit chez lui (#7547, budget de taille) ;
@@ -234,10 +233,9 @@ export function applyMessageNew(
      remplaçait jusqu'à #9262 ; `rawMessageFromSocket` sert un message
      serveur COMPLET, donc ce chemin-ci ne perdait rien — c'est l'autre
      appelant qui régressait. */
+  /* Une relecture du fil EN VOL ne l'efface plus : l'écriture est rejouée sur
+     sa réponse (#9291, #18914 — `live-cache-journal.ts`). */
   upsertThreadMessage(queryClient, raw.conversationId, message);
-  /* Une requête du fil EN VOL écraserait cette pose par sa réponse, partie
-     avant le message (#9291) : elle est relancée. */
-  keepLiveMessageOverFetch(queryClient, raw.conversationId);
 
   /* Le cid ne voyage QUE vers la room personnelle de l'expéditeur
      (`stripClientMessageId`, `MeeshySocketIOManager.ts:3011-3039`) : sa
@@ -250,8 +248,6 @@ export function applyMessageNew(
      remplace jamais, et un message protégé n'entre dans la ligne (cache
      PERSISTÉ) que par son identité et ses drapeaux. */
   offerLastMessage(queryClient, raw.conversationId, message, buildTranslationRecord(raw.translations));
-  /* Une relecture de la LISTE en vol remettrait l'aperçu précédent (#9637). */
-  keepLiveListOverFetch(queryClient);
   /* L'AVIS D'ACTIVATION DU CHIFFREMENT (#11373) ferme le régime en cache. */
   applyEncryptionAnnounced(queryClient, raw.conversationId, encryptionAnnounced(raw));
 }
@@ -344,16 +340,13 @@ export function applyMessageTranslation(queryClient: QueryClient, data: Translat
   if (Object.keys(incoming).length === 0) return;
 
   for (const conversationId of cachedThreadConversationIds(queryClient)) {
-    const existing = findCachedThreadMessage(queryClient, conversationId, data.messageId);
-    if (existing === undefined) continue;
-
-    const merged = mergeMessageTranslations(existing, data.translations);
+    if (findCachedThreadMessage(queryClient, conversationId, data.messageId) === undefined) continue;
+    /* La fusion se calcule SUR la rangée reçue, jamais sur un instantané : une
+       relecture en vol rejoue cette écriture sur sa réponse (#10573, #18914),
+       dont le texte peut être plus récent que le cache. */
     patchThreadMessages(queryClient, conversationId, (messages) =>
-      messages.map((m) => (m.id === data.messageId ? merged : m)),
+      messages.map((m) => (m.id === data.messageId ? mergeMessageTranslations(m, data.translations) : m)),
     );
-    /* Une requête du fil EN VOL rendrait le message nu, parti avant sa
-       traduction (#10573) : elle est relancée, motif `applyMessageNew`. */
-    keepLiveMessageOverFetch(queryClient, conversationId);
   }
 
   /* LA LIGNE SUIT MÊME FIL FERMÉ (#7547) — elle se retrouve par son DERNIER

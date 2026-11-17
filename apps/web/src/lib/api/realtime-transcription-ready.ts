@@ -57,16 +57,15 @@ export function graftTranscription(
   queryClient: QueryClient,
   data: { readonly conversationId: string; readonly messageId: string; readonly attachmentId: string; readonly transcription: AudioTranscription },
 ): void {
-  const existing = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
-  const attachments = existing?.attachments;
-  if (existing === undefined || attachments === undefined) return;
-  const target = attachments.find((a) => a.id === data.attachmentId);
+  const target = findCachedThreadMessage(queryClient, data.conversationId, data.messageId)?.attachments?.find((a) => a.id === data.attachmentId);
   if (target === undefined || maskedAttachment(target) || target.transcription != null) return;
-  const next: Message = {
-    ...existing,
-    attachments: attachments.map((a): Attachment => (a.id === data.attachmentId ? { ...a, transcription: data.transcription } : a)),
-  };
-  patchThreadMessages(queryClient, data.conversationId, (messages) => messages.map((m) => (m.id === data.messageId ? next : m)));
+  /* Greffée SUR la rangée reçue, jamais sur un instantané : une relecture en
+     vol rejoue cette écriture sur sa réponse (#18914). */
+  const grafted = (message: Message): Message =>
+    message.attachments === undefined
+      ? message
+      : { ...message, attachments: message.attachments.map((a): Attachment => (a.id === data.attachmentId ? { ...a, transcription: data.transcription } : a)) };
+  patchThreadMessages(queryClient, data.conversationId, (messages) => messages.map((m) => (m.id === data.messageId ? grafted(m) : m)));
 }
 
 export type OnDemandTranscription = 'grafted' | 'queued' | 'failed';

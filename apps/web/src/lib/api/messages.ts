@@ -5,6 +5,7 @@ import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import { fixtureHold } from './fixture-hold';
 import type { ApiResult, HttpTransport } from './http';
+import { writeLive, type LiveWriteOptions } from './live-cache-journal';
 import { canSendPlaintext, E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
@@ -247,11 +248,19 @@ export function patchThreadMessages(
   queryClient: QueryClient,
   conversationId: string,
   updater: ThreadMessagesUpdater,
+  options: LiveWriteOptions = {},
 ): void {
-  queryClient.setQueriesData<MessagesInfiniteData>({ queryKey: messagesQueryKey(conversationId) }, (data) => {
-    if (data === undefined || !Array.isArray(data.pages)) return data;
-    return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
-  });
+  for (const { queryKey } of queryClient.getQueryCache().findAll({ queryKey: messagesQueryKey(conversationId) })) {
+    writeLive<MessagesInfiniteData>(
+      queryClient,
+      queryKey,
+      (data) => {
+        if (data === undefined || !Array.isArray(data.pages)) return data;
+        return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
+      },
+      options,
+    );
+  }
 }
 
 /**
@@ -338,9 +347,9 @@ export function upsertThreadMessage(
   /* LA FENÊTRE ANCRÉE (#7420) n'accueille que des REMPLACEMENTS : un message
      neuf est plus récent qu'elle, il appartient au présent — l'y poser
      ouvrirait un trou entre sa dernière page et lui. */
-  queryClient.setQueriesData<MessagesInfiniteData>(
-    { queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 },
-    (data) => {
+  const windows = queryClient.getQueryCache().findAll({ queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 });
+  for (const { queryKey } of windows) {
+    writeLive<MessagesInfiniteData>(queryClient, queryKey, (data) => {
       if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
       return {
         ...data,
@@ -349,10 +358,10 @@ export function upsertThreadMessage(
           messages: page.messages.map((m) => (matches(m) ? mergedThreadRow(m, message) : m)),
         })),
       };
-    },
-  );
+    });
+  }
 
-  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
+  writeLive<MessagesInfiniteData>(queryClient, messagesQueryKey(conversationId), (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
 
     const host = data.pages.findIndex((page) => page.messages.some(matches));

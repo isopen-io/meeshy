@@ -9,7 +9,6 @@ import type {
 import { patchConversation, patchConversationDetail } from './conversations';
 import { acceptsLastMessage, isListProtected, listSafeLastMessage, withListRank, withNature, withSideband } from './list-preview';
 import { applyEncryptionAnnounced, encryptionAnnounced } from './realtime-encryption-regime';
-import { keepLiveListOverFetch } from './realtime-thread-catch-up';
 import type { Conversation, Message, Participant } from './types';
 
 /**
@@ -281,10 +280,6 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
 
     return next;
   });
-  /* Une relecture de la LISTE en vol remettrait l'aperçu précédent (#9637) —
-     seul l'aperçu relance : une réaction ou un appel ne la relance pas à
-     chaque évènement d'un groupe actif. */
-  if (speaksOfPreview) keepLiveListOverFetch(queryClient);
 }
 
 /**

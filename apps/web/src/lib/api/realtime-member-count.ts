@@ -46,10 +46,10 @@ function withServedCount(conversation: Conversation, served: { readonly memberCo
 }
 
 export function applyMemberCountChange(queryClient: QueryClient, change: MemberCountChange): void {
-  const edit =
-    'served' in change
-      ? (conversation: Conversation): Conversation => withServedCount(conversation, change.served)
-      : (conversation: Conversation): Conversation => ({ ...conversation, memberCount: Math.max(0, (conversation.memberCount ?? 0) + change.delta) });
-  patchConversation(queryClient, change.conversationId, edit);
-  patchConversationDetail(queryClient, change.conversationId, edit);
+  const served = 'served' in change;
+  const edit = served
+    ? (conversation: Conversation): Conversation => withServedCount(conversation, change.served)
+    : (conversation: Conversation): Conversation => ({ ...conversation, memberCount: Math.max(0, (conversation.memberCount ?? 0) + change.delta) });
+  patchConversation(queryClient, change.conversationId, edit, { relative: !served });
+  patchConversationDetail(queryClient, change.conversationId, edit, { relative: !served });
 }

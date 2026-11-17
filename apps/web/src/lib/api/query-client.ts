@@ -4,6 +4,7 @@ import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 
 import { createAccountCacheShelf } from './account-caches';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
+import { installLiveCacheJournal } from './live-cache-journal';
 import { pruneGoneEphemerals } from './ephemeral-cache';
 import { ApiError } from './client';
 import { apiConfig } from './config';
@@ -233,6 +234,8 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   }) as AppQueryClient;
   /* L'état du jeu ne recule jamais (#10898, #10900) : une écriture plus ancienne que celle en cache est ignorée. */
   client.setQueryDefaults(ENGAGEMENT_PROGRESS_QUERY_KEY, { structuralSharing: keepNewerGameState });
+  /* Une écriture temps réel survit à une relecture partie avant elle (#18914) : rejouée sur sa réponse. */
+  installLiveCacheJournal(client);
 
   /** Hydrate depuis une entrée SÉRIALISÉE si elle porte le `buster` attendu —
    * `false` sinon (absente, périmée, corrompue) : rien n'est alors restauré. */

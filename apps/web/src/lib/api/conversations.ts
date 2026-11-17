@@ -11,6 +11,7 @@ import { decodeConversation } from './decode';
 import { conversationById, conversationsWithSurged, directConversationWith } from './fixtures';
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
+import { writeLive, type LiveWriteOptions } from './live-cache-journal';
 import type { Conversation } from './types';
 import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
@@ -250,18 +251,24 @@ export function patchConversation(
   queryClient: QueryClient,
   conversationId: string,
   updater: (conversation: Conversation) => Conversation,
+  options: LiveWriteOptions = {},
 ): void {
-  queryClient.setQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY, (data) => {
-    if (data === undefined) return data;
-    return {
-      ...data,
-      pages: data.pages.map((page) =>
-        page.conversations.some((c) => c.id === conversationId)
-          ? { ...page, conversations: page.conversations.map((c) => (c.id === conversationId ? updater(c) : c)) }
-          : page,
-      ),
-    };
-  });
+  writeLive<ConversationsInfiniteData>(
+    queryClient,
+    CONVERSATIONS_QUERY_KEY,
+    (data) => {
+      if (data === undefined) return data;
+      return {
+        ...data,
+        pages: data.pages.map((page) =>
+          page.conversations.some((c) => c.id === conversationId)
+            ? { ...page, conversations: page.conversations.map((c) => (c.id === conversationId ? updater(c) : c)) }
+            : page,
+        ),
+      };
+    },
+    options,
+  );
 }
 
 /**
@@ -279,10 +286,9 @@ export function patchConversationDetail(
   queryClient: QueryClient,
   conversationId: string,
   updater: (conversation: Conversation) => Conversation,
+  options: LiveWriteOptions = {},
 ): void {
-  queryClient.setQueryData<Conversation>(conversationQueryKey(conversationId), (data) =>
-    data === undefined ? data : updater(data),
-  );
+  writeLive<Conversation>(queryClient, conversationQueryKey(conversationId), (data) => (data === undefined ? data : updater(data)), options);
 }
 
 /**
