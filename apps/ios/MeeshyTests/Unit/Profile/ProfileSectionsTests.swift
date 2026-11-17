@@ -173,6 +173,27 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertFalse(band.contains("RoundedRectangle"), "aucune carte redessinée sur place (loi 12)")
     }
 
+    func test_vitrineSections_titleWithTheSectionHeaderOfTheKit_neverTheOldOverline() throws {
+        for path in ["Meeshy/Features/Profile/Views/ProfileCirclesSection.swift",
+                     "Meeshy/Features/Profile/Faces/ProfileVoiceSection.swift",
+                     "Meeshy/Features/Profile/Faces/ProfilePublicationsSection.swift"] {
+            let source = try code(path)
+            XCTAssertTrue(source.contains("MeeshySectionHeader("), "\(path) : l'en-tête est K44")
+            XCTAssertFalse(source.contains("ProfileSectionHeader("), "\(path) : aucun en-tête redessiné sur place (loi 12)")
+        }
+        let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(profile.contains("MeeshySectionHeader(title: ProfileActivityBand.title)"), "Mon activité porte l'en-tête K44")
+    }
+
+    func test_circlesSection_putsTheRequestsInItsHeader_andInvitesWithTheButtonOfTheKit() throws {
+        let circles = try code("Meeshy/Features/Profile/Views/ProfileCirclesSection.swift")
+        XCTAssertTrue(circles.contains("accessory: { requestsButton }"), "« N demandes à répondre » est l'accessoire de l'en-tête")
+        XCTAssertTrue(circles.contains("MeeshyButton(Self.inviteTitle"), "« Inviter quelqu'un » est le bouton K40")
+        XCTAssertFalse(circles.contains("ProfileNavigationRow("), "plus de rangées sous l'échelle : la planche n'en dessine pas")
+        XCTAssertTrue(circles.contains("onOpen(.requests)"))
+        XCTAssertTrue(circles.contains("onOpen(.invite)"))
+    }
+
     func test_profileButtons_answerTheTouch_withThePressResponseOfTheKit() throws {
         for path in ["Meeshy/Features/Profile/Views/ProfileSectionChrome.swift",
                      "Meeshy/Features/Profile/Views/ProfileContactSection.swift",

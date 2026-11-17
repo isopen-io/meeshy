@@ -78,7 +78,7 @@ enum ProfilePublicationsState: Equatable {
 nonisolated enum ProfilePublicationsCopy {
 
     static var title: String {
-        String(localized: "profile.vitrine.posts.title", defaultValue: "PUBLICATIONS", bundle: .main)
+        String(localized: "profile.vitrine.posts.title", defaultValue: "Publications", bundle: .main)
     }
 
     static var seeAll: String {

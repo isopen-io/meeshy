@@ -2,8 +2,8 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// « Mes cercles » sur ma fiche (#18590, planche `Main`) : les cinq niveaux au premier regard, ce qui attend ma réponse,
-/// et la porte pour inviter.
+/// « Mes cercles » sur ma fiche (#18590, planche `Main`) : l'en-tête du kit (K44) qui porte ce qui attend ma réponse, les
+/// cinq niveaux au premier regard, et « Inviter quelqu'un », le bouton du kit (K40).
 ///
 /// Une vue à VALEURS : elle reçoit le résumé et une porte à ouvrir, elle ne charge rien et ne connaît pas le routeur.
 /// Les pastilles SONT l'échelle de proximité du kit (K33, forme à comptes) : la même loi d'intensité que « Voir comme »,
@@ -17,22 +17,42 @@ struct ProfileCirclesSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "circle.circle.fill", title: Self.title, color: MeeshyColors.brandPrimary)
+            MeeshySectionHeader(title: Self.title, lead: { EmptyView() }, accessory: { requestsButton })
             VStack(spacing: 0) {
                 scaleButton
                 if let phrase = Self.emptyPhrase(for: summary, hasServedLinks: hasServedLinks) {
                     emptyLine(phrase).meeshyTransition(.opacity)
                 }
-                if let requests = Self.requestsText(count: summary.pendingCount) {
-                    ProfileNavigationRow(icon: "person.badge.plus", title: requests, hint: nil,
-                                         identifier: "profile.circles.requests", accentHex: accentHex) { onOpen(.requests) }
-                        .meeshyTransition(.opacity)
-                }
-                ProfileNavigationRow(icon: "person.crop.circle.badge.plus", title: Self.inviteTitle, hint: nil,
-                                     identifier: "profile.circles.invite", accentHex: accentHex) { onOpen(.invite) }
             }
             .background(ProfileSectionCard(tintHex: accentHex))
-            .meeshyAnimation(MeeshyAnimation.springDefault, value: summary)
+            MeeshyButton(Self.inviteTitle, systemImage: "person.badge.plus", kind: .glass, size: .s44,
+                         action: { onOpen(.invite) })
+                .accessibilityIdentifier("profile.circles.invite")
+        }
+        .meeshyAnimation(MeeshyAnimation.springDefault, value: summary)
+    }
+
+    /// L'accent de la fiche : l'échelle et l'encre des demandes.
+    private var tint: Color { Color(hex: accentHex) }
+
+    /// « 2 demandes à répondre » dans l'en-tête, à l'encre de l'accent ; rien quand rien n'attend.
+    @ViewBuilder
+    private var requestsButton: some View {
+        if let requests = Self.requestsText(count: summary.pendingCount) {
+            Button {
+                HapticFeedback.light()
+                onOpen(.requests)
+            } label: {
+                Text(requests)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
+                    .foregroundStyle(tint)
+                    .multilineTextAlignment(.trailing)
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableButtonStyle())
+            .accessibilityIdentifier("profile.circles.requests")
+            .meeshyTransition(.opacity)
         }
     }
 
@@ -64,7 +84,7 @@ struct ProfileCirclesSection: View {
             levels: Self.scaleLevels(of: summary),
             current: nil,
             counts: Self.scaleCounts(of: summary),
-            tint: Color(hex: accentHex),
+            tint: tint,
             form: .dots,
             size: .regular
         )
@@ -83,7 +103,7 @@ struct ProfileCirclesSection: View {
     // MARK: - Ce que la section dit
 
     static var title: String {
-        String(localized: "profile.section.circles", defaultValue: "MES CERCLES", bundle: .main)
+        String(localized: "profile.section.circles", defaultValue: "Mes cercles", bundle: .main)
     }
 
     /// Les niveaux de l'échelle, du plus large au plus intime : nommés comme partout, dessinés du glyphe de « Voir
@@ -133,6 +153,6 @@ struct ProfileCirclesSection: View {
     }
 
     private static var inviteTitle: String {
-        String(localized: "profile.circles.invite", defaultValue: "Inviter", bundle: .main)
+        String(localized: "profile.circles.invite", defaultValue: "Inviter quelqu'un", bundle: .main)
     }
 }

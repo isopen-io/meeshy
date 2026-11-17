@@ -13,12 +13,10 @@ struct ProfileVoiceSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack(alignment: .center, spacing: MeeshySpacing.sm) {
-                ProfileSectionHeader(icon: "waveform", title: ProfileVoiceCopy.title, color: MeeshyColors.brandPrimary)
-                Spacer(minLength: MeeshySpacing.sm)
+            MeeshySectionHeader(title: ProfileVoiceCopy.title, lead: { EmptyView() }, accessory: {
                 MeeshyBadge(.label(sample.isPublic ? ProfileVoiceCopy.publicBadge : ProfileVoiceCopy.privateBadge),
                             leading: .systemImage(sample.isPublic ? "globe" : "lock"))
-            }
+            })
             MeeshyWavePlayer(
                 label: ProfileVoiceCopy.playerLabel,
                 progress: player.progress,
@@ -56,7 +54,7 @@ struct ProfileVoiceSection: View {
 nonisolated enum ProfileVoiceCopy {
 
     static var title: String {
-        String(localized: "profile.vitrine.voice.title", defaultValue: "MA VOIX", bundle: .main)
+        String(localized: "profile.vitrine.voice.title", defaultValue: "Ma voix", bundle: .main)
     }
 
     /// Le nom du son, que le lecteur complète en « Lire … » / « Mettre en pause … ».

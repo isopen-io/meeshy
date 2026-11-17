@@ -555,7 +555,7 @@ struct ProfileView: View {
     /// Légende et mon décor, là où je cherche « où j'en suis ».
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "chart.bar.fill", title: ProfileActivityBand.title, color: MeeshyColors.indigo300)
+            MeeshySectionHeader(title: ProfileActivityBand.title)
             ProfileActivityBand(stats: stats, isLoading: statsLoading, accentHex: accentColor, onOpen: openActivity)
             progressionEntry
             ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })

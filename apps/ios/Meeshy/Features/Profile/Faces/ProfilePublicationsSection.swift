@@ -51,18 +51,18 @@ struct ProfilePublicationsSection: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.sm) {
-            ProfileSectionHeader(icon: "square.grid.3x3.fill", title: ProfilePublicationsCopy.title,
-                                 color: MeeshyColors.brandPrimary)
-            Spacer(minLength: MeeshySpacing.sm)
-            if !viewModel.posts.isEmpty {
-                Button(ProfilePublicationsCopy.seeAll) { showsAll = true }
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
-                    .foregroundStyle(Color(hex: accentColor))
-                    .frame(minHeight: MeeshyControlSize.tapTarget)
-                    .buttonStyle(PressableButtonStyle())
-                    .accessibilityIdentifier("profile.posts.seeAll")
-            }
+        MeeshySectionHeader(title: ProfilePublicationsCopy.title, lead: { EmptyView() }, accessory: { seeAllButton })
+    }
+
+    @ViewBuilder
+    private var seeAllButton: some View {
+        if !viewModel.posts.isEmpty {
+            Button(ProfilePublicationsCopy.seeAll) { showsAll = true }
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
+                .foregroundStyle(Color(hex: accentColor))
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .buttonStyle(PressableButtonStyle())
+                .accessibilityIdentifier("profile.posts.seeAll")
         }
     }
 

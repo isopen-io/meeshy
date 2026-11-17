@@ -38801,43 +38801,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "دعوة"
+            "value": "ادعُ شخصًا"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einladen"
+            "value": "Jemanden einladen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Invite"
+            "value": "Invite someone"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Invitar"
+            "value": "Invitar a alguien"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inviter"
+            "value": "Inviter quelqu'un"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Invita"
+            "value": "Invita qualcuno"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Convidar"
+            "value": "Convidar alguém"
           }
         }
       }
@@ -39375,37 +39375,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "MEINE AKTIVITÄT"
+            "value": "Meine Aktivität"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "MY ACTIVITY"
+            "value": "My activity"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "MI ACTIVIDAD"
+            "value": "Mi actividad"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "MON ACTIVITÉ"
+            "value": "Mon activité"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "LA MIA ATTIVITÀ"
+            "value": "La mia attività"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "MINHA ATIVIDADE"
+            "value": "Minha atividade"
           }
         }
       }
@@ -39422,37 +39422,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "MEINE KREISE"
+            "value": "Meine Kreise"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "MY CIRCLES"
+            "value": "My circles"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "MIS CÍRCULOS"
+            "value": "Mis círculos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "MES CERCLES"
+            "value": "Mes cercles"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "LE MIE CERCHIE"
+            "value": "Le mie cerchie"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "MEUS CÍRCULOS"
+            "value": "Meus círculos"
           }
         }
       }
@@ -346370,37 +346370,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "MEINE STIMME"
+            "value": "Meine Stimme"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "MY VOICE"
+            "value": "My voice"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "MI VOZ"
+            "value": "Mi voz"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "MA VOIX"
+            "value": "Ma voix"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "LA MIA VOCE"
+            "value": "La mia voce"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "MINHA VOZ"
+            "value": "Minha voz"
           }
         }
       }
@@ -346558,37 +346558,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "BEITRÄGE"
+            "value": "Beiträge"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "POSTS"
+            "value": "Posts"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "PUBLICACIONES"
+            "value": "Publicaciones"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "PUBLICATIONS"
+            "value": "Publications"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "PUBBLICAZIONI"
+            "value": "Pubblicazioni"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "PUBLICAÇÕES"
+            "value": "Publicações"
           }
         }
       }

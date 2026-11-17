@@ -43,7 +43,7 @@ struct ProfileActivityBand: View {
     // MARK: - Ce que la bande dit
 
     static var title: String {
-        String(localized: "profile.section.activity", defaultValue: "MON ACTIVITÉ", bundle: .main)
+        String(localized: "profile.section.activity", defaultValue: "Mon activité", bundle: .main)
     }
 
     /// Ce que le lecteur d'écran dit d'un chiffre absent : le tiret du kit ne se prononce pas.
@@ -71,7 +71,7 @@ struct ProfileActivityBand: View {
         }
     }
 
-    /// Le titre de la section, puis chaque valeur avec son nom : « MON ACTIVITÉ: 12 Messages, 3 Conversations, … ».
+    /// Le titre de la section, puis chaque valeur avec son nom : « Mon activité: 12 Messages, 3 Conversations, … ».
     static func accessibilityLabel(stats: UserStats?, isLoading: Bool = false) -> String {
         if isLoading && stats == nil { return "\(title): \(loadingLabel)" }
         let pairs = values(of: stats).map { "\($0.value) \($0.label)" }.joined(separator: ", ")
