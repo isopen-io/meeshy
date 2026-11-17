@@ -506,7 +506,11 @@ export class MessagingService {
           conversationId,
           senderId: participant!.id,
           mentionedUserIds: request.mentionedUserIds,
-          ...persistableEncryption(request.encryptedPayload),
+          // GW-12 (#18906) — la métadonnée gardée est une liste blanche ; le reste
+          // est retenu, et le journal n'en nomme que les clés.
+          ...persistableEncryption(request.encryptedPayload, {
+            onWithheld: (keys) => logger.warn('e2ee metadata keys withheld from the message row', { ...corr, conversationId, keys })
+          }),
           deviceLayerRelay: request.deviceLayer,
           clientMessageId: request.clientMessageId
         }),
@@ -532,7 +536,7 @@ export class MessagingService {
         // first attempt — and do it off the ACK path.
         const translations = (message as { translations?: unknown }).translations;
         if (this.isTranslationsEmpty(translations)) {
-          void this.queueTranslation(message, originalLanguage).catch((err) =>
+          void this.queueTranslation(message, message.originalLanguage).catch((err) =>
             logger.error('background re-translation failed', err as Error)
           );
         }
@@ -560,11 +564,14 @@ export class MessagingService {
 
       // 7. Effets de bord post-save — exécutés en arrière-plan, JAMAIS sur le
       //    chemin de l'ACK (cf. note ci-dessus).
+      // La langue PERSISTÉE, jamais la déclarée : en e2ee la ligne porte une
+      // constante, et les statistiques de langue ne doivent rien apprendre de
+      // plus (GW-12, #18906).
       this.runPostSaveSideEffects({
         message,
         conversationId,
         senderParticipantId: participant!.id,
-        originalLanguage
+        originalLanguage: message.originalLanguage
       });
 
       logger.info('perf:messaging.handleMessage', {

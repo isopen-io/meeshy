@@ -51,6 +51,15 @@ export const E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE =
 export const E2EE_PLAINTEXT_LOCATION_REFUSAL_MESSAGE =
   'Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucun lieu en clair';
 
+export const E2EE_PLAINTEXT_STICKER_REFUSAL_MESSAGE =
+  'Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucun sticker en clair';
+
+export const E2EE_PLAINTEXT_CITED_PIECE_REFUSAL_MESSAGE =
+  'Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucune pièce citée en clair';
+
+export const E2EE_PLAINTEXT_FORWARD_REFUSAL_MESSAGE =
+  'Cette conversation est chiffrée de bout en bout : un transfert s’y envoie comme un nouveau message chiffré, jamais comme un lien vers sa source';
+
 /** Le littéral que les clients posent dans `content` quand ils envoient un chiffré. */
 export const E2EE_CONTENT_PLACEHOLDER = '[Encrypted]';
 
@@ -120,6 +129,44 @@ export const isE2eePlaintextRefusal = (error: unknown): error is E2eePlaintextRe
 /** Lève le refus quand le texte ne peut pas être écrit en clair. */
 export function assertPlaintextAdmitted(params: Parameters<typeof plaintextRefusedIn>[0]): void {
   if (plaintextRefusedIn(params)) throw new E2eePlaintextRefusedError();
+}
+
+/**
+ * Ce que le client déclare À CÔTÉ du chiffré et que le serveur écrirait en
+ * clair sur la ligne (#13113) : les textes d'un sticker (`metadata.sticker`),
+ * l'instantané d'une pièce citée (`metadata.attachmentReplyTo`), et le lien d'un
+ * transfert serveur vers une source que le serveur LIT — et dont la liste sert
+ * le clair dans le fil chiffré (`forwardedFrom.content`). Le lieu n'y est pas :
+ * à côté d'un chiffré il est RETENU (#12526), seul il est refusé ailleurs.
+ */
+export type PlaintextNeighbors = {
+  readonly sticker?: unknown;
+  readonly attachmentReplyTo?: unknown;
+  readonly forwardedFromId?: unknown;
+  readonly forwardedFromConversationId?: unknown;
+};
+
+const PLAINTEXT_NEIGHBOR_REFUSALS: readonly (readonly [keyof PlaintextNeighbors, string])[] = [
+  ['sticker', E2EE_PLAINTEXT_STICKER_REFUSAL_MESSAGE],
+  ['attachmentReplyTo', E2EE_PLAINTEXT_CITED_PIECE_REFUSAL_MESSAGE],
+  ['forwardedFromId', E2EE_PLAINTEXT_FORWARD_REFUSAL_MESSAGE],
+  ['forwardedFromConversationId', E2EE_PLAINTEXT_FORWARD_REFUSAL_MESSAGE],
+];
+
+const declared = (value: unknown): boolean => value !== undefined && value !== null && value !== '';
+
+/**
+ * Lève le refus quand un envoi vers une conversation e2ee déclare un voisin en
+ * clair, qu'il porte un chiffré ou non : fail-closed, le message n'est pas
+ * écrit plutôt qu'écrit sans son voisin, et la phrase dit lequel (#9223).
+ */
+export function assertNoPlaintextNeighbors(params: {
+  readonly encryptionMode: string | null | undefined;
+  readonly neighbors: PlaintextNeighbors;
+}): void {
+  if (!isEndToEndMode(params.encryptionMode)) return;
+  const refused = PLAINTEXT_NEIGHBOR_REFUSALS.find(([field]) => declared(params.neighbors[field]));
+  if (refused) throw new E2eePlaintextRefusedError(refused[1]);
 }
 
 /** Lève le refus quand une conversation e2ee recevrait des pièces que le serveur a lues (#12518). */
