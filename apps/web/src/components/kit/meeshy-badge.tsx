@@ -76,7 +76,9 @@ function Lead({ leading }: { readonly leading: MeeshyBadgeLeading }) {
 /**
  * Une pastille : inerte (un `<span>`, sans rôle) ou touchable (un `<button>` de 44
  * de cible qui déborde sans changer l'encombrement). Un compte à zéro ne rend rien
- * et ne prend aucune place ; un glyphe seul exige un nom dit.
+ * et ne prend aucune place ; un glyphe seul exige un nom dit. Inerte, son nom dit
+ * (« 100 non lus » sous « 99+ ») est un texte réservé à la voix, jamais un
+ * `aria-label` : ARIA l'interdit sur un `<span>` sans rôle, et les lecteurs l'ignorent.
  */
 export function MeeshyBadge({ content, leading = 'none', surface, kind, tint, size, shape, lineLimit, isCurrent, isStale, disabled = false, label, onPress, scheme, className }: MeeshyBadgeProps) {
   const [isPressed, setPressed] = useState(false);
@@ -102,11 +104,12 @@ export function MeeshyBadge({ content, leading = 'none', surface, kind, tint, si
     ...(recipe.radii === null ? {} : { 'data-bubble': '' }),
     ...(glass === null ? {} : glass.attributes),
   };
+  const spokenApart = !isInteractive && name !== undefined && name !== shown.text;
   const body = (
     <>
       <Lead leading={leading} />
       {shown.text === null ? null : (
-        <span className="kit-badge__content" data-kit-badge-content="" data-content={shown.kind}>
+        <span className="kit-badge__content" data-kit-badge-content="" data-content={shown.kind} {...(spokenApart ? { 'aria-hidden': 'true' as const } : {})}>
           {shown.text}
         </span>
       )}
@@ -114,8 +117,9 @@ export function MeeshyBadge({ content, leading = 'none', surface, kind, tint, si
   );
   if (!isInteractive) {
     return (
-      <span {...shared} aria-label={name}>
+      <span {...shared}>
         {body}
+        {spokenApart ? <span className="sr-only">{name}</span> : null}
       </span>
     );
   }

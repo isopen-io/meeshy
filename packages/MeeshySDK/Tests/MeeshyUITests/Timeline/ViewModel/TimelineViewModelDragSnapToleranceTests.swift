@@ -82,8 +82,9 @@ final class TimelineViewModelDragSnapToleranceTests: XCTestCase {
     /// La borne : quel que soit le zoom, l'aimant ne décide jamais à la place de
     /// l'auteur au-delà d'un quart de seconde.
     func test_toleranceIsCappedAcrossTheWholeZoomRange() {
-        var zoom = TimelineScrubArea<AnyView>.zoomRange.lowerBound
-        while zoom <= TimelineScrubArea<AnyView>.zoomRange.upperBound {
+        let range: ClosedRange<CGFloat> = 0.05...8.0
+        var zoom = range.lowerBound
+        while zoom <= range.upperBound {
             let tolerance = TimelineGeometry(zoomScale: zoom).dragSnapToleranceSeconds
             XCTAssertLessThanOrEqual(tolerance, TimelineGeometry.maxSnapToleranceSeconds,
                                      "zoom \(zoom) : tolérance \(tolerance) s")

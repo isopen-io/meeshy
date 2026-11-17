@@ -288,6 +288,9 @@ export async function anonymizeUserIdentity(
       equippedBannerFrame: null,
       bio: '',
       birthDate: null,
+      // #18862 — la ville DÉCLARÉE est une donnée personnelle : elle part avec le compte, et son réglage aussi.
+      city: null,
+      cityCircle: null,
       searchTokens: [],
       blockedUserIds: [],
       referralCode: null,

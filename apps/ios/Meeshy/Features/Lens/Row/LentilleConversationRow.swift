@@ -34,7 +34,6 @@ struct LentilleConversationRow: View {
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
     var onCreateShareLink: (() -> Void)? = nil
-    var onCommunityTap: (() -> Void)? = nil
 
     var isDark: Bool = false
     var storyRingState: StoryRingState = .none

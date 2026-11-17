@@ -479,32 +479,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "live_location_duration_15m",
-          "status": "android-only"
-        },
-        {
-          "androidName": "live_location_duration_1h",
-          "status": "android-only"
-        },
-        {
-          "androidName": "live_location_duration_2h",
-          "status": "android-only"
-        },
-        {
-          "androidName": "live_location_duration_30m",
-          "status": "android-only"
-        },
-        {
-          "androidName": "live_location_duration_8h",
-          "status": "android-only"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "location.live.shareDuration",
-          "androidName": "live_location_duration_title",
-          "status": "adopted"
-        },
-        {
           "androidName": "live_location_remaining",
           "status": "android-only"
         },

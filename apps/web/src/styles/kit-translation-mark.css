@@ -1,0 +1,147 @@
+/* LA MARQUE DE TRADUCTION (K51, #18875) — un glyphe, une origine, un point, un geste.
+   Trois nœuds, aucune ombre ; le seul flou est celui de la légende, demandé à K01
+   (`glass-kit.css`), jamais écrit ici. Seule l'opacité s'anime. Chaque mesure vient de
+   `meeshy-translation-mark-recipe.ts`, posée en propriétés `--kit-translation-*`. */
+@layer components {
+  .kit-translation {
+    --kit-translation-ink: var(--kit-translation-tint, var(--accent, var(--color-ios-brand)));
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--kit-translation-sep);
+    box-sizing: border-box;
+    max-inline-size: 100%;
+    font-size: var(--kit-translation-font);
+    font-weight: 400;
+    line-height: 1.35;
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-translation[data-enters] {
+    animation: kit-translation-rise var(--motion-rise-duration) var(--motion-rise) both;
+  }
+
+  .kit-translation__glyph {
+    display: inline-flex;
+    flex: none;
+    align-self: center;
+    inline-size: var(--kit-translation-glyph);
+    block-size: var(--kit-translation-glyph);
+    color: var(--kit-translation-ink);
+    transition: opacity var(--motion-morph-duration) var(--motion-reduced);
+  }
+
+  .kit-translation__glyph[data-tone='ink3'] {
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-translation__glyph svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .kit-translation__mention {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .kit-translation__announce {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .kit-translation__dot {
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-translation__toggle {
+    position: relative;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--kit-translation-ink);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    opacity: var(--kit-translation-toggle-opacity);
+    transition: opacity 120ms var(--motion-pulse), transform 120ms var(--motion-pulse);
+  }
+
+  .kit-translation__toggle::after {
+    content: '';
+    position: absolute;
+    inset-block: calc((100% - var(--kit-translation-target)) / 2);
+    inset-inline: -8px;
+  }
+
+  .kit-translation__toggle:active {
+    transform: scale(var(--kit-translation-pressed));
+    opacity: var(--kit-translation-pressed-opacity);
+  }
+
+  .kit-translation__toggle:focus-visible,
+  .kit-translation__legend:focus-visible {
+    outline: 2px solid var(--kit-translation-ink);
+    outline-offset: 3px;
+  }
+
+  .kit-translation[data-density='legend'] {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    color: var(--color-ios-ink);
+  }
+
+  .kit-translation__legend {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kit-translation-legend-gap);
+    padding: var(--kit-translation-legend-pad);
+    border: 0;
+    border-radius: var(--kit-translation-legend-radius);
+    font: inherit;
+    font-weight: 600;
+    color: inherit;
+    text-align: start;
+  }
+
+  button.kit-translation__legend {
+    min-block-size: var(--kit-translation-target);
+    cursor: pointer;
+  }
+
+  .kit-translation__caption {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .kit-translation[data-mode='announce'] {
+    font-size: var(--kit-translation-font);
+    font-weight: 600;
+    color: var(--kit-translation-ink);
+  }
+}
+
+@keyframes kit-translation-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-translation[data-enters] {
+    animation: none;
+  }
+
+  .kit-translation__glyph,
+  .kit-translation__toggle {
+    transition: none;
+  }
+}

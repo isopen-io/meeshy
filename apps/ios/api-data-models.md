@@ -229,7 +229,7 @@ Logique dans `APIMessage.toMessage(currentUserId:)`:
 
 ## Response Wrappers
 
-### OffsetPagination (SDK: `CoreModels.swift` ou equivalent)
+### OffsetPagination (SDK : `packages/MeeshySDK/Sources/MeeshySDK/Models/`)
 
 ```json
 { "total": 150, "limit": 50, "offset": 0, "hasMore": true }
@@ -241,7 +241,7 @@ Logique dans `APIMessage.toMessage(currentUserId:)`:
 { "total": 25, "page": 1, "limit": 20, "totalPages": 2 }
 ```
 
-## Domain Models (CoreModels.swift)
+## Domain Models (`packages/MeeshySDK/Sources/MeeshySDK/Models/`)
 
 Les types domain portent le prefixe `Meeshy`:
 

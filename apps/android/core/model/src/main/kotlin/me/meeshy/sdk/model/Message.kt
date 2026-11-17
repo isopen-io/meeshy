@@ -169,9 +169,6 @@ data class ApiMessageSender(
     private fun String?.nonBlank(): String? = this?.takeIf { it.isNotBlank() }
 }
 
-/** Ancien nom de l'expéditeur imbriqué d'un transfert — un seul type désormais. */
-typealias ApiMessageSenderDetail = ApiMessageSender
-
 /**
  * The SOURCE conversation of a forwarded message, hoisted onto the payload by
  * the gateway (`forwardedFromConversation`) alongside `forwardedFromId`. Carries

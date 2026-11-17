@@ -195,7 +195,7 @@ describe('une installation qui revient retrouve sa place (#12593)', () => {
 
     const back = await directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(keys, ALICE, NOW.getTime() + 1) });
 
-    expect(back).toEqual({ deviceId: 1, created: false });
+    expect(back).toEqual({ deviceId: 1, created: false, returning: true });
     expect(store.collections.E2EEDevice.rows[0]).toMatchObject({ retiredAt: null, sessionId: sessionIdOf(2), registrationId: 4242 });
     expect(stateOf(store, ALICE)).toEqual({ active: ['1:4242'], preKeys: 4 });
   });
@@ -212,7 +212,7 @@ describe('une installation qui revient retrouve sa place (#12593)', () => {
 
     const other = await directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(fakeDeviceKeys({ registrationId: 4242 }), ALICE) });
 
-    expect(other).toEqual({ deviceId: 2, created: true });
+    expect(other).toEqual({ deviceId: 2, created: true, returning: false });
   });
 
   it("la borne ne compte que les appareils ACTIFS : des places retirées sous la même registrationId ne la font pas tomber", async () => {
