@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -115,6 +116,7 @@ class ChromeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, GameAttention.None)
 
     private var warmedUp = false
+    private var notificationsJob: Job? = null
 
     init {
         viewModelScope.observeNotificationSync(notificationRepository, messageSocketManager)
@@ -123,12 +125,14 @@ class ChromeViewModel @Inject constructor(
     fun warmUpIfAuthenticated(isAuthenticated: Boolean) {
         authenticated.value = isAuthenticated
         if (!isAuthenticated) {
+            notificationsJob?.cancel()
+            notificationsJob = null
             warmedUp = false
             return
         }
         if (warmedUp) return
         warmedUp = true
-        notificationRepository.notificationsStream(onSyncError = {}).launchIn(viewModelScope)
+        notificationsJob = notificationRepository.notificationsStream(onSyncError = {}).launchIn(viewModelScope)
         viewModelScope.launch {
             friendshipCache.hydrateCoalesced(fetch = {
                 friendRepository.friendshipGraph(sessionRepository.currentUserId.orEmpty()).getOrNull()
