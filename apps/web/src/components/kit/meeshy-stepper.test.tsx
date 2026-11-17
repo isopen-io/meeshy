@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { useState } from 'react';
 
 import { kitMount } from '@/test-support/kit-mount';
 
@@ -290,10 +291,14 @@ describe('MeeshyStepper — revue : le clavier du contrat', () => {
 
   test('boutons : flèches pour un pas, Page pour dix, Début et Fin pour les bornes', () => {
     const changes: number[] = [];
-    const container = mount(<MeeshyStepper {...props} value={20} onChange={(value) => changes.push(value)} />);
+    function Host() {
+      const [value, setValue] = useState(20);
+      return <MeeshyStepper {...props} value={value} onChange={(next) => (changes.push(next), setValue(next))} />;
+    }
+    const container = mount(<Host />);
     const plus = container.querySelector('[data-kit-stepper-plus]');
-    for (const value of ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']) key(plus, value);
-    expect(changes).toEqual([21, 19, 30, 10, 1, 50]);
+    for (const value of ['ArrowUp', 'ArrowDown', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']) key(plus, value);
+    expect(changes).toEqual([21, 20, 19, 29, 19, 1, 50]);
   });
 
   test('boutons : une touche à la butée ne change rien et dit la borne', () => {

@@ -2,6 +2,7 @@ import '@/styles/kit-circle-scale.css';
 import '@/styles/kit-motion.css';
 import { memo, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 
+import { focusKitRadio } from './kit-radio-focus';
 import {
   meeshyCircleScaleRecipe,
   meeshyCircleScaleRingDiameter,
@@ -117,10 +118,13 @@ function Dots(props: MeeshyCircleScaleProps & { readonly ranks: readonly MeeshyC
     const forward = isRtl ? 'ArrowLeft' : 'ArrowRight';
     const backward = isRtl ? 'ArrowRight' : 'ArrowLeft';
     const from = current ?? -1;
-    if (event.key === forward || event.key === 'ArrowDown') onSelect?.(Math.min(from + 1, levels.length - 1));
-    else if (event.key === backward || event.key === 'ArrowUp') onSelect?.(Math.max(from - 1, 0));
-    else return;
+    const isNext = event.key === forward || event.key === 'ArrowDown';
+    const isPrevious = event.key === backward || event.key === 'ArrowUp';
+    if (!isNext && !isPrevious) return;
+    const target = isNext ? Math.min(from + 1, levels.length - 1) : Math.max(from - 1, 0);
     event.preventDefault();
+    focusKitRadio(event.currentTarget, target);
+    onSelect?.(target);
   };
   return (
     <div className="kit-scale__dots">
@@ -146,7 +150,7 @@ function Dots(props: MeeshyCircleScaleProps & { readonly ranks: readonly MeeshyC
   );
 }
 
-function Pill({ level, rank, leading, trailing, onSelect, isEnabled }: { readonly level: MeeshyCircleScaleLevel; readonly rank: MeeshyCircleScaleRank; readonly leading: ReactNode; readonly trailing: ReactNode; readonly onSelect: (() => void) | undefined; readonly isEnabled: boolean }) {
+function Pill({ level, rank, leading, trailing, onSelect, isEnabled, spoken }: { readonly level: MeeshyCircleScaleLevel; readonly rank: MeeshyCircleScaleRank; readonly leading: ReactNode; readonly trailing: ReactNode; readonly onSelect: (() => void) | undefined; readonly isEnabled: boolean; readonly spoken: string }) {
   const body = (
     <>
       {leading ?? level.glyph}
@@ -157,7 +161,7 @@ function Pill({ level, rank, leading, trailing, onSelect, isEnabled }: { readonl
   const style = rankStyle(rank);
   if (onSelect === undefined) return <span className="kit-scale__pill" data-ink={rank.ink} style={style}>{body}</span>;
   return (
-    <button type="button" className="kit-scale__pill" data-ink={rank.ink} style={style} disabled={!isEnabled} onClick={onSelect}>
+    <button type="button" className="kit-scale__pill" data-ink={rank.ink} style={style} aria-label={spoken} disabled={!isEnabled} onClick={onSelect}>
       {body}
     </button>
   );
@@ -199,7 +203,8 @@ function Rings({ levels, ranks, other, otherLabel, center, marker, showsTitles =
 /**
  * Une échelle de proximité : un niveau parmi N, par l'intensité d'une seule teinte.
  * Sans `onSelect` : UN élément (image nommée « Proche, 5 / 6 ») ; avec : un groupe de
- * boutons radio nommés dont le courant est coché. Le niveau est toujours ÉCRIT ou dit,
+ * boutons radio nommés dont le courant est coché (la pilule, elle, devient UN bouton
+ * nommé de même, jamais enfoui sous une image qui le rendrait muet). Le niveau est toujours ÉCRIT ou dit,
  * jamais seulement teinté.
  */
 export const MeeshyCircleScale = memo(function MeeshyCircleScale(props: MeeshyCircleScaleProps) {
@@ -209,7 +214,8 @@ export const MeeshyCircleScale = memo(function MeeshyCircleScale(props: MeeshyCi
   if (form === 'pill' && recipe.current === null) return null;
   const spoken = spokenOf(props, recipe.current);
   const isGroup = onSelect !== undefined && form === 'dots';
-  const roleProps = isGroup ? { role: 'radiogroup' as const, 'aria-label': spoken } : { role: 'img' as const, 'aria-label': spoken };
+  const isPillButton = onSelect !== undefined && form === 'pill';
+  const roleProps = isGroup ? { role: 'radiogroup' as const, 'aria-label': spoken } : isPillButton ? {} : { role: 'img' as const, 'aria-label': spoken };
   return (
     <div
       className={className === undefined ? 'kit-scale' : `kit-scale ${className}`}
@@ -221,7 +227,7 @@ export const MeeshyCircleScale = memo(function MeeshyCircleScale(props: MeeshyCi
     >
       {form === 'dots' ? <Dots {...props} ranks={recipe.ranks} current={recipe.current} /> : null}
       {form === 'pill' && recipe.current !== null ? (
-        <Pill level={levels[recipe.current] ?? { title: '' }} rank={recipe.ranks[recipe.current] as MeeshyCircleScaleRank} leading={props.leading} trailing={props.trailing} onSelect={onSelect === undefined ? undefined : () => onSelect(recipe.current ?? 0)} isEnabled={isEnabled !== false} />
+        <Pill level={levels[recipe.current] ?? { title: '' }} rank={recipe.ranks[recipe.current] as MeeshyCircleScaleRank} leading={props.leading} trailing={props.trailing} onSelect={onSelect === undefined ? undefined : () => onSelect(recipe.current ?? 0)} isEnabled={isEnabled !== false} spoken={spoken} />
       ) : null}
       {form === 'rings' ? <Rings {...props} ranks={recipe.ranks} other={recipe.other} /> : null}
     </div>

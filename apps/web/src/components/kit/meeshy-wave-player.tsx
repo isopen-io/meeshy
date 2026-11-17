@@ -92,10 +92,23 @@ const useWidth = (): readonly [React.RefObject<HTMLDivElement | null>, number] =
 
 type Scrub = { readonly isActive: boolean; readonly fraction: number };
 
+/**
+ * Le glissement, tenu au niveau du lecteur : la recette le reçoit, donc le remplissage, le
+ * repère et le temps visé suivent le doigt (et non le `progress` reçu). Une rangée qui
+ * disparaît doigt posé dit encore à l'hôte que le doigt est levé.
+ */
 function useScrub(props: MeeshyWavePlayerProps) {
-  const { onScrub, onScrubbingChange } = props;
+  const { onScrub } = props;
   const [scrub, setScrub] = useState<Scrub>({ isActive: false, fraction: 0 });
   const live = useRef(scrub);
+  const latest = useRef(props);
+  latest.current = props;
+  useEffect(
+    () => () => {
+      if (live.current.isActive) latest.current.onScrubbingChange?.(false);
+    },
+    [],
+  );
   const aim = (event: ReactPointerEvent<HTMLElement>): number => {
     const box = event.currentTarget.getBoundingClientRect();
     const fraction = seekFraction({ clientX: event.clientX, left: box.left, width: box.width });
@@ -114,7 +127,7 @@ function useScrub(props: MeeshyWavePlayerProps) {
             onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
               event.currentTarget.setPointerCapture?.(event.pointerId);
               set({ isActive: true, fraction: aim(event) });
-              onScrubbingChange?.(true);
+              latest.current.onScrubbingChange?.(true);
             },
             onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
               if (live.current.isActive) set({ isActive: true, fraction: aim(event) });
@@ -123,21 +136,23 @@ function useScrub(props: MeeshyWavePlayerProps) {
               if (!live.current.isActive) return;
               const fraction = aim(event);
               set({ isActive: false, fraction });
-              onScrub(fraction);
-              onScrubbingChange?.(false);
+              latest.current.onScrub?.(fraction);
+              latest.current.onScrubbingChange?.(false);
             },
             onPointerCancel: () => {
               if (!live.current.isActive) return;
               set({ isActive: false, fraction: live.current.fraction });
-              onScrubbingChange?.(false);
+              latest.current.onScrubbingChange?.(false);
             },
           },
   };
 }
 
-function Zone({ props, recipe, width }: { readonly props: MeeshyWavePlayerProps; readonly recipe: MeeshyWavePlayerRecipe; readonly width: number }) {
+type ScrubHandle = ReturnType<typeof useScrub>;
+
+function Zone({ props, recipe, width, scrubbing }: { readonly props: MeeshyWavePlayerProps; readonly recipe: MeeshyWavePlayerRecipe; readonly width: number; readonly scrubbing: ScrubHandle }) {
   const { samples, onScrub, words, duration } = props;
-  const { scrub, handlers } = useScrub(props);
+  const { scrub, handlers } = scrubbing;
   const shown = recipe.shownProgress;
   const total = duration !== undefined && duration > 0 ? Math.round(duration) : 100;
   const elapsed = Math.round(shown * total);
@@ -199,7 +214,8 @@ export const MeeshyWavePlayer = memo(function MeeshyWavePlayer(props: MeeshyWave
   const { label, words, progress, isPlaying, onToggle, duration, size, phase = 'ready', clock, tint, caption, trailing, className } = props;
   if (label === '') throw new Error('MeeshyWavePlayer : le nom dit est obligatoire.');
   const [rootRef, width] = useWidth();
-  const recipe = meeshyWavePlayerRecipe({ size, phase, isPlaying, progress, duration, clock, reduceMotion: prefersReducedMotion() });
+  const scrubbing = useScrub(props);
+  const recipe = meeshyWavePlayerRecipe({ size, phase, isPlaying, progress, duration, clock, isScrubbing: scrubbing.scrub.isActive, scrubFraction: scrubbing.scrub.fraction, reduceMotion: prefersReducedMotion() });
   const verb = recipe.glyphKind === 'pause' ? words.pause : recipe.glyphKind === 'replay' ? words.replay : words.play;
   const state = phase === 'buffering' ? words.buffering : phase === 'unavailable' ? words.unavailable : '';
   const press = (): void => {
@@ -215,7 +231,7 @@ export const MeeshyWavePlayer = memo(function MeeshyWavePlayer(props: MeeshyWave
           {recipe.showsRing ? <span className="kit-wave__ring" aria-hidden="true" /> : null}
         </button>
         <div className="kit-wave__lane" ref={rootRef}>
-          <Zone props={props} recipe={recipe} width={width} />
+          <Zone props={props} recipe={recipe} width={width} scrubbing={scrubbing} />
           {caption === undefined ? null : <span className="kit-wave__caption" data-kit-wave-caption="">{caption}</span>}
         </div>
         <span className="kit-wave__clock" data-kit-wave-clock="">

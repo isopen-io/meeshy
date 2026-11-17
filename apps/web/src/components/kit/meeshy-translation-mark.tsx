@@ -47,7 +47,8 @@ const TRANSLATE_GLYPH = (
  * La marque de traduction : trois densités (le glyphe seul devant un aperçu, la ligne
  * sous un texte, la légende de verre sur un média), trois modes (traduit, original,
  * annonce avant l'envoi). Aucun état : elle annonce ce que l'hôte rend, jamais autre
- * chose. Sans `onToggle`, elle informe et ne promet aucun geste (ni bouton, ni halte de
+ * chose. La bascule se nomme par son VERBE (« Voir l'original » ↔ « Voir la traduction ») :
+ * elle ne porte donc pas `aria-pressed`, qui ferait dire « Voir la traduction, enfoncé ». Sans `onToggle`, elle informe et ne promet aucun geste (ni bouton, ni halte de
  * clavier, ni point). Seule l'opacité s'anime.
  */
 export const MeeshyTranslationMark = memo(function MeeshyTranslationMark({
@@ -133,7 +134,7 @@ export const MeeshyTranslationMark = memo(function MeeshyTranslationMark({
             {content}
           </MeeshyGlass>
         ) : (
-          <MeeshyGlass as="button" type="button" interactive {...toneProps} className="kit-translation__legend" data-kit-translation-legend="" aria-pressed={isShowingOriginal} aria-label={label ?? texts.toggle} aria-disabled={isPending === true ? 'true' : undefined} onClick={toggle} onContextMenu={explore} onKeyDown={exploreByKey}>
+          <MeeshyGlass as="button" type="button" interactive {...toneProps} className="kit-translation__legend" data-kit-translation-legend="" aria-label={label ?? texts.toggle} aria-disabled={isPending === true ? 'true' : undefined} onClick={toggle} onContextMenu={explore} onKeyDown={exploreByKey}>
             {content}
           </MeeshyGlass>
         )}
@@ -155,7 +156,6 @@ export const MeeshyTranslationMark = memo(function MeeshyTranslationMark({
         <button
           type="button"
           className="kit-translation__toggle"
-          aria-pressed={isShowingOriginal}
           aria-label={label}
           aria-disabled={isPending === true ? 'true' : undefined}
           onClick={toggle}

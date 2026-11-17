@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent, typ
 
 import { impact } from '@/lib/view/haptics';
 
+import { focusKitRadio } from './kit-radio-focus';
 import {
   MEESHY_STEPPER_HOLD,
   meeshyStepperHoldInterval,
@@ -125,8 +126,59 @@ function useStepper(props: MeeshyStepperProps) {
     [isEnabled, range, onChange, move, stop, tick, repeatsOnHold],
   );
 
-  return { press, release: stop, bound };
+  const leap = useCallback(
+    (target: number, direction: number): void => {
+      const live = latest.current;
+      if (target === current.current) {
+        impact('rigid');
+        setBound(direction > 0 ? 'max' : 'min');
+        live.onBound?.();
+        return;
+      }
+      current.current = target;
+      setBound(null);
+      impact('light');
+      live.onChange?.(target);
+    },
+    [],
+  );
+
+  const keyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    if (!isEnabled || range === undefined || onChange === undefined) return;
+    const intent = stepperKeyIntent(event.key, isRightToLeft());
+    if (intent === null) return;
+    event.preventDefault();
+    stop();
+    if (intent.kind === 'step') {
+      move(intent.delta);
+      return;
+    }
+    const live = latest.current;
+    const bound = intent.delta > 0 ? range.max : range.min;
+    const paged = (): number =>
+      Array.from({ length: PAGE_STEPS }).reduce<number>((value) => meeshyStepperNext({ value, delta: intent.delta, range, step: live.step, ladder: live.stepLadder }).value, current.current);
+    leap(intent.kind === 'bound' ? bound : paged(), intent.delta);
+  };
+
+  return { press, release: stop, bound, keyDown };
 }
+
+const PAGE_STEPS = 10;
+
+type KeyIntent = { readonly kind: 'step' | 'page' | 'bound'; readonly delta: number };
+
+/** Le clavier du contrat : flèches pour un pas, Page pour dix, Début et Fin pour les bornes ; en RTL la flèche gauche avance. */
+const stepperKeyIntent = (key: string, isRtl: boolean): KeyIntent | null => {
+  const forward = isRtl ? 'ArrowLeft' : 'ArrowRight';
+  const backward = isRtl ? 'ArrowRight' : 'ArrowLeft';
+  if (key === 'ArrowUp' || key === forward) return { kind: 'step', delta: 1 };
+  if (key === 'ArrowDown' || key === backward) return { kind: 'step', delta: -1 };
+  if (key === 'PageUp') return { kind: 'page', delta: 1 };
+  if (key === 'PageDown') return { kind: 'page', delta: -1 };
+  if (key === 'End') return { kind: 'bound', delta: 1 };
+  if (key === 'Home') return { kind: 'bound', delta: -1 };
+  return null;
+};
 
 function StepButton({ kind, label, delta, isBound, isDisabled, stepper }: { readonly kind: 'minus' | 'plus'; readonly label: string; readonly delta: number; readonly isBound: boolean; readonly isDisabled: boolean; readonly stepper: ReturnType<typeof useStepper> }) {
   return (
@@ -160,7 +212,7 @@ function Buttons(props: MeeshyStepperProps & { readonly canDecrement: boolean; r
   const boundText = stepper.bound === 'max' ? maximumLabel : stepper.bound === 'min' ? minimumLabel : undefined;
   const spoken = `${spokenValue ?? String(value)}${boundText === undefined ? '' : `, ${boundText}`}`;
   return (
-    <div className="kit-stepper__capsule" role="group" aria-label={label}>
+    <div className="kit-stepper__capsule" role="group" aria-label={label} onKeyDown={stepper.keyDown}>
       <StepButton kind="minus" label={decrementLabel} delta={-1} isBound={!canDecrement} isDisabled={!isEnabled} stepper={stepper} />
       <span className="kit-stepper__value" data-kit-stepper-value="" aria-hidden="true">
         {valueContent ?? value}
@@ -173,18 +225,30 @@ function Buttons(props: MeeshyStepperProps & { readonly canDecrement: boolean; r
   );
 }
 
+/** Le clavier d'un groupe radio : flèches pour le voisin (la gauche avance en RTL), Début et Fin pour les extrémités. */
+const trackKeyTarget = ({ key, from, lastIndex, isRtl }: { readonly key: string; readonly from: number; readonly lastIndex: number; readonly isRtl: boolean }): number | null => {
+  const forward = isRtl ? 'ArrowLeft' : 'ArrowRight';
+  const backward = isRtl ? 'ArrowRight' : 'ArrowLeft';
+  if (key === forward || key === 'ArrowDown') return Math.min(from + 1, lastIndex);
+  if (key === backward || key === 'ArrowUp') return Math.max(from - 1, 0);
+  if (key === 'Home') return 0;
+  if (key === 'End') return lastIndex;
+  return null;
+};
+
 function Track({ value, label, stops, onChange, describeStop = defaultDescribeStop, isEnabled = true, fill }: MeeshyStepperProps & { readonly stops: readonly MeeshyStepperStop[]; readonly fill: number }) {
   const lastIndex = stops.length - 1;
+  const isStop = Number.isInteger(value) && value >= 0 && value <= lastIndex;
+  const focusIndex = isStop ? value : 0;
   const choose = (index: number): void => {
     if (isEnabled && index !== value && index >= 0 && index <= lastIndex) onChange?.(index);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    const forward = isRightToLeft() ? 'ArrowLeft' : 'ArrowRight';
-    const backward = isRightToLeft() ? 'ArrowRight' : 'ArrowLeft';
-    if (event.key === forward || event.key === 'ArrowDown') choose(value + 1);
-    else if (event.key === backward || event.key === 'ArrowUp') choose(value - 1);
-    else return;
+    const target = trackKeyTarget({ key: event.key, from: isStop ? value : -1, lastIndex, isRtl: isRightToLeft() });
+    if (target === null) return;
     event.preventDefault();
+    focusKitRadio(event.currentTarget, target);
+    choose(target);
   };
   return (
     <div className="kit-stepper__track" role="radiogroup" aria-label={label} style={{ '--kit-stepper-count': stops.length, '--kit-stepper-fill': fill } as never}>
@@ -198,7 +262,7 @@ function Track({ value, label, stops, onChange, describeStop = defaultDescribeSt
           role="radio"
           aria-checked={index === value}
           aria-label={describeStop(stop, index, stops.length)}
-          tabIndex={index === value ? 0 : -1}
+          tabIndex={index === focusIndex ? 0 : -1}
           disabled={!isEnabled}
           className="kit-stepper__stop"
           data-selected={index === value ? '' : undefined}
