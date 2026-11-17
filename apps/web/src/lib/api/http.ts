@@ -450,8 +450,11 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     }
     /* Un 401 ne dit rien de l'identité COURANTE si elle n'est plus celle qui
        a demandé : la déconnexion d'A, rejouée sur ses en-têtes explicites, ne
-       ferme jamais la session de B ouverte entre-temps. */
-    if (unauthorized && presentsIdentity && !identityChanged()) options.onUnauthorized?.(refusalOf(envelope));
+       ferme jamais la session de B ouverte entre-temps. Ni de la session
+       courante du MÊME compte, si elle n'a pas présenté ce crédential : l'onglet
+       a repris entre-temps celle que l'appareil tient (#19132). */
+    const credentialChanged = JSON.stringify(options.credential?.() ?? null) !== JSON.stringify(credential);
+    if (unauthorized && presentsIdentity && !identityChanged() && !credentialChanged) options.onUnauthorized?.(refusalOf(envelope));
     if (deletedAccount !== null) options.onAccountDeleted?.(deletedAccount);
 
     if (envelope.success === true) {

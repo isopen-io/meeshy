@@ -209,23 +209,49 @@ export function forgetAccountCaches({
 }
 
 /**
+ * QUI SUIT L'APPAREIL (#19132) — `session-follow.ts`, chargé avec le temps
+ * réel après la première peinture, s'ENREGISTRE ici (motif `typing-emit.ts`) :
+ * la première peinture n'en porte que ce port. Tant qu'il ne l'a pas fait, une
+ * session refusée que l'appareil ne tient plus attend — la pose du suivi relit
+ * l'appareil et la fait converger.
+ */
+export type DeviceFollower = (store: SessionStoreApi, shelf: AccountCacheShelf) => void;
+
+let deviceFollower: DeviceFollower | null = null;
+
+export function setDeviceFollower(next: DeviceFollower | null): void {
+  deviceFollower = next;
+}
+
+/**
  * LA SESSION COURANTE EST REFUSÉE (401 sur son jeton, `auth:session-revoked`
  * du socket) — elle finit, et ce que l'appareil gardait d'elle part avec.
  * L'ordre compte : `clearSession()` fait d'abord ranger le cache du compte
  * par `query-client.ts`, que l'oubli retire aussitôt.
+ *
+ * SAUF QUAND L'APPAREIL TIENT DÉJÀ UNE AUTRE SESSION (#19132) : un autre
+ * onglet s'est reconnecté, a changé de compte ou a fini la sienne. Le refus ne
+ * dit alors rien de ce que l'appareil tient — ni son entrée, ni ce que le
+ * compte y a laissé (publications du studio, reprises d'envoi, seaux du
+ * service worker) ne partent : cet onglet SUIT l'appareil.
  */
 export function endRevokedSession(
   store: SessionStoreApi,
   deps: { readonly storage?: SafeStorage; readonly cacheStorage?: CacheStorageLike; readonly publications?: PublicationsEraser } = {},
 ): void {
-  const current = store.getState().session;
+  const state = store.getState();
+  const current = state.session;
   /* Sous une identité anonyme TENUE par un compte (#8816), le 401 a refusé
      le jeton de l'INVITÉ : c'est lui qui finit, le compte reste. */
   if (current.status === 'guest' && current.account !== undefined) {
-    store.getState().dropAnonymous(current.guest.conversationId);
+    state.dropAnonymous(current.guest.conversationId);
+    return;
+  }
+  if (current.status === 'authenticated' && !state.holdsDeviceSession()) {
+    deviceFollower?.(store, createAccountCacheShelf(deps.storage ?? safeLocalStorage()));
     return;
   }
   const userId = current.status === 'authenticated' ? current.user.id : null;
-  store.getState().clearSession();
+  state.clearSession();
   if (userId !== null) forgetAccountCaches({ userId, ...deps });
 }

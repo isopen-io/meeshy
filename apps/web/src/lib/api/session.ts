@@ -205,6 +205,25 @@ export type SessionStoreState = {
    * quitte la session tenue ET persistée. Sans effet hors d'un compte. */
   noteEmailProven(): void;
   restoreSession(): void;
+  /**
+   * CE QUE L'APPAREIL TIENT (#19132) — l'entrée `meeshy.session` telle qu'un
+   * rechargement la restaurerait, lue sans rien y écrire : `anonymous` si elle
+   * est absente, corrompue ou échue. Un autre onglet a pu la remplacer depuis
+   * que celui-ci tient la sienne.
+   */
+  deviceSession(): SessionState;
+  /**
+   * L'entrée de l'appareil porte-t-elle ENCORE la session de cet onglet —
+   * mêmes jetons, échue ou non (#19132) ? Sinon un autre onglet l'a remplacée
+   * ou finie, et ce que cet onglet en apprend ne la concerne pas.
+   */
+  holdsDeviceSession(): boolean;
+  /**
+   * Finit la session de CET onglet. L'entrée de l'appareil ne part avec elle
+   * que si elle porte ENCORE cette session (#19132) : un autre onglet l'a
+   * peut-être remplacée par une session plus récente, qu'un 401 ici ne
+   * concerne pas.
+   */
   clearSession(): void;
   /**
    * REJOINDRE EN ANONYME (#8816). Sous un compte, l'identité anonyme est
@@ -252,6 +271,17 @@ export function sessionIdentityKey(session: SessionState): string | null {
   if (session.status === 'authenticated') return `u:${session.user.id}`;
   if (session.status === 'guest') return `g:${session.sessionToken}`;
   return null;
+}
+
+/**
+ * QUELLE SESSION est tenue (#19132) — ses jetons, là où `sessionIdentityKey`
+ * ne nomme que la personne : deux onglets du même compte peuvent tenir deux
+ * sessions. Le compte tenu d'abord (#8816), l'invité d'un lien sinon.
+ */
+export function heldSessionKey(session: SessionState): string | null {
+  const account = heldAccountOf(session);
+  if (account !== null) return `${account.token} ${account.sessionToken}`;
+  return session.status === 'guest' ? session.sessionToken : null;
 }
 
 /** La clé de la session tenue — exportée pour la landing (#10002), dont le
@@ -411,25 +441,18 @@ function persist(storage: SessionStorage, session: PersistedSession): void {
   }
 }
 
-/**
- * UNE SESSION TENUE NE RÉÉCRIT QUE SA PROPRE ENTRÉE (#18914, audit C3 ;
- * #19132). Deux onglets partagent `meeshy.session`, et aucun ne suit l'autre :
- * l'onglet d'Ada qui persistait une édition — ou la projection de `GET /me`,
- * qui tourne en fond (`served-profile-session.ts`) — écrivait sa session
- * par-dessus celle de Bob, ouverte dans l'autre onglet, et Bob rechargé se
- * réveillait en Ada. Le même compte ne suffit pas non plus : Ada reconnectée
- * dans un onglet persiste un jeton RÉCENT, que l'autre onglet, resté sur
- * l'ancienne session, remplaçait par le sien — révoqué ou échu, il la
- * déconnectait au rechargement. L'édition reste tenue en mémoire ; elle n'est
- * persistée que si l'entrée persistée est la MÊME session : même jeton, même
- * identifiant de session — et donc le même compte, qu'un jeton désigne. Absente,
- * corrompue ou d'invité, l'entrée n'est pas réécrite : un autre onglet l'a
- * fermée ou remplacée.
- */
-function persistHeld(storage: SessionStorage, held: AuthenticatedSession, user: SessionUser): void {
-  const persisted = readPersisted(storage);
-  if (typeof persisted !== 'object' || persisted.kind === 'guest' || persisted.token !== held.token || persisted.sessionToken !== held.sessionToken) return;
-  persist(storage, { user, token: held.token, sessionToken: held.sessionToken, expiresAt: held.expiresAt });
+/** La session qu'une entrée persistée décrit — projetée, comme à l'`establish`. */
+function sessionOf(persisted: PersistedSession): SessionState {
+  if (persisted.kind === 'guest') {
+    return { status: 'guest', sessionToken: persisted.sessionToken, guest: pickGuest(persisted.guest), expiresAt: persisted.expiresAt };
+  }
+  return {
+    status: 'authenticated',
+    user: pickSessionUser(persisted.user),
+    token: persisted.token,
+    sessionToken: persisted.sessionToken,
+    expiresAt: persisted.expiresAt,
+  };
 }
 
 function purge(storage: SessionStorage): void {
@@ -537,6 +560,31 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
   const storage = options.storage ?? safeLocalStorage();
   const now = options.now ?? (() => Date.now());
 
+  const deviceSession = (): SessionState => {
+    const persisted = readPersisted(storage);
+    return typeof persisted === 'object' && persisted.expiresAt > now() ? sessionOf(persisted) : { status: 'anonymous' };
+  };
+
+  /**
+   * L'ENTRÉE DE L'APPAREIL EST-ELLE ENCORE CETTE SESSION ? (#18914 C3, #19132)
+   * Deux onglets partagent `meeshy.session`. Celui d'Ada qui persistait une
+   * édition — ou la projection de `GET /me`, qui tourne en fond — écrivait sa
+   * session par-dessus celle de Bob, ouverte dans l'autre onglet ; Ada
+   * reconnectée dans un onglet y voyait son jeton RÉCENT remplacé par l'ancien
+   * de l'autre onglet, et un 401 de cet onglet ancien effaçait l'entrée
+   * récente. Une session ne réécrit ni n'efface l'entrée que si c'est la MÊME
+   * session : mêmes jetons — et donc le même compte, qu'un jeton désigne.
+   */
+  const holdsDevice = (session: SessionState): boolean => {
+    const persisted = readPersisted(storage);
+    return heldSessionKey(session) === (typeof persisted === 'object' ? heldSessionKey(sessionOf(persisted)) : null);
+  };
+
+  /** L'édition reste tenue en mémoire ; l'entrée d'une autre session n'est pas réécrite. */
+  const persistHeld = (held: AuthenticatedSession, user: SessionUser): void => {
+    if (holdsDevice(held)) persist(storage, { user, token: held.token, sessionToken: held.sessionToken, expiresAt: held.expiresAt });
+  };
+
   return createStore<SessionStoreState>((set, get) => ({
     session: { status: 'anonymous' },
     establish: ({ user, token, sessionToken, expiresIn }) => {
@@ -558,14 +606,14 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       const current = get().session;
       if (current.status !== 'authenticated') return;
       const user = pickSessionUser(withProfileFields(current.user, fields));
-      persistHeld(storage, current, user);
+      persistHeld(current, user);
       set({ session: { ...current, user } });
     },
     noteEmailProven: () => {
       const current = get().session;
       if (current.status !== 'authenticated' || current.user.emailUnproven !== true) return;
       const { emailUnproven: _proven, ...user } = current.user;
-      persistHeld(storage, current, user);
+      persistHeld(current, user);
       set({ session: { ...current, user } });
     },
     restoreSession: () => {
@@ -576,29 +624,12 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
         purge(storage);
         return;
       }
-      if (persisted.kind === 'guest') {
-        set({
-          session: {
-            status: 'guest',
-            sessionToken: persisted.sessionToken,
-            guest: pickGuest(persisted.guest),
-            expiresAt: persisted.expiresAt,
-          },
-        });
-        return;
-      }
-      set({
-        session: {
-          status: 'authenticated',
-          user: pickSessionUser(persisted.user),
-          token: persisted.token,
-          sessionToken: persisted.sessionToken,
-          expiresAt: persisted.expiresAt,
-        },
-      });
+      set({ session: sessionOf(persisted) });
     },
+    deviceSession,
+    holdsDeviceSession: () => holdsDevice(get().session),
     clearSession: () => {
-      purge(storage);
+      if (holdsDevice(get().session)) purge(storage);
       set({ session: { status: 'anonymous' } });
     },
     adoptAnonymous: ({ sessionToken, guest }) => {
