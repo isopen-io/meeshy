@@ -106,7 +106,7 @@ struct MessageCardBackdropPanel: View {
                     Text(MessageCardExportText.text("export.card.backdrop.veil", "Voile"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Slider(value: Binding(get: { chosen.veil }, set: onVeil), in: MessageCardBackdrop.veilRange)
+                    Slider(value: Binding(get: { chosen.veil }, set: { onVeil($0) }), in: MessageCardBackdrop.veilRange)
                         .accessibilityLabel(MessageCardExportText.text("export.card.backdrop.veil", "Voile"))
                 }
                 if let onCrop {
