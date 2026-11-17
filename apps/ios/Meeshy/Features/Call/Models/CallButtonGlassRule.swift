@@ -48,3 +48,21 @@ enum CallOutputButtonRule {
         return isSpeaker && !isVideoCall ? .active : .normal
     }
 }
+
+/// #19239 — le bloc qui PORTE les boutons de l'appel (la pilule, les rails, la barre d'Effets).
+/// Sous iOS 26 un verre ne lit pas un autre verre : une pilule de verre sous des boutons de verre
+/// les faisait fondre en formes molles et passait leurs icônes dessous. Les boutons étant les
+/// verres (#17323), le bloc n'est alors qu'un fond sombre au liseré clair ; avant iOS 26, le
+/// verre dessiné se superpose sans défaut et le bloc garde le sien.
+nonisolated enum CallControlsBlockRule {
+    static func carriesItsOwnGlass(isLiquidGlassAvailable: Bool) -> Bool {
+        !isLiquidGlassAvailable
+    }
+
+    /// Le fond sombre d'un bloc sans verre : assez dense pour garder les légendes lisibles sur
+    /// une image claire, assez léger pour laisser deviner ce qu'il couvre.
+    static let backdropOpacity: Double = 0.42
+
+    /// Le liseré qui détache le bloc de l'image, à la place du bord du verre.
+    static let rimOpacity: Double = 0.14
+}

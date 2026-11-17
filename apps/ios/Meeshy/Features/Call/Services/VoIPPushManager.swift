@@ -329,11 +329,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // Backend sends `isVideo` as a string ("true"/"false") because APNs
         // payloads are Record<string,string>, but older builds may still send
         // it as a Bool. Accept both for forward compatibility.
-        let isVideo: Bool = {
-            if let b = data["isVideo"] as? Bool { return b }
-            if let s = data["isVideo"] as? String { return s.lowercased() == "true" }
-            return false
-        }()
+        let isVideo = Self.parseIsVideo(data["isVideo"])
 
         // Per-user TURN credentials carried in the push payload — required so
         // RTCPeerConnection is built with TURN BEFORE the SDP answer is
@@ -390,6 +386,13 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     }
 
     // MARK: - Payload Parsers
+
+    /// `isVideo` voyage en chaîne (`"true"`/`"false"`, APNs ne porte que des
+    /// chaînes) ; une passerelle ancienne l'envoie en booléen.
+    nonisolated static func parseIsVideo(_ raw: Any?) -> Bool {
+        if let flag = raw as? Bool { return flag }
+        return (raw as? String)?.lowercased() == "true"
+    }
 
     /// Decode the JSON-encoded `iceServers` field carried by VoIP pushes.
     /// Returns nil when the field is missing, empty, or unparsable — callers
