@@ -35,16 +35,17 @@ final class ConversationListCacheWriterGuardTests: XCTestCase {
     ///
     /// Mesuré le 2026-09-18 sur `dev` :
     /// - `ConversationSyncEngine.saveSorted` — le chokepoint réconcilié (1) ;
-    /// - `ConversationListViewModel` — les deux chemins de `loadMore`, épuisé
-    ///   et nominal (2), dans `+Loading` ; et `schedulePersist` (1), parti avec
-    ///   `ConversationListPersister` au découpage par cohésion (#10988) — le
-    ///   total de l'écran reste 3 ;
+    /// - `ConversationListPersister` — la seule écriture en bloc de l'écran
+    ///   (1), et seulement quand le cache n'a RIEN : tout instantané de la liste
+    ///   se fusionne sinon sur le cache courant (`update`, #18933). Les deux
+    ///   chemins de `loadMore` de `+Loading` y passent désormais — l'épuisé
+    ///   gravait l'instantané brut, effaçant lignes et facettes du moteur ;
+    ///   `+Loading` est retiré de la table ;
     /// - `RootView.ensureUnread` — l'écrivain qui inventait la ligne « 1 » :
     ///   sa dernière écriture en bloc a disparu (lien à froid, 2026-10-17),
     ///   le nom est retiré de la table.
     private static let allowance: [String: Int] = [
         "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift": 1,
-        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel+Loading.swift": 2,
         "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListPersister.swift": 1,
     ]
 
