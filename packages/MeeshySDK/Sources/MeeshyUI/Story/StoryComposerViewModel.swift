@@ -285,7 +285,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     }
 
     /// Ce que le canvas peint sous une scène sans `effects.background` : noir
-    /// opaque (`StoryComposerView+Canvas`, repli documenté).
+    /// opaque (repli documenté).
     static let unpaintedSlideBackground = "000000"
 
     /// Luminance WCAG moyenne du bitmap de fond effectivement affiché
