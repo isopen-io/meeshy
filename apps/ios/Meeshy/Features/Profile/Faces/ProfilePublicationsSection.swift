@@ -30,9 +30,8 @@ struct ProfilePublicationsSection: View {
                     header
                     MeeshyMediaGrid(label: ProfilePublicationsCopy.title, items: items, layout: .row, columns: 3,
                                     shape: .tall, tint: Color(hex: accentColor),
-                                    onOpen: { id in open(id) }) { item, size in
-                        thumbnail(of: item, size: size)
-                    }
+                                    onOpen: { id in open(id) },
+                                    content: { item, size in thumbnail(of: item, size: size) })
                 }
                 .meeshyTransition(.opacity)
             }
