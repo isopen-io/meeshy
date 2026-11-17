@@ -155,6 +155,9 @@ export type CallRingPushInput = {
   readonly isVideo: boolean;
   readonly calleeUserIds: readonly string[];
   readonly foregroundUserIds: ReadonlySet<string>;
+  readonly conversationType: string;
+  readonly isGroup: boolean;
+  readonly invitedByUserId?: string;
 };
 
 /**
@@ -208,6 +211,9 @@ export async function pushIncomingCall(
       iceServersJson: JSON.stringify(deps.callService.generateIceServers(offlineUserId)),
       isChinaDevice: offlineCountries.get(offlineUserId) === 'CN',
       voipCapable: voipCapableUsers.has(offlineUserId),
+      conversationType: input.conversationType,
+      isGroup: input.isGroup,
+      invitedByUserId: input.invitedByUserId,
     });
     for (const push of pushes) {
       deps.pushService.sendToUser(push).catch(err => {

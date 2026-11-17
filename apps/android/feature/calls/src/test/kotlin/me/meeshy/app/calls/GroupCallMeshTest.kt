@@ -61,6 +61,37 @@ class GroupCallMeshTest {
     }
 
     @Test
+    fun `an invitee woken by the push answers the inviter as primary and every other offerer through the mesh`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val h = Harness()
+            h.bind(this, isOutgoing = false, self = "m", primary = "alice")
+            assertThat(h.signal("offer", from = "bob")).isTrue()
+            assertThat(h.signal("offer", from = "alice")).isFalse()
+            assertThat(h.signal("offer", from = "carol")).isTrue()
+            assertThat(h.sent.map { it.to to it.signal.kind }).containsExactly(
+                "bob" to GroupMeshSignalKind.Answer,
+                "carol" to GroupMeshSignalKind.Answer,
+            )
+            assertThat(h.mesh.ui.value.roster.members.map { it.userId to it.isPrimary })
+                .containsExactly("alice" to true, "bob" to false, "carol" to false)
+            h.mesh.teardown()
+        }
+
+    @Test
+    fun `rejoining from the conversation without a known primary answers every member, the first offerer as primary`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val h = Harness()
+            h.bind(this, isOutgoing = false, self = "m")
+            assertThat(h.signal("offer", from = "bob")).isFalse()
+            assertThat(h.signal("offer", from = "alice")).isTrue()
+            assertThat(h.signal("offer", from = "carol")).isTrue()
+            assertThat(h.sent.map { it.to }).containsExactly("alice", "carol")
+            assertThat(h.mesh.ui.value.roster.members.map { it.userId to it.isPrimary })
+                .containsExactly("bob" to true, "alice" to false, "carol" to false)
+            h.mesh.teardown()
+        }
+
+    @Test
     fun `my own echo is swallowed once the call is a group`() = runTest(UnconfinedTestDispatcher()) {
         val h = Harness()
         h.bind(this, isOutgoing = true)

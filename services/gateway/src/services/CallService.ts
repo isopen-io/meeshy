@@ -40,6 +40,7 @@ import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { resolveCallSummaryParticipantIds } from './calls/callSummaryParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
+import { mayReadCallSession } from './calls/callSessionReadAccess';
 import { assertCallableConversationType, assertViewerMayStartCall } from './calls/callStartAdmission';
 import { commitCallEnd } from './calls/endCallRetry';
 import { callEngagementCrediter } from './calls/callEngagementCredits';
@@ -1908,30 +1909,10 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
     }
 
-    // CVE-003: Authorization check if a requesting user is provided.
-    if (requestingUserId) {
-      // Fast path: the user is already a participant of this call.
-      const isCallParticipant = call.participants.some((p) => p.participant?.userId === requestingUserId);
-
-      // Otherwise, authorize by active membership of the call's conversation.
-      if (!isCallParticipant) {
-        const isMember = await this.prisma.participant.findFirst({
-          where: {
-            conversationId: call.conversationId,
-            userId: requestingUserId,
-            isActive: true
-          }
-        });
-
-        if (!isMember) {
-          logger.warn('❌ Unauthorized call access attempt', {
-            callId,
-            userId: requestingUserId,
-            conversationId: call.conversationId
-          });
-          throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You do not have access to this call`);
-        }
-      }
+    // CVE-003 · #19238 — participant, membre actif ou invité en attente (`mayReadCallSession`).
+    if (requestingUserId && !(await mayReadCallSession(this.prisma, call, requestingUserId))) {
+      logger.warn('❌ Unauthorized call access attempt', { callId, userId: requestingUserId, conversationId: call.conversationId });
+      throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You do not have access to this call`);
     }
 
     return call;

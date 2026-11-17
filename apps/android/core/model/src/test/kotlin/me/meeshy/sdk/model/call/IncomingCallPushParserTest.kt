@@ -166,4 +166,33 @@ class IncomingCallPushParserTest {
         assertThat(call("title" to " ", "body" to "").title).isNull()
         assertThat(call("title" to " ", "body" to "").body).isNull()
     }
+
+    // --- Appel de groupe et invitation (#19238) -----------------------------
+
+    @Test
+    fun `an invitation into a call under way is a group call whose principal is the inviter`() {
+        val push = call("callerUserId" to "inviter", "conversationType" to "direct", "isGroup" to "true", "invitedBy" to "inviter")
+        assertThat(push.isGroupCall).isTrue()
+        assertThat(push.conversationType).isEqualTo("direct")
+        assertThat(push.invitedBy).isEqualTo("inviter")
+        assertThat(push.principalUserId).isEqualTo("inviter")
+    }
+
+    @Test
+    fun `a group conversation is a group call even without the flag`() {
+        assertThat(call("conversationType" to "group").isGroupCall).isTrue()
+    }
+
+    @Test
+    fun `a direct call, or a push from an older gateway, is not a group call and its principal is the caller`() {
+        val direct = call("callerUserId" to "caller", "conversationType" to "direct", "isGroup" to "false")
+        assertThat(direct.isGroupCall).isFalse()
+        assertThat(direct.principalUserId).isEqualTo("caller")
+        val older = call("callerUserId" to "caller")
+        assertThat(older.isGroupCall).isFalse()
+        assertThat(older.conversationType).isNull()
+        assertThat(older.invitedBy).isNull()
+        assertThat(older.principalUserId).isEqualTo("caller")
+    }
 }
+
