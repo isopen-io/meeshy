@@ -45,6 +45,13 @@ const DEFAULT_LANGUAGE: UnfurlLanguage = 'fr';
 /** La plus grande largeur d'image qu'un robot d'aperçu télécharge sans la refuser. */
 const IMAGE_WIDTH_MAX = 1200;
 
+/**
+ * Un original JPEG ou PNG part tel quel jusqu'à ce poids : ce sont les seuls formats que
+ * TOUS les robots lisent (WhatsApp lit mal le WebP, que sont nos variantes et vignettes).
+ */
+const ORIGINAL_IMAGE_BYTES_MAX = 1_000_000;
+const UNIVERSAL_IMAGE_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png']);
+
 /** Les codecs qu'un lecteur de robot (Facebook, Telegram, Discord) sait jouer. */
 const PLAYABLE_VIDEO_CODECS: ReadonlySet<string> = new Set(['h264', 'avc', 'avc1']);
 
@@ -63,6 +70,7 @@ const authorSelect = {
 
 const mediaSelect = {
   mimeType: true,
+  fileSize: true,
   fileUrl: true,
   thumbnailUrl: true,
   width: true,
@@ -106,6 +114,7 @@ const contentUnfurlSelect = {
 
 type UnfurlMediaRow = {
   readonly mimeType: string;
+  readonly fileSize: number | null;
   readonly fileUrl: string;
   readonly thumbnailUrl: string | null;
   readonly width: number | null;
@@ -148,11 +157,10 @@ export function isContentUnfurlId(postId: string): boolean {
 }
 
 export async function loadContentUnfurlSource(prisma: PrismaClient, postId: string): Promise<ContentUnfurlSource | null> {
-  const row = await prisma.post.findFirst({
+  return prisma.post.findFirst({
     where: { id: postId, deletedAt: NOT_DELETED },
     select: contentUnfurlSelect
   });
-  return row as ContentUnfurlSource | null;
 }
 
 const isContentKind = (type: string): type is UnfurlContentKind => CONTENT_KINDS.has(type);
@@ -185,8 +193,15 @@ const renditionsOf = (raw: unknown): readonly Rendition[] =>
 
 type ServedImage = { readonly url: string; readonly meta: UnfurlImageMeta | null };
 
-/** La plus grande variante WebP qu'un robot accepte, sinon la vignette, sinon l'original. */
+/** Un original que tous les robots lisent, sinon la plus grande variante WebP acceptée, sinon la vignette, sinon l'original. */
 function imageOf(media: UnfurlMediaRow): ServedImage | null {
+  const mime = media.mimeType.toLowerCase();
+  const original = publicUrl(media.fileUrl);
+  const universal = UNIVERSAL_IMAGE_TYPES.has(mime) && media.fileSize !== null && media.fileSize <= ORIGINAL_IMAGE_BYTES_MAX;
+  if (universal && original !== null) {
+    const meta = media.width !== null && media.height !== null ? { type: mime, width: media.width, height: media.height } : null;
+    return { url: original, meta };
+  }
   const variant = renditionsOf(media.imageVariants)
     .filter((entry) => entry.width <= IMAGE_WIDTH_MAX && (entry.format ?? 'webp') === 'webp')
     .reduce<Rendition | null>((best, entry) => (best === null || entry.width > best.width ? entry : best), null);
@@ -194,7 +209,7 @@ function imageOf(media: UnfurlMediaRow): ServedImage | null {
   if (variant !== null && variantUrl !== null) {
     return { url: variantUrl, meta: { type: 'image/webp', width: variant.width, height: variant.height } };
   }
-  const fallback = publicUrl(media.thumbnailUrl) ?? publicUrl(media.fileUrl);
+  const fallback = publicUrl(media.thumbnailUrl) ?? original;
   return fallback === null ? null : { url: fallback, meta: null };
 }
 

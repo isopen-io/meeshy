@@ -30,6 +30,7 @@ const API = 'https://gate.meeshy.me';
 
 type Media = {
   readonly mimeType?: string;
+  readonly fileSize?: number | null;
   readonly fileUrl?: string;
   readonly thumbnailUrl?: string | null;
   readonly width?: number | null;
@@ -43,6 +44,7 @@ type Media = {
 
 const media = (o: Media = {}) => ({
   mimeType: o.mimeType ?? 'image/jpeg',
+  fileSize: o.fileSize === undefined ? 4_200_000 : o.fileSize,
   fileUrl: o.fileUrl ?? '2026/11/66f0c0ffee0000000000aaaa/plage.jpg',
   thumbnailUrl: o.thumbnailUrl === undefined ? '2026/11/66f0c0ffee0000000000aaaa/plage_thumb.jpg' : o.thumbnailUrl,
   width: o.width === undefined ? 3024 : o.width,
@@ -217,6 +219,23 @@ describe('Un post public se déplie en carte : titre, texte, image', () => {
     expect(html).not.toContain('+33600000000');
     expect(html).not.toContain('1234');
     expect(html).not.toContain('66f0c0ffee0000000000dddd');
+  });
+
+  it('un original JPEG ou PNG léger part tel quel, avec ses dimensions : tous les robots le lisent', async () => {
+    const { html } = await deplier({ ligne: contenu({ media: [media({ fileSize: 480_000, width: 1600, height: 1200 })] }) });
+    expect(meta(html, 'og:image')).toBe(`${API}/api/v1/attachments/file/${encodeURIComponent('2026/11/66f0c0ffee0000000000aaaa/plage.jpg')}`);
+    expect(meta(html, 'og:image:type')).toBe('image/jpeg');
+    expect(meta(html, 'og:image:width')).toBe('1600');
+    expect(meta(html, 'og:image:height')).toBe('1200');
+  });
+
+  it('un original lourd, ou dans un format que tous ne lisent pas, cède à la variante', async () => {
+    const lourd = await deplier({ ligne: contenu({ media: [media({ fileSize: 4_200_000 })] }) });
+    expect(meta(lourd.html, 'og:image')).toContain('plage_1080w.webp');
+    const heic = await deplier({ ligne: contenu({ media: [media({ mimeType: 'image/heic', fileSize: 300_000 })] }) });
+    expect(meta(heic.html, 'og:image')).toContain('plage_1080w.webp');
+    const inconnu = await deplier({ ligne: contenu({ media: [media({ fileSize: null })] }) });
+    expect(meta(inconnu.html, 'og:image')).toContain('plage_1080w.webp');
   });
 
   it('sans variante, prend la vignette, puis l’original', async () => {
