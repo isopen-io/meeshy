@@ -802,11 +802,10 @@ struct MeeshyComposerHost: View {
         // une story privée en la voyant ouverte sur « Amis » — le dernier choix
         // mémorisé — serait offrir une faute que le serveur refuserait ensuite
         // (403 `REPOST_AUDIENCE_WIDENING`), après que la composition est faite.
-        // L'ÉDITION, elle, rend `nil` ici : c'est le ViewModel hydraté qui
-        // porte son audience (`editingInitialVisibility`), réassignée en
-        // priorité absolue par `StoryComposerView.init`. Deux sources pour une
-        // même valeur, dont la seconde gagne toujours, feraient une première
-        // ligne morte qui aurait l'air de décider.
+        // L'ÉDITION, elle, impose l'audience que porte le ViewModel hydraté
+        // (`editingInitialVisibility`, servie par
+        // `ComposerHydration.initialVisibility`) : l'audience ACTUELLE de la
+        // story, jamais un dernier choix mémorisé.
         //
         // L'audience de l'hydratation passe par le MÊME validateur que les
         // autres (`selectable`, dans `seed`) et non à côté : la chaîne vient
