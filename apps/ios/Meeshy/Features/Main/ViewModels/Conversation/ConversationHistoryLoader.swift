@@ -26,7 +26,8 @@ protocol ConversationHistoryLoading: AnyObject, Sendable {
     func refreshLatest(warmCache: Bool, readerPrism: [String]) async -> HistoryRefresh
     func fetchOlder(before cursor: String) async throws -> HistoryPage
     func persist(_ messages: [APIMessage], readerPrism: [String]) async
-    func fetchMissed(after watermark: Date) async throws -> [APIMessage]
+    func catchUpCursor(newestHeld: Date?) async -> Date?
+    func fetchMissed(after cursor: Date, readerPrism: [String]) async throws -> [APIMessage]
     func restoreAround(ids: [String], limit: Int, readerPrism: [String]) async -> [APIMessage]
     func forgetConversation() async
     func mergeIntoMessageCache(_ messages: [Message], placement: CachePlacement) async
@@ -61,13 +62,17 @@ final class ConversationHistoryLoader: ConversationHistoryLoading {
     }
 
     /// Cache chaud : on demande au gateway d'omettre `translations`, déjà en GRDB et rattrapées par le socket.
+    /// La page — les trente plus récents, d'un seul tenant — étend le fil détenu sans trou quand elle
+    /// le rejoint ou l'ouvre (#18929) ; ce que la base tenait se lit AVANT de la graver.
     func refreshLatest(warmCache: Bool, readerPrism: [String]) async -> HistoryRefresh {
         do {
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: 30,
                 includeReplies: true, includeTranslations: !warmCache, languages: nil
             )
-            await persist(response.data, readerPrism: readerPrism)
+            let base = try? await ConversationContiguity.base(of: conversationId, on: persistence)
+            let extent = base.flatMap { ConversationContiguity.extent(ofRefresh: response.data.map(\.createdAt), over: $0) }
+            await persist(response.data, readerPrism: readerPrism, extendingContiguityTo: extent)
             return .page(response.data)
         } catch let error as MeeshyError {
             return Self.refreshOutcome(for: error)
@@ -104,15 +109,38 @@ final class ConversationHistoryLoader: ConversationHistoryLoading {
     }
 
     func persist(_ messages: [APIMessage], readerPrism: [String]) async {
-        await bestEffort("conversationHistoryLoader.messages.upsertFromAPIMessages", category: .grdb) { try await persistence.upsertFromAPIMessages(messages, preferredLanguages: readerPrism) }
+        await persist(messages, readerPrism: readerPrism, extendingContiguityTo: nil)
     }
 
-    func fetchMissed(after watermark: Date) async throws -> [APIMessage] {
+    /// Le filigrane n'avance que si la page est bien sur le disque.
+    private func persist(_ messages: [APIMessage], readerPrism: [String], extendingContiguityTo extent: Date?) async {
+        await bestEffort("conversationHistoryLoader.messages.upsertFromAPIMessages", category: .grdb) {
+            try await persistence.upsertFromAPIMessages(messages, preferredLanguages: readerPrism)
+            if let extent { try await ConversationContiguity.extend(conversationId, to: extent, on: persistence) }
+        }
+    }
+
+    /// D'où repart le rattrapage `after` : la fin du fil détenu SANS TROU (#18929), jamais un message
+    /// entré seul — déposé par la NSE, ramené par un push, relayé par le socket conversation fermée.
+    func catchUpCursor(newestHeld: Date?) async -> Date? {
+        let watermark = try? await ConversationContiguity.base(of: conversationId, on: persistence).watermark
+        return ConversationContiguity.catchUpCursor(watermark: watermark, newestHeld: newestHeld)
+    }
+
+    /// Le balayage `after`, gravé dans la base ; parti de l'intérieur du fil détenu sans trou, il en
+    /// étend le filigrane jusqu'au plus récent message lu.
+    func fetchMissed(after cursor: Date, readerPrism: [String]) async throws -> [APIMessage] {
         let service = messageService
         let convId = conversationId
-        return try await ConversationCatchUpGate.shared.pages(conversationId: convId, after: watermark) {
-            try await ConversationHistoryLoader.fetchMissedPages(service: service, conversationId: convId, after: watermark)
+        let collected = try await ConversationCatchUpGate.shared.pages(conversationId: convId, after: cursor) {
+            try await ConversationHistoryLoader.fetchMissedPages(service: service, conversationId: convId, after: cursor)
         }
+        let base = try? await ConversationContiguity.base(of: convId, on: persistence)
+        let extent = base.flatMap {
+            ConversationContiguity.extent(ofSweepFrom: cursor, fetched: collected.map(\.createdAt), watermark: $0.watermark)
+        }
+        await persist(collected, readerPrism: readerPrism, extendingContiguityTo: extent)
+        return collected
     }
 
     /// Chaque adresse est relue indépendamment ; une adresse déjà couverte par une fenêtre
@@ -142,6 +170,9 @@ final class ConversationHistoryLoader: ConversationHistoryLoading {
         await CacheCoordinator.shared.conversations.invalidate(for: conversationId)
         await CacheCoordinator.shared.participants.invalidate(for: conversationId)
         try? await persistence.deleteAll(conversationId: conversationId)
+        await bestEffort("conversationHistoryLoader.contiguity.forget", category: .grdb) {
+            try await ConversationContiguity.forget(conversationId, on: persistence)
+        }
     }
 
     func mergeIntoMessageCache(_ messages: [Message], placement: CachePlacement) async {

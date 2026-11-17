@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
-import { THREAD_RENDERABLE_MODES, resolveThreadMode, threadCapabilities, toStickyPreference, toStoredMode, usesFlatRow } from './decision';
+import { THREAD_RENDERABLE_MODES, resolveThreadMode, threadCapabilities, toStickyPreference, usesFlatRow } from './decision';
 import { CATCHUP_CONVERSATION } from '@/lib/api/fixtures-catchup';
 import { unreadOf } from '@/lib/view/conversation';
 
@@ -283,15 +283,14 @@ describe('usesFlatRow', () => {
   });
 });
 
-describe('toStickyPreference / toStoredMode — aller-retour TOTAL', () => {
+describe('toStickyPreference — chaque mode rendu a SA préférence', () => {
   test('null (rien de mémorisé) ⇔ auto', () => {
     expect(toStickyPreference(null)).toBe('auto');
-    expect(toStoredMode('auto')).toBeNull();
   });
 
-  test('chaque mode rendu a sa préférence, et réciproquement', () => {
-    /* Typé des DEUX côtés : un `as never` sur le mode rendrait l'aller-retour
-       vert même si les deux tables cessaient de se correspondre. */
+  test('chaque mode rendu a sa préférence, et deux modes n’en partagent jamais une', () => {
+    /* Typé des DEUX côtés : un `as never` sur le mode rendrait le témoin
+       vert même si la table cessait de correspondre aux mots du menu. */
     const pairs: readonly (readonly [Exclude<ReadingModePreference, 'auto'>, ConversationReadingMode])[] = [
       ['focal', 'focal'],
       ['script', 'script'],
@@ -299,9 +298,7 @@ describe('toStickyPreference / toStoredMode — aller-retour TOTAL', () => {
       ['riviere', 'river'],
       ['bulles', 'bubbles'],
     ];
-    for (const [preference, mode] of pairs) {
-      expect(toStoredMode(preference)).toBe(mode);
-      expect(toStickyPreference(mode)).toBe(preference);
-    }
+    for (const [preference, mode] of pairs) expect(toStickyPreference(mode)).toBe(preference);
+    expect(new Set(pairs.map(([, mode]) => toStickyPreference(mode))).size).toBe(pairs.length);
   });
 });

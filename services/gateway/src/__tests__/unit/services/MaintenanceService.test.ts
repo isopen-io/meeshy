@@ -111,6 +111,9 @@ function makePrisma(overrides: {
     userSession: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    pushToken: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     userVoiceModel: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },

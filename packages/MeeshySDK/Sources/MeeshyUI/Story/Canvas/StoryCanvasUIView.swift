@@ -460,8 +460,8 @@ public final class StoryCanvasUIView: UIView {
     /// uses this to mirror the value into its viewModel cache.
     public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
 
-    /// `true` quand le composer affiche son `DrawingOverlayView` (PKCanvasView
-    /// SwiftUI overlay) au-dessus du canvas. Tant que `true`, le canvas ne
+    /// `true` quand le composer affiche sa surface de tracé live
+    /// (`MeeshyDrawingSurface`) au-dessus du canvas. Tant que `true`, le canvas ne
     /// rend PLUS le drawing persisté de `slide.effects.drawingData` —
     /// l'overlay live le remplace, sinon les 2 drawings se superposent
     /// (l'ancien à la mauvaise position en design space + le nouveau en

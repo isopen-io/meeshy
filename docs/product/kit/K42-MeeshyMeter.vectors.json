@@ -1,0 +1,84 @@
+{
+  "composant": "MeeshyMeter",
+  "cle": "K42",
+  "note": "Vecteurs de parité (fiche K42 § 06, § 10). Loi de la fraction : bornée de 0 à 1, total nul ou négatif = aucune vue.",
+  "fraction": [
+    {
+      "valeur": 23,
+      "total": 50,
+      "fraction": 0.46
+    },
+    {
+      "valeur": -4,
+      "total": 50,
+      "fraction": 0
+    },
+    {
+      "valeur": 80,
+      "total": 50,
+      "fraction": 1
+    },
+    {
+      "valeur": 10,
+      "total": 0,
+      "fraction": null
+    },
+    {
+      "valeur": 10,
+      "total": -3,
+      "fraction": null
+    },
+    {
+      "valeur": 0,
+      "total": 1,
+      "fraction": 0
+    },
+    {
+      "valeur": 0.62,
+      "total": 1,
+      "fraction": 0.62
+    }
+  ],
+  "crans": [
+    {
+      "total": 4,
+      "fraction": 0.5,
+      "allumes": 2
+    },
+    {
+      "total": 5,
+      "fraction": 0.8,
+      "allumes": 4
+    },
+    {
+      "total": 5,
+      "fraction": 1,
+      "allumes": 5
+    },
+    {
+      "total": 5,
+      "fraction": 0,
+      "allumes": 0
+    },
+    {
+      "total": 3,
+      "fraction": 0.34,
+      "allumes": 1
+    }
+  ],
+  "tailles": [
+    {
+      "taille": 5,
+      "hauteur": 5
+    },
+    {
+      "taille": 8,
+      "hauteur": 8
+    },
+    {
+      "taille": 12,
+      "hauteur": 12
+    }
+  ],
+  "perimeeDesature": true
+}

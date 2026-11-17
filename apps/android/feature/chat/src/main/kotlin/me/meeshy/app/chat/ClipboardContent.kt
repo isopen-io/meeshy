@@ -2,11 +2,8 @@ package me.meeshy.app.chat
 
 /**
  * A large paste folded into a composer attachment — the app-local model behind the
- * clipboard-content preview chip (port of the iOS app-local `ClipboardContent`
- * struct, which the audit flags as living in `MediaPlayerContext.swift` under a
- * misleading filename). The iOS factory reads `Date()` twice; the Android port
- * takes the clock as a parameter so the value type stays pure and testable, and
- * uses full structural equality instead of iOS's id-only `==`.
+ * clipboard-content preview chip. The clock is a parameter so the value type
+ * stays pure and testable, and equality is fully structural.
  */
 data class ClipboardContent(
     val id: String,

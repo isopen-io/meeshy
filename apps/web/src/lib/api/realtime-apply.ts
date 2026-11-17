@@ -28,7 +28,6 @@ import {
 import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Message, Participant } from './types';
 import { applyEncryptionAnnounced, encryptionAnnounced } from './realtime-encryption-regime';
-import { keepLiveListOverFetch, keepLiveMessageOverFetch } from './realtime-thread-catch-up';
 import { purgeViewOnceIn, sealViewOnceIn } from './view-once-seal';
 
 /* Le puits de `conversation:updated` vit chez lui (#7547, budget de taille) ;
@@ -234,10 +233,9 @@ export function applyMessageNew(
      remplaçait jusqu'à #9262 ; `rawMessageFromSocket` sert un message
      serveur COMPLET, donc ce chemin-ci ne perdait rien — c'est l'autre
      appelant qui régressait. */
+  /* Une relecture du fil EN VOL ne l'efface plus : l'écriture est rejouée sur
+     sa réponse (#9291, #18914 — `live-cache-journal.ts`). */
   upsertThreadMessage(queryClient, raw.conversationId, message);
-  /* Une requête du fil EN VOL écraserait cette pose par sa réponse, partie
-     avant le message (#9291) : elle est relancée. */
-  keepLiveMessageOverFetch(queryClient, raw.conversationId);
 
   /* Le cid ne voyage QUE vers la room personnelle de l'expéditeur
      (`stripClientMessageId`, `MeeshySocketIOManager.ts:3011-3039`) : sa
@@ -250,8 +248,6 @@ export function applyMessageNew(
      remplace jamais, et un message protégé n'entre dans la ligne (cache
      PERSISTÉ) que par son identité et ses drapeaux. */
   offerLastMessage(queryClient, raw.conversationId, message, buildTranslationRecord(raw.translations));
-  /* Une relecture de la LISTE en vol remettrait l'aperçu précédent (#9637). */
-  keepLiveListOverFetch(queryClient);
   /* L'AVIS D'ACTIVATION DU CHIFFREMENT (#11373) ferme le régime en cache. */
   applyEncryptionAnnounced(queryClient, raw.conversationId, encryptionAnnounced(raw));
 }
@@ -344,16 +340,13 @@ export function applyMessageTranslation(queryClient: QueryClient, data: Translat
   if (Object.keys(incoming).length === 0) return;
 
   for (const conversationId of cachedThreadConversationIds(queryClient)) {
-    const existing = findCachedThreadMessage(queryClient, conversationId, data.messageId);
-    if (existing === undefined) continue;
-
-    const merged = mergeMessageTranslations(existing, data.translations);
+    if (findCachedThreadMessage(queryClient, conversationId, data.messageId) === undefined) continue;
+    /* La fusion se calcule SUR la rangée reçue, jamais sur un instantané : une
+       relecture en vol rejoue cette écriture sur sa réponse (#10573, #18914),
+       dont le texte peut être plus récent que le cache. */
     patchThreadMessages(queryClient, conversationId, (messages) =>
-      messages.map((m) => (m.id === data.messageId ? merged : m)),
+      messages.map((m) => (m.id === data.messageId ? mergeMessageTranslations(m, data.translations) : m)),
     );
-    /* Une requête du fil EN VOL rendrait le message nu, parti avant sa
-       traduction (#10573) : elle est relancée, motif `applyMessageNew`. */
-    keepLiveMessageOverFetch(queryClient, conversationId);
   }
 
   /* LA LIGNE SUIT MÊME FIL FERMÉ (#7547) — elle se retrouve par son DERNIER
@@ -480,19 +473,19 @@ export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: At
   const attachmentId = attachmentIdOf(data.attachment);
   if (attachmentId === undefined) return;
 
-  const existing = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
-  if (existing === undefined) return;
-  const attachments = existing.attachments;
+  const attachments = findCachedThreadMessage(queryClient, data.conversationId, data.messageId)?.attachments;
   if (attachments === undefined || !attachments.some((a) => a.id === attachmentId)) return;
 
   const incoming = data.attachment as Record<string, unknown>;
-  const next: Message = {
-    ...existing,
-    attachments: attachments.map((a) => (a.id === attachmentId ? mergedAttachment(a, incoming) : a)),
-  };
+  /* Fusionnée SUR la rangée reçue, jamais sur un instantané : une relecture en
+     vol rejoue cette écriture sur sa réponse (#18914). */
+  const enriched = (message: Message): Message =>
+    message.attachments === undefined
+      ? message
+      : { ...message, attachments: message.attachments.map((a) => (a.id === attachmentId ? mergedAttachment(a, incoming) : a)) };
 
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
-    messages.map((m) => (m.id === data.messageId ? next : m)),
+    messages.map((m) => (m.id === data.messageId ? enriched(m) : m)),
   );
 }
 
@@ -614,27 +607,26 @@ export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatu
       : latestCachedThreadMessage(queryClient, data.conversationId);
   if (target === undefined) return;
 
-  const counters: Message = {
-    ...target,
-    deliveredCount: summary.deliveredCount,
-    readCount: summary.readCount,
-    recipientCount: summary.totalMembers,
+  /* Posés SUR la rangée reçue, jamais sur un instantané : une relecture en vol
+     rejoue cette écriture sur sa réponse (#18914). */
+  const counted = (message: Message): Message => {
+    const counters: Message = {
+      ...message,
+      deliveredCount: summary.deliveredCount,
+      readCount: summary.readCount,
+      recipientCount: summary.totalMembers,
+    };
+    if (summary.readByAllAt === undefined) return counters;
+    if (summary.readByAllAt !== null) return { ...counters, readByAllAt: summary.readByAllAt };
+    // `exactOptionalPropertyTypes` refuse `{ readByAllAt: undefined }` — un
+    // `null` de la charge EFFACE la date connue en RETIRANT la clé, jamais en
+    // lui assignant `undefined`.
+    const { readByAllAt: _drop, ...rest } = counters;
+    return rest;
   };
-  // `exactOptionalPropertyTypes` refuse `{ readByAllAt: undefined }` — un
-  // `null` de la charge EFFACE la date connue en RETIRANT la clé, jamais en
-  // lui assignant `undefined`.
-  let next: Message = counters;
-  if (summary.readByAllAt !== undefined) {
-    if (summary.readByAllAt === null) {
-      const { readByAllAt: _drop, ...rest } = counters;
-      next = rest;
-    } else {
-      next = { ...counters, readByAllAt: summary.readByAllAt };
-    }
-  }
 
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
-    messages.map((m) => (m.id === target.id ? next : m)),
+    messages.map((m) => (m.id === target.id ? counted(m) : m)),
   );
 
   void queryClient.invalidateQueries({ queryKey: messageReceiptsPeopleQueryKey(data.conversationId, target.id) });

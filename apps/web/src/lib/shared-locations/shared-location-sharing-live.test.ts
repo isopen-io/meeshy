@@ -5,6 +5,7 @@ import type { LiveSocketWatcher } from '@/lib/api/live-socket-watchers';
 import type { SocketClient, SocketHandler } from '@/lib/net/socket';
 
 import { browserSharedLocationFixSource, createSharedLocationSharingHolder, socketSharedLocationEmitter } from './shared-location-sharing-live';
+import { sharedLocationAcrossTabs } from './shared-location-sharing';
 
 /**
  * **LE CENTRE BRANCHÉ** (#18345) : le fil `location:share-*` avec son accusé, la
@@ -191,5 +192,40 @@ describe('plusieurs appareils, un partage (#18389)', () => {
     expect(center?.entry(PROCHE)).toBeNull();
     expect(storage.getItem(rosterKey)).toBeNull();
     expect(emitted).toEqual([]);
+  });
+});
+
+describe('plusieurs onglets du même compte (#18431)', () => {
+  const memory = () => {
+    const map = new Map<string, string>();
+    return { getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, v), removeItem: (k: string) => void map.delete(k) };
+  };
+  test('chaque opération du centre passe par le verrou Web Locks du compte, en exclusif', async () => {
+    const requests: Array<{ name: string; mode: string }> = [];
+    const locks = {
+      request: <T,>(name: string, options: { readonly mode: 'exclusive' }, callback: () => Promise<T>): Promise<T> => {
+        requests.push({ name, mode: options.mode });
+        return callback();
+      },
+    };
+    const session = createSessionStore({ storage: memory() });
+    session.getState().establish({ user: { id: AMI, username: AMI, displayName: null, avatar: null } as never, token: 't', sessionToken: 's', expiresIn: 3600 });
+    const holder = createSharedLocationSharingHolder({
+      session,
+      watch: () => () => undefined,
+      storage: memory(),
+      locks,
+      fixes: { isGranted: async () => true, currentFix: async () => ({ kind: 'fix', fix: PARIS }), follow: () => () => undefined },
+      schedule: () => () => undefined,
+      served: async () => null,
+    });
+    await holder()?.reconcile();
+    expect(requests).toEqual([{ name: `meeshy.shared-location.roster.u_${AMI}.lock`, mode: 'exclusive' }]);
+  });
+
+  test('sans Web Locks, le centre marche comme avant, avec le seul verrou de l’onglet', async () => {
+    const run = sharedLocationAcrossTabs(undefined, 'x');
+    expect(await run(async () => 42)).toBe(42);
+    expect(await sharedLocationAcrossTabs({ request: 'pas une fonction' }, 'x')(async () => 'seul')).toBe('seul');
   });
 });

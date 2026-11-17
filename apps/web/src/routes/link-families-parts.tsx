@@ -113,7 +113,16 @@ export const HUB_FAMILIES: readonly LinkFamily[] = ['share', 'tracking', 'commun
  * Miroir `LinksHubView.linkCard` — la carte ouvre la famille, « + » ouvre la création.
  * Sous le nom, une phrase dit à quoi sert la famille — visible au repos, jamais derrière un (i).
  */
-export function LinkFamilyCard({ language, family }: { readonly language: InterfaceLanguage; readonly family: LinkFamily }) {
+export function LinkFamilyCard({
+  language,
+  family,
+  figure,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly family: LinkFamily;
+  /** Le chiffre de la famille et son mot (« 1 284 », « clics ») — absent tant que le serveur ne le sert pas. */
+  readonly figure?: { readonly value: string; readonly caption: string } | undefined;
+}) {
   const spec = LINK_FAMILIES[family];
   return (
     <div data-links-family={family} className="relative flex items-center gap-1 rounded-card ps-3.5 pe-1" style={{ ...CARD_STYLE, minHeight: 80 }}>
@@ -134,6 +143,14 @@ export function LinkFamilyCard({ language, family }: { readonly language: Interf
             {spec.description(language)}
           </span>
         </span>
+        {figure === undefined ? null : (
+          <span data-links-family-figure className="relative ms-auto grid shrink-0 justify-items-end ps-2 leading-tight" style={{ color: INK }}>
+            <strong className="text-lg font-bold tabular-nums">{figure.value}</strong>
+            <span className="text-chip font-medium" style={{ color: INK_2 }}>
+              {figure.caption}
+            </span>
+          </span>
+        )}
       </Link>
       {spec.create === null ? null : (
         <Link

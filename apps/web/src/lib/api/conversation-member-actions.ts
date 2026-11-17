@@ -4,7 +4,7 @@ import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversati
 import { roleOfAction, type MemberAction } from '@/lib/view/conversation-management';
 
 import { conversationMembersQueryKey, type ConversationMember, type ConversationMembersData } from './conversation-members';
-import { conversationQueryKey, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
+import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
 import type { PersonSummary } from './friend-requests';
 import type { ApiResult, HttpRequest } from './http';
 import { outcomeOf } from './outcome';
@@ -52,15 +52,12 @@ export const managementFailureOf = (result: { readonly status: number; readonly 
 
 const countOf = (conversation: Conversation | undefined): number | undefined => conversation?.memberCount;
 
+/* Des LECTURES pures : un point d'écriture appelé pour lire serait journalisé,
+   puis rejoué sur la réponse d'une relecture en vol (#18914). */
 function takeSnapshot(queryClient: QueryClient, conversationId: string): Snapshot {
-  let listCount: number | undefined;
-  patchConversation(queryClient, conversationId, (c) => {
-    listCount = countOf(c);
-    return c;
-  });
   return {
     members: queryClient.getQueryData<ConversationMembersData>(conversationMembersQueryKey(conversationId)),
-    listCount,
+    listCount: countOf(findCachedConversation(queryClient, conversationId)),
     detailCount: countOf(queryClient.getQueryData<Conversation>(conversationQueryKey(conversationId))),
   };
 }
@@ -97,8 +94,8 @@ function editMembers(
   );
   if (delta === 0) return;
   const shift = (c: Conversation): Conversation => ({ ...c, memberCount: Math.max(0, (c.memberCount ?? 0) + delta) });
-  patchConversation(queryClient, conversationId, shift);
-  patchConversationDetail(queryClient, conversationId, shift);
+  patchConversation(queryClient, conversationId, shift, { relative: true });
+  patchConversationDetail(queryClient, conversationId, shift, { relative: true });
 }
 
 function requestOf(conversationId: string, action: MemberAction): HttpRequest {

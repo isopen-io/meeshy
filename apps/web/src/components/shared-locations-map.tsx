@@ -6,16 +6,24 @@ import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 import { apiDeps } from '@/lib/api/deps';
 import { publicProfileQueryOptions, type PublicProfileView } from '@/lib/api/public-profile';
 import { appQueryClient } from '@/lib/api/query-client';
-import { sharedLocationsQueryOptions, type SharedLocationDeps } from '@/lib/api/shared-locations';
+import { sharedLocationsQueryOptions, type SharedLocation, type SharedLocationDeps } from '@/lib/api/shared-locations';
+import { profileCircleQueryOptions } from '@/lib/api/profile-circle';
+import { sessionStore } from '@/lib/api/session';
 import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
+import { translateCircles } from '@/lib/i18n-circles-catalog';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { bboxQuery, fitView, panView, viewBbox, zoomView, type GeoBbox, type MapSize, type MapView } from '@/lib/map/slippy';
 import { useOnline } from '@/lib/net/online';
 import { knownPersonByIdInConversations, servedPresenceByIdInConversations } from '@/lib/profile/known-people-cache';
-import { bindSharedLocationsLive, sharedLocationsStore, type SharedLocationsStoreApi } from '@/lib/shared-locations/shared-locations-live';
+import { relationActionsOf } from '@/lib/profile/relation-face';
+import { rowOffered } from '@/routes/user-profile-relation-rows';
+import type { SharedLocationSharingCenter } from '@/lib/shared-locations/shared-location-sharing';
+import { sharedLocationsStore, type SharedLocationsStoreApi } from '@/lib/shared-locations/shared-locations-live';
+import { SHARED_LOCATIONS_WORLD as WORLD, useSharedLocationsUpkeep } from '@/lib/shared-locations/use-shared-locations-upkeep';
 import { initialsOf } from '@/lib/view/conversation';
 
+import { SharedLocationCard } from './shared-location-card';
 import { SharedLocationsMapView, type SharedLocationPerson } from './shared-locations-map-view';
 
 /**
@@ -55,8 +63,6 @@ const personOfProfile = (view: PublicProfileView, now: number): SharedLocationPe
 
 const DEFAULT_SIZE: MapSize = { width: 360, height: 480 };
 const REQUEST_CALM_MS = 300;
-const MAX_TIMER_MS = 2 ** 31 - 1;
-const WORLD: GeoBbox = { minLongitude: -180, minLatitude: -90, maxLongitude: 180, maxLatitude: 90 };
 const DEFAULT_VIEW: Pick<MapView, 'center' | 'zoom'> = { center: { latitude: 20, longitude: 0 }, zoom: 2 };
 
 const bboxOfQuery = (query: string): GeoBbox => {
@@ -86,6 +92,10 @@ function useCalm<T extends string | number>(value: T, ms: number): T {
   return calm;
 }
 
+/** Le zoom suit la précision accordée : l'endroit exact se voit de près, une ville de plus haut. */
+const FOCUS_ZOOM = { exact: 15, neighborhood: 13, city: 10 } as const satisfies Readonly<Record<SharedLocation['precision'], number>>;
+const focusOn = (location: SharedLocation): Pick<MapView, 'center' | 'zoom'> => ({ center: { latitude: location.latitude, longitude: location.longitude }, zoom: FOCUS_ZOOM[location.precision] });
+
 const timeFormatter = (language: InterfaceLanguage) => {
   const format = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' });
   return (iso: string): string => format.format(new Date(iso));
@@ -97,12 +107,21 @@ export function SharedLocationsMap({
   deps = apiDeps,
   watch = watchRealtime,
   initialView,
+  focusUserId,
+  viewerId,
+  sharing,
 }: {
   readonly language: InterfaceLanguage;
   readonly store?: SharedLocationsStoreApi;
   readonly deps?: SharedLocationDeps;
   readonly watch?: WatchRealtime;
   readonly initialView?: Pick<MapView, 'center' | 'zoom'>;
+  /** La personne sur qui la carte s'ouvre (« Voir sur la carte » de sa fiche) : centrée, choisie, sa feuille ouverte. */
+  readonly focusUserId?: string;
+  /** Le compte ouvert (par défaut celui de la session) : le verdict de la paire est par lecteur. */
+  readonly viewerId?: string | null;
+  /** Mon partage (par défaut celui du compte ouvert) ; `null` : aucun. */
+  readonly sharing?: SharedLocationSharingCenter | null;
 }) {
   const ready = useCirclesCatalog(language);
   const online = useOnline();
@@ -111,17 +130,29 @@ export function SharedLocationsMap({
   const size: MapSize = { width: Math.min(measured ?? DEFAULT_SIZE.width, 720), height: DEFAULT_SIZE.height };
   const byUser = useStore(store, (state) => state.byUser);
   const locations = useMemo(() => Object.values(byUser), [byUser]);
-  const [view, setView] = useState<Pick<MapView, 'center' | 'zoom'>>(() => initialView ?? (locations.length === 0 ? DEFAULT_VIEW : fitView(locations, size)));
+  const focused = focusUserId === undefined ? undefined : byUser[focusUserId];
+  const [view, setView] = useState<Pick<MapView, 'center' | 'zoom'>>(() => initialView ?? (focused !== undefined ? focusOn(focused) : locations.length === 0 ? DEFAULT_VIEW : fitView(locations, size)));
   const placed = useRef(initialView !== undefined || locations.length > 0);
+  const [selected, setSelected] = useState<string | null>(focusUserId ?? null);
+  const [cardOpen, setCardOpen] = useState(focusUserId !== undefined);
   const [caughtUp, setCaughtUp] = useState(false);
+  const sessionViewer = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
+  const viewer = viewerId === undefined ? sessionViewer : viewerId;
+  /* « Partager la mienne » : le verdict de la PAIRE, servi par la passerelle — jamais supposé de ce que l'autre me partage
+     (les cercles sont dirigés). Sans verdict lisible, rien n'est offert ; un partage déjà en cours reste modifiable. */
+  const circle = useQuery(
+    { ...profileCircleQueryOptions({ ...deps, handle: selected ?? '', viewerId: viewer ?? '' }), enabled: selected !== null && viewer !== null && cardOpen },
+    appQueryClient,
+  );
+  const shareOffered = rowOffered(relationActionsOf(circle.data ?? null), 'location', false);
 
   useEffect(() => {
     if (placed.current || locations.length === 0) return;
     placed.current = true;
-    setView(fitView(locations, size));
+    setView(focused !== undefined ? focusOn(focused) : fitView(locations, size));
   }, [locations, size.width, size.height]);
 
-  useEffect(() => watch((socket) => bindSharedLocationsLive({ socket, store })), [watch, store]);
+  useSharedLocationsUpkeep({ store, watch });
 
   const calmQuery = useCalm(bboxQuery(viewBbox({ ...view, ...size })), REQUEST_CALM_MS);
   const bbox = caughtUp ? bboxOfQuery(calmQuery) : WORLD;
@@ -132,13 +163,6 @@ export function SharedLocationsMap({
     /* Un monde servi par le cache d'une visite précédente ne suffit pas : on attend celui de CETTE ouverture. */
     if (caught.isFetchedAfterMount && bboxQuery(caught.data.bbox) === bboxQuery(WORLD)) setCaughtUp(true);
   }, [caught.data, caught.isFetchedAfterMount, store]);
-
-  const nextTerm = useMemo(() => store.getState().nextExpiry(), [store, byUser]);
-  useEffect(() => {
-    if (nextTerm === null) return undefined;
-    const timer = setTimeout(() => store.getState().expire(), Math.min(MAX_TIMER_MS, Math.max(0, nextTerm - Date.now()) + 5));
-    return () => clearTimeout(timer);
-  }, [nextTerm, store]);
 
   const status = caught.isError ? 'failed' : caughtUp || caught.data !== undefined ? 'ready' : 'loading';
   const unnamed = useMemo(
@@ -170,6 +194,24 @@ export function SharedLocationsMap({
         onRetry={() => void caught.refetch()}
         onZoom={(delta) => setView((current) => zoomView({ ...current, ...size }, delta))}
         onPan={(dx, dy) => setView((current) => panView({ ...current, ...size }, dx, dy))}
+        selectedUserId={selected}
+        onSelect={(userId) => {
+          setSelected(userId);
+          setCardOpen(true);
+        }}
+        detail={
+          selected !== null && cardOpen && (status === 'ready' || byUser[selected] !== undefined) ? (
+            <SharedLocationCard
+              language={language}
+              userId={selected}
+              name={personOf(selected).name ?? translateCircles(language, 'positions.someone')}
+              location={byUser[selected]}
+              shareOffered={shareOffered}
+              {...(sharing === undefined ? {} : { sharing })}
+              onClose={() => setCardOpen(false)}
+            />
+          ) : null
+        }
       />
     </div>
   );

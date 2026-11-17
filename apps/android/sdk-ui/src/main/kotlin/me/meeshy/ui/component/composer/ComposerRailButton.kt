@@ -48,7 +48,7 @@ public fun ComposerRailButton(
 }
 
 /**
- * What a door ALREADY carries (iOS `ComposerRailDoorBadge`): a counter laid over the corner of its glyph, so the author
+ * What a door ALREADY carries (as on iOS): a counter laid over the corner of its glyph, so the author
  * sees that the scene holds three texts without opening the door. [description] is what a screen reader says of it.
  */
 public data class ComposerRailBadge(val count: Int, val description: String)

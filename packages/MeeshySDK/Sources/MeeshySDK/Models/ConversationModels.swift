@@ -152,6 +152,16 @@ public struct APIConversationPreferences: Codable, Sendable {
     /// compatibility with pre-Phase-1 server responses and old cache
     /// rows; the Store treats `nil` as version 0.
     public var version: Int?
+    /// Additifs (#18916) : la route `GET /user-preferences/conversations` les
+    /// sert déjà. `conversationId` dit à quelle ligne une préférence revient,
+    /// `updatedAt` est le filigrane SERVEUR du rattrapage, `orderInCategory`
+    /// l'ordre manuel que la route riche ne sert pas.
+    public var conversationId: String?
+    public var orderInCategory: Int?
+    public var updatedAt: Date?
+    /// Additif (#18925) : la ligne de conversation et la route des préférences
+    /// servent l'effacement d'historique du lecteur ; `nil` = jamais effacé.
+    public var clearHistoryBefore: Date?
 
     public init(
         isPinned: Bool? = nil,
@@ -164,7 +174,11 @@ public struct APIConversationPreferences: Codable, Sendable {
         customName: String? = nil,
         mentionsOnly: Bool? = nil,
         version: Int? = nil,
-        appearance: ConversationAppearance? = nil
+        appearance: ConversationAppearance? = nil,
+        conversationId: String? = nil,
+        orderInCategory: Int? = nil,
+        updatedAt: Date? = nil,
+        clearHistoryBefore: Date? = nil
     ) {
         self.isPinned = isPinned
         self.isMuted = isMuted
@@ -177,6 +191,10 @@ public struct APIConversationPreferences: Codable, Sendable {
         self.mentionsOnly = mentionsOnly
         self.version = version
         self.appearance = appearance
+        self.conversationId = conversationId
+        self.orderInCategory = orderInCategory
+        self.updatedAt = updatedAt
+        self.clearHistoryBefore = clearHistoryBefore
     }
 }
 
@@ -528,9 +546,9 @@ extension APIConversation {
         // ne pas élargir CHAQUE appelant. `lastReadAt` (l'horloge de l'ACTION,
         // locale) N'EST PAS écrasé ici : voir `ConversationSyncEngine+Ecritures
         // .reconcileUnread`, qui en reste l'UNIQUE loi de fusion.
-        conversation.userState.lastReadMessageId = lastReadMessageId
-        conversation.userState.lastReadMessageCreatedAt = lastReadMessageCreatedAt
-        conversation.userState.appearance = prefs?.appearance
+        conversation.userState = conversation.userState.servingRow(
+            lastReadMessageId: lastReadMessageId, lastReadMessageCreatedAt: lastReadMessageCreatedAt, preferences: prefs
+        )
         conversation = conversation.wearingInterlocutor(otherParticipant)
 
         return conversation

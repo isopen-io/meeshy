@@ -1,0 +1,47 @@
+{
+  "composant": "MeeshySectionHeader",
+  "cle": "K44",
+  "note": "Vecteurs de parité (fiche K44 § 10). Titre 22 (19 en feuille, 26 en colonne) ; compteur 16, écart 8 ; hauteur de ligne 44 au moins ; compteur nul ou zéro : ni nombre ni écart ; chevron : 0° ouvert, 180° fermé.",
+  "titres": [
+    {
+      "taille": "page",
+      "police": 22
+    },
+    {
+      "taille": "sheet",
+      "police": 19
+    },
+    {
+      "taille": "column",
+      "police": 26
+    }
+  ],
+  "compteurs": [
+    {
+      "compteur": null,
+      "affiche": false,
+      "ecart": 0
+    },
+    {
+      "compteur": 0,
+      "affiche": false,
+      "ecart": 0
+    },
+    {
+      "compteur": 6,
+      "affiche": true,
+      "ecart": 8
+    }
+  ],
+  "chevron": [
+    {
+      "ouvert": true,
+      "degres": 0
+    },
+    {
+      "ouvert": false,
+      "degres": 180
+    }
+  ],
+  "hauteurMin": 44
+}

@@ -25,9 +25,7 @@ public struct TrackBarView<Content: View>: View {
     /// Largeur de la colonne d'étiquette collante. Passée par le conteneur —
     /// défaut = la constante partagée `TrackBarView.labelColumnWidth` — pour
     /// que ruler, playhead et étiquette restent alignés au pixel via une source
-    /// unique plutôt qu'un littéral dupliqué. Les conteneurs la pilotent depuis
-    /// `TimelineScrubArea.laneLabelWidth` (offset ruler/playhead) pour garantir
-    /// l'alignement.
+    /// unique plutôt qu'un littéral dupliqué.
     public let labelColumnWidth: CGFloat
     /// Durée totale de la piste, pré-formatée par le conteneur via
     /// `formatTrackDuration`. Rendue ligne 1 de l'étiquette, à droite de l'icône.
@@ -80,8 +78,8 @@ public struct TrackBarView<Content: View>: View {
     /// duration on line 1, type/custom name on line 2) so the track carries its
     /// own duration + identity. Élargie 52 → 84 pt (capture user 2026-07-20 :
     /// « 12,0 s » tronquait en « 12,… ») — la durée ET le type restent lisibles
-    /// en entier. MUST equal `TimelineScrubArea.laneLabelWidth` (the
-    /// ruler/playhead offset) so ticks align with the lanes — lockstep at 84.
+    /// en entier. Any container that offsets a ruler or a playhead by the
+    /// label column reads this value, so ticks align with the lanes.
     // `static let` stored properties aren't allowed on a generic type
     // (`TrackBarView<Content>`) — computed `static var` instead, same
     // constant-folding result for a literal like this.

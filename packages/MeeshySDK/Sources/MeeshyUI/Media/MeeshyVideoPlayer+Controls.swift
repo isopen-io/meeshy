@@ -6,7 +6,7 @@ import Combine
 
 // MARK: - Layered Overlay Controls (inline)
 //
-// Legacy `VideoPlayerOverlayControls` style : scrim top + scrim bottom,
+// Overlay style inherited from the former SDK players : scrim top + scrim bottom,
 // top bar (expand + speed), big center play/pause + skip ±10s, bottom
 // custom seek bar + time current/total. All controls drawn ON the video,
 // transparent — never a separate capsule under it.

@@ -650,7 +650,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageAt: protectionLastMessage.createdAt,
     /**
      * L'APERÇU DE LISTE A UN SUJET FLOUTÉ (§5.9, #5676) : ni traduction ni
-     * carte à descendre — `previewKindOf` doit s'arrêter à `isBlurred` AVANT
+     * carte à descendre — `composeConversationPreview` doit s'arrêter à `isBlurred` AVANT
      * de lire `lastMessageTranslations`.
      */
     lastMessageTranslations: {},

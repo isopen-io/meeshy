@@ -13,7 +13,7 @@ import Foundation
 /// C'est aussi ce qui en fait une `struct` sans isolation : rien à synchroniser,
 /// le propriétaire (`@MainActor` en pratique) en détient une copie unique.
 ///
-/// Miroir TypeScript : `apps/web/utils/seen-message-accumulator.ts` — mêmes cas.
+/// Miroir TypeScript : le web legacy qui la portait a quitté le dépôt (#7668), et `apps/web` n'en a pas de miroir à ce jour.
 /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
 public struct SeenMessageAccumulator: Sendable {
 

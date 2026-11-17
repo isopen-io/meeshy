@@ -35,6 +35,23 @@ final class NotificationListViewModelFilteringTests: XCTestCase {
         XCTAssertEqual(vm.filteredNotifications.map(\.id), ["m1", "m2"])
     }
 
+    /// Même loi que `loadInitial` (#18916) : changer de catégorie hors ligne sur un
+    /// cache expiré peint les lignes du disque qui relèvent de la catégorie.
+    func test_select_whenCacheExpired_paintsTheDiskRowsOfTheCategory() async {
+        let feed = MockNotificationFeed()
+        feed.cached = .expired
+        feed.diskFeed = [
+            NotificationStubs.notification("men", type: "user_mentioned"),
+            NotificationStubs.notification("msg", type: "new_message")
+        ]
+        let vm = NotificationListViewModel(service: MockNotificationListService(), feed: feed)
+
+        await vm.select(.mentions)
+
+        XCTAssertEqual(vm.filteredNotifications.map(\.id), ["men"], "le disque expiré se peint, filtré par la catégorie")
+        XCTAssertFalse(vm.isLoading)
+    }
+
     func test_select_laMemeCategorie_neRechargePas() async {
         let mock = MockNotificationListService()
         let vm = NotificationListViewModel(service: mock, feed: MockNotificationFeed())

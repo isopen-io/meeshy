@@ -8,8 +8,8 @@ import MeeshyUI
 ///   3. Owning an `AttachmentDownloader` and applying
 ///      `MediaDownloadPolicyEngine.shouldAutoDownload` on resolve.
 ///
-/// Replaces `VideoMediaView` (inline path) and `GatedVideoFullscreenPlayer`
-/// (fullscreen path) — both used to duplicate this logic.
+/// Replaces the former inline and fullscreen video gates, which both used to
+/// duplicate this logic.
 ///
 /// App-side because it orchestrates SDK building blocks
 /// (`CacheCoordinator`, `MediaDownloadPolicyEngine`, `NetworkConditionMonitor`,

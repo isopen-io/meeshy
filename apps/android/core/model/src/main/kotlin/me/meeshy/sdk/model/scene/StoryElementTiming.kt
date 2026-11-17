@@ -2,7 +2,7 @@ package me.meeshy.sdk.model.scene
 
 /**
  * The pure, Compose-agnostic visibility timing of an on-canvas element — parity with the
- * iOS `StoryTextEditorView` start/duration timing fields (`StoryTextObject.startTime` /
+ * iOS `StoryInlineTextEditor` start/duration timing fields (`StoryTextObject.startTime` /
  * `duration`, seconds, `0…30`).
  *
  * Held as a flat ([startSeconds], [durationSeconds]) pair because the two ends are

@@ -398,8 +398,7 @@ final class StoryPhotoSaveService: ObservableObject {
             // quand même, chauffait l'appareil, et son MP4 finissait jeté par
             // la garde `isCurrent` d'après-bake. Les trois chemins d'export
             // coupent désormais au même endroit (cf.
-            // `StoryExportShareViewModel.startExport` et
-            // `TimelineExportController.start`).
+            // `StoryExportShareViewModel.startExport`).
             //
             // Garde ancrée sur le JETON DE GÉNÉRATION, pas sur
             // `Task.isCancelled` : c'est le mécanisme d'annulation RÉEL de ce

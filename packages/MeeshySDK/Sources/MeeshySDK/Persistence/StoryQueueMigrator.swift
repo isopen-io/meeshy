@@ -49,8 +49,8 @@ extension StoryPublishQueue: PublishQueueForwarding {
 /// inspection.
 public enum StoryQueueMigrator {
 
-    /// Logger category mirrors the existing `StoryOfflineQueueBootstrap`
-    /// subsystem so migrator + bootstrap logs interleave cleanly.
+    /// Logger category under the legacy SDK subsystem, so migrator logs
+    /// interleave with the other story-queue logs.
     private static let logger = MeeshyLog.logger(.storyQueueMigrator, subsystem: .legacySDK)
 
     /// Returns the legacy file URL when present on disk. Builds the path

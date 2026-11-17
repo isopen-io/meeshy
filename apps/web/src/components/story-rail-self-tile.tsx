@@ -15,13 +15,15 @@ import { useMyRing } from '@/lib/profile-decor/my-ring';
  * l'auteur pour créer une nouvelle story et (bulle pensant) en bas droite pour
  * créer un mood ou afficher le smiley animé du mood en cours comme sous iOS ».
  *
- * Géographie reprise TRAIT POUR TRAIT de `LentilleRailSelfEntryView`
- * (`apps/ios/.../Lens/Chrome/StoriesVivantsRail.swift`) :
- * `ZStack(alignment: .bottomTrailing)` porte la pastille d'humeur,
- * `.overlay(alignment: .topLeading)` porte le badge de création, et ce sont
- * DEUX `Button(.plain)` distincts. Le commentaire d'iOS tranche l'ambiguïté
- * qu'un lecteur pourrait avoir : « le badge bas-droit reste le MOOD (💭 /
- * emoji), jamais un second plus ambigu ».
+ * Géographie reprise TRAIT POUR TRAIT de `MyStoryButton`
+ * (`apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`, qui a
+ * remplacé `LentilleRailSelfEntryView` quand la liste a adopté le rail du
+ * fil, #11033) : `.overlay(alignment: .bottomTrailing)` porte la pastille
+ * d'humeur, `.overlay(alignment: .topLeading)` porte le badge de création, et
+ * ce sont DEUX boutons distincts de l'avatar, dont le tap suit
+ * `StoryTrayActionResolver.avatarTap(hasMyStory:hasAnyStory:)`. Le badge
+ * bas-droit reste le MOOD (💭 / emoji), jamais un second plus. Miroir
+ * Android : `StoryRingCell.kt` (le « + » et le badge d'humeur du compte).
  *
  * ## TROIS CONTRÔLES, TROIS ARBRES — jamais l'un DANS l'autre
  *

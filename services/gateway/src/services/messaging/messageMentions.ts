@@ -5,6 +5,7 @@ import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
 import { protectedPreview } from '../notifications/notification-preview';
 import { messageReadership, blockedReaderKeys } from '../../socketio/editedAudience';
 import { pendingRequestUserIds } from './pendingMessageRequests';
+import { departedAccountUserIds } from './departedAccounts';
 
 /**
  * Le masque servi quand la relecture des drapeaux ne conclut pas — message
@@ -412,7 +413,7 @@ async function notifyNewlyMentioned(
         // existait déjà ; il ne manquait que la colonne — et une projection
         // trop étroite rend une loi impossible en aval sans qu'aucun témoin ne
         // rougisse.
-        select: { participants: { where: { isActive: true }, select: { userId: true, messageRequestAt: true } } },
+        select: { participants: { where: { isActive: true }, select: { userId: true, messageRequestAt: true, user: { select: { isActive: true, deletedAt: true } } } } },
       }),
     ]);
     if (!sender || !conversation) return;
@@ -476,7 +477,10 @@ async function notifyNewlyMentioned(
     // routes REST qui ne passent pas par le handler socket.
     const pending = pendingRequestUserIds(conversation.participants);
 
-    const admitted = newlyMentionedUserIds.filter((userId) => !blocked.has(userId) && !pending.has(userId));
+    // #18910 — un compte supprimé ou désactivé reste membre après la purge : une édition ne le fait pas sonner.
+    const departed = departedAccountUserIds(conversation.participants);
+
+    const admitted = newlyMentionedUserIds.filter((userId) => !blocked.has(userId) && !pending.has(userId) && !departed.has(userId));
     if (admitted.length === 0) return;
 
     await notificationService.createMentionNotificationsBatch(

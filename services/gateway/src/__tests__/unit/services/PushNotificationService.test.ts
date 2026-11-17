@@ -112,6 +112,7 @@ const mockPrisma = {
     update: jest.fn(),
     deleteMany: jest.fn(),
   },
+  userSession: { findMany: jest.fn(async () => [{ id: 'live-session' }]) },
 };
 
 jest.mock('@meeshy/shared/prisma/client', () => ({
@@ -1036,6 +1037,7 @@ describe('PushNotificationService', () => {
           bundleId: true,
           apnsEnvironment: true,
           appVersion: true,
+          sessionId: true,
         },
       });
     });

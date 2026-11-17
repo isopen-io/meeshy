@@ -52,16 +52,17 @@ class MessageRepositoryFacadeTest {
         assertThat(first).isEqualTo(CacheResult.Empty)
     }
 
+    /** #18915 (AND-09) — the thread revalidates on the messages window (2 min), the one `isCacheFresh` judges with. */
     @Test
-    fun `messagesStream defaults to the default cache policy`() = runTest {
+    fun `messagesStream defaults to the messages cache policy`() = runTest {
         val fixture = Fixture()
         val onSyncError: (Throwable) -> Unit = {}
-        every { fixture.history.messagesStream("c1", CachePolicy.Default, onSyncError) } returns
+        every { fixture.history.messagesStream("c1", CachePolicy.Messages, onSyncError) } returns
             flowOf(CacheResult.Empty)
 
         fixture.repository.messagesStream("c1", onSyncError = onSyncError).first()
 
-        verify(exactly = 1) { fixture.history.messagesStream("c1", CachePolicy.Default, onSyncError) }
+        verify(exactly = 1) { fixture.history.messagesStream("c1", CachePolicy.Messages, onSyncError) }
     }
 
     @Test

@@ -89,7 +89,7 @@ type Harness = {
   readonly registration: ReturnType<typeof fakeRegistration>;
   readonly announcements: readonly RegistrationLike[];
   readonly reloads: () => number;
-  readonly discards: () => number;
+  readonly persists: () => number;
   readonly caches: { readonly alive: ReadonlySet<string> };
   readonly errors: readonly unknown[];
   readonly registrations: readonly { readonly url: string; readonly options: unknown }[];
@@ -126,7 +126,7 @@ function harness(
     ],
   );
   let reloads = 0;
-  let discards = 0;
+  let persists = 0;
   let visibility = 'visible';
 
   window.addEventListener(SW_UPDATE_AVAILABLE_EVENT, (event) => {
@@ -160,8 +160,8 @@ function harness(
     reload: () => {
       reloads += 1;
     },
-    discardPersistedCache: () => {
-      discards += 1;
+    persistQueryCache: () => {
+      persists += 1;
     },
     setInterval: (handler) => {
       intervals.push(handler);
@@ -184,7 +184,7 @@ function harness(
     registrations,
     caches: { alive },
     reloads: () => reloads,
-    discards: () => discards,
+    persists: () => persists,
     controllerChange: () => {
       for (const listener of [...controllerListeners]) listener();
     },
@@ -293,15 +293,17 @@ describe('appliquer la mise à jour — ce que le clic fait, dans cet ordre', ()
     expect([...h.caches.alive]).toEqual([`${WORKBOX_PRECACHE_PREFIX}-v2-https://meeshy.me/`]);
   });
 
-  test('jette le cache de requêtes persisté — la session, elle, ne lui appartient pas', async () => {
+  test('range le cache de requêtes au moment de partir, sans le jeter : la version neuve le relit (#18923)', async () => {
     const waiting = fakeWorker();
     const h = harness({ waiting });
     const controller = createAppUpdateController(h.env);
     await controller.register();
 
     await controller.applyUpdate(h.registration);
+    h.controllerChange();
 
-    expect(h.discards()).toBe(1);
+    expect(h.persists()).toBe(1);
+    expect(h.reloads()).toBe(1);
   });
 
   test('demande au worker en attente de prendre la main, puis recharge au CHANGEMENT DE CONTRÔLEUR', async () => {
@@ -364,21 +366,21 @@ describe('appliquer la mise à jour — ce que le clic fait, dans cet ordre', ()
 
     await controller.applyUpdate(h.registration);
 
-    expect(h.discards()).toBe(1);
     expect(waiting.messages).toEqual([SKIP_WAITING_MESSAGE]);
     h.controllerChange();
+    expect(h.persists()).toBe(1);
     expect(h.reloads()).toBe(1);
   });
 });
 
 describe("la version appliquée par un AUTRE onglet", () => {
-  test('recharge cet onglet-ci, et jette son cache persisté avant de partir', async () => {
+  test('recharge cet onglet-ci, et range son cache persisté avant de partir', async () => {
     const h = harness();
     await createAppUpdateController(h.env).register();
 
     h.controllerChange();
 
-    expect(h.discards()).toBe(1);
+    expect(h.persists()).toBe(1);
     expect(h.reloads()).toBe(1);
   });
 
@@ -389,7 +391,7 @@ describe("la version appliquée par un AUTRE onglet", () => {
     h.controllerChange();
 
     expect(h.reloads()).toBe(0);
-    expect(h.discards()).toBe(0);
+    expect(h.persists()).toBe(0);
   });
 });
 
@@ -502,7 +504,7 @@ describe('la révision servie diffère de celle en cache (#12654)', () => {
     await controller.applyUpdate(registration!);
 
     expect(h.reloads()).toBe(1);
-    expect(h.discards()).toBe(1);
+    expect(h.persists()).toBe(1);
   });
 });
 

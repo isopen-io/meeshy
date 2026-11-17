@@ -28,6 +28,7 @@ import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
 // double qui énumère ses clés à la main, et ce module est doublé partout.
 import { NOTIFICATION_FANOUT_CONCURRENCY } from '../notifications/notificationFanOutBudget';
 import { pendingRequestUserIds } from './pendingMessageRequests';
+import { departedAccountUserIds } from './departedAccounts';
 
 
 export type { NotificationActorProfile };
@@ -409,7 +410,8 @@ export async function notifyMessageRecipients(params: {
         encryptionMode: true,
         participants: {
           where: { isActive: true, type: 'user' },
-          select: { userId: true, messageRequestAt: true },
+          // #18910 — l'état du compte suit la lecture : un compte supprimé reste membre après la purge.
+          select: { userId: true, messageRequestAt: true, user: { select: { isActive: true, deletedAt: true } } },
         },
       },
     });
@@ -424,6 +426,7 @@ export async function notifyMessageRecipients(params: {
     const silenced = new Set<string>([
       ...deadFor.keys(),
       ...pendingRequestUserIds(conversation.participants),
+      ...departedAccountUserIds(conversation.participants),
     ]);
     const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !silenced.has(id));
 

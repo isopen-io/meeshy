@@ -1,0 +1,62 @@
+{
+  "composant": "MeeshyCollapsingHero",
+  "cle": "K28",
+  "note": "Vecteurs de parité (fiche K28 § 10). hauteur = 318 − 222 × progress ; avatar et titre finissent à 55 % ; bannière = (1 − progress) / 0,5 ; verre = (progress − 0,5) / 0,5 ; distance de défilement = 450 − 96.",
+  "crans": [
+    {
+      "progress": 0,
+      "hauteur": 318,
+      "avatar": 112,
+      "titre": 36,
+      "banniere": 1,
+      "verre": 0,
+      "identiteDansLaBarre": false
+    },
+    {
+      "progress": 0.35,
+      "hauteur": 240.3,
+      "avatar": 63.6364,
+      "titre": 23.9091,
+      "banniere": 1,
+      "verre": 0,
+      "identiteDansLaBarre": false
+    },
+    {
+      "progress": 0.7,
+      "hauteur": 162.6,
+      "avatar": 36,
+      "titre": 17,
+      "banniere": 0,
+      "verre": 0.4,
+      "identiteDansLaBarre": true
+    },
+    {
+      "progress": 1,
+      "hauteur": 96,
+      "avatar": 36,
+      "titre": 17,
+      "banniere": 0,
+      "verre": 1,
+      "identiteDansLaBarre": true
+    },
+    {
+      "progress": 3,
+      "hauteur": 96,
+      "avatar": 36,
+      "titre": 17,
+      "banniere": 0,
+      "verre": 1,
+      "identiteDansLaBarre": true
+    },
+    {
+      "progress": -0.5,
+      "hauteur": 318,
+      "avatar": 112,
+      "titre": 36,
+      "banniere": 1,
+      "verre": 0,
+      "identiteDansLaBarre": false
+    }
+  ],
+  "distanceDefilement": 354
+}

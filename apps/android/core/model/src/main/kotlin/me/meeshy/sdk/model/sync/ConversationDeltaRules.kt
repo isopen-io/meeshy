@@ -22,7 +22,8 @@ object ConversationDeltaRules {
         val removedIds: List<String>,
         /**
          * Au moins une ligne ne s'explique pas par la ligne maigre : conversation inconnue du cache, ou
-         * activité plus récente que l'aperçu gardé. Seule la route riche sert l'aperçu et les non-lus.
+         * activité différente de l'aperçu gardé (plus récente, ou plus ancienne après la suppression du dernier
+         * message). Seule la route riche sert l'aperçu et les non-lus.
          */
         val needsRichRefresh: Boolean,
     )
@@ -106,10 +107,15 @@ object ConversationDeltaRules {
         return served + existing.participants.filter { it.userId == null || it.userId !in servedUsers }
     }
 
+    /**
+     * L'activité a bougé dans un sens OU dans l'autre (iOS `doitEtreRehydratee`) : un message reçu l'avance, la
+     * suppression du dernier message la fait RECULER (`recomputeConversationLastMessageAt`, passerelle). Un recul
+     * manqué pendant l'absence laisserait l'aperçu d'un message supprimé en tête de ligne (#18928).
+     */
     private fun activityMoved(known: ApiConversation, row: SyncConversationRow): Boolean {
         val served = isoToEpochMillisOrNull(row.lastMessageAt) ?: return false
         val cached = isoToEpochMillisOrNull(known.lastMessage?.createdAt) ?: return true
-        return served > cached
+        return served != cached
     }
 
     private const val DIRECT = "direct"

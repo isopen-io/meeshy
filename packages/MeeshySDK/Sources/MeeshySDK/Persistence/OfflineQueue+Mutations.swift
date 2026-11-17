@@ -443,7 +443,7 @@ extension OfflineQueue {
         await refreshPendingCount()
     }
 
-    // MARK: - Reaction Enqueue (Wave 1 Task 3.6 — ports ReactionQueue.enqueue)
+    // MARK: - Reaction Enqueue (Wave 1 Task 3.6 — ports the former reaction queue's enqueue)
 
     /// Persists a reaction mutation as an `OutboxRecord` of kind
     /// `.sendReaction`, applying the same coalescing state machine that
@@ -477,7 +477,7 @@ extension OfflineQueue {
 
         let cid = clientMessageId ?? ClientMessageId.generate()
         // Match the legacy `rxq_<uuid>` namespace so any in-flight rows
-        // written by the deleted `ReactionQueue` continue to be drained
+        // written by the former reaction queue actor continue to be drained
         // correctly by the existing dispatcher (which routes by `kind`, not
         // by id prefix). The UUID is generated fresh per call ; collisions
         // on the same `(messageId, emoji)` are caught by the coalescing

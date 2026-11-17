@@ -816,8 +816,9 @@ class TestTranslationPipelineServiceJobSubmission:
         logger.info("submit_job default languages OK")
 
     @pytest.mark.asyncio
-    async def test_submit_job_with_webhook(self, pipeline_service):
-        """Test job submission with webhook"""
+    async def test_submit_job_with_webhook(self, pipeline_service, monkeypatch):
+        """Test job submission with an allowed webhook (#18772)"""
+        monkeypatch.setenv("TRANSLATOR_WEBHOOK_ALLOWED_HOSTS", "webhook.example.com")
         logger.info("Test 26.21: submit_job with webhook")
 
         await pipeline_service.initialize()
@@ -826,11 +827,11 @@ class TestTranslationPipelineServiceJobSubmission:
             user_id="user_webhook",
             audio_path="/tmp/test.wav",
             target_languages=["fr"],
-            webhook_url="http://webhook.example.com/callback",
+            webhook_url="https://webhook.example.com/callback",
             callback_metadata={"request_id": "req_123"}
         )
 
-        assert job.webhook_url == "http://webhook.example.com/callback"
+        assert job.webhook_url == "https://webhook.example.com/callback"
         assert job.callback_metadata == {"request_id": "req_123"}
 
         await pipeline_service.close()
@@ -1571,16 +1572,17 @@ class TestTranslationPipelineServiceWebhook:
         logger.info("send_webhook no URL OK")
 
     @pytest.mark.asyncio
-    async def test_send_webhook_success(self, pipeline_service):
-        """Test send_webhook success"""
+    async def test_send_webhook_success(self, pipeline_service, monkeypatch):
+        """Test send_webhook success to an allowed host (#18772)"""
         logger.info("Test 26.49: send_webhook success")
         from services.translation_pipeline_service import TranslationJob, JobStatus
+        monkeypatch.setenv("TRANSLATOR_WEBHOOK_ALLOWED_HOSTS", "webhook.example.com")
 
         job = TranslationJob(
             id="job_webhook",
             user_id="user_webhook",
             status=JobStatus.COMPLETED,
-            webhook_url="http://webhook.example.com/callback",
+            webhook_url="https://webhook.example.com/callback",
             callback_metadata={"test": "data"}
         )
 

@@ -498,7 +498,7 @@ struct BubbleStandardLayout: View {
             //
             // Stretching the bubble to 70% is no longer a concern: identity
             // bar and inner content both report their intrinsic widths
-            // (UserIdentityBar's greedy Spacer is collapsed via
+            // (the identity bar's greedy Spacer is collapsed via
             // `.fixedSize(horizontal: true, vertical: false)` on the bar
             // inside `textBubbleContent`).
             .frame(maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass, containerWidth: bubbleContainerWidth), alignment: isMe ? .trailing : .leading)

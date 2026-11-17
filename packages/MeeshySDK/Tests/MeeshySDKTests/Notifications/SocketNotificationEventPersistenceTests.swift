@@ -88,4 +88,44 @@ final class SocketNotificationEventPersistenceTests: XCTestCase {
         let api = event.toAPINotification(createdAt: "2026-06-28T10:00:00.000Z")
         XCTAssertEqual(api.context?.postId, "p99")
     }
+
+
+    // MARK: - État et métadonnées servis par le fil (#19104)
+
+    /// La passerelle sert l'état de la ligne sous `state` (`formatNotification`),
+    /// jamais à la racine : une notification réécrite après une édition déjà
+    /// lue repartait non lue et datée de son arrivée.
+    func test_toAPINotification_servesTheWireStateOfTheRow() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n-state", "userId": "u1", "type": "new_message", "content": "Salut",
+            "state": { "isRead": true, "readAt": "2026-11-01T10:05:00.000Z", "createdAt": "2026-11-01T10:00:00.000Z" }
+        }
+        """)
+
+        let api = event.toAPINotification(createdAt: "2026-11-17T12:00:00.000Z")
+
+        XCTAssertEqual(event.resolvedIsRead, true)
+        XCTAssertTrue(api.isRead)
+        XCTAssertEqual(api.createdAt, "2026-11-01T10:00:00.000Z")
+    }
+
+    /// La ligne rangée par le socket garde le type de contenu et la communauté :
+    /// sans eux, la cloche servie par le cache ouvrait un commentaire de réel
+    /// en détail de post plat.
+    func test_toAPINotification_keepsTheMetadataAndTheCommunity() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n-meta", "userId": "u1", "type": "post_comment", "content": "Superbe",
+            "metadata": { "postType": "REEL", "postThumbnailUrl": "https://x/t.jpg" },
+            "context": { "communityId": "c1" }
+        }
+        """)
+
+        let api = event.toAPINotification(createdAt: "2026-11-17T12:00:00.000Z")
+
+        XCTAssertEqual(api.metadata?.postType, "REEL")
+        XCTAssertEqual(api.metadata?.postThumbnailUrl, "https://x/t.jpg")
+        XCTAssertEqual(api.context?.communityId, "c1")
+    }
 }

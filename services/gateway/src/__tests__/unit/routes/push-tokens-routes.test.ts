@@ -156,6 +156,7 @@ function makeRequest(overrides: Record<string, any> = {}) {
     params: {},
     body: {},
     query: {},
+    headers: {},
     user: { userId: USER_ID, role: 'USER' },
     authContext: makeAuthContext(),
     ...overrides,

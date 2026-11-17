@@ -75,7 +75,7 @@ extension ConversationSyncEngine {
             let recues = (collection?.added ?? []) + (collection?.modified ?? [])
             let supprimees = collection?.deleted ?? []
 
-            let existing = await cache.conversations.load(for: "list").snapshot() ?? []
+            let existing = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
             let parId = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
             let userId = await currentUserId()

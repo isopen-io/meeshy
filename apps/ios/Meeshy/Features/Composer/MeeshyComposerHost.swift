@@ -17,8 +17,8 @@ import MeeshyUI
 //
 // Les membres de ces extensions ne sont pas `private` : Swift ne rend un
 // `private` visible qu'aux extensions du MÊME fichier. C'est le patron que
-// `StoryComposerView` suit déjà dans le SDK (`+TopBar`, `+Canvas`,
-// `+Publication`). La contrepartie est portée par les gardes de source, dont
+// `StoryComposerViewModel` suit déjà dans le SDK (`+Elements`, `+Repost`,
+// `+TextEditing`). La contrepartie est portée par les gardes de source, dont
 // l'adresse est l'UNITÉ (`AppSourceGuard.unit`) et non un fichier :
 // sans cela, chaque découpage éteindrait en silence toutes les gardes NÉGATIVES
 // du type — elles passeraient au vert en lisant la moitié qui ne contient pas
@@ -802,11 +802,10 @@ struct MeeshyComposerHost: View {
         // une story privée en la voyant ouverte sur « Amis » — le dernier choix
         // mémorisé — serait offrir une faute que le serveur refuserait ensuite
         // (403 `REPOST_AUDIENCE_WIDENING`), après que la composition est faite.
-        // L'ÉDITION, elle, rend `nil` ici : c'est le ViewModel hydraté qui
-        // porte son audience (`editingInitialVisibility`), réassignée en
-        // priorité absolue par `StoryComposerView.init`. Deux sources pour une
-        // même valeur, dont la seconde gagne toujours, feraient une première
-        // ligne morte qui aurait l'air de décider.
+        // L'ÉDITION, elle, impose l'audience que porte le ViewModel hydraté
+        // (`editingInitialVisibility`, servie par
+        // `ComposerHydration.initialVisibility`) : l'audience ACTUELLE de la
+        // story, jamais un dernier choix mémorisé.
         //
         // L'audience de l'hydratation passe par le MÊME validateur que les
         // autres (`selectable`, dans `seed`) et non à côté : la chaîne vient

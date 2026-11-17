@@ -60,7 +60,7 @@ public struct UnreadUpdateEvent: Decodable, Sendable {
         } else {
             // Le serveur a bien annoncé QUELQUE CHOSE, mais on ne sait pas le
             // lire (pont malformé). Décodage TOLÉRANT, même patron que
-            // `MeeshyConversation.bridge` (`CoreModels.swift`) : l'événement
+            // `MeeshyConversation.bridge` (`MeeshyConversation.swift`) : l'événement
             // entier reste exploitable. Mais un pont ILLISIBLE n'est pas un
             // pont ABSENT — ne pas savoir lire n'autorise pas à détruire, donc
             // `.notComputed` et non `.cleared`.

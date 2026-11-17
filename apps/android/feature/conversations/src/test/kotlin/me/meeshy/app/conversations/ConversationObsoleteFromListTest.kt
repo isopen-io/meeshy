@@ -105,6 +105,7 @@ class ConversationObsoleteFromListTest {
             },
             preferencesSocketManager = mockk<PreferencesSocketManager> {
                 every { conversationPreferencesUpdated } returns MutableSharedFlow<UserPreferencesConversationUpdatedSocketData>()
+                every { conversationsReordered } returns MutableSharedFlow<me.meeshy.sdk.model.UserPreferencesReorderedSocketData>()
             },
             starredStore = InMemoryStarredMessagesStore(),
             currentUserId = { "me" },

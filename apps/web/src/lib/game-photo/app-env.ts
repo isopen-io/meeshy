@@ -3,7 +3,7 @@ import { browserPhotoEnv, type PhotoEnv } from './env';
 
 /**
  * L'ENVIRONNEMENT PHOTO DE L'APPLICATION (#9382) — UN seul, créé au premier
- * besoin : la base du carnet ne s'ouvre qu'au premier geste (`lazyBackend`),
+ * besoin : la base du carnet ne s'ouvre qu'au premier geste (`accountBackend`),
  * et l'écran Progression ne paie rien tant que personne ne photographie. Garder une photo y signale l'étape
  * immortalisée au registre partagé (D22 b, `withKeptSignal`) : l'identifiant seul, jamais l'image.
  */

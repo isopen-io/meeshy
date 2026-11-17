@@ -124,7 +124,7 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     ///
     /// **Une seule table, en fraction de la taille de police (em)**, recopiée
     /// à l'identique sur les deux autres miroirs — TS
-    /// `apps/web/lib/story-text-effect.ts`, Kotlin
+    /// `apps/web/src/lib/canvas/text-effect.ts`, Kotlin
     /// `apps/android/core/model/.../StoryTextEffect.kt`. Toute évolution
     /// touche les trois. En em et non en points : l'effet doit grandir avec le
     /// texte (pincement, curseur de taille, export 1080) sans qu'aucun client

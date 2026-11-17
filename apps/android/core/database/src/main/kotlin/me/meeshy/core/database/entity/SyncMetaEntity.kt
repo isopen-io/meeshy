@@ -22,6 +22,13 @@ import androidx.room.PrimaryKey
  * [lastSyncedAt], which merely says "we tried," not "we saw everything up to
  * here."
  *
+ * For a conversation's messages (`messages:<id>`, #18929, #19114) the same column is the CONTIGUITY watermark: the
+ * server `createdAt` up to which the history held is proven gap-free, moved only by contiguous reads (the recent window
+ * and the forward sweep that joins it, a backward page that closes a gap) — never by a pushed message or a socket
+ * arrival. A gap left under the recent window is kept under its own key (`messages:<id>:gap`), whose
+ * [contentWatermarkMillis] is the instant of the oldest message of the segment above it
+ * (`me.meeshy.sdk.model.sync.ThreadContiguity`).
+ *
  * [etag] is the response's own `ETag` header (RFC 7232) from the last time
  * this resource's request was proven complete-in-one-shot — #5188. It is
  * reused as `If-None-Match`; a matching 304 means "confirmed unchanged" and

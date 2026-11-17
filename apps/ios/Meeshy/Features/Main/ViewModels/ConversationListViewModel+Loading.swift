@@ -310,15 +310,9 @@ extension ConversationListViewModel {
                 // That re-loop was visible as 3-4 consecutive
                 // `forcing exhausted` lines in the May 2026 device log
                 // even though the in-memory guard was working correctly.
-                let exhaustedSnapshot = conversations
-                Task {
-                    await CacheCoordinator.shared.conversations.saveCursor(
-                        nextCursor: nil,
-                        hasMore: false,
-                        for: "list"
-                    )
-                    await bestEffort("conversationListViewModelLoading.conversations.save", category: .cache) { try await CacheCoordinator.shared.conversations.save(exhaustedSnapshot, for: "list") }
-                }
+                // Même fusion que tout instantané de la liste (#18933) : le
+                // brut effaçait les lignes et les facettes du moteur.
+                persistLoadedPage()
                 return
             }
 

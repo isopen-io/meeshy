@@ -27,7 +27,7 @@ import MeeshyUI
 ///
 /// ## Ce qui change pour l'auteur
 ///
-/// L'édition montait `StoryComposerView` NU, donc sans plateau ni socle. Elle
+/// L'édition montait l'ancien atelier du SDK NU, donc sans plateau ni socle. Elle
 /// n'offre toujours AUCUN changement de format, et c'est la table qui le veut :
 /// `UpdatePostSchema.type` n'accepte que POST et RÉEL, et changer le format d'un
 /// contenu publié est le rôle du repost, pas de l'édition. L'éventail ne se
@@ -98,11 +98,10 @@ struct StoryEditComposer: View {
                                                  documentFormat: .story)),
             // Valeur de POLITESSE, jamais celle qui décide : le ViewModel
             // hydraté porte `editingInitialVisibility`, que
-            // `StoryComposerView.init` réassigne en PRIORITÉ ABSOLUE — le
-            // composer s'ouvre sur la visibilité ACTUELLE de la story, jamais
-            // sur un dernier choix mémorisé. `ComposerHydration.initialVisibility`
-            // rend d'ailleurs `nil` pour l'édition, exactement pour ne pas
-            // fabriquer une seconde source à cette valeur.
+            // `ComposerHydration.initialVisibility` IMPOSE à l'ouverture
+            // (`ComposerDocumentOpening.of`) — le composer s'ouvre sur la
+            // visibilité ACTUELLE de la story, jamais sur un dernier choix
+            // mémorisé.
             initialVisibility: session.story.visibility ?? PostVisibility.friends.rawValue,
             hydration: .editingStory(session.composer),
             onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, _ in

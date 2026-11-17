@@ -108,11 +108,14 @@ export function mount({
   already = [] as Record<string, unknown>[],
   credential,
   fetchFails = false,
+  indexedDBStalls = false,
 }: {
   readonly clients?: ClientStub[];
   readonly already?: Record<string, unknown>[];
   readonly credential?: DeliveryReceiptCredential;
   readonly fetchFails?: boolean;
+  /** Une IndexedDB qui ne répond jamais (profil chargé, appareil lent) : rien de ce qui l'attend n'aboutit. */
+  readonly indexedDBStalls?: boolean;
 } = {}): WorkerHarness {
   const listeners = new Map<string, Listener>();
   const shown: ShownNotification[] = [];
@@ -177,7 +180,7 @@ export function mount({
         badges.push(count);
       },
     },
-    indexedDB: idb,
+    indexedDB: indexedDBStalls ? { open: () => ({}) } : idb,
     fetch: async (url: string, init: Record<string, unknown>) => {
       deliveries.push({ url, init });
       if (fetchFails) throw new TypeError('Failed to fetch');

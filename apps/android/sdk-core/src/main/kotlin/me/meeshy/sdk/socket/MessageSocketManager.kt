@@ -15,8 +15,8 @@ import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.game.GameUpdatedEvent
 import me.meeshy.sdk.model.packs.PackInstallationUpdatedEvent
 import me.meeshy.sdk.model.profile.ProfileDecorUpdatedEvent
+import me.meeshy.sdk.model.profile.ProfileUpdatedEvent
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
-import me.meeshy.sdk.model.MessageTranslationSharedEvent
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TypingEvent
@@ -84,7 +84,6 @@ class MessageSocketManager @Inject constructor(
     private val _reactionRemoved = SocketInboundRoute.subject<ReactionUpdateEvent>()
     private val _unreadUpdated = SocketInboundRoute.subject<UnreadUpdateEvent>()
     private val _translationReceived = SocketInboundRoute.subject<TranslationEvent>()
-    private val _translationShared = SocketInboundRoute.subject<MessageTranslationSharedEvent>()
     private val _transcriptionReady = SocketInboundRoute.subject<TranscriptionReadyEvent>()
     private val _audioTranslationReady = SocketInboundRoute.subject<AudioTranslationEvent>()
     private val _conversationUpdated = SocketInboundRoute.subject<ConversationUpdatedSocketEvent>()
@@ -112,6 +111,7 @@ class MessageSocketManager @Inject constructor(
     private val _notificationDeletedBulk = SocketInboundRoute.subject<NotificationDeletedBulkSocketEvent>()
     private val _notificationCounts = SocketInboundRoute.subject<NotificationCountsSocketEvent>()
     private val _profileDecorUpdated = SocketInboundRoute.subject<ProfileDecorUpdatedEvent>()
+    private val _profileUpdated = SocketInboundRoute.subject<ProfileUpdatedEvent>()
     private val _packInstallationUpdated = SocketInboundRoute.subject<PackInstallationUpdatedEvent>()
     private val _gameUpdated = SocketInboundRoute.subject<GameUpdatedEvent>()
 
@@ -141,8 +141,6 @@ class MessageSocketManager @Inject constructor(
      * contrat le déclarait, personne ne le produisait (cycle 77).
      */
     val translationReceived: SharedFlow<TranslationEvent> = _translationReceived.exposed()
-    /** `message:translation-shared` : la traduction (enveloppe scellée) qu'un autre membre vient de partager. */
-    val translationShared: SharedFlow<MessageTranslationSharedEvent> = _translationShared.exposed()
     val transcriptionReady: SharedFlow<TranscriptionReadyEvent> = _transcriptionReady.exposed()
     val audioTranslationReady: SharedFlow<AudioTranslationEvent> = _audioTranslationReady.exposed()
     val conversationUpdated: SharedFlow<ConversationUpdatedSocketEvent> = _conversationUpdated.exposed()
@@ -199,6 +197,9 @@ class MessageSocketManager @Inject constructor(
     /** `profile:decor-updated` : le décor d'un compte a changé ; le filtrage par compte est celui du consommateur. */
     val profileDecorUpdated: SharedFlow<ProfileDecorUpdatedEvent> = _profileDecorUpdated.exposed()
 
+    /** #18924 — `profile:updated` : MON profil, changé sur un autre de mes appareils (`user:<moi>` seulement). */
+    val profileUpdated: SharedFlow<ProfileUpdatedEvent> = _profileUpdated.exposed()
+
     /** `pack:installation-updated` : un pack s'installe ou se retire sur mon compte (ici ou sur un autre appareil). */
     val packInstallationUpdated: SharedFlow<PackInstallationUpdatedEvent> = _packInstallationUpdated.exposed()
 
@@ -227,7 +228,6 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.REACTION_REMOVED, _reactionRemoved)
         route(SocketEventNames.CONVERSATION_UNREAD_UPDATED, _unreadUpdated)
         route(SocketEventNames.MESSAGE_TRANSLATION, _translationReceived)
-        route(SocketEventNames.MESSAGE_TRANSLATION_SHARED, _translationShared)
         route(SocketEventNames.AUDIO_TRANSCRIPTION_READY, _transcriptionReady)
         route(SocketEventNames.AUDIO_TRANSLATION_READY, _audioTranslationReady)
         route(SocketEventNames.CONVERSATION_UPDATED, _conversationUpdated)
@@ -269,6 +269,7 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.NOTIFICATION_DELETED_BULK, _notificationDeletedBulk)
         route(SocketEventNames.NOTIFICATION_COUNTS, _notificationCounts)
         route(SocketEventNames.PROFILE_DECOR_UPDATED, _profileDecorUpdated)
+        route(SocketEventNames.PROFILE_UPDATED, _profileUpdated)
         route(SocketEventNames.PACK_INSTALLATION_UPDATED, _packInstallationUpdated)
         route(SocketEventNames.GAME_UPDATED, _gameUpdated)
     }

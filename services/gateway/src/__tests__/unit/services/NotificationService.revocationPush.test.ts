@@ -45,6 +45,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
+    userPreferences: { findUnique: jest.fn() },
     $runCommandRaw: jest.fn(),
   };
   return { PrismaClient: jest.fn(() => mockPrisma) };
@@ -117,6 +118,7 @@ describe('NotificationService — push de révocation des bannières déjà livr
 
     prisma.notification.count.mockResolvedValue(0);
     prisma.notification.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.userPreferences.findUnique.mockResolvedValue(null);
   });
 
   describe('retrait d’une réaction (unlike, emoji retiré)', () => {
@@ -302,6 +304,20 @@ describe('NotificationService — push de révocation des bannières déjà livr
       await service.flushPendingRevocations();
 
       expect(pushCalls()[0]?.payload.data[REPRODUCED_PUSH_FIELD]).toBe(REPRODUCED_PUSH_VALUE);
+    });
+
+    it('showSenderName:false : le remplacement ne porte ni nom, ni pseudo, ni avatar de l’acteur (#18910)', async () => {
+      sendToUser.mockResolvedValue(delivered);
+      prisma.userPreferences.findUnique.mockResolvedValue({ notification: { showSenderName: false } });
+      prisma.notification.findUnique.mockResolvedValue(makeRawNotification());
+
+      await service.announceNotificationsReproduced([{ id: NOTIF_ID, userId: AUTHOR_ID }]);
+      await service.flushPendingRevocations();
+
+      const { payload } = pushCalls()[0] as PushCall & { payload: { title: string } };
+      expect(payload.title).toBe('Meeshy');
+      ['senderDisplayName', 'senderUsername', 'senderAvatar', 'imageURL'].forEach((key) =>
+        expect(payload.data[key] ?? '').toBe(''));
     });
 
     it('une ligne disparue entre la réécriture et l’annonce : la révocation part, aucun remplacement', async () => {

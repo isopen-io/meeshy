@@ -4,8 +4,6 @@ import lentilleTokens from '@meeshy/shared/design/lentille-tokens.json';
 
 import { ROW_HEIGHT } from './lens-row';
 import { SECTION_TOGGLE_MIN_HEIGHT } from './lens-sticker';
-import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE SQUELETTE DE LA LISTE (#5650, F5/§5 étape 9) — CACHE VIDE seulement
@@ -103,8 +101,8 @@ const STAGGER_MS = 40;
  * `<ul ref={frame}>` doit rester le MÊME nœud DOM entre le chargement et le
  * contenu réel : `useScene(frame)` attache ses écouteurs de défilement une
  * SEULE fois, au montage — un `<ul>` REMPLACÉ par un autre laisserait la
- * scène orpheline, jamais réarmée). `LensSkeleton`, ci-dessous, en est
- * l'usage AUTONOME.
+ * scène orpheline, jamais réarmée). L'hôte porte `aria-busy` et le nom
+ * accessible de la liste.
  */
 export function LensSkeletonRows() {
   return (
@@ -114,13 +112,5 @@ export function LensSkeletonRows() {
         <SkeletonRow key={i} delayMs={i * STAGGER_MS} />
       ))}
     </>
-  );
-}
-
-export function LensSkeleton() {
-  return (
-    <ul id="contenu" aria-busy="true" aria-label={translate(currentInterfaceLanguage(), 'list.loading')} className="flex flex-1 flex-col overflow-hidden px-2">
-      <LensSkeletonRows />
-    </ul>
   );
 }

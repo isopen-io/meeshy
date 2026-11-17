@@ -40,7 +40,7 @@ public sealed interface GameElementEmblem {
     public data class League(val league: LeagueKey) : GameElementEmblem
 }
 
-/** La forme d'une médaille de succès ou de défi (iOS `GameBadgeShape`, hors l'accumulation des badges d'axe). */
+/** La forme d'une médaille de succès ou de défi (hors l'accumulation des badges d'axe). */
 public sealed interface GameElementMedalShape {
     /** [filled] pastilles pleines sur [total]. */
     public data class Collection(val filled: Int, val total: Int) : GameElementMedalShape

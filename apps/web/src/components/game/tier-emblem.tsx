@@ -1,12 +1,9 @@
-import { useId } from 'react';
-
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 
 import { isSpectralTier } from '@/lib/game/ladder';
-import { paintUrl, safeUid } from '@/lib/game/materials';
+import { paintUrl } from '@/lib/game/materials';
 import { EMBLEM_BOX, TIER_EMBLEMS, type EmblemShape } from '@/lib/game/tier-emblem';
 
-import { PaintDefs } from './paint-defs';
 import { SignatureGlyph } from './signature';
 
 /**
@@ -14,9 +11,8 @@ import { SignatureGlyph } from './signature';
  * dix formes bâties autour de la Signature) à la couleur spectrale du palier :
  * un jeton `--game-tier-<palier>`, le prisme pour Galaxie.
  *
- *   · `TierEmblemGlyph` se pose DANS le SVG d'un hôte (l'anneau de niveau, en
- *     filigrane) ; l'hôte déclare les peintures de ses `<defs>` ;
- *   · `TierEmblem` est un dessin autonome.
+ * `TierEmblemGlyph` se pose DANS le SVG d'un hôte (l'anneau de niveau, en
+ * filigrane) ; l'hôte déclare les peintures de ses `<defs>`.
  *
  * DÉCORATIF (`aria-hidden`) : l'hôte dit le palier.
  */
@@ -56,17 +52,5 @@ export function TierEmblemGlyph({ uid, tier, cx, cy, size, opacity = 1 }: GlyphP
       ))}
       <SignatureGlyph cx={0} cy={0} size={SIGNATURE_SIZE} color={design.core === 'filled' ? KNOCKOUT : color} mode="flat" strokeWidth={120} />
     </g>
-  );
-}
-
-export function TierEmblem({ tier, size }: { readonly tier: LevelTierKey; readonly size: number }) {
-  const uid = safeUid(useId());
-  return (
-    <svg viewBox={`0 0 ${EMBLEM_BOX} ${EMBLEM_BOX}`} width={size} height={size} aria-hidden="true" focusable="false">
-      <defs>
-        <PaintDefs uid={uid} paints={['prism']} />
-      </defs>
-      <TierEmblemGlyph uid={uid} tier={tier} cx={EMBLEM_BOX / 2} cy={EMBLEM_BOX / 2} size={EMBLEM_BOX - 6} />
-    </svg>
   );
 }

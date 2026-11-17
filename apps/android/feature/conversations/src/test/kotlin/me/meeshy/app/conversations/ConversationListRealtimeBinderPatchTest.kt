@@ -29,6 +29,8 @@ import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.StarredMessages
 import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
+import me.meeshy.sdk.model.UserPreferencesReorderedSocketData
+import me.meeshy.sdk.model.ConversationReorderItem
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
@@ -48,6 +50,7 @@ class ConversationListRealtimeBinderPatchTest {
         val banned = MutableSharedFlow<ParticipantBannedEvent>(extraBufferCapacity = 64)
         val joined = MutableSharedFlow<ParticipantJoinedEvent>(extraBufferCapacity = 64)
         val unbanned = MutableSharedFlow<ParticipantUnbannedEvent>(extraBufferCapacity = 64)
+        val reordered = MutableSharedFlow<UserPreferencesReorderedSocketData>(extraBufferCapacity = 64)
         val connection = MutableStateFlow(SocketConnectionState.DISCONNECTED)
     }
 
@@ -84,6 +87,7 @@ class ConversationListRealtimeBinderPatchTest {
         preferencesSocketManager = mockk<PreferencesSocketManager> {
             every { conversationPreferencesUpdated } returns
                 MutableSharedFlow<UserPreferencesConversationUpdatedSocketData>()
+            every { conversationsReordered } returns frames.reordered
         },
         starredStore = stars,
         currentUserId = { me },
@@ -274,12 +278,36 @@ class ConversationListRealtimeBinderPatchTest {
 
         frames.connection.value = SocketConnectionState.CONNECTED
         runCurrent()
-        coVerify(exactly = 0) { rig.repo.refresh() }
+        coVerify(exactly = 0) { rig.repo.catchUp() }
 
         frames.connection.value = SocketConnectionState.CONNECTING
         runCurrent()
         frames.connection.value = SocketConnectionState.CONNECTED
         runCurrent()
-        coVerify(exactly = 1) { rig.repo.refresh() }
+        // #18927 — a catch-up, never a refresh that would join a sweep built before the events missed.
+        coVerify(exactly = 1) { rig.repo.catchUp() }
+        coVerify(exactly = 0) { rig.repo.refresh() }
     }
+
+    /**
+     * #18915 (AND-04) — the order of a category, dragged on another device, is written to the cache the sections sort
+     * by, without a reread; a frame naming another account writes nothing.
+     */
+    @Test
+    fun `a reorder broadcast of this account reaches the cache, one naming another account does not`() =
+        runTest(StandardTestDispatcher()) {
+            val frames = Frames()
+            val rig = rig()
+            binder(frames, rig, me = "me")
+            runCurrent()
+            val mine = listOf(ConversationReorderItem("c-a", 1), ConversationReorderItem("c-b", 0))
+
+            frames.reordered.emit(UserPreferencesReorderedSocketData(userId = "someone-else", updates = listOf(ConversationReorderItem("c-x", 0))))
+            frames.reordered.emit(UserPreferencesReorderedSocketData(userId = "me", updates = mine))
+            runCurrent()
+
+            coVerify(exactly = 1) { rig.repo.applyRemoteReorder(any()) }
+            coVerify(exactly = 1) { rig.repo.applyRemoteReorder(mine) }
+            coVerify(exactly = 0) { rig.repo.refresh() }
+        }
 }

@@ -33,7 +33,7 @@ import MeeshyUI
 /// > du son là ».
 ///
 /// Elle était une lecture pure pendant que le son de CONTENU s'ouvrait déjà
-/// d'un doigt (`MeeshyAudioTranscriptPlayer.onEdit`). Deux moitiés de la même
+/// d'un doigt. Deux moitiés de la même
 /// idée qui se comportaient différemment dans un seul écran — la loi 6 prise en
 /// défaut sans quitter la vue.
 ///

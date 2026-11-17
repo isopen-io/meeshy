@@ -8,7 +8,7 @@ import java.util.Locale
 /**
  * The absolute-date rung shared by every relative-time formatter (`short`, `long`) so the two
  * can never drift on how an "older than three months" instant reads. The year is shown only when
- * it differs from the reference year (matching iOS `CallTimeLabel`); the first letter is
+ * it differs from the reference year (matching iOS); the first letter is
  * uppercased so the month reads as a proper label at the start of a line.
  */
 internal fun formatAbsoluteDate(

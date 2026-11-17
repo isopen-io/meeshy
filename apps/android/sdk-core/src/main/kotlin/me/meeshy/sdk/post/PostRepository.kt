@@ -852,6 +852,28 @@ class PostRepository @Inject constructor(
     suspend fun applyPostUpdate(updated: ApiPost): Boolean =
         fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(updated.id) { PostUpdateMerge.merge(it, updated) } } ?: false
 
+    /**
+     * #18931 — un geste vivant sur [postId] (j'aime, commentaire : [patch], comptes ABSOLUS de la passerelle) atteint la
+     * ligne du fil ET la copie du détail ; `false` : rien n'a changé dans le fil.
+     */
+    suspend fun applyEngagement(postId: String, patch: (ApiPost) -> ApiPost?): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) {
+            detailMemo.get(postId)?.let(patch)?.let(detailMemo::keep)
+            foldIntoCache(postId, patch)
+        } ?: false
+
+    /** #18931 — un post supprimé ailleurs (`post:deleted`) quitte le fil et la copie du détail ; `false` : il n'y était pas. */
+    suspend fun applyDeletion(postId: String): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) {
+            detailMemo.forget(postId)
+            var removed = false
+            _feedCache.update { rows ->
+                removed = rows?.any { it.id == postId } == true
+                if (removed) rows?.filterNot { it.id == postId } else rows
+            }
+            removed
+        } ?: false
+
     /** Le compte absolu de [emoji] (`post:reaction-*`) sur la ligne du fil ; `false` : ligne absente ou compte deja a jour. */
     suspend fun applyReactionCount(postId: String, emoji: String, count: Int): Boolean =
         fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(postId) { PostReactionSummaryLaw.applying(it, emoji, count) } } ?: false

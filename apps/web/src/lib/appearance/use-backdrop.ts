@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import { useEffect, useState } from 'react';
 
-import { bindAppearanceLive } from '@/lib/api/conversation-appearance';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { useColorScheme } from '@/lib/use-color-scheme';
@@ -106,24 +105,4 @@ export function useBackdropPhoto(params: { readonly conversationId: string; read
     };
   }, [attachmentId, thumb, full]);
   return source === null || ready === null || ready.id !== attachmentId ? undefined : ready.src;
-}
-
-/** Un autre appareil du lecteur change le fond ou l'accent : la liste et le fil le relisent du cache. */
-export function useAppearanceLive(enabled: boolean): void {
-  const queryClient = useQueryClient();
-  useEffect(() => {
-    if (!enabled) return undefined;
-    let live = true;
-    let stop: (() => void) | null = null;
-    void import('@/lib/api/realtime').then(
-      ({ watchLiveSocket }) => {
-        if (live) stop = watchLiveSocket((socket) => bindAppearanceLive({ socket, queryClient }));
-      },
-      () => undefined,
-    );
-    return () => {
-      live = false;
-      stop?.();
-    };
-  }, [enabled, queryClient]);
 }

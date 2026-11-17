@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react';
-
 import { ChromeActionDisc } from './chrome-action';
 import { Glyph } from './glyph';
 
@@ -30,40 +28,6 @@ export const BUTTON = {
 
 /** La hauteur de l'en-tête d'un écran plein cadre — celle que dix routes recopiaient. */
 export const SCREEN_HEADER_HEIGHT = 64;
-
-/**
- * L'EN-TÊTE D'ÉCRAN : le retour à GAUCHE (une cible de 44, `CHROME_ACTION_HIT_CLASS`),
- * le titre en `h1`, les actions à droite. L'élément de retour est fourni par
- * l'écran — un lien qui navigue reste un lien (`route-table.tsx` § Link).
- */
-export function ScreenHeader({
-  leading,
-  title,
-  subtitle,
-  trailing,
-}: {
-  readonly leading: ReactNode;
-  readonly title: ReactNode;
-  readonly subtitle?: ReactNode;
-  readonly trailing?: ReactNode;
-}) {
-  return (
-    <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: SCREEN_HEADER_HEIGHT }}>
-      {leading}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <h1 className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {title}
-        </h1>
-        {subtitle === undefined ? null : (
-          <p className="truncate text-chip font-medium" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {subtitle}
-          </p>
-        )}
-      </div>
-      {trailing}
-    </header>
-  );
-}
 
 /** La flèche de retour, dans le disque de 28 du chrome, retournée en RTL. */
 export function BackGlyph() {

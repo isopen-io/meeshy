@@ -169,8 +169,8 @@
       "firstScreen": 69
     },
     "links": {
-      "total": 38,
-      "firstScreen": 38
+      "total": 45,
+      "firstScreen": 45
     },
     "links-affiliate": {
       "total": 35,
@@ -400,15 +400,15 @@
   "releves": {
     "links": {
       "de": {
-        "total": 39,
-        "firstScreen": 39
+        "total": 38,
+        "firstScreen": 38
       },
       "a": {
-        "total": 70,
-        "firstScreen": 70
+        "total": 45,
+        "firstScreen": 45
       },
-      "motif": "Chaque type de lien (partage, suivi, communautés, parrainage) redit sous son nom à quoi il sert",
-      "issue": 17641
+      "motif": "La face Liens de la planche du profil montre mon lien de profil en billet (« Mon lien de profil », son adresse), « Mes adresses » et le chiffre de chaque famille accordé à son nombre (« 3 arrivées ») : sept mots que l'écran doit porter, le reste reste derrière ses (i)",
+      "issue": 18880
     },
     "links-affiliate": {
       "de": {

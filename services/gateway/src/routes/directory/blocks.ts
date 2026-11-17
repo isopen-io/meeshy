@@ -175,6 +175,18 @@ export async function bloquer(
     logError(fastify.log, '[BLOCKS] Ritual shares not withdrawn after block', error);
   }
 
+  // #18910 — les notifications de l'autre quittent les deux listes, rejoué même sur un blocage déjà posé.
+  // Côté bloqueur : tout, annoncé. Côté bloqué : le seul contenu du bloqueur, SANS rien lui annoncer
+  // (une disparition en direct lui apprendrait le blocage). Best-effort : une panne ne défait pas le blocage. Hors
+  // de la réponse : des années de notifications (50 lots de 1 000) ne retiennent pas le geste.
+  const notifications = fastify.notificationService;
+  if (notifications) {
+    Promise.all([
+      notifications.retractNotificationsFromActor(moi, cibleId),
+      notifications.retractNotificationsFromActor(cibleId, moi, 'actor-content'),
+    ]).catch((error: unknown) => logError(fastify.log, '[BLOCKS] Notifications not retracted after block', error));
+  }
+
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une
   // troisième lecture avant les deux existantes. Il n'est pas déclaré au schéma

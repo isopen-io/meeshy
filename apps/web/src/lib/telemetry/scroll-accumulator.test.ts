@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { SCROLL_VELOCITY_BUCKETS_PT_PER_S } from '@meeshy/shared/types/social-events-v2';
+
 import {
   SCROLL_SAMPLE_MS,
   bindDecimatedScroll,
@@ -25,6 +27,19 @@ describe('createListingScrollAccumulator', () => {
     expect(summary.velocityHistogram).toEqual([100, 100, 100, 100]);
     expect(summary.velocityHistogram.reduce((a, b) => a + b, 0)).toBe(summary.activeScrollMs);
     expect(summary.durationMs).toBe(400);
+  });
+
+  test('les bornes de vitesse sont celles de la loi partagée (SCROLL_VELOCITY_BUCKETS_PT_PER_S)', () => {
+    const bucketAt = (ptPerS: number): number => {
+      const acc = createListingScrollAccumulator(0);
+      acc.sample(0, 0);
+      acc.sample(ptPerS / 10, 100);
+      return acc.summary(100).velocityHistogram.findIndex((ms) => ms > 0);
+    };
+    SCROLL_VELOCITY_BUCKETS_PT_PER_S.forEach((edge, index) => {
+      expect(bucketAt(edge - 10)).toBe(index);
+      expect(bucketAt(edge)).toBe(index + 1);
+    });
   });
 
   test('changements de direction et part de distance remontée', () => {

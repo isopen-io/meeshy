@@ -123,7 +123,7 @@ extension MeeshyComposerHost {
     /// l'auteur d'en changer sous cette surface : de l'UI morte au sens strict de
     /// la loi 4, puisqu'elle NOMMERAIT un réglage qu'elle ne règle pas.
     ///
-    /// **La FORME est celle de l'atelier** (`StoryComposerView+TopBar.visibilityMenu`),
+    /// **La FORME est celle qu'avait le menu de visibilité de l'ancien atelier**,
     /// pas celle du mood : un menu qui se replie en une capsule. Le socle est une
     /// RANGÉE — le ruban de six chips du mood y mangerait toute la largeur et
     /// repousserait la flèche hors de l'écran. Les deux surfaces ne sont jamais
@@ -392,9 +392,8 @@ extension MeeshyComposerHost {
     /// lirait comme un lien. Le socle et l'en-tête du mood portent le MÊME
     /// traitement.
     ///
-    /// `brandPrimary`, pas `indigo500` en dur : c'est le MÊME jeton (alias), et
-    /// celui que la flèche de `StoryComposerView+TopBar` utilise déjà — un seul
-    /// nom pour un même fond de bouton proéminent à travers le composer.
+    /// `brandPrimary`, pas `indigo500` en dur : c'est le MÊME jeton (alias) — un
+    /// seul nom pour un même fond de bouton proéminent à travers le composer.
     /// `.opacity` marque le refus du gate : un remplissage plein aurait l'air
     /// armé même quand rien ne peut partir.
     func publishCapsule<Contenu: View>(_ contenu: Contenu, chevron: ComposerPublishChevron? = nil) -> some View {
@@ -576,9 +575,8 @@ extension MeeshyComposerHost {
     /// cette vue ne fait qu'habiller la même action en pastille de verre.
     ///
     /// **Verre PROÉMINENT (`.adaptiveGlassProminent`), pas régulier** : c'est
-    /// l'action TERMINALE de la feuille — le même traitement que la flèche de
-    /// `StoryComposerView+TopBar` (`adaptiveGlassProminent(in:tint:)`), pour
-    /// que le geste « publier depuis l'en-tête d'un composer » ait partout le
+    /// l'action TERMINALE de la feuille — le même traitement que la flèche du
+    /// socle (`adaptiveGlassProminent(in:tint:)`), pour que le geste « publier depuis l'en-tête d'un composer » ait partout le
     /// même relief. `.opacity` marque l'état désactivé : un remplissage plein
     /// aurait l'air armé même quand le gate refuse.
     ///

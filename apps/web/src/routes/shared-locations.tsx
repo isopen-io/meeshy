@@ -1,5 +1,7 @@
 import { SharedLocationsMap } from '@/components/shared-locations-map';
 import { Glyph } from '@/components/glyph';
+import { MAP_PERSON_PARAM } from '@/components/profile-see-on-map';
+import { useOptionalRoute } from '@/lib/router';
 import { Link } from '@/routes/route-table';
 import { translate } from '@/lib/i18n-catalog';
 import { translateCircles } from '@/lib/i18n-circles-catalog';
@@ -16,6 +18,8 @@ import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 export default function SharedLocationsScreen() {
   const language = currentInterfaceLanguage();
   const ready = useCirclesCatalog(language);
+  /* `?person=<id>` : la carte ouverte depuis la fiche de cette personne (#18881) ; absent, la carte de tous mes proches. */
+  const person = useOptionalRoute()?.search.get(MAP_PERSON_PARAM) ?? '';
   return (
     <main className="relative flex min-h-dvh flex-col gap-4 px-4 pb-8 pt-safe">
       <header className="flex shrink-0 items-center gap-2" style={{ height: 64 }}>
@@ -26,7 +30,7 @@ export default function SharedLocationsScreen() {
           {ready ? translateCircles(language, 'positions.title') : ''}
         </h1>
       </header>
-      <SharedLocationsMap language={language} />
+      <SharedLocationsMap key={person} language={language} {...(person === '' ? {} : { focusUserId: person })} />
     </main>
   );
 }

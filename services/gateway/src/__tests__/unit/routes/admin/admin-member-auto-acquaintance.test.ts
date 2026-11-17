@@ -85,6 +85,19 @@ function createMockPrisma(opts: PrismaOpts = {}) {
         return { id: 'prefs-1', ...row };
       }),
     },
+    // #18910 — l'écriture se fusionne DANS la base : le double applique le pipeline `$mergeObjects` à la ligne
+    // vivante, comme Mongo (une colonne qui n'est pas un objet vaut `{}`).
+    $runCommandRaw: jest.fn(async (command: AnyRecord) => {
+      const set = (command.updates as Array<{ u: Array<{ $set: AnyRecord }> }>)[0].u[0].$set;
+      Object.entries(set).forEach(([category, stage]) => {
+        if (typeof stage === 'string') return;
+        const [defaults, , submitted] = (stage as { $mergeObjects: Array<{ $literal?: AnyRecord }> }).$mergeObjects;
+        const live = row?.[category];
+        const stored = typeof live === 'object' && live !== null && !Array.isArray(live) ? (live as AnyRecord) : {};
+        row = { ...(row ?? {}), [category]: { ...defaults.$literal, ...stored, ...submitted.$literal } };
+      });
+      return { n: 1, nModified: 1 };
+    }),
     userPreference: {
       findMany: jest.fn(async () => []),
       deleteMany: jest.fn(async (_args: unknown) => ({ count: 0 })),
