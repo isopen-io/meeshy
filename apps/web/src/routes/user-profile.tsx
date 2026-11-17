@@ -233,8 +233,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
     enabled: showsContent && !isSelf,
     settled: !busy,
   });
-  const items = useMemo(() => relationActionsOf(verdict), [verdict]);
-  const ladder = useMemo(() => circleLadderOf(verdict), [verdict]);
+  const served = verdict.kind === 'served' ? verdict.view : null;
+  const items = useMemo(() => relationActionsOf(served), [served]);
+  /* En attente ou en échec, aucune rangée qui dépend du cercle ne s'offre : l'ancienne règle ne vaut que
+     pour un ancien serveur (revue #18879). */
+  const rowItems = useMemo(() => (verdict.kind === 'pending' ? [] : items), [verdict.kind, items]);
+  const ladder = useMemo(() => circleLadderOf(served), [served]);
 
   const onSignIn = useCallback(() => navigate(visitorSignInHref(window.location)), []);
   const onCallFailed = useCallback((message: string) => announce(message, 'error'), [announce]);
@@ -284,6 +288,8 @@ export function UserProfileView({ username }: { readonly username: string }) {
                   <ProfileFacePanel language={language} face="vitrine" idBase={faceBase}>
                     {/* LA VITRINE D'UN VISITEUR SANS COMPTE (#18878) : la page publique EST la Vitrine au cercle Public (loi 2), là où il arrive. */}
                     {isSelf || signedIn ? null : <VisitorVitrine language={language} targetId={person.id} />}
+                    {/* SA PROPRE FICHE MÈNE À SON ÉDITION dès la face où l'on arrive (revue #18879). */}
+                    {isSelf ? <ProfileSelfSection language={language} /> : null}
                     <ProfileStatsSection language={language} stats={stats} createdAt={person.createdAt} loading={statsLoading} />
                     <ProfileTabs language={language} tabs={offered} active={tab} onChange={selectTab} idBase={tabBase} accent={accent} />
                     <ProfileTabPanel idBase={tabBase} tab={tab}>
@@ -345,7 +351,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           onSignIn={onSignIn}
                           circle={
                             signedIn && (relation.kind === 'friend' || relation.kind === 'none') ? (
-                              <ProfileRelationRows language={language} person={person} relation={relation} viewerId={viewerId} items={items} announce={announce} />
+                              <ProfileRelationRows language={language} person={person} relation={relation} viewerId={viewerId} items={rowItems} announce={announce} />
                             ) : null
                           }
                         />
@@ -353,7 +359,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                       </>
                     )}
                     {/* APPELER suit le verdict du cercle commun : un appel qu'il ferme a sa rangée verrouillée, jamais un bouton à côté. */}
-                    {isSelf || !signedIn || !callsAvailable() || !rowOffered(items, 'call', true) ? null : (
+                    {isSelf || !signedIn || !callsAvailable() || !rowOffered(rowItems, 'call', true) ? null : (
                       <ProfileCall language={language} person={callPerson} online={online} onFailed={onCallFailed} />
                     )}
                   </ProfileFacePanel>

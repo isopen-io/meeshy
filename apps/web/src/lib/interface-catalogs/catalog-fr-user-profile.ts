@@ -122,6 +122,7 @@ const frUserProfile = {
   'userProfile.relation.links.title': 'Son lien',
   'userProfile.relation.links.copy': 'Copier son lien',
   'userProfile.relation.links.copied': 'Lien copié',
+  'userProfile.relation.links.copyFailed': 'Copie impossible',
   'userProfile.relation.links.send': 'Envoyer son profil',
 } as const;
 

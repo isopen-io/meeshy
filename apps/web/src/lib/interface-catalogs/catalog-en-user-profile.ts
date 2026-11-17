@@ -115,6 +115,7 @@ const enUserProfile = {
   'userProfile.relation.links.title': 'Their link',
   'userProfile.relation.links.copy': 'Copy their link',
   'userProfile.relation.links.copied': 'Link copied',
+  'userProfile.relation.links.copyFailed': 'Could not copy',
   'userProfile.relation.links.send': 'Send their profile',
 } satisfies UserProfileCatalogSlice;
 

@@ -115,6 +115,7 @@ const ptUserProfile = {
   'userProfile.relation.links.title': 'O link dele',
   'userProfile.relation.links.copy': 'Copiar o link',
   'userProfile.relation.links.copied': 'Link copiado',
+  'userProfile.relation.links.copyFailed': 'Não foi possível copiar',
   'userProfile.relation.links.send': 'Enviar o perfil',
 } satisfies UserProfileCatalogSlice;
 

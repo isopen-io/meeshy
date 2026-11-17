@@ -115,6 +115,7 @@ const arUserProfile = {
   'userProfile.relation.links.title': 'رابطه',
   'userProfile.relation.links.copy': 'انسخ رابطه',
   'userProfile.relation.links.copied': 'تم نسخ الرابط',
+  'userProfile.relation.links.copyFailed': 'تعذّر النسخ',
   'userProfile.relation.links.send': 'أرسل ملفه',
 } satisfies UserProfileCatalogSlice;
 

@@ -115,6 +115,7 @@ const esUserProfile = {
   'userProfile.relation.links.title': 'Su enlace',
   'userProfile.relation.links.copy': 'Copiar su enlace',
   'userProfile.relation.links.copied': 'Enlace copiado',
+  'userProfile.relation.links.copyFailed': 'No se pudo copiar',
   'userProfile.relation.links.send': 'Enviar su perfil',
 } satisfies UserProfileCatalogSlice;
 

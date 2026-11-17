@@ -3,7 +3,7 @@ import type { ProfileCircleView } from '@meeshy/shared/utils/profile-circle-view
 
 import { circleVerdictKeysOf, circleVerdictStateOf, verdictMustRefresh } from './user-profile-circle-verdict';
 
-const view: ProfileCircleView = { isSelf: false, level: 'friend', sharesCommunity: false, capabilities: {}, missing: null };
+const view: ProfileCircleView = { isSelf: false, level: 'FRIEND', sharesCommunity: false, capabilities: {}, missing: null };
 
 describe('le verdict du cercle distingue un ancien serveur d’un verdict qui n’est pas encore là (revue #18879)', () => {
   test('servi : le verdict', () => {
