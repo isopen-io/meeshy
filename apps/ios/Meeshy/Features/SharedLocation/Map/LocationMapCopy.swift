@@ -13,8 +13,22 @@ enum LocationMapCopy {
     static var layers: String { String(localized: "locationMap.layers", defaultValue: "Changer le fond de carte", bundle: .main) }
     static var recenter: String { String(localized: "locationMap.recenter", defaultValue: "Recentrer la carte", bundle: .main) }
     static var someone: String { String(localized: "circles.locations.someone", defaultValue: "Quelqu'un", bundle: .main) }
-    static var myPositionNotShared: String {
-        String(localized: "locationMap.me.notShared", defaultValue: "Ma position — non partagée", bundle: .main)
+    static func myPosition(_ share: LocationMapOwnShare, name: String?) -> String {
+        switch share {
+        case .notShared:
+            return String(localized: "locationMap.me.notShared", defaultValue: "Ma position — non partagée", bundle: .main)
+        case .shared:
+            return String(localized: "locationMap.me.shared", defaultValue: "Ma position — partagée", bundle: .main)
+        case .sharedWithThem:
+            return String(format: String(localized: "locationMap.me.sharedWith", defaultValue: "Ma position — partagée avec %@",
+                                         bundle: .main), name ?? someone)
+        }
+    }
+
+    /// La pilule de précision, en légende de la carte : « Précision quartier ».
+    static func precisionPill(_ precision: SharedLocationPrecision) -> String {
+        String(format: String(localized: "locationMap.precision.pill", defaultValue: "Précision %@", bundle: .main),
+               precisionWord(precision))
     }
 
     static func view(_ precision: SharedLocationPrecision) -> String {
@@ -87,6 +101,7 @@ enum LocationMapCopy {
     static var call: String { String(localized: "locationMap.action.call", defaultValue: "Appeler", bundle: .main) }
     static var shareMine: String { String(localized: "locationMap.action.shareMine", defaultValue: "Partager la mienne", bundle: .main) }
     static var history: String { String(localized: "locationMap.action.history", defaultValue: "Historique", bundle: .main) }
+    static var mapShortcut: String { String(localized: "locationMap.shortcut.map", defaultValue: "Carte", bundle: .main) }
 
     static func notSharingTitle(name: String) -> String {
         String(format: String(localized: "locationMap.person.notSharing", defaultValue: "%@ ne partage pas sa position", bundle: .main), name)
@@ -111,6 +126,16 @@ enum LocationMapCopy {
 
     static var around: String { String(localized: "locationMap.nearby.around", defaultValue: "Autour de toi", bundle: .main) }
     static var nearestFirst: String { String(localized: "locationMap.nearby.nearestFirst", defaultValue: "Du plus près", bundle: .main) }
+    static var sortLabel: String { String(localized: "locationMap.nearby.sort", defaultValue: "Trier", bundle: .main) }
+    static var isNew: String { String(localized: "locationMap.nearby.new", defaultValue: "Nouveau", bundle: .main) }
+
+    static func sort(_ sort: NearbySort) -> String {
+        switch sort {
+        case .nearest: return nearestFirst
+        case .endingSoon: return String(localized: "locationMap.nearby.endingSoon", defaultValue: "Fin la plus proche", bundle: .main)
+        case .byCircle: return String(localized: "locationMap.nearby.byCircle", defaultValue: "Par cercle", bundle: .main)
+        }
+    }
     static var notOnMap: String { String(localized: "locationMap.nearby.notOnMap", defaultValue: "Pas sur la carte", bundle: .main) }
     static var filtersLabel: String { String(localized: "locationMap.nearby.filters", defaultValue: "Cercles montrés", bundle: .main) }
     static var all: String { String(localized: "locationMap.nearby.all", defaultValue: "Tous", bundle: .main) }

@@ -13,6 +13,10 @@ struct NearbyMapScreen: View {
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
     @State private var filter: NearbyCircleFilter = .all
+    @State private var sort: NearbySort = .nearest
+    /// « Nouveau » à côté du titre tant que la carte de mes proches n'a jamais été ouverte sur cet appareil.
+    @AppStorage("locationMap.nearby.opened") private var wasOpened = false
+    @State private var showsNew = false
     @State private var me: SharedLocationFix?
     @State private var opened: ShareMyLocationRecipient?
     @State private var sharesMine = false
@@ -27,7 +31,7 @@ struct NearbyMapScreen: View {
     }
 
     private var shown: [SharedLocationPin] {
-        let placements = NearbyRules.arranged(model.pins.map { placement($0) }, filter: filter)
+        let placements = NearbyRules.arranged(model.pins.map { placement($0) }, filter: filter, sort: sort)
         return placements.compactMap { model.pin(for: $0.id) }
     }
 
@@ -66,7 +70,9 @@ struct NearbyMapScreen: View {
             LocationMapCanvas(focus: focus, onViewport: { viewport = $0 },
                               onRegionSettled: { model.regionChanged($0.bounds) })
                 .ignoresSafeArea()
-            LocationMapPinsLayer(viewport: viewport, pins: shown, me: me, onSelect: { open($0) })
+            LocationMapPinsLayer(viewport: viewport, pins: shown, me: me,
+                                 meShare: LocationMapOwnShare.resolve(recipientIds: recipientIds, focusedUserId: nil),
+                                 onSelect: { open($0) })
                 .ignoresSafeArea()
             VStack(spacing: MeeshySpacing.md) {
                 header
@@ -89,11 +95,18 @@ struct NearbyMapScreen: View {
         .onMeeshyAnchoredSheetFootprint { sheetHeight = $0?.height ?? 0 }
     }
 
+    private var recipientIds: [String] { sharing.roster.pruned(now: Date()).recipients.map(\.userId) }
+
     private var header: some View {
         HStack(spacing: MeeshySpacing.md) {
             MeeshyGlassButton(systemImage: "chevron.left", label: LocationMapCopy.back, size: .s44, action: { dismiss() })
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(LocationMapCopy.nearbyTitle).font(.headline.weight(.bold)).foregroundStyle(Color.white)
+                HStack(spacing: MeeshySpacing.sm) {
+                    Text(LocationMapCopy.nearbyTitle).font(.headline.weight(.bold)).foregroundStyle(Color.white)
+                    if showsNew {
+                        MeeshyBadge(.label(LocationMapCopy.isNew), surface: .solid, kind: .accent)
+                    }
+                }
                 Text(LocationMapCopy.nearbySubtitle(model.pins.count)).font(.caption).foregroundStyle(Color.white.opacity(0.75))
             }
             .accessibilityElement(children: .combine)
@@ -102,8 +115,27 @@ struct NearbyMapScreen: View {
             .padding(.vertical, MeeshySpacing.sm)
             .meeshyGlass(in: Capsule(), tone: .deep)
             Spacer()
+            arrangeMenu
         }
         .padding(.horizontal, MeeshySpacing.lg)
+    }
+
+    /// L'entonnoir : l'ordre de « Autour de toi » et le cercle montré, les mêmes que les puces.
+    private var arrangeMenu: some View {
+        Menu {
+            Picker(LocationMapCopy.sortLabel, selection: $sort) {
+                ForEach(NearbySort.allCases, id: \.self) { item in Text(LocationMapCopy.sort(item)).tag(item) }
+            }
+            Picker(LocationMapCopy.filtersLabel, selection: $filter) {
+                ForEach(NearbyCircleFilter.allCases, id: \.self) { item in
+                    Text(item.level.map { CircleLevelNames.title(of: $0) } ?? LocationMapCopy.all).tag(item)
+                }
+            }
+        } label: {
+            MeeshyGlassButtonFace(systemImage: "line.3.horizontal.decrease", kind: filter == .all && sort == .nearest ? .normal : .active)
+        }
+        .accessibilityLabel(LocationMapCopy.sortLabel)
+        .accessibilityValue("\(LocationMapCopy.sort(sort)), \(filter.level.map { CircleLevelNames.title(of: $0) } ?? LocationMapCopy.all)")
     }
 
     private var filters: some View {
@@ -145,7 +177,7 @@ struct NearbyMapScreen: View {
                 MeeshySectionHeader(title: LocationMapCopy.around, count: shown.count) {
                     EmptyView()
                 } accessory: {
-                    MeeshyBadge(.label(LocationMapCopy.nearestFirst), leading: .systemImage("arrow.up.arrow.down"),
+                    MeeshyBadge(.label(LocationMapCopy.sort(sort)), leading: .systemImage("arrow.up.arrow.down"),
                                 surface: .outline, size: .s28)
                 }
                 aroundList(now: context.date)
@@ -211,7 +243,8 @@ struct NearbyMapScreen: View {
     // MARK: - Données
 
     private func placement(_ pin: SharedLocationPin) -> NearbyPlacement {
-        NearbyPlacement(id: pin.id, circle: pin.circle, distanceMeters: distance(to: pin))
+        NearbyPlacement(id: pin.id, circle: pin.circle, distanceMeters: distance(to: pin),
+                        remaining: pin.deadline.timeIntervalSinceNow)
     }
 
     private func distance(to pin: SharedLocationPin) -> Double? {
@@ -226,6 +259,8 @@ struct NearbyMapScreen: View {
     }
 
     private func appear() async {
+        showsNew = !wasOpened
+        wasOpened = true
         me = LocationMapOwnPosition.lastKnown()
         await model.appeared()
         refocus(animated: false)

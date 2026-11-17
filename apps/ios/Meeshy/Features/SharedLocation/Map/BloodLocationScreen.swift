@@ -12,6 +12,7 @@ struct BloodLocationScreen: View {
 
     @StateObject private var model: BloodLocationModel
     @StateObject private var people = SharedLocationsMapViewModel()
+    @ObservedObject private var sharing: SharedLocationSharingCenter
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
     @State private var isPlaying = false
@@ -21,11 +22,15 @@ struct BloodLocationScreen: View {
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(userId: String, displayName: String) {
+    init(userId: String, displayName: String, sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
         self.userId = userId
         self.displayName = displayName
         _model = StateObject(wrappedValue: BloodLocationModel(userId: userId))
+        _sharing = ObservedObject(wrappedValue: sharing)
     }
+
+    private var recipientIds: [String] { sharing.roster.pruned(now: Date()).recipients.map(\.userId) }
+    private var ownShare: LocationMapOwnShare { LocationMapOwnShare.resolve(recipientIds: recipientIds, focusedUserId: userId) }
 
     private var tint: Color { LocationMapTint.color(for: .blood) }
 
@@ -35,7 +40,7 @@ struct BloodLocationScreen: View {
                 .ignoresSafeArea()
             traceLayer
             LocationMapPinsLayer(viewport: viewport, pins: people.pins.filter { $0.id == userId },
-                                 me: me)
+                                 me: me, meShare: ownShare, focusedName: displayName)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
             chrome
@@ -43,7 +48,8 @@ struct BloodLocationScreen: View {
         .meeshyAnchoredSheet(isPresented: .constant(true), height: .detents([0.5, 0.9], initial: 0),
                              isDragDismissEnabled: false, closeLabel: nil, surface: .dark, outside: .passesThrough) {
             ScrollView { BloodLocationSheet(model: model, displayName: displayName, tint: tint,
-                                            isPlaying: $isPlaying, onShareMine: { sharesMine = true }) }
+                                            isPlaying: $isPlaying, onShareMine: { sharesMine = true },
+                                            ownShare: ownShare, seenByCount: recipientIds.count) }
         }
         .task {
             me = LocationMapOwnPosition.lastKnown()

@@ -9,6 +9,9 @@ struct BloodLocationSheet: View {
     let tint: Color
     @Binding var isPlaying: Bool
     let onShareMine: () -> Void
+    /// Ma position part-elle vers ce Sang, et combien de personnes la voient ?
+    var ownShare: LocationMapOwnShare = .notShared
+    var seenByCount = 0
 
     @Environment(\.locale) private var locale
 
@@ -92,8 +95,8 @@ struct BloodLocationSheet: View {
 
     private var mine: some View {
         VStack(spacing: 0) {
-            MeeshyToggleRow(LocationMapCopy.myPositionNotShared, systemImage: "mappin.and.ellipse",
-                            subtitle: LocationMapCopy.nobodySeesMe, accessory: .chevron, showsDivider: true, tint: tint,
+            MeeshyToggleRow(LocationMapCopy.myPosition(ownShare, name: displayName), systemImage: "mappin.and.ellipse",
+                            subtitle: seenByCount == 0 ? LocationMapCopy.nobodySeesMe : LocationMapCopy.seenBy(seenByCount), accessory: .chevron, showsDivider: true, tint: tint,
                             action: onShareMine)
             MeeshyToggleRow(BloodLocationCopy.ghostTitle, systemImage: "theatermasks",
                             subtitle: BloodLocationCopy.ghostSubtitle(name: displayName),

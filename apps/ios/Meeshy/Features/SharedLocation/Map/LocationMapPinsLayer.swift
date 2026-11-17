@@ -25,6 +25,9 @@ struct LocationMapPinsLayer: View {
     var travellingId: String?
     var hasArrived = true
     var me: SharedLocationFix?
+    /// Ce que dit mon épingle : ma position part-elle, et vers la personne regardée ?
+    var meShare: LocationMapOwnShare = .notShared
+    var focusedName: String?
     var onSelect: ((String) -> Void)?
 
     var body: some View {
@@ -81,7 +84,7 @@ struct LocationMapPinsLayer: View {
     }
 
     private var ownPin: some View {
-        MeeshyMapPin(label: LocationMapCopy.myPositionNotShared, kind: .own) {
+        MeeshyMapPin(label: LocationMapCopy.myPosition(meShare, name: focusedName), kind: .own) {
             ZStack {
                 MeeshyColors.brandPrimary
                 Image(systemName: "person.fill")

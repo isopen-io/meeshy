@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import GameController
 import MeeshySDK
 import MeeshyUI
 
@@ -19,6 +20,7 @@ struct PersonLocationMapScreen: View {
 
     @StateObject private var model = SharedLocationsMapViewModel()
     @StateObject private var places = LocationPlaceNamer()
+    @ObservedObject private var sharing = SharedLocationSharingHolder.center()
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
     @State private var style: LocationMapStyle = .standard
@@ -27,11 +29,16 @@ struct PersonLocationMapScreen: View {
     @State private var sharesMine = false
     @State private var showsHistory = false
     @State private var bloodHistoryOpen = false
+    @State private var hasKeyboard = GCKeyboard.coalesced != nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var pin: SharedLocationPin? { model.pin(for: userId) }
+    private var ownShare: LocationMapOwnShare {
+        LocationMapOwnShare.resolve(recipientIds: sharing.roster.pruned(now: Date()).recipients.map(\.userId),
+                                    focusedUserId: userId)
+    }
 
     var body: some View {
         MeeshyAvatarMorphScopeHost {
@@ -49,6 +56,12 @@ struct PersonLocationMapScreen: View {
                     ) { sheetContent }
                 }
             }
+        }
+        .background { shortcuts }
+        .environment(\.meeshyHasKeyboard, hasKeyboard)
+        .onReceive(NotificationCenter.default.publisher(for: .GCKeyboardDidConnect)) { _ in hasKeyboard = true }
+        .onReceive(NotificationCenter.default.publisher(for: .GCKeyboardDidDisconnect)) { _ in
+            hasKeyboard = GCKeyboard.coalesced != nil
         }
         .task { await appear() }
         .adaptiveOnChange(of: model.pins, initial: true) { _, pins in Task { await places.resolve(pins.filter { $0.id == userId }) } }
@@ -69,12 +82,53 @@ struct PersonLocationMapScreen: View {
                 .ignoresSafeArea()
             trace
             LocationMapPinsLayer(viewport: viewport, pins: model.pins, selectedId: userId, travellingId: userId,
-                                 hasArrived: hasArrived || reduceMotion, me: me)
+                                 hasArrived: hasArrived || reduceMotion, me: me, meShare: ownShare,
+                                 focusedName: displayName)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
             if !hasArrived, !reduceMotion, let pin { heroAvatar(pin) }
             chrome
+            if sizeClass == .regular { legend }
         }
+    }
+
+    // MARK: - Le clavier (K55, planche iPad-Split)
+
+    /// ⌘M referme la carte (on revient à la fiche), ⌘↵ écrit : invisibles, mais reconnus quand un clavier est branché.
+    private var shortcuts: some View {
+        ZStack {
+            Button(LocationMapCopy.close) { dismiss() }
+                .keyboardShortcut("m", modifiers: .command)
+            if let write = actions(for: pin)?.onWrite {
+                Button(LocationMapCopy.write, action: write)
+                    .keyboardShortcut(.return, modifiers: .command)
+            }
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
+    }
+
+    /// En bas de la carte : la précision servie, puis les raccourcis (rien sans clavier).
+    private var legend: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: MeeshySpacing.md) {
+                if let pin {
+                    MeeshyBadge(.label(LocationMapCopy.precisionPill(pin.precision)), leading: .systemImage("circle.dashed"),
+                                surface: .glass, size: .s36)
+                }
+                MeeshyKeyLegend(items: legendItems, container: .glassBar)
+                Spacer()
+            }
+            .padding(MeeshySpacing.lg)
+        }
+    }
+
+    private var legendItems: [MeeshyKeyLegendItem] {
+        let map = MeeshyKeyLegendItem(id: "map", combos: [[.primary, .character("M")]], title: LocationMapCopy.mapShortcut)
+        guard onWrite != nil, pin != nil else { return [map] }
+        return [map, MeeshyKeyLegendItem(id: "write", combos: [[.primary, .enter]], title: LocationMapCopy.write)]
     }
 
     @ViewBuilder
@@ -153,6 +207,10 @@ struct PersonLocationMapScreen: View {
         ScrollView {
             sheetContent.padding(.top, MeeshySpacing.xxl)
         }
+    }
+
+    private func actions(for pin: SharedLocationPin?) -> PersonLocationActions? {
+        pin.map { actions($0) }
     }
 
     private func actions(_ pin: SharedLocationPin) -> PersonLocationActions {

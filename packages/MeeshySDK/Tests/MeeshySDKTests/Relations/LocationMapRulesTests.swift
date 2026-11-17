@@ -81,6 +81,30 @@ struct LocationMapRulesTests {
         #expect(counts[.close] == 1)
     }
 
+    @Test("le tri : « Fin la plus proche » met d'abord le partage qui s'achève, « Par cercle » le Sang avant le Proche et l'Ami")
+    func nearby_sorts() {
+        let people = [
+            NearbyPlacement(id: "leo", circle: .close, distanceMeters: 2_400, remaining: 42 * 60),
+            NearbyPlacement(id: "x", circle: nil, distanceMeters: 10, remaining: nil),
+            NearbyPlacement(id: "mina", circle: .blood, distanceMeters: 300, remaining: 7 * 3_600),
+            NearbyPlacement(id: "tomas", circle: .friend, distanceMeters: 24_000, remaining: 5 * 60),
+        ]
+        let ending = NearbyRules.arranged(people, filter: .all, sort: .endingSoon).map(\.id)
+        #expect(ending == ["tomas", "leo", "mina", "x"])
+        let byCircle = NearbyRules.arranged(people, filter: .all, sort: .byCircle).map(\.id)
+        #expect(byCircle == ["mina", "leo", "tomas", "x"])
+        let nearest = NearbyRules.arranged(people, filter: .all, sort: .nearest).map(\.id)
+        #expect(nearest == ["x", "mina", "leo", "tomas"])
+    }
+
+    @Test("mon épingle dit si ma position part : non partagée, partagée, ou partagée avec la personne regardée")
+    func ownPin_saysWhetherMyPositionIsShared() {
+        #expect(LocationMapOwnShare.resolve(recipientIds: [], focusedUserId: nil) == .notShared)
+        #expect(LocationMapOwnShare.resolve(recipientIds: ["leo"], focusedUserId: nil) == .shared)
+        #expect(LocationMapOwnShare.resolve(recipientIds: ["leo"], focusedUserId: "leo") == .sharedWithThem)
+        #expect(LocationMapOwnShare.resolve(recipientIds: ["mina"], focusedUserId: "leo") == .notShared)
+    }
+
     @Test("un partage qui s'arrête passe « pas sur la carte » ; il en sort s'il repart, et s'oublie après 8 h")
     func endings_followTheServedMap() {
         let before = ["yuki": entry(minutesLeft: 10, circle: .friend), "leo": entry(minutesLeft: 42)]

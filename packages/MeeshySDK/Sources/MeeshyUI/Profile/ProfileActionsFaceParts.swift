@@ -13,6 +13,7 @@ struct ProfileLocationMapAction: View {
 
     var body: some View {
         MeeshyLabeledAction(title: Self.title, systemImage: "map", tint: tint, hint: Self.hint, action: { isOpen = true })
+            .keyboardShortcut("m", modifiers: .command)
             .fullScreenCover(isPresented: $isOpen) { map.destination(request) }
     }
 

@@ -105,27 +105,64 @@ public struct NearbyPlacement: Identifiable, Equatable, Sendable {
     public let id: String
     public let circle: RelationLevel?
     public let distanceMeters: Double?
+    /// Le temps qui reste au partage, quand il est connu.
+    public let remaining: TimeInterval?
 
-    public init(id: String, circle: RelationLevel?, distanceMeters: Double?) {
+    public init(id: String, circle: RelationLevel?, distanceMeters: Double?, remaining: TimeInterval? = nil) {
         self.id = id
         self.circle = circle
         self.distanceMeters = distanceMeters.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+        self.remaining = remaining.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
     }
+}
+
+/// L'ordre de « Autour de toi » : du plus près, la fin la plus proche d'abord, ou par cercle (Sang, Proche, Ami).
+public enum NearbySort: String, CaseIterable, Sendable {
+    case nearest, endingSoon, byCircle
 }
 
 public enum NearbyRules {
     /// « Du plus près » : par distance croissante, les distances inconnues à la fin, l'identifiant départageant.
-    public static func arranged(_ people: [NearbyPlacement], filter: NearbyCircleFilter) -> [NearbyPlacement] {
+    public static func arranged(_ people: [NearbyPlacement], filter: NearbyCircleFilter,
+                                sort: NearbySort = .nearest) -> [NearbyPlacement] {
         people
             .filter { filter.admits($0.circle) }
-            .sorted { lhs, rhs in
-                switch (lhs.distanceMeters, rhs.distanceMeters) {
-                case let (l?, r?) where l != r: return l < r
-                case (.some, nil): return true
-                case (nil, .some): return false
-                default: return lhs.id < rhs.id
-                }
-            }
+            .sorted { lhs, rhs in precedes(lhs, rhs, sort: sort) }
+    }
+
+    private static func precedes(_ lhs: NearbyPlacement, _ rhs: NearbyPlacement, sort: NearbySort) -> Bool {
+        switch sort {
+        case .nearest:
+            return nearer(lhs, rhs)
+        case .endingSoon:
+            return ascending(lhs.remaining, rhs.remaining) ?? nearer(lhs, rhs)
+        case .byCircle:
+            let left = circleRank(lhs.circle), right = circleRank(rhs.circle)
+            return left != right ? left < right : nearer(lhs, rhs)
+        }
+    }
+
+    private static func nearer(_ lhs: NearbyPlacement, _ rhs: NearbyPlacement) -> Bool {
+        ascending(lhs.distanceMeters, rhs.distanceMeters) ?? (lhs.id < rhs.id)
+    }
+
+    /// L'ordre croissant de deux valeurs, les inconnues à la fin ; `nil` quand elles ne départagent pas.
+    private static func ascending(_ lhs: Double?, _ rhs: Double?) -> Bool? {
+        switch (lhs, rhs) {
+        case let (l?, r?) where l != r: return l < r
+        case (.some, nil): return true
+        case (nil, .some): return false
+        default: return nil
+        }
+    }
+
+    private static func circleRank(_ circle: RelationLevel?) -> Int {
+        switch circle {
+        case .blood: return 0
+        case .close: return 1
+        case .friend: return 2
+        default: return 3
+        }
     }
 
     /// Le compte de chaque puce, « Tous » compris.
@@ -163,5 +200,16 @@ public struct SharedLocationEndings: Equatable, Sendable {
     /// Du plus récent au plus ancien.
     public var ordered: [(id: String, endedAt: Date)] {
         endedAt.map { (id: $0.key, endedAt: $0.value) }.sorted { ($1.endedAt, $0.id) < ($0.endedAt, $1.id) }
+    }
+}
+
+/// Ce que dit mon épingle : ma position ne part vers personne, elle part, ou elle part vers la personne regardée.
+/// Sur la carte d'une personne, une position partagée avec d'autres qu'elle reste « non partagée » pour elle.
+public enum LocationMapOwnShare: Equatable, Sendable {
+    case notShared, shared, sharedWithThem
+
+    public static func resolve(recipientIds: [String], focusedUserId: String?) -> LocationMapOwnShare {
+        guard let focusedUserId else { return recipientIds.isEmpty ? .notShared : .shared }
+        return recipientIds.contains(focusedUserId) ? .sharedWithThem : .notShared
     }
 }
