@@ -33,6 +33,15 @@ describe('prévenir les destinataires au démarrage (#19204)', () => {
     expect(notices.every((n) => n.emitterId === EMETTEUR && n.durationMinutes === 60 && n.expiresAt === new Date(T0 + HEURE).toISOString())).toBe(true);
   });
 
+  it('l\'avis dit la durée pour CE lecteur : son échéance propre, plus proche que le terme', async () => {
+    const { notices, demarrer } = prevenu();
+
+    await demarrer({ notifyRecipients: true }, [{ userId: AMI, expiresInSeconds: 600 }, { userId: PROCHE }]);
+
+    expect(notices.find((n) => n.readerId === AMI)).toMatchObject({ durationMinutes: 10, expiresAt: new Date(T0 + 600_000).toISOString() });
+    expect(notices.find((n) => n.readerId === PROCHE)).toMatchObject({ durationMinutes: 60 });
+  });
+
   it('l\'avis ne porte aucune position, ni précision, ni autre destinataire', async () => {
     const { notices, demarrer } = prevenu();
 

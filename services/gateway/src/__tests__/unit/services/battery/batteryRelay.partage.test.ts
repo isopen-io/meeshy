@@ -37,7 +37,7 @@ const LIENS: readonly CircleLink[] = [
   [EMETTEUR, BLOQUEUR, 'CLOSE'],
 ];
 
-function monde(options: { readonly accordes?: readonly string[]; readonly coupure?: boolean } = {}) {
+function monde(options: { readonly accordes?: readonly string[]; readonly coupure?: boolean; readonly fantome?: boolean } = {}) {
   const world = messagingWorld({
     links: LIENS,
     users: [EMETTEUR, PROCHE, SANG_REFUSE, AMI, BLOQUEUR].map((id) => ({
@@ -45,6 +45,7 @@ function monde(options: { readonly accordes?: readonly string[]; readonly coupur
       birthDate: ADULT_BIRTH,
       ...(id === BLOQUEUR ? { blockedUserIds: [EMETTEUR] } : {}),
       ...(id === EMETTEUR && options.coupure ? { batterySharingDisabledAt: new Date(T0) } : {}),
+      ...(id === EMETTEUR && options.fantome ? { locationGhostAt: new Date(T0) } : {}),
     })),
   });
   const settings = table([{ ownerId: EMETTEUR, otherId: SANG_REFUSE, batteryShared: false }]);
@@ -105,6 +106,14 @@ describe('la batterie accompagne le partage de position (#19204)', () => {
 
   it('la coupure globale ferme tout, partage ou non', async () => {
     const m = monde({ accordes: [PROCHE], coupure: true });
+
+    await m.releve(18);
+
+    expect(m.vers(PROCHE)).toEqual([]);
+  });
+
+  it('l\'émetteur en fantôme met le partage en pause, et sa batterie avec lui', async () => {
+    const m = monde({ accordes: [PROCHE], fantome: true });
 
     await m.releve(18);
 

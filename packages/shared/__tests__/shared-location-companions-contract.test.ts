@@ -63,7 +63,7 @@ describe('prévenir, prolonger, redemander, la batterie pendant le partage (#192
 
   it('les gabarits existent dans les huit langues et ne portent aucune coordonnée', () => {
     for (const lang of ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar', 'zh-Hans']) {
-      for (const key of ['location.startedAction', 'location.startedBody', 'location.extendAction', 'location.reaskAction', 'location.requestBody'] as const) {
+      for (const key of ['location.startedAction', 'location.startedBody', 'location.startedBodyMinutes', 'location.extendAction', 'location.reaskAction', 'location.requestBody'] as const) {
         const text = notificationString(lang, key, { count: 8 });
         expect(text.length).toBeGreaterThan(0);
         expect(text).not.toMatch(/\{|latitude|longitude/);

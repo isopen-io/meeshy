@@ -64,6 +64,14 @@ describe('prévenu d\'un partage (#19204)', () => {
     expect(m.created[0]).toMatchObject({ lang: 'en', title: 'Léo is sharing their location with you', content: 'For 1 h — tap to see them on the map' });
   });
 
+  it('une durée qui n\'est pas une heure pleine se dit en minutes', async () => {
+    const m = monde();
+
+    await m.notices.started([{ emitterId: EMETTEUR, readerId: LECTEUR, durationMinutes: 10, expiresAt: TERME }]);
+
+    expect(m.created[0]).toMatchObject({ content: 'Pendant 10 min — touche pour le voir sur la carte', metadata: { durationMinutes: 10 } });
+  });
+
   it('un compte introuvable n\'est pas prévenu, sans arrêter les autres', async () => {
     const m = monde();
 
