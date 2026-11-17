@@ -138,8 +138,15 @@ final class CallViewGlassGuardTests: XCTestCase {
         let glass = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift")
         )
-        let modifier = try block("func callControlsGlass<S: Shape>(in shape: S) -> some View {", until: "\n    }\n", in: glass)
+        let entry = try block("func callControlsGlass<S: Shape>(in shape: S) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(entry.contains("modifier(CallControlsBlockSurface(shape: shape))"))
+        let modifier = try block("struct CallControlsBlockSurface<S: Shape>: ViewModifier {", until: "\n}\n", in: glass)
         XCTAssertTrue(modifier.contains(".adaptiveGlass(in: shape)"))
+        XCTAssertTrue(
+            modifier.contains("if CallControlsBlockRule.carriesItsOwnGlass(isLiquidGlassAvailable: Platform.isIOS26OrLater) {"),
+            "#19239 — sous iOS 26 le bloc ne pose pas un verre sous des boutons de verre"
+        )
+        XCTAssertEqual(modifier.components(separatedBy: ".adaptiveGlass(").count - 1, 1, "Le seul verre du bloc est celui d'avant iOS 26")
         let controlCircle = try block("func callControlGlass(diameter: CGFloat, isActive: Bool, tint: Color) -> some View {", until: "\n    }\n", in: glass)
         XCTAssertTrue(controlCircle.contains(".adaptiveLiquidGlass(in: Circle()"), "Le disque de l'en-tête est un verre dessiné avant iOS 26")
         XCTAssertTrue(controlCircle.contains("interactive: true"))
