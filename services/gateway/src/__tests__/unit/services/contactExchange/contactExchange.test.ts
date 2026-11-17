@@ -39,7 +39,7 @@ const compte = (id: string, username: string, overrides: Partial<Compte> = {}): 
   id, username, displayName: username.toUpperCase(), avatar: null, blockedUserIds: [], isActive: true, deletedAt: null, deactivatedAt: null, ...overrides,
 });
 
-function guichet(options: { comptes?: Compte[]; acceptsRequests?: boolean; befriends?: boolean; vitrineServie?: boolean } = {}) {
+function guichet(options: { comptes?: Compte[]; acceptsRequests?: boolean; befriends?: boolean | 'panne'; vitrineServie?: boolean } = {}) {
   let clock = T0;
   const comptes = new Map((options.comptes ?? [compte(EMETTEUR, 'sofia'), compte(LECTEUR, 'aissa')]).map((c) => [c.id, c]));
   const cache = new Map<string, { value: string; until: number }>();
@@ -72,7 +72,11 @@ function guichet(options: { comptes?: Compte[]; acceptsRequests?: boolean; befri
       return options.vitrineServie === false ? null : { id: issuerId, username: 'sofia', bio: 'Programmatrice de festival.' };
     },
     acceptsRequests: async () => options.acceptsRequests ?? true,
-    befriend: async (pair) => { amities.push(pair); return options.befriends ?? true; },
+    befriend: async (pair) => {
+      amities.push(pair);
+      if (options.befriends === 'panne') throw new Error('base indisponible');
+      return options.befriends ?? true;
+    },
   };
   return {
     deps, emissions, amities, vitrines, cache,
@@ -174,6 +178,14 @@ describe('accepter un jeton (#19205)', () => {
     const res = await g.accepter(await jeton(g, ['friendRequest']));
     expect(res.success && res.data.friendRequest).toBe('not-sent');
     expect((g.emissions[0].payload as { received: string[] }).received).toEqual([]);
+  });
+
+  it('le cœur des demandes tombe en panne : le jeton déjà consommé rend quand même la vitrine, la demande dite `not-sent`', async () => {
+    const g = guichet({ befriends: 'panne' });
+    const res = await g.accepter(await jeton(g));
+    expect(res).toMatchObject({ success: true, data: { friendRequest: 'not-sent' } });
+    expect(res.success && 'profile' in res.data).toBe(true);
+    expect((g.emissions[0].payload as { received: string[] }).received).toEqual(['vitrine']);
   });
 
   it('rejoué : le second passage reçoit le refus générique, rien ne repart', async () => {
