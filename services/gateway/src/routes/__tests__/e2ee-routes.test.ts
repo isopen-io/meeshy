@@ -144,11 +144,12 @@ describe('routes /e2ee', () => {
     expect(again.statusCode).toBe(404);
   });
 
-  it("liste MES appareils chiffrés avec plateforme, libellé, dates et l'appareil courant — à moi seul, sans aucune clé", async () => {
+  it("liste MES appareils chiffrés avec plateforme, libellé, dates, l'appareil courant, la clé d'identité PUBLIQUE et les capacités — à moi seul, sans clé privée ni session (#19155)", async () => {
     const { app } = await buildApp();
+    const aliceKeys = fakeDeviceKeys({ oneTime: 2, kyber: 2 });
     await app.inject({
       method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' },
-      payload: { ...enrollment(ALICE), label: 'iPhone d’Alice' },
+      payload: { ...enrollment(ALICE, aliceKeys), label: 'iPhone d’Alice' },
     });
     await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment(BOB) });
 
@@ -167,9 +168,11 @@ describe('routes /e2ee', () => {
       enrolledAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       lastSeenAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       current: true,
+      identityKey: aliceKeys.identityKey,
+      capabilities: [],
     });
     expect(fromAnotherSession.json().data.devices).toEqual([expect.objectContaining({ deviceId: 1, current: false })]);
-    expect(JSON.stringify(fromEnrolledDevice.json())).not.toMatch(/identityKey|sessionId|signedPreKey|kyber/);
+    expect(JSON.stringify(fromEnrolledDevice.json())).not.toMatch(/sessionId|signedPreKey|kyber|preKey|private|pushToken/i);
     expect(anonymous.statusCode).toBe(401);
   });
 
@@ -296,5 +299,107 @@ describe('routes /e2ee', () => {
 
     expect(matching.statusCode).toBe(200);
     expect(malformed.statusCode).toBe(400);
+  });
+});
+
+describe('GET /e2ee/devices sert la clé PUBLIQUE et les capacités de mes appareils (#19155, GW-14, IOS-19)', () => {
+  type Store = Awaited<ReturnType<typeof buildApp>>['store'];
+  const unusedPreKeys = (store: Store) => store.collections.E2EEOneTimePreKey.rows.filter((row) => row.usedAt === null).length;
+  /** Deux appareils du même compte : leurs deux sessions sont vivantes, sinon l'enrôlement suivant retire le premier. */
+  const liveSessions = (store: Store, who: readonly string[]) => who.forEach((name) => store.collections.UserSession.insert({ id: SESSIONS[name] }));
+
+  it("sert, pour chacun de MES appareils, sa clé d'identité et ses capacités déclarées, sans réserver aucune pré-clé", async () => {
+    const { app, store } = await buildApp();
+    liveSessions(store, ['alice', 'aliceAndroid']);
+    const iphone = fakeDeviceKeys({ oneTime: 3, kyber: 3 });
+    const android = fakeDeviceKeys({ oneTime: 3, kyber: 3 });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: { ...enrollment(ALICE, iphone), capabilities: ['device-trust-v1'] } });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'aliceAndroid' }, payload: { ...enrollment(ALICE, android), platform: 'android' } });
+    const before = unusedPreKeys(store);
+
+    const listed = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' } });
+
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().data.devices.map((device: Record<string, unknown>) => ({
+      deviceId: device.deviceId, platform: device.platform, identityKey: device.identityKey, capabilities: device.capabilities,
+    }))).toEqual([
+      { deviceId: 1, platform: 'ios', identityKey: iphone.identityKey, capabilities: ['device-trust-v1'] },
+      { deviceId: 2, platform: 'android', identityKey: android.identityKey, capabilities: [] },
+    ]);
+    expect(unusedPreKeys(store)).toBe(before);
+    expect(store.collections.E2EEOneTimePreKey.rows.every((row) => row.usedBy === null)).toBe(true);
+  });
+
+  it("un contact ne lit ni la clé servie ici ni les capacités : la liste est celle de l'appelant, et elle seule", async () => {
+    const { app } = await buildApp();
+    const iphone = fakeDeviceKeys({ oneTime: 1, kyber: 1 });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: { ...enrollment(ALICE, iphone), capabilities: ['device-trust-v1'] } });
+
+    const seenByBob = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' } });
+    const contactDirectory = await app.inject({ method: 'GET', url: `/e2ee/keys/${ALICE}/devices`, headers: { 'x-test-user': 'bob' } });
+
+    expect(seenByBob.json().data).toEqual({ devices: [] });
+    expect(contactDirectory.json().data.devices).toEqual([{ deviceId: 1, registrationId: iphone.registrationId }]);
+  });
+
+  it('un réenrôlement met les capacités à jour : la capacité apparaît avec la mise à jour de l’app', async () => {
+    const { app } = await buildApp();
+    const keys = fakeDeviceKeys({ oneTime: 1, kyber: 1 });
+    const first = Date.now() - 60_000;
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: { ...enrollment(ALICE, keys), binding: keys.binding(ALICE, first) } });
+    const updated = await app.inject({
+      method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' },
+      payload: { ...enrollment(ALICE, keys), binding: keys.binding(ALICE, first + 1_000), capabilities: ['device-trust-v1', 'device-trust-v1'] },
+    });
+
+    const listed = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' } });
+
+    expect(updated.statusCode).toBe(200);
+    expect(listed.json().data.devices).toEqual([expect.objectContaining({ deviceId: 1, capabilities: ['device-trust-v1'] })]);
+  });
+
+  it('la mise à jour des clés déclare aussi les capacités ; sans le champ, elles restent', async () => {
+    const { app } = await buildApp();
+    const keys = fakeDeviceKeys({ oneTime: 1, kyber: 1 });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE, keys) });
+
+    const declared = await app.inject({ method: 'PUT', url: '/e2ee/devices/1/keys', headers: { 'x-test-user': 'alice' }, payload: { capabilities: ['device-trust-v1'] } });
+    const refill = await app.inject({ method: 'PUT', url: '/e2ee/devices/1/keys', headers: { 'x-test-user': 'alice' }, payload: { oneTimePreKeys: [{ keyId: 50, publicKey: 'BQ'.padEnd(44, 'A') }] } });
+    const listed = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' } });
+
+    expect([declared.statusCode, refill.statusCode]).toEqual([200, 200]);
+    expect(listed.json().data.devices).toEqual([expect.objectContaining({ capabilities: ['device-trust-v1'] })]);
+  });
+
+  it.each([
+    ['plus de 8 capacités', Array.from({ length: 9 }, (_, index) => `capacite-${index}`)],
+    ['une capacité de plus de 32 caractères', ['c'.repeat(33)]],
+    ['une capacité vide', ['']],
+    ['une capacité hors de l’alphabet borné', ['Device Trust']],
+    ['une capacité qui n’est pas une chaîne', [42]],
+  ])('refuse %s, sans rien enrôler', async (_case, capabilities) => {
+    const { app, store } = await buildApp();
+    const refused = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: { ...enrollment(ALICE), capabilities } });
+
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().code).toBe(E2EE_ERROR_CODES.ENVELOPES_INVALID);
+    expect(store.collections.E2EEDevice.rows).toHaveLength(0);
+  });
+
+  it("un appareil écrit avant ce champ (capacités ABSENTES en base) en a de vides, et un ancien client n'est pas cassé", async () => {
+    const { app, store } = await buildApp();
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+    store.collections.E2EEDevice.rows.forEach((row) => {
+      delete row.capabilities;
+    });
+    store.collections.E2EEDevice.insert({
+      userId: ALICE, deviceId: 2, registrationId: 77, identityKey: 'BQ'.padEnd(44, 'B'), sessionId: SESSIONS.aliceWeb, platform: 'web',
+      signedPreKeyId: 1, signedPreKey: 'x', signedPreKeySignature: 'x', kyberLastResortId: 1, kyberLastResort: 'x', kyberLastResortSignature: 'x',
+      capabilities: null,
+    });
+
+    const listed = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' } });
+
+    expect(listed.json().data.devices.map((device: { capabilities: unknown }) => device.capabilities)).toEqual([[], []]);
   });
 });

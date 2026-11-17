@@ -3676,6 +3676,12 @@ model E2EEDevice {
   platform String
   label    String?
 
+  /// Ce que l'appareil sait faire, tel qu'il l'a déclaré à l'enrôlement ou à la mise à jour
+  /// de ses clés (#19155, spec 2026-11-17 § 5.1) : `device-trust-v1` = il sait confirmer un
+  /// appareil par code. Au plus 8 chaînes de 32 caractères. Un document écrit avant ce champ
+  /// ne le porte pas : il se LIT comme `[]` (`E2EEDirectory.ownDevices`, lecture défensive).
+  capabilities String[] @default([])
+
   createdAt             DateTime  @default(now())
   lastSeenAt            DateTime  @default(now())
   signedPreKeyRotatedAt DateTime  @default(now())

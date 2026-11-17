@@ -23,6 +23,7 @@ import { createHash } from 'crypto';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   deviceBindingMessage,
+  distinctCapabilities,
   E2EE_DEVICE_BINDING_MAX_SKEW_MS,
   E2EE_DEVICE_ID_MAX,
   E2EE_ERROR_CODES,
@@ -34,6 +35,7 @@ import {
   type E2EEErrorCode,
   type E2EEOwnDevice,
   type E2EEPublishKeysRequest,
+  readCapabilities,
 } from '@meeshy/shared/types/e2ee-directory';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { RETIRABLE_DEVICE, retireDeviceRows, retireDevicesOfEndedSessions } from './device-retirement';
@@ -317,7 +319,8 @@ export class E2EEDirectory {
   private async placeDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: boolean }> {
     const { userId, sessionId, request, at } = params;
     const keyFields = { ...signedPreKeyFields(request.signedPreKey, at), ...kyberLastResortFields(request.kyberLastResort) };
-    const profile = { platform: request.platform, label: request.label ?? null, lastSeenAt: at };
+    // Un (ré)enrôlement dit ce que l'appareil sait faire MAINTENANT (#19155) : absent = rien de neuf.
+    const profile = { platform: request.platform, label: request.label ?? null, lastSeenAt: at, capabilities: distinctCapabilities(request.capabilities ?? []) };
 
     const existing = await this.prisma.e2EEDevice.findFirst({
       where: { userId, identityKey: request.identityKey, registrationId: request.registrationId, ...ACTIVE },
@@ -350,6 +353,7 @@ export class E2EEDirectory {
         lastSeenAt: at,
         ...(request.signedPreKey ? signedPreKeyFields(request.signedPreKey, at) : {}),
         ...(request.kyberLastResort ? kyberLastResortFields(request.kyberLastResort) : {}),
+        ...(request.capabilities ? { capabilities: distinctCapabilities(request.capabilities) } : {}),
       },
     });
     await this.addOneTimeKeys(device, request);
@@ -390,7 +394,11 @@ export class E2EEDirectory {
     return devices.map((device) => ({ deviceId: device.deviceId, registrationId: device.registrationId }));
   }
 
-  /** Mes appareils actifs, pour moi seul (#13014) : jamais une clé, jamais la session d'un autre appareil. */
+  /**
+   * Mes appareils actifs, pour moi seul (#13014) : leur clé d'identité PUBLIQUE et leurs
+   * capacités comprises (#19155, GW-14, IOS-19) — lire la clé d'un de mes appareils ne
+   * réserve plus aucune pré-clé. Jamais une pré-clé, jamais la session d'un autre appareil.
+   */
   async ownDevices(caller: { userId: string; sessionId: string }): Promise<E2EEOwnDevice[]> {
     const devices = await this.activeDevices(caller.userId);
     return devices.map((device) => ({
@@ -401,6 +409,8 @@ export class E2EEDirectory {
       enrolledAt: device.createdAt.toISOString(),
       lastSeenAt: device.lastSeenAt.toISOString(),
       current: device.sessionId === caller.sessionId,
+      identityKey: device.identityKey,
+      capabilities: readCapabilities((device as { capabilities?: unknown }).capabilities),
     }));
   }
 
