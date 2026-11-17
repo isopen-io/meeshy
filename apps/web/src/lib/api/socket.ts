@@ -756,9 +756,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * `participants-writes.ts:420`) et le legacy l'écoutait déjà
    * (`presence.service.ts:150`) : ce câblage restaure une PARITÉ, il n'ouvre
    * pas un périmètre.
+   *
+   * La LISTE seule (`exact`, #18914) : la racine préfixe aussi la fiche et les
+   * pages du fil ouvert, qu'une conversation NEUVE ne change pas.
    */
   const onConversationNew = (): void => {
-    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY, exact: true });
   };
 
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
