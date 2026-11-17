@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationConsumptionService
+import me.meeshy.sdk.notification.NotificationDeletedSocketEvent
 import me.meeshy.sdk.model.NotificationReadScope
 import io.mockk.coVerify
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -47,8 +48,10 @@ class NotificationBannerViewModelTest {
     private val consumption = mockk<NotificationConsumptionService>(relaxed = true)
 
     private val received = MutableSharedFlow<ApiNotification>(extraBufferCapacity = 16)
+    private val deleted = MutableSharedFlow<NotificationDeletedSocketEvent>(extraBufferCapacity = 16)
     private val socket = mockk<MessageSocketManager> {
         every { notificationReceived } returns received
+        every { notificationDeleted } returns deleted
     }
 
     private val conversationRepository = mockk<ConversationRepository>(relaxed = true).also {
@@ -119,6 +122,35 @@ class NotificationBannerViewModelTest {
         runCurrent()
 
         received.emit(notification(id = "n1"))
+        runCurrent()
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun aBannerLeavesTheScreenWhenItsNotificationIsRetracted() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+        received.emit(notification(id = "n1", conversationId = "c2"))
+        runCurrent()
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+
+        deleted.emit(NotificationDeletedSocketEvent("n1"))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun theRetractionOfAnotherNotificationLeavesTheBannerInPlace() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+        received.emit(notification(id = "n1", conversationId = "c2"))
+        runCurrent()
+
+        deleted.emit(NotificationDeletedSocketEvent("n2"))
+        advanceTimeBy(1_000)
         runCurrent()
 
         assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
