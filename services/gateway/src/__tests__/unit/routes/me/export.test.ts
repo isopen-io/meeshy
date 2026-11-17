@@ -72,6 +72,8 @@ async function buildApp(opts: {
     user: { findUnique: mocks.userFindUnique },
     participant: { findMany: mocks.participantFindMany },
     message: { findMany: mocks.messageFindMany },
+    // Les liens d'adresse (#18863) : un compte qui n'en a aucun.
+    trackingLink: { findMany: jest.fn().mockResolvedValue([]) },
     // #3633 — le défaut "toutes les types" en couvre désormais dix, pas trois ;
     // ce fichier ne teste que profile/messages/contacts, ces doubles évitent
     // seulement qu'un modèle non simulé fasse lever le chemin par défaut.
