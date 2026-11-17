@@ -31,6 +31,8 @@ import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from '../src/lib/sw-cac
  *  - `sw-institutional.js` ramène `/about/` sur `/about` (#5554) ;
  *  - `sw-legacy-purge.js` efface, à l'activation, les caches `meeshy-cache-*`
  *    que le service worker du legacy a laissés sur l'origine (#6702) ;
+ *  - `sw-retired-caches.js` efface, à l'activation, ce que la v2 a cessé de
+ *    ranger — les réponses `/api/v1/e2ee/*` du seau `api` (#18987) ;
  *  - `sw-push.js` porte les écouteurs `push` et `notificationclick` (#7305) —
  *    le worker généré n'en avait AUCUN, pendant que la passerelle composait
  *    déjà toute la charge web (`PushNotificationService`, branche
@@ -44,7 +46,7 @@ import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from '../src/lib/sw-cac
  *    adresse ; la coque Android reçoit le même partage par un intent, pas par
  *    ce worker.
  */
-export const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js', 'sw-recent-media.js'] as const;
+export const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-retired-caches.js', 'sw-push.js', 'sw-share-target.js', 'sw-recent-media.js'] as const;
 
 /**
  * LE SEUL SCRIPT QUE LA COQUE GARDE (#11326) : `sw-recent-media.js` resert
@@ -239,6 +241,7 @@ export function meeshyPwa(): PluginOption {
            sources SVG ni leurs PNG n'ont à peser sur l'installation. */
         'brand/world-wide/**',
         'sw-legacy-purge.js',
+        'sw-retired-caches.js',
         'sw-push.js',
         'sw-share-target.js',
         'sw-recent-media.js',

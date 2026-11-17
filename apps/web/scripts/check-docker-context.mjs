@@ -88,6 +88,7 @@ const REQUIRED = [
   'apps/web/nginx.conf',
   'apps/web/public/sw-institutional.js',
   'apps/web/public/sw-legacy-purge.js',
+  'apps/web/public/sw-retired-caches.js',
   'apps/web/public/sw-share-target.js',
   'apps/web/scripts/prerender-institutional.tsx',
   'apps/web/scripts/check-nginx-public.sh',
