@@ -344,6 +344,54 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(section.contains(".closesForConversationOpening(.sheet)"))
     }
 
+    // MARK: - Voir comme : trois crans, la voix, la pastille sur la bannière
+
+    func test_crans_arePublicFriendAndBlood_eachOpeningWhatTheLawOpens() {
+        let crans = VitrineCran.make(ownerRole: nil)
+        XCTAssertEqual(crans.map(\.level), [.public, .friend, .blood])
+        for cran in crans {
+            let seen = VitrineSeenAs.make(view: ProfileCircleView.seenAs(cran.level))
+            let locked = Set(seen.lockedRows.map(\.row))
+            XCTAssertEqual(cran.opened, VitrineSeenAs.Row.allCases.filter { !locked.contains($0) },
+                           "le cran \(cran.level) se lit dans la loi, jamais dans une liste à la main")
+            XCTAssertEqual(cran.contact, seen.contact)
+        }
+    }
+
+    func test_crans_neverCloseWhatALowerCircleOpens() {
+        let crans = VitrineCran.make(ownerRole: nil)
+        let opened = crans.map { Set($0.opened) }
+        XCTAssertTrue(opened[0].isSubset(of: opened[1]))
+        XCTAssertTrue(opened[1].isSubset(of: opened[2]))
+        XCTAssertTrue(opened[2].contains(.presence), "Sang voit ma présence")
+    }
+
+    func test_cranSpokenLabel_namesTheCircle_thenWhatItOpens_neverAValue() {
+        let cran = VitrineCran(level: .friend, opened: [.presence, .game], contact: .write)
+        let label = cran.spokenLabel
+        XCTAssertTrue(label.hasPrefix(CircleLevelNames.title(of: .friend)), label)
+        XCTAssertTrue(label.contains(VitrineSeenAsCopy.rowTitle(.presence)), label)
+        XCTAssertTrue(label.contains(VitrineSeenAsCopy.write), label)
+        let empty = VitrineCran(level: .public, opened: [], contact: .unavailable).spokenLabel
+        XCTAssertTrue(empty.contains(VitrineSeenAsCopy.cranNothing), empty)
+    }
+
+    func test_seenAs_showsMyVoice_onlyWhenIMadeItPublic() {
+        let privateVoice = MeeshyUser(id: "me", username: "aicha", voicePublic: false, voiceSampleUrl: "/v.m4a")
+        let publicVoice = MeeshyUser(id: "me", username: "aicha", voicePublic: true, voiceSampleUrl: "/v.m4a")
+        XCTAssertNil(VitrineSeenAsView.publicVoice(of: privateVoice), "une voix privée ne paraît à aucun cercle")
+        XCTAssertEqual(VitrineSeenAsView.publicVoice(of: publicVoice)?.url, "/v.m4a")
+    }
+
+    func test_viewedByAndWhatSees_sitOnTheBanner() throws {
+        let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(profile.contains(".overlay(alignment: .topTrailing)"), "« Vue par : Moi » est posé sur la bannière")
+        XCTAssertEqual(profile.components(separatedBy: "VitrineSeenAsCopy.viewedByMe").count, 2, "une seule porte « Vue par »")
+        let seenAs = try code("Meeshy/Features/Profile/Faces/VitrineSeenAsView.swift")
+        XCTAssertTrue(seenAs.contains(".overlay(alignment: .bottomTrailing) { whatSeesBadge }"))
+        XCTAssertTrue(seenAs.contains("VitrineCransSection("))
+    }
+
     /// La valeur SERVIE par le catalogue pour la langue du simulateur : le témoin tient en français comme en anglais (CI).
     private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
 }

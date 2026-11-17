@@ -16,6 +16,7 @@ struct VitrineSeenAsView: View {
     let accentColor: String
 
     @StateObject private var model: VitrineSeenAsViewModel
+    private let crans: [VitrineCran]
     @State private var linkCopied = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
@@ -28,6 +29,7 @@ struct VitrineSeenAsView: View {
         _model = StateObject(wrappedValue: VitrineSeenAsViewModel(
             handle: user.username, ownerRole: PlatformRole(raw: user.role), initial: initial
         ))
+        crans = VitrineCran.make(ownerRole: PlatformRole(raw: user.role))
     }
 
     private var accent: Color { Color(hex: accentColor) }
@@ -40,6 +42,11 @@ struct VitrineSeenAsView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                 hero
+                VitrineCransSection(crans: crans, current: model.level, accentColor: accentColor,
+                                    onSelect: { level in model.select(level) })
+                if let voice = Self.publicVoice(of: shown) {
+                    ProfileVoiceSection(sample: voice, accentColor: accentColor)
+                }
                 lockedSection
                 ladderSection
                 linkFooter
@@ -74,11 +81,6 @@ struct VitrineSeenAsView: View {
                 circlePicker.frame(maxWidth: .infinity)
                 ScrollView(.horizontal, showsIndicators: false) { circlePicker }
             }
-            Text(VitrineSeenAsCopy.whatSees(model.level))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .accessibilityAddTraits(.updatesFrequently)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.sm)
@@ -114,6 +116,7 @@ struct VitrineSeenAsView: View {
             MeeshyLivingBanner(tint: accent, height: MeeshyLivingBannerHeight.card)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .accessibilityHidden(true)
+                .overlay(alignment: .bottomTrailing) { whatSeesBadge }
             MeeshyAvatar(
                 name: shown.displayName ?? shown.username,
                 context: .profileBanner,
@@ -128,6 +131,21 @@ struct VitrineSeenAsView: View {
             identity
             contactButton
         }
+    }
+
+    /// « Ce que voit le cercle Ami », posé SUR la bannière (planche `Moi-Apercu`) : le cercle courant, dit là où l'œil
+    /// lit la Vitrine rendue.
+    private var whatSeesBadge: some View {
+        MeeshyBadge(.label(VitrineSeenAsCopy.whatSees(model.level)), leading: .systemImage("eye"), surface: .glass)
+            .padding(MeeshySpacing.sm)
+            .accessibilityAddTraits(.updatesFrequently)
+            .accessibilityIdentifier("profile.seenAs.whatSees")
+    }
+
+    /// Ma voix ne paraît dans l'aperçu que si je l'ai rendue publique : elle n'est gardée par aucun cercle.
+    static func publicVoice(of user: MeeshyUser) -> ProfileVoiceSample? {
+        guard let sample = ProfileVoiceSample.make(user: user), sample.isPublic else { return nil }
+        return sample
     }
 
     private var identity: some View {

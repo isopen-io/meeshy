@@ -408,6 +408,11 @@ struct ProfileView: View {
                     .overlay(ProgressView().tint(.white))
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if !isEditing {
+                viewedByButton.transition(.opacity)
+            }
+        }
     }
 
     private var avatarBlock: some View {
@@ -460,13 +465,17 @@ struct ProfileView: View {
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundStyle(theme.textMuted)
             }
-
-            MeeshyButton(VitrineSeenAsCopy.viewedByMe, systemImage: "eye", kind: .glass, size: .s36,
-                         tint: Color(hex: accentColor), action: { seenAsShown = true })
-                .accessibilityHint(VitrineSeenAsCopy.viewedByHint)
-                .padding(.top, MeeshySpacing.xs)
         }
         .padding(.top, MeeshySpacing.sm)
+    }
+
+    /// « Vue par : Moi » posé SUR la bannière, en haut à droite (planche `Main`) : la porte de l'aperçu par cercle.
+    private var viewedByButton: some View {
+        MeeshyButton(VitrineSeenAsCopy.viewedByMe, systemImage: "eye", kind: .glass, size: .s36,
+                     tint: Color(hex: accentColor), action: { seenAsShown = true })
+            .accessibilityHint(VitrineSeenAsCopy.viewedByHint)
+            .accessibilityIdentifier("profile.viewedBy")
+            .padding(MeeshySpacing.sm)
     }
 
     /// La langue dans laquelle l'app me parle : le mois de l'ancienneté se dit dans la même langue que sa phrase.

@@ -98,6 +98,18 @@ nonisolated enum VitrineSeenAsCopy {
         }
     }
 
+    static var cransTitle: String {
+        String(localized: "profile.seenAs.crans.title", defaultValue: "Trois crans", bundle: .main)
+    }
+
+    static var cransSubtitle: String {
+        String(localized: "profile.seenAs.crans.subtitle", defaultValue: "Ce qui se déverrouille", bundle: .main)
+    }
+
+    static var cranNothing: String {
+        String(localized: "profile.seenAs.crans.nothing", defaultValue: "Rien de gardé", bundle: .main)
+    }
+
     static var ladderTitle: String {
         String(localized: "profile.seenAs.ladder.title", defaultValue: "Ce que chaque cercle ajoute", bundle: .main)
     }
