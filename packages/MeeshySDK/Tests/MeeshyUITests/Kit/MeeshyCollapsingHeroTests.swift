@@ -80,7 +80,7 @@ struct MeeshyCollapsingHeroTests {
         let files = ["MeeshyCollapsingHero.swift", "MeeshyCollapsingHeroRecipe.swift"]
         try KitAssemblyGuards.assertAgnostic(files)
         for file in files {
-            #expect(!(try KitAtomVectors.code(file)).contains("UIBlurEffect"), file)
+            #expect(!(try KitAtomVectors.code(file)).contains("UIBlurEffect"), "\(file)")
         }
     }
 }

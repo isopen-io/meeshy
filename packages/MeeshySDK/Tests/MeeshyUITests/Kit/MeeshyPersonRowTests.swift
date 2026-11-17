@@ -94,8 +94,8 @@ struct MeeshyPersonRowTests {
         try KitAssemblyGuards.assertAgnostic(files)
         for file in files {
             let source = try KitAtomVectors.code(file)
-            #expect(!source.contains("PresenceState"), file)
-            #expect(!source.contains("isOnline"), file)
+            #expect(!source.contains("PresenceState"), "\(file)")
+            #expect(!source.contains("isOnline"), "\(file)")
         }
     }
 }
