@@ -153,7 +153,7 @@ public struct APIQuotedAttachmentReference: Decodable, Sendable, Equatable {
 
 public extension Array where Element == APIMessageAttachment {
     /// La MÊME règle que `[MeeshyMessageAttachment].quotedRepresentative`
-    /// (`CoreModels.swift`), sur le type du fil : le premier média hors
+    /// (`MeeshyMessageAttachment.swift`), sur le type du fil : le premier média hors
     /// localisation, sinon le premier tout court. Une seule règle, deux
     /// surcharges — la copie inline que `uiReplyTo` portait a divergé une fois
     /// (`.first` devant une localisation) et n'a plus le droit d'exister.

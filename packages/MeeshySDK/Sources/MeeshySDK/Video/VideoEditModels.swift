@@ -2,7 +2,7 @@ import Foundation
 
 /// **Ce que l'édition d'une vidéo rend à son appelant.**
 ///
-/// L'ancien éditeur vidéo (`MeeshyVideoEditorView`) a quitté le dépôt (#9124) :
+/// L'ancien éditeur vidéo a quitté le dépôt (#9124) :
 /// une vidéo s'édite désormais dans la scène du composer. Son pipeline —
 /// document non destructif, constructeur de composition, export — n'avait plus
 /// aucun appelant et l'a suivi (#9331), emportant un second `VideoFilterPreset`

@@ -547,8 +547,8 @@ public actor OfflineQueue {
     /// Called once on first boot after migration to the outbox pipeline.
     ///
     /// Wave 1 Task 3.6 — also sweeps `message_retry_queue.json` and
-    /// `reaction_queue.json`, the abandoned files owned by the deleted
-    /// `MessageRetryQueue` and `ReactionQueue` actors. Failures are silent
+    /// `reaction_queue.json`, the abandoned files owned by the former
+    /// message-retry and reaction queue actors. Failures are silent
     /// because the worst case is a few stale KB on disk that the next
     /// container migration will reclaim.
     public static func deleteLegacyFile() {

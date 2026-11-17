@@ -10,10 +10,9 @@ import MeeshySDK
 /// Buffering is the live media policy's (`MediaPolicyMonitor`), never a
 /// per-surface preset.
 ///
-/// Replaces : `InlineVideoPlayerView`, `VideoPlayerView`,
-/// `VideoFullscreenPlayerView`, the app-side `VideoMediaView`,
-/// `GatedVideoFullscreenPlayer` and `VideoFullscreenPlayer` (those become
-/// wrappers around `VideoAvailabilityResolver { MeeshyVideoPlayer }`).
+/// The single video player of the SDK : the former inline and fullscreen
+/// players, SDK and app-side, are gone, and the app gates it with
+/// `VideoAvailabilityResolver { MeeshyVideoPlayer }`.
 public struct MeeshyVideoPlayer: View {
 
     // MARK: - Style
