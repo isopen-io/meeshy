@@ -83,6 +83,12 @@ on:
       # comme la passerelle et :core:e2ee — une régénération, ou une montée de la version
       # épinglée, doit rejouer le miroir Swift.
       - 'packages/shared/fixtures/libsignal/**'
+      # Le contrat de ce que libsignal chiffre (#18940) : E2EEContentVectorTests
+      # rejoue ses vecteurs — une PR TypeScript seule qui les change doit rejouer
+      # le miroir Swift.
+      - 'packages/shared/fixtures/e2ee-content/**'
+      - 'packages/shared/fixtures/e2ee-signal/**'
+      - 'packages/shared/types/e2ee-content.ts'
       - 'packages/shared/types/external-interop-compliance.ts'
       - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
@@ -141,6 +147,9 @@ on:
       - 'packages/shared/fixtures/author-ink.vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
       - 'packages/shared/fixtures/libsignal/**'
+      - 'packages/shared/fixtures/e2ee-content/**'
+      - 'packages/shared/fixtures/e2ee-signal/**'
+      - 'packages/shared/types/e2ee-content.ts'
       - 'packages/shared/types/external-interop-compliance.ts'
       - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
