@@ -10,6 +10,7 @@ import me.meeshy.app.R
 import me.meeshy.app.push.media.CircularAvatar
 import me.meeshy.app.push.media.PushMediaFetcher
 import me.meeshy.sdk.model.push.ConversationShortcutId
+import me.meeshy.sdk.model.push.PushConversationLockSeal
 import me.meeshy.sdk.model.push.PushNotificationActions
 import me.meeshy.sdk.model.push.PushPresentationText
 import javax.inject.Inject
@@ -44,8 +45,12 @@ class MessagingStyleEnricher @Inject constructor(
             .build()
 
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName(context.getString(R.string.push_message_you)).build())
-        previousMessages(request).forEach(style::addMessage)
-        style.addMessage(text, PushNotificationActions.timestampMillis(payload, System.currentTimeMillis()), sender)
+        val fresh = NotificationCompat.MessagingStyle.Message(
+            text,
+            PushNotificationActions.timestampMillis(payload, System.currentTimeMillis()),
+            sender,
+        ).also { message -> payload.messageId?.let { message.extras.putString(MESSAGE_ID_KEY, it) } }
+        messagesOf(request, text, fresh).forEach(style::addMessage)
         if (!payload.isDirectConversation) {
             style.isGroupConversation = true
             style.conversationTitle = payload.conversationTitle
@@ -56,13 +61,43 @@ class MessagingStyleEnricher @Inject constructor(
         ConversationShortcutId.of(payload.conversationId)?.let(builder::setShortcutId)
     }
 
-    private fun previousMessages(request: EnrichmentRequest): List<NotificationCompat.MessagingStyle.Message> {
+    /**
+     * Les messages de la bannière : l'historique déjà posé puis le message reçu. Une CORRECTION (message modifié) ne
+     * s'ajoute pas : elle remplace le texte du message qu'elle nomme, à sa place et sous son horodatage, sans empiler
+     * l'ancien texte à côté du nouveau. Sans message reconnu (bannière posée avant que les messages portent leur
+     * identité), l'historique reste tel quel ; sans historique lisible, le texte corrigé devient le seul message.
+     */
+    private fun messagesOf(
+        request: EnrichmentRequest,
+        served: String,
+        fresh: NotificationCompat.MessagingStyle.Message,
+    ): List<NotificationCompat.MessagingStyle.Message> {
+        val payload = request.push.payload
+        if (!payload.isCorrection) return previousMessages(request, served, MAX_HISTORY - 1) + fresh
+        val history = previousMessages(request, served, MAX_HISTORY)
+        val messageId = payload.messageId
+        if (history.isEmpty()) return listOf(fresh)
+        if (messageId == null) return history
+        return history.map { message ->
+            if (message.extras.getString(MESSAGE_ID_KEY) == messageId) message.withText(served) else message
+        }
+    }
+
+    private fun NotificationCompat.MessagingStyle.Message.withText(text: String): NotificationCompat.MessagingStyle.Message =
+        NotificationCompat.MessagingStyle.Message(text, timestamp, person).also { it.extras.putAll(extras) }
+
+    /**
+     * L'historique de la bannière déjà posée. Sous le scellé d'un verrou PIN, seuls les messages identiques au libellé
+     * survivent : une bannière posée AVANT le verrou porte du texte en clair qui ne doit pas être recopié.
+     */
+    private fun previousMessages(request: EnrichmentRequest, served: String, limit: Int): List<NotificationCompat.MessagingStyle.Message> {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return emptyList()
         val previous = runCatching { manager.activeNotifications }.getOrNull()
             ?.firstOrNull { it.id == request.notificationId && it.tag == null }
             ?.notification ?: return emptyList()
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(previous) ?: return emptyList()
-        return style.messages.takeLast(MAX_HISTORY - 1)
+        val sealed = PushConversationLockSeal.isSealed(request.push.payload)
+        return style.messages.filter { !sealed || it.text.toString() == served }.takeLast(limit)
     }
 
     /** La photo de l'expéditeur ne voyage jamais avec un message protégé : seul son nom est dit, comme le titre servi. */
@@ -80,6 +115,8 @@ class MessagingStyleEnricher @Inject constructor(
     }
 
     companion object {
+        /** L'identité du message sur sa bulle de bannière : la correction retrouve ainsi le texte qu'elle remplace. */
+        private const val MESSAGE_ID_KEY = "meeshy.messageId"
         private const val MAX_HISTORY = 8
         private const val AVATAR_BUDGET_MILLIS = 2_500L
         private const val AVATAR_MIME = "image/jpeg"

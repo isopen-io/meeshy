@@ -21,6 +21,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "push_placeholder_locked",
+          "status": "android-only"
+        },
+        {
           "androidName": "push_placeholder_view_once",
           "status": "android-only"
         },

@@ -10,9 +10,13 @@
  * toujours) : la fiche les couvre toutes, aucune lecture n'est économisable.
  * Une lecture qui échoue LÈVE : l'appelant ferme.
  */
+import type { RelationLevel } from '@meeshy/shared/types/relation';
+import { applyPresenceVisibility, type PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import {
-  profileFieldOpen,
+  profileFieldServed,
   resolveProfileCircleView,
+  resolveProfileCircleViewAs,
+  resolveProfilePresenceAs,
   type ProfileCircleView,
   type ProfileGatedField,
 } from '@meeshy/shared/utils/profile-circle-view';
@@ -51,6 +55,7 @@ export async function readProfileCircleView(
     grantedByTarget: accords.byTarget,
     sharesCommunity: coMembers.has(targetId),
     blockedEitherWay: blocked.has(targetId),
+    targetDeactivated: target?.deactivated ?? false,
     viewerMinor: viewer?.age ?? 'unknown',
     targetMinor: target?.age ?? 'unknown',
     viewerRole: viewer?.role ?? null,
@@ -63,39 +68,70 @@ const GATED_FIELDS: readonly ProfileGatedField[] = ['country', 'timezone'];
 /** La colonne de la ligne que porte chaque champ gardé. */
 const COLUMN_OF = { country: 'registrationCountry', timezone: 'timezone' } as const satisfies Record<ProfileGatedField, string>;
 
-type GatedColumns = { registrationCountry?: string | null; timezone?: string | null };
+export type GatedColumns = { registrationCountry?: string | null; timezone?: string | null };
 
 /**
- * Retire de la ligne les champs que le cercle du lecteur ne ouvre pas. Soi garde
- * les siens ; un lecteur sans compte n'en reçoit aucun ; une ligne qui n'en porte
- * aucun ne coûte aucune lecture. Le champ fermé est RETIRÉ, jamais rendu `null` :
- * `null` dirait « la personne n'en a pas », ce que le cercle n'a pas à savoir.
+ * Retire de la ligne les champs que la présence SERVIE ne laisse pas partir : le
+ * pays suit « en ligne », le fuseau la présence détaillée. La visibilité est
+ * celle que `resolvePresenceVisibility` vient de rendre pour CE lecteur — cercle,
+ * préférences de la cible, désactivation, blocage, rôle — et la MÊME décide de
+ * `isOnline` / `lastActiveAt` : aucun second verdict ne peut ouvrir l'heure locale
+ * d'une personne qui a caché sa présence. Le champ fermé est RETIRÉ, jamais rendu
+ * `null` : `null` dirait « la personne n'en a pas », ce que le lecteur n'a pas à savoir.
  */
-export async function withCircleGatedFields<T extends GatedColumns & { readonly id?: unknown }>(
-  prisma: PairAccessDb,
-  viewerId: string | undefined,
-  row: T,
-): Promise<T> {
-  const carried = GATED_FIELDS.filter((field) => row[COLUMN_OF[field]] != null);
-  if (carried.length === 0 || (viewerId && viewerId === String(row.id))) return row;
-  const view = viewerId ? await readProfileCircleView(prisma, { viewerId, targetId: String(row.id) }) : null;
-  const closed = carried.filter((field) => !view || !profileFieldOpen(view, field));
+export function withPresenceGatedFields<T extends GatedColumns>(row: T, visibility: PresenceVisibility): T {
   const kept = { ...row };
-  for (const field of closed) delete kept[COLUMN_OF[field]];
+  for (const field of GATED_FIELDS) if (!profileFieldServed(visibility, field)) delete kept[COLUMN_OF[field]];
   return kept;
 }
 
-type SeenColumns = GatedColumns & { isOnline?: unknown; lastActiveAt?: unknown };
+type SeenColumns = GatedColumns & { isOnline?: boolean | null; lastActiveAt?: Date | null };
+
+/** Ce que « Voir comme » lit du propriétaire : ses préférences de présence. */
+export type OwnerPresencePreferences = { readonly showOnlineStatus: boolean; readonly showLastSeen: boolean };
 
 /**
- * La fiche du propriétaire telle que la voit un lecteur de la vue résolue
- * (« Voir comme ») : pays et fuseau par la porte de leur champ, la présence par
- * celle de ses deux capacités — un Ami lit « en ligne » et rien d'autre.
+ * « Voir comme » (`?as=`) : la vue du cercle ET la présence qu'un lecteur ordinaire
+ * de ce cercle recevrait du propriétaire RÉEL — son âge déclaré et son rôle pour la
+ * loi d'accès, ses préférences et sa désactivation pour la loi des valeurs. Rien
+ * n'est relâché pour le propriétaire : il voit ce que le service réel servirait.
  */
-export function profileSeenAs<T extends SeenColumns>(view: ProfileCircleView, row: T): T {
-  const kept = { ...row };
-  for (const field of GATED_FIELDS) if (!profileFieldOpen(view, field)) delete kept[COLUMN_OF[field]];
-  if (view.capabilities.presence?.state !== 'open') delete kept.isOnline;
-  if (view.capabilities.presenceDetailed?.state !== 'open') delete kept.lastActiveAt;
+export async function readProfileSeenAs(
+  prisma: PairAccessDb,
+  privacy: { getPreferences(userId: string): Promise<OwnerPresencePreferences> },
+  params: { readonly ownerId: string; readonly level: RelationLevel; readonly now?: Date },
+): Promise<{ readonly view: ProfileCircleView; readonly visibility: PresenceVisibility }> {
+  const [people, prefs] = await Promise.all([
+    peopleOf(prisma, [params.ownerId], params.now ?? new Date()),
+    privacy.getPreferences(params.ownerId),
+  ]);
+  const owner = people.get(params.ownerId);
+  const facts = { targetMinor: owner?.age ?? 'unknown', targetRole: owner?.role ?? null } as const;
+  return {
+    view: resolveProfileCircleViewAs({ level: params.level, targetId: params.ownerId, ...facts }),
+    visibility: resolveProfilePresenceAs({
+      level: params.level,
+      ...facts,
+      targetShowOnlineStatus: prefs.showOnlineStatus,
+      targetShowLastSeen: prefs.showLastSeen,
+      targetIsDeactivated: owner?.deactivated ?? true,
+    }),
+  };
+}
+
+/**
+ * La fiche du propriétaire telle que la voit un lecteur de « Voir comme » : pays,
+ * fuseau, « en ligne » et dernière vue par la présence que ce lecteur RECEVRAIT
+ * (`readProfileSeenAs`) — la même porte que pour un lecteur réel. Un champ fermé
+ * est retiré ; « en ligne » sans la date garde la garde anti-stale de l'Ami.
+ */
+export function profileSeenAs<T extends SeenColumns>(visibility: PresenceVisibility, row: T): T {
+  const kept = withPresenceGatedFields(row, visibility);
+  if ('isOnline' in kept) {
+    const served = applyPresenceVisibility({ isOnline: kept.isOnline ?? null, lastActiveAt: kept.lastActiveAt ?? null }, visibility);
+    kept.isOnline = served.isOnline;
+  }
+  if (!visibility.showOnline) delete kept.isOnline;
+  if (!visibility.showLastSeenTimestamp) delete kept.lastActiveAt;
   return kept;
 }
