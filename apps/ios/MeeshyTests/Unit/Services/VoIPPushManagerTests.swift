@@ -583,4 +583,31 @@ final class VoIPPushManagerTests: XCTestCase {
         XCTAssertEqual(registrar.registerCallCount, 0)
         XCTAssertEqual(sut.debug_pendingTokenToRegister, "tokPreLogin")
     }
+
+    // MARK: - #19238 — le push dit seul que l'appel est de groupe
+
+    func test_groupConversationToMark_isGroupFlag_marksTheConversation() {
+        XCTAssertEqual(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1", "conversationType": "direct", "isGroup": "true"]), "conv-1")
+        XCTAssertEqual(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1", "isGroup": true]), "conv-1")
+    }
+
+    func test_groupConversationToMark_groupConversationType_marksTheConversation() {
+        XCTAssertEqual(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1", "conversationType": "group", "isGroup": "false"]), "conv-1")
+    }
+
+    func test_groupConversationToMark_directCallOrOlderGateway_marksNothing() {
+        XCTAssertNil(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1", "conversationType": "direct", "isGroup": "false"]))
+        XCTAssertNil(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1"]))
+        XCTAssertNil(VoIPPushManager.groupConversationToMark(["conversationId": "", "isGroup": "true"]))
+        XCTAssertNil(VoIPPushManager.groupConversationToMark(["isGroup": "true"]))
+    }
+
+    func test_voipPush_marksTheGroupRightAfterReportingTheCall() throws {
+        let source = AppSourceGuard.stripComments(try voipPushManagerSource())
+        let parse = try XCTUnwrap(source.range(of: "let groupConversationId = Self.groupConversationToMark(data)"))
+        let report = try XCTUnwrap(source.range(of: "CallManager.shared.incomingRing.reportIncomingVoIPCall(", range: parse.upperBound..<source.endIndex))
+        let mark = try XCTUnwrap(source.range(of: "GroupCallMeshCoordinator.shared.markGroupConversation(groupConversationId", range: report.upperBound..<source.endIndex))
+        XCTAssertTrue(source[report.upperBound..<mark.lowerBound].contains("if let groupConversationId"))
+    }
 }
+
