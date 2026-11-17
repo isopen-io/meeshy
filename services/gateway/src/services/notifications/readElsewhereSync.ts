@@ -18,15 +18,15 @@ import type { SendPushOptions } from '../PushNotificationService';
  */
 
 /**
- * Les bannières que le marquage vient de lire et qui ont été poussées : celles
- * dont `readAt` n'est pas antérieur au marquage (`since`, le même instant que
- * l'écriture). Lecture BORNÉE par les ids et la projection, après l'écriture et
- * seulement quand elle a marqué quelque chose — le cas courant ne paie rien.
- * Ne lève jamais : une révocation manquée laisse une bannière, pas une panne.
+ * Les bannières poussées que le marquage d'une conversation va lire : les NON LUES de la conversation dont un push
+ * est parti, cherchées AVANT l'écriture. `isRead: false` fait passer la lecture par l'index [userId, isRead] — la
+ * même voie que le marquage —, là où un filtre sur `readAt` après coup balayait tout l'historique du compte.
+ * Lecture bornée par la projection et le lot. Ne lève jamais : une révocation manquée laisse une bannière, pas une
+ * panne.
  */
-export async function pushedBannersReadSince(
+export async function pushedUnreadBanners(
   prisma: PrismaClient,
-  params: { readonly userId: string; readonly conversationId: string; readonly since: string }
+  params: { readonly userId: string; readonly conversationId: string }
 ): Promise<RetractedNotification[]> {
   try {
     const raw = await (prisma as unknown as {
@@ -37,9 +37,9 @@ export async function pushedBannersReadSince(
       find: 'Notification',
       filter: {
         userId: { $oid: params.userId },
+        isRead: false,
         'context.conversationId': params.conversationId,
         'delivery.pushSent': true,
-        readAt: { $gte: { $date: params.since } },
       },
       projection: { _id: 1, type: 1, 'context.conversationId': 1, 'delivery.pushSent': 1 },
       singleBatch: true,

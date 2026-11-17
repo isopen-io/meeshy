@@ -228,6 +228,32 @@ describe('NotificationService — une lecture faite ailleurs remet l’icône à
     expect(revocations()[0].payload.data.conversationIds).toBe(`${CONV_A},${CONV_A}`);
   });
 
+  it('les bannières à révoquer se cherchent parmi les NON LUES, avant le marquage : l’index [userId, isRead] sert, jamais un balayage de tout l’historique', async () => {
+    unreadBanners = [{ id: NOTIF_1, conversationId: CONV_A, type: 'new_message' }];
+
+    await service.markConversationNotificationsAsRead(USER, CONV_A);
+    await settle();
+
+    const commands = prisma.$runCommandRaw.mock.calls.map((call: any[]) => call[0]);
+    const lookupAt = commands.findIndex((command: any) => command.find === 'Notification');
+    const updateAt = commands.findIndex((command: any) => command.update === 'Notification');
+    expect(lookupAt).toBeGreaterThanOrEqual(0);
+    expect(lookupAt).toBeLessThan(updateAt);
+    expect(commands[lookupAt].filter).toMatchObject({ isRead: false, 'context.conversationId': CONV_A, 'delivery.pushSent': true });
+    expect(commands[lookupAt].filter).not.toHaveProperty('readAt');
+    expect(revocations()).toHaveLength(1);
+  });
+
+  it('rien de marqué (une autre lecture est passée avant) : rien n’est révoqué', async () => {
+    unreadBanners = [{ id: NOTIF_1, conversationId: CONV_A, type: 'new_message' }];
+    marked = 0;
+
+    await service.markConversationNotificationsAsRead(USER, CONV_A);
+    await settle();
+
+    expect(revocations()).toEqual([]);
+  });
+
   it('la lecture d’un post ou d’une demande d’ami ne touche pas la pastille des conversations', async () => {
     await service.markPostNotificationsAsRead(USER, '64c000000000000000000003');
     await service.markFriendRequestNotificationsAsRead(USER, '64d000000000000000000004');

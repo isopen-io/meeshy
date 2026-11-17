@@ -57,7 +57,8 @@ import { filterMutedRecipients } from './mutedRecipients';
 import { conversationUnreadOf } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { retractNotificationRows } from './retractNotificationRows';
-import { BadgeSyncDebouncer, pushedBannersReadSince, sendBadgeSyncToIos } from './readElsewhereSync';
+import { BadgeSyncDebouncer, pushedUnreadBanners, sendBadgeSyncToIos } from './readElsewhereSync';
+import { accountDeviceLane, BULK_DEVICE_LANE, DEVICE_LANE_MAX_PENDING, DeviceWorkLanes } from './deviceWorkLanes';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
 import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
 import { reproducedPushAudience } from './reproducedPushAudience';
@@ -3011,6 +3012,7 @@ export class NotificationService {
 
     try {
       const readAt = new Date().toISOString();
+      const banners = contextKey === 'conversationId' ? await pushedUnreadBanners(this.prisma, { userId, conversationId: contextValue }) : [];
       const result = await (this.prisma as unknown as {
         $runCommandRaw: (cmd: Record<string, unknown>) => Promise<{ nModified?: number }>;
       }).$runCommandRaw({
@@ -3035,9 +3037,7 @@ export class NotificationService {
         this.announceReadBulk(userId, { kind: 'context', contextKey, contextValue });
         // Rafraîchir les compteurs côté client (cloche + badge) en temps réel.
         this.emitCountsUpdate(userId).catch(() => {});
-        if (contextKey === 'conversationId') {
-          this.revokeDeliveredPushes(await pushedBannersReadSince(this.prisma, { userId, conversationId: contextValue, since: readAt }));
-        }
+        if (banners.length > 0) this.revokeDeliveredPushes(banners, accountDeviceLane(userId));
       }
 
       return count;
@@ -3053,7 +3053,7 @@ export class NotificationService {
   }
 
   private readonly badgeSync = new BadgeSyncDebouncer((userId) =>
-    this.queueDeviceWork(() => sendBadgeSyncToIos({ prisma: this.prisma, pushService: this.pushService, userId })));
+    this.queueDeviceWork(() => sendBadgeSyncToIos({ prisma: this.prisma, pushService: this.pushService, userId }), accountDeviceLane(userId)));
 
   /**
    * #18910 — une lecture ÉCRITE (`broadcastReadStatus`, après le curseur, que des notifications soient marquées ou
@@ -3564,8 +3564,8 @@ export class NotificationService {
   }
 
   /**
-   * La FILE d'appareil : tout ce que les hubs d'annonce envoient vers APNs/FCM
-   * y passe, dans l'ordre, un envoi à la fois.
+   * Les FILES d'appareil (`DeviceWorkLanes`, bornées) : ce que les hubs d'annonce envoient vers APNs/FCM y passe dans
+   * l'ordre, un envoi à la fois par file — une par compte pour une lecture, `bulk` pour les retraits de masse.
    *
    * Rien n'est attendu par l'appelant : le retrait ou la réécriture qui l'a
    * demandé est déjà durable, son appelant répond à un geste utilisateur
@@ -3578,16 +3578,16 @@ export class NotificationService {
    * quelle que soit la taille de l'audience » ; un `void` par lot rendait ce
    * plafond caduc dès que l'envoi était plus lent que le drainage.
    *
-   * La file tient DEUX invariants d'un coup : le pic reste à un envoi, et
+   * La file `bulk` tient DEUX invariants d'un coup : le pic reste à un envoi, et
    * l'ORDRE d'enfilement est l'ordre d'envoi — ce dont dépend la réécriture,
    * dont la révocation doit précéder le remplacement de la même bannière.
    */
-  private deviceQueue: Promise<void> = Promise.resolve();
+  private readonly deviceLanes = new DeviceWorkLanes({ maxPending: DEVICE_LANE_MAX_PENDING,
+    onDrop: (lane) => notificationLogger.warn('device push lane full — step dropped, banner left in place', { lane }),
+    onError: (lane, error) => notificationLogger.error('device push queue step failed', { lane, error }) });
 
-  private queueDeviceWork(work: () => Promise<void>): void {
-    this.deviceQueue = this.deviceQueue.then(work).catch((error) => {
-      notificationLogger.error('device push queue step failed', { error });
-    });
+  private queueDeviceWork(work: () => Promise<void>, lane = BULK_DEVICE_LANE): void {
+    this.deviceLanes.enqueue(lane, work);
   }
 
   /**
@@ -3596,10 +3596,8 @@ export class NotificationService {
    * bannière de ceux qui ne le sont pas (`notificationRevocationPush`). Le
    * module ne rejette jamais.
    */
-  private revokeDeliveredPushes(revoked: readonly RetractedNotification[]): void {
-    this.queueDeviceWork(() =>
-      sendNotificationRevocationPushes({ pushService: this.pushService, revoked })
-    );
+  private revokeDeliveredPushes(revoked: readonly RetractedNotification[], lane = BULK_DEVICE_LANE): void {
+    this.queueDeviceWork(() => sendNotificationRevocationPushes({ pushService: this.pushService, revoked }), lane);
   }
 
   /**
@@ -3609,7 +3607,7 @@ export class NotificationService {
    */
   async flushPendingRevocations(): Promise<void> {
     this.badgeSync.flush();
-    await this.deviceQueue;
+    await this.deviceLanes.drain();
   }
 
   // ==============================================
