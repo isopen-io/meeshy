@@ -56,6 +56,7 @@ import { truncateByCodePoints } from '../../utils/truncate-text';
 import { filterMutedRecipients } from './mutedRecipients';
 import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
+import { retractNotificationRows } from './retractNotificationRows';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
 import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
 import { reproducedPushAudience } from './reproducedPushAudience';
@@ -142,7 +143,7 @@ import {
 } from './builders/account-security';
 import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { guardedInterval } from '../../utils/guarded-timer';
-import { refusesActorContent } from './blocked-actor-content';
+import { ACTOR_CONTENT_TYPES, refusesActorContent } from './blocked-actor-content';
 import { isSecurityEmailType } from './security-types';
 import { senderIdentityPushFields } from './senderIdentityPushFields';
 
@@ -160,25 +161,6 @@ type ReproducedNotificationPush = {
   readonly title: string;
   readonly subtitle?: string;
   readonly stale: RetractedNotification;
-};
-
-/**
- * Le lot d'un retrait par chemin JSON. Très au-dessus du réel — une demande
- * d'amitié produit UNE notification, à sa création — et `singleBatch` en fait
- * une lecture close plutôt qu'un curseur laissé ouvert côté serveur.
- */
-const RETRACTION_BATCH_SIZE = 1000;
-
-/**
- * Le retour d'une commande Mongo `find` brute réduite à sa projection d'ids.
- *
- * `_id` arrive en Extended JSON (`{ $oid }`) et non en `string` : c'est la
- * différence entre la commande brute et un `findMany` Prisma, et la raison pour
- * laquelle le retrait relit puis supprime par ids typés plutôt que d'enchaîner
- * deux commandes brutes.
- */
-type RawNotificationIdBatch = {
-  cursor?: { firstBatch?: ReadonlyArray<{ _id: string | { $oid: string } }> };
 };
 
 export class NotificationService {
@@ -3145,53 +3127,47 @@ export class NotificationService {
    * produit UNE notification, à sa création).
    */
   async retractFriendRequestNotifications(userId: string, friendRequestId: string): Promise<number> {
-    if (!/^[0-9a-f]{24}$/i.test(userId)) {
-      return 0;
-    }
+    return retractNotificationRows({
+      prisma: this.prisma,
+      userId,
+      match: { 'context.friendRequestId': friendRequestId },
+      // `delivery.pushSent` : la révocation push ne réveille un appareil que
+      // là où un push est parti (cf. `retractedNotificationOf`).
+      projection: { _id: 1, 'delivery.pushSent': 1 },
+      announce: (retracted) => this.announceNotificationsRetracted(retracted),
+      failure: { message: 'Failed to retract friend request notifications', context: { friendRequestId } },
+    });
+  }
 
-    try {
-      const raw = await (this.prisma as unknown as {
-        $runCommandRaw: (cmd: Record<string, unknown>) => Promise<RawNotificationIdBatch>;
-      }).$runCommandRaw({
-        find: 'Notification',
-        filter: {
-          userId: { $oid: userId },
-          'context.friendRequestId': friendRequestId,
-        },
-        // `delivery.pushSent` : la révocation push ne réveille un appareil que
-        // là où un push est parti (cf. `retractedNotificationOf`).
-        projection: { _id: 1, 'delivery.pushSent': 1 },
-        singleBatch: true,
-        batchSize: RETRACTION_BATCH_SIZE,
-      });
-
-      const rows = (raw?.cursor?.firstBatch ?? []).map((row) => ({
-        id: typeof row._id === 'string' ? row._id : row._id.$oid,
-        delivery: (row as { delivery?: unknown }).delivery,
-      }));
-
-      if (rows.length === 0) {
-        return 0;
-      }
-
-      const ids = rows.map((row) => row.id);
-      await this.prisma.notification.deleteMany({ where: { id: { in: ids } } });
-
-      // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
-      // qu'elle recalcule doivent voir la base d'après le retrait.
-      await this.announceNotificationsRetracted(
-        rows.map((row) => retractedNotificationOf({ id: row.id, userId, delivery: row.delivery }))
-      );
-
-      return ids.length;
-    } catch (error) {
-      notificationLogger.error('Failed to retract friend request notifications', {
-        error,
-        userId,
-        friendRequestId,
-      });
-      return 0;
-    }
+  /**
+   * RETIRE les notifications qu'un acteur a produites chez `userId` — le geste
+   * d'un BLOCAGE (#18910), dans ses deux sens.
+   *
+   *  - `'all'` (côté bloqueur, acteur = la personne bloquée) : tous les types,
+   *    annoncés comme tout retrait (`notification:deleted` par ligne, compteurs,
+   *    révocation des bannières). Une demande d'ami « accepter » ou une réaction
+   *    d'une personne bloquée ne reste pas dans la cloche ni dans le compteur ;
+   *  - `'actor-content'` (côté bloqué, acteur = le bloqueur) : seulement les
+   *    types qui portent le CONTENU de l'acteur (`ACTOR_CONTENT_TYPES` : extrait,
+   *    vignette, avatar), et SILENCIEUX — aucune émission vers lui, car une
+   *    disparition en direct lui apprendrait le blocage que la route veut taire.
+   */
+  async retractNotificationsFromActor(
+    userId: string,
+    actorId: string,
+    scope: 'all' | 'actor-content' = 'all'
+  ): Promise<number> {
+    return retractNotificationRows({
+      prisma: this.prisma,
+      userId,
+      match: {
+        'actor.id': actorId,
+        ...(scope === 'actor-content' ? { type: { $in: [...ACTOR_CONTENT_TYPES] } } : {}),
+      },
+      projection: { _id: 1, type: 1, 'context.conversationId': 1, 'delivery.pushSent': 1 },
+      announce: scope === 'all' ? (retracted) => this.announceNotificationsRetracted(retracted) : undefined,
+      failure: { message: 'Failed to retract notifications from actor', context: { actorId, scope } },
+    });
   }
 
   /**
