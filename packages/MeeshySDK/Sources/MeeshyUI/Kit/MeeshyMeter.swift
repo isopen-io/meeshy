@@ -97,7 +97,7 @@ public struct MeeshyMeter<Leading: View, Trailing: View>: View {
                     .accessibilityLabel(label)
                     .accessibilityValue(MeeshyMeterRecipe.spokenValue(spoken: spokenValue,
                                                                       fraction: recipe.fillFraction,
-                                                                      locale: locale))
+                                                                      locale: locale) ?? "")
             }
         }
     }
@@ -166,7 +166,7 @@ public struct MeeshyMeter<Leading: View, Trailing: View>: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(trackColor)
                 Capsule().fill(style).frame(width: proxy.size.width * CGFloat(shown))
-                ForEach(shownMarks, id: \.self) { mark in
+                ForEach(Array(shownMarks.enumerated()), id: \.offset) { _, mark in
                     Rectangle()
                         .fill(MeeshyMeterColors.mark(isDark: colorScheme == .dark))
                         .frame(width: MeeshyBorder.regular, height: CGFloat(recipe.height))

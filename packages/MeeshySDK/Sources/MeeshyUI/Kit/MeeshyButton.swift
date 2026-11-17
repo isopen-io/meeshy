@@ -32,6 +32,7 @@ public struct MeeshyButton<Trailing: View>: View {
         MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
     }
     @State private var holdLaw = MeeshyButtonHoldLaw()
+    @GestureState private var isTouching = false
 
     public init(_ title: String,
                 systemImage: String? = nil,
@@ -112,6 +113,7 @@ public struct MeeshyButton<Trailing: View>: View {
 
     private var holdControl: some View {
         let recipe = recipeValue(isPressed: holdState == .held || holdState == .live)
+        let diameter = recipe.diameter ?? MeeshyButtonRecipe.holdDiameter
         return MeeshyButtonLabel(title: title, systemImage: systemImage, width: .fit, kind: kind, size: size,
                                  shape: .hold, tint: tint, isDestructive: isDestructive, isPending: isPending,
                                  isDeferred: false, hasTrailing: false, trailing: EmptyView())
@@ -119,27 +121,35 @@ public struct MeeshyButton<Trailing: View>: View {
                                                   isPressed: holdState == .held || holdState == .live))
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard isEnabled, holdLaw.press() != nil else { return }
-                        onHoldChange?(true)
+                    .updating($isTouching) { _, touching, _ in touching = true }
+                    .onChanged { value in
+                        let inside = MeeshyButtonHoldLaw.isInside(x: Double(value.location.x),
+                                                                  y: Double(value.location.y),
+                                                                  diameter: diameter)
+                        report(holdLaw.track(isInside: inside, isEnabled: isEnabled && !isPending))
                     }
-                    .onEnded { _ in
-                        guard holdLaw.release() != nil else { return }
-                        onHoldChange?(false)
-                    }
+                    .onEnded { _ in report(holdLaw.endTouch()) }
             )
-            .onDisappear {
-                guard holdLaw.cancel() != nil else { return }
-                onHoldChange?(false)
+            .adaptiveOnChange(of: isTouching) { _, touching in
+                guard !touching else { return }
+                report(holdLaw.endTouch())
             }
+            .onDisappear { report(holdLaw.endTouch()) }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(title)
             .accessibilityAddTraits(.isButton)
+            .modifier(MeeshyButtonSpokenState(
+                isPending: isPending, isDeferred: false,
+                hint: MeeshyButtonWords.hint(disabledReason: disabledReason, isEnabled: isEnabled)
+            ))
             .accessibilityAction {
-                if let began = holdLaw.toggle(isEnabled: isEnabled) {
-                    onHoldChange?(began)
-                }
+                report(holdLaw.toggle(isEnabled: isEnabled && !isPending))
             }
+    }
+
+    private func report(_ held: Bool?) {
+        guard let held else { return }
+        onHoldChange?(held)
     }
 
     private func recipeValue(isPressed: Bool) -> MeeshyButtonRecipe {
@@ -368,24 +378,25 @@ public struct MeeshyButtonPair<Primary: View, Secondary: View>: View {
     }
 
     public var body: some View {
-        if MeeshyButtonPairLaw.stacks(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize) {
-            VStack(spacing: MeeshyButtonPairLaw.spacing) {
-                primary
-                secondary
-            }
-        } else {
-            MeeshyButtonPairLayout {
-                primary
-                secondary
-            }
+        MeeshyButtonPairLayout(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize) {
+            primary
+            secondary
         }
     }
 }
 
+/// La paire mesure ses deux libellés : en ligne aux parts 1,6 et 1 quand chacun
+/// tient dans sa part, empilée (le principal en haut, pleine largeur) sinon.
 private struct MeeshyButtonPairLayout: Layout {
+    let isAccessibilitySize: Bool
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard subviews.count == 2 else { return .zero }
-        let total = proposal.width ?? 0
+        let total = width(of: proposal, subviews: subviews)
+        if stacks(total: total, subviews: subviews) {
+            let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: total, height: nil)).height }
+            return CGSize(width: total, height: heights.reduce(0, +) + CGFloat(MeeshyButtonPairLaw.spacing))
+        }
         let widths = MeeshyButtonPairLaw.widths(total: Double(total))
         let heights = [
             subviews[0].sizeThatFits(ProposedViewSize(width: CGFloat(widths.primary), height: nil)).height,
@@ -396,6 +407,17 @@ private struct MeeshyButtonPairLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard subviews.count == 2 else { return }
+        if stacks(total: bounds.width, subviews: subviews) {
+            let primaryHeight = subviews[0].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+            let secondaryHeight = subviews[1].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+            subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.minY), anchor: .topLeading,
+                              proposal: ProposedViewSize(width: bounds.width, height: primaryHeight))
+            subviews[1].place(at: CGPoint(x: bounds.minX,
+                                          y: bounds.minY + primaryHeight + CGFloat(MeeshyButtonPairLaw.spacing)),
+                              anchor: .topLeading,
+                              proposal: ProposedViewSize(width: bounds.width, height: secondaryHeight))
+            return
+        }
         let widths = MeeshyButtonPairLaw.widths(total: Double(bounds.width))
         let primaryWidth = CGFloat(widths.primary)
         let secondaryWidth = CGFloat(widths.secondary)
@@ -405,5 +427,21 @@ private struct MeeshyButtonPairLayout: Layout {
                                       y: bounds.minY),
                           anchor: .topLeading,
                           proposal: ProposedViewSize(width: secondaryWidth, height: bounds.height))
+    }
+
+    private func idealWidths(_ subviews: Subviews) -> (primary: Double, secondary: Double) {
+        (Double(subviews[0].sizeThatFits(.unspecified).width), Double(subviews[1].sizeThatFits(.unspecified).width))
+    }
+
+    private func width(of proposal: ProposedViewSize, subviews: Subviews) -> CGFloat {
+        if let width = proposal.width, width.isFinite { return width }
+        let ideal = idealWidths(subviews)
+        return CGFloat(MeeshyButtonPairLaw.neededWidth(primaryIdeal: ideal.primary, secondaryIdeal: ideal.secondary))
+    }
+
+    private func stacks(total: CGFloat, subviews: Subviews) -> Bool {
+        let ideal = idealWidths(subviews)
+        return MeeshyButtonPairLaw.stacks(isAccessibilitySize: isAccessibilitySize, total: Double(total),
+                                          primaryIdeal: ideal.primary, secondaryIdeal: ideal.secondary)
     }
 }
