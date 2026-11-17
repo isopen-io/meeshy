@@ -78,8 +78,6 @@ export function mediaPageOffers(params: {
   };
 }
 
-export const offersAnything = (offers: MediaPageOffers): boolean => offers.save || offers.react || offers.reply || offers.compose || offers.share;
-
 /**
  * UNE PAGE TELLE QUE LA VISIONNEUSE LA REMET À SES ACTIONS — la pièce
  * ORIGINALE (jamais sa copie révélée), le message qui la porte, ce qu'elle

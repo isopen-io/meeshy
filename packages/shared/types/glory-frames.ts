@@ -36,13 +36,10 @@ import { GLORY_FRAME_PACK_SCHEMA, readGloryFramePackFrame, type GloryFramePackFr
 import { GLORY_ATMOSPHERES, type GloryAtmosphere } from './glory-atmospheres.js';
 
 export const GLORY_FRAME_FAMILIES = ['rank', 'tier', 'meesh', 'treasury', 'flame', 'day', 'achievement'] as const;
-export type GloryFrameFamily = (typeof GLORY_FRAME_FAMILIES)[number];
 
 /** La Meesh n° 1, puis l'édition de la pièce (argent, or à chaque centième, prisme à chaque millième). */
 export const MEESH_FRAME_EDITIONS = ['first', 'silver', 'gold', 'prism'] as const;
 export type MeeshFrameEdition = (typeof MEESH_FRAME_EDITIONS)[number];
-
-export type PhotoFlameThreshold = (typeof PHOTO_FLAME_THRESHOLDS)[number];
 
 export type GloryFrameContract = { readonly schema: typeof GLORY_FRAME_PACK_SCHEMA; readonly frames: readonly GloryFrame[] };
 

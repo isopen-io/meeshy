@@ -55,6 +55,3 @@ export const sendSheetStore = createSendSheetStore();
 export const openSendSheet = (request: SendSheetRequest): void => sendSheetStore.getState().open(request);
 
 export const closeSendSheet = (): void => sendSheetStore.getState().close();
-
-export const subscribeSendSheet = (listener: (request: SendSheetRequest | null) => void): (() => void) =>
-  sendSheetStore.subscribe((state) => listener(state.request));

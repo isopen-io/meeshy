@@ -77,13 +77,6 @@ export function engagementPillModel(
   return { kind: 'streak', streakDays: shown.streakDays, totalText, label };
 }
 
-/**
- * LA MARQUE À CÔTÉ DE L'HEURE (directive porteur 2026-10-01, #9570) —
- * « 🔥4 · 120 » tant que la série COURT, le cumul seul « 120 » sinon, rien
- * pour un cumul nul : la même loi que la pastille, relue au jour du lecteur.
- */
-export type StreakMarkModel = EngagementPillModel;
-
 export const streakMarkModel = engagementPillModel;
 
 /**
