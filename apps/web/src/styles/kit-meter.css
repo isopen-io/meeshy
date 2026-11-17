@@ -1,0 +1,146 @@
+/* LA JAUGE (K42, #18874) — une piste, un remplissage, cinq parties optionnelles. Deux
+   formes pleines : ni flou, ni ombre, ni masque. Chaque valeur chiffrée vient de
+   `meeshy-meter-recipe.ts`, qui la pose en propriétés `--kit-meter-*`. Seuls
+   `transform` et `opacity` s'animent : le remplissage ENTRE par `scaleX` (une fois), le
+   segment indéterminé voyage par `translate`. */
+@layer components {
+  .kit-meter {
+    display: block;
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  .kit-meter__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--kit-meter-value-gap);
+    margin-block-end: 6px;
+    font-size: 13px;
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-meter__value {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ios-ink);
+  }
+
+  .kit-meter__row {
+    display: flex;
+    align-items: center;
+    gap: var(--kit-meter-value-gap);
+  }
+
+  .kit-meter__track {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    block-size: var(--kit-meter-h);
+    border-radius: var(--ios-radius-full);
+    background-color: var(--color-ios-fill);
+    overflow: hidden;
+    opacity: var(--kit-meter-opacity);
+  }
+
+  .kit-meter__fill {
+    display: block;
+    inline-size: calc(var(--kit-meter-fraction) * 100%);
+    min-inline-size: var(--kit-meter-min-fill);
+    block-size: 100%;
+    border-radius: inherit;
+    background-image: linear-gradient(to right, var(--kit-meter-tone), var(--kit-meter-tone-end));
+    transform-origin: left center;
+  }
+
+  .kit-meter__fill:dir(rtl) {
+    background-image: linear-gradient(to left, var(--kit-meter-tone), var(--kit-meter-tone-end));
+    transform-origin: right center;
+  }
+
+  .kit-meter__track[data-enters] > .kit-meter__fill {
+    animation: kit-meter-rise var(--motion-rise-duration) var(--motion-rise) both;
+  }
+
+  .kit-meter__track[data-form='stepped'] {
+    gap: var(--kit-meter-step-gap);
+    background-color: transparent;
+    overflow: visible;
+  }
+
+  .kit-meter__step {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    border: 1px solid var(--color-ios-hairline);
+    border-radius: var(--ios-radius-full);
+  }
+
+  .kit-meter__step[data-filled] {
+    border-color: transparent;
+    background-color: var(--kit-meter-tone);
+  }
+
+  .kit-meter__segment {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: calc(var(--kit-meter-segment) * 100%);
+    border-radius: inherit;
+    background-color: var(--kit-meter-tone);
+  }
+
+  .kit-meter__track[data-moving] > .kit-meter__segment {
+    animation: kit-meter-slide 1400ms linear infinite;
+  }
+
+  .kit-meter__mark {
+    position: absolute;
+    inset-block: 0;
+    inline-size: var(--kit-meter-mark);
+    background-color: var(--color-ios-surface);
+  }
+
+  .kit-meter__captions {
+    display: flex;
+    justify-content: space-between;
+    margin-block-start: var(--kit-meter-caption-gap);
+    font-size: 12.5px;
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-meter__leading,
+  .kit-meter__trailing {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+  }
+}
+
+@keyframes kit-meter-rise {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes kit-meter-slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(263%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-meter__track[data-enters] > .kit-meter__fill,
+  .kit-meter__track[data-moving] > .kit-meter__segment {
+    animation: none;
+  }
+}

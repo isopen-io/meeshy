@@ -1,0 +1,106 @@
+/* LA TOUCHE DE RACCOURCI (K55, #18874) — un carré arrondi à lèvre, en chasse fixe, et la
+   légende qui les range en paires. AUCUN écouteur, aucune cible : la cible de 44 est celle
+   de l'hôte, inchangée par sa présence. Le verre de la barre de légende vient de K01. Chaque
+   valeur chiffrée vient de `meeshy-key-hint-recipe.ts`, qui la pose en propriétés
+   `--kit-key-*`. L'état enfoncé change la teinte, sans translation : la lèvre reste. */
+@layer components {
+  .kit-key-hint {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--kit-key-gap);
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .kit-key {
+    display: inline-grid;
+    place-items: center;
+    box-sizing: border-box;
+    min-inline-size: var(--kit-key-side);
+    block-size: var(--kit-key-side);
+    padding-inline: var(--kit-key-pad);
+    border: var(--kit-key-border) solid var(--color-edge);
+    border-block-end-width: var(--kit-key-lip);
+    border-radius: var(--kit-key-radius);
+    background-color: var(--color-ios-fill);
+    color: var(--color-ios-ink-2);
+    font-family: var(--ios-font-mono, ui-monospace, monospace);
+    font-size: var(--kit-key-font);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .kit-key-hint[data-pressed] > .kit-key {
+    background-color: color-mix(in srgb, var(--color-ios-ink) 14%, var(--color-ios-fill));
+  }
+
+  .kit-key-hint[data-surface='onAccent'] > .kit-key {
+    border-color: color-mix(in srgb, var(--color-ios-on-brand) 45%, transparent);
+    background-color: color-mix(in srgb, var(--color-ios-on-brand) 18%, transparent);
+    color: var(--color-ios-on-brand);
+  }
+
+  .kit-key-hint[data-surface='onGlass'] > .kit-key {
+    border-color: var(--color-media-hairline);
+    background-color: color-mix(in srgb, var(--color-on-media) 14%, transparent);
+    color: var(--color-on-media);
+  }
+
+  .kit-key-hint[data-context='inset'] > .kit-key {
+    background-color: color-mix(in srgb, currentcolor 12%, transparent);
+    border-color: color-mix(in srgb, currentcolor 30%, transparent);
+    color: inherit;
+  }
+}
+
+.kit-key-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--kit-key-rule-gap);
+  row-gap: 6px;
+}
+
+.kit-key-legend-bar {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-block-size: var(--kit-key-bar-h);
+  padding-inline: 14px;
+  border-radius: var(--kit-key-bar-radius);
+}
+
+.kit-key-legend__entry {
+  display: inline-flex;
+  align-items: center;
+  column-gap: var(--kit-key-rule-gap);
+}
+
+.kit-key-legend__rule {
+  inline-size: var(--kit-key-rule-w);
+  block-size: var(--kit-key-rule-h);
+  background-color: var(--color-media-hairline);
+}
+
+.kit-key-legend__pair {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kit-key-pair-gap);
+  white-space: nowrap;
+}
+
+.kit-key-legend__label {
+  overflow: hidden;
+  max-inline-size: 16ch;
+  text-overflow: ellipsis;
+  font-size: var(--kit-key-label);
+  font-weight: var(--kit-key-label-weight);
+  color: var(--color-ios-ink);
+}
+
+.kit-key-legend__leading {
+  display: inline-flex;
+  align-items: center;
+}
