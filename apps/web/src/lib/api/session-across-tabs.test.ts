@@ -404,6 +404,26 @@ describe('W1 — la révocation reçue par la socket se juge sur la session qu�
     expect(noted).toEqual([]);
   });
 
+  test('la révocation d’une session que l’appareil ne tient plus n’est pas notée : l’onglet suit l’appareil, il n’y a rien à expliquer', async () => {
+    const storage = fakeStorage();
+    const { staleTab } = staleTabThenFreshLogin(storage);
+    const noted: string[] = [];
+    setDeviceFollower(followDeviceSession);
+    try {
+      await endRevokedSessionWithReason({
+        store: staleTab,
+        reason: 'user_revoke',
+        load: async () => ({ note: (reason: string) => void noted.push(reason) }),
+        end: (store) => endRevokedSession(store, { storage, cacheStorage: noReaderCaches }),
+      });
+    } finally {
+      setDeviceFollower(null);
+    }
+
+    expect(noted).toEqual([]);
+    expect(tokenOf(staleTab.getState().session)).toBe('jwt-recent');
+  });
+
   test('la session toujours tenue est fermée, son motif noté d’abord', async () => {
     const tab = openTab(fakeStorage());
     tab.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });

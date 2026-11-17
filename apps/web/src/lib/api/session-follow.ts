@@ -83,9 +83,11 @@ export type SessionEndNotes = { note(reason: string): void };
  * de `auth:session-revoked` est noté avant la fin, pour que l'écran de
  * connexion l'explique — mais son module se charge à la demande, et pendant ce
  * temps l'onglet a pu reprendre la session que l'appareil tient : fermer
- * celle-là la ferait payer pour la session révoquée. Sans motif (jeton échu),
- * la session finit aussitôt ; un module qui ne se charge pas ne la retient
- * jamais ouverte.
+ * celle-là la ferait payer pour la session révoquée. Le motif n'est noté que si
+ * la session révoquée est encore celle de l'appareil : sinon l'onglet SUIT
+ * l'appareil, ne passe par aucun écran de connexion, et un motif gardé
+ * s'afficherait à contretemps. Sans motif (jeton échu), la session finit
+ * aussitôt ; un module qui ne se charge pas ne la retient jamais ouverte.
  */
 export function endRevokedSessionWithReason(params: {
   readonly store: SessionStoreApi;
@@ -102,7 +104,7 @@ export function endRevokedSessionWithReason(params: {
   const stillHeld = (): boolean => heldSessionKey(store.getState().session) === refused;
   return load()
     .then((notes) => {
-      if (stillHeld()) notes.note(reason);
+      if (stillHeld() && store.getState().holdsDeviceSession()) notes.note(reason);
     })
     .catch(() => undefined)
     .then(() => {
