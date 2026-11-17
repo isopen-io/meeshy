@@ -1,7 +1,7 @@
 {
   "composant": "MeeshyStateBlock",
   "cle": "K38",
-  "note": "Vecteurs de parité (fiche K38 § 02, § 06). Une erreur a toujours une sortie ; un vide plein écran aussi ; seule la forme compacte peut s'en passer.",
+  "note": "Vecteurs de parité (fiche K38 § 02, § 06). Une erreur a toujours une sortie ; un vide plein écran aussi ; seule la forme compacte peut s'en passer. Le refus dit ce qui est fermé comme le succès dit ce qui est fait (au plus quatre lignes, #18873) ; un glyphe nommé par l'hôte remplace celui du genre.",
   "refus": [
     {
       "genre": "error",
@@ -77,6 +77,30 @@
       "genre": "success",
       "ton": "success",
       "annonce": false
+    }
+  ],
+  "consequences": [
+    {
+      "genre": "success",
+      "garde": true,
+      "glyphe": "checkmark"
+    },
+    {
+      "genre": "denied",
+      "garde": true,
+      "glyphe": "minus.circle"
+    },
+    {
+      "genre": "error",
+      "garde": false
+    },
+    {
+      "genre": "offline",
+      "garde": false
+    },
+    {
+      "genre": "empty",
+      "garde": false
     }
   ]
 }

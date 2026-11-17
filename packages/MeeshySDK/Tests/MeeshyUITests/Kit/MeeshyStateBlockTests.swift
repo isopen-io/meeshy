@@ -135,6 +135,18 @@ struct MeeshyStateBlockTests {
         #expect(MeeshyStateBlockRecipe.consequenceSystemImage(of: .success) == "checkmark")
     }
 
+    @Test("les lignes-conséquences suivent les vecteurs de parité")
+    func consequences_followTheVectors() throws {
+        for row in try KitAtomVectors.rows(Self.file, "consequences") {
+            let name = try #require(row["genre"] as? String)
+            let kept = MeeshyStateBlockRecipe.shownConsequences(["a"], kind: Self.kind(name))
+            #expect(kept.isEmpty == !((row["garde"] as? Bool) ?? false), "\(row)")
+            if let glyph = row["glyphe"] as? String {
+                #expect(MeeshyStateBlockRecipe.consequenceSystemImage(of: Self.kind(name)) == glyph, "\(row)")
+            }
+        }
+    }
+
     @Test("garde de source : le bloc ne sait ni lien, ni fiche, ni permission, ni réseau")
     func source_isAnAgnosticAtom() throws {
         try KitAssemblyGuards.assertAgnostic(["MeeshyStateBlock.swift", "MeeshyStateBlockRecipe.swift"])
