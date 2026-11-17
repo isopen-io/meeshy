@@ -125,7 +125,7 @@ extension ConversationSyncEngine {
         // Figée AVANT la première écriture : `saveSorted(firstPage)` remplace le
         // cache par la seule page 1, et sans cette baseline les pages suivantes
         // n'auraient plus d'homologue local où retrouver leur frontière de lecture.
-        let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
+        let baseline = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
 
         // Fetch the first page to show something on screen as fast as
         // possible, then fan out to the remaining pages in parallel. On
@@ -467,7 +467,7 @@ extension ConversationSyncEngine {
         guard let creance = await creanceDeSync() else { return .indisponible(.creanceAbsente) }
 
         let userId = await currentUserId()
-        let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
+        let baseline = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
         let parId = Dictionary(baseline.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         var servies: [MeeshyConversation] = []
@@ -658,7 +658,7 @@ extension ConversationSyncEngine {
             let userId = await currentUserId()
             let deltaConversations = (await Self.mapConversationsOffMain(response.data, userId: userId))
 
-            let existing = await cache.conversations.load(for: "list").snapshot() ?? []
+            let existing = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
 
             // O(existing + deltas) merge by id, instead of an O(deltas × convs)
             // firstIndex / removeAll scan per delta — measurable on a foreground

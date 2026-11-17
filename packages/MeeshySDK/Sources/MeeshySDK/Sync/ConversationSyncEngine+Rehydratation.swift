@@ -90,7 +90,7 @@ extension ConversationSyncEngine {
 
         guard !recues.isEmpty else { return .faite(resteAuServeur: resteAuServeur) }
 
-        let existing = await cache.conversations.load(for: "list").snapshot() ?? []
+        let existing = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
         let (merged, removedIds) = Self.mergeDeltaConversations(existing: existing, deltas: recues)
         let removedSet = Set(removedIds)
         for removedId in removedIds {
