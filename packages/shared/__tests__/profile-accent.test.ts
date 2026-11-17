@@ -6,8 +6,10 @@ import {
 } from '../utils/profile-accent';
 import { updateUserProfileSchema } from '../utils/validation';
 
-const LIGHT_SURFACE = '#FFFFFF';
-const DARK_SURFACE = '#0B0B12';
+// Les surfaces du design system (`packages/design-tokens/ios.css`, `--ios-surface` et
+// `--ios-surface-card`, thèmes clair et sombre) : la vitrine se pose sur la page ET sur ses cartes.
+const LIGHT_SURFACES = ['#FFFFFF', '#F8F7FF'];
+const DARK_SURFACES = ['#09090B', '#13111C'];
 
 const channel = (hex: string, offset: number): number => {
   const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
@@ -29,10 +31,10 @@ describe('PROFILE_ACCENT_COLORS : la liste FERMÉE des teintes de la vitrine (#1
     ]);
   });
 
-  it('chaque teinte a une encre lisible (4.5:1) sur une surface claire ET sur une surface sombre', () => {
+  it('chaque teinte a une encre lisible (4.5:1) sur chaque surface claire ET sombre du design system, cartes comprises', () => {
     for (const tone of PROFILE_ACCENT_COLORS) {
-      expect(contrast(tone.inkOnLight, LIGHT_SURFACE)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(tone.inkOnDark, DARK_SURFACE)).toBeGreaterThanOrEqual(4.5);
+      LIGHT_SURFACES.forEach((surface) => expect(contrast(tone.inkOnLight, surface)).toBeGreaterThanOrEqual(4.5));
+      DARK_SURFACES.forEach((surface) => expect(contrast(tone.inkOnDark, surface)).toBeGreaterThanOrEqual(4.5));
     }
   });
 
