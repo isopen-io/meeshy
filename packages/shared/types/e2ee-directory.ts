@@ -77,6 +77,8 @@ export const E2EE_ERROR_CODES = {
   DEVICE_LIMIT_REACHED: 'E2EE_DEVICE_LIMIT_REACHED',
   ENVELOPES_INVALID: 'E2EE_ENVELOPES_INVALID',
   KEYS_FORBIDDEN: 'E2EE_KEYS_FORBIDDEN',
+  /** Un compte réserve trop de bundles, toutes cibles confondues : il patiente (`Retry-After`) (#18906, GW-01). */
+  KEYS_BUDGET_EXCEEDED: 'E2EE_KEYS_BUDGET_EXCEEDED',
   REGIME_CHANGED: 'E2EE_REGIME_CHANGED',
   /** Une conversation chiffrée de bout en bout ne repasse jamais en clair (#12949). */
   IRREVERSIBLE: 'E2EE_IRREVERSIBLE',
@@ -84,6 +86,8 @@ export const E2EE_ERROR_CODES = {
   DIRECT_ALREADY_END_TO_END: 'E2EE_DIRECT_ALREADY_END_TO_END',
   /** Un tête-à-tête ne se chiffre de bout en bout qu'entre exactement deux membres actifs (#12966). */
   DIRECT_NOT_A_PAIR: 'E2EE_DIRECT_NOT_A_PAIR',
+  /** Un tête-à-tête chiffré de bout en bout reste à deux : aucune porte n'y fait entrer un troisième membre (#16188). */
+  DIRECT_STAYS_A_PAIR: 'E2EE_DIRECT_STAYS_A_PAIR',
   BINDING_INVALID: 'E2EE_DEVICE_BINDING_INVALID',
   PREKEY_STOCK_FULL: 'E2EE_PREKEY_STOCK_FULL',
   IDENTITY_REVOKED: 'E2EE_IDENTITY_REVOKED',
@@ -124,6 +128,14 @@ export const E2EE_SIGNAL_CHANNEL_REQUIRED_MESSAGE =
  */
 export const E2EE_IRREVERSIBLE_MESSAGE =
   'End-to-end encryption cannot be turned off for this conversation. To chat without it, start a new conversation.';
+
+/**
+ * Le texte servi avec `E2EE_DIRECT_STAYS_A_PAIR` (#16188) : un ancien client qui
+ * ajoute ou invite quelqu'un dans un tête-à-tête chiffré de bout en bout
+ * l'affiche tel quel (#9223).
+ */
+export const E2EE_DIRECT_STAYS_A_PAIR_MESSAGE =
+  'This end-to-end encrypted conversation stays between the two of you: nobody can be added. To chat with more people, start a group.';
 
 /**
  * Le texte servi avec `E2EE_DIRECT_ALREADY_END_TO_END` (#12966) : chiffrer un
