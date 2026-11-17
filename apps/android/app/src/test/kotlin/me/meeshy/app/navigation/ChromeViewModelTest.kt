@@ -8,9 +8,12 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -200,6 +203,32 @@ class ChromeViewModelTest {
 
         coVerify(exactly = 2) { friendRepository.friendshipGraph(any()) }
         verify(exactly = 2) { notificationRepository.notificationsStream(any(), any()) }
+    }
+
+    @Test
+    fun `a logout stops the notification stream collector and the next login runs exactly one`() = runTest {
+        val vm = viewModel()
+        var active = 0
+        every { notificationRepository.notificationsStream(any(), any()) } returns flow {
+            active++
+            try {
+                awaitCancellation()
+            } finally {
+                active--
+            }
+        }
+
+        vm.warmUpIfAuthenticated(true)
+        advanceUntilIdle()
+        assertThat(active).isEqualTo(1)
+
+        vm.warmUpIfAuthenticated(false)
+        advanceUntilIdle()
+        assertThat(active).isEqualTo(0)
+
+        vm.warmUpIfAuthenticated(true)
+        advanceUntilIdle()
+        assertThat(active).isEqualTo(1)
     }
 
     private fun progressWithActs(vararg done: Boolean): ApiEngagementProgress = progressWith(done = done.toList())
