@@ -4,6 +4,17 @@ import MeeshySDK
 /// Les mots de la face Actions de ma fiche (#18869, planche `Moi-Actions`).
 nonisolated enum ProfileActionsCopy {
 
+    static var title: String {
+        String(localized: "profile.actions.title", defaultValue: "Actions", bundle: .main)
+    }
+
+    /// « @aissa » sous le titre ; rien sans pseudo.
+    static func handle(of user: MeeshyUser?) -> String? {
+        guard let username = user?.username.trimmingCharacters(in: .whitespacesAndNewlines),
+              !username.isEmpty else { return nil }
+        return "@\(username)"
+    }
+
     static var showTitle: String {
         String(localized: "profile.actions.show", defaultValue: "Montrer", bundle: .main)
     }

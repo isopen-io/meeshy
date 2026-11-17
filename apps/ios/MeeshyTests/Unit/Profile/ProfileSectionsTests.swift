@@ -339,6 +339,22 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(voice.contains(".onDisappear { player.stop() }"), "la voix se tait quand on quitte la fiche")
     }
 
+    // MARK: - Face Actions (Moi-Actions)
+
+    func test_actionsHeader_namesMyHandle_withTheAtSign_andSaysNothingWithoutAUser() {
+        XCTAssertEqual(ProfileActionsCopy.handle(of: MeeshyUser(id: "me", username: "aissa")), "@aissa")
+        XCTAssertNil(ProfileActionsCopy.handle(of: MeeshyUser(id: "me", username: "  ")))
+        XCTAssertNil(ProfileActionsCopy.handle(of: nil))
+    }
+
+    func test_actionsFace_opensWithMyAvatar_theActionsTitle_andMyHandle() throws {
+        let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
+        XCTAssertTrue(face.contains("MeeshyAvatar(name:"), "l'avatar de la planche, celui du kit")
+        XCTAssertTrue(face.contains("ProfileActionsCopy.title"))
+        XCTAssertTrue(face.contains("ProfileActionsCopy.handle(of: user)"))
+        XCTAssertTrue(face.contains(".accessibilityAddTraits(.isHeader)"), "« Actions » est le titre de la face pour VoiceOver")
+    }
+
     // MARK: - Publications (K49)
 
     func test_publicationTiles_onAnEmptyCacheWhileLoading_areThreeSkeletons_neverASpinner() {

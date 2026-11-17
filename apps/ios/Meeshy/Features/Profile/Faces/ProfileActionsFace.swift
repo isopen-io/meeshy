@@ -38,6 +38,7 @@ struct ProfileActionsFace: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
+            header
             showSection
             sharingSection
             whoSeesMeSection
@@ -48,6 +49,32 @@ struct ProfileActionsFace: View {
             MeeshyButton(ProfileActionsCopy.logout, systemImage: "rectangle.portrait.and.arrow.right",
                          kind: .danger, width: .fill, isDestructive: true, action: { onAction(.logout) })
         }
+    }
+
+    // MARK: - En-tête
+
+    /// Mon avatar, « Actions » en grand, et mon pseudo dessous (planche `Moi-Actions`).
+    private var header: some View {
+        HStack(spacing: MeeshySpacing.md) {
+            MeeshyAvatar(name: user?.displayName ?? user?.username ?? "", context: .custom(40),
+                         accentColor: accentColor, avatarURL: user?.avatar, thumbHash: user?.avatarThumbHash)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(ProfileActionsCopy.title)
+                    .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .heavy, design: .rounded))
+                    .foregroundStyle(theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                if let handle = ProfileActionsCopy.handle(of: user) {
+                    Text(handle)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .monospaced))
+                        .foregroundStyle(theme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("profile.actions.header")
     }
 
     // MARK: - Montrer
