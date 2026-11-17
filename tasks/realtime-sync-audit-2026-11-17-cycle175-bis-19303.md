@@ -1,8 +1,18 @@
-# Cycle 175 — deux sessions sur la même issue, et ce qui restait une fois le doublon retiré
+# Cycle 175 bis — deux sessions sur la même issue, et ce qui restait une fois le doublon retiré
 
 *2026-11-17. Branche `claude/exciting-planck-pqz9ln`, partie de la tête de `dev`
-(`8ed69c323`). Nom de fichier suffixé par son issue, comme aux cycles 171 à 174 —
-un nom de fichier partagé FUSIONNE en silence (#18632).*
+(`8ed69c323`), refusionnée sur `b25dc3e7f1`.*
+
+*__« bis », et le nom de fichier est la mesure de ce cycle.__ La session `…Qbf5`
+a publié son propre journal du cycle 175 — `tasks/realtime-sync-audit-2026-11-17-cycle175-19261.md`,
+PR #19301 — sous le nom EXACT que celui-ci portait d'abord. Les deux sessions
+avaient suivi la même règle de nommage (suffixer par l'issue, cycles 171 à 174)
+et l'ont donc violée ensemble : #18632 dit qu'un nom de fichier partagé FUSIONNE
+en silence, et la règle qui devait l'empêcher a produit la collision parce que
+les deux lots partageaient l'issue. **Suffixer par l'ISSUE ne désambiguïse que
+des lots d'issues différentes** ; deux sessions sur la même issue ont besoin
+d'autre chose — ici le « bis » et le numéro de l'issue RÉELLEMENT livrée
+(#19303).*
 
 **Développé** : #19261 — la fenêtre du gel de livraison s'ancre sur la POSITION.
 **Livré par une autre session**, PR #19300, pendant que celle-ci écrivait.

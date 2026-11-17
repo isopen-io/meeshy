@@ -1,9 +1,9 @@
-# La règle du plancher de livraison cesse d'être RETAPABLE (#19303)
+## La règle du plancher de livraison cesse d'être RETAPABLE (#19303)
 
 *2026-11-17. Cycle 175. Suite de #19261 (le comportement), qui suit #18731 et
 #18701.*
 
-## Décision
+### Décision
 
 La POSITION du curseur de livraison, et la PROJECTION d'où elle se résout,
 vivent à UN endroit : `services/messaging/deliveryFloor.ts`.
@@ -17,7 +17,7 @@ vivent à UN endroit : `services/messaging/deliveryFloor.ts`.
 Les trois sites de plage de livraison la consultent, y compris celui où `since`
 est aujourd'hui inexploité.
 
-## Pourquoi : #19261 a corrigé le verdict, pas la condition
+### Pourquoi : #19261 a corrigé le verdict, pas la condition
 
 #19261 a retiré l'horloge murale des deux sites vivants. Il l'a fait en
 **retapant** la règle à chacun — son propre message de commit porte « une règle
@@ -27,7 +27,7 @@ c'est la forme normale du correctif quand la règle n'a pas d'endroit où vivre.
 **un endroit ne l'avait effectivement pas** — la cascade « lu ⇒ remis », dont le
 `select` ignorait la colonne, ce que #19261 est venu réparer.
 
-## La forme forte : des champs REQUIS, pas optionnels
+### La forme forte : des champs REQUIS, pas optionnels
 
 La décision de #17208 (lesson *une loi qui PUBLIE son `select`…*) posait déjà que
 « le TYPE du paramètre est l'autre moitié de la garde ». Sa forme forte est
@@ -50,7 +50,7 @@ voit pas : que les sites demandent bien la colonne à la BASE. #19261 n'en avait
 aucun — ses six témoins sont des témoins de verdict, et un double Prisma rend ce
 qu'on lui dit quel que soit son `select`.
 
-## Le plancher est le MINIMUM, et non la position seule
+### Le plancher est le MINIMUM, et non la position seule
 
 L'invariant attendu est `position <= horloge` (un message est créé avant d'être
 remis), donc `position ?? clock` et `min` coïncident sur toute donnée saine. Ils
@@ -63,7 +63,7 @@ tiennent ensemble : le gel est **write-once**, donc ré-ouvrir un intervalle dé
 gravé n'écrit rien ; et un message sous le plancher est un message que le curseur
 **DÉCLARE** déjà remis.
 
-## Le site EXACT reçoit la position bien qu'elle y soit INERTE
+### Le site EXACT reçoit la position bien qu'elle y soit INERTE
 
 `freezeMessageStatus` ignore `since` dès qu'une liste d'ids est nommée — la liste
 ÉTANT la borne, et `since` n'ayant aucun autre usage dans la fonction. #19261 a
@@ -72,7 +72,7 @@ aujourd'hui ; la valeur reste un **piège armé** (règle du cycle 84). Le jour 
 ce paramètre compterait en mode exact, l'horloge serait de retour sans qu'un
 témoin tombe.
 
-## Ce que la décision NE tranche PAS
+### Ce que la décision NE tranche PAS
 
 **La chaîne de LECTURE porte les deux horloges que la livraison vient de
 perdre** — son balayage de contiguïté (`_computeExactReadCursorTarget`, le défaut
