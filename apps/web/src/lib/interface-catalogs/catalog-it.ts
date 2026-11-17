@@ -255,8 +255,6 @@ const it = {
   'feed.like.error': 'Errore nel mettere Mi piace',
   'post.bookmark.error': 'Salvataggio non riuscito',
   'feed.gesture.pending': 'Azione non confermata — offline',
-  'feed.share.error': 'Errore nella condivisione del post',
-  'feed.share.copied': 'Link copiato — non resta che incollarlo.',
 
   'root.menu.feed': 'Feed',
   'root.menu.game': 'La mia Leggenda',

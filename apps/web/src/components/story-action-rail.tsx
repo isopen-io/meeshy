@@ -18,7 +18,7 @@ import { GLYPH_SIZE } from '@/components/ui-chrome';
 import { percent, ringAppearance } from '@/lib/stories/save-progress';
 import type { StorySaveJobView } from '@/lib/stories/save-store';
 
-import { VIEWER_GLASS, VIEWER_RAIL_CORRIDOR, ViewerActionRail, type ViewerAction, type ViewerProbe } from './viewer-chrome';
+import { VIEWER_GLASS, ViewerActionRail, type ViewerAction, type ViewerProbe } from './viewer-chrome';
 
 /**
  * **LE RAIL D'ACTIONS DU LECTEUR DE STORIES** — miroir de
@@ -50,12 +50,6 @@ import { VIEWER_GLASS, VIEWER_RAIL_CORRIDOR, ViewerActionRail, type ViewerAction
  * gestionnaire.
  */
 
-/**
- * Le couloir que le rail réserve au bord de fin — UNE valeur, celle des
- * primitives. La barre basse partage sa rangée avec le rail : la légende ne
- * passe donc plus jamais dessous, sans que l'hôte ait à réserver quoi que ce soit.
- */
-export const STORY_ACTION_RAIL_CORRIDOR = VIEWER_RAIL_CORRIDOR;
 const TEXT_SHADOW = '0 1px 2px var(--color-scrim)';
 
 type RailGlyphs = { readonly idle: GlyphShape; readonly active?: GlyphShape };

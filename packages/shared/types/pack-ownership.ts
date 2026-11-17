@@ -32,8 +32,6 @@ export type PackEligibilityRule =
   | { readonly kind: 'trophy'; readonly key: string }
   | { readonly kind: 'season'; readonly number: number };
 
-export type PackEligibilityKind = PackEligibilityRule['kind'];
-
 /** Les faits lus par le serveur : le rang courant, les clés de trophées gravées, les saisons jouées. */
 export type PackEligibilityFacts = {
   readonly rank: GloryRankOrMythic;
