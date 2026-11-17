@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import java.io.IOException
 import kotlinx.serialization.json.JsonNull
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.conversation.ChatMutationAdmission
@@ -13,6 +14,7 @@ import me.meeshy.sdk.conversation.MessageMutationsRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.runHarnessTest
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiResponse
@@ -221,6 +223,76 @@ class ExhaustedMessageGestureTest {
             assertThat(harness.cachedMessage("m1").content).isEqualTo("bonjour")
             api.readTheMessageAlone("m1")
         }
+
+    // — #19047: a deletion refused for good (404, 410) of a message the server no longer serves —
+
+    private fun sealed(id: String, at: String) =
+        message(id, at, content = "[Encrypted]").copy(isEncrypted = true, encryptionMode = "e2ee")
+
+    private fun MessageCollaboratorHarness.erasures() = PlaintextErasureLedger(database, clock) { "me" }
+
+    private suspend fun PlaintextErasureLedger.keys(): List<String> = pending("me", 100).flatMap { it.messageKeys("me") }
+
+    private fun MessageCollaboratorHarness.repository(api: MessageApi, erasures: PlaintextErasureLedger) = MessageRepository(
+        api,
+        mockk(relaxed = true),
+        database,
+        database.messageDao(),
+        database.syncMetaDao(),
+        outbox,
+        clock,
+        regime = EndToEndRegimeKeeper(EndToEndRegimeLedger.None, database),
+        erasures = erasures,
+    )
+
+    /** Around an id it no longer knows, the gateway serves its newest page instead: the message is not in it. */
+    private fun gatewayAnswering(around: String, vararg page: ApiMessage): MessageApi = mockk {
+        coEvery { listAround(CONVERSATION, around, any()) } returns ApiResponse(success = true, data = page.toList())
+    }
+
+    @Test
+    fun `a deletion refused in 410 of a message the server no longer serves stays deleted, and its plaintext erasure is recorded`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(sealed("m1", T1))
+            harness.seedSynced(sealed("m9", T9))
+            val erasures = harness.erasures()
+            val repo = harness.repository(gatewayAnswering("m1", sealed("m9", T9)), erasures)
+            repo.deleteOptimistic("m1")
+
+            DeleteMessageHandler(mockk(relaxed = true), repo).onExhausted(harness.exhausted(OutboxLanes.forMessage(CONVERSATION)))
+
+            assertThat(harness.cachedMessage("m1").deletedAt).isNotNull()
+            assertThat(harness.cachedMessage("m1").content).isEmpty()
+            assertThat(erasures.keys()).containsExactly("m1")
+        }
+
+    @Test
+    fun `a deletion refused of a message the server still serves gives it back, and erases nothing`() = runHarnessTest { harness ->
+        harness.seedSynced(sealed("m1", T1))
+        harness.seedSynced(sealed("m9", T9))
+        val erasures = harness.erasures()
+        val repo = harness.repository(gatewayAnswering("m1", sealed("m1", T1)), erasures)
+        repo.deleteOptimistic("m1")
+
+        DeleteMessageHandler(mockk(relaxed = true), repo).onExhausted(harness.exhausted(OutboxLanes.forMessage(CONVERSATION)))
+
+        assertThat(harness.cachedMessage("m1").deletedAt).isNull()
+        assertThat(erasures.keys()).isEmpty()
+    }
+
+    @Test
+    fun `a deletion refused whose read back fails proves nothing, and erases nothing`() = runHarnessTest { harness ->
+        harness.seedSynced(sealed("m1", T1))
+        val erasures = harness.erasures()
+        val api = mockk<MessageApi> { coEvery { listAround(CONVERSATION, "m1", any()) } throws IOException("offline") }
+        val repo = harness.repository(api, erasures)
+        repo.deleteOptimistic("m1")
+
+        DeleteMessageHandler(mockk(relaxed = true), repo).onExhausted(harness.exhausted(OutboxLanes.forMessage(CONVERSATION)))
+
+        assertThat(harness.cachedMessage("m1").deletedAt).isNull()
+        assertThat(erasures.keys()).isEmpty()
+    }
 
     private companion object {
         const val CONVERSATION = "c1"

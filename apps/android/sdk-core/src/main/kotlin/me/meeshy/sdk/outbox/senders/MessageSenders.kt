@@ -187,7 +187,8 @@ internal object PlaintextRefusal {
  * vault (#14656, iOS `confirmDeletion`). An exhausted deletion (refused in clear for an end-to-end conversation, #13790,
  * or retries spent) lifts its optimistic tombstone — the plaintext, never erased, reads again — then reads the message
  * back by its id (#18915), so the bubble gives way to the server's message wherever it sits in the thread: a refresh
- * of the conversation only reads its recent window.
+ * of the conversation only reads its recent window. A read back that does NOT serve it — a 404 or a 410 says the server
+ * no longer knows it — lays the tombstone again and erases its plaintext (#19047, [MessageRepository.settleRefusedDeletion]).
  */
 public class DeleteMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
@@ -202,8 +203,7 @@ public class DeleteMessageHandler @Inject constructor(
     }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        messageRepository.markUndeleted(row.targetId)
-        PlaintextRefusal.laneConversation(row.lane)?.let { messageRepository.refreshMessage(it, row.targetId) }
+        messageRepository.settleRefusedDeletion(PlaintextRefusal.laneConversation(row.lane), row.targetId)
     }
 }
 

@@ -350,6 +350,21 @@ class MessageRepository internal constructor(
         erasures?.recordNamed(listOf(messageId))
     }
 
+    /**
+     * #19047 — a deletion refused for good lifts its optimistic tombstone, then reads the message back by its id. When
+     * that read serves it, the server's message takes its place (#18915). When it answers WITHOUT it — a 404 or a 410 says
+     * the server no longer knows it — the message is gone for this reader: the tombstone is laid again and its
+     * end-to-end plaintext erased, instead of a row revived out of the window for good, its plaintext kept in the vault. A
+     * read that proves nothing (offline, refused) leaves the row as the rollback left it.
+     */
+    suspend fun settleRefusedDeletion(conversationId: String?, messageId: String) {
+        markUndeleted(messageId)
+        conversationId ?: return
+        if (history.readBack(conversationId, messageId) != MessageReadBack.ABSENT) return
+        mutations.markGone(messageId)
+        confirmDeletion(messageId)
+    }
+
     /** Removes the named rows (either of their two ids) and their edit history. */
     suspend fun purgeMessages(messageIds: Collection<String>) = mutations.purgeMessages(messageIds)
 

@@ -108,11 +108,16 @@ class ExhaustionHandlersTest {
         coVerify(exactly = 0) { messageRepository.refresh(any()) }
     }
 
+    /**
+     * The handler never confirms the erasure itself: it hands the refused deletion to the repository, which erases the
+     * plaintext only when the message read back proves it gone (#19047, `ExhaustedMessageGestureTest`).
+     */
     @Test
-    fun `an exhausted delete for everyone never confirms the erasure of its plaintext`() = runTest {
+    fun `an exhausted delete for everyone hands the refusal to the repository and never confirms the erasure itself`() = runTest {
         DeleteMessageHandler(mockk<MessageApi>(), messageRepository)
             .onExhausted(outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c1")))
 
+        coVerify(exactly = 1) { messageRepository.settleRefusedDeletion("c1", "m1") }
         coVerify(exactly = 0) { messageRepository.confirmDeletion(any()) }
     }
 

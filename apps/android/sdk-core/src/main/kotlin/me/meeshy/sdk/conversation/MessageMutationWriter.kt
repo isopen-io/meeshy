@@ -118,6 +118,10 @@ internal class MessageMutationWriter(
     suspend fun markUndeleted(messageId: String, snapshot: ApiMessage? = null): Boolean =
         tombstones.markUndeleted(messageId, snapshot)
 
+    /** #19047 — la pierre tombale reposée, à cette horloge, d'un message que le serveur ne sert plus. */
+    suspend fun markGone(messageId: String): Boolean =
+        tombstones.markDeleted(messageId, Instant.ofEpochMilli(clock.nowMillis()).toString())
+
     /** Retire les lignes nommées — par l'une ou l'autre de leurs deux clés — et leurs versions antérieures. */
     suspend fun purgeMessages(messageIds: Collection<String>) = updater.purge(updater.ticket(), messageIds)
 

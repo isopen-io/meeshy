@@ -174,18 +174,28 @@ internal class MessageHistoryReader(
      * for good, so the regime ledger learns from what it serves, the events that arrived before the row replay, and a
      * sealed message served gone (deleted, expired, a view-once I opened) records its erasure here as on a page.
      */
-    suspend fun refreshMessage(conversationId: String, messageId: String, limit: Int = 1): Boolean {
+    suspend fun refreshMessage(conversationId: String, messageId: String, limit: Int = 1): Boolean =
+        readBack(conversationId, messageId, limit) == MessageReadBack.MERGED
+
+    /**
+     * [refreshMessage], saying what the read PROVED (#19047). A read the gateway answered without serving the message —
+     * around an id it no longer knows it serves the newest page instead — proves the message gone for this reader:
+     * [MessageReadBack.ABSENT]. A failed read, a refused envelope or an account that closed meanwhile prove nothing:
+     * [MessageReadBack.UNKNOWN].
+     */
+    suspend fun readBack(conversationId: String, messageId: String, limit: Int = 1): MessageReadBack {
         val ticket = fence?.currentTicket()
         val response = when (val result = rawApiCall { messageApi.listAround(conversationId, messageId, limit) }) {
             is NetworkResult.Success -> result.data
-            is NetworkResult.Failure -> return false
+            is NetworkResult.Failure -> return MessageReadBack.UNKNOWN
         }
-        val page = response.data?.takeIf { response.success } ?: return false
-        val target = page.firstOrNull { it.id == messageId } ?: return false
+        val page = response.data?.takeIf { response.success } ?: return MessageReadBack.UNKNOWN
+        val target = page.firstOrNull { it.id == messageId }
+            ?: return fence.commitOrWrite(ticket) { MessageReadBack.ABSENT } ?: MessageReadBack.UNKNOWN
         val served = if (limit > 1) page else listOf(target)
         val now = clock.nowMillis()
-        fence.commitOrWrite(ticket) { ingestion().ingest(served, now) } ?: return false
-        return true
+        fence.commitOrWrite(ticket) { ingestion().ingest(served, now) } ?: return MessageReadBack.UNKNOWN
+        return MessageReadBack.MERGED
     }
 
     /**
@@ -205,7 +215,7 @@ internal class MessageHistoryReader(
 
     /** Whether the cached window was synced within the messages policy's freshness window. */
     suspend fun isCacheFresh(conversationId: String): Boolean {
-        val syncedAt = syncMetaDao.lastSyncedAt("messages:$conversationId") ?: return false
+        val syncedAt = syncMetaDao.lastSyncedAt(ThreadSyncKey.of(conversationId)) ?: return false
         return clock.nowMillis() - syncedAt < CachePolicy.Messages.freshForMillis
     }
 
