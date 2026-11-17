@@ -3,6 +3,7 @@
  * `/users/me/avatar`, `/users/me/banner`. Extrait de `profile.ts` (#4284,
  * budget de taille) — la façade de ré-export vit là-bas.
  */
+import { normalizeCityInput } from '@meeshy/shared/utils/profile-city';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
@@ -165,6 +166,10 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // (`contact-change.ts`) — prouve la possession avant d'écrire quoi que
       // ce soit ; ne pas recréer ce raccourci ici.
       if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
+      // #18862 : la ville DÉCLARÉE (texte brut, vide = effacement) et le cercle qui la lit
+      // (`null` = elle seule). Le cercle est une valeur de l'échelle, déjà validée par Zod.
+      if (body.city !== undefined) updateData.city = normalizeCityInput(body.city);
+      if (body.cityCircle !== undefined) updateData.cityCircle = body.cityCircle;
 
       // UNE lecture de la ligne avant l'écriture, ouverte seulement quand un
       // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les

@@ -353,6 +353,10 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   // /users/:id, /users/id/:id) ne sont PLUS publics depuis #10205 (directive
   // porteur du 2026-10-11) : un lecteur sans compte reçoit 403 ACCOUNT_REQUIRED,
   // et le témoin ci-dessous le PROUVE en les traitant comme toute route gardée.
+  // #18862 — l'adresse courte `/@:username` est une REDIRECTION pure vers `/u/:username` : aucune
+  // lecture, aucune identité, le pseudo (validé) est recopié tel quel dans l'adresse. La garde de
+  // #10205 (compte requis) s'applique à la CIBLE, que le client suit ensuite.
+  { method: 'GET', url: '/api/v1/@:username', why: "redirection pure vers /u/:username, sans lecture : la garde « compte requis » (#10205) s'applique à la cible" },
   // #10157 (L5) — le magasin adressé par contenu des packs officiels : le web
   // le lit en `fetch(url, { mode: 'cors' })` SANS aucun en-tête. Liste blanche
   // calculée au démarrage par `PackIndex`, aucune lecture de base, aucune identité.

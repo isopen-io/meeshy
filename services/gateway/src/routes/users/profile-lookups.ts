@@ -181,7 +181,9 @@ export async function getUserByUsername(fastify: FastifyInstance) {
                 voiceSampleUrl: { type: 'string', nullable: true },
                 voiceSampleDurationMs: { type: 'number', nullable: true },
                 voiceQuality: { type: 'number', nullable: true },
-                createdAt: { type: 'string', format: 'date-time' }
+                createdAt: { type: 'string', format: 'date-time' },
+                city: publicProfileSchema.properties.city,
+                cityCircle: publicProfileSchema.properties.cityCircle
               }
             }
           }

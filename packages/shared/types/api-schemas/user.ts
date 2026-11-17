@@ -350,6 +350,8 @@ export const updateUserRequestSchema = {
     regionalLanguage: { type: 'string', maxLength: 5, description: 'Regional language code (empty string clears)' },
     customDestinationLanguage: { type: 'string', maxLength: 5, nullable: true, description: 'Custom destination language (empty string allowed)' },
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
-    voicePublic: { type: 'boolean', description: 'Expose the cloned voice sample on the public profile' }
+    voicePublic: { type: 'boolean', description: 'Expose the cloned voice sample on the public profile' },
+    city: { type: 'string', maxLength: 80, nullable: true, description: 'Declared city (empty string or null clears it)' },
+    cityCircle: { type: 'string', enum: ['PUBLIC', 'COMMUNITY', 'ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD'], nullable: true, description: 'Circle from which the city is readable (null = only the owner)' }
   }
 } as const;
