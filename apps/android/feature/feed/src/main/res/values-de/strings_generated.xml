@@ -12,7 +12,6 @@
     <string name="feed_action_repost">Erneut teilen</string>
     <string name="feed_action_send">Senden</string>
     <string name="feed_action_share">Teilen</string>
-    <string name="feed_action_view_profile">Profil ansehen</string>
     <string name="feed_caption_collapse">weniger</string>
     <string name="feed_caption_expand">mehr…</string>
     <string name="feed_carousel_a11y_position">Medium %1$d von %2$d</string>
@@ -71,13 +70,8 @@
         <item quantity="one">%1$d Like</item>
         <item quantity="other">%1$d Likes</item>
     </plurals>
-    <plurals name="feed_post_stat_replies">
-        <item quantity="one">%1$d Antwort</item>
-        <item quantity="other">%1$d Antworten</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d Speicherungen</string>
     <string name="feed_post_stat_shares">%1$d Mal geteilt</string>
-    <string name="feed_quote_cancel">Abbrechen</string>
     <string name="feed_quote_submit">Erneut teilen</string>
     <string name="feed_reel">Reel</string>
     <string name="feed_reel_card_a11y">Reel von %1$s</string>
@@ -171,9 +165,7 @@
     <string name="post_comments_reply_badge">Antworten</string>
     <string name="post_comments_reply_error">Fehler beim Senden der Antwort</string>
     <string name="post_comments_replying_to">Antwort an %1$s</string>
-    <string name="post_comments_send">Senden</string>
     <string name="post_comments_send_error">Fehler beim Senden des Kommentars</string>
-    <string name="post_comments_sending">Wird gesendet…</string>
     <string name="post_comments_title">Kommentare</string>
     <plurals name="post_comments_view_replies">
         <item quantity="one">%1$d Antwort anzeigen</item>

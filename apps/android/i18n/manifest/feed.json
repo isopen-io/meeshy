@@ -15,10 +15,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "bookmarks_remove",
-          "status": "android-only"
-        },
-        {
           "androidName": "bookmarks_title",
           "status": "android-only"
         },
@@ -38,12 +34,6 @@
           "catalog": "app",
           "iosKey": "feed.post.copy_text",
           "androidName": "feed_action_copy_text",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.post.view_profile",
-          "androidName": "feed_action_view_profile",
           "status": "adopted"
         },
         {
@@ -97,10 +87,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "feed_composer_attach_media",
-          "status": "android-only"
-        },
-        {
           "androidName": "feed_composer_media_limit",
           "status": "android-only"
         },
@@ -140,10 +126,6 @@
         },
         {
           "androidName": "feed_delete_confirm_title",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_edited",
           "status": "android-only"
         },
         {
@@ -221,22 +203,12 @@
           "status": "android-only"
         },
         {
-          "androidName": "feed_pinned",
-          "status": "android-only"
-        },
-        {
           "androidName": "feed_post_options",
           "status": "android-only"
         },
         {
           "androidName": "feed_post_reach_a11y",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "2fa_cancel",
-          "androidName": "feed_quote_cancel",
-          "status": "adopted"
         },
         {
           "androidName": "feed_quote_hint",
@@ -429,10 +401,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "post_comments_input_hint",
-          "status": "android-only"
-        },
-        {
           "androidName": "post_comments_load_more",
           "status": "android-only"
         },
@@ -449,10 +417,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "post_comments_reply_hint",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "a11y.bubble.replyTo",
           "androidName": "post_comments_replying_to",
@@ -461,18 +425,6 @@
         {
           "androidName": "post_comments_replying_to_generic",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.feedback.send",
-          "androidName": "post_comments_send",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "activation.email.sending",
-          "androidName": "post_comments_sending",
-          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -497,14 +449,6 @@
           "iosKey": "feed.post.detail.unavailable.back",
           "androidName": "post_detail_back",
           "status": "adopted"
-        },
-        {
-          "androidName": "post_detail_empty",
-          "status": "android-only"
-        },
-        {
-          "androidName": "post_detail_not_found",
-          "status": "android-only"
         },
         {
           "catalog": "app",

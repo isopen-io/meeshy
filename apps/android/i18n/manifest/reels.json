@@ -10,12 +10,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "2fa_close",
-          "androidName": "reels_close",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "reels.action.comment",
           "androidName": "reels_action_comment",
           "status": "adopted"
@@ -60,12 +54,6 @@
           "catalog": "app",
           "iosKey": "feed.post.repost",
           "androidName": "reels_action_repost",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "action.share",
-          "androidName": "reels_share",
           "status": "adopted"
         },
         {

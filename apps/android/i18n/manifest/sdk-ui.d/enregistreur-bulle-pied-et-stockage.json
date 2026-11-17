@@ -21,14 +21,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "audio_recorder_preview_pause",
-          "status": "android-only"
-        },
-        {
-          "androidName": "audio_recorder_preview_play",
-          "status": "android-only"
-        },
-        {
           "androidName": "audio_recorder_redo",
           "status": "android-only"
         },

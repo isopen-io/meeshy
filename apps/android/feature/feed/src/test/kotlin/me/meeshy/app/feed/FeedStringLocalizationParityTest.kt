@@ -22,7 +22,7 @@ class FeedStringLocalizationParityTest {
         "values-ar" to setOf("zero", "one", "two", "few", "many", "other"),
     )
 
-    private val plurals = listOf("feed_post_stat_likes", "feed_post_stat_comments", "feed_post_stat_reposts", "feed_post_stat_replies")
+    private val plurals = listOf("feed_post_stat_likes", "feed_post_stat_comments", "feed_post_stat_reposts")
     private val strings = listOf("feed_bookmark_success", "feed_post_stat_saves", "feed_post_stat_shares", "feed_action_cancel")
 
     private fun elements(folder: String, tag: String): List<Element> =
