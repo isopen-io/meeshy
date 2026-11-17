@@ -28,8 +28,9 @@ import { createWorkerTranslator } from './worker-protocol';
  * déjà (`OfferedMessage.shareable`) : un clair qu'il ne lit pas se traduit ici et
  * n'en sort pas.
  *
- * Le Worker importe un moteur TIERS (jsDelivr) : il ne démarre jamais dans un
- * navigateur qui tient un coffre chiffré, et le coffre qui naît l'arrête
+ * Le Worker importe un moteur TIERS (jsDelivr) : il ne se crée que par la
+ * porte de l'origine, qui le refuse à tout navigateur qui tient un coffre
+ * chiffré, et le coffre qui naît, dans cet onglet ou un autre, l'arrête
  * (`third-party-runtime-gate.ts`, #18989).
  *
  * Le consentement est vérifié par `useDeviceTranslation` AVANT l'`import()` de
@@ -38,16 +39,11 @@ import { createWorkerTranslator } from './worker-protocol';
  * le point d'entrée (budget de la première peinture).
  */
 let scheduler: DeviceTranslationScheduler | null = null;
+let launched: Promise<boolean> | null = null;
 
-function deviceTranslationScheduler(queryClient: QueryClient): DeviceTranslationScheduler | null {
-  if (scheduler !== null) return scheduler;
-  if (typeof Worker === 'undefined') return null;
-
+/** Crée le Worker et sa file ; rend ce qui les arrête. Appelé par la porte seulement. */
+function launchScheduler(queryClient: QueryClient): () => void {
   const worker = new Worker(new URL('./device-translation-worker.ts', import.meta.url), { type: 'module', name: 'meeshy-device-translation' });
-  thirdPartyRuntimeGate.register(() => {
-    worker.terminate();
-    scheduler = null;
-  });
   const builtin = (globalThis as { readonly Translator?: BuiltinTranslatorApi }).Translator;
   const store = createIndexedDbStore();
   const share = createTranslationSharer({
@@ -66,7 +62,10 @@ function deviceTranslationScheduler(queryClient: QueryClient): DeviceTranslation
       void share(delivered, origin);
     },
   });
-  return scheduler;
+  return () => {
+    worker.terminate();
+    scheduler = null;
+  };
 }
 
 export function offerToDevice(
@@ -78,11 +77,12 @@ export function offerToDevice(
     readonly conversationEncryptionMode: string | null;
   },
 ): void {
-  void thirdPartyRuntimeGate.mayStart().then((allowed) => {
-    if (!allowed) return;
-    deviceTranslationScheduler(queryClient)?.offer({
+  if (typeof Worker === 'undefined') return;
+  launched ??= thirdPartyRuntimeGate.start(() => launchScheduler(queryClient));
+  void launched.then(() =>
+    scheduler?.offer({
       messages: offeredMessagesOf(params.messages, params.viewerId, params.conversationEncryptionMode),
       preferredLanguages: params.preferredLanguages,
-    });
-  });
+    }),
+  );
 }

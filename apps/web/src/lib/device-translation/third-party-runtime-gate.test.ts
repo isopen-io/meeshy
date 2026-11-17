@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs';
 
 import { E2EE_VAULT_DB_PREFIX, E2EE_VAULT_HELD_KEY } from '@/lib/e2ee/vault/vault-guard';
 
-import { createThirdPartyRuntimeGate, e2eeVaultMayExist, type VaultPresenceHost } from './third-party-runtime-gate';
+import {
+  createThirdPartyRuntimeGate,
+  e2eeVaultMayExist,
+  type RuntimeChannel,
+  type RuntimeLockManager,
+  type VaultPresenceHost,
+} from './third-party-runtime-gate';
 
 /**
  * **LE MOTEUR DE TRADUCTION TIERS NE DÉMARRE JAMAIS DANS UN NAVIGATEUR QUI
@@ -50,52 +56,221 @@ describe('e2eeVaultMayExist — un coffre qui ne peut pas être exclu compte com
   });
 });
 
-describe('createThirdPartyRuntimeGate — le moteur tiers démarre seulement là où aucun coffre ne vit', () => {
-  test('sans coffre, il démarre', async () => {
-    const gate = createThirdPartyRuntimeGate({ vaultMayExist: () => Promise.resolve(false) });
+/**
+ * Un `LockManager` partagé par plusieurs contextes de l'origine, fidèle à Web
+ * Locks sur ce que la porte emploie : les demandes d'un nom se servent DANS
+ * L'ORDRE, une part partagée s'ajoute aux parts partagées tenues, et une part
+ * partagée demandée après une part exclusive en attente attend derrière elle.
+ */
+const originLocks = (): RuntimeLockManager => {
+  type Waiter = { readonly mode: 'shared' | 'exclusive'; readonly run: () => void };
+  const holders = new Map<string, { readonly mode: 'shared' | 'exclusive'; readonly count: number }>();
+  const queues = new Map<string, Waiter[]>();
+  const queueOf = (name: string): Waiter[] => {
+    const queue = queues.get(name) ?? [];
+    queues.set(name, queue);
+    return queue;
+  };
+  const pump = (name: string) => {
+    const queue = queueOf(name);
+    for (;;) {
+      const head = queue[0];
+      const held = holders.get(name);
+      if (head === undefined) return;
+      if (held !== undefined && (held.mode === 'exclusive' || head.mode === 'exclusive')) return;
+      queue.shift();
+      holders.set(name, { mode: head.mode, count: (held?.count ?? 0) + 1 });
+      head.run();
+    }
+  };
+  const release = (name: string) => {
+    const held = holders.get(name);
+    if (held !== undefined && held.count > 1) holders.set(name, { mode: held.mode, count: held.count - 1 });
+    else holders.delete(name);
+    pump(name);
+  };
+  return {
+    request: (name, { mode }, callback) =>
+      new Promise((resolve, reject) => {
+        const run = () =>
+          void callback().then(
+            (value) => {
+              release(name);
+              resolve(value);
+            },
+            (error: unknown) => {
+              release(name);
+              reject(error);
+            },
+          );
+        queueOf(name).push({ mode, run });
+        pump(name);
+      }),
+  };
+};
 
-    expect(await gate.mayStart()).toBe(true);
+/** Un `BroadcastChannel` : ce qu'un contexte poste arrive, plus tard, à tous les AUTRES. */
+const originBus = () => {
+  const listeners = new Set<{ readonly owner: symbol; readonly listener: (event: { readonly data: unknown }) => void }>();
+  return (): RuntimeChannel => {
+    const owner = Symbol('contexte');
+    return {
+      postMessage: (data) =>
+        listeners.forEach((entry) => {
+          if (entry.owner !== owner) setTimeout(() => entry.listener({ data }), 0);
+        }),
+      addEventListener: (_type, listener) => void listeners.add({ owner, listener }),
+    };
+  };
+};
+
+/** Une origine : la marque du coffre, le verrou et le canal que ses contextes partagent. */
+const origin = () => {
+  const marker = { held: false };
+  const locks = originLocks();
+  const channel = originBus();
+  const context = () =>
+    createThirdPartyRuntimeGate({
+      vaultMayExist: () => Promise.resolve(marker.held),
+      markVault: () => void (marker.held = true),
+      locks,
+      channel: channel(),
+    });
+  return { marker, locks, context };
+};
+
+/** Un moteur fictif : son lancement et son arrêt s'inscrivent au journal. */
+const engine = (journal: string[], name: string) => () => {
+  journal.push(`${name} : lancé`);
+  return () => void journal.push(`${name} : arrêté`);
+};
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+const rejectionOf = (attempt: Promise<unknown>): Promise<unknown> =>
+  attempt.then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+
+describe('createThirdPartyRuntimeGate — le moteur tiers ne vit dans aucun contexte d’une origine qui tient un coffre', () => {
+  test('sans coffre, il démarre', async () => {
+    const journal: string[] = [];
+
+    expect(await origin().context().start(engine(journal, 'traduction'))).toBe(true);
+    expect(journal).toEqual(['traduction : lancé']);
   });
 
-  test('avec un coffre, il ne démarre pas — et la sonde ne se relit pas à chaque fenêtre', async () => {
-    let probes = 0;
-    const gate = createThirdPartyRuntimeGate({ vaultMayExist: () => Promise.resolve(++probes > 0) });
+  test('avec un coffre, il ne démarre pas', async () => {
+    const { marker, context } = origin();
+    marker.held = true;
+    const journal: string[] = [];
 
-    expect(await gate.mayStart()).toBe(false);
-    expect(await gate.mayStart()).toBe(false);
-    expect(probes).toBe(1);
+    expect(await context().start(engine(journal, 'traduction'))).toBe(false);
+    expect(journal).toEqual([]);
   });
 
   test('le coffre qui naît dans la page ARRÊTE le moteur déjà lancé, et plus aucun ne démarre', async () => {
-    const gate = createThirdPartyRuntimeGate({ vaultMayExist: () => Promise.resolve(false) });
-    const stopped: string[] = [];
-    gate.register(() => void stopped.push('worker de traduction'));
+    const gate = origin().context();
+    const journal: string[] = [];
+    await gate.start(engine(journal, 'traduction'));
 
-    gate.closeBeforeVault();
+    await gate.closeBeforeVault();
 
-    expect(stopped).toEqual(['worker de traduction']);
-    expect(await gate.mayStart()).toBe(false);
+    expect(journal).toEqual(['traduction : lancé', 'traduction : arrêté']);
+    expect(await gate.start(engine(journal, 'relance'))).toBe(false);
   });
 
-  test('un moteur qui s’inscrit APRÈS la fermeture est arrêté sur-le-champ', () => {
-    const gate = createThirdPartyRuntimeGate({ vaultMayExist: () => Promise.resolve(false) });
-    gate.closeBeforeVault();
-    const stopped: string[] = [];
+  test('le coffre qui naît dans un AUTRE onglet arrête le moteur de celui-ci, et ne naît qu’une fois ce moteur arrêté', async () => {
+    const { context } = origin();
+    const translatingTab = context();
+    const vaultTab = context();
+    const journal: string[] = [];
+    await translatingTab.start(engine(journal, 'onglet qui traduit'));
 
-    gate.register(() => void stopped.push('arrivé trop tard'));
+    await vaultTab.closeBeforeVault();
+    journal.push('onglet du coffre : première clé');
 
-    expect(stopped).toEqual(['arrivé trop tard']);
+    expect(journal).toEqual(['onglet qui traduit : lancé', 'onglet qui traduit : arrêté', 'onglet du coffre : première clé']);
+    expect(await translatingTab.start(engine(journal, 'relance'))).toBe(false);
+  });
+
+  test('un onglet qui démarre pendant la naissance du coffre ne lance rien : la marque précède la part exclusive', async () => {
+    const { marker, context } = origin();
+    const vaultTab = context();
+    const lateTab = context();
+    const journal: string[] = [];
+
+    const birth = vaultTab.closeBeforeVault();
+    const late = lateTab.start(engine(journal, 'onglet tardif'));
+    await birth;
+
+    expect(marker.held).toBe(true);
+    expect(await late).toBe(false);
+    expect(journal).toEqual([]);
+  });
+
+  test('tant qu’un moteur d’un autre contexte ne s’est pas arrêté, le coffre ne naît pas', async () => {
+    const { locks } = origin();
+    const ports = { vaultMayExist: () => Promise.resolve(false), markVault: () => undefined, locks, channel: undefined };
+    const deafTab = createThirdPartyRuntimeGate(ports);
+    const vaultTab = createThirdPartyRuntimeGate(ports);
+    await deafTab.start(engine([], 'onglet sourd'));
+    let born = false;
+
+    void vaultTab.closeBeforeVault().then(() => void (born = true));
+    await tick();
+
+    expect(born).toBe(false);
+  });
+
+  test('un moteur qui ne se lance pas, une sonde qui échoue : le moteur est absent, jamais une exception', async () => {
+    const { locks } = origin();
+    const launchFails = createThirdPartyRuntimeGate({ vaultMayExist: () => Promise.resolve(false), markVault: () => undefined, locks, channel: undefined });
+    const probeFails = createThirdPartyRuntimeGate({ vaultMayExist: () => Promise.reject(new Error('refusé')), markVault: () => undefined, locks, channel: undefined });
+    const refused = () => {
+      throw new Error('Worker refusé');
+    };
+
+    expect(await launchFails.start(refused)).toBe(false);
+    expect(await probeFails.start(engine([], 'traduction'))).toBe(false);
+  });
+
+  test('sans Web Locks, le moteur démarre sur la seule sonde, et aucun coffre ne peut naître', async () => {
+    const gate = createThirdPartyRuntimeGate({ vaultMayExist: () => Promise.resolve(false), markVault: () => undefined, locks: undefined, channel: undefined });
+    const journal: string[] = [];
+
+    expect(await gate.start(engine(journal, 'traduction'))).toBe(true);
+    expect(await rejectionOf(gate.closeBeforeVault())).toMatchObject({ reason: 'NO_WEB_LOCKS' });
+    expect(journal).toEqual(['traduction : lancé', 'traduction : arrêté']);
+  });
+
+  test('une marque qui ne s’écrit pas empêche le coffre de naître', async () => {
+    const gate = createThirdPartyRuntimeGate({
+      vaultMayExist: () => Promise.resolve(false),
+      markVault: () => {
+        throw new DOMException('quota', 'QuotaExceededError');
+      },
+      locks: origin().locks,
+      channel: undefined,
+    });
+
+    expect(await rejectionOf(gate.closeBeforeVault())).toMatchObject({ name: 'QuotaExceededError' });
   });
 });
 
-describe('runtime.ts — le Worker tiers passe par la porte', () => {
+describe('runtime.ts — le Worker tiers ne se crée que par la porte', () => {
   const runtime = readFileSync(new URL('./runtime.ts', import.meta.url), 'utf8');
 
-  test('la porte est interrogée AVANT la création du Worker, et le Worker s’y inscrit', () => {
-    const asked = runtime.indexOf('thirdPartyRuntimeGate.mayStart()');
-    const created = runtime.indexOf("new Worker(new URL('./device-translation-worker.ts'");
-    expect(asked).toBeGreaterThan(-1);
-    expect(created).toBeGreaterThan(-1);
-    expect(runtime).toContain('thirdPartyRuntimeGate.register(');
+  test('le seul chemin qui crée le Worker passe par `thirdPartyRuntimeGate.start`', () => {
+    const launcher = runtime.indexOf('function launchScheduler(');
+    const worker = runtime.indexOf('new Worker(');
+    const nextFunction = runtime.indexOf('\nexport function', launcher);
+
+    expect(launcher).toBeGreaterThan(-1);
+    expect(runtime.split('new Worker(').length - 1).toBe(1);
+    expect(worker > launcher && worker < nextFunction).toBe(true);
+    expect(runtime.split('launchScheduler(').length - 1).toBe(2);
+    expect(runtime).toContain('thirdPartyRuntimeGate.start(() => launchScheduler(queryClient))');
   });
 });
