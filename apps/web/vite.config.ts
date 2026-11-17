@@ -11,6 +11,7 @@ import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.j
 import { declaredBuildFlag } from './src/lib/build-flag.js';
 import { loadedPreloadDeps } from './src/lib/build-preload-deps.js';
 import { shellApiOrigin, withApiPreconnect } from './src/lib/net/shell-preconnect.js';
+import { withRuntimeConfigPrefetch } from './src/lib/api/runtime-config.js';
 import { dropServiceWorkerScripts, meeshyPwa } from './vite/pwa.js';
 
 /**
@@ -63,11 +64,20 @@ const inlineInterfaceLanguageBootstrap = (): Plugin => ({
 /**
  * La coque préconnecte sa passerelle dès le HTML (#10534) — voir
  * `src/lib/net/shell-preconnect.ts`. Le web n'en reçoit pas : son origine
- * n'est connue qu'à l'exécution (`/config.js`).
+ * n'est connue qu'à l'exécution (`/config.json`).
  */
 const shellApiPreconnect = (): Plugin => ({
   name: 'meeshy-shell-api-preconnect',
   transformIndexHtml: (html) => withApiPreconnect(html, shellApiOrigin(process.env.VITE_API_BASE)),
+});
+
+/**
+ * Le web nu précharge sa configuration de déploiement (#18988) — voir
+ * `src/lib/api/runtime-config.ts`. La coque ne la lit pas (`__RUNTIME_CONFIG__`).
+ */
+const runtimeConfigPrefetch = (): Plugin => ({
+  name: 'meeshy-runtime-config-prefetch',
+  transformIndexHtml: (html) => withRuntimeConfigPrefetch(html),
 });
 
 /**
@@ -438,6 +448,8 @@ export default defineConfig({
   define: {
     __BENCH__: JSON.stringify(bench),
     __SHELL__: JSON.stringify(forCapacitor),
+    /* #18988 — le web nu lit `/config.json` au démarrage ; la coque, jamais. */
+    __RUNTIME_CONFIG__: JSON.stringify(!forCapacitor),
     /**
      * `__FIXTURES__` — LE JEU DE FIXTURES EST-IL LIÉ DANS CE BUNDLE ?
      * (revue #5815). Littéral, jamais une valeur d'exécution : c'est la
@@ -532,7 +544,7 @@ export default defineConfig({
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
-    ...(forCapacitor ? [] : [prerenderLanding()]),
+    ...(forCapacitor ? [] : [runtimeConfigPrefetch(), prerenderLanding()]),
     ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets(), shellApiPreconnect()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere

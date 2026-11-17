@@ -38,12 +38,14 @@ export const SW_RUNTIME_CACHES = {
 export const SW_RUNTIME_CACHE_NAMES: readonly string[] = Object.values(SW_RUNTIME_CACHES);
 
 /**
- * LE SEAU DE `/config.js` (#10208) — la configuration du DÉPLOIEMENT, pas une
- * donnée de lecteur : hors de `SW_RUNTIME_CACHES`, donc ni la fin d'un compte
- * ni une mise à jour ne le purgent. Le purger ne ferait que priver le prochain
- * démarrage hors ligne de l'origine déclarée.
+ * L'ANCIEN SEAU DE `/config.js` (#10208), RETIRÉ (#18988). Il gardait un
+ * SCRIPT que tout code de l'origine pouvait réécrire et que la page exécutait
+ * à chaque chargement (contre-analyse du 2026-11-17, WEBX-01). La
+ * configuration est désormais une DONNÉE lue par `fetch`
+ * (`lib/api/runtime-config.ts`) qu'aucun seau ne garde : ce nom ne sert plus
+ * qu'à la purge de `public/sw-retired-caches.js`, qui en porte le JUMEAU.
  */
-export const SW_DEPLOYMENT_CONFIG_CACHE = 'deployment-config';
+export const SW_RETIRED_DEPLOYMENT_CONFIG_CACHE = 'deployment-config';
 
 /**
  * LE SEAU DES FICHIERS DE PACKS (#10149) — vignettes, contrats et chaînes

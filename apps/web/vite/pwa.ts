@@ -12,7 +12,7 @@ import { EMAIL_TOKEN_NAVIGATIONS } from '../src/lib/net/email-token-navigations.
 import { mediaCacheFreshnessPlugin } from '../src/lib/net/media-cache-freshness.js';
 import { NETWORK_ONLY_NAVIGATIONS } from '../src/lib/net/network-only-navigations.js';
 import { SHARE_TARGET } from '../src/lib/share-incoming/share-target.js';
-import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from '../src/lib/sw-caches.js';
+import { SW_RUNTIME_CACHES } from '../src/lib/sw-caches.js';
 
 /**
  * LE SERVICE WORKER ET LA PWA, HORS DE `vite.config.ts` (#11326).
@@ -32,7 +32,8 @@ import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from '../src/lib/sw-cac
  *  - `sw-legacy-purge.js` efface, à l'activation, les caches `meeshy-cache-*`
  *    que le service worker du legacy a laissés sur l'origine (#6702) ;
  *  - `sw-retired-caches.js` efface, à l'activation, ce que la v2 a cessé de
- *    ranger — les réponses `/api/v1/e2ee/*` du seau `api` (#18987) ;
+ *    ranger — les réponses `/api/v1/e2ee/*` du seau `api` (#18987) et
+ *    l'ancien seau de `/config.js` (#18988) ;
  *  - `sw-push.js` porte les écouteurs `push` et `notificationclick` (#7305) —
  *    le worker généré n'en avait AUCUN, pendant que la passerelle composait
  *    déjà toute la charge web (`PushNotificationService`, branche
@@ -233,7 +234,9 @@ export function meeshyPwa(): PluginOption {
         /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) — réécrite au
            démarrage du conteneur, donc JAMAIS précachée : son
            empreinte de build est celle du fichier par défaut, pas de
-           celui que le conteneur sert. Elle a son seau (ci-dessous). */
+           celui que le conteneur sert. `config.json` (#18988) n'entre
+           pas dans `globPatterns` ; `config.js` n'est plus lu que par
+           les bundles d'avant #18988, le temps de la transition. */
         'config.js',
         /* L'AVATAR ET LA BANNIÈRE DE WORLD WIDE (#10204) — servis par
            adresse ABSOLUE dans la conversation et lus par le réseau
@@ -306,28 +309,15 @@ export function meeshyPwa(): PluginOption {
        * « Offline Graceful Degradation »).
        */
       runtimeCaching: [
-        {
-          /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) en
-             StaleWhileRevalidate : un démarrage sous service worker la
-             lit dans son seau sans attendre le réseau (le script est
-             bloquant), hors ligne compris, et la relit en fond — une
-             origine changée au redémarrage du conteneur s'applique au
-             lancement suivant. Fonction AUTONOME : Workbox la
-             stringifie dans `dist/sw.js`.
-             `index.html` la charge en script CLASSIQUE et bloquant
-             (`<script src="/config.js">`, sans commentaire : chaque
-             octet du document compte dans la première peinture) parce
-             que `src/lib/api/config.ts` la lit à l'évaluation du
-             module ; le défaut `public/config.js` est vide, et
-             l'entrypoint du conteneur (`docker/runtime-config.sh`) le
-             réécrit. */
-          urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === '/config.js',
-          handler: 'StaleWhileRevalidate',
-          options: {
-            cacheName: SW_DEPLOYMENT_CONFIG_CACHE,
-            expiration: { maxEntries: 1 },
-          },
-        },
+        /* LA CONFIGURATION DU DÉPLOIEMENT N'A PLUS DE SEAU (#18988).
+           `/config.js` était un script CLASSIQUE servi ici en
+           StaleWhileRevalidate : tout code de l'origine pouvait réécrire le
+           seau, et la page exécutait la copie à chaque chargement. La
+           configuration est désormais une DONNÉE (`/config.json`, lue par
+           `src/lib/api/runtime-config.ts`) que le worker laisse au RÉSEAU :
+           c'est le cache HTTP, réglé par nginx et qu'aucun script n'écrit, qui
+           la rend instantanée au démarrage suivant. L'ancien seau est purgé à
+           l'activation (`public/sw-retired-caches.js`). */
         {
           /* LES MÉDIAS D'ABORD, ET L'ORDRE EST LA MOITIÉ DU CORRECTIF
              (#6973) : le routeur de Workbox retient la PREMIÈRE route

@@ -46,7 +46,10 @@ const kb = (bytes) => Math.round((bytes / 1024) * 100) / 100;
  */
 const index = readFileSync(join(dist, 'index.html'), 'utf8');
 const documentReferences = [
-  ...index.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g),
+  /* `.json` : la configuration du déploiement (#18988), PRÉCHARGÉE par le
+     document et attendue avant le premier rendu (`runtime-config.ts`) — une
+     requête du chemin critique, comptée comme l'était `config.js`. */
+  ...index.matchAll(/(?:src|href)="([^"]+\.(?:js|css|json))"/g),
 ]
   /**
    * La base de construction change la FORME des chemins : « /assets/x.js » en

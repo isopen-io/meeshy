@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'bun:test';
 
-import { SW_RUNTIME_CACHES } from './lib/sw-caches';
+import { SW_RETIRED_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from './lib/sw-caches';
 
 /**
  * CE QUE LA V2 NE RANGE PLUS NE SURVIT PAS À L'ACTIVATION DU WORKER (#18987).
@@ -113,6 +113,36 @@ describe('sw-retired-caches.js — les réponses e2ee déjà rangées quittent l
 
   test('son nom du seau `api` est le JUMEAU de `SW_RUNTIME_CACHES.api`', () => {
     expect(readFileSync(SCRIPT, 'utf8')).toContain(`const API_CACHE = '${SW_RUNTIME_CACHES.api}';`);
+  });
+});
+
+/**
+ * LE SEAU DE L'ANCIEN `/config.js` DISPARAÎT (#18988) — un script que tout
+ * code de l'origine pouvait réécrire, et que la page exécutait à chaque
+ * chargement. La configuration est désormais une DONNÉE lue par `fetch`
+ * (`src/lib/api/runtime-config.ts`) que plus aucun seau ne garde ; ce qu'un
+ * script a pu déposer dans l'ancien seau ne doit pas lui survivre.
+ */
+describe('sw-retired-caches.js — le seau de l’ancien `/config.js` est effacé à l’activation', () => {
+  test('le seau `deployment-config` disparaît, les autres restent', async () => {
+    const caches = fakeCaches({
+      [SW_RETIRED_DEPLOYMENT_CONFIG_CACHE]: fakeCache(['https://meeshy.me/config.js']),
+      [SW_RUNTIME_CACHES.medias]: fakeCache(['https://meeshy.me/brand/logo.png']),
+    });
+
+    await activate(load(caches.api));
+
+    expect([...caches.alive.keys()]).toEqual([SW_RUNTIME_CACHES.medias]);
+  });
+
+  test('son nom est le JUMEAU de `SW_RETIRED_DEPLOYMENT_CONFIG_CACHE`', () => {
+    expect(readFileSync(SCRIPT, 'utf8')).toContain(`const RETIRED_DEPLOYMENT_CONFIG_CACHE = '${SW_RETIRED_DEPLOYMENT_CONFIG_CACHE}';`);
+  });
+
+  test('aucune route du worker ne sert plus la configuration de déploiement', () => {
+    const config = readFileSync(join(V2, 'vite/pwa.ts'), 'utf8');
+    expect(config).not.toContain("url.pathname === '/config.js'");
+    expect(config).not.toContain('SW_DEPLOYMENT_CONFIG_CACHE');
   });
 });
 

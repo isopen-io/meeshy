@@ -169,7 +169,9 @@ RUN set -eu; for p in about child-safety contact faq help partners privacy terms
     test -s /app/dist/build-info.json \
       || { echo "MANQUE dist/build-info.json"; exit 1; }; \
     test -s /app/dist/config.js || { echo "MANQUE dist/config.js"; exit 1; }; \
-    if grep -q '"url":"config.js"\|url:"config.js"' /app/dist/sw.js; then echo "sw.js precache config.js"; exit 1; fi; \
+    test -s /app/dist/config.json || { echo "MANQUE dist/config.json"; exit 1; }; \
+    if grep -q '"url":"config.js\(on\)\{0,1\}"\|url:"config.js\(on\)\{0,1\}"' /app/dist/sw.js; then echo "sw.js precache la configuration"; exit 1; fi; \
+    if grep -q 'src="/config.js"' /app/dist/index.html; then echo "index.html charge encore config.js"; exit 1; fi; \
     echo "les huit pages sont presentes et precachees, build-info.json ecrit"
 
 # ===== SERVICE =====
@@ -188,16 +190,20 @@ COPY apps/web/scripts/check-nginx-public.sh /tmp/check-nginx-public.sh
 RUN sh /tmp/check-nginx-public.sh && rm /tmp/check-nginx-public.sh
 
 # LA CONFIGURATION DE DÉMARRAGE (#10208), prouvée ICI : une origine déclarée
-# s'écrit dans `config.js`, une origine invalide refuse de démarrer.
+# s'écrit dans `config.json` (la donnée que lit l'application, #18988) et dans
+# `config.js` (les bundles d'avant, #9223), une origine invalide refuse de
+# démarrer.
 COPY apps/web/docker/runtime-config.sh /usr/local/bin/meeshy-runtime-config
 RUN set -eu; chmod 0755 /usr/local/bin/meeshy-runtime-config; \
-    MEESHY_CONFIG_FILE=/tmp/c.js MEESHY_API_URL=http://10.0.0.5:3000 MEESHY_WEB_URL=https://chat.acme.fr \
+    MEESHY_CONFIG_FILE=/tmp/c.js MEESHY_CONFIG_JSON_FILE=/tmp/c.json MEESHY_API_URL=http://10.0.0.5:3000 MEESHY_WEB_URL=https://chat.acme.fr \
       meeshy-runtime-config true; \
     grep -q '"apiUrl": "http://10.0.0.5:3000"' /tmp/c.js && grep -q '"webUrl": "https://chat.acme.fr"' /tmp/c.js \
       || { echo "config.js ne porte pas les origines declarees"; exit 1; }; \
-    if MEESHY_CONFIG_FILE=/tmp/c.js MEESHY_API_URL='https://x";alert(1)//' meeshy-runtime-config true 2>/dev/null; then \
+    grep -q '^{"apiUrl": "http://10.0.0.5:3000", "webUrl": "https://chat.acme.fr"}$' /tmp/c.json \
+      || { echo "config.json ne porte pas les origines declarees"; exit 1; }; \
+    if MEESHY_CONFIG_FILE=/tmp/c.js MEESHY_CONFIG_JSON_FILE=/tmp/c.json MEESHY_API_URL='https://x";alert(1)//' meeshy-runtime-config true 2>/dev/null; then \
       echo "une origine invalide a ete acceptee"; exit 1; fi; \
-    rm -f /tmp/c.js
+    rm -f /tmp/c.js /tmp/c.json
 
 # 3400 : 3100 est au legacy, 3300 à l'ancienne refonte. Les trois peuvent
 # tourner côte à côte pendant la bascule.
