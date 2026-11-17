@@ -8,8 +8,8 @@ import MeeshySDK
 /// Le composer mute `loadedImages[id] = edited` quand une image est
 /// retouchée. Sans ce pont, le `StoryCanvasUIView` ne voyait que `media.mediaURL`
 /// (URL inchangée → `ImageLoader` cache servait l'ancien bitmap) et le canvas
-/// principal restait stale après édition. Le mini canvas marchait déjà car
-/// `SlideMiniPreview` lit `loadedImages` direct.
+/// principal restait stale après édition. Les vignettes marchaient déjà car
+/// elles lisent `loadedImages` direct.
 ///
 /// `version` est un cookie monotone que le composer bump à chaque mutation
 /// utile pour permettre au `Coordinator` de SwiftUI de déclencher un rebuild
@@ -35,8 +35,8 @@ struct ComposerImageCacheReader: ImageCacheReader {
 /// SwiftUI wrapper around `StoryCanvasUIView` for embedded composer use.
 ///
 /// Wraps the bare `StoryCanvasUIView` so the SwiftUI composer can supply its
-/// own top bar, bottom toolbars, and viewport scaling. Replaces the legacy
-/// `StoryCanvasView` SwiftUI canvas in `StoryComposerView`.
+/// own top bar, bottom toolbars, and viewport scaling. Mounted through
+/// `EmbeddedSceneCanvas`.
 public struct StoryComposerCanvasView: UIViewRepresentable {
     @Binding public var slide: StorySlide
     public var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
@@ -79,8 +79,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// (cf. `StoryCanvasUIView.inlineEditCeilingGlobalY`).
     public var inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude
     /// Notifié quand la couche manipulable change (`.canvas` / `.background` /
-    /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
-    /// le `CanvasLayerIndicator` (chip row).
+    /// `.foreground`), pour un hôte qui veut dire quelle couche il manipule.
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
     /// Le glisser d'un objet de premier plan, pour les cibles de l'hôte (#18712).
     public var onItemDragged: ((StoryCanvasItemDrag) -> Void)?

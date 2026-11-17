@@ -291,8 +291,8 @@ extension PasteIntoComposer {
 // MARK: - Injection dans le composer de story (SDK)
 
 extension View {
-    /// Fournit au composer de story (`StoryComposerView`, côté SDK) la lecture
-    /// du presse-papier. Même doctrine que `storyCameraCaptureProvided` : la
+    /// Fournit au composer (`MeeshyComposerHost+Portals`, via l'environnement
+    /// du SDK) la lecture du presse-papier. Même doctrine que `storyCameraCaptureProvided` : la
     /// résolution d'un `NSItemProvider` (représentation fichier vs données,
     /// autorisation sandbox, nom d'origine) est de l'orchestration app-side, et
     /// elle existe déjà. Sans cet appel, la capsule « Coller » n'est pas rendue

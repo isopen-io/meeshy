@@ -74,7 +74,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
 
 // MARK: - TextEditingMode
 
-/// État du mode d'édition de texte flottant. Orthogonal à `BandStateMachine`.
+/// État du mode d'édition de texte flottant.
 public nonisolated enum TextEditingMode: Equatable, Sendable {
     case inactive
     case active(textId: String, expandedTool: TextEditTool?)

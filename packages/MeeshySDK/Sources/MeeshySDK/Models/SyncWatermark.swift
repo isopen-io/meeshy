@@ -29,8 +29,8 @@ public enum SyncWatermark {
 
     // MARK: - Conversation-list delta watermark (`updatedSince`)
     //
-    // JUMEAU WEB — `conversationDeltaWatermark`
-    // (`apps/web/lib/conversations/delta-merge.ts`). Même règle « le curseur
+    // JUMEAU WEB — `deltaWatermark`
+    // (`apps/web/src/lib/api/conversations-delta.ts`). Même règle « le curseur
     // vit en temps SERVEUR », exprimée sur la source que chaque plateforme
     // détient : iOS fait avancer une valeur persistée, le web recalcule le plus
     // récent `updatedAt` de son cache et le borne par `now`. Les deux

@@ -103,7 +103,7 @@ extension FeedViewModel {
     /// ⚠️ Le corps du Task ne capture PAS `self` : hors-ligne le stream peut ne
     /// jamais émettre, et un `guard let self` fort aurait retenu un VM fermé
     /// indéfiniment (un Task fantôme par like/post). Même forme que
-    /// `UserProfileViewModel.observeOutcome`.
+    /// `PostDetailViewModel.observeOutcome`.
     func observeOutcome(
         cmid: String,
         rollback: @escaping @MainActor () -> Void,

@@ -88,7 +88,7 @@ nonisolated enum ComposerStoryCanvas {
     /// > Ce qu'on sème pour donner une page à l'auteur ne doit jamais compter
     /// > comme ce que l'auteur y a écrit.
     /// **Une règle, un site** (#4741). Elle vivait ICI en toutes lettres et
-    /// dans `StoryComposerView` sous un autre nom, et les deux divergeaient
+    /// dans l'ancien atelier du SDK sous un autre nom, et les deux divergeaient
     /// dans les DEUX sens : une pastille de lieu seule n'armait pas la flèche,
     /// un fond choisi seul l'armait puis se faisait jeter par le filtre de
     /// publication. Le meuble ne la réécrit plus — il la DEMANDE.

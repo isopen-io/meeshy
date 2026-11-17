@@ -13,8 +13,8 @@ import ImageIO
 ///
 /// `.document` monte toujours la scène du meuble (`ComposerMountedView`) : la
 /// story, le post et le réel s'y composent, quelle que soit la porte. L'atelier
-/// du SDK (`StoryComposerView`), troisième surface jusqu'au #15629, a quitté le
-/// dépôt avec la reprise d'un brouillon et la modification d'une story.
+/// du SDK, troisième surface jusqu'au #15629, a quitté le dépôt avec la reprise
+/// d'un brouillon et la modification d'une story.
 ///
 /// **Le mood a sa PROPRE surface.** Un mood n'a NI pièce jointe
 /// (`allowsCapture: false`, `ComposerIntent.swift`), NI rangée d'outils à

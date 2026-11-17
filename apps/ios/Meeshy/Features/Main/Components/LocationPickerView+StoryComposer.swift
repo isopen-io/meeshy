@@ -9,8 +9,8 @@ import os
 // MARK: - Injection dans le composer de story (SDK)
 
 extension View {
-    /// Fournit au composer de story (`StoryComposerView`, côté SDK) la fabrique
-    /// de CE picker. Le composer expose un point d'injection plutôt qu'un import
+    /// Fournit au composer (`MeeshyComposerHost+Portals`, la feuille de
+    /// stickers) la fabrique de CE picker. Le composer expose un point d'injection plutôt qu'un import
     /// direct : `LocationPickerView` dépend de MapKit, CoreLocation et de
     /// `MediaPermissionCoordinator` — de l'orchestration UX produit, donc
     /// app-side (SDK purity). Sans cet appel, le chip « Lieu » du panneau Texte

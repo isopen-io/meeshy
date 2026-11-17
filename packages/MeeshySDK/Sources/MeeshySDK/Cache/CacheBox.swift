@@ -5,7 +5,7 @@ import Foundation
 ///
 /// NOTE — kept NON-GENERIC on purpose. The previous generic form
 /// (`CacheBox<T: Sendable>`) is the same shape that tripped a Swift 6.3.2
-/// optimizer crash on `WeakBox<T>` and `FABPanGestureWrapper<Content>.Coordinator`
+/// optimizer crash on `WeakBox<T>` and on a former generic gesture wrapper's `Coordinator`
 /// (EarlyPerfInliner / isCallerAndCalleeLayoutConstraintsCompatible on the
 /// synthesized deinit, under Release `-O -whole-module-optimization`). With a
 /// single concrete instantiation the generic was gratuitous — typing on

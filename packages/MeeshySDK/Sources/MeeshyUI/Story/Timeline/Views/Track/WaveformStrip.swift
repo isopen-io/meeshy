@@ -3,9 +3,8 @@ import MeeshySDK
 
 /// Bande de forme d'onde, partagée par les pistes audio et vidéo.
 ///
-/// Extraite de `AudioClipBar`, où elle était dessinée en ligne. La dupliquer
-/// dans `VideoClipBar` aurait laissé les deux tracés diverger au premier
-/// ajustement — un seul rendu pour les deux barres.
+/// Un seul rendu pour les deux familles de pistes : dupliquer le tracé
+/// l'aurait laissé diverger au premier ajustement.
 public struct WaveformStrip: View {
 
     let samples: [Float]
@@ -20,8 +19,8 @@ public struct WaveformStrip: View {
         self.reading = reading
     }
 
-    /// La tranche de piste que la règle monte (#13597), posée par `TimelineScrubArea` dans l'espace
-    /// `TimelineVisibleWindow.spaceName` ; `nil` hors de l'atelier : la bande entière, déjà bornée par l'écran.
+    /// La tranche de piste que la règle monte (#13597), posée par l'hôte qui défile dans l'espace
+    /// `TimelineVisibleWindow.spaceName` ; `nil` sans un tel hôte : la bande entière, déjà bornée par l'écran.
     @Environment(\.timelineVisibleWindow) private var visibleWindow
 
     public var body: some View {

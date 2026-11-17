@@ -358,7 +358,7 @@ final class MessageSocketEventTests: XCTestCase {
     /// Un `bridge` malformé (ici : `kind` inconnu du client) ne doit JAMAIS
     /// faire échouer le décodage de l'événement ENTIER — `conversationId` et
     /// `unreadCount` restent exploitables sans lui (même discipline de
-    /// tolérance que `MeeshyConversation.bridge`, CoreModels.swift).
+    /// tolérance que `MeeshyConversation.bridge`, MeeshyConversation.swift).
     func testUnreadUpdateEventDecoding_malformedBridge_dropsBridgeButKeepsEvent() throws {
         let json = """
         {

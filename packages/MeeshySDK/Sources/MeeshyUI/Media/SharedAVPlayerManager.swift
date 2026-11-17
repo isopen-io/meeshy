@@ -298,8 +298,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         // 4. Streaming fallback removed (spec §4.10).
         // Sans fichier ni téléchargement autorisé en cours, le caller n'a pas
         // appliqué la politique réseau — `player` reste nil et la surface
-        // (VideoMediaView / InlineVideoPlayerView / VideoFullscreenPlayerView)
-        // montre l'overlay de téléchargement au lieu d'un flux silencieux.
+        // (`MeeshyVideoPlayer`, derrière `VideoAvailabilityResolver`) montre l'overlay de téléchargement au lieu d'un flux silencieux.
         // Stories don't pass through this manager (their pipeline is
         // StoryReaderPrefetcher + StoryMediaLoader), so removing the
         // fallback only affects conversation/feed video.

@@ -16,8 +16,6 @@ import MeeshySDK
 @MainActor
 final class SoundExtractionCollectionTests: XCTestCase {
 
-    // MARK: - MediaAccessibilityStore
-
     // MARK: - Gardes de source
 
     /// Espaces normalisés — cf. `MediaAltCollectionTests.collapsed` : une garde

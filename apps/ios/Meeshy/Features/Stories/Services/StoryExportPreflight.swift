@@ -17,9 +17,9 @@ import MeeshyUI
 // dans le SDK (Task 9, 2026-07-26) :
 // `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExportIntroFactory.swift`.
 // Elle ne vivait ici que par accident — aucune de ses dépendances n'est
-// app-side — et `TimelineExportController` (SDK) a besoin d'appeler la MÊME
-// fabrique que les chemins app-side ci-dessous, pour que l'interlude soit
-// garanti par construction sur TOUS les chemins d'export.
+// app-side — et TOUS les chemins d'export (dont `ComposerSceneExportController`)
+// appellent la MÊME fabrique, pour que l'interlude soit garanti par
+// construction.
 
 /// Résolution de la langue gravée dans le MP4 (Prisme Linguistique).
 enum StoryExportLanguageResolver {

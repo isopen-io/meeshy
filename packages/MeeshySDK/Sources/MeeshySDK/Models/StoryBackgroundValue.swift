@@ -12,7 +12,8 @@ import Foundation
 /// retombe sur son gradient par défaut — `safeBackgroundImageUrl` W7).
 /// Source de vérité UNIQUE du parsing — consommée par le canvas CALayer
 /// (`StoryRenderer.renderBackground`), le composite (`StorySlideRenderer`),
-/// les miniatures (`SlideMiniPreview`) et le letterbox du composer.
+/// les miniatures (`SceneThumbnailRenderer`, via le composite) et le letterbox
+/// du composer.
 public enum StoryBackgroundValue: Equatable, Sendable {
     case hex(String)
     case gradient(String, String)

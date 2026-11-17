@@ -80,7 +80,7 @@ public final class TimelineViewModel: ObservableObject {
     /// début : l'abonné (canvas du composer) reçoit d'abord le scrub(0) du
     /// `didSet`, puis peut rendre l'état STATIQUE sans ré-armement de preview.
     public var onPlaybackEnded: (() -> Void)?
-    /// Mirror of `engine.isMuted` so SwiftUI views (TransportBar mute button)
+    /// Mirror of `engine.isMuted` so SwiftUI views (any mute control)
     /// re-render on toggle. The engine remains the audio-routing source of
     /// truth — this stored property is the @Published view-state seam that
     /// tracks it. Keep them in lock-step inside `toggleMute()`.
@@ -679,8 +679,8 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - Transitions
 
-    /// Returns the created transition's id (for routing the selection to the
-    /// TransitionInspector right after creation), or nil when rejected.
+    /// Returns the created transition's id (so the caller can select it
+    /// right after creation), or nil when rejected.
     @discardableResult
     public func addTransition(fromClipId: String, toClipId: String, kind: StoryTransitionKind, duration: Float) -> String? {
         guard fromClipId != toClipId else { return nil }

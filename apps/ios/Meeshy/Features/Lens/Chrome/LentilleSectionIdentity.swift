@@ -8,8 +8,8 @@ import MeeshySDK
 ///
 /// **Pourquoi ce fichier existe.** La greffe LWS-5/I-060 a documenté un écart :
 /// le résolveur produit `.live` et `.temporal(kind:)`, mais la liste iOS
-/// classe ses sections par `MeeshyConversationSection` (SDK, `CoreModels.swift`,
-/// GELÉ S1 — on ne lui ajoute rien). Faute d'identité, I-060 repliait
+/// classe ses sections par `MeeshyConversationSection` (SDK,
+/// `MeeshyConversationSection.swift`, GELÉ S1 — on ne lui ajoute rien). Faute d'identité, I-060 repliait
 /// provisoirement ces deux buckets sur `.other` « jusqu'à ce que LWS-6 décide
 /// comment les exposer ». LWS-6/I-062 décide ici : ces sections reçoivent une
 /// identité PROPRE, construite depuis l'initialiseur PUBLIC du type SDK — donc

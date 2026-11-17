@@ -229,7 +229,7 @@ private struct MediaChromeTinted: ViewModifier {
 }
 
 /// Le premier plan d'un glyphe : la teinte d'un état ACTIF quand il y en a une, le
-/// verre adaptatif sinon — la forme de `ToolRowForeground` du composer.
+/// verre adaptatif sinon — la forme qu'avait la rangée d'outils de l'ancien atelier.
 private struct MediaChromeForeground: ViewModifier {
     let accent: Color?
 

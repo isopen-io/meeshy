@@ -107,7 +107,7 @@ final class LentilleRowEquatableTests: XCTestCase {
     // MARK: - Clause 1 — `conversation.id`
     //
     // `id` n'entre dans AUCUN `h.combine` de `renderFingerprint`
-    // (`CoreModels.swift`) : deux conversations identiques sur tout le reste
+    // (`MeeshyConversation.swift`) : deux conversations identiques sur tout le reste
     // mais d'`id` différent ont donc le MÊME fingerprint — l'isolation est
     // directe, sans effet de bord sur la clause 2.
 
