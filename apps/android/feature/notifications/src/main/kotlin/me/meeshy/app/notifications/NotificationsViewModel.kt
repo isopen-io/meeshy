@@ -138,9 +138,7 @@ class NotificationsViewModel @Inject constructor(
         collecting(consumption.postNotificationsRead) { readRows(NotificationReadScope.Post(it)) }
         collecting(consumption.typeNotificationsRead) { readRows(NotificationReadScope.Types(it)) }
         collecting(consumption.allNotificationsRead) { readRows(NotificationReadScope.All) }
-        collecting(consumption.notificationWasDeleted) { id ->
-            _state.update { it.copy(categoryRows = it.categoryRows.filterNot { row -> row.id == id }) }
-        }
+        collecting(consumption.notificationWasDeleted) { id -> patchCategoryRows { rows -> rows.filterNot { it.id == id } } }
         // Le serveur a refusé : ce que le geste avait basculé hors du cache n'est pas connu d'ici, la page se relit.
         collecting(consumption.notificationReadRolledBack) {
             val category = _state.value.selectedCategory
@@ -153,10 +151,15 @@ class NotificationsViewModel @Inject constructor(
     }
 
     private fun readRows(scope: NotificationReadScope) {
-        _state.update { current ->
-            val ids = current.categoryRows.filter { !it.state.isRead && scope.matches(it) }.mapTo(HashSet()) { it.id }
-            if (ids.isEmpty()) current else current.copy(categoryRows = current.categoryRows.withRead(ids, isRead = true))
+        patchCategoryRows { rows ->
+            val ids = rows.filter { !it.state.isRead && scope.matches(it) }.mapTo(HashSet()) { it.id }
+            if (ids.isEmpty()) rows else rows.withRead(ids, isRead = true)
         }
+    }
+
+    private fun patchCategoryRows(transform: (List<ApiNotification>) -> List<ApiNotification>) {
+        if (categoryJob?.isActive == true) inFlightPatches = inFlightPatches + transform
+        _state.update { it.copy(categoryRows = transform(it.categoryRows)) }
     }
 
     /** Forces a revalidation regardless of freshness — the pull-to-refresh and « Réessayer » entry point. */
@@ -237,6 +240,13 @@ class NotificationsViewModel @Inject constructor(
 
     private var categoryJob: Job? = null
 
+    /**
+     * Les patchs reçus pendant le vol d'une page de catégorie : la page a été calculée AVANT eux, elle les rejoue en
+     * arrivant au lieu de remettre non lue la ligne lue ou de ressusciter la ligne supprimée. Idempotents, donc sûrs
+     * même quand le serveur les avait déjà vus.
+     */
+    private var inFlightPatches: List<(List<ApiNotification>) -> List<ApiNotification>> = emptyList()
+
     /** Le curseur et le « reste-t-il » PROPRES à chaque catégorie : revenir à une puce reprend où elle en était. */
     private val categoryPaging = HashMap<NotificationFilterCategory, CategoryPaging>()
 
@@ -249,6 +259,7 @@ class NotificationsViewModel @Inject constructor(
         val held = _state.value.categoryRows
         val cursor = if (append) paging?.nextCursor else null
         _state.update { it.copy(isCategoryLoading = !append && it.filteredNotifications.isEmpty(), isLoadingMore = append) }
+        inFlightPatches = emptyList()
         categoryJob = viewModelScope.launch {
             val result = try {
                 notificationRepository.listScopePage(scope = scope, cursor = cursor, offset = if (append) held.size else 0)
@@ -262,7 +273,7 @@ class NotificationsViewModel @Inject constructor(
             val rows = page?.let {
                 val known = if (append) _state.value.categoryRows else emptyList()
                 val knownIds = known.mapTo(HashSet()) { row -> row.id }
-                known + it.items.filter { row -> row.id !in knownIds }
+                inFlightPatches.fold(known + it.items.filter { row -> row.id !in knownIds }) { acc, patch -> patch(acc) }
             }
             if (page != null && rows != null) {
                 categoryPaging[category] = CategoryPaging(page.nextCursor, page.hasMore)
