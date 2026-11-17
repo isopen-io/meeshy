@@ -207,7 +207,7 @@ describe('la fiche d’un appel', () => {
 
   test('un appel vivant atteint par son adresse DEMANDE avant de rejoindre, et se nomme avec la personne', () => {
     const html = renderToStaticMarkup(<CallJoinPrompt language="fr" name="Kwame Mensah" media="video" onJoin={noop} onCancel={noop} />);
-    expect(html).toContain('role="alertdialog"');
+    expect(html).toContain('role="group"');
     expect(html).toContain('aria-label="Rejoindre l’appel avec Kwame Mensah"');
     expect(html).toContain('data-call-join-prompt-action="join"');
     expect(html).toContain('data-call-join-prompt-action="cancel"');

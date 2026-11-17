@@ -203,7 +203,7 @@ try {
         (await page.getAttribute('[data-call-join-prompt]', 'aria-label').catch(() => null)) === 'Rejoindre l’appel avec Kwame Mensah',
         `${label} : l'invite se nomme avec la personne (${await page.getAttribute('[data-call-join-prompt]', 'aria-label').catch(() => null)})`,
       );
-      await page.waitForTimeout(800);
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const untouched = await page.evaluate(() => ({
         path: location.pathname,
         screen: document.querySelector('[data-call-screen]') !== null,

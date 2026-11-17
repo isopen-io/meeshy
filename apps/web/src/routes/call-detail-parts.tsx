@@ -276,7 +276,9 @@ export function CallDetailState({
  * **UN APPEL VIVANT ATTEINT PAR SON ADRESSE SE REJOINT AU TOUCHER** (#18907) —
  * quiconque partage la conversation peut forger `/call/<id>` : l'ouvrir ne doit
  * ni acquérir caméra et micro ni émettre `call:join`. La page DEMANDE ;
- * « Rejoindre » rejoint dans le geste, « Annuler » n'émet rien.
+ * « Rejoindre » rejoint dans le geste, « Annuler » n'émet rien. C'est le corps
+ * de l'écran, pas une couche posée dessus : le retour quitte l'écran, comme
+ * depuis la fiche.
  */
 export function CallJoinPrompt({
   language,
@@ -294,7 +296,7 @@ export function CallJoinPrompt({
   const question = translate(language, 'callJoin.named', { name });
   return (
     <div
-      role="alertdialog"
+      role="group"
       aria-label={question}
       data-call-join-prompt={media}
       className="grid flex-1 content-center justify-items-center gap-4 px-6 py-10 text-center"
@@ -310,7 +312,7 @@ export function CallJoinPrompt({
           type="button"
           data-call-join-prompt-action="cancel"
           onClick={onCancel}
-          className="min-h-12 flex-1 rounded-card px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="min-h-12 flex-1 rounded-card px-3 text-body font-semibold active:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ ...CARD, color: INK, outlineColor: BRAND }}
         >
           {translate(language, 'callBackPrompt.cancel')}
@@ -319,7 +321,7 @@ export function CallJoinPrompt({
           type="button"
           data-call-join-prompt-action="join"
           onClick={onJoin}
-          className="min-h-12 flex-1 rounded-card px-3 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="min-h-12 flex-1 rounded-card px-3 text-body font-semibold active:opacity-80 text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ backgroundColor: 'var(--ios-indigo-600)', outlineColor: BRAND }}
         >
           {translate(language, 'callJoin.action')}
