@@ -55,7 +55,8 @@ public nonisolated enum ProfileRelationAction: String, CaseIterable, Sendable {
         self == .block || self == .report
     }
 
-    public var title: String {
+    /// `@MainActor` malgré le type `nonisolated` : `Bundle.module`.
+    @MainActor public var title: String {
         switch self {
         case .write: return String(localized: "profile.relation.action.write", defaultValue: "Écrire", bundle: .module)
         case .call: return String(localized: "profile.relation.action.call", defaultValue: "Appeler", bundle: .module)
@@ -108,7 +109,7 @@ public nonisolated struct ProfileRelationLockedGroup: Equatable, Sendable {
     }
 
     /// Les noms joints selon la langue (« Talkie, Ensemble et Batterie »).
-    public func title(locale: Locale = .current) -> String {
+    @MainActor public func title(locale: Locale = .current) -> String {
         let formatter = ListFormatter()
         formatter.locale = locale
         let titles = actions.map(\.title)
@@ -116,11 +117,11 @@ public nonisolated struct ProfileRelationLockedGroup: Equatable, Sendable {
     }
 
     /// Ce qui l'ouvre, dit sur la rangée verrouillée : « dès Ami ».
-    public var requirement: String {
+    @MainActor public var requirement: String {
         ProfileRelationLockedGroup.requirement(opensAt: opensAt)
     }
 
-    public static func requirement(opensAt level: RelationLevel) -> String {
+    @MainActor public static func requirement(opensAt level: RelationLevel) -> String {
         switch level {
         case .public: return String(localized: "profile.relation.opensAt.public", defaultValue: "pour tous", bundle: .module)
         case .community: return String(localized: "profile.relation.opensAt.community", defaultValue: "dès Communauté", bundle: .module)

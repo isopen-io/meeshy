@@ -4,6 +4,7 @@ import MeeshySDK
 
 /// #18870 — la face Actions de la fiche d'un autre range TOUTES les opérations existantes, offertes ou verrouillées
 /// selon le cercle commun ; ce qui est fermé dit le cercle qui l'ouvre (loi 4).
+@MainActor
 final class ProfileRelationActionTests: XCTestCase {
 
     func test_allCases_listEveryExistingOperation_inThePlancheOrder() {
