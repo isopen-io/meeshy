@@ -27,47 +27,6 @@ import MeeshyUI
 // (`ComposerObjectEditorRail.entries`) et les actions d'un objet
 // (`StoryCanvasContextAction.offered`, filtrées par `ComposerTrailingRailPolicy`).
 
-/// **Les deux boutons de SCÈNE que le rail gauche porte après ses portes**
-/// (#8713) : l'éclair (mode Animé), puis le Cadre.
-///
-/// Ils ne sont pas des PORTES — ils ne font entrer aucune matière — et ne
-/// deviennent donc pas des cas de `ComposerRailDoor`, dont le niveau, la
-/// pastille et le libellé décrivent ce qu'on POSE. Ils se rangent à la suite
-/// de la dernière porte « de scène » : le lieu.
-nonisolated enum ComposerSceneToggle: String, CaseIterable, Equatable, Sendable {
-    case animated
-    case frame
-
-    var symbol: String {
-        switch self {
-        case .animated: return "bolt.fill"
-        case .frame:    return "crop"
-        }
-    }
-}
-
-nonisolated enum ComposerLeadingSceneToggles {
-
-    /// L'ordre est celui de la directive — l'éclair, PUIS le Cadre — et il ne
-    /// dépend pas de ce qui est servi : un bouton qui paraît ne déplace pas
-    /// son voisin sous le doigt.
-    static func served(animated: Bool, frame: Bool) -> [ComposerSceneToggle] {
-        ComposerSceneToggle.allCases.filter { toggle in
-            switch toggle {
-            case .animated: return animated
-            case .frame:    return frame
-            }
-        }
-    }
-
-    /// **Après le lieu** quand la rangée le porte (la Story), sinon après la
-    /// dernière porte de la rangée : le lieu vit en bas hors Story (#4893), et
-    /// les deux boutons ne l'y suivent pas — ils règlent la SCÈNE.
-    static func anchor(in sideRow: [ComposerRailDoor]) -> ComposerRailDoor? {
-        sideRow.contains(.place) ? .place : sideRow.last
-    }
-}
-
 /// **La colonne DROITE : les options du moment en haut, l'historique en bas**
 /// (#8713, #8714).
 nonisolated enum ComposerTrailingColumn {

@@ -87,14 +87,4 @@ nonisolated enum ShareConversationStore {
         if let custom, !custom.isEmpty { return custom }
         return recent.contactName
     }
-
-    // MARK: - Lecture réelle
-
-    static func liveTargets() -> [ShareTarget] {
-        let defaults = UserDefaults(suiteName: ShareSession.appGroupIdentifier)
-        return targets(
-            recentsData: defaults?.data(forKey: recentConversationsKey),
-            snapshotsData: defaults?.data(forKey: conversationSnapshotsKey)
-        )
-    }
 }

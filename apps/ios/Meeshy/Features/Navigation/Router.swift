@@ -92,9 +92,6 @@ enum Route: Hashable {
     /// au-dessus de la première page. `section` : la section où une entrée extérieure (notification, bandeau du
     /// joueur) pose le regard ; `nil` : la fiche s'ouvre en haut.
     case progressionConcept(ProgressionConcept, section: ProgressionConceptSection? = nil)
-    /// L'ANCIEN tableau de bord de Progression, retiré (#9564, amendement n° 4). La route reste une version pour les
-    /// liens déjà posés et ouvre la première page de Progression ; elle se retire à zéro usage mesuré.
-    case progressionDashboard
     case links
     case affiliate
     case trackingLinks
@@ -185,8 +182,6 @@ extension Route {
             return page.title
         case .progressionConcept(let concept, _):
             return ConceptText.name(concept)
-        case .progressionDashboard:
-            return String(localized: "route.title.progression", defaultValue: "Ma Légende", bundle: .main)
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
@@ -837,12 +832,7 @@ final class Router: ObservableObject {
             case .userLinks:
                 replaceStack(with: .links)
 
-            case .post(let postId), .postDetail(let postId):
-                // `.post` is the legacy short-form (e.g. `meeshy://post/<id>`
-                // / `meeshy://p/<id>`) and `.postDetail` is the canonical
-                // long-form added with the /feeds/post/:postId rollout —
-                // both land on the same PostDetailView surface, so route
-                // them through a single arm.
+            case .postDetail(let postId):
                 push(.postDetail(postId))
 
             case .storyDetail(let postId):

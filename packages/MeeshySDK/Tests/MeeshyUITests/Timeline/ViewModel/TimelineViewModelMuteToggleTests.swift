@@ -93,14 +93,4 @@ final class TimelineViewModelMuteToggleTests: XCTestCase {
         XCTAssertFalse(sut.canUndo, "une image n'a rien à couper — aucune commande poussée")
         XCTAssertEqual(sut.project.mediaObjects[0].volume, 1.0)
     }
-
-    func test_muteFromTimeline_isVisibleToLaneBadgeResolver() async {
-        let sut = makeSUT(project: audioProject(volume: 1.0))
-        await sut.awaitConfigured()
-
-        sut.toggleClipMute(id: "audio-1")
-        let audio = sut.project.audioPlayerObjects[0]
-        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: false, audio: audio),
-                      "la barre audio doit afficher l'état coupé dès le tap")
-    }
 }

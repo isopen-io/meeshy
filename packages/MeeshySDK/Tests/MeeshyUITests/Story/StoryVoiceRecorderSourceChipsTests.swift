@@ -26,39 +26,6 @@ final class StoryVoiceRecorderSourceChipsTests: XCTestCase {
 
     // MARK: - Rendu
 
-    func test_sourceChips_meetTheFortyFourPointTouchTarget() {
-        let size = measured(StoryVoiceRecorderSourceChips(
-            onImportAudioFile: {}, onOpenSoundLibrary: {}))
-        XCTAssertGreaterThanOrEqual(
-            size.height, 44,
-            "Les chips sont des portes de navigation, pas des décorations : 44 pt de zone de contact."
-        )
-    }
-
-    func test_sourceChips_withoutAnyHandler_haveNoSurfaceAtAll() {
-        let size = measured(StoryVoiceRecorderSourceChips(
-            onImportAudioFile: nil, onOpenSoundLibrary: nil))
-        XCTAssertEqual(
-            size.height, 0, accuracy: 0.5,
-            """
-            Sans handler il n'y a rien à ouvrir : l'absence doit être STRUCTURELLE \
-            (pas une rangée vide qui réserve de la place), pour que les call sites \
-            existants du recorder restent identiques au pixel près.
-            """
-        )
-    }
-
-    func test_sourceChips_withASingleHandler_showOnlyThatDoor() {
-        let both = measured(StoryVoiceRecorderSourceChips(
-            onImportAudioFile: {}, onOpenSoundLibrary: {}))
-        let filesOnly = measured(StoryVoiceRecorderSourceChips(
-            onImportAudioFile: {}, onOpenSoundLibrary: nil))
-        XCTAssertGreaterThan(
-            both.width, filesOnly.width,
-            "Chaque chip n'existe que si SA closure est fournie — pas de bouton mort."
-        )
-    }
-
     // MARK: - Routage après fermeture (helper pur)
 
     // MARK: - Gardes de source
