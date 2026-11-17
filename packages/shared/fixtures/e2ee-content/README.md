@@ -59,7 +59,8 @@ générés par l'encodeur TS qu'ils mesurent. `canonicalBase64` et `padded` n'en
   clair illisible).
 - `verdict` : l'issue de l'ouverture (sonde, puis lecture, puis confrontation à l'enveloppe, la conversation AVANT l'auteur).
   `version` accompagne `future-version`, `kind` accompagne `admitted-unknown-kind`, `expected` (le contenu ou le signal lu)
-  accompagne `admitted` et `admitted-unauthored`.
+  accompagne `admitted` et `admitted-unauthored`, `reason` accompagne `unreadable` quand la raison fait partie du contrat
+  (aujourd'hui la profondeur, `not-json` : § « La profondeur d'imbrication »).
 
 ## Les verdicts
 
@@ -69,7 +70,7 @@ générés par l'encodeur TS qu'ils mesurent. `canonicalBase64` et `padded` n'en
 | `admitted-unauthored` | contenu sans aucun auteur (client antérieur à #12976) | `.opened` (`isAuthored` vrai pour deux absents) | `Opened` |
 | `admitted-unknown-kind` | signal d'une action inconnue : rangé, jamais appliqué | `.signal` (`.unknown(kind:)`) | `Signal` |
 | `future-version` | version que l'appareil ne lit pas encore : **le clair se GARDE**, scellé (son JSON privé de ses blancs de fin), et se relit après la mise à jour | `unsupportedVersion` ⇒ illisible ET acquitté : perdu (IOS-04) | `UnsupportedVersion` ⇒ illisible ET acquitté : perdu (AND-04) |
-| `unreadable` | pas de l'UTF-8, pas du JSON (dont une demi-paire de substitution, où qu'elle soit), pas un objet, clé requise absente ou du mauvais type | `DecodingError` ⇒ `.undecryptable` | `Malformed` ⇒ `Undecryptable` |
+| `unreadable` | pas de l'UTF-8, pas du JSON (dont une demi-paire de substitution, où qu'elle soit, et une imbrication de plus de 64 niveaux), pas un objet, clé requise absente ou du mauvais type | `DecodingError` ⇒ `.undecryptable` | `Malformed` ⇒ `Undecryptable` |
 | `misattributed-conversation` | le serveur range le clair dans une autre conversation | `E2EEContentError.misattributed` | `Misattributed` |
 | `misattributed-author` | le serveur le présente sous un autre auteur (ou un auteur à moitié, ou un signal sans auteur) | `.misattributedAuthor` | `MisattributedAuthor` |
 
@@ -107,6 +108,57 @@ encodée en octets (`ED A0 80`) n'est pas de l'UTF-8 (`surrogate-encoded-in-utf8
 - **Kotlin** : kotlinx.serialization déséchappe `\ud800` en une `String` qui porte la demi-paire, puisque les chaînes JVM
   l'admettent. Android admet donc aujourd'hui ces clairs. C'est un écart attendu (#18944).
 
+**À l'écriture, l'encodeur TS LÈVE sur une demi-paire** (`encodeE2EEContent`, `encodeE2EESignal`) : il n'écrit pas ce
+qu'aucun appareil ne lirait. Aucun émetteur honnête n'en produit sur l'iPhone (une `String` Swift est toujours bien formée)
+ni sur Android (l'encodeur UTF-8 de la JVM la remplace par `?`). **Un texte web, si** : copier-coller, emoji tronqué au
+milieu de sa paire. Le web DOIT donc passer tout texte saisi par `wellFormedE2EEText` AVANT d'encoder : chaque demi-paire
+isolée devient U+FFFD, comme `String.prototype.toWellFormed`, et l'envoi part au lieu d'être perdu (audit de #19080, E7).
+**Aujourd'hui, aucun appelant** : le web n'envoie pas encore de message chiffré. Son premier envoi chiffré l'appelle, témoin
+à l'appui (#19162).
+
+## Les entiers : `sentAt` et l'intervalle sûr
+
+Le contrat TS lit un entier JSON comme `Number.isSafeInteger` (zod `.int()`) : `sentAt` (un `Int64` Swift, un `Long`
+Kotlin) se lit entre −(2^53 − 1) et 2^53 − 1. Au-delà, un nombre JavaScript ne représente plus chaque entier, et la lecture
+TS rend `unreadable` (`invalid-fields`). L'iPhone (`Int64`) et Android (`Long`) admettent aujourd'hui jusqu'à
+2^63 − 1 : un `sentAt` de 2^60 est lu sur mobile et illisible sur le web. Seul un émetteur hostile y arrive (un `sentAt`
+honnête vaut environ 1,79 × 10^12, loin de 2^53 ≈ 9,0 × 10^15) ; il ne gagne rien que Sesame ne lui donne déjà (sceller un
+clair différent par appareil). La borne du contrat est l'intervalle sûr : iOS et Android s'y alignent au rejeu (#18943,
+#18944).
+
+## La profondeur d'imbrication (#19112)
+
+**Un clair a au plus 64 niveaux d'imbrication** (`E2EE_MAX_DEPTH`). Un contenu en a 1 (l'objet), un signal 2 au plus : aucun
+clair légitime n'approche la borne. Elle existe pour qu'un clair hostile (30 000 `[` tiennent sous le plafond d'une enveloppe)
+rende le même verdict partout. Sans elle, un analyseur récursif déborde (kotlinx-serialization sur Android), un autre lit
+(`JSON.parse` analyse sans récursion ; seul son `reviver` déborde, au-delà de plusieurs milliers de niveaux), un troisième
+s'arrête à sa propre borne (le `JSONDecoder` de l'iPhone, vraisemblablement 512, **non vérifié**) : un clair de profondeur 65 à
+512 était lisible sur une plateforme et pas sur une autre.
+
+La règle, que chaque client applique **à l'identique** :
+
+1. le clair se décode en UTF-8 strict d'abord : un octet invalide rend `unreadable` (`not-utf8`), quelle que soit la profondeur ;
+2. puis un parcours **linéaire**, sans analyse, compte la profondeur. Hors d'une chaîne, `[` et `{` ouvrent un niveau, `]` et `}`
+   le ferment, `"` ouvre une chaîne. Dans une chaîne, `\` échappe l'unité qui le suit (`\"` ne ferme pas la chaîne ; dans
+   `"\\"`, le second guillemet la ferme) et `"` la ferme. Dès qu'un niveau dépasse 64, le clair est `unreadable` (`not-json`),
+   **avant toute analyse**, quelle que soit sa version (aucune `future-version` au-delà de la borne) et quoi qu'il porte (la sonde
+   le range parmi les messages, comme tout JSON illisible) ;
+3. sinon, l'analyse et la lecture habituelles.
+
+Les délimiteurs sont ASCII : compter sur les octets UTF-8, les unités UTF-16 ou les points de code donne le même nombre. Pour un
+JSON valide, le compte est sa profondeur. Un texte qui ferme plus qu'il n'ouvre n'est pas du JSON : la borne le laisse passer,
+l'analyse le refuse, et le verdict (`not-json`) ne dépend pas de la manière dont un client compte un niveau négatif.
+
+Les vecteurs portent `reason` : `depth-at-the-limit-reads` (64, contenu et signal : admis), `depth-beyond-the-limit-is-unreadable`
+et `depth-beyond-the-limit-is-an-unreadable-message` (65), `future-version-beyond-the-limit-is-unreadable` et
+`future-version-beyond-the-limit-is-an-unreadable-message` (illisibles, jamais gardés), `brackets-inside-strings-do-not-count`
+(400 ouvrants dans une chaîne, après `\"` et avant `\\` : admis), `escaped-backslash-closes-the-string` (`"\\"` ferme la
+chaîne : les 64 tableaux qui suivent comptent) et `deep-array-is-not-json` (1 000 niveaux : `not-json`, avant `not-an-object`).
+
+- **web** : il consomme `openE2EEPlaintext` ; la borne lui est acquise.
+- **Android** : 64 depuis #19077 (`E2eePlaintextReader.MAX_DEPTH`, même parcours) ; il lira la constante du contrat (#19112).
+- **iOS** : la borne se pose AVANT `JSONDecoder` (#19112). D'ici là, le rejeu iOS admet les clairs de profondeur 65 à 512.
+
 ## Ce que ce contrat ne lie pas encore
 
 - **Le clair n'est pas lié à SON message** (WEB-15, #18984). `E2EEEnvelopeOrigin` ne porte que la conversation et l'auteur.
@@ -130,7 +182,7 @@ Chaque banc lit les fichiers du dépôt par chemin relatif (aucune copie) et rej
 2. **remplissage** — octets canoniques + `recipients` → octets identiques à `padded.base64` ; et chaque ligne de
    `padding.vectors.json` (`lengths`, `ceilings`) contre la fonction de palier ;
 3. **ouverture** — `padded.base64` (ou `plaintextBase64`) → sonde → lecteur → confrontation à `envelope` → `payload`, `verdict`
-   et, s'il y a lieu, `expected`, `version`, `kind`.
+   et, s'il y a lieu, `expected`, `version`, `kind`, `reason`.
 
 | plateforme | banc | comment |
 |---|---|---|
@@ -151,6 +203,11 @@ Chaque banc lit les fichiers du dépôt par chemin relatif (aucune copie) et rej
   (`invalid-utf8`) ; kotlinx.serialization peut accepter un nombre entre guillemets (`sent-at-as-string`) ; un signal n'est
   vérifié que sur `s`, la conversation et l'auteur (`reaction-missing-emoji`, `receipt-unknown-value`…).
 - Android : `Double.toString` écrit `30.0` ; le jour où il émettra `read-progress`, il devra écrire `30`.
+- iOS et Android : un `sentAt` hors de l'intervalle sûr (au-delà de 2^53 − 1) est admis (`Int64`, `Long`) là où le contrat
+  le juge `invalid-fields` (§ « Les entiers »).
+- iOS : tant que la borne de profondeur n'est pas posée avant `JSONDecoder` (#19112), `depth-beyond-the-limit-is-unreadable`,
+  `escaped-backslash-closes-the-string` et leurs jumeaux de signal sont admis, et les deux `future-version-beyond-the-limit-*`
+  gardés.
 
 Chaque écart qui tombe au rejeu se corrige dans le client, jamais dans le fichier : le fichier est le contrat.
 

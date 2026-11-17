@@ -230,13 +230,6 @@ public interface MessageDao {
     )
     public suspend fun oldestSyncedSince(conversationId: String, fromMillis: Long): MessageEntity?
 
-    /** Oldest server-acked row — the `before` cursor for backwards pagination. */
-    @Query(
-        "SELECT * FROM messages WHERE conversationId = :conversationId " +
-            "AND sendState IS NULL ORDER BY createdAt ASC LIMIT 1",
-    )
-    public suspend fun oldestSynced(conversationId: String): MessageEntity?
-
     /**
      * The high-water mark for a conversation's SERVER-CONFIRMED messages — MAX
      * `createdAt` among rows with no pending `sendState` (#5206). An optimistic,

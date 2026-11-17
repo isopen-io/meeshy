@@ -70,10 +70,8 @@ apps/ios/
 | `FirebaseCore`     | Firebase initialization           |
 | `FirebaseAnalytics`| Screen tracking, usage analytics  |
 | `FirebaseCrashlytics` | Crash reporting               |
-| `FirebaseMessaging`| Push notifications (APNs)        |
 | `SocketIO`         | Real-time messaging               |
 | `WebRTC`           | Voice/video calls (P2P)          |
-| `Kingfisher`       | Image caching                     |
 | Apple `Speech`     | On-device speech recognition (SFSpeechRecognizer) |
 
 ## Common Commands

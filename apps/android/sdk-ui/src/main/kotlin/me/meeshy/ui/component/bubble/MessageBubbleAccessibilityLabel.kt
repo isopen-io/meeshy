@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.model.EndToEndSeal
 import me.meeshy.sdk.model.text.PlainText
 import java.util.Locale
 import me.meeshy.sdk.model.ForwardAttribution
@@ -44,6 +45,8 @@ public data class BubbleAccessibilityStrings(
     val delivery: BubbleDeliveryA11yStrings,
     /** What an end-to-end message this device cannot open says (#13110); blank ⇒ nothing of it is read. */
     val endToEndSealed: String = "",
+    /** What it says, case by case (#18983) ; a case absent here reads [endToEndSealed]. */
+    val endToEndSeals: Map<EndToEndSeal, String> = emptyMap(),
     /** « Sans compte » : annoncé après le nom d'un invité anonyme ; blanc ⇒ rien. */
     val anonymousSender: String = "",
     /** La source annoncée pour un message qui ne vient pas d'un utilisateur ; blanc ⇒ rien. */
@@ -110,7 +113,7 @@ public object MessageBubbleAccessibilityLabel {
         }
 
         if (content.isEndToEndSealed) {
-            strings.endToEndSealed.takeIf { it.isNotBlank() }?.let { parts += it }
+            (strings.endToEndSeals[content.endToEndSeal] ?: strings.endToEndSealed).takeIf { it.isNotBlank() }?.let { parts += it }
             timeText?.takeIf { it.isNotBlank() }?.let { parts += it }
             return parts.joinToString(", ")
         }

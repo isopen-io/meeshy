@@ -14,8 +14,10 @@
  * remplace plus. La ligne d'un envoi relayé porte le marqueur `libsignal-v1`,
  * jamais la chaîne que le client aurait posée à sa place. Tout le reste est
  * RETENU, jamais refusé : un client plus récent qui ajoute une clé ne perd pas
- * son message (#9223). `onWithheld` reçoit les NOMS des clés retenues, jamais
- * leurs valeurs, qui pourraient porter du clair.
+ * son message (#9223). `onWithheld` reçoit le COMPTE des clés retenues et les
+ * seuls noms que la passerelle connaît, jamais une valeur, qui pourrait porter
+ * du clair — ni un nom choisi par le client, qui le pourrait aussi (audit de
+ * #19080, E6).
  */
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { LIBSIGNAL_PROTOCOL, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
@@ -48,9 +50,21 @@ const KEPT: ReadonlyMap<string, (value: unknown) => boolean> = new Map<string, (
 /** Ce que la composition de la charge pose elle-même : le chiffré part dans `encryptedContent`, le mode est affirmé, le relais ne s'écrit pas. */
 const COMPOSED: ReadonlySet<string> = new Set(['ciphertext', 'mode', 'relay']);
 
+/**
+ * Les noms qui peuvent se NOMMER au journal : ceux que la passerelle connaît
+ * (les clés gardées d'un mauvais type, le chiffré d'un envoi relayé, la langue
+ * que des clients déclaraient, #9998). Un nom choisi par le client est un texte
+ * libre : une borne de longueur ou d'alphabet y laisserait passer un mot de
+ * clair, et une liste y laisserait gonfler le journal. Il n'est que compté.
+ */
+const NAMEABLE: ReadonlySet<string> = new Set([...KEPT.keys(), 'ciphertext', 'language']);
+
+/** Ce que la passerelle dit des clés retenues : combien, et lesquelles parmi celles qu'elle connaît. */
+export type WithheldKeys = { readonly count: number; readonly named: readonly string[] };
+
 export function persistableEncryption(
   payload: MessageRequest['encryptedPayload'],
-  options: { readonly onWithheld?: (keys: readonly string[]) => void } = {},
+  options: { readonly onWithheld?: (withheld: WithheldKeys) => void } = {},
 ): PersistableEncryption {
   if (!payload) return {};
   const fields = payload as unknown as Readonly<Record<string, unknown>>;
@@ -62,7 +76,7 @@ export function persistableEncryption(
   const relayed = Boolean(payload.relay);
   const ciphertextWithheld = relayed && payload.ciphertext !== LIBSIGNAL_PROTOCOL;
   const withheld = [...(ciphertextWithheld ? ['ciphertext'] : []), ...declared.filter((key) => !kept.includes(key))];
-  if (withheld.length > 0) options.onWithheld?.(withheld);
+  if (withheld.length > 0) options.onWithheld?.({ count: withheld.length, named: withheld.filter((key) => NAMEABLE.has(key)) });
   return {
     encryptedContent: relayed ? LIBSIGNAL_PROTOCOL : payload.ciphertext,
     encryptionMetadata: { mode: 'e2ee', ...Object.fromEntries(kept.map((key) => [key, fields[key]])) } as Prisma.InputJsonValue,

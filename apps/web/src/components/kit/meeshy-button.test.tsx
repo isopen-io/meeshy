@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { installHapticsDriver } from '@/lib/view/haptics';
-import { kitMount } from '@/test-support/kit-mount';
+import { kitMount, spokenText } from '@/test-support/kit-mount';
 
-import { MeeshyButton, MeeshyButtonPair, meeshyButtonHold, meeshyButtonRecipe, type MeeshyButtonKind, type MeeshyButtonSize } from './meeshy-button';
+import { MeeshyButton, MeeshyButtonPair, meeshyButtonHold, meeshyButtonRecipe, meeshyButtonStyle, type MeeshyButtonKind, type MeeshyButtonSize } from './meeshy-button';
 
-const { mount, act } = kitMount();
+const { mount, render, act } = kitMount();
 
 afterEach(() => installHapticsDriver(null));
 
@@ -97,6 +97,21 @@ describe('MeeshyButton — la recette en valeurs', () => {
   });
 });
 
+describe('MeeshyButton — la teinte', () => {
+  const styleOf = (kind: MeeshyButtonKind, extra: { readonly isDestructive?: boolean } = {}) =>
+    meeshyButtonStyle(meeshyButtonRecipe({ kind, size: 50, ...extra }), '#2BAE66', 'fit') as Record<string, string>;
+
+  test('accent prend la teinte reçue pour fond, pas seulement celle de l’hôte', () => {
+    expect(styleOf('accent')['--kit-button-fill']).toContain('var(--kit-button-tint');
+  });
+
+  test('texte : l’encre est la teinte reçue, neutre sans elle, rouge quand il détruit', () => {
+    expect(styleOf('text')['--kit-button-ink']).toContain('var(--kit-button-tint');
+    expect(styleOf('text')['--kit-button-ink']).toContain('var(--color-ios-ink)');
+    expect(styleOf('text', { isDestructive: true })['--kit-button-ink']).toBe('var(--color-error)');
+  });
+});
+
 describe('MeeshyButton — le composant', () => {
   test('un toucher part une fois, avec un tic léger', () => {
     const played = recordHaptics();
@@ -135,6 +150,17 @@ describe('MeeshyButton — le composant', () => {
     const describedBy = button(container).getAttribute('aria-describedby');
     expect(describedBy).not.toBeNull();
     expect(container.querySelector(`[id="${describedBy}"]`)?.textContent).toBe('Sofia n’accepte pas de nouvelles demandes');
+  });
+
+  test('le nom dit reste le titre : raison, attente et différé sont lus en description, jamais dans le nom', () => {
+    const off = mount(<MeeshyButton title="Demander" disabled disabledReason="Sofia n’accepte pas de nouvelles demandes" onPress={() => {}} />);
+    expect(spokenText(button(off))).toBe('Demander');
+    const busy = mount(<MeeshyButton title="Envoyer" isPending pendingLabel="en cours" onPress={() => {}} />);
+    expect(spokenText(button(busy))).toBe('Envoyer');
+    const later = mount(<MeeshyButton title="Envoyer" isDeferred deferredLabel="sera envoyé" onPress={() => {}} />);
+    expect(spokenText(button(later))).toBe('Envoyer');
+    const describedBy = button(later).getAttribute('aria-describedby') ?? '';
+    expect(later.querySelector(`[id="${describedBy}"]`)?.textContent).toBe('sera envoyé');
   });
 
   test('différé : le bouton reste actif et pose la pastille horloge, annoncée', () => {
@@ -190,6 +216,38 @@ describe('MeeshyButton — le maintien', () => {
       node.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 }));
     });
     expect(events).toEqual([true, false]);
+  });
+
+  test('le bouton qui disparaît pendant le maintien relâche', () => {
+    const events: boolean[] = [];
+    const container = mount(<MeeshyButton title="Parler" shape="hold" glyph={<i>m</i>} holdState="idle" onHoldChange={(held) => events.push(held)} />);
+    act(() => {
+      button(container).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
+    });
+    render(<span />);
+    expect(events).toEqual([true, false]);
+  });
+
+  test('l’appui long du maintien n’ouvre pas le menu du système, qui volerait le pointeur', () => {
+    const container = mount(<MeeshyButton title="Parler" shape="hold" glyph={<i>m</i>} holdState="idle" onHoldChange={() => {}} />);
+    const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    act(() => {
+      button(container).dispatchEvent(menu);
+    });
+    expect(menu.defaultPrevented).toBe(true);
+    const plain = mount(<MeeshyButton title="Écrire" onPress={() => {}} />);
+    const ordinary = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    act(() => {
+      button(plain).dispatchEvent(ordinary);
+    });
+    expect(ordinary.defaultPrevented).toBe(false);
+  });
+
+  test('le maintien ne cède pas le geste au défilement ni à la bulle du système', () => {
+    const css = readFileSync(fileURLToPath(new URL('../../styles/kit-button.css', import.meta.url)), 'utf8');
+    const holdRules = [...css.matchAll(/\.kit-button\[data-shape='hold'\]\s*\{([^}]*)\}/g)].map((match) => match[1] ?? '').join('');
+    expect(holdRules).toContain('touch-action: none;');
+    expect(holdRules).toContain('-webkit-touch-callout: none;');
   });
 
   test('une alternative à deux touchers existe : Espace tenue au clavier', () => {

@@ -1,0 +1,238 @@
+/* L'ÉCHELLE DE PROXIMITÉ (K33, #18875) — une seule teinte, de plus en plus pleine. Chaque
+   rang pose son intensité `--kit-scale-i` (0 à 1) ; le fond est cette part de la teinte,
+   le bord garde la teinte entière. Aucune couleur par niveau, aucune image, aucun canvas :
+   des bordures et des fonds. Les mesures viennent de `meeshy-circle-scale-recipe.ts`.
+   Seuls `transform`, `opacity` et la couleur de fond s'animent. */
+@property --kit-scale-i {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@layer components {
+  .kit-scale {
+    --kit-scale-ink: var(--kit-scale-tint, var(--accent, var(--color-ios-brand)));
+    display: block;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    opacity: var(--kit-scale-opacity);
+  }
+
+  .kit-scale__dots {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--kit-scale-gap);
+  }
+
+  .kit-scale__cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-inline-size: var(--kit-scale-target);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-ios-ink-2);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  button.kit-scale__cell {
+    cursor: pointer;
+    transition: transform 120ms var(--motion-pulse);
+  }
+
+  button.kit-scale__cell:active {
+    transform: scale(var(--kit-scale-pressed));
+  }
+
+  button.kit-scale__cell:focus-visible,
+  button.kit-scale__pill:focus-visible {
+    outline: 2px solid var(--kit-scale-ink);
+    outline-offset: 3px;
+  }
+
+  .kit-scale__dot,
+  .kit-scale__pill {
+    --kit-scale-fill: color-mix(in srgb, var(--kit-scale-ink) calc(var(--kit-scale-i) * 100%), transparent);
+    box-sizing: border-box;
+    border: var(--kit-scale-stroke) solid var(--kit-scale-ink);
+    background-color: var(--kit-scale-fill);
+    color: var(--color-ios-ink);
+    transition: --kit-scale-i var(--motion-morph-duration) var(--motion-morph);
+  }
+
+  .kit-scale__dot[data-ink='dark'],
+  .kit-scale__pill[data-ink='dark'] {
+    color: var(--ios-indigo-950);
+  }
+
+  .kit-scale__dot {
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-scale-dot);
+    block-size: var(--kit-scale-dot);
+    border-radius: 50%;
+  }
+
+  .kit-scale[data-size='compact'] .kit-scale__dot {
+    border-radius: var(--ios-radius-full);
+    inline-size: var(--kit-scale-target);
+    block-size: var(--kit-scale-dot);
+  }
+
+  .kit-scale__dot svg,
+  .kit-scale__pill svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .kit-scale__count {
+    font-family: var(--font-display, inherit);
+    font-size: 18px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kit-scale__cell[data-current] .kit-scale__title {
+    color: var(--color-ios-ink);
+    font-weight: 800;
+  }
+
+  .kit-scale__cell[data-current] .kit-scale__dot {
+    outline: 2px solid var(--kit-scale-ink);
+    outline-offset: 3px;
+  }
+
+  .kit-scale__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-block-size: var(--kit-scale-pill);
+    padding-inline: 12px;
+    border-radius: var(--ios-radius-full);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+  }
+
+  button.kit-scale__pill {
+    min-block-size: max(var(--kit-scale-pill), var(--kit-scale-target));
+    cursor: pointer;
+    transition: transform 120ms var(--motion-pulse), --kit-scale-i var(--motion-morph-duration) var(--motion-morph);
+  }
+
+  button.kit-scale__pill:active {
+    transform: scale(var(--kit-scale-pressed));
+  }
+
+  .kit-scale__pill-title {
+    white-space: nowrap;
+  }
+
+  .kit-scale__leading,
+  .kit-scale__trailing {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+  }
+
+  .kit-scale__rings {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .kit-scale__ring-stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-scale-box);
+    max-inline-size: 100%;
+    aspect-ratio: 1;
+  }
+
+  .kit-scale__ring {
+    --kit-scale-fill: color-mix(in srgb, var(--kit-scale-ink) calc(var(--kit-scale-i) * 100%), transparent);
+    position: absolute;
+    inline-size: var(--kit-scale-ring);
+    max-inline-size: 100%;
+    aspect-ratio: 1;
+    box-sizing: border-box;
+    border: var(--kit-scale-stroke) solid color-mix(in srgb, var(--kit-scale-ink) 62%, transparent);
+    border-radius: 50%;
+    background-color: color-mix(in srgb, var(--kit-scale-fill) 14%, transparent);
+    transition: --kit-scale-i var(--motion-morph-duration) var(--motion-morph);
+  }
+
+  .kit-scale__ring[data-current] {
+    border: var(--kit-scale-current-stroke) solid var(--kit-scale-ink);
+  }
+
+  .kit-scale__ring[data-current]::after {
+    content: '';
+    position: absolute;
+    inset: calc(var(--kit-scale-glow) / -2);
+    border-radius: 50%;
+    background-image: radial-gradient(closest-side, transparent 82%, color-mix(in srgb, var(--kit-scale-ink) 30%, transparent) 90%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .kit-scale__ring[data-other] {
+    border: var(--kit-scale-stroke) dashed var(--kit-scale-other-tint, var(--color-ios-ink-2));
+  }
+
+  .kit-scale__center {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-scale-center);
+    block-size: var(--kit-scale-center);
+  }
+
+  .kit-scale__marker {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 50%;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-scale-marker);
+    block-size: var(--kit-scale-marker);
+    border: var(--kit-scale-cutout) solid var(--color-ios-card);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .kit-scale__marker:dir(rtl) {
+    transform: translate(50%, -50%);
+  }
+
+  .kit-scale__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-scale__legend li[data-current] {
+    font-weight: 800;
+    color: var(--kit-scale-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-scale__dot,
+  .kit-scale__pill,
+  .kit-scale__ring,
+  button.kit-scale__cell,
+  button.kit-scale__pill {
+    transition: none;
+  }
+}

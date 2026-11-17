@@ -26,10 +26,14 @@
  * un second message qui la citerait serait perdu.
  *
  * Soi-même (ses autres appareils) n'est compté dans aucun seau. Une panne du
- * magasin de compteurs laisse passer, comme chaque limiteur de la passerelle.
+ * magasin de compteurs laisse passer le DEMANDEUR, comme chaque limiteur de la
+ * passerelle ; le seau de la CIBLE se replie alors sur le dernier recours (audit
+ * de #19080, E4) : il ne refuse personne et ne consomme aucune pré-clé, là où
+ * « laisser passer » laissait fondre le stock sans compter. La limitation
+ * désactivée hors production (`RATE_LIMIT_DISABLED`) n'est pas une panne.
  */
 import type { Redis } from 'ioredis';
-import { createCustomRateLimiter, type RateLimitInfo } from '../../utils/rate-limiter';
+import { createCustomRateLimiter, rateLimitDisabled, type RateLimitInfo } from '../../utils/rate-limiter';
 
 export const E2EE_KEY_RESERVATION_BUDGET = {
   requesterPerMinute: 60,
@@ -79,8 +83,9 @@ export function createKeyReservationBudget(redis?: Redis): KeyReservationBudget 
       const requester = `user:${requesterUserId}`;
       const exceeded = exceededAfter(await Promise.all([perMinute.consume(requester, 1), perDay.consume(requester, 1)]));
       if (exceeded.length > 0) return { requesterAllowed: false, retryAfter: Math.max(...exceeded), spendOneTimeKeys: false };
-      const target = exceededAfter([await perTarget.consume(`user:${targetUserId}`, 1)]);
-      return { requesterAllowed: true, retryAfter: 0, spendOneTimeKeys: target.length === 0 };
+      const target = await perTarget.consume(`user:${targetUserId}`, 1);
+      const spendOneTimeKeys = target === null ? rateLimitDisabled() : target.retryAfter === undefined;
+      return { requesterAllowed: true, retryAfter: 0, spendOneTimeKeys };
     },
   };
 }

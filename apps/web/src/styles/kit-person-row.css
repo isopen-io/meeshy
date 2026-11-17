@@ -1,0 +1,281 @@
+/* LA RANGÉE DE PERSONNE (K39, #18876) — une hauteur fixe par taille : la liste connaît sa
+   longueur avant de peindre. Au repos : ni flou, ni ombre, ni animation. Seule la
+   transformation s'anime, au balayage. Chaque valeur chiffrée vient de
+   `meeshy-person-row-recipe.ts`, qui la pose en propriétés `--kit-person-*`. */
+@layer components {
+  .kit-person-wrap {
+    position: relative;
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+
+  .kit-person-swipe {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    inline-size: 100%;
+    transition: transform var(--motion-morph-duration, 420ms) var(--motion-morph, ease-out);
+  }
+
+  .kit-person-swipe[data-open='trailing'] {
+    transform: translateX(calc(-1 * var(--kit-person-actions, 9.5rem)));
+  }
+
+  .kit-person-swipe[data-open='leading'] {
+    transform: translateX(var(--kit-person-actions, 9.5rem));
+  }
+
+  .kit-person-swipe[data-open='trailing']:dir(rtl) {
+    transform: translateX(var(--kit-person-actions, 9.5rem));
+  }
+
+  .kit-person-swipe[data-open='leading']:dir(rtl) {
+    transform: translateX(calc(-1 * var(--kit-person-actions, 9.5rem)));
+  }
+
+  .kit-person {
+    position: relative;
+    display: flex;
+    flex: 1 1 100%;
+    align-items: center;
+    gap: var(--kit-person-avatar-gap);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    block-size: var(--kit-person-h);
+    padding-inline: var(--kit-person-pad-start) var(--kit-person-pad-end);
+    background-color: color-mix(in srgb, var(--color-ios-brand) calc(var(--kit-person-pending, 0) * 100%), var(--color-ios-card));
+    color: var(--color-ios-ink);
+    flex-wrap: wrap;
+  }
+
+  .kit-person[data-divider]::after {
+    content: '';
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline: var(--kit-person-divider-inset) 0;
+    block-size: 1px;
+    background-color: var(--color-ios-hairline);
+  }
+
+  .kit-person[data-pressed] {
+    background-color: var(--color-ios-fill);
+  }
+
+  .kit-person__hit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    touch-action: pan-y;
+  }
+
+  .kit-person__hit:focus-visible {
+    outline: 2px solid var(--color-ios-brand);
+    outline-offset: -2px;
+  }
+
+  .kit-person > :not(.kit-person__hit) {
+    position: relative;
+    z-index: 2;
+  }
+
+  .kit-person__hit ~ :not(.kit-person__trailing, .kit-person__secondary, .kit-person__note) {
+    pointer-events: none;
+  }
+
+  .kit-person__avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--kit-person-avatar);
+    block-size: var(--kit-person-avatar);
+    opacity: var(--kit-person-opacity);
+  }
+
+  .kit-person__ghost {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+    border: 1.5px dashed var(--color-ios-ink-3);
+    border-radius: var(--ios-radius-full);
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-person__text {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: center;
+    min-inline-size: 0;
+    opacity: var(--kit-person-opacity);
+  }
+
+  .kit-person__name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-inline-size: 0;
+    font-size: var(--kit-person-title);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .kit-person__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kit-person__level {
+    display: inline-grid;
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-person__subtitle {
+    overflow: hidden;
+    color: var(--color-ios-ink-2);
+    font-size: var(--kit-person-subtitle);
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kit-person__meta {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: flex-end;
+    opacity: var(--kit-person-opacity);
+  }
+
+  .kit-person__meta-value {
+    font-size: var(--kit-person-meta);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kit-person__meta-detail {
+    color: var(--color-ios-ink-2);
+    font-size: var(--kit-person-meta-detail);
+    font-weight: 600;
+  }
+
+  .kit-person__secondary,
+  .kit-person__trailing {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--kit-person-target);
+    min-block-size: var(--kit-person-target);
+  }
+
+  .kit-person__check {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+    border: 1.5px solid var(--color-ios-ink-3);
+    border-radius: var(--ios-radius-full);
+  }
+
+  .kit-person__check[data-checked] {
+    border-color: var(--color-ios-brand);
+    background-color: var(--color-ios-brand);
+    color: var(--color-ios-on-brand);
+  }
+
+  .kit-person__note {
+    flex: 1 1 100%;
+    padding-inline-start: calc(var(--kit-person-avatar) + var(--kit-person-avatar-gap));
+  }
+
+  .kit-person__actions {
+    display: flex;
+    flex: none;
+    inline-size: var(--kit-person-actions, 9.5rem);
+    position: absolute;
+    inset-block: 0;
+  }
+
+  .kit-person__actions[data-side='trailing'] {
+    inset-inline-start: 100%;
+  }
+
+  .kit-person__actions[data-side='leading'] {
+    inset-inline-end: 100%;
+  }
+
+  .kit-person__action {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-inline-size: var(--kit-person-target);
+    border: 0;
+    background-color: var(--color-ios-brand);
+    color: var(--color-ios-on-brand);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .kit-person__action[data-role='destructive'] {
+    background-color: var(--color-error);
+  }
+
+  .kit-person__action:focus-visible {
+    outline: 2px solid var(--color-ios-ink);
+    outline-offset: -2px;
+  }
+
+  .kit-person-wrap:focus-within .kit-person-swipe:not([data-open]) .kit-person__actions {
+    visibility: visible;
+  }
+
+  .kit-person--skeleton .kit-person__bar {
+    display: block;
+    block-size: 0.75rem;
+    inline-size: 45%;
+    margin-block: 3px;
+    border-radius: var(--ios-radius-full);
+    background-color: var(--color-ios-fill);
+  }
+
+  .kit-person--skeleton .kit-person__bar[data-wide] {
+    inline-size: 65%;
+  }
+
+  .kit-person--skeleton .kit-person__avatar {
+    border-radius: var(--ios-radius-full);
+    background-color: var(--color-ios-fill);
+  }
+
+  .kit-person__action-glyph {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .kit-person__action-title {
+    font-size: 0.6875rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-person-swipe {
+      transition: none;
+    }
+  }
+}
