@@ -75,7 +75,7 @@ class MeeshyMapTraceTest {
     }
 
     @Test
-    fun `perime il s eteint a 60 pour cent et cesse de couler ; mouvement reduit aussi`() {
+    fun `perime il s eteint a 60 pour cent et cesse de couler - mouvement reduit aussi`() {
         val stale = MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route, isStale = true)
         assertThat(stale.opacity).isEqualTo(0.6f)
         assertThat(stale.flows).isFalse()

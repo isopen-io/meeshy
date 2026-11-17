@@ -37,7 +37,7 @@ class MeeshyReorderListTest {
     }
 
     @Test
-    fun `saisie - 1,02 ; en vol - incline de 2 ; en mouvement reduit rien ne bouge`() {
+    fun `saisie - 1,02 - en vol - incline de 2 - en mouvement reduit rien ne bouge`() {
         assertThat(MeeshyReorderListRecipe.resolve(phase = MeeshyReorderPhase.Grabbed).scale).isEqualTo(1.02f)
         val flying = MeeshyReorderListRecipe.resolve(phase = MeeshyReorderPhase.Flying)
         assertThat(flying.tiltDegrees).isEqualTo(2f)
@@ -64,7 +64,7 @@ class MeeshyReorderListTest {
     }
 
     @Test
-    fun `le premier se souligne seulement si l hote le demande ; le rang s affiche en ordinal`() {
+    fun `le premier se souligne seulement si l hote le demande - le rang s affiche en ordinal`() {
         assertThat(MeeshyReorderListRecipe.resolve(isFirst = true, emphasizesFirst = true).emphasized).isTrue()
         assertThat(MeeshyReorderListRecipe.resolve(isFirst = true).emphasized).isFalse()
         assertThat(MeeshyReorderListRecipe.resolve(rank = MeeshyReorderRank.Ordinal).showsRank).isTrue()

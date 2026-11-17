@@ -29,7 +29,7 @@ class MeeshyChartTest {
     }
 
     @Test
-    fun `un axe pour barres, courbe et bande ; sans point le graphique est vide`() {
+    fun `un axe pour barres, courbe et bande - sans point le graphique est vide`() {
         assertThat(MeeshyChartRecipe.resolve(MeeshyChartKind.Bars, pointCount = 3).hasAxis).isTrue()
         assertThat(MeeshyChartRecipe.resolve(MeeshyChartKind.Donut, pointCount = 3).hasAxis).isFalse()
         assertThat(MeeshyChartRecipe.resolve(MeeshyChartKind.Line, pointCount = 0).isEmpty).isTrue()

@@ -25,7 +25,7 @@ class MeeshyAvatarMorphTest {
     }
 
     @Test
-    fun `avec portee et capacite - partage ; avec progression - piloté au doigt`() {
+    fun `avec portee et capacite - partage - avec progression - pilote au doigt`() {
         assertThat(MeeshyAvatarMorphRecipe.resolve(from = 44, to = 112, hasScope = true, canTravel = true).mode).isEqualTo(MeeshyAvatarMorphMode.Shared)
         val driven = MeeshyAvatarMorphRecipe.resolve(from = 44, to = 112, hasScope = true, progress = 0.4f)
         assertThat(driven.mode).isEqualTo(MeeshyAvatarMorphMode.Driven)
