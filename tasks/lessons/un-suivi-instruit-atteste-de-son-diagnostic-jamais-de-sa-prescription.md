@@ -1,4 +1,4 @@
-## Un suivi INSTRUIT atteste de son diagnostic, jamais de sa prescription (cycle 175, #19261)
+## Un suivi INSTRUIT atteste de son diagnostic, jamais de sa prescription (cycle 175, #19261, #19303)
 
 Le dépôt sait déjà qu'**un suivi hérité est une AFFIRMATION** et se mesure avant
 d'être recopié (cycle 107 : une symétrie LEXICALE prise pour une symétrie de
@@ -72,4 +72,30 @@ type qui exige la lecture la **supprime**. Quand une règle a une forme de DONN�
 — une projection, un jeu de colonnes, une carte — elle peut cesser d'être
 retapable, et c'est le seul état où « une règle qu'il faut retaper à chaque site
 est une règle qu'un site finira par ne pas avoir » cesse de s'appliquer.
+
+### Et le même cycle a mesuré le corollaire de collision
+
+Deux sessions ont développé #19261 en parallèle le même jour. Celle-ci avait fait
+son relevé de branches (30 branches distantes, aucune sur ces chemins) et posé
+son **commentaire d'allocation publique sur l'issue avant la première ligne** — la
+primitive du cycle 172. La branche concurrente n'existait pas encore à cet
+instant. Elle a fusionné la première, et la directive du 2026-11-15 a tranché
+sans négociation : `dev` se garde, le lot s'y adapte.
+
+> **La doctrine de la branche poussée tôt réduit la FENÊTRE de collision ; elle
+> ne la supprime pas** — le dépôt l'écrit déjà, et voici sa mesure. Un relevé
+> irréprochable ne protège pas d'une session qui démarre dans le même quart
+> d'heure. Le commentaire d'allocation reste utile pour autant : il est ce qui
+> rend la collision LISIBLE après coup.
+
+Le réflexe devant un doublon fusionné est de jeter la branche. Il aurait coûté
+trois choses ici : la loi structurelle, les deux témoins de projection que le lot
+gagnant n'avait pas, et la JUMELLE de lecture (#19299) — trouvée en posant la
+question du dépôt sur un lot qui, lui, ne l'avait pas posée.
+
+> Devant un doublon, la question n'est pas « qui a gagné ? » mais **« qu'est-ce
+> que mon exemplaire porte que l'autre ne porte pas ? »** — et elle se répond en
+> comparant les deux diffs LIGNE À LIGNE, jamais en comparant les intentions, qui
+> sont par construction les mêmes puisque les deux lots lisaient la même issue.
+> Et ce qui reste se livre sous SA propre issue : le doublon a fermé la première.
 ---
