@@ -180,6 +180,21 @@ final class MessageEnrichmentWriterTests: XCTestCase {
         XCTAssertEqual(try actor.translations(for: Self.messageId).map(\.translatedContent), ["Meet you at the station"])
     }
 
+    /// Une modification arrivée avant sa ligne rend caduques les traductions de
+    /// l'ancien texte tamponnées avec elle : rejouées à l'arrivée de la ligne,
+    /// la traduction du texte v1 s'écrivait sous le texte v2 (audit #19352).
+    func test_markEdited_beforeItsRow_dropsTheTranslationsOfThePreviousText() async throws {
+        let actor = try makeActor()
+
+        try await MessageEnrichmentWriter.save([Self.translation], into: actor)
+        try await actor.deleteTranslations(messageLocalId: Self.messageId)
+        try await actor.markEdited(localId: Self.messageId, newContent: "texte corrigé", editedAt: Date())
+        try await insertVocal(into: actor)
+        await actor.replayPendingRowEvents(for: [Self.messageId])
+
+        XCTAssertTrue(try actor.translations(for: Self.messageId).isEmpty)
+    }
+
     /// Une suppression arrivée elle aussi avant la ligne se rejoue d'abord : la
     /// traduction se juge sur la pierre tombale.
     func test_save_beforeItsRow_isNotKeptWhenTheDeletionAlsoArrivedFirst() async throws {

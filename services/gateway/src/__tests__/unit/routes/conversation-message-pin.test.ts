@@ -245,6 +245,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
     try {
       const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(res.statusCode).toBe(404);
+      expect(res.json().code).toBe('MESSAGE_NOT_FOUND');
     } finally {
       await app.close();
     }
@@ -355,6 +356,7 @@ describe('épingler / dépingler un message supprimé', () => {
     try {
       const res = await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(res.statusCode).toBe(404);
+      expect(res.json().code).toBe('MESSAGE_NOT_FOUND');
       expect(update).not.toHaveBeenCalled();
     } finally {
       await app.close();
