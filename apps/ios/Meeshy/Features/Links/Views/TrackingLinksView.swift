@@ -40,37 +40,14 @@ struct TrackingLinksView: View {
         }
     }
 
+    /// Les chiffres de mes liens de suivi : la bande du kit (K34), un seul élément pour VoiceOver (#18871).
     private func trackingStatsOverview(_ stats: TrackingLinkStats) -> some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
-            trackingStatCard("\(stats.totalLinks)", label: String(localized: "tracking.links.stats.links", defaultValue: "Liens", bundle: .main), icon: "link")
-            trackingStatCard("\(stats.totalClicks)", label: String(localized: "tracking.links.stats.clicks", defaultValue: "Clics", bundle: .main), icon: "cursorarrow.click")
-            trackingStatCard("\(stats.uniqueClicks)", label: String(localized: "tracking.links.stats.uniques", defaultValue: "Uniques", bundle: .main), icon: "person.fill")
-            trackingStatCard("\(stats.activeLinks)", label: String(localized: "tracking.links.stats.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle")
-        }
-    }
-
-    private func trackingStatCard(_ value: String, label: String, icon: String) -> some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(MeeshyIconSize.md))
-                .foregroundColor(accent)
-                .accessibilityHidden(true)
-            Text(value)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(theme.textPrimary)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(MeeshySpacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: accentHex))
-                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
-        )
-        .accessibilityElement(children: .combine)
+        MeeshyFigureBand(items: [
+            MeeshyFigureItem(value: stats.totalLinks.formatted(), unit: String(localized: "tracking.links.stats.links", defaultValue: "Liens", bundle: .main)),
+            MeeshyFigureItem(value: stats.totalClicks.formatted(), unit: String(localized: "tracking.links.stats.clicks", defaultValue: "Clics", bundle: .main)),
+            MeeshyFigureItem(value: stats.uniqueClicks.formatted(), unit: String(localized: "tracking.links.stats.uniques", defaultValue: "Uniques", bundle: .main)),
+            MeeshyFigureItem(value: stats.activeLinks.formatted(), unit: String(localized: "tracking.links.stats.active", defaultValue: "Actifs", bundle: .main)),
+        ], size: .compact, emptyLabel: ProfileActivityBand.emptyLabel)
     }
 
     private var linksSection: some View {

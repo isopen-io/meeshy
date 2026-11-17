@@ -53,36 +53,13 @@ struct ShareLinksView: View {
 
     // MARK: - Stats overview
 
+    /// Les chiffres de mes liens de partage : la bande du kit (K34), un seul élément pour VoiceOver (#18871).
     private func shareLinkStatsOverview(_ stats: MyShareLinkStats) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            shareLinkStatCard("\(stats.totalLinks)", label: String(localized: "share.links.stats.total", defaultValue: "Liens", bundle: .main), icon: "link")
-            shareLinkStatCard("\(stats.activeLinks)", label: String(localized: "share.links.stats.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle.fill")
-            shareLinkStatCard("\(stats.totalUses)", label: String(localized: "share.links.stats.joined", defaultValue: "Rejoints", bundle: .main), icon: "person.fill.badge.plus")
-        }
-    }
-
-    private func shareLinkStatCard(_ value: String, label: String, icon: String) -> some View {
-        VStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(MeeshyIconSize.xl))
-                .foregroundColor(MeeshyColors.shareAccent)
-                .accessibilityHidden(true)
-            Text(value)
-                .font(.title2.weight(.bold))
-                .foregroundStyle(theme.textPrimary)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(MeeshySpacing.mdPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
-                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(MeeshyColors.shareAccent.opacity(MeeshyOpacity.light), lineWidth: 1))
-        )
-        .accessibilityElement(children: .combine)
+        MeeshyFigureBand(items: [
+            MeeshyFigureItem(value: stats.totalLinks.formatted(), unit: String(localized: "share.links.stats.total", defaultValue: "Liens", bundle: .main)),
+            MeeshyFigureItem(value: stats.activeLinks.formatted(), unit: String(localized: "share.links.stats.active", defaultValue: "Actifs", bundle: .main)),
+            MeeshyFigureItem(value: stats.totalUses.formatted(), unit: String(localized: "share.links.stats.joined", defaultValue: "Rejoints", bundle: .main)),
+        ], size: .compact, emptyLabel: ProfileActivityBand.emptyLabel)
     }
 
     // MARK: - Links list
