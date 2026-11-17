@@ -131,8 +131,8 @@ nonisolated enum ProfileLinksCopy {
         let format = String(localized: "profile.links.expires", defaultValue: "Expire %@", bundle: .main)
         return String(format: format, relative)
     }
-    static var createdEmpty: String {
-        String(localized: "profile.links.created.empty", defaultValue: "Aucun lien créé", bundle: .main)
+    static var firstLinkTitle: String {
+        String(localized: "profile.links.created.first", defaultValue: "Ton premier lien t'attend", bundle: .main)
     }
     static var createdUnavailable: String {
         String(localized: "profile.links.created.unavailable", defaultValue: "Mes liens ne se chargent pas", bundle: .main)

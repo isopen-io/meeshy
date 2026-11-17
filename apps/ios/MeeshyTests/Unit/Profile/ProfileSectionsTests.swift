@@ -81,6 +81,14 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertEqual(openedPath(.invite), [.affiliate])
     }
 
+    /// Planche `Etat-Vide` vue 1 : ma face Liens sans lien propose ses trois familles, chacune menant à sa page.
+    func test_firstLinkShortcuts_areShareTrackingAndReferral_eachLeadingToItsPage() {
+        XCTAssertEqual(ProfileCreatedLinks.firstLinkShortcuts, [.share, .tracking, .referral])
+        XCTAssertEqual(ProfileCreatedLinks.firstLinkShortcuts.map { ProfileCreatedLinks.route(for: $0) },
+                       [.shareLinks, .trackingLinks, .affiliate])
+        XCTAssertEqual(ProfileCreatedLinks.route(for: .community), .communityLinks)
+    }
+
     // MARK: - Mon activité
 
     func test_activityAccessibilityLabel_pairsEachOfTheThreeValuesWithItsNoun() {

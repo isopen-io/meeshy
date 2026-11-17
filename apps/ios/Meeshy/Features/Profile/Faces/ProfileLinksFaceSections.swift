@@ -117,15 +117,42 @@ struct ProfileCreatedLinks: View {
                                                              perform: { Task { await model.refresh() } }),
                              art: .none, size: .compact, tint: accent)
         case .ready where model.summary.tickets.isEmpty:
-            MeeshyStateBlock(kind: .empty, title: ProfileLinksCopy.createdEmpty,
-                             primary: MeeshyStateBlockAction(title: ProfileLinksCopy.createLink, systemImage: "plus",
-                                                             perform: onCreate),
-                             art: .ghost(.ticket, count: 2), size: .compact, tint: accent)
+            firstLink
         case .ready:
             filters
             ForEach(model.visibleTickets) { ticket in
                 ProfileCreatedLinkTicket(ticket: ticket, accent: accent, locale: locale,
                                          destination: destination(of: ticket), onOpen: onOpen)
+            }
+        }
+    }
+
+    /// Les familles proposées quand je n'ai encore créé aucun lien (planche `Etat-Vide` vue 1).
+    static let firstLinkShortcuts: [LinksFaceFamily] = [.share, .tracking, .referral]
+
+    /// La page d'une famille de liens, où l'on crée le premier.
+    static func route(for family: LinksFaceFamily) -> Route {
+        switch family {
+        case .share: return .shareLinks
+        case .tracking: return .trackingLinks
+        case .community: return .communityLinks
+        case .referral: return .affiliate
+        }
+    }
+
+    /// Aucun lien créé : « Ton premier lien t'attend », « Créer un lien », et un raccourci par famille.
+    private var firstLink: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            MeeshyStateBlock(kind: .empty, title: ProfileLinksCopy.firstLinkTitle,
+                             primary: MeeshyStateBlockAction(title: ProfileLinksCopy.createLink, systemImage: "plus",
+                                                             perform: onCreate),
+                             art: .ghost(.ticket, count: 2), tint: accent)
+            HStack(spacing: MeeshySpacing.sm) {
+                ForEach(Self.firstLinkShortcuts, id: \.self) { family in
+                    MeeshyButton(ProfileLinksCopy.familyName(family), systemImage: ProfileLinksCopy.familyGlyph(family),
+                                 kind: .outline, size: .s36, tint: accent,
+                                 action: { onOpen(Self.route(for: family)) })
+                }
             }
         }
     }
