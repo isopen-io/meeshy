@@ -54,8 +54,15 @@ import { registerCreationRoutes } from '../../../../routes/tracking-links/creati
 
 type StoredLink = Record<string, unknown> & { id: string; token: string };
 
-const matches = (row: StoredLink, where: Record<string, unknown>) =>
-  Object.entries(where).every(([key, value]) => row[key] === value);
+const isSetFilter = (value: unknown): value is { isSet: boolean } =>
+  typeof value === 'object' && value !== null && 'isSet' in value;
+
+const matches = (row: StoredLink, where: Record<string, unknown>): boolean =>
+  Object.entries(where).every(([key, value]) => {
+    if (key === 'OR') return (value as Array<Record<string, unknown>>).some((branch) => matches(row, branch));
+    if (isSetFilter(value)) return (row[key] !== undefined) === value.isSet;
+    return row[key] === value;
+  });
 
 const buildTrackingLinkStore = () => {
   const rows: StoredLink[] = [];

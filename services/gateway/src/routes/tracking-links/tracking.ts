@@ -1,9 +1,10 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { mayManageTrackingLink } from './link-ownership';
+import { isForeignAddressLink, mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { servedTrackingLinkTarget } from '../../services/tracking-link-target';
 import { clickGeo } from './click-geo';
+import { addressLinkOpensTo } from '../../services/profile-addresses/address-link-gate';
 import { logError } from '../../utils/logger';
 import {
   createUnifiedAuthMiddleware,
@@ -101,7 +102,9 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Token invalide');
       }
 
-      const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
+      const viewerId = isRegisteredUser(request.authContext) ? request.authContext.registeredUser!.id : undefined;
+      const found = await trackingLinkService.getTrackingLinkByToken(token);
+      const trackingLink = found && (await addressLinkOpensTo(fastify.prisma, found, viewerId)) ? found : null;
 
       if (!trackingLink) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
@@ -484,7 +487,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
-      if (!trackingLink) {
+      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 

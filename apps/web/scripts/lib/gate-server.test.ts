@@ -97,6 +97,19 @@ describe('le serveur des gates', () => {
     }
   });
 
+  test('`headers` pose les en-têtes que nginx enverrait — la garde de la CSP sert `dist/` sous la politique réelle (#18986)', async () => {
+    const policed = await startDistServer(root, {
+      headers: (pathname) => (pathname.startsWith('/assets/') ? {} : { 'content-security-policy': "default-src 'self'" }),
+    });
+    try {
+      expect((await fetch(`${policed.base}/links/share`)).headers.get('content-security-policy')).toBe("default-src 'self'");
+      expect((await fetch(`${policed.base}/assets/present.js`)).headers.get('content-security-policy')).toBeNull();
+      expect((await fetch(`${policed.base}/assets/absent.js`)).headers.get('content-security-policy')).toBeNull();
+    } finally {
+      policed.close();
+    }
+  });
+
   test("une erreur de lecture AUTRE qu'absente rend 500 et NOMME son code — une saturation doit se voir", async () => {
     const saturé = await startDistServer(root, {
       readFile: () => Promise.reject(Object.assign(new Error('too many open files'), { code: 'EMFILE' })),

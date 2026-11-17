@@ -4,7 +4,8 @@ import me.meeshy.sdk.model.translation.DeviceTranslationEligibility
 
 /**
  * **RÉAGIR, ÉPINGLER, DÉSÉPINGLER, SUPPRIMER POUR TOUS** (#13790) : en bout en bout, ces gestes voyagent en SIGNAUX chiffrés
- * (`POST /e2ee/conversations/:id/signals`, #13142) que l'Android natif ne sait pas encore sceller (#13015). Leurs routes en clair
+ * (`POST /e2ee/conversations/:id/signals`, #13142) que l'Android natif ne scelle pas encore (#13202) — il n'en applique,
+ * à la réception, que la suppression pour tous (#18981). Leurs routes en clair
  * y répondent `409 E2EE_SIGNAL_CHANNEL_REQUIRED`, mais la passerelle a déjà lu l'emoji et le message visé : le geste ne doit
  * jamais partir. iOS les envoie par le canal ; [MessageActionPolicy] porte la loi PARTAGÉE (qui les offre), et cette loi-ci
  * dit ce que CE client peut en faire tant qu'il n'a pas le canal.

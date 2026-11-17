@@ -33,7 +33,9 @@
  * et dont le manifeste de précache porte la NOUVELLE empreinte de ce document
  * — exactement ce qu'un vrai déploiement produit : Workbox grave `revision:
  * md5(index.html)` pour les fichiers non empreintés (mesuré sur `dist/sw.js`),
- * et c'est ce champ qui fait différer le worker. Aucun interrupteur de
+ * suivie, pour un document, de la révision de ses en-têtes
+ * (`PRECACHED_DOCUMENT_HEADERS_REVISION`, `scripts/lib/csp.mjs`), et c'est ce
+ * champ qui fait différer le worker. Aucun interrupteur de
  * construction n'est ajouté au produit pour les besoins d'un témoin.
  *
  * LE MARQUEUR EST LA PREUVE DE « LA PAGE TOURNE SUR B » : il est dans le
@@ -50,6 +52,7 @@ import { cp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
+import { PRECACHED_DOCUMENT_HEADERS_REVISION } from './lib/csp.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const A_DIR = 'dist-app-update-a';
@@ -198,14 +201,15 @@ async function fabriquerB() {
   const empreinteB = createHash('md5').update(documentB, 'utf8').digest('hex');
 
   const workerA = await readFile(join(A, 'sw.js'), 'utf8');
-  const entree = `{url:"index.html",revision:"${empreinteA}"}`;
+  const revisionDe = (empreinte) => `${empreinte}.${PRECACHED_DOCUMENT_HEADERS_REVISION}`;
+  const entree = `{url:"index.html",revision:"${revisionDe(empreinteA)}"}`;
   if (!workerA.includes(entree)) {
     throw new Error(
       `le manifeste de précache de A ne porte pas ${entree} — la forme du manifeste a changé, ` +
         'ce gate doit être relu plutôt que contourné.',
     );
   }
-  await writeFile(join(B, 'sw.js'), workerA.replace(entree, `{url:"index.html",revision:"${empreinteB}"}`));
+  await writeFile(join(B, 'sw.js'), workerA.replace(entree, `{url:"index.html",revision:"${revisionDe(empreinteB)}"}`));
 
   return { empreinteA, empreinteB };
 }

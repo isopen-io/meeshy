@@ -67,7 +67,7 @@ internal fun ColumnScope.BubbleTextBody(
         )
     } else if (content.isEndToEndSealed) {
         Text(
-            text = stringResource(R.string.bubble_message_end_to_end),
+            text = stringResource(BubbleEndToEndSeal.label(content.endToEndSeal)),
             style = MaterialTheme.typography.bodyMedium,
             fontStyle = FontStyle.Italic,
             color = onColor.copy(alpha = 0.6f),
