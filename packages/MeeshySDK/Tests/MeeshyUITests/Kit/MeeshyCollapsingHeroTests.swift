@@ -14,7 +14,7 @@ struct MeeshyCollapsingHeroTests {
         for row in try KitAtomVectors.rows(Self.file, "crans") {
             let progress = try #require(row["progress"] as? Double)
             let recipe = MeeshyCollapsingHeroRecipe.resolve(progress: progress)
-            let close = KitAssemblyGuards.close
+            let close: (Double, Double) -> Bool = { KitAssemblyGuards.close($0, $1) }
             #expect(close(recipe.height, row["hauteur"] as? Double ?? .nan), "\(row)")
             #expect(close(recipe.avatarSize, row["avatar"] as? Double ?? .nan), "\(row)")
             #expect(close(recipe.titleSize, row["titre"] as? Double ?? .nan), "\(row)")

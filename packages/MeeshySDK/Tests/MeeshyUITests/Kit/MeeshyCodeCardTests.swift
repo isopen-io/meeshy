@@ -14,7 +14,7 @@ struct MeeshyCodeCardTests {
         for row in try KitAtomVectors.rows(Self.file, "inclinaisons") {
             let yaw = try #require(row["lacet"] as? Double)
             let motion = MeeshyCodeCardRecipe.motion(yaw: yaw, pitch: 0)
-            let close = KitAssemblyGuards.close
+            let close: (Double, Double) -> Bool = { KitAssemblyGuards.close($0, $1) }
             #expect(close(motion.reflectionPosition, row["reflet"] as? Double ?? .nan), "\(row)")
             #expect(close(motion.plateShift, row["plaque"] as? Double ?? .nan), "\(row)")
             #expect(close(motion.centerShift, row["pastille"] as? Double ?? .nan), "\(row)")

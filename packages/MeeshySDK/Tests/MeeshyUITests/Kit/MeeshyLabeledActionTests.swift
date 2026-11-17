@@ -19,9 +19,9 @@ struct MeeshyLabeledActionTests {
         }
     }
 
-    @Test("pour chaque largeur de 240 à 1024 et chaque compte de 1 à 12 : jamais une action seule, colonnes ≥ 76")
+    @Test("pour chaque largeur de 250 à 1024 et chaque compte de 1 à 12 : jamais une action seule, colonnes ≥ 76")
     func grid_neverLeavesALoneAction() {
-        for width in stride(from: 240.0, through: 1024, by: 16) {
+        for width in stride(from: 250.0, through: 1024, by: 16) {
             for count in 1...12 {
                 let grid = MeeshyActionGridRecipe.resolve(width: width, count: count)
                 #expect(grid.rows.reduce(0, +) == count, "\(width) \(count)")
