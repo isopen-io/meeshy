@@ -24,10 +24,10 @@ class MeeshyMediaGridTest {
     @Test
     fun `le rapport suit la forme et la mise en page`() {
         assertThat(MeeshyMediaGridRecipe.resolve(shape = MeeshyMediaTileShape.Square).aspect).isEqualTo(1f)
-        assertThat(MeeshyMediaGridRecipe.resolve(shape = MeeshyMediaTileShape.Tall).aspect).isWithin(1e-6f).of(0.75f)
+        assertThat(MeeshyMediaGridRecipe.resolve(shape = MeeshyMediaTileShape.Tall).aspect).isWithin(1e-6f).of(2f / 3f)
         assertThat(MeeshyMediaGridRecipe.resolve(shape = MeeshyMediaTileShape.Free).aspect).isNull()
         assertThat(MeeshyMediaGridRecipe.resolve(layout = MeeshyMediaGridLayout.Masonry).aspect).isNull()
-        assertThat(MeeshyMediaGridRecipe.resolve(layout = MeeshyMediaGridLayout.Row, shape = MeeshyMediaTileShape.Tall).aspect).isEqualTo(1f)
+        assertThat(MeeshyMediaGridRecipe.resolve(layout = MeeshyMediaGridLayout.Row, shape = MeeshyMediaTileShape.Tall).aspect).isWithin(1e-6f).of(2f / 3f)
     }
 
     @Test

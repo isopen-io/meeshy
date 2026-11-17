@@ -44,18 +44,32 @@ public object MeeshyAvatarMorphRecipe {
     private const val BADGE_RATIO: Float = 0.25f
     private const val BADGE_MIN_DP: Float = 14f
 
-    private fun resolvePath(requested: MeeshyAvatarMorphPath, from: Int, to: Int, dx: Float?, dy: Float?): MeeshyAvatarMorphPath {
-        if (requested != MeeshyAvatarMorphPath.Auto) return requested
-        if (dx == null || dy == null) return MeeshyAvatarMorphPath.Straight
-        return if (min(abs(dx), abs(dy)) > max(from, to) / 2f) MeeshyAvatarMorphPath.Arc else MeeshyAvatarMorphPath.Straight
+    /** Sous ce rapport du petit écart au grand, le voyage est assez droit pour une ligne ; au-delà, un arc. */
+    public const val ARC_DIAGONAL_THRESHOLD: Float = 0.25f
+
+    /** Le trajet automatique : un arc dès que l'écart est assez diagonal, une ligne sinon (sans écart, une ligne). */
+    public fun autoPath(dx: Float, dy: Float): MeeshyAvatarMorphPath {
+        val longest = max(abs(dx), abs(dy))
+        if (!longest.isFinite() || longest <= 0f) return MeeshyAvatarMorphPath.Straight
+        return if (min(abs(dx), abs(dy)) / longest >= ARC_DIAGONAL_THRESHOLD) MeeshyAvatarMorphPath.Arc else MeeshyAvatarMorphPath.Straight
     }
+
+    private fun resolvePath(requested: MeeshyAvatarMorphPath, dx: Float?, dy: Float?): MeeshyAvatarMorphPath {
+        if (requested != MeeshyAvatarMorphPath.Auto) return requested
+        if (dx == null || dy == null) return MeeshyAvatarMorphPath.Auto
+        return autoPath(dx, dy)
+    }
+
+    /** La pastille s'efface en vol, sauf si elle voyage : là avant le départ et après l'arrivée. */
+    public fun badgeOpacity(progress: Float, travels: Boolean): Float =
+        if (travels || progress <= 0f || progress >= 1f) 1f else 0f
 
     @Suppress("LongParameterList")
     public fun resolve(
         from: Int,
         to: Int,
         hasScope: Boolean,
-        canTravel: Boolean = false,
+        canTravel: Boolean = true,
         requestedPath: MeeshyAvatarMorphPath = MeeshyAvatarMorphPath.Auto,
         progress: Float? = null,
         reduceMotion: Boolean = false,
@@ -74,7 +88,11 @@ public object MeeshyAvatarMorphRecipe {
         val big = max(max(from, to), 1).toFloat()
         return MeeshyAvatarMorphValues(
             mode = mode,
-            path = resolvePath(requestedPath, from, to, displacementX, displacementY),
+            path = if (mode == MeeshyAvatarMorphMode.Crossfade) {
+                MeeshyAvatarMorphPath.Straight
+            } else {
+                resolvePath(requestedPath, displacementX, displacementY)
+            },
             durationMillis = DURATION_MILLIS,
             progress = bounded,
             scaleFrom = from / big,

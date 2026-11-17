@@ -38,6 +38,7 @@ public sealed interface MeeshyAvatarGroupSelection {
 @Immutable
 public data class MeeshyAvatarGroupValues(
     val isRenderable: Boolean,
+    val effectiveLayout: MeeshyAvatarGroupLayout,
     val size: MeeshyAvatarGroupSize,
     val overlapDp: Int,
     val ringDp: Float,
@@ -81,17 +82,18 @@ public object MeeshyAvatarGroupRecipe {
         reduceMotion: Boolean = false,
     ): MeeshyAvatarGroupValues {
         val total = count.coerceAtLeast(0)
-        val columns = (layout as? MeeshyAvatarGroupLayout.Grid)?.columns?.coerceIn(GRID_MIN_COLUMNS, GRID_MAX_COLUMNS)
+        val effective = if (layout == MeeshyAvatarGroupLayout.Duo && total != 2) MeeshyAvatarGroupLayout.Stack else layout
+        val columns = (effective as? MeeshyAvatarGroupLayout.Grid)?.columns?.coerceIn(GRID_MIN_COLUMNS, GRID_MAX_COLUMNS)
+        val capacity = (columns ?: 0) * GRID_ROWS
         val visible = when {
-            layout == MeeshyAvatarGroupLayout.Duo -> 2
-            layout == MeeshyAvatarGroupLayout.Rail -> total
-            columns != null -> minOf(total, max.coerceIn(1, columns * GRID_ROWS - 1))
+            effective == MeeshyAvatarGroupLayout.Duo || effective == MeeshyAvatarGroupLayout.Rail -> total
+            columns != null -> if (total <= capacity) total else max.coerceIn(1, capacity - 1)
             else -> minOf(total, max.coerceIn(STACK_MIN, STACK_MAX))
         }
-        val isFixed = layout == MeeshyAvatarGroupLayout.Duo || layout == MeeshyAvatarGroupLayout.Rail
-        val overflow = if (isFixed) 0 else (total - visible).coerceAtLeast(0)
+        val overflow = (total - visible).coerceAtLeast(0)
         return MeeshyAvatarGroupValues(
-            isRenderable = total > 0 && (layout != MeeshyAvatarGroupLayout.Duo || total == 2),
+            isRenderable = total > 0,
+            effectiveLayout = effective,
             size = size,
             overlapDp = size.overlapDp,
             ringDp = size.ringDp,
@@ -99,7 +101,7 @@ public object MeeshyAvatarGroupRecipe {
             overflow = overflow,
             overflowLabel = overflowLabel(overflow),
             columns = columns,
-            breathes = layout == MeeshyAvatarGroupLayout.Duo && !reduceMotion,
+            breathes = effective == MeeshyAvatarGroupLayout.Duo && !reduceMotion,
             haloOpacity = HALO_OPACITY,
         )
     }

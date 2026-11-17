@@ -61,6 +61,7 @@ private const val DISC_BORDER_DP = 1.5f
 private const val POINT_RADIUS_DP = 3
 private const val SELECT_RING_DP = 3
 private const val RING_GAP_DP = 5
+private const val GHOST_STROKE_DP = 1.5f
 
 /**
  * **L'épingle de personne** (K36) : un contenu rond (avatar, vignette, glyphe) sous un liseré qui le détache de n'importe
@@ -159,17 +160,30 @@ public fun MeeshyMapPin(
                         .decorative(),
                 )
             }
-            Box(
-                Modifier
-                    .size(values.contentDp.dp)
-                    .shadow(10.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(linerColor)
-                    .padding(values.linerDp.dp)
-                    .clip(CircleShape)
-                    .alpha(values.contentOpacity),
-                contentAlignment = Alignment.Center,
-            ) { content() }
+            if (kind == MeeshyMapPinKind.Ghost) {
+                Box(
+                    Modifier
+                        .size(values.contentDp.dp)
+                        .decorative()
+                        .drawBehind {
+                            val stroke = GHOST_STROKE_DP.dp.toPx()
+                            val dash = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
+                            drawCircle(tokens.textMuted, radius = size.minDimension / 2f - stroke / 2f, style = Stroke(stroke, pathEffect = dash))
+                        },
+                )
+            } else {
+                Box(
+                    Modifier
+                        .size(values.contentDp.dp)
+                        .shadow(10.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(linerColor)
+                        .padding(values.linerDp.dp)
+                        .clip(CircleShape)
+                        .alpha(values.contentOpacity),
+                    contentAlignment = Alignment.Center,
+                ) { content() }
+            }
             if (badge != null) {
                 Box(
                     Modifier
@@ -180,7 +194,7 @@ public fun MeeshyMapPin(
                 ) { badge() }
             }
         }
-        MeeshyMapPinRecipe.caption(caption)?.let { text ->
+        MeeshyMapPinRecipe.caption(caption)?.takeIf { kind == MeeshyMapPinKind.Other }?.let { text ->
             Box(
                 Modifier
                     .padding(top = MeeshyMapPinRecipe.CAPTION_GAP_DP.dp)
@@ -266,7 +280,7 @@ public fun MeeshyPinCluster(
             Modifier.background(tokens.backgroundPrimary, CircleShape).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy((-MeeshyMapPinRecipe.CLUSTER_OVERLAP_DP).dp),
         ) {
-            contents.take(MeeshyMapPinRecipe.CLUSTER_MAX).forEach { slot ->
+            contents.take(MeeshyMapPinRecipe.clusterContentCount(count)).forEach { slot ->
                 Box(Modifier.size(MeeshyMapPinRecipe.CLUSTER_DP.dp).clip(CircleShape).border(2.dp, tokens.backgroundPrimary, CircleShape)) { slot() }
             }
         }

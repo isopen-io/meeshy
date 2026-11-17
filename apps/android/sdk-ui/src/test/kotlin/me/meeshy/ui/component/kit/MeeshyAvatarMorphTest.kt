@@ -43,11 +43,11 @@ class MeeshyAvatarMorphTest {
     }
 
     @Test
-    fun `le chemin est un arc quand le deplacement depasse la moitie du plus grand diametre sur les deux axes`() {
+    fun `le chemin est un arc quand le deplacement est assez diagonal, decide au vol sans ecart connu`() {
         fun path(x: Float, y: Float) = MeeshyAvatarMorphRecipe.resolve(from = 44, to = 112, hasScope = true, canTravel = true, displacementX = x, displacementY = y).path
         assertThat(path(200f, 20f)).isEqualTo(MeeshyAvatarMorphPath.Straight)
         assertThat(path(200f, 90f)).isEqualTo(MeeshyAvatarMorphPath.Arc)
-        assertThat(MeeshyAvatarMorphRecipe.resolve(from = 44, to = 112, hasScope = true, canTravel = true).path).isEqualTo(MeeshyAvatarMorphPath.Straight)
+        assertThat(MeeshyAvatarMorphRecipe.resolve(from = 44, to = 112, hasScope = true, canTravel = true).path).isEqualTo(MeeshyAvatarMorphPath.Auto)
         assertThat(
             MeeshyAvatarMorphRecipe.resolve(from = 44, to = 112, hasScope = true, canTravel = true, requestedPath = MeeshyAvatarMorphPath.Arc).path,
         ).isEqualTo(MeeshyAvatarMorphPath.Arc)

@@ -54,8 +54,8 @@ private const val GRID_GAP_DP = 8
  * et 3 autres »). Il ne compte que ce qui déborde. Sans [selection], le groupe est UN élément ; avec elle, chaque visage est
  * un élément à part (radio ou case) et porte un anneau et une coche, jamais la couleur seule.
  *
- * Pile de 2 à 5 visages recouverts, duo qui respire (immobile en mouvement réduit), rail de tous les visages, ou grille de
- * deux rangées dont la dernière case est le compte. Jumeau iOS : `MeeshyAvatarGroup`.
+ * Pile de 2 à 5 visages recouverts, duo qui respire (immobile en mouvement réduit ; sans exactement deux visages, une pile),
+ * rail de tous les visages, ou grille de deux rangées qui montre tout ce qui tient et réserve sa dernière case au compte. Jumeau iOS : `MeeshyAvatarGroup`.
  */
 @Composable
 @Suppress("LongParameterList", "LongMethod")
@@ -83,7 +83,7 @@ public fun MeeshyAvatarGroup(
         AvatarSlot(index, values, surface, tint, selection, onSelect, cell)
     }
     Box(modifier.then(said).then(tap)) {
-        when (layout) {
+        when (values.effectiveLayout) {
             MeeshyAvatarGroupLayout.Stack -> Row(horizontalArrangement = Arrangement.spacedBy((-values.overlapDp).dp), verticalAlignment = Alignment.CenterVertically) {
                 repeat(values.visible) { slot(it) }
                 values.overflowLabel?.let { OverflowChip(it, values, surface) }

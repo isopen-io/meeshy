@@ -21,8 +21,10 @@ public data class MeeshyMapTraceSegment(
 )
 
 /**
- * La loi pure du chemin : ses courbes, sa longueur, la fraction de chaque point, son milieu et la position à une fraction.
- * Sous deux points, ou 24 dp de longueur à l'écran, rien n'est dessiné.
+ * La loi pure du chemin : ses courbes (pour le dessin), et, mesurées sur les seuls points REÇUS comme sur iOS, sa longueur,
+ * la fraction de chaque point reçu, son milieu et la position à une fraction. Le tracé commence sous le premier point et finit
+ * sous le dernier : aucun point n'est inventé. `Link` ne lit que le premier et le dernier point lisibles. Sous deux points, ou
+ * 24 dp de longueur à l'écran, rien n'est dessiné.
  */
 public class MeeshyMapTracePath private constructor(
     public val isDrawable: Boolean,
@@ -30,40 +32,34 @@ public class MeeshyMapTracePath private constructor(
     public val length: Float,
     public val fractions: List<Float>,
     public val midpoint: MeeshyMapTracePoint,
-    private val samples: List<Sample>,
+    private val points: List<MeeshyMapTracePoint>,
+    private val cumulative: List<Float>,
+    private val receivedIndexes: List<Int>,
 ) {
-    internal data class Sample(val point: MeeshyMapTracePoint, val at: Float)
+    /** La part du chemin parcourue jusqu'au point REÇU d'indice [index] ; `null` pour un point que le tracé ne passe pas. */
+    public fun fraction(index: Int): Float? {
+        val drawn = receivedIndexes.indexOf(index)
+        if (drawn < 0) return null
+        return fractions[drawn]
+    }
 
-    /** La position à [fraction] (0 à 1) de la longueur ; hors bornes, le bout le plus proche. */
+    /** La position à [fraction] (0 à 1) de la longueur, sur les points reçus ; hors bornes, le bout le plus proche. */
     public fun at(fraction: Float): MeeshyMapTracePoint {
-        if (samples.isEmpty()) return MeeshyMapTracePoint(0f, 0f)
-        val target = fraction.coerceIn(0f, 1f) * length
-        val next = samples.indexOfFirst { it.at >= target }
-        if (next <= 0) return samples.first().point
-        val a = samples[next - 1]
-        val b = samples[next]
-        val span = b.at - a.at
-        val t = if (span == 0f) 0f else (target - a.at) / span
-        return MeeshyMapTracePoint(a.point.x + (b.point.x - a.point.x) * t, a.point.y + (b.point.y - a.point.y) * t)
+        if (points.isEmpty()) return ORIGIN
+        if (length <= 0f) return points.first()
+        val target = (if (fraction.isFinite()) fraction.coerceIn(0f, 1f) else 0f) * length
+        val segment = (1 until points.size).firstOrNull { cumulative[it] >= target } ?: points.lastIndex
+        val span = cumulative[segment] - cumulative[segment - 1]
+        if (span <= 0f) return points[segment]
+        val t = (target - cumulative[segment - 1]) / span
+        val a = points[segment - 1]
+        val b = points[segment]
+        return MeeshyMapTracePoint(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
     }
 
     public companion object {
         public const val MIN_LENGTH_DP: Float = 24f
-        private const val SAMPLES: Int = 16
         private val ORIGIN = MeeshyMapTracePoint(0f, 0f)
-        private val NOTHING = MeeshyMapTracePath(false, emptyList(), 0f, emptyList(), ORIGIN, emptyList())
-
-        private fun bezier(s: MeeshyMapTraceSegment, t: Float): MeeshyMapTracePoint {
-            val u = 1f - t
-            val a = u * u * u
-            val b = 3f * u * u * t
-            val c = 3f * u * t * t
-            val d = t * t * t
-            return MeeshyMapTracePoint(
-                a * s.start.x + b * s.c1.x + c * s.c2.x + d * s.end.x,
-                a * s.start.y + b * s.c1.y + c * s.c2.y + d * s.end.y,
-            )
-        }
 
         /** Catmull-Rom converti en cubiques : le chemin lissé passe par chaque point. */
         private fun smooth(points: List<MeeshyMapTracePoint>): List<MeeshyMapTraceSegment> =
@@ -82,29 +78,23 @@ public class MeeshyMapTracePath private constructor(
         private fun straight(points: List<MeeshyMapTracePoint>): List<MeeshyMapTraceSegment> =
             points.dropLast(1).mapIndexed { index, start -> MeeshyMapTraceSegment(start, start, points[index + 1], points[index + 1]) }
 
-        private fun sample(segments: List<MeeshyMapTraceSegment>): List<Sample> {
-            val out = mutableListOf(Sample(segments.first().start, 0f))
-            segments.forEach { segment ->
-                repeat(SAMPLES) { step ->
-                    val point = bezier(segment, (step + 1) / SAMPLES.toFloat())
-                    val last = out.last()
-                    out.add(Sample(point, last.at + hypot(point.x - last.point.x, point.y - last.point.y)))
-                }
-            }
-            return out
-        }
-
         public fun of(points: List<MeeshyMapTracePoint>, kind: MeeshyMapTraceKind, smoothing: Boolean = true): MeeshyMapTracePath {
-            val picked = if (kind == MeeshyMapTraceKind.Link) listOfNotNull(points.firstOrNull(), points.lastOrNull()) else points
-            val usable = picked.filter { it.x.isFinite() && it.y.isFinite() }
-            if (usable.size < 2) return NOTHING
-            val segments = if (smoothing && kind != MeeshyMapTraceKind.Link && usable.size > 2) smooth(usable) else straight(usable)
-            val samples = sample(segments)
-            val length = samples.last().at
-            if (length < MIN_LENGTH_DP) return NOTHING
-            val fractions = usable.indices.map { index -> if (index == 0) 0f else samples[index * SAMPLES].at / length }
-            val path = MeeshyMapTracePath(true, segments, length, fractions, ORIGIN, samples)
-            return MeeshyMapTracePath(true, segments, length, fractions, path.at(0.5f), samples)
+            val usable = points.indices.filter { points[it].x.isFinite() && points[it].y.isFinite() }
+            val received = if (kind == MeeshyMapTraceKind.Link && usable.size >= 2) listOf(usable.first(), usable.last()) else usable
+            val drawn = received.map { points[it] }
+            val cumulative = drawn.indices.runningFold(0f) { total, index ->
+                if (index == 0) total else total + hypot(drawn[index].x - drawn[index - 1].x, drawn[index].y - drawn[index - 1].y)
+            }.drop(1)
+            val length = cumulative.lastOrNull() ?: 0f
+            val fractions = cumulative.mapIndexed { index, at -> if (length > 0f) at / length else if (index == 0) 0f else 1f }
+            val segments = when {
+                drawn.size < 2 -> emptyList()
+                smoothing && kind != MeeshyMapTraceKind.Link && drawn.size > 2 -> smooth(drawn)
+                else -> straight(drawn)
+            }
+            val isDrawable = drawn.size >= 2 && length >= MIN_LENGTH_DP
+            val path = MeeshyMapTracePath(isDrawable, segments, length, fractions, ORIGIN, drawn, cumulative, received)
+            return MeeshyMapTracePath(isDrawable, segments, length, fractions, path.at(0.5f), drawn, cumulative, received)
         }
     }
 }

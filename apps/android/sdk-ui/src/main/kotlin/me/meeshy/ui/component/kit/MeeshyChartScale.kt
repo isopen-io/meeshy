@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.kit
 
 import androidx.compose.runtime.Immutable
+import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
@@ -32,10 +33,14 @@ public data class MeeshyChartArc(
  */
 public object MeeshyChartScale {
     private const val FULL_TURN: Float = 0.9999f
+    private const val TICK_EPSILON: Double = 1e-9
+    private const val TICK_ROUNDING: Double = 1e9
+
+    private fun serve(value: Double): Double = if (value.isFinite() && value > 0.0) value else 0.0
 
     /** Chaque valeur contre le maximum, de 0 à 1 ; négative ou illisible vaut zéro, une série nulle reste nulle. */
     public fun normalized(values: List<Double>, ceiling: Double? = null): List<Float> {
-        val clean = values.map { if (it.isFinite() && it > 0.0) it else 0.0 }
+        val clean = values.map(::serve)
         val top = ceiling ?: (clean.maxOrNull() ?: 0.0)
         return clean.map { if (top <= 0.0) 0f else minOf(it / top, 1.0).toFloat() }
     }
@@ -52,32 +57,31 @@ public object MeeshyChartScale {
         return nice * base
     }
 
-    /** Les graduations de 0 à [max] : environ [count] intervalles sur des pas ronds, la dernière couvrant [max]. */
+    /**
+     * Les graduations de 0 à un pas rond (1, 2 ou 5 fois une puissance de dix) qui atteint ou dépasse [max] ; [count] est le
+     * nombre visé de graduations. Sans maximum lisible et positif, ou sous deux graduations : le seul zéro.
+     */
     public fun niceTicks(max: Double, count: Int): List<Double> {
-        if (!max.isFinite() || max <= 0.0 || count < 1) return listOf(0.0, 1.0)
-        val step = niceStep(max / count)
-        val ticks = mutableListOf<Double>()
-        var value = 0.0
-        while (value < max + step) {
-            ticks.add((value * 1e9).roundToLong() / 1e9)
-            if (value >= max) break
-            value += step
-        }
-        return ticks
+        if (!max.isFinite() || max <= 0.0 || count < 2) return listOf(0.0)
+        val step = niceStep(max / (count - 1))
+        val intervals = ceil(max / step - TICK_EPSILON).toInt().coerceAtLeast(1)
+        return (0..intervals).map { (it * step * TICK_ROUNDING).roundToLong() / TICK_ROUNDING }
     }
 
-    /** Le point le plus haut — le premier en cas d'égalité ; `null` sans aucun point. */
-    public fun peak(values: List<Double>): MeeshyChartPeak? =
-        values.foldIndexed<Double, MeeshyChartPeak?>(null) { index, best, value ->
-            if (best == null || value > best.value) MeeshyChartPeak(index, value) else best
-        }
+    /** Le premier maximum strictement positif ; `null` s'il n'y en a pas (série vide, nulle ou négative). */
+    public fun peak(values: List<Double>): MeeshyChartPeak? {
+        val served = values.map(::serve)
+        val top = served.maxOrNull() ?: return null
+        if (top <= 0.0) return null
+        return MeeshyChartPeak(served.indexOf(top), top)
+    }
 
     /** Les parts d'un tout, bout à bout, en fractions de 0 à 1. Un total nul rend des segments sans largeur. */
     public fun segments(values: List<Double>): List<MeeshyChartSegment> {
-        val total = values.sumOf { it.coerceAtLeast(0.0) }
+        val total = values.sumOf(::serve)
         var cursor = 0f
         return values.map { raw ->
-            val value = raw.coerceAtLeast(0.0)
+            val value = serve(raw)
             val share = if (total == 0.0) 0f else (value / total).toFloat()
             MeeshyChartSegment(value, cursor, cursor + share, share).also { cursor += share }
         }

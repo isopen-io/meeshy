@@ -21,6 +21,7 @@ public data class MeeshyStateBlockValues(
     val kind: MeeshyStateBlockKind,
     val size: MeeshyStateBlockSize,
     val isAlert: Boolean,
+    val announcesOnAppear: Boolean,
     val glyphTone: MeeshyStateBlockTone,
     val hasGhost: Boolean,
     val hasHalo: Boolean,
@@ -79,6 +80,7 @@ public object MeeshyStateBlockRecipe {
         hasSecondary: Boolean = false,
         isOverContent: Boolean = false,
         reduceMotion: Boolean = false,
+        isDark: Boolean = false,
     ): MeeshyStateBlockValues {
         val reason = refusal(kind, size, hasPrimary, hasSecondary)
         val isRegular = size == MeeshyStateBlockSize.Regular
@@ -89,9 +91,10 @@ public object MeeshyStateBlockRecipe {
             kind = kind,
             size = size,
             isAlert = kind == MeeshyStateBlockKind.Error,
+            announcesOnAppear = announces(kind),
             glyphTone = tone(kind),
             hasGhost = showsImage && kind != MeeshyStateBlockKind.Success,
-            hasHalo = showsImage && !reduceMotion,
+            hasHalo = showsImage && isDark,
             rowHeightDp = if (isRegular) null else ROW_HEIGHT_DP,
             titleSp = if (isRegular) TITLE_SP else COMPACT_TITLE_SP,
             shakes = kind == MeeshyStateBlockKind.Error && !reduceMotion,
@@ -99,6 +102,13 @@ public object MeeshyStateBlockRecipe {
             hapticOnEnter = kind == MeeshyStateBlockKind.Error,
         )
     }
+
+    /** Les genres qui s'annoncent à la voix : une erreur, un passage hors ligne. */
+    public fun announces(kind: MeeshyStateBlockKind): Boolean =
+        kind == MeeshyStateBlockKind.Error || kind == MeeshyStateBlockKind.Offline
+
+    /** Un bloc qui change de genre sur place s'annonce si le nouveau genre s'annonce, jamais deux fois pour le même. */
+    public fun announcesTransition(from: MeeshyStateBlockKind, to: MeeshyStateBlockKind): Boolean = from != to && announces(to)
 
     /** Le nombre de silhouettes du fantôme : de 1 à 4, trois par défaut. */
     public fun ghostCount(count: Int?): Int = (count ?: GHOST_COUNT_DEFAULT).coerceIn(1, GHOST_COUNT_MAX)

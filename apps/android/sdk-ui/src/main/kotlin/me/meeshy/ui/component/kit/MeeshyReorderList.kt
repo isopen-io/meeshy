@@ -159,7 +159,7 @@ public fun <T> MeeshyReorderList(
                         },
                         onDragEnd = {
                             val from = grabbed
-                            val to = MeeshyReorderListRecipe.targetIndex(from, offset, heights.toList(), spacingPx)
+                            val to = MeeshyReorderListRecipe.targetIndex(from, offset, heights.take(latestItems.size), spacingPx)
                             grabbed = NO_INDEX
                             offset = 0f
                             haptics.light()
@@ -213,7 +213,7 @@ public fun <T> MeeshyReorderList(
                 horizontalArrangement = Arrangement.spacedBy(ROW_PADDING_DP.dp),
             ) {
                 if (handleEdge == MeeshyReorderHandleEdge.Leading) handle()
-                if (values.showsRank) RankBadge(index + 1, values.rankBadgeDp, tint)
+                if (values.showsRank) RankBadge(index, values.rankBadgeDp, tint)
                 Box(Modifier.weight(1f)) { row(item, index) }
                 if (handleEdge == MeeshyReorderHandleEdge.Trailing) handle()
             }
@@ -243,8 +243,9 @@ private fun ReorderHandle(values: MeeshyReorderValues, enabled: Boolean, ink: Co
 }
 
 @Composable
-private fun RankBadge(position: Int, sizeDp: Float, tint: Color) {
-    Box(Modifier.size(sizeDp.dp).background(tint.copy(alpha = 0.16f), CircleShape).decorative(), contentAlignment = Alignment.Center) {
-        Text(position.toString(), color = tint, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
+private fun RankBadge(index: Int, sizeDp: Float, tint: Color) {
+    val fill = tint.copy(alpha = MeeshyReorderListRecipe.rankOpacity(index))
+    Box(Modifier.size(sizeDp.dp).background(fill, CircleShape).decorative(), contentAlignment = Alignment.Center) {
+        Text((index + 1).toString(), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
     }
 }

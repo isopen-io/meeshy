@@ -41,6 +41,15 @@ public object MeeshyReorderListRecipe {
     public const val DROP_HALO_DP: Float = 4f
     public const val DROP_HALO_MILLIS: Int = 600
     public const val LONG_PRESS_MILLIS: Long = 350L
+    public const val RANK_SECOND_OPACITY: Float = 0.34f
+    public const val RANK_REST_OPACITY: Float = 0.16f
+
+    /** La pastille de rang suit la position, jamais l'élément : pleine au premier, 34 % au deuxième, 16 % ensuite. */
+    public fun rankOpacity(position: Int): Float = when {
+        position < 1 -> 1f
+        position == 1 -> RANK_SECOND_OPACITY
+        else -> RANK_REST_OPACITY
+    }
 
     /** Déplace un élément : une NOUVELLE liste, bornes tenues ; sans effet, la même liste. */
     public fun <T> move(ids: List<T>, from: Int, to: Int): List<T> {

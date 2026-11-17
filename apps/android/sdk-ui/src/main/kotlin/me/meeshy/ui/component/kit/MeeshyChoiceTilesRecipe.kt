@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.kit
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.vector.ImageVector
 
 public enum class MeeshyChoiceContent { Option, Value, Icon }
 
@@ -28,6 +29,27 @@ public sealed interface MeeshyChoiceSelection {
     public data class Multiple(val ids: Set<String>) : MeeshyChoiceSelection {
         override fun contains(id: String): Boolean = id in ids
     }
+}
+
+/** Une tuile à choisir : un identifiant, des mots déjà traduits, un glyphe ou une valeur, un état. */
+public data class MeeshyChoiceItem(
+    val id: String,
+    val title: String,
+    val detail: String? = null,
+    val icon: ImageVector? = null,
+    val value: String? = null,
+    val state: MeeshyChoiceItemState = MeeshyChoiceItemState.Enabled,
+)
+
+/** Ce qu'un toucher fait : choisir, retirer, rendre la raison d'un verrou, ou rien. */
+public sealed interface MeeshyChoiceOutcome {
+    public data class Select(val id: String) : MeeshyChoiceOutcome
+
+    public data class Deselect(val id: String) : MeeshyChoiceOutcome
+
+    public data class Locked(val id: String) : MeeshyChoiceOutcome
+
+    public data object Ignored : MeeshyChoiceOutcome
 }
 
 @Immutable
@@ -75,6 +97,30 @@ public object MeeshyChoiceTilesRecipe {
     public const val VALUE_HEIGHT_DP: Float = 132f
     public const val VALUE_SP: Float = 40f
     public const val VALUE_DENSE_SP: Float = 30f
+
+    /** Une tuile libre s'éteint quand le plafond d'une sélection multiple est atteint ; une tuile éteinte le reste. */
+    public fun isDisabled(item: MeeshyChoiceItem, selection: MeeshyChoiceSelection, maxSelected: Int?): Boolean {
+        if (item.state == MeeshyChoiceItemState.Disabled) return true
+        if (selection !is MeeshyChoiceSelection.Multiple || maxSelected == null) return false
+        return item.id !in selection.ids && selection.ids.size >= maxSelected
+    }
+
+    /** Ce que fait un toucher : le choix courant d'une sélection simple ne se retire que si le vide est permis. */
+    public fun outcome(
+        selection: MeeshyChoiceSelection,
+        item: MeeshyChoiceItem,
+        allowsEmpty: Boolean,
+        maxSelected: Int?,
+    ): MeeshyChoiceOutcome {
+        if (item.state is MeeshyChoiceItemState.Locked) return MeeshyChoiceOutcome.Locked(item.id)
+        if (isDisabled(item, selection, maxSelected)) return MeeshyChoiceOutcome.Ignored
+        val chosen = selection.contains(item.id)
+        return when {
+            !chosen -> MeeshyChoiceOutcome.Select(item.id)
+            selection is MeeshyChoiceSelection.Multiple || allowsEmpty -> MeeshyChoiceOutcome.Deselect(item.id)
+            else -> MeeshyChoiceOutcome.Ignored
+        }
+    }
 
     public fun columns(columns: Int?): Int = (columns ?: MIN_COLUMNS).coerceIn(MIN_COLUMNS, MAX_COLUMNS)
 

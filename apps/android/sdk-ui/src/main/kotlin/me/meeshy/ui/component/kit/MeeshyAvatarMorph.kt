@@ -20,11 +20,17 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.hypot
 import me.meeshy.ui.accessibility.LocalReduceMotion
 
-private const val ARC_BULGE = 0.18f
+/** Le sommet de l'arc iOS (courbe quadratique de bosse 0,25) passe à mi-course à 0,125 de la distance. */
+private const val ARC_BULGE = 0.125f
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 private fun boundsFor(path: MeeshyAvatarMorphPath, totalMillis: Int): BoundsTransform = BoundsTransform { initial, target ->
-    if (path != MeeshyAvatarMorphPath.Arc) {
+    val resolved = if (path == MeeshyAvatarMorphPath.Auto) {
+        MeeshyAvatarMorphRecipe.autoPath(target.center.x - initial.center.x, target.center.y - initial.center.y)
+    } else {
+        path
+    }
+    if (resolved != MeeshyAvatarMorphPath.Arc) {
         tween(totalMillis, easing = FastOutSlowInEasing)
     } else {
         val dx = target.center.x - initial.center.x
@@ -48,7 +54,8 @@ private fun boundsFor(path: MeeshyAvatarMorphPath, totalMillis: Int): BoundsTran
  * **L'avatar qui voyage** (K29) : un avatar passe d'un écran à l'autre (liste, fiche, épingle de carte) au lieu de
  * réapparaître. Le composant transporte, il ne dessine rien : l'avatar, ses initiales, sa photo et son anneau sont ceux de
  * l'hôte, posés dans [avatar]. Il relie deux emplacements qui portent la même [identity] dans la même portée ([visibility] du
- * `SharedTransitionLayout` de l'hôte) : un seul avatar, jamais deux, en 560 ms, en ligne droite ou en arc selon l'écart.
+ * `SharedTransitionLayout` de l'hôte) : un seul avatar, jamais deux, en 560 ms, en ligne droite ou en arc selon l'écart
+ * (un arc dès que le petit écart fait le quart du grand, mesuré au vol sur les deux emplacements).
  *
  * Sans [visibility] (pas de portée) ou sous mouvement réduit : l'avatar reste en place et la transition de l'hôte fait le
  * fondu. La [badge] (présence) reste sur l'avatar : elle ne voyage que si l'hôte la pose dans [avatar] ; sinon elle s'efface

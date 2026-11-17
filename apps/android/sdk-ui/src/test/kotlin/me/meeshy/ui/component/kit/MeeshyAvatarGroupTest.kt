@@ -32,7 +32,8 @@ class MeeshyAvatarGroupTest {
 
     @Test
     fun `le duo exige exactement deux et respire sauf en mouvement reduit`() {
-        assertThat(MeeshyAvatarGroupRecipe.resolve(layout = MeeshyAvatarGroupLayout.Duo, count = 3).isRenderable).isFalse()
+        assertThat(MeeshyAvatarGroupRecipe.resolve(layout = MeeshyAvatarGroupLayout.Duo, count = 3).effectiveLayout)
+            .isEqualTo(MeeshyAvatarGroupLayout.Stack)
         val duo = MeeshyAvatarGroupRecipe.resolve(layout = MeeshyAvatarGroupLayout.Duo, count = 2)
         assertThat(duo.isRenderable).isTrue()
         assertThat(duo.breathes).isTrue()

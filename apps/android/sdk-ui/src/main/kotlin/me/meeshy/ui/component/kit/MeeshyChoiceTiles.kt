@@ -52,23 +52,15 @@ private const val TINT_FILL_ALPHA = 0.16f
 private const val CHECK_MILLIS = 160
 private const val ICON_SHARE = 0.5f
 
-/** Une tuile à choisir : un identifiant, des mots déjà traduits, un glyphe ou une valeur, un état. */
-public data class MeeshyChoiceItem(
-    val id: String,
-    val title: String,
-    val detail: String? = null,
-    val icon: ImageVector? = null,
-    val value: String? = null,
-    val state: MeeshyChoiceItemState = MeeshyChoiceItemState.Enabled,
-)
-
 /**
  * **Les tuiles de choix** (K47) : choisir une valeur parmi quelques-unes. Une tuile choisit, elle ne déclenche rien — toucher
  * change [selection] (par [onSelect]) et rien d'autre, la suite appartient au bouton de l'écran. Le choix se marque par TROIS
  * signes à la fois : un bord de 2, un fond teinté, une coche de coin — jamais par la couleur seule.
  *
- * La sélection est à l'hôte, entière (une valeur ou un ensemble). Une tuile verrouillée dit sa raison à la voix et la rend par
- * [onLockedPress] ; une tuile éteinte ne répond pas. Chaque tuile est UN élément (radio en sélection simple, case en sélection
+ * La sélection est à l'hôte, entière (une valeur ou un ensemble) : [onSelect] reçoit l'identifiant à ajouter ou à retirer.
+ * En sélection simple, retoucher le choix courant ne fait rien, sauf si [allowsEmpty] permet de n'avoir aucun choix. En
+ * sélection multiple, au plafond [maxSelected], les tuiles libres s'éteignent. Une tuile verrouillée dit sa raison à la voix
+ * et la rend par [onLockedPress] ; une tuile éteinte ne répond pas. Chaque tuile est UN élément (radio en sélection simple, case en sélection
  * multiple). Jumeau iOS : `MeeshyChoiceTiles`.
  */
 @Composable
@@ -83,6 +75,8 @@ public fun MeeshyChoiceTiles(
     surface: MeeshyChoiceSurface = MeeshyChoiceSurface.Tonal,
     columns: Int? = null,
     tint: Color = MeeshyPalette.Indigo500,
+    allowsEmpty: Boolean = false,
+    maxSelected: Int? = null,
     onLockedPress: ((String) -> Unit)? = null,
 ) {
     val layout = MeeshyChoiceTilesRecipe.resolve(content, format, surface, columns)
@@ -97,6 +91,8 @@ public fun MeeshyChoiceTiles(
                     ChoiceTile(
                         item = item,
                         isSelected = selection.contains(item.id),
+                        isOff = MeeshyChoiceTilesRecipe.isDisabled(item, selection, maxSelected),
+                        outcome = { MeeshyChoiceTilesRecipe.outcome(selection, item, allowsEmpty, maxSelected) },
                         isMultiple = isMultiple,
                         content = content,
                         format = format,
@@ -119,6 +115,8 @@ public fun MeeshyChoiceTiles(
 private fun ChoiceTile(
     item: MeeshyChoiceItem,
     isSelected: Boolean,
+    isOff: Boolean,
+    outcome: () -> MeeshyChoiceOutcome,
     isMultiple: Boolean,
     content: MeeshyChoiceContent,
     format: MeeshyChoiceFormat,
@@ -134,7 +132,8 @@ private fun ChoiceTile(
     val haptics = rememberMeeshyHaptics()
     val source = remember { MutableInteractionSource() }
     val isPressed by source.collectIsPressedAsState()
-    val v = MeeshyChoiceTilesRecipe.resolve(content, format, surface, columns, isSelected, isPressed, item.state, reduce)
+    val state = if (isOff && item.state !is MeeshyChoiceItemState.Locked) MeeshyChoiceItemState.Disabled else item.state
+    val v = MeeshyChoiceTilesRecipe.resolve(content, format, surface, columns, isSelected, isPressed, state, reduce)
     val press by animateFloatAsState(v.pressScale, label = "choice-press")
     val check by animateFloatAsState(if (v.showsCheck) 1f else 0f, tween(CHECK_MILLIS), label = "choice-check")
     val shape = RoundedCornerShape(v.radiusDp.dp)
@@ -146,12 +145,20 @@ private fun ChoiceTile(
     }
     val fill = if (v.tintedFill) tint.copy(alpha = TINT_FILL_ALPHA) else tokens.surfaceFill
     val spoken = listOfNotNull(item.title, item.value, item.detail, locked?.reason).joinToString(", ")
-    val tap = when {
-        v.isDisabled -> Modifier
-        locked != null -> Modifier.clickable(interactionSource = source, indication = null, role = Role.Button) { onLockedPress?.invoke(item.id) }
-        else -> Modifier.clickable(interactionSource = source, indication = null, role = if (isMultiple) Role.Checkbox else Role.RadioButton) {
-            haptics.selection()
-            onSelect(item.id)
+    val tap = if (v.isDisabled) {
+        Modifier
+    } else {
+        Modifier.clickable(
+            interactionSource = source,
+            indication = null,
+            role = if (locked != null) Role.Button else if (isMultiple) Role.Checkbox else Role.RadioButton,
+        ) {
+            when (val result = outcome()) {
+                is MeeshyChoiceOutcome.Locked -> onLockedPress?.invoke(result.id)
+                is MeeshyChoiceOutcome.Select -> { haptics.selection(); onSelect(result.id) }
+                is MeeshyChoiceOutcome.Deselect -> { haptics.selection(); onSelect(result.id) }
+                MeeshyChoiceOutcome.Ignored -> Unit
+            }
         }
     }
     Box(

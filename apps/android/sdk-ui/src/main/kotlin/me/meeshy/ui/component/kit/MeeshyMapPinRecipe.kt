@@ -115,14 +115,17 @@ public object MeeshyMapPinRecipe {
         )
     }
 
-    /** Un mot sous l'épingle : une ligne, coupé à 18 signes. */
+    /** Un mot sous l'épingle : une ligne, coupé à 18 signes, sans blanc avant « … » ; blanc ⇒ rien. */
     public fun caption(caption: String?): String? {
-        if (caption.isNullOrEmpty()) return null
-        val points = caption.codePointCount(0, caption.length)
-        if (points <= CAPTION_MAX) return caption
-        val end = caption.offsetByCodePoints(0, CAPTION_MAX - 1)
-        return caption.substring(0, end) + "…"
+        val text = caption?.trim().orEmpty()
+        if (text.isEmpty()) return null
+        if (text.codePointCount(0, text.length) <= CAPTION_MAX) return text
+        val end = text.offsetByCodePoints(0, CAPTION_MAX - 1)
+        return text.substring(0, end).trimEnd() + "…"
     }
+
+    /** Les contenus montrés d'une grappe : trois au plus, aucun sous deux. */
+    public fun clusterContentCount(count: Int): Int = if (count < CLUSTER_MIN) 0 else minOf(count, CLUSTER_MAX)
 
     /** Le compte d'une grappe : rien sous deux, « 99+ » au-delà de 99. */
     public fun clusterCount(count: Int): String? = when {

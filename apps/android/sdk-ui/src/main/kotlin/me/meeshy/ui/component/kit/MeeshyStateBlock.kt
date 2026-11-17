@@ -89,8 +89,9 @@ private fun toneColor(tone: MeeshyStateBlockTone, tint: Color?): Color {
  * phrase, une sortie. Il dessine l'absence, il ne la décide pas : l'hôte lit son état, choisit le [kind] et passe les mots.
  * Sans la sortie que la loi exige (une erreur sans « Réessayer », un vide plein écran sans issue), il ne se dessine pas.
  *
- * Un seul élément pour la voix (le titre puis la phrase) ; l'image et le halo se taisent ; une erreur est une alerte dite
- * une fois, et vibre à l'entrée. Sous mouvement réduit : ni secousse, ni respiration, ni halo. Jumeau iOS : `MeeshyStateBlock`.
+ * Un seul élément pour la voix (le titre puis la phrase) ; l'image et le halo se taisent ; seuls l'erreur (alerte) et le
+ * hors ligne (poli) s'annoncent, et l'erreur vibre à l'entrée. Le halo n'existe qu'en thème sombre. Sous mouvement réduit :
+ * ni secousse, ni respiration. Jumeau iOS : `MeeshyStateBlock`.
  */
 @Composable
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
@@ -112,7 +113,7 @@ public fun MeeshyStateBlock(
     hapticOnError: Boolean = true,
 ) {
     val reduce = LocalReduceMotion.current
-    val values = MeeshyStateBlockRecipe.resolve(kind, size, primary != null, secondary != null, isOverContent, reduce)
+    val values = MeeshyStateBlockRecipe.resolve(kind, size, primary != null, secondary != null, isOverContent, reduce, MeeshyTheme.isDark)
     val haptics = rememberMeeshyHaptics()
     val shake = remember { Animatable(0f) }
     val entersAsError = values.isResolvable && values.hapticOnEnter && hapticOnError
@@ -133,7 +134,9 @@ public fun MeeshyStateBlock(
         .graphicsLayer { translationX = shake.value * MeeshyStateBlockRecipe.ENTER_SHAKE_DP.dp.toPx() }
         .semantics(mergeDescendants = true) {
             contentDescription = spoken
-            if (announces) liveRegion = if (values.isAlert) LiveRegionMode.Assertive else LiveRegionMode.Polite
+            if (announces && values.announcesOnAppear) {
+                liveRegion = if (values.isAlert) LiveRegionMode.Assertive else LiveRegionMode.Polite
+            }
         }
     if (values.size == MeeshyStateBlockSize.Compact) {
         Row(

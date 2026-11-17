@@ -68,9 +68,9 @@ class MeeshyChartTest {
     @Test
     fun `graduations rondes dont la derniere couvre le maximum`() {
         assertThat(MeeshyChartScale.niceTicks(100.0, 4)).containsExactly(0.0, 50.0, 100.0).inOrder()
-        assertThat(MeeshyChartScale.niceTicks(37.0, 4)).containsExactly(0.0, 10.0, 20.0, 30.0, 40.0).inOrder()
-        assertThat(MeeshyChartScale.niceTicks(0.0, 4)).containsExactly(0.0, 1.0).inOrder()
-        assertThat(MeeshyChartScale.niceTicks(Double.NaN, 4)).containsExactly(0.0, 1.0).inOrder()
+        assertThat(MeeshyChartScale.niceTicks(37.0, 4)).containsExactly(0.0, 20.0, 40.0).inOrder()
+        assertThat(MeeshyChartScale.niceTicks(0.0, 4)).containsExactly(0.0)
+        assertThat(MeeshyChartScale.niceTicks(Double.NaN, 4)).containsExactly(0.0)
     }
 
     @Test

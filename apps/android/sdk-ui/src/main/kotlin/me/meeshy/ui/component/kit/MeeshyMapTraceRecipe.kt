@@ -28,6 +28,8 @@ public object MeeshyMapTraceRecipe {
     public const val LINK_DP: Float = 2.5f
     public const val HISTORY_DP: Float = 7f
     public const val HALO_DP: Float = 16f
+    public const val LINK_CASING_DP: Float = 5f
+    public const val HISTORY_CASING_DP: Float = 16f
     public const val CASING_OPACITY: Float = 0.55f
     public const val CASING_OPACITY_LIGHT: Float = 0.7f
     public const val STALE_OPACITY: Float = 0.6f
@@ -51,7 +53,7 @@ public object MeeshyMapTraceRecipe {
     ): MeeshyMapTraceValues {
         val large = weight == MeeshyMapTraceWeight.Large
         val dot = if (large) 4.5f else 4f
-        val bounded = progress?.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        val bounded = progress?.let { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
         return MeeshyMapTraceValues(
             kind = kind,
             dotDp = dot,
@@ -61,11 +63,15 @@ public object MeeshyMapTraceRecipe {
                 MeeshyMapTraceKind.History -> HISTORY_DP
                 MeeshyMapTraceKind.Route -> dot
             },
-            casingDp = if (large) 8f else 7f,
+            casingDp = when (kind) {
+                MeeshyMapTraceKind.Link -> LINK_CASING_DP
+                MeeshyMapTraceKind.History -> HISTORY_CASING_DP
+                MeeshyMapTraceKind.Route -> if (large) 8f else 7f
+            },
             haloDp = HALO_DP,
             casingOpacity = if (onLightMap) CASING_OPACITY_LIGHT else CASING_OPACITY,
             opacity = if (isStale) STALE_OPACITY else 1f,
-            flows = kind == MeeshyMapTraceKind.Route && !isStale && isAnimated && !reduceMotion,
+            flows = kind != MeeshyMapTraceKind.History && !isStale && isAnimated && !reduceMotion,
             progress = bounded,
             hasHead = bounded != null,
             showsMidLabel = length == null || length >= MIN_MID_LABEL_LENGTH_DP,

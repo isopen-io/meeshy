@@ -62,7 +62,7 @@ class MeeshyMapTraceTest {
     }
 
     @Test
-    fun `la recette - un trajet coule, un lien pointille mince, une histoire epaisse`() {
+    fun `la recette - un trajet et un lien coulent, un lien pointille mince, une histoire epaisse qui ne coule pas`() {
         val route = MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route)
         assertThat(route.flows).isTrue()
         assertThat(route.dotDp).isEqualTo(4f)
@@ -71,7 +71,8 @@ class MeeshyMapTraceTest {
         assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route, weight = MeeshyMapTraceWeight.Large).dotEveryDp).isEqualTo(11f)
         assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Link).strokeDp).isEqualTo(2.5f)
         assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.History).strokeDp).isEqualTo(7f)
-        assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Link).flows).isFalse()
+        assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Link).flows).isTrue()
+        assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.History).flows).isFalse()
     }
 
     @Test
@@ -92,7 +93,8 @@ class MeeshyMapTraceTest {
     @Test
     fun `la progression est bornee, la tete n existe qu avec elle, l etiquette de milieu veut 96`() {
         assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route, progress = 1.7f).progress).isEqualTo(1f)
-        assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route, progress = Float.NaN).hasHead).isFalse()
+        assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route, progress = Float.NaN).progress).isEqualTo(0f)
+        assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route).hasHead).isFalse()
         assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route, progress = 0.4f).hasHead).isTrue()
         assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route, length = 80f).showsMidLabel).isFalse()
         assertThat(MeeshyMapTraceRecipe.resolve(MeeshyMapTraceKind.Route, length = 96f).showsMidLabel).isTrue()
