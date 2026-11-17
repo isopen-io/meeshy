@@ -38,6 +38,15 @@ sealed interface ProfileActionAccess {
             return Locked(RelationOpenings.opensAt(action.feature))
         }
 
+        /**
+         * Le niveau auquel la face juge les opérations. Le niveau d'outils servi (`accessLevel`, #16623) est le verdict de la
+         * loi pour la paire : il ne s'écarte du lien qu'entre deux comptes de l'équipe, et il est servi même sans lien. À défaut,
+         * le lien ; sans l'un ni l'autre, Public — sauf pour une personne connectée dont le lien n'est pas encore là (cache
+         * vide, hors ligne) : le niveau est alors INCONNU (`null`) et rien n'est faussement verrouillé.
+         */
+        fun levelFor(linkLevel: RelationLevel?, toolLevel: RelationLevel?, awaitingLink: Boolean): RelationLevel? =
+            toolLevel ?: linkLevel ?: RelationLevel.PUBLIC.takeUnless { awaitingLink }
+
         /** Toutes les opérations, une fois, dans l'ordre de la face. */
         fun plan(level: RelationLevel): List<Pair<ProfileRelationAction, ProfileActionAccess>> =
             ProfileRelationAction.entries.map { it to of(level, it) }

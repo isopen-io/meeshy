@@ -15,6 +15,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.hilt.navigation.compose.hiltViewModel
 import me.meeshy.app.contacts.circles.ReceptionBlockSection
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.MeeshyUser
@@ -49,6 +50,8 @@ internal data class ProfileActionsFaceInput(
     val userId: String,
     val displayName: String,
     val circle: ProfileCircle?,
+    /** Le niveau d'outils servi pour la paire (`accessLevel`) ; `null` tant qu'il n'est pas servi. */
+    val toolLevel: RelationLevel?,
     val receptions: ProfileReceptionBlocks?,
     val isOpeningConversation: Boolean,
 )
@@ -59,8 +62,7 @@ internal data class ProfileActionsFaceInput(
  * la fiche savait faire ne disparaît : écrire, appeler, la connexion, le Talkie, le Bring, la position, la batterie,
  * l'injoignable, la fiche partagée, le blocage et le signalement.
  *
- * Le niveau lu est celui du lien servi ; sans lien, c'est Public — sauf pour une personne que je sais connectée dont le lien
- * n'est pas encore là (cache vide, hors ligne) : le niveau est alors INCONNU, et rien n'est faussement verrouillé.
+ * Le niveau lu est celui de [ProfileActionAccess.levelFor] : le niveau d'outils servi, sinon le lien, sinon Public ou INCONNU.
  */
 @Composable
 internal fun ProfileActionsFace(
@@ -70,7 +72,11 @@ internal fun ProfileActionsFace(
     onShareProfile: (() -> Unit)?,
 ) {
     val plan = input.plan
-    val level: RelationLevel? = input.circle?.level ?: RelationLevel.PUBLIC.takeUnless { plan.showsConnectedBanner }
+    val level = ProfileActionAccess.levelFor(
+        linkLevel = input.circle?.level,
+        toolLevel = input.toolLevel,
+        awaitingLink = plan.showsConnectedBanner,
+    )
     val access = remember(level) { level?.let { ProfileActionAccess.plan(it).toMap() }.orEmpty() }
     val locked = remember(access) { access.lockedRows() }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxl)) {
@@ -78,8 +84,12 @@ internal fun ProfileActionsFace(
         ConnectionSection(input, callbacks)
         TalkSection(input, access, callbacks)
         TogetherSection(input, access)
-        WhereSection(input, access)
-        PhoneSection(input, access)
+        ProfileWhereSection(
+            userId = input.userId,
+            displayName = input.displayName,
+            offered = access.offers(ProfileRelationAction.LOCATION),
+        )
+        PhoneSections(input)
         CardSection(input, onOpenCircle, onShareProfile)
         NotOpenSection(locked)
         DangerSection(plan, callbacks)
@@ -155,8 +165,9 @@ private fun TalkSection(
             }
         }
         if (offersCall && onCall != null) {
-            add { size -> MeeshyLabeledAction(title = callTitle, icon = MeeshyIcons.Call, onClick = { onCall(false) }, size = size) }
-            add { size -> MeeshyLabeledAction(title = videoTitle, icon = MeeshyIcons.Video, onClick = { onCall(true) }, size = size) }
+            val idle = !input.isOpeningConversation
+            add { size -> MeeshyLabeledAction(title = callTitle, icon = MeeshyIcons.Call, onClick = { onCall(false) }, size = size, enabled = idle) }
+            add { size -> MeeshyLabeledAction(title = videoTitle, icon = MeeshyIcons.Video, onClick = { onCall(true) }, size = size, enabled = idle) }
         }
     }
     val talkie = access.offers(ProfileRelationAction.TALKIE)
@@ -177,34 +188,37 @@ private fun TogetherSection(input: ProfileActionsFaceInput, access: Map<ProfileR
     }
 }
 
+/**
+ * « Où il est » : PROPOSER un partage exige le cercle ([offered], dès Ami) ; ARRÊTER un partage en cours ne l'exige jamais.
+ * La section se compose donc à tout niveau — la rangée se tait d'elle-même, titre compris, quand il n'y a rien à proposer
+ * ni à arrêter.
+ */
 @Composable
-private fun WhereSection(input: ProfileActionsFaceInput, access: Map<ProfileRelationAction, ProfileActionAccess>) {
-    if (!access.offers(ProfileRelationAction.LOCATION)) return
-    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-        SectionHeading(stringResource(R.string.fiche_section_where))
-        ProfileShareLocationRow(userId = input.userId, displayName = input.displayName, offered = true)
-    }
+internal fun ProfileWhereSection(
+    userId: String,
+    displayName: String,
+    offered: Boolean,
+    viewModel: ProfileShareLocationViewModel = hiltViewModel(key = "share-location-$userId"),
+) {
+    ProfileShareLocationRow(
+        userId = userId,
+        displayName = displayName,
+        offered = offered,
+        heading = stringResource(R.string.fiche_section_where),
+        viewModel = viewModel,
+    )
 }
 
-/** Les sections du téléphone se retirent d'elles-mêmes hors épisode ; seul le niveau inconnu ou ouvert les laisse parler. */
+/**
+ * La batterie et le téléphone injoignable : chaque section se tait d'elle-même hors épisode servi et hors lien qui l'ouvre
+ * (le serveur juge), comme sur la fiche d'un lien et les infos d'une conversation. Aucun niveau local ne les retient : un
+ * lien en cache en retard sur le serveur ne masque pas un épisode servi. Émises sans enveloppe, pour qu'une section muette
+ * ne laisse aucun espace dans la face.
+ */
 @Composable
-private fun PhoneSection(input: ProfileActionsFaceInput, access: Map<ProfileRelationAction, ProfileActionAccess>) {
-    val levelUnknown = access.isEmpty()
-    val battery = levelUnknown || access.offers(ProfileRelationAction.BATTERY)
-    val unreachable = levelUnknown || access.offers(ProfileRelationAction.UNREACHABLE)
-    if (!battery && !unreachable) return
-    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-        if (battery) {
-            BatteryPersonSection(userId = input.userId, name = input.displayName, surface = BatteryPersonSurface.PROFILE)
-        }
-        if (unreachable) {
-            PhoneReachabilityPersonSection(
-                userId = input.userId,
-                name = input.displayName,
-                surface = PhoneReachabilityPersonSurface.PROFILE,
-            )
-        }
-    }
+private fun PhoneSections(input: ProfileActionsFaceInput) {
+    BatteryPersonSection(userId = input.userId, name = input.displayName, surface = BatteryPersonSurface.PROFILE)
+    PhoneReachabilityPersonSection(userId = input.userId, name = input.displayName, surface = PhoneReachabilityPersonSurface.PROFILE)
 }
 
 @Composable
@@ -306,6 +320,7 @@ internal fun ProfileOtherFace(
     profile: MeeshyUser,
     displayName: String,
     circle: ProfileCircle?,
+    toolLevel: RelationLevel?,
     receptions: ProfileReceptionBlocks?,
     isOpeningConversation: Boolean,
     actions: ProfileActionCallbacks,
@@ -322,7 +337,7 @@ internal fun ProfileOtherFace(
         )
         ProfileFace.ACTIONS -> if (plan != null) {
             ProfileActionsFace(
-                input = ProfileActionsFaceInput(plan, profile.id, displayName, circle, receptions, isOpeningConversation),
+                input = ProfileActionsFaceInput(plan, profile.id, displayName, circle, toolLevel, receptions, isOpeningConversation),
                 callbacks = actions,
                 onOpenCircle = onOpenCircle,
                 onShareProfile = onOpenShare.takeIf { share != null },

@@ -47,8 +47,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import me.meeshy.sdk.model.relation.ProfileCircle
-import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.profile.ProfileActionPlan
@@ -59,6 +57,10 @@ import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.ProfileTab
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.battery.BatteryPersonSection
+import me.meeshy.ui.component.battery.BatteryPersonSurface
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSection
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSurface
 import me.meeshy.ui.profile.ProfileFullscreenImage
 import me.meeshy.ui.profile.ProfileFullscreenImageViewer
 import me.meeshy.ui.theme.MeeshyMotion
@@ -163,6 +165,7 @@ internal fun ProfileSheetLoadedContent(
                             profile = profile,
                             displayName = header.displayName,
                             circle = circle,
+                            toolLevel = actionsState.toolLevel.takeIf { actionsState.userId == profile.id },
                             receptions = actionsState.receptionsOnProfile.takeIf { actionsState.userId == profile.id && it.isNotEmpty() }
                                 ?.let { ProfileReceptionBlocks(profile.id, it) },
                             isOpeningConversation = actionsState.isOpeningConversation,
@@ -202,6 +205,20 @@ internal fun ProfileSheetLoadedContent(
                             .padding(top = MeeshySpacing.lg),
                         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
                     ) {
+                        // L'épisode de la personne se lit aussi sur la Vitrine (planche « Avec Léo ») : la batterie (#14147)
+                        // et le téléphone injoignable (#18737), chacun muet hors épisode et hors lien qui l'ouvre.
+                        if (!state.isSelf) {
+                            BatteryPersonSection(
+                                userId = profile.id,
+                                name = header.displayName,
+                                surface = BatteryPersonSurface.PROFILE,
+                            )
+                            PhoneReachabilityPersonSection(
+                                userId = profile.id,
+                                name = header.displayName,
+                                surface = PhoneReachabilityPersonSurface.PROFILE,
+                            )
+                        }
                         AnimatedContent(
                             targetState = tabs.selected,
                             transitionSpec = { profileTabTransition(initialState, targetState, reduceMotion) },
