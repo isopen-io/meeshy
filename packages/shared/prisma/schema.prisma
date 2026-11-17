@@ -2638,12 +2638,27 @@ model EmailInvitation {
   email            String
   affiliateTokenId String   @db.ObjectId
   sentAt           DateTime @default(now())
+  /// Relances envoyées (#19207) : une par 72 h, trois au plus (`invitationResendWindow`).
+  /// Absent sur les lignes d'avant le lot, lu comme zéro.
+  resendCount      Int?     @default(0)
+  lastResentAt     DateTime?
 
   sender         User           @relation("EmailInvitationSender", fields: [senderId], references: [id])
   affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
 
   @@index([senderId])
   @@index([email])
+}
+
+/// Une adresse qui ne veut plus d'invitation (#19207). Le serveur n'en garde qu'une
+/// empreinte HMAC à clé secrète (`READER_KEY_HMAC_SECRET`, domaine `invitation-opt-out:`),
+/// jamais l'adresse : comme pour le carnet d'adresses (#9225), un non-inscrit n'est pas
+/// gardé en clair. Écrite par le lien « Ne plus recevoir d'invitation » de l'e-mail,
+/// lue par l'envoi et la relance, qui la refusent.
+model EmailInvitationOptOut {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  emailHash String   @unique
+  createdAt DateTime @default(now())
 }
 
 /// Lien de tracking pour compter les clics sur les liens partagés
