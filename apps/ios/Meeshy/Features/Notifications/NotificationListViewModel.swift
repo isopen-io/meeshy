@@ -57,13 +57,16 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
             }
             .store(in: &cancellables)
 
-        // Une notification arrivée LUE (réécrite après une édition) a été
-        // retirée de la liste par son `deleted` : la relecture la remet à sa
-        // place, sans bannière ni compte (#19104).
-        feed.notificationArrivedRead
+        // Une notification entrée SANS BRUIT (arrivée lue, ou réécrite après une
+        // édition) : son `deleted` l'a retirée de la liste, elle y reprend son
+        // rang dans la fenêtre chargée — sans relire le serveur, donc sans jeter
+        // les pages que `loadMore` a ajoutées ni faire sauter le défilement
+        // (#19104).
+        feed.notificationArrivedQuietly
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.scheduleRefresh()
+            .sink { [weak self] row in
+                guard let self else { return }
+                self.notifications = NotificationCachePatch.upsertingByCreatedAt(self.notifications, row)
             }
             .store(in: &cancellables)
 
@@ -124,6 +127,16 @@ final class NotificationListViewModel: ObservableObject, NotificationListModelin
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 self?.markReadLocally(scope: .all)
+            }
+            .store(in: &cancellables)
+
+        // Une demande d'ami lue ailleurs : TOUTES ses lignes passent lues, pages
+        // chargées au-delà du cache comprises (#19104).
+        feed.friendRequestNotificationsRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] friendRequestId in
+                guard let self else { return }
+                self.notifications = NotificationCachePatch.markingRead(self.notifications, friendRequestId: friendRequestId)
             }
             .store(in: &cancellables)
 

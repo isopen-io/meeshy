@@ -7,6 +7,7 @@ import { decodeNotifications, type NotificationRecord } from '@/lib/notification
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { withoutPendingReads } from './notifications-pending-reads';
 
 /**
  * **LE PORT DES NOTIFICATIONS** (#6288) — `services/gateway/src/routes/notifications.ts`.
@@ -207,11 +208,18 @@ export function notificationsInfiniteOptions(deps: NotificationsDeps, category: 
   };
 }
 
-export function notificationCountsQueryOptions(deps: NotificationsDeps) {
+/**
+ * Le compte relu chez la passerelle. `pendingReadsOf` : le client dont les lectures locales pas encore confirmées se
+ * déduisent du compte relu, comme de celui que pousse `notification:counts` (`notifications-pending-reads.ts`) — sans
+ * quoi une relecture au retour sur l'onglet, pendant un POST de lecture, remonterait la pastille.
+ */
+export function notificationCountsQueryOptions(deps: NotificationsDeps, options: { readonly pendingReadsOf?: QueryClient } = {}) {
   return {
     queryKey: NOTIFICATION_COUNTS_QUERY_KEY,
-    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
-      unwrap(await loadNotificationCounts({ ...deps, ...(signal === undefined ? {} : { signal }) })),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => {
+      const counts = unwrap(await loadNotificationCounts({ ...deps, ...(signal === undefined ? {} : { signal }) }));
+      return options.pendingReadsOf === undefined ? counts : withoutPendingReads(options.pendingReadsOf, counts);
+    },
   };
 }
 

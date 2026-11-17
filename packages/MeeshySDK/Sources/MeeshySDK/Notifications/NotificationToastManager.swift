@@ -140,13 +140,20 @@ public final class NotificationToastManager: ObservableObject {
     /// cache durable, lui, est rendu par `applyUnreadToCache`.
     public let notificationReadRolledBack = PassthroughSubject<String, Never>()
 
-    /// Une notification est ARRIVÉE DÉJÀ LUE — le plus souvent une notification
-    /// RÉÉCRITE après une édition (`notification:deleted` puis
-    /// `notification:new`, même id) que l'utilisateur avait déjà lue. Elle ne
-    /// sonne pas, ne compte pas et ne passe pas par `newNotificationReceived`
-    /// (bannières du jeu, révélations) ; la cloche montée, qui vient de retirer
-    /// la ligne sur le `deleted`, se relit sur ce signal (#19104).
-    public let notificationArrivedRead = PassthroughSubject<String, Never>()
+    /// Une notification est entrée SANS BRUIT : arrivée déjà lue (lue ailleurs
+    /// avant son émission), ou RÉÉCRITE après une édition (`notification:deleted`
+    /// puis `notification:new`, même id). Elle ne sonne pas, ne compte pas et ne
+    /// passe pas par `newNotificationReceived` (bannières du jeu, révélations).
+    /// La ligne voyage avec le signal : la cloche montée, qui l'a retirée sur le
+    /// `deleted`, la range à sa date dans sa fenêtre, sans relire le serveur ni
+    /// jeter les pages déjà chargées (#19104).
+    public let notificationArrivedQuietly = PassthroughSubject<APINotification, Never>()
+
+    /// Une demande d'ami a été lue ailleurs (`read-bulk`, portée `context`, clé
+    /// `friendRequestId`) : la cloche montée repeint en lues TOUTES ses lignes de
+    /// cette demande, y compris celles des pages au-delà du cache, que des ids
+    /// relevés dans le cache ne nommeraient pas (#19104).
+    public let friendRequestNotificationsRead = PassthroughSubject<String, Never>()
 
     /// Un autre appareil vient de PURGER les notifications lues
     /// (`notification:deleted-bulk`, portée `read`). La cloche montée retire
@@ -236,6 +243,10 @@ public final class NotificationToastManager: ObservableObject {
 
     // Dedup set: évite d'afficher 2x la même notification (APN foreground + socket simultanés)
     var recentNotificationIds = Set<String>()
+
+    // Les suppressions récentes : un `notification:new` du même id dans la
+    // fenêtre est une RÉÉCRITURE, pas une arrivée (#19104).
+    var recentRevocations: [String: Date] = [:]
 
     // Coalescing du compteur non-lu : `refreshUnreadCount` a 8 appelants (boot app,
     // login, RootView, iPadRootView, NotificationListView…) qui se déclenchent quasi

@@ -277,12 +277,25 @@ final class NotificationContentRouterTests: XCTestCase {
         .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote,
     ]
 
-    func test_surface_relayedActivity_followsTheDiscriminantTheGatewayServes() {
-        for type in relayedTypes {
+    /// Une réaction ou un partage relayés visent le contenu LUI-MÊME : sa surface suit le discriminant servi.
+    func test_surface_relayedReactionOrShare_followsTheDiscriminantTheGatewayServes() {
+        for type: MeeshyNotificationType in [.friendContentReaction, .friendContentShare] {
             XCTAssertEqual(NotificationContentRouter.surface(postType: "REEL", notificationType: type, storyLifecycleHint: false),
                            .reel, type.rawValue)
-            XCTAssertEqual(NotificationContentRouter.surface(postType: "POST", notificationType: type, storyLifecycleHint: false),
-                           .post, type.rawValue)
+            XCTAssertEqual(NotificationContentRouter.surface(postType: "STORY", notificationType: type, storyLifecycleHint: false),
+                           .story, type.rawValue)
+        }
+    }
+
+    /// Revue N4 — une republication ou une citation relayée ouvre la REPUBLICATION, toujours un post. La passerelle
+    /// sert le `postType` de l'ORIGINAL (il nomme, dans le titre, ce qui a été republié) : le suivre ouvrait l'écran
+    /// des stories sur un post sans échéance.
+    func test_surface_relayedRepostOrQuote_opensThePost_whateverTheOriginalWas() {
+        for type: MeeshyNotificationType in [.friendContentRepost, .friendContentQuote] {
+            for original in ["STORY", "MOOD", "REEL", "STATUS"] {
+                XCTAssertEqual(NotificationContentRouter.surface(postType: original, notificationType: type, storyLifecycleHint: true),
+                               .post, "\(type.rawValue) d'un original \(original)")
+            }
         }
     }
 
