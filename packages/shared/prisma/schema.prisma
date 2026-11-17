@@ -127,6 +127,10 @@ model User {
   firstName                 String
   lastName                  String
   bio                       String   @default("")
+  /// Ville DÉCLARÉE par la personne (#18862) : texte libre, jamais une position.
+  city                      String?
+  /// Cercle (RelationLevel) à partir duquel la ville se lit ; null = la personne seule.
+  cityCircle                String?
   email                     String   @unique
   phoneNumber               String?
   /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
