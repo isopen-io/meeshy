@@ -72,9 +72,18 @@ export const isFcmTokenDeadCode = (code: string | undefined): boolean => !!code 
 
 export const isRetryableFcmCode = (code: string | undefined): boolean => !!code && FCM_RETRYABLE_CODES.has(code);
 
-export const fcmFailureIsProviderFault = (code: string | undefined): boolean =>
-  !!code && (FCM_PROVIDER_CODES.has(code) || code.startsWith('app/network-'));
+const fcmFailureIsProviderFault = (code: string): boolean =>
+  FCM_PROVIDER_CODES.has(code) || code.startsWith('app/network-');
+
+/**
+ * Vrai seulement quand Firebase a RÉPONDU sur ce jeton ou ce message (désinscrit, mal formé…). Une erreur sans
+ * code — délai du disjoncteur dépassé, disjoncteur ouvert — ou un code côté projet ou réseau n'accuse pas le jeton.
+ */
+export const fcmFailureIsTokenFault = (code: string | undefined): boolean =>
+  !!code && !fcmFailureIsProviderFault(code);
+
+/** Ce que Firebase a rendu : `rejection` quand il a refusé le jeton ou le message (une réponse, pas une panne). */
+export type FcmSendOutcome = { readonly rejection: { readonly code: string; readonly message: string } | null };
 
 /** Le repli d'un disjoncteur ouvert : une panne du fournisseur déclarée, jamais une valeur qui ressemble à un succès. */
-export const circuitOpenError = (provider: string): Error =>
-  Object.assign(new Error(`${provider} circuit breaker OPEN`), { code: 'messaging/server-unavailable' });
+export const circuitOpenError = (provider: string): Error => new Error(`${provider} circuit breaker OPEN`);

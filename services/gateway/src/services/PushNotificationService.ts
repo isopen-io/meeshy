@@ -28,7 +28,8 @@ import {
   APNS_PERMANENT_REASONS,
   apnsFailureOutcome,
   circuitOpenError,
-  fcmFailureIsProviderFault,
+  fcmFailureIsTokenFault,
+  type FcmSendOutcome,
   isFcmTokenDeadCode,
   isRetryableApnsReason,
   isRetryableFcmCode,
@@ -595,9 +596,10 @@ export class PushNotificationService {
           fcmCorr
         )
       );
-      if (outcome.tokenInvalid) {
-        pushLogger.warn('push.sendViaFCM.tokenInvalid', fcmCorr);
-        return { success: false, tokenId: tokenRecord.id, error: 'TOKEN_INVALID' };
+      if (outcome.rejection) {
+        pushLogger.warn('push.sendViaFCM.rejected', { ...fcmCorr, errorCode: outcome.rejection.code });
+        const error = isFcmTokenDeadCode(outcome.rejection.code) ? 'TOKEN_INVALID' : outcome.rejection.message;
+        return { success: false, tokenId: tokenRecord.id, error };
       }
       pushLogger.info('push.sendViaFCM.success', fcmCorr);
       return { success: true, tokenId: tokenRecord.id };
@@ -613,30 +615,26 @@ export class PushNotificationService {
         errorMessage: error?.message
       });
 
-      return {
-        success: false,
-        tokenId: tokenRecord.id,
-        error: error.message || 'FCM error',
-        transient: fcmFailureIsProviderFault(errorCode),
-      };
+      // Firebase a répondu sur le jeton par une valeur (plus haut) : une exception est une panne du fournisseur,
+      // un délai dépassé ou un disjoncteur ouvert — jamais la faute du jeton.
+      return { success: false, tokenId: tokenRecord.id, error: error.message || 'FCM error', transient: true };
     }
   }
 
   /**
    * Sends via FCM, retrying transient provider errors (`messaging/internal-error`,
-   * etc.) with exponential backoff. Permanent errors (bad/unregistered token)
-   * throw immediately on the first attempt — retrying them would just waste
-   * round-trips and delay the TOKEN_INVALID classification.
+   * etc.) with exponential backoff. A rejection of the token or of the message
+   * (unregistered, malformed) is Firebase ANSWERING, not Firebase failing: it is
+   * returned as a value, so the circuit breaker only counts provider faults.
    */
-  private async sendFcmWithRetry(message: unknown, corr: Record<string, unknown>): Promise<{ tokenInvalid: boolean }> {
+  private async sendFcmWithRetry(message: unknown, corr: Record<string, unknown>): Promise<FcmSendOutcome> {
     for (let attempt = 0; ; attempt++) {
       try {
         await this.firebaseMessaging!.send(message);
-        return { tokenInvalid: false };
+        return { rejection: null };
       } catch (error: any) {
         const code = error?.code || error?.errorInfo?.code;
-        // Un jeton désinscrit est une réponse de Firebase, pas une panne : rendu en valeur, le disjoncteur ne le compte pas.
-        if (isFcmTokenDeadCode(code)) return { tokenInvalid: true };
+        if (fcmFailureIsTokenFault(code)) return { rejection: { code, message: error?.message || code } };
         if (!isRetryableFcmCode(code) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
           throw error;
         }
