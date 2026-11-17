@@ -31,7 +31,9 @@ function monde(readerLang: Record<string, string | null> = { systemLanguage: 'fr
       { id: LECTEUR, username: 'awa', displayName: null, avatar: null, ...lang, ...readerLang },
     ]),
   };
-  return { notices: sharedLocationNoticesOf({ prisma: prisma as never, notifications, now: () => Date.parse(AT) }), created };
+  const claimed = new Set<string>();
+  const claim = async (key: string) => (claimed.has(key) ? false : (claimed.add(key), true));
+  return { notices: sharedLocationNoticesOf({ prisma: prisma as never, notifications, claim, now: () => Date.parse(AT) }), created };
 }
 
 describe('prévenu d\'un partage (#19204)', () => {
@@ -82,6 +84,41 @@ describe('prévenu d\'un partage (#19204)', () => {
 
     expect(m.created.map((c) => c.userId)).toEqual([LECTEUR]);
   });
+
+  it('arrêter puis relancer ne prévient pas deux fois dans la fenêtre : un avis par paire, jamais une rafale', async () => {
+    const m = monde();
+    const avis = { emitterId: EMETTEUR, readerId: LECTEUR, durationMinutes: 60, expiresAt: TERME };
+
+    await m.notices.started([avis]);
+    await m.notices.started([avis]);
+    await m.notices.started([avis]);
+
+    expect(m.created).toHaveLength(1);
+  });
+
+  it('le plafond est par paire : un autre destinataire du même émetteur est prévenu', async () => {
+    const m = monde();
+
+    await m.notices.started([{ emitterId: EMETTEUR, readerId: LECTEUR, durationMinutes: 60, expiresAt: TERME }]);
+    await m.notices.started([{ emitterId: LECTEUR, readerId: EMETTEUR, durationMinutes: 60, expiresAt: TERME }]);
+
+    expect(m.created.map((c) => c.userId)).toEqual([LECTEUR, EMETTEUR]);
+  });
+
+  it('un compte introuvable ne consomme pas le plafond de la paire', async () => {
+    const created: unknown[] = [];
+    const claimed: string[] = [];
+    const notices = sharedLocationNoticesOf({
+      prisma: { user: table([]) } as never,
+      notifications: { createNotification: async (p) => (created.push(p), { id: 'n' } as never) },
+      claim: async (key) => (claimed.push(key), true),
+    });
+
+    await notices.started([{ emitterId: EMETTEUR, readerId: LECTEUR, durationMinutes: 60, expiresAt: TERME }]);
+
+    expect(claimed).toEqual([]);
+    expect(created).toEqual([]);
+  });
 });
 
 describe('une demande adressée à l\'émetteur (#19204)', () => {
@@ -112,7 +149,7 @@ describe('une demande adressée à l\'émetteur (#19204)', () => {
 
   it('sans service de notification, rien ne part et rien ne lève', async () => {
     const prisma = { user: table([]) };
-    const notices = sharedLocationNoticesOf({ prisma: prisma as never, notifications: null });
+    const notices = sharedLocationNoticesOf({ prisma: prisma as never, notifications: null, claim: async () => true });
 
     await notices.started([{ emitterId: EMETTEUR, readerId: LECTEUR, durationMinutes: 60, expiresAt: TERME }]);
     expect(await notices.requested({ emitterId: LECTEUR, requesterId: EMETTEUR, kind: 'extend', requestedAt: AT })).toBe(false);
