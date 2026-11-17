@@ -2,6 +2,7 @@ package me.meeshy.ui.component.kit
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.theme.MeeshyKitInkColors
 
 /** Les trois présentations : verre qui s'incline, claire à plat (image, impression), cadre de visée posé sur l'image de l'hôte. */
 public enum class MeeshyCodeCardStyle { Glass, Plain, Reticle }
@@ -63,8 +64,6 @@ public object MeeshyCodeCardRecipe {
     public const val CENTER_SHARE: Double = 0.25
     public const val CENTER_MINIMUM_SIDE: Double = 120.0
     public const val TINT_CONTRAST: Double = 4.5
-    public val GlassPlate: Color = Color(0xFFF5F3FF)
-    public val GlassInk: Color = Color(0xFF1B1140)
 
     public fun resolve(
         style: MeeshyCodeCardStyle,
@@ -108,9 +107,9 @@ public object MeeshyCodeCardRecipe {
     /** Le côté de la pastille : 25 % du code, absente sous 120. */
     public fun centerSide(side: Double): Double = if (side < CENTER_MINIMUM_SIDE) 0.0 else Math.round(side * CENTER_SHARE).toDouble()
 
-    public fun plateColor(style: MeeshyCodeCardStyle): Color = if (style == MeeshyCodeCardStyle.Plain) Color.White else GlassPlate
+    public fun plateColor(style: MeeshyCodeCardStyle): Color = if (style == MeeshyCodeCardStyle.Plain) Color.White else MeeshyKitInkColors.GlassPlate
 
-    public fun inkColor(style: MeeshyCodeCardStyle): Color = if (style == MeeshyCodeCardStyle.Plain) Color.Black else GlassInk
+    public fun inkColor(style: MeeshyCodeCardStyle): Color = if (style == MeeshyCodeCardStyle.Plain) Color.Black else MeeshyKitInkColors.GlassInk
 
     /** La teinte servie : assombrie au besoin jusqu'à 4,5:1 sur la plaque. */
     public fun servedTint(tint: Color, style: MeeshyCodeCardStyle): Color =

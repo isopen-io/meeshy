@@ -2,6 +2,7 @@ package me.meeshy.ui.component.kit
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.theme.MeeshyKitInkColors
 
 /** Les quatre tailles du billet : héros, rangée de liste, compact (un rail), mini (vertical, pour un rail). */
 public enum class MeeshyTicketSize { Hero, Row, Compact, Mini }
@@ -56,7 +57,7 @@ public object MeeshyTicketRecipe {
     public const val SELECTED_BORDER_WIDTH: Double = 2.0
     public const val REST_BORDER_WIDTH: Double = 1.0
     public const val FLIP_LIFT: Double = 1.05
-    public val DARK_INK: Color = Color(0xFF0B0B12)
+    public val DARK_INK: Color = MeeshyKitInkColors.TicketDarkInk
     public val DASH_PATTERN: List<Double> = listOf(6.0, 4.0)
 
     @Suppress("LongParameterList")
