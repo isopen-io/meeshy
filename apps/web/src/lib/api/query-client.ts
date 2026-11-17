@@ -4,7 +4,6 @@ import { endToEndRegimeLedger, mayPersistConversationContent } from '@/lib/end-t
 
 import { createAccountCacheShelf } from './account-caches';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
-import { installLiveCacheJournal } from './live-cache-journal';
 import { pruneGoneEphemerals } from './ephemeral-cache';
 import { ApiError } from './client';
 import { apiConfig } from './config';
@@ -137,6 +136,13 @@ export type AppQueryClient = QueryClient & {
    * n'a aucune raison de se vider à l'écran avant de partir.
    */
   discardPersisted: () => void;
+  /**
+   * LE JOURNAL DES ÉCRITURES VIVES EST POSÉ (#18914, `live-cache-journal.ts`).
+   * Il se pose AVEC le client mais dans son propre petit morceau : rien de lui
+   * n'est payé avant le premier pixel. Un témoin qui mesure ce que le journal
+   * garantit attend cette promesse.
+   */
+  liveJournal: Promise<void>;
 };
 
 /**
@@ -243,8 +249,15 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   }) as AppQueryClient;
   /* L'état du jeu ne recule jamais (#10898, #10900) : une écriture plus ancienne que celle en cache est ignorée. */
   client.setQueryDefaults(ENGAGEMENT_PROGRESS_QUERY_KEY, { structuralSharing: keepNewerGameState });
-  /* Une écriture temps réel survit à une relecture partie avant elle (#18914) : rejouée sur sa réponse. */
-  installLiveCacheJournal(client);
+  /* Une écriture temps réel survit à une relecture partie avant elle (#18914) : rejouée sur sa réponse. Le journal
+     se pose AVEC le client, dans son propre petit morceau — le socle est à son plafond (budgets.json ›
+     first_paint.kb), motif `endToEndCacheWatch`. Aucune requête de la liste, d'une fiche ou d'un fil ne le précède :
+     toutes naissent dans des modules qui importent le journal STATIQUEMENT (`conversations.ts`, `messages.ts`),
+     donc évalués après lui, et sa pose passe avant leur premier rendu. */
+  client.liveJournal = import('./live-cache-journal').then(
+    ({ installLiveCacheJournal }) => installLiveCacheJournal(client),
+    () => undefined,
+  );
 
   /** Hydrate depuis une entrée SÉRIALISÉE si elle porte le `buster` attendu —
    * `false` sinon (absente, périmée, corrompue) : rien n'est alors restauré. */

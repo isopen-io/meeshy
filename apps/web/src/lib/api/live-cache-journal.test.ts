@@ -557,8 +557,9 @@ describe('hors ligne, la racine des conversations reste EN PAUSE', () => {
     onlineManager.setOnline(true);
   });
 
-  test('la liste, la fiche et le fil gardent le mode réseau « online », crochet du journal compris', () => {
+  test('la liste, la fiche et le fil gardent le mode réseau « online », crochet du journal compris', async () => {
     const queryClient = appClient();
+    await queryClient.liveJournal;
 
     const modes = [CONVERSATIONS_QUERY_KEY, conversationQueryKey('c-a'), messagesQueryKey('c-a')].map(
       (queryKey) => queryClient.defaultQueryOptions({ queryKey }).networkMode,
@@ -569,6 +570,7 @@ describe('hors ligne, la racine des conversations reste EN PAUSE', () => {
 
   test('ouvrir un fil hors ligne attend le réseau : aucune copie ancienne ne remplace ce que le temps réel a posé', async () => {
     const queryClient = appClient();
+    await queryClient.liveJournal;
     const read = localMessage({ id: 'm-lu', senderId: 'u-other' });
     const received = localMessage({ id: 'm-recu', senderId: 'u-other' });
     queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([read, received]));
@@ -608,6 +610,7 @@ describe('le journal et le fil d’une conversation fermée au clair', () => {
       },
     };
     const queryClient = createAppQueryClient({ buster: 'test:journal-scelle', storage });
+    await queryClient.liveJournal;
     const before = localMessage({ id: 'm-0', conversationId: sealed, senderId: 'u-other', content: 'avant' });
     queryClient.setQueryData(messagesQueryKey(sealed), threadPages([before]));
     queryClient.setQueryData(messagesQueryKey('c-claire-journal'), threadPages([localMessage({ id: 'm-clair', conversationId: 'c-claire-journal', content: 'bonjour en clair' })]));
