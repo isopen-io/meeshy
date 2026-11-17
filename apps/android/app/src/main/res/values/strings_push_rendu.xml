@@ -9,4 +9,5 @@
     <string name="push_placeholder_ephemeral">Ephemeral message</string>
     <string name="push_placeholder_hidden">Hidden message</string>
     <string name="push_placeholder_encrypted">Encrypted message</string>
+    <string name="push_placeholder_locked">Locked conversation</string>
 </resources>

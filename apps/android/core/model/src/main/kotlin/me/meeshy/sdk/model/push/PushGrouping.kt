@@ -20,15 +20,22 @@ public object PushGrouping {
 }
 
 /**
- * The app-icon badge a push carries : the unread conversations the gateway counted
- * (`unreadCount`), else the local count derived from the cache, never negative ; `0` when
- * the user turned badges off (clears a residual badge, same rule as iOS and the gateway).
+ * Le nombre que porte UNE bannière (`Notification.number`) : les messages qu'elle regroupe, jamais le total de
+ * conversations non lues du serveur. Android n'a pas de compteur absolu de l'icône : les lanceurs ADDITIONNENT les
+ * `number` des bannières actives, si bien qu'un total global posé sur chacune d'elles gonflait l'icône (3 conversations
+ * de 1, 2 et 3 non lus annonçaient 6). Le total reste affaire d'iOS (`aps.badge`), de la liste et du cache.
+ * `0` quand l'utilisateur a coupé les pastilles (efface un nombre résiduel, même règle qu'iOS et la passerelle).
  */
 public object PushBadgePolicy {
 
-    public fun badge(payload: PushPayload, preferences: UserNotificationPreferences, localUnreadConversations: Int?): Int? {
+    /**
+     * @param previous le nombre de la bannière déjà posée sous le même index, `null` sans bannière
+     * @param addsMessage `false` pour une CORRECTION de texte (message modifié) : elle ne compte pas un message de plus
+     */
+    public fun bannerCount(preferences: UserNotificationPreferences, previous: Int?, addsMessage: Boolean = true): Int {
         if (!preferences.notificationBadgeEnabled) return 0
-        return (payload.unreadCount ?: localUnreadConversations)?.coerceAtLeast(0)
+        val before = (previous ?: 0).coerceAtLeast(0)
+        return if (addsMessage) before + 1 else before.coerceAtLeast(1)
     }
 }
 
