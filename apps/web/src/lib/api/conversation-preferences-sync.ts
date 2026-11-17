@@ -9,6 +9,7 @@ import type { SocketClient } from '@/lib/net/socket';
 import { patchConversation, patchConversationDetail } from './conversations';
 import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
 import { messagesQueryKey } from './messages';
+import type { MessagesInfiniteData } from './messages-pages';
 import { preferenceEntryOf } from './preferences';
 import type { Conversation } from './types';
 
@@ -34,8 +35,13 @@ import type { Conversation } from './types';
  *   la valeur servie est retiré — le serveur reprend la main, et un geste
  *   ultérieur fait ailleurs pourra se voir. Un override CONTRAIRE reste : c'est
  *   l'écho d'un geste plus ancien, et le geste suivant attend sa propre issue.
- * - **L'historique vidé** : un `clearHistoryBefore` qui CHANGE périme le fil de
- *   la conversation, lui seul ; inchangé (une épingle), il ne le relit pas.
+ * - **L'historique vidé** : un `clearHistoryBefore` périme le fil de la
+ *   conversation, lui seul, quand le fil en cache porte encore un message
+ *   d'AVANT la date (la passerelle ne sert que `createdAt >= clearHistoryBefore`,
+ *   `personalHistoryFilter.ts`). Rien à retirer — une épingle, une date déjà
+ *   appliquée, un fil jamais ouvert — ne relit rien : la décision se lit dans
+ *   le cache, pas dans une mémoire que chaque connexion neuve repartait vide
+ *   (#19116).
  * - **Portée catégorie** (`{ userId, category }`) : les réglages d'application
  *   sont périmés. La portée communauté n'a pas de lecteur web.
  */
@@ -99,6 +105,13 @@ const withPreferenceFields = (conversation: Conversation, fields: Payload): Conv
   userPreferences: [{ ...preferenceEntryOf(conversation), ...fields }],
 });
 
+/** Le fil en cache porte-t-il un message créé avant `cutoff` ? Les dates d'un
+ * cache réhydraté sont des chaînes : `new Date` lit les deux formes. */
+const threadHoldsMessageBefore = (queryClient: QueryClient, conversationId: string, cutoff: number): boolean => {
+  const pages = queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId))?.pages;
+  return Array.isArray(pages) && pages.some((page) => page.messages.some((message) => new Date(message.createdAt).getTime() < cutoff));
+};
+
 const patchBoth = (queryClient: QueryClient, conversationId: string, edit: (conversation: Conversation) => Conversation): void => {
   patchConversation(queryClient, conversationId, edit);
   patchConversationDetail(queryClient, conversationId, edit);
@@ -110,14 +123,11 @@ export function createPreferencesSync(params: {
 }) {
   const { queryClient, conversations } = params;
   const versions = new Map<string, number>();
-  const clearedBefore = new Map<string, string | null>();
 
   const applyHistoryClear = (conversationId: string, served: Payload): void => {
-    const next = served['clearHistoryBefore'];
-    if (!isTextOrNull(next)) return;
-    const previous = clearedBefore.get(conversationId) ?? null;
-    clearedBefore.set(conversationId, next);
-    if (next !== previous) void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId), exact: true });
+    const cutoff = typeof served['clearHistoryBefore'] === 'string' ? Date.parse(served['clearHistoryBefore']) : Number.NaN;
+    if (Number.isNaN(cutoff) || !threadHoldsMessageBefore(queryClient, conversationId, cutoff)) return;
+    void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId), exact: true });
   };
 
   return (value: unknown): void => {

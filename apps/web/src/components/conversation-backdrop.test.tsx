@@ -41,7 +41,7 @@ async function show(c: Conversation, deps: ConversationsDeps = offline): Promise
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <ConversationBackdrop conversation={c} accent="#6366F1" live={false} deps={deps} />
+        <ConversationBackdrop conversation={c} accent="#6366F1" deps={deps} />
       </QueryClientProvider>,
     );
   });

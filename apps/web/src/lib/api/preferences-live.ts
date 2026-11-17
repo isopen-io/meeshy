@@ -9,10 +9,12 @@ import type { SocketClient } from '@/lib/net/socket';
  * `user:preferences-updated` d'un autre appareil repeint la liste des
  * conversations même quand aucun fil n'est ouvert : fond et accent, épingle,
  * sourdine, archive, nom personnel, catégorie, favori, historique vidé, et
- * les réglages d'application. Le module qui applique l'événement est chargé
- * EN `import()` : le chunk `realtime` est au plafond de `budgets.json`. Si le
- * socket tombe avant l'arrivée du module, l'abonnement n'a pas lieu (le
- * disposer le sait).
+ * les réglages d'application. C'est le SEUL puits (#19116) : le fond du fil en
+ * montait un second, avec sa propre mémoire de version, qui rejouait une
+ * diffusion en retard et relisait deux fois un historique vidé. Le module qui
+ * applique l'événement est chargé EN `import()` : le chunk `realtime` est au
+ * plafond de `budgets.json`. Si le socket tombe avant l'arrivée du module,
+ * l'abonnement n'a pas lieu (le disposer le sait).
  */
 export function bindPreferencesLiveLazily(params: {
   readonly socket: SocketClient;

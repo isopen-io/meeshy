@@ -1,4 +1,8 @@
-import { QueryClient } from '@tanstack/react-query';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { InfiniteQueryObserver, QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
@@ -6,13 +10,14 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import { appearanceOf } from '@/lib/appearance/read';
 import { createConversationStore, effectiveFlagsOf } from '@/lib/conversation-store';
 import type { SocketClient, SocketHandler } from '@/lib/net/socket';
-import { threadPages } from '@/test-support/thread-cache';
+import { localMessage, threadPages } from '@/test-support/thread-cache';
 
 import { bindPreferencesLive, createPreferencesSync } from './conversation-preferences-sync';
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation } from './conversations';
 import type { ConversationsInfiniteData } from './conversations-pages';
 import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
 import { messagesQueryKey } from './messages';
+import type { MessagesPage, MessagesPageParam } from './messages-pages';
 import { categoryIdOf, customNameOf, flagsOf, reactionOf } from './preferences';
 import type { Conversation } from './types';
 
@@ -197,7 +202,7 @@ describe('user:preferences-updated (portée conversation) — TOUTE la charge, p
 describe('vider l’historique sur un autre appareil — le fil ouvert se relit, et lui seul', () => {
   test('un `clearHistoryBefore` nouveau périme le fil de la conversation, ni la liste ni la fiche', () => {
     const queryClient = seeded();
-    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([]));
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([localMessage({ id: 'm-avant', conversationId: 'c1', createdAt: new Date('2026-11-17T08:00:00.000Z') })]));
     const { sync } = syncOn(queryClient);
 
     sync(event({ preferences: preferences({ clearHistoryBefore: '2026-11-17T09:00:00.000Z' }) }));
@@ -217,6 +222,27 @@ describe('vider l’historique sur un autre appareil — le fil ouvert se relit,
     sync(event({ version: 3, preferences: preferences({ isPinned: true, clearHistoryBefore: '2026-11-17T09:00:00.000Z' }) }));
 
     expect(isInvalidated(queryClient, messagesQueryKey('c1'))).toBe(false);
+  });
+
+  test('un historique vidé qui ne retire RIEN du fil en cache ne le relit pas — même reçu par un puits neuf (#19116)', () => {
+    const queryClient = seeded();
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([localMessage({ id: 'm-apres', conversationId: 'c1', createdAt: new Date('2026-11-17T10:00:00.000Z') })]));
+    const { sync } = syncOn(queryClient);
+
+    sync(event({ preferences: preferences({ isPinned: true, clearHistoryBefore: '2026-11-17T09:00:00.000Z' }) }));
+
+    expect(isInvalidated(queryClient, messagesQueryKey('c1'))).toBe(false);
+  });
+
+  test('un fil persisté (dates en chaîne) dont un message précède l’effacement se relit', () => {
+    const queryClient = seeded();
+    const rehydrated = { ...localMessage({ id: 'm-avant', conversationId: 'c1' }), createdAt: '2026-11-17T08:59:59.000Z' };
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([rehydrated as unknown as ReturnType<typeof localMessage>]));
+    const { sync } = syncOn(queryClient);
+
+    sync(event({ preferences: preferences({ clearHistoryBefore: '2026-11-17T09:00:00.000Z' }) }));
+
+    expect(isInvalidated(queryClient, messagesQueryKey('c1'))).toBe(true);
   });
 
   test('sans effacement connu, une préférence ne relit pas le fil', () => {
@@ -240,6 +266,93 @@ describe('user:preferences-updated (portée catégorie) — un réglage d’appl
 
     expect(isInvalidated(queryClient, APP_PREFERENCES_QUERY_KEY)).toBe(true);
     expect(isInvalidated(queryClient, CONVERSATIONS_QUERY_KEY)).toBe(false);
+  });
+});
+
+/**
+ * **UN SEUL PUITS PAR CONNEXION, MÊME QUAND UN FIL EST OUVERT** (#19116,
+ * réserve C4 de l'audit de #19081). Le fond du fil montait un SECOND puits,
+ * avec sa propre mémoire de version, à côté de celui de la connexion : une
+ * diffusion v5 arrivée en retard après une v6 était rejouée par le puits neuf
+ * (la sourdine retombait), et un historique vidé relançait le fil deux fois.
+ * Le faux socket garde ici TOUS les écouteurs d'un nom — celui d'avant n'en
+ * gardait qu'un par nom (`Map`), et ne pouvait pas voir le doublon.
+ */
+function multiSocket() {
+  const handlers: Array<readonly [string, SocketHandler]> = [];
+  const socket: SocketClient = {
+    connected: true,
+    connect: () => undefined,
+    disconnect: () => undefined,
+    emit: () => undefined,
+    on: (name, handler) => void handlers.push([name, handler as SocketHandler]),
+    off: (name, handler) => {
+      const index = handlers.findIndex(([n, h]) => n === name && h === handler);
+      if (index !== -1) handlers.splice(index, 1);
+    },
+  };
+  const fire = (name: string, payload: unknown): void => {
+    for (const [n, handler] of [...handlers]) if (n === name) handler(payload);
+  };
+  const listeners = (name: string): number => handlers.filter(([n]) => n === name).length;
+  return { socket, fire, listeners };
+}
+
+const SOURCES = fileURLToPath(new URL('../../', import.meta.url));
+
+const sourcesOf = (dir: string): readonly string[] =>
+  readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return sourcesOf(path);
+    return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
+  });
+
+describe('un seul puits de préférences par connexion, même quand un fil est ouvert (#19116)', () => {
+  test('l’application ne pose le puits qu’à UN endroit : la connexion, jamais un écran', () => {
+    const binders = sourcesOf(SOURCES)
+      .filter((path) => /\bbindPreferencesLive\(/.test(readFileSync(path, 'utf8')) && !path.endsWith('conversation-preferences-sync.ts'))
+      .map((path) => relative(SOURCES, path).split('\\').join('/'));
+
+    expect(binders).toEqual(['lib/api/preferences-live.ts']);
+  });
+
+  test('sur un socket à écouteurs multiples, une diffusion v5 en retard après une v6 ne rejoue rien', () => {
+    const queryClient = seeded();
+    const { socket, fire, listeners } = multiSocket();
+    const off = bindPreferencesLive({ socket, queryClient, conversations: createConversationStore() });
+
+    fire(SERVER_EVENTS.USER_PREFERENCES_UPDATED, event({ version: 6, preferences: preferences({ isMuted: true }) }));
+    fire(SERVER_EVENTS.USER_PREFERENCES_UPDATED, event({ version: 5, preferences: preferences({ isMuted: false }) }));
+
+    expect(listeners(SERVER_EVENTS.USER_PREFERENCES_UPDATED)).toBe(1);
+    expect(flagsOf(listRow(queryClient)).isMuted).toBe(true);
+    off();
+  });
+
+  test('sur un socket à écouteurs multiples, un historique vidé relit le fil observé UNE seule fois', async () => {
+    const queryClient = seeded();
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([localMessage({ id: 'm-avant', conversationId: 'c1', createdAt: new Date('2026-11-17T08:00:00.000Z') })]));
+    const reads = { count: 0 };
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: messagesQueryKey('c1'),
+      queryFn: (): Promise<MessagesPage> => {
+        reads.count += 1;
+        return Promise.resolve({ messages: [], hasOlder: false, nextCursor: null });
+      },
+      initialPageParam: undefined as MessagesPageParam,
+      getNextPageParam: () => undefined,
+      staleTime: 60_000,
+    });
+    const stop = observer.subscribe(() => undefined);
+    const { socket, fire } = multiSocket();
+    const off = bindPreferencesLive({ socket, queryClient, conversations: createConversationStore() });
+
+    fire(SERVER_EVENTS.USER_PREFERENCES_UPDATED, event({ version: 7, preferences: preferences({ clearHistoryBefore: '2026-11-17T09:00:00.000Z' }) }));
+    for (let i = 0; i < 20 && queryClient.isFetching() > 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(reads.count).toBe(1);
+    off();
+    stop();
   });
 });
 
