@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_state_error_title">Não é possível abrir este perfil agora</string>
+    <string name="profile_state_error_message">A tua ligação está bem. O problema é do nosso lado e nunca dura muito.</string>
+    <string name="profile_state_offline_title">Estás offline</string>
+    <string name="profile_state_offline_message">Este perfil abre assim que voltares a ter ligação.</string>
+    <string name="profile_state_nobody_title">Ninguém aqui</string>
+    <string name="profile_state_nobody_message">Este perfil não existe ou não está visível para ti.</string>
+    <string name="profile_state_nobody_back">Voltar</string>
+    <string name="profile_state_cached_message">Offline · último perfil guardado</string>
+    <string name="profile_state_cached_detail">Vês a última versão guardada neste telemóvel</string>
+    <string name="profile_report_sheet_title">Denunciar %1$s</string>
+    <string name="profile_report_sheet_hint">É anónimo. A nossa equipa lê em 24 h.</string>
+    <string name="profile_report_sheet_question">O que se passa?</string>
+    <string name="profile_report_also_block">Bloquear também %1$s</string>
+    <string name="profile_report_also_block_hint">Não será avisado</string>
+    <string name="profile_report_send">Denunciar</string>
+</resources>

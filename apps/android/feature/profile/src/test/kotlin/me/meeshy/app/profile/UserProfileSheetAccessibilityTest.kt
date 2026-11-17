@@ -88,16 +88,35 @@ class UserProfileSheetAccessibilityTest {
         var retried = 0
         body(UserProfileSheetUiState(user = bob, loadFailed = true), onRetry = { retried++ })
 
-        compose.onNodeWithText(context.getString(R.string.profile_loadFailed_message)).assertIsDisplayed()
-        compose.onNodeWithTag(PROFILE_RETRY_TAG).performClick()
+        compose.onNodeWithText(context.getString(R.string.profile_state_error_title)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.common_retry)).performClick()
         assertThat(retried).isEqualTo(1)
     }
 
     @Test
-    fun `un refus garde le message sans Reessayer`() {
-        body(UserProfileSheetUiState(user = bob))
+    fun `un refus dit Personne ici sans Reessayer et Retour referme la feuille`() {
+        var closed = 0
+        body(UserProfileSheetUiState(user = bob), onClose = { closed++ })
 
-        compose.onNodeWithText(context.getString(R.string.profile_loadFailed_message)).assertIsDisplayed()
-        compose.onNodeWithTag(PROFILE_RETRY_TAG).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.profile_state_nobody_title)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.common_retry)).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.profile_state_nobody_back)).performClick()
+        assertThat(closed).isEqualTo(1)
+    }
+
+    @Test
+    fun `bloque par la cible dit Personne ici et ne garde aucune identite`() {
+        body(UserProfileSheetUiState(user = bob, isBlockedByTarget = true))
+
+        compose.onNodeWithText(context.getString(R.string.profile_state_nobody_title)).assertIsDisplayed()
+        compose.onNodeWithText("Bob").assertDoesNotExist()
+    }
+
+    @Test
+    fun `une panne hors ligne le dit au lieu d'accuser le serveur`() {
+        body(UserProfileSheetUiState(user = bob, loadFailed = true, isOffline = true))
+
+        compose.onNodeWithText(context.getString(R.string.profile_state_offline_title)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.profile_state_error_title)).assertDoesNotExist()
     }
 }

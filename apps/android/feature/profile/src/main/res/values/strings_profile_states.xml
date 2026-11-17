@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_state_error_title">Can\'t open this profile right now</string>
+    <string name="profile_state_error_message">Your connection is fine. The problem is on our side, and it never lasts long.</string>
+    <string name="profile_state_offline_title">You\'re offline</string>
+    <string name="profile_state_offline_message">This profile will open as soon as you\'re back online.</string>
+    <string name="profile_state_nobody_title">Nobody here</string>
+    <string name="profile_state_nobody_message">This profile doesn\'t exist, or isn\'t visible to you.</string>
+    <string name="profile_state_nobody_back">Back</string>
+    <string name="profile_state_cached_message">Offline · last saved profile</string>
+    <string name="profile_state_cached_detail">You\'re seeing the last version kept on this phone</string>
+    <string name="profile_report_sheet_title">Report %1$s</string>
+    <string name="profile_report_sheet_hint">It\'s anonymous. Our team reads it within 24 h.</string>
+    <string name="profile_report_sheet_question">What\'s happening?</string>
+    <string name="profile_report_also_block">Also block %1$s</string>
+    <string name="profile_report_also_block_hint">They won\'t be told</string>
+    <string name="profile_report_send">Report</string>
+</resources>

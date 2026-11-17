@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {
+          "androidName": "profile_state_error_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_state_error_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_state_offline_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_state_offline_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_state_nobody_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_state_nobody_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_state_nobody_back",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_state_cached_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_state_cached_detail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_report_sheet_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_report_sheet_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_report_sheet_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_report_also_block",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_report_also_block_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_report_send",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -25,6 +25,8 @@ import me.meeshy.sdk.model.profile.from
 import me.meeshy.sdk.model.profile.repainted
 import me.meeshy.sdk.profile.ProfileCacheRepository
 import me.meeshy.sdk.profile.ProfileSheetLoader
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.DynamicColorGenerator
@@ -40,36 +42,40 @@ data class UserProfileSheetUiState(
     val isBlockedByTarget: Boolean = false,
     val loadFailed: Boolean = false,
     val isSelf: Boolean = false,
+    val isOffline: Boolean = false,
 ) {
+    /** Hors ligne sur une fiche peinte : la capsule dit que c'est la dernière version gardée, rien ne se vide. */
+    val showsOfflineCapsule: Boolean get() = isOffline && profile != null && !isBlockedByTarget
+
     /** « Réessayer » n'est offert qu'à une panne : un refus (bloqué par la cible) ne se rejoue pas. */
     val canRetry: Boolean get() = loadFailed && !isBlockedByTarget
 
     /** Gris neutre quand la cible nous bloque, sinon l'accent déjà dérivé de la fiche. */
     val accentHex: String get() = ProfileAccentRules.accentHex(isBlockedByTarget, user.accentColor)
 
-    /** Ce que la feuille peint : un squelette sur cache vide, jamais un spinner sur un contenu peint. */
+    /**
+     * Ce que la feuille peint : un squelette sur cache vide, jamais un spinner sur un contenu peint. Un profil
+     * introuvable, privé ou qui nous a bloqués se confondent en « Personne ici » : rien ne dit pourquoi.
+     */
     val content: ProfileSheetContent get() = when {
-        isBlockedByTarget -> ProfileSheetContent.Close
+        isBlockedByTarget -> ProfileSheetContent.Nobody
         profile != null -> ProfileSheetContent.Loaded
         isLoadingProfile -> ProfileSheetContent.Skeleton
         loadFailed -> ProfileSheetContent.Failed
-        else -> ProfileSheetContent.Refused
+        else -> ProfileSheetContent.Nobody
     }
 }
 
-/** Les quatre façons dont la feuille se présente, plus sa fermeture d'elle-même. */
+/** Les façons dont la feuille se présente. */
 enum class ProfileSheetContent {
     /** Cache vide, synchronisation en cours : en-tête et onglets en squelette. */
     Skeleton,
 
-    /** Panne sur cache vide : « Ce profil n'a pas pu se charger. » et Réessayer. */
+    /** Panne sur cache vide : « Impossible d'ouvrir cette fiche » et Réessayer. */
     Failed,
 
-    /** Refus typé de la passerelle : le même message, sans Réessayer (rejouer ne changerait rien). */
-    Refused,
-
-    /** La cible m'a bloqué (403, ou 404 sur fiche peinte) : la feuille se ferme d'elle-même. */
-    Close,
+    /** « Personne ici » : introuvable, privé ou bloqué par la cible, sans le dire, avec Retour. */
+    Nobody,
 
     /** Un profil est peint, du cache ou du réseau. */
     Loaded,
@@ -86,15 +92,19 @@ class UserProfileSheetViewModel @Inject constructor(
     private val cache: ProfileCacheRepository,
     socket: MessageSocketManager,
     private val session: SessionRepository,
+    private val networkMonitor: NetworkMonitor = InMemoryNetworkMonitor(),
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(UserProfileSheetUiState())
+    private val _state = MutableStateFlow(UserProfileSheetUiState(isOffline = !networkMonitor.isOnline.value))
     val state: StateFlow<UserProfileSheetUiState> = _state.asStateFlow()
 
     private var load = ProfileLoadState()
     private var loadJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            networkMonitor.isOnline.collect { online -> _state.update { it.copy(isOffline = !online) } }
+        }
         viewModelScope.launch {
             try {
                 socket.userUpdated.collect { event ->
@@ -128,7 +138,7 @@ class UserProfileSheetViewModel @Inject constructor(
         if (!retry) load = ProfileLoadState()
         _state.update { shown ->
             val samePerson = accented.id.isNotEmpty() && accented.id == shown.user.id
-            val base = if (retry || samePerson) shown else UserProfileSheetUiState()
+            val base = if (retry || samePerson) shown else UserProfileSheetUiState(isOffline = shown.isOffline)
             base.copy(
                 user = accented,
                 isLoadingProfile = base.profile == null,
