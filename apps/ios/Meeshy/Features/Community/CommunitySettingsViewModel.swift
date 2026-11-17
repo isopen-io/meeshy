@@ -35,6 +35,7 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
     private let originalLocalEmoji: String
     private let service: CommunityServiceProviding
     private let imageUploader: UserServiceProviding
+    private let myCommunities: MyCommunitiesWrites
 
     var hasChanges: Bool {
         name != originalName ||
@@ -49,14 +50,18 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
     /// Publique → privée seulement : rouvrir une communauté, ou tout autre changement, part sans détour.
     var needsPrivacyConfirmation: Bool { !originalIsPrivate && isPrivate }
 
+    /// `myCommunities` : quitter ou supprimer d'ici retire la communauté de la
+    /// bande Communautés et de la feuille de partage, comme depuis la fiche (#18935).
     init(
         community: MeeshyCommunity,
         service: CommunityServiceProviding = CommunityService.shared,
         imageUploader: UserServiceProviding = UserService.shared,
-        currentUserId: @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" }
+        currentUserId: @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
+        myCommunities: MyCommunitiesWrites = .live
     ) {
         self.service = service
         self.imageUploader = imageUploader
+        self.myCommunities = myCommunities
         self.communityId = community.id
         self.isCreator = community.createdBy == currentUserId()
 
@@ -158,6 +163,7 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
     func deleteCommunity() async {
         do {
             try await service.delete(communityId: communityId)
+            await myCommunities.remove(communityId)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -167,6 +173,7 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
     func leaveCommunity() async {
         do {
             try await service.leave(communityId: communityId)
+            await myCommunities.remove(communityId)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
