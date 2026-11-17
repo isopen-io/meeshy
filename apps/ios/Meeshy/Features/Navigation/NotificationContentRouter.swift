@@ -51,6 +51,10 @@ enum NotificationContentRouter {
         notificationType: MeeshyNotificationType,
         storyLifecycleHint: Bool
     ) -> NotificationContentSurface {
+        // Une republication ou une citation relayée (#14070, #14072) ouvre la REPUBLICATION, qui est toujours un
+        // post (`PostService`) : la passerelle sert le `postType` de l'ORIGINAL, qui nomme ce qui a été republié
+        // dans le titre, et le `postId` de la republication.
+        if notificationType == .friendContentRepost || notificationType == .friendContentQuote { return .post }
         let discriminant = (postType?.isEmpty == false ? postType : contentType)?.uppercased()
 
         switch discriminant {
