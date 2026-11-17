@@ -209,8 +209,9 @@ export class E2EEDeviceVerificationRelay {
       from: `${sender.deviceId}:${sender.registrationId}`,
       to: recipients.map((recipient) => `${recipient.deviceId}:${recipient.registrationId}`),
     });
-    if (message.type === 'request') {
-      await this.onRequest?.({ userId, ...refOf(sender) }).catch((error: unknown) => logger.warn('e2ee device verification push not sent', { error }));
+    if (message.type === 'request' && this.onRequest) {
+      // Le push éventuel ne retient pas l'accusé du dépôt.
+      this.onRequest({ userId, ...refOf(sender) }).catch((error: unknown) => logger.warn('e2ee device verification push not sent', { error }));
     }
     return { ids: stored.map((delivery) => delivery.served.id), recipients: recipients.map(refOf) };
   }

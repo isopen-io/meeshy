@@ -37,8 +37,9 @@ export function deviceTrustRuntime(prisma: PrismaClient): DeviceTrustRuntime {
   const announcements = createOwnDeviceAnnouncements({
     prisma,
     counters,
+    // Le fournisseur (APNs, FCM) ne retient jamais la réponse d'un enrôlement ni d'un dépôt : le push part détaché.
     push: async ({ userId, payload }) => {
-      await getPushNotificationService(prisma)
+      getPushNotificationService(prisma)
         .sendToUser({ userId, payload })
         .catch((error: unknown) => logger.warn('e2ee device verification push failed', { error }));
     },
