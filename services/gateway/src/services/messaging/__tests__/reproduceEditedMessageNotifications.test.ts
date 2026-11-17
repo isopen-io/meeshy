@@ -560,3 +560,30 @@ describe('une édition qui laisse la synthèse intacte (#18910)', () => {
     ]);
   });
 });
+
+/**
+ * #18910 (revue) — « intacte » se juge sur ce que la ligne PORTERA, corps compris.
+ * Le corps d'un `message_reaction` ne se recopie pas dans sa métadonnée : une ligne
+ * d'avant la synthèse (« ❤️ : « texte brut » ») dont la copie `messageContent` dit
+ * déjà la synthèse d'après garde, sinon, le texte que l'auteur vient d'éditer.
+ */
+describe('une édition dont seule la phrase de réaction change (#18910, revue)', () => {
+  it('réécrit le corps d’avant la synthèse, même quand la métadonnée est déjà à jour', async () => {
+    findMany.mockResolvedValue([
+      row({
+        type: 'message_reaction',
+        content: '❤️ : « mon ancien secret »',
+        context: { conversationId: '507f1f77bcf86cd799439021' },
+        metadata: { action: 'view_message', reactionEmoji: '❤️', messageContent: 'Petit message texte' },
+      }),
+    ]);
+
+    const reproduced = await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'nouveau texte' }, announcer
+    );
+
+    expect(reproduced).toBe(1);
+    expect(updatedData().content).toBe('❤️ · Petit message texte');
+    expect(announceNotificationsReproduced).toHaveBeenCalledTimes(1);
+  });
+});
