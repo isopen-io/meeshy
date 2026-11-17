@@ -76,6 +76,8 @@ public struct UserProfileSheet: View {
     @Environment(\.profileLocationMap) var locationMap
     /// « En direct · Entre Proches » (#19416) — fourni par l'app, absent sinon.
     @Environment(\.profileLiveSection) var liveSectionSlot
+    /// Les sections de la face Actions lues par l'app (#19433) ; absentes sans elle.
+    @Environment(\.profileActionsParts) var actionsParts
     @Environment(\.profileLoading) private var injectedProfileLoading
     @Environment(\.dismiss) var dismiss
     /// La face lue (loi 1, #18870) ; la Vitrine d'abord.

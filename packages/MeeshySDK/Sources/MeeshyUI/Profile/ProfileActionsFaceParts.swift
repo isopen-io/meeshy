@@ -47,7 +47,7 @@ struct ProfileWhereSlot: View {
         if let map, let request, map.placement(for: request.userId) == placement {
             switch placement {
             case .action: ProfileLocationMapAction(map: map, request: request, tint: tint)
-            case .card: ProfileWhereSection(map: map, request: request).disabled(isDisabled)
+            case .card: ProfileWhereSection(map: map, request: request).disabled(isDisabled).padding(.bottom, MeeshySpacing.xxl)
             case .none: EmptyView()
             }
         }

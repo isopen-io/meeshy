@@ -180,3 +180,22 @@ final class TogetherCenterTests: XCTestCase {
         XCTAssertNotEqual(center.name(of: "inconnu"), "inconnu")
     }
 }
+
+/// « Regarder ensemble » propose les vidéos de notre conversation, « Écouter ensemble » ses audios (#19433).
+@MainActor
+final class ProfileTogetherChoiceTests: XCTestCase {
+
+    func test_watch_keepsTheVideos_andListen_keepsTheAudios() {
+        let pieces = TogetherPieces.select([
+            TogetherListedAttachment(id: "v1", originalName: "film.mp4", mimeType: "video/mp4"),
+            TogetherListedAttachment(id: "a1", originalName: "voix.m4a", mimeType: "audio/mp4"),
+        ])
+        XCTAssertEqual(ProfileTogetherChoice.pieces(pieces, for: .video).map(\.id), ["v1"])
+        XCTAssertEqual(ProfileTogetherChoice.pieces(pieces, for: .audio).map(\.id), ["a1"])
+    }
+
+    func test_eachAction_hasItsOwnTitle() {
+        XCTAssertNotEqual(TogetherRowWording.title(.video), TogetherRowWording.title(.audio))
+    }
+}
+

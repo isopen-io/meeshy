@@ -2,24 +2,23 @@ import SwiftUI
 import UIKit
 import MeeshySDK
 
-// MARK: - UserProfileSheet — la face Actions (#18870)
+// MARK: - UserProfileSheet — la face Actions (#18870, hiérarchie #19433)
 //
-// Ce que je peux FAIRE avec cette personne, fait du kit (loi 12) : « Parler » en actions libellées (K32), « Notre
-// cercle » (la demande de connexion, puis l'emplacement de l'app : le niveau commun, Talkie, Bring, Ensemble, position,
-// batterie, injoignable, et ce qui reste fermé en rangées verrouillées K37), « Sa fiche » (envoyer son profil, copier
-// son lien), et en bas, séparés, bloquer et signaler (K40 destructif). Rien de ce que l'ancien onglet Détails
-// permettait ne disparaît (loi 11).
+// Ce que je peux FAIRE avec cette personne, fait du kit (loi 12), dans l'ordre de la planche `Autre-Actions` :
+// « Parler » en actions libellées (K32), Talkie et « Ensemble » (lus par l'app), « Où il est », la demande de
+// connexion tant qu'aucun lien n'est servi, « Son téléphone » (lu par l'app), « Sa fiche » en rangées (K06 : envoyer
+// son profil, copier son lien, son QR, ses nouveautés, notre cercle), et en bas, séparés, bloquer et signaler (K40
+// destructif). Chaque section porte son propre espace : une section que l'app ne montre pas ne laisse aucun trou.
+// Rien de ce que l'ancien onglet Détails permettait ne disparaît (loi 11).
 
 extension UserProfileSheet {
 
     @ViewBuilder
     var actionsFace: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
-            talkSection
-            circleSection
-            ProfileWhereSlot.of(self, .card)
-            profileCardSection
-            safetySection
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(ProfileActionsSection.order, id: \.self) { section in
+                actionsSection(section)
+            }
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .task(id: pendingRequestId) { await loadPendingRequest() }
@@ -28,6 +27,18 @@ extension UserProfileSheet {
                 ProfileActivitySheet(items: [link.url])
                     .presentationDetents([.medium, .large])
             }
+        }
+    }
+
+    @ViewBuilder
+    private func actionsSection(_ section: ProfileActionsSection) -> some View {
+        switch section {
+        case .talk: talkSection.padding(.bottom, MeeshySpacing.xxl)
+        case .part(let part): ProfileActionsPartSlot.of(self, part)
+        case .whereTheyAre: ProfileWhereSlot.of(self, .card)
+        case .circle: circleSection
+        case .card: ProfileActionsCardSection.of(self)
+        case .safety: safetySection
         }
     }
 
@@ -84,9 +95,16 @@ extension UserProfileSheet {
 
     // MARK: - Notre cercle
 
+    /// La demande de connexion garde « Notre cercle » tant qu'aucun lien n'est servi ; lié, c'est une rangée de « Sa fiche ».
+    @ViewBuilder
     private var circleSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(title: String(localized: "profile.relation.section.circle", defaultValue: "Notre cercle", bundle: .module))
+        if ProfileActionsSection.showsCircleTitle(linked: relationLinked) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                MeeshySectionHeader(title: String(localized: "profile.relation.section.circle", defaultValue: "Notre cercle", bundle: .module))
+                connectionControls
+            }
+            .padding(.bottom, MeeshySpacing.xxl)
+        } else {
             connectionControls
         }
     }
@@ -130,25 +148,6 @@ extension UserProfileSheet {
     }
 
     // MARK: - Sa fiche
-
-    @ViewBuilder
-    private var profileCardSection: some View {
-        if let link = ProfileLink(username: displayUser.username) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                MeeshySectionHeader(title: String(localized: "profile.relation.section.card", defaultValue: "Sa fiche", bundle: .module))
-                MeeshyActionGrid {
-                    labeledAction(.sendProfile) { sharesProfile = true }
-                    MeeshyLabeledAction(
-                        title: String(localized: "profile.relation.action.copyLink", defaultValue: "Copier son lien", bundle: .module),
-                        systemImage: "doc.on.doc",
-                        tint: accentTint,
-                        hint: link.displayText,
-                        action: { copyProfileLink(link) }
-                    )
-                }
-            }
-        }
-    }
 
     func copyProfileLink(_ link: ProfileLink) {
         UIPasteboard.general.url = link.url

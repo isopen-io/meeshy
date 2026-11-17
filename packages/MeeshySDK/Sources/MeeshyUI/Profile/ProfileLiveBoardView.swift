@@ -10,8 +10,6 @@ public struct ProfileLiveBoardView<Map: View>: View {
     private let map: Map?
     private let onOpenMap: (() -> Void)?
 
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     public init(board: ProfileLiveBoard, now: Date, tint: Color, map: Map?, onOpenMap: (() -> Void)?) {
         self.board = board
         self.now = now
@@ -25,7 +23,7 @@ public struct ProfileLiveBoardView<Map: View>: View {
             MeeshySectionHeader(title: board.isStale ? ProfileVitrineCopy.staleTitle : ProfileVitrineCopy.liveTitle,
                                 isLive: !board.isStale, lead: { EmptyView() }, accessory: { circleBadge })
             if let place = board.place { placeTile(place) }
-            deviceTiles
+            ProfileDeviceTiles(board: board, now: now)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.vitrine.live")
@@ -61,11 +59,23 @@ public struct ProfileLiveBoardView<Map: View>: View {
         )
         .accessibilityIdentifier("profile.vitrine.live.place")
     }
+}
 
-    // MARK: La batterie et le téléphone
+/// La batterie sur sa jauge (K42) et le téléphone joignable ou injoignable (K34), côte à côte — en colonne aux grandes
+/// tailles de texte. Le bloc « En direct » de la Vitrine et « Son téléphone » de la face Actions (#19433) posent les
+/// MÊMES tuiles : un même état se lit pareil sur les deux faces.
+public struct ProfileDeviceTiles: View {
+    private let board: ProfileLiveBoard
+    private let now: Date
 
-    @ViewBuilder
-    private var deviceTiles: some View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    public init(board: ProfileLiveBoard, now: Date) {
+        self.board = board
+        self.now = now
+    }
+
+    public var body: some View {
         if board.battery != nil || board.phone != nil {
             let layout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: MeeshySpacing.smPlus))

@@ -88970,6 +88970,53 @@
         }
       }
     },
+    "profile.relation.action.theirQR": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز QR الخاص به"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR-Code"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Their QR"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su QR"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son QR"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il suo QR"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR do perfil"
+          }
+        }
+      }
+    },
     "profile.vitrine.localTime": {
       "extractionState": "manual",
       "localizations": {
