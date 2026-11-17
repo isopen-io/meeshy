@@ -232,3 +232,40 @@ et 174.
 - **Un participant SANS curseur** balaie toujours depuis le début de la
   conversation. Le plancher est `null` dans ce cas — comportement d'avant, et
   aucune des deux sessions ne l'a changé.
+
+---
+
+## Erratum du cycle — une mesure publiée, puis retirée
+
+Ce cycle a publié un tableau de mesure FAUX, et il faut le dire ici parce que le
+journal est ce qui reste.
+
+Le job `Web · gardes navigateur · tranche 4` est tombé sur la PR #19315, dont le
+diff est passerelle + documents. Pour établir que le rouge n'était pas celui du
+lot, j'ai monté un worktree sur `dev` nu, rejoué les deux gates des deux côtés,
+obtenu **EXIT=1 de part et d'autre**, et publié « le rouge préexiste sur `dev` »
+— sur la PR et dans une issue ouverte pour cela (#19370).
+
+**`apps/web/dist` n'existait dans aucun des deux arbres.** Les deux côtés
+servaient un répertoire vide ; le tableau mesurait l'absence de build, quatre
+fois. Refait après les deux `bun run build` que la CI exécute avant ces gates,
+**les deux gates passent**. Les vraies causes de la CI sont un 404 de
+registration de service worker et une valeur calculée lue `flow-end` là où le
+témoin attend `justify-end` — deux sérialisations de la même valeur selon la
+version du moteur, la CI installant son propre Chromium.
+
+Les deux publications sont corrigées, et #19370 retitrée sur son objet réel.
+
+> **Les deux côtés d'une comparaison peuvent échouer pour une raison qui
+> n'appartient à aucun des deux, et l'égalité se lit alors comme « le défaut
+> préexiste » — la conclusion la plus RASSURANTE disponible.** Le contrôle qui
+> l'attrape coûte un run : prouver que le banc rend VERT sur au moins l'un des
+> deux arbres avant de les comparer. Détail et corollaires (reproduire une
+> étape de CI reproduit ses PRÉCONDITIONS, pas sa commande ; la queue d'un
+> journal n'est pas son verdict) :
+> `tasks/lessons/2026-11-17-avant-de-comparer-deux-arbres-prouver-que-le-banc-rend-vert-sur-un.md`.
+
+Et le dépôt l'avait écrit douze lignes au-dessus du gate, dans le fichier que
+j'ai ouvert pour y lire sa commande : « un gate qui tourne sans `dist` rendrait
+un rouge de plomberie qui ne mesure rien ».
+
