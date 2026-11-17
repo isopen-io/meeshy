@@ -56,6 +56,16 @@ public object MeeshyKeyHintRule {
     /** Une touche affichée est une promesse : clavier matériel présent ET commande active. */
     public fun isShown(hasKeyboard: Boolean, isEnabled: Boolean): Boolean = hasKeyboard && isEnabled
 
+    /**
+     * Un clavier à touches (`Configuration.KEYBOARD_QWERTY`) qui n'est pas replié (`HARDKEYBOARDHIDDEN_YES`). Une configuration
+     * inconnue, un clavier absent ou un pavé numérique ne promettent aucun raccourci : une touche montrée sans clavier ment.
+     */
+    public fun hasHardwareKeyboard(keyboard: Int, hardKeyboardHidden: Int): Boolean =
+        keyboard == KEYBOARD_QWERTY && hardKeyboardHidden != HARD_KEYBOARD_HIDDEN_YES
+
+    private const val KEYBOARD_QWERTY: Int = 2
+    private const val HARD_KEYBOARD_HIDDEN_YES: Int = 2
+
     public fun glyph(key: MeeshyKey, platform: MeeshyKeyPlatform): String {
         val apple = platform == MeeshyKeyPlatform.Apple
         return when (key) {
@@ -123,10 +133,11 @@ public object MeeshyKeyHintRecipe {
         hasKeyboard: Boolean,
         isPressed: Boolean,
         reduceMotion: Boolean,
+        isEnabled: Boolean = true,
     ): MeeshyKeyHintValues {
         val compact = size == MeeshyKeyHintSize.Compact
         return MeeshyKeyHintValues(
-            isRendered = keys.isNotEmpty() && hasKeyboard,
+            isRendered = keys.isNotEmpty() && MeeshyKeyHintRule.isShown(hasKeyboard, isEnabled),
             keyCount = keys.size.coerceAtMost(MAX_KEYS),
             sizeDp = if (compact) 20 else 26,
             cornerRadiusDp = 8,

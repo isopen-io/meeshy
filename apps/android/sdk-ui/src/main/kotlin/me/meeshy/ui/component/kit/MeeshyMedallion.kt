@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -128,15 +129,15 @@ public fun MeeshyMedallion(
     }
     val transition = rememberInfiniteTransition(label = "medallion")
     val animated = values.isAnimated
-    val turn = if (animated && values.decor == MeeshyMedallionDecor.Dashed) {
-        transition.animateFloat(0f, FULL_TURN, infiniteRepeatable(tween(MeeshyMedallionRecipe.DASHED_TURN_MILLIS, easing = LinearEasing), RepeatMode.Restart), label = "dashed").value
+    val turn: State<Float>? = if (animated && values.decor == MeeshyMedallionDecor.Dashed) {
+        transition.animateFloat(0f, FULL_TURN, infiniteRepeatable(tween(MeeshyMedallionRecipe.DASHED_TURN_MILLIS, easing = LinearEasing), RepeatMode.Restart), label = "dashed")
     } else {
-        0f
+        null
     }
-    val wave = if (animated && values.waveCount > 0) {
-        transition.animateFloat(0f, 1f, infiniteRepeatable(tween(WAVE_MILLIS, easing = LinearEasing), RepeatMode.Restart), label = "waves").value
+    val wave: State<Float>? = if (animated && values.waveCount > 0) {
+        transition.animateFloat(0f, 1f, infiniteRepeatable(tween(WAVE_MILLIS, easing = LinearEasing), RepeatMode.Restart), label = "waves")
     } else {
-        0f
+        null
     }
     val phase = if (values.drifts) {
         transition.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(MeeshyMotionRecipe.FLOAT_MILLIS, easing = LinearEasing), RepeatMode.Restart), label = "blob").value
@@ -159,7 +160,7 @@ public fun MeeshyMedallion(
     Box(
         modifier = modifier
             .size(values.diameterDp.dp)
-            .drawBehind { drawDecor(values, base, surface, turn, wave) }
+            .drawBehind { drawDecor(values, base, surface, turn?.value ?: 0f, wave?.value ?: 0f) }
             .clip(clipShape)
             .let { m ->
                 if (gradientEnd != null && values.paint == MeeshyMedallionPaint.Solid) {

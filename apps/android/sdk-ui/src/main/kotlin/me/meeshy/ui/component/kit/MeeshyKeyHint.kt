@@ -1,6 +1,5 @@
 package me.meeshy.ui.component.kit
 
-import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,8 +41,7 @@ public enum class MeeshyKeyLegendContainer { None, GlassBar }
 @Composable
 public fun rememberHasHardwareKeyboard(): Boolean {
     val configuration = LocalConfiguration.current
-    return configuration.keyboard != Configuration.KEYBOARD_NOKEYS &&
-        configuration.hardKeyboardHidden != Configuration.HARDKEYBOARDHIDDEN_YES
+    return MeeshyKeyHintRule.hasHardwareKeyboard(configuration.keyboard, configuration.hardKeyboardHidden)
 }
 
 @Composable
@@ -86,7 +84,7 @@ private fun keyNames(): (MeeshyKey, MeeshyKeyPlatform) -> String {
 /**
  * **La touche de raccourci** (K55) : une touche ou une combinaison de touches accolées, toujours le même carré-arrondi en chasse
  * fixe. Elle montre la touche, elle n'écoute pas le clavier : [isPressed] est passé par l'hôte (120 ms) quand il reconnaît le
- * raccourci. Sans clavier matériel ([hasKeyboard] faux) ou sans touche, rien n'est rendu et aucune place n'est réservée. Le
+ * raccourci. Sans clavier matériel ([hasKeyboard] faux), commande éteinte ([enabled] faux) ou sans touche, rien n'est rendu et aucune place n'est réservée. Le
  * modificateur `Primary` s'écrit Ctrl sur Android ; la voix dit « raccourci : Control M » dans la langue de l'app.
  * Jumeau iOS : `MeeshyKeyHint`.
  */
@@ -99,12 +97,13 @@ public fun MeeshyKeyHint(
     size: MeeshyKeyHintSize = MeeshyKeyHintSize.Regular,
     surface: MeeshyKeyHintSurface = MeeshyKeyHintSurface.Auto,
     isPressed: Boolean = false,
+    enabled: Boolean = true,
     platform: MeeshyKeyPlatform = MeeshyKeyPlatform.Other,
     hasKeyboard: Boolean = rememberHasHardwareKeyboard(),
     spokenPrefix: String = stringResource(R.string.kit_key_spoken_prefix),
 ) {
     val reduce = LocalReduceMotion.current
-    val values = MeeshyKeyHintRecipe.resolve(keys, context, size, hasKeyboard, isPressed, reduce)
+    val values = MeeshyKeyHintRecipe.resolve(keys, context, size, hasKeyboard, isPressed, reduce, isEnabled = enabled)
     if (!values.isRendered) return
     val shown = keys.take(values.keyCount)
     val names = keyNames()

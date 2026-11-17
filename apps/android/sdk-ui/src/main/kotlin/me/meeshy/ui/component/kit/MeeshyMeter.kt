@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -115,7 +116,8 @@ public fun MeeshyMeter(
     }
     val values = MeeshyMeterRecipe.resolve(form, kind, fullKind, size, shown.value, isStale, enabled, isRtl, marks)
     val base = meterBase(values.kind, tint)
-    val percent = NumberFormat.getPercentInstance()
+    val locales = LocalConfiguration.current.locales
+    val percent = remember(locales) { NumberFormat.getPercentInstance(locales[0]) }
     val spoken = MeeshyMeterRecipe.spokenValue(spokenValue, target) { percent.format(it.toDouble()) }
     val trackColor = MeeshyTheme.tokens.controlFill
     val fillBrush = if (tintEnd != null) Brush.horizontalGradient(listOf(base, tintEnd)) else Brush.horizontalGradient(listOf(base, base))

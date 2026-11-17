@@ -198,3 +198,31 @@ public object MeeshyButtonHoldRule {
     public fun isHeld(state: MeeshyButtonHoldState): Boolean =
         state == MeeshyButtonHoldState.Held || state == MeeshyButtonHoldState.Live
 }
+
+/**
+ * La loi du maintien : chaque bord se rapporte une seule fois — `true` au doigt posé, `false` au doigt levé, `null` s'il ne
+ * change rien. Le doigt, le lecteur d'écran et le départ du bouton passent par elle, jamais par l'état que l'hôte renvoie.
+ * Miroir de `MeeshyButtonHoldLaw` (iOS).
+ */
+public class MeeshyButtonHoldLaw {
+    public var isHeld: Boolean = false
+        private set
+
+    public fun press(): Boolean? {
+        if (isHeld) return null
+        isHeld = true
+        return true
+    }
+
+    public fun release(): Boolean? {
+        if (!isHeld) return null
+        isHeld = false
+        return false
+    }
+
+    /** Le doigt sort ou le bouton disparaît : même effet qu'un doigt levé. */
+    public fun cancel(): Boolean? = release()
+
+    /** L'action du lecteur d'écran : tient s'il est libre, relâche s'il tient. */
+    public fun toggle(): Boolean = (if (isHeld) release() else press()) ?: isHeld
+}

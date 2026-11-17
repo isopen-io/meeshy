@@ -85,6 +85,7 @@ public data class MeeshyBadgeValues(
     val heightDp: Int,
     val textSp: Float,
     val glyphDp: Int,
+    val horizontalPaddingDp: Int,
     val cornerRadiusDp: Int,
     val bubbleCornersDp: List<Int>?,
     val isDisc: Boolean,
@@ -140,6 +141,7 @@ public object MeeshyBadgeRecipe {
             heightDp = size.heightDp,
             textSp = textSp(size),
             glyphDp = glyphDp(size),
+            horizontalPaddingDp = if (isDisc) 0 else horizontalPaddingDp(size),
             cornerRadiusDp = cornerRadiusDp(surface, content, isMultiLine),
             bubbleCornersDp = if (shape == MeeshyBadgeShape.Bubble) listOf(BUBBLE_FAR_DP, BUBBLE_FAR_DP, BUBBLE_FAR_DP, BUBBLE_TAIL_DP) else null,
             isDisc = isDisc,
@@ -168,6 +170,13 @@ public object MeeshyBadgeRecipe {
         MeeshyBadgeSize.S22 -> 11f
         MeeshyBadgeSize.S28 -> 12f
         MeeshyBadgeSize.S36 -> 12.5f
+    }
+
+    private fun horizontalPaddingDp(size: MeeshyBadgeSize): Int = when (size) {
+        MeeshyBadgeSize.S18 -> 6
+        MeeshyBadgeSize.S22 -> 8
+        MeeshyBadgeSize.S28 -> 10
+        MeeshyBadgeSize.S36 -> 12
     }
 
     private fun glyphDp(size: MeeshyBadgeSize): Int = when (size) {

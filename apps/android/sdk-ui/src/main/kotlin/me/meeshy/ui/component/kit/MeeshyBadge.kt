@@ -141,7 +141,7 @@ public fun MeeshyBadge(
                 .background(if (values.surface == MeeshyBadgeSurface.Solid) base else base.copy(alpha = values.tonalAlpha))
                 .let { if (values.outlineDp > 0f) it.border(values.outlineDp.dp, base, clipShape) else it }
                 .let { if (values.hasAccentBorder) it.border(2.dp, MeeshyPalette.Indigo500, clipShape) else it }
-                .padding(horizontal = if (values.isDisc) 0.dp else (values.heightDp / 3).dp),
+                .padding(horizontal = values.horizontalPaddingDp.dp),
             horizontalArrangement = Arrangement.spacedBy(MeeshyBadgeRecipe.LEADING_GAP_DP.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {

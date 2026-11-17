@@ -25,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -105,8 +106,10 @@ public fun MeeshyButton(
     val livePressed by interaction.collectIsPressedAsState()
     val focused by interaction.collectIsFocusedAsState()
     val isHold = shape == MeeshyButtonShape.Hold
+    val holdLaw = remember { MeeshyButtonHoldLaw() }
+    val shownPressed = pressed ?: if (isHold) MeeshyButtonHoldRule.isHeld(holdState) else livePressed
     val values = MeeshyButtonRecipe.resolve(
-        kind, size, shape, isPressed = pressed ?: livePressed, isFocused = focused, isEnabled = enabled,
+        kind, size, shape, isPressed = shownPressed, isFocused = focused, isEnabled = enabled,
         isPending = isPending, isDestructive = isDestructive, hasTrailing = trailing != null, hasTint = tint != null,
     )
     val scale by animateFloatAsState(values.scale, MeeshyMotion.springFast(), label = "button-press")
@@ -117,8 +120,17 @@ public fun MeeshyButton(
     val spoken = if (isDeferred) "$baseName, $deferredName" else baseName
     val latestClick = rememberUpdatedState(onClick)
     val latestHold = rememberUpdatedState(onHoldChange)
+    val latestPlaysHaptic = rememberUpdatedState(values.playsHaptic)
     fun play() {
-        if (values.playsHaptic) MeeshyMotion.play(MeeshyMotionHaptic.Light, haptics)
+        if (latestPlaysHaptic.value) MeeshyMotion.play(MeeshyMotionHaptic.Light, haptics)
+    }
+    fun report(edge: Boolean?) {
+        edge?.let { latestHold.value?.invoke(it) }
+    }
+    if (isHold) {
+        DisposableEffect(holdLaw) {
+            onDispose { report(holdLaw.cancel()) }
+        }
     }
     val clipShape = RoundedCornerShape(values.cornerRadiusDp.dp)
 
@@ -134,12 +146,13 @@ public fun MeeshyButton(
                             if (!enabled) return@pointerInput
                             awaitEachGesture {
                                 awaitFirstDown()
-                                play()
-                                latestHold.value?.invoke(true)
+                                val began = holdLaw.press()
+                                if (began != null) play()
+                                report(began)
                                 try {
                                     waitForUpOrCancellation()
                                 } finally {
-                                    latestHold.value?.invoke(false)
+                                    report(holdLaw.release())
                                 }
                             }
                         }.focusable(enabled, interaction)
@@ -161,9 +174,9 @@ public fun MeeshyButton(
                     contentDescription = spoken
                     role = Role.Button
                     if (!enabled) disabled()
-                    if (isHold) {
+                    if (isHold && enabled) {
                         semanticsOnClick(label = null) {
-                            latestHold.value?.invoke(!MeeshyButtonHoldRule.isHeld(holdState))
+                            report(holdLaw.toggle())
                             true
                         }
                     }
@@ -197,12 +210,12 @@ public fun MeeshyButton(
                     )
                 }
                 trailing?.let { Box(Modifier.decorative()) { it() } }
-                val clock: (@Composable () -> Unit)? = badge ?: if (isDeferred) {
-                    { MeeshyBadge(MeeshyBadgeContent.Glyph, leading = MeeshyBadgeLeading.Icon(MeeshyIcons.Schedule), size = MeeshyBadgeSize.S18, label = deferredName) }
-                } else {
-                    null
+                when {
+                    badge != null -> badge()
+                    isDeferred -> Box(Modifier.decorative()) {
+                        MeeshyBadge(MeeshyBadgeContent.Glyph, leading = MeeshyBadgeLeading.Icon(MeeshyIcons.Schedule), size = MeeshyBadgeSize.S18)
+                    }
                 }
-                clock?.invoke()
             }
         }
         if (!enabled && !disabledReason.isNullOrBlank()) {
