@@ -34,10 +34,9 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     private let signals: EndToEndSignalApplier
     private let storeChanges: AnyPublisher<Void, Never>
     private var subscriptions: Set<AnyCancellable> = []
-    /// Les ouvertures et fermetures de session, dans l'ordre où elles sont
-    /// demandées : deux tâches libres pouvaient rattraper le nouveau compte
-    /// avant d'oublier l'ancien (audit #12769).
-    private var lifecycle: Task<Void, Never>?
+    /// Les étapes de session, dans l'ordre où elles sont demandées (audit
+    /// #12769), et la fermeture qui passe devant elles (IOSX-05, #18948).
+    private let lifecycle = EndToEndLifecycleQueue()
     /// L'ouverture de la dernière session demandée, que les gestes hors du fil
     /// attendent avant de ranger un clair au coffre (#13067).
     private var opening: Task<Void, Never>?
@@ -77,7 +76,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         let runtime = runtime
         account = userId
         enqueue { await runtime.open(session: userId) }
-        opening = lifecycle
+        opening = lifecycle.tail
         // Réceptions et rattrapages passent par la même file que l'ouverture :
         // une connexion déjà établie publie à l'abonnement, avant même que
         // l'ouverture de la session ait atteint le runtime (audit #12769).
@@ -143,25 +142,24 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         let signals = signals
         enqueue { await runtime.catchUp(as: userId) }
         enqueue { await signals.drain(as: userId) }
-        guard let lifecycle else { return }
-        await BoundedWait.first(of: lifecycle, orAfter: limit)
+        guard let tail = lifecycle.tail else { return }
+        await BoundedWait.first(of: tail, orAfter: limit)
     }
 
+    /// La fermeture passe DEVANT les étapes de la session (IOSX-05) : celles en
+    /// vol sont annulées, celles qui attendent ne commencent pas, et la session
+    /// suivante attend qu'elles aient rendu la main.
     func stop() {
         opening = nil
         account = nil
         subscriptions.removeAll()
         regimeLedger.reset()
         let runtime = runtime
-        enqueue { await runtime.close() }
+        lifecycle.closeAhead { await runtime.close() }
     }
 
     private func enqueue(_ step: @escaping @concurrent @Sendable () async -> Void) {
-        let previous = lifecycle
-        lifecycle = Task {
-            await previous?.value
-            await step()
-        }
+        lifecycle.enqueue(step)
     }
 }
 

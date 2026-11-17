@@ -7,9 +7,11 @@ import LibSignalClient
 /// transaction que libsignal lui passe comme contexte : un déchiffrement et le
 /// nouvel état du ratchet partent ensemble ou pas du tout.
 ///
-/// Confiance : TOFU avec alerte (spec § 4.1 et § 7.3). Une identité inconnue
-/// est acceptée ; une identité qui change est enregistrée et signalée
-/// (`.replacedExisting`), l'envoi continue (politique Signal par défaut).
+/// Confiance : TOFU (spec § 4.1 et § 7.3). Une identité inconnue est acceptée ;
+/// une identité qui change est enregistrée et `saveIdentity` rend
+/// `.replacedExisting`, l'envoi continue (politique Signal par défaut). Rien ne
+/// le SIGNALE encore à l'utilisateur : l'alerte de changement de clé et les
+/// numéros de sécurité sont à venir (constat IOS-01 de la revue E2EE, #18906).
 public final class MeeshySignalProtocolStore: IdentityKeyStore, PreKeyStore, SignedPreKeyStore, KyberPreKeyStore,
     SessionStore, SenderKeyStore, Sendable
 {
@@ -55,7 +57,7 @@ public final class MeeshySignalProtocolStore: IdentityKeyStore, PreKeyStore, Sig
     /// session entre le tri du scelleur et le chiffrement ne reçoit rien.
     public func isTrustedIdentity(_ identity: IdentityKey, for address: ProtocolAddress, direction: Direction, context: StoreContext) throws -> Bool {
         let records = try transaction(context)
-        guard direction == .sending, let ownUserId, address.name == ownUserId else { return true }
+        guard direction == .sending, let ownUserId, E2EEAccountId.same(address.name, ownUserId) else { return true }
         return try E2EEOwnDeviceApprovals.pinned(address.deviceId, in: records) == identity.serialize()
     }
 

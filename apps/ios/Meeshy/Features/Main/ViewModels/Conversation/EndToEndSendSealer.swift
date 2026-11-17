@@ -185,6 +185,7 @@ struct EndToEndSendSealer {
     static func classify(_ error: any Error) -> EndToEndDelivery {
         switch error {
         case E2EESealError.recipientHasNoDevice: return .refused(.recipientWithoutEncryptedDevice)
+        case E2EESealError.peerIsSelf: return .refused(.recipientUnsealable)
         case E2EEEnrollmentError.deviceLimitReached: return .refused(.deviceLimitReached)
         case is URLError: return .transportFailed(error)
         case let meeshy as MeeshyError:

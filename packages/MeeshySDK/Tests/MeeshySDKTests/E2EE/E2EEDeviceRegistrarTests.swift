@@ -34,6 +34,49 @@ final class E2EEDeviceRegistrarTests: XCTestCase {
         )
     }
 
+    // MARK: - R-3 : quand cette génération a été enrôlée
+
+    func test_aNewEnrollment_recordsTheServersDateForThisDevice() async throws {
+        let server = FakeE2EEServer()
+        let phone = try installation()
+        let served = Date(timeIntervalSince1970: 1_790_000_000)
+        let directory = DatedOwnDevicesDirectory(inner: server.client(userId: alice, sessionId: "s1"), enrolledAt: served)
+
+        _ = try await phone.registrar(directory).ensureEnrolled(userId: alice)
+
+        XCTAssertEqual(try E2EEPlaintextVault(vault: phone.vault, owner: alice).enrolledAt(), served)
+    }
+
+    func test_withoutTheServersDate_aNewEnrollment_keepsTheDevicesClock() async throws {
+        let server = FakeE2EEServer()
+        let phone = try installation()
+        let clock = Date(timeIntervalSince1970: 1_790_000_100)
+        let registrar = E2EEDeviceRegistrar(
+            identities: E2EEIdentityVault(secrets: phone.secrets), vault: phone.vault, lock: phone.lock,
+            directory: server.client(userId: alice, sessionId: "s1"), platform: .ios, label: "iPhone", now: { clock }
+        )
+
+        _ = try await registrar.ensureEnrolled(userId: alice)
+
+        XCTAssertEqual(try E2EEPlaintextVault(vault: phone.vault, owner: alice).enrolledAt(), clock)
+        XCTAssertNil(try E2EEPlaintextVault(vault: phone.vault, owner: bob).enrolledAt(), "le coffre d'un autre compte ne dit rien")
+    }
+
+    func test_anInstallationEnrolledWithoutADate_learnsItFromTheServer_neverFromItsClock() async throws {
+        let server = FakeE2EEServer()
+        let phone = try installation()
+        let undated = server.client(userId: alice, sessionId: "s1")
+        _ = try await phone.registrar(undated).ensureEnrolled(userId: alice)
+        try phone.vault.write { try $0.remove(.localEnrollment, E2EELocalEnrollmentRecord.dateKey) }
+
+        _ = try await phone.registrar(undated).ensureEnrolled(userId: alice)
+        XCTAssertNil(try E2EEPlaintextVault(vault: phone.vault, owner: alice).enrolledAt(), "déjà enrôlée, elle ne prend pas l'heure de l'appareil pour la sienne")
+
+        let served = Date(timeIntervalSince1970: 1_780_000_000)
+        _ = try await phone.registrar(DatedOwnDevicesDirectory(inner: undated, enrolledAt: served)).ensureEnrolled(userId: alice)
+        XCTAssertEqual(try E2EEPlaintextVault(vault: phone.vault, owner: alice).enrolledAt(), served)
+    }
+
     func test_theFirstLaunch_enrollsWithAFullBatch_andTheNextOnlyReadsTheStock() async throws {
         let server = FakeE2EEServer()
         let phone = try installation()
@@ -175,11 +218,117 @@ final class E2EEDeviceRegistrarTests: XCTestCase {
         XCTAssertNotEqual(bobDevice.identity.keyPair.identityKey.serialize(), aliceDevice.identity.keyPair.identityKey.serialize())
         XCTAssertNil(try phone.vault.read { try $0.load(.plaintext, "m1") }, "rien du compte précédent ne reste")
     }
+
+    // MARK: - IOS-03 (#18945) : un coffre arrivé sans sa clé
+
+    /// Sauvegarde iCloud ou Finder restaurée, Démarrage rapide : le coffre
+    /// arrive, sa clé de scellement et l'identité (`ThisDeviceOnly`) non. Rien
+    /// de ce coffre ne se lira plus jamais : l'installation devient un NOUVEL
+    /// appareil, au lieu de lever `unsealable` à chaque ouverture de session.
+    func test_aVaultRestoredWithoutItsKey_becomesANewDevice() async throws {
+        let server = FakeE2EEServer()
+        let database = try DatabaseQueue()
+        let lock = E2EEProcessLock(path: E2EETestDevice.temporaryPath("lock"))
+        let old = Installation(
+            vault: try E2EEGRDBRecordVault(writer: database, sealingKey: SymmetricKey(size: .bits256)),
+            secrets: E2EEInMemorySecretStore(), lock: lock
+        )
+        _ = try await old.registrar(server.client(userId: alice, sessionId: "s1")).ensureEnrolled(userId: alice)
+        try old.vault.write { try $0.save(Data("historique".utf8), as: .plaintext, "m1") }
+        let restored = Installation(
+            vault: try E2EEGRDBRecordVault(writer: database, sealingKey: SymmetricKey(size: .bits256)),
+            secrets: E2EEInMemorySecretStore(), lock: lock
+        )
+        let directory = server.client(userId: alice, sessionId: "s2")
+
+        let device = try await restored.registrar(directory).ensureEnrolled(userId: alice)
+
+        XCTAssertEqual(directory.log, ["enroll:\(E2EEPreKeyPolicy.batchSize)"], "un NOUVEL appareil : lot complet, aucune place reprise")
+        XCTAssertEqual(try restored.vault.read { try $0.keys(of: .plaintext) }, [], "aucune ligne du coffre étranger ne reste")
+        XCTAssertEqual(try restored.vault.read { try E2EELocalEnrollmentRecord.load(in: $0) }, device.device)
+    }
+
+    /// Le miroir : rouvert avec SA clé, le coffre garde son enrôlement et son historique.
+    func test_aVaultReopenedWithItsKey_keepsItsEnrollmentAndHistory() async throws {
+        let server = FakeE2EEServer()
+        let database = try DatabaseQueue()
+        let key = SymmetricKey(size: .bits256)
+        let secrets = E2EEInMemorySecretStore()
+        let lock = E2EEProcessLock(path: E2EETestDevice.temporaryPath("lock"))
+        let directory = server.client(userId: alice, sessionId: "s1")
+        let first = Installation(vault: try E2EEGRDBRecordVault(writer: database, sealingKey: key), secrets: secrets, lock: lock)
+        let before = try await first.registrar(directory).ensureEnrolled(userId: alice)
+        try first.vault.write { try $0.save(Data("historique".utf8), as: .plaintext, "m1") }
+        let reopened = Installation(vault: try E2EEGRDBRecordVault(writer: database, sealingKey: key), secrets: secrets, lock: lock)
+
+        let after = try await reopened.registrar(directory).ensureEnrolled(userId: alice)
+
+        XCTAssertEqual(after.device, before.device)
+        XCTAssertEqual(directory.log, ["enroll:\(E2EEPreKeyPolicy.batchSize)", "stock"])
+        XCTAssertEqual(try reopened.vault.read { try $0.load(.plaintext, "m1") }, Data("historique".utf8))
+    }
+
+    /// Une base OCCUPÉE peut n'être que passagère (comme un trousseau
+    /// verrouillé avant le premier déverrouillage) : elle ne se juge jamais
+    /// comme un coffre étranger, rien n'est effacé.
+    func test_aBusyDatabase_neverResetsTheVault() async throws {
+        let server = FakeE2EEServer()
+        let secrets = E2EEInMemorySecretStore()
+        try E2EEIdentityVault(secrets: secrets).store(E2EELocalIdentity.generate())
+        let busy = BusyVault()
+        let registrar = E2EEDeviceRegistrar(
+            identities: E2EEIdentityVault(secrets: secrets), vault: busy,
+            lock: E2EEProcessLock(path: E2EETestDevice.temporaryPath("lock")),
+            directory: server.client(userId: alice, sessionId: "s1"), platform: .ios, label: "iPhone"
+        )
+
+        do {
+            _ = try await registrar.ensureEnrolled(userId: alice)
+            XCTFail("une base occupée remonte, elle ne se répare pas en effaçant")
+        } catch {
+            XCTAssertEqual((error as? DatabaseError)?.resultCode, .SQLITE_BUSY)
+        }
+        XCTAssertEqual(busy.writes, 0, "aucune réinitialisation tentée")
+        XCTAssertNotNil(try E2EEIdentityVault(secrets: secrets).current(), "l'identité reste")
+    }
+}
+
+/// Une base qui refuse tout, comme une base occupée par l'autre processus.
+private final class BusyVault: E2EERecordVaultProviding, @unchecked Sendable {
+    private(set) var writes = 0
+
+    func write<T>(_ body: (any E2EERecordTransaction) throws -> T) throws -> T {
+        writes += 1
+        throw DatabaseError(resultCode: .SQLITE_BUSY)
+    }
+
+    func read<T>(_ body: (any E2EERecordTransaction) throws -> T) throws -> T {
+        throw DatabaseError(resultCode: .SQLITE_BUSY)
+    }
 }
 
 extension FakeE2EEDirectoryClient {
     /// Fait consommer `count` pré-clés de `userId` par ce client (un tiers qui réserve des bundles).
     func bundlesSync(of userId: String, count: Int) -> Int {
         (0..<count).reduce(0) { total, _ in total + server.bundlesForTest(of: userId).devices.count }
+    }
+}
+
+/// L'annuaire qui date l'appareil courant, comme `GET /e2ee/devices` (`enrolledAt`).
+private final class DatedOwnDevicesDirectory: ForwardingE2EEDirectory {
+    private let served: Date
+
+    init(inner: FakeE2EEDirectoryClient, enrolledAt served: Date) {
+        self.served = served
+        super.init(inner: inner)
+    }
+
+    override func ownDevices() async throws -> [E2EEOwnDeviceDetails] {
+        try await inner.ownDevices().map { device in
+            E2EEOwnDeviceDetails(
+                deviceId: device.deviceId, registrationId: device.registrationId, platform: device.platform, label: device.label,
+                enrolledAt: device.current ? served : device.enrolledAt, lastSeenAt: device.lastSeenAt, current: device.current
+            )
+        }
     }
 }
