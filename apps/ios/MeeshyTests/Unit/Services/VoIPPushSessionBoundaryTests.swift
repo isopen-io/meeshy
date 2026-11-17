@@ -110,4 +110,21 @@ final class VoIPPushSessionBoundaryTests: XCTestCase {
         XCTAssertTrue(afterAccountAResponse.contains { $0.hasPrefix("start:") },
                       "un POST part APRÈS la réponse de A, sous la session courante. Événements : \(registrar.events)")
     }
+
+    func test_registerTokenWithBackend_staleResponseAfterTheNextAccountPosted_postsAgainDespiteTheCooldown() async {
+        let registrar = HeldFirstVoIPRegistrar()
+        let (sut, _) = makeSUT(registrar: registrar)
+
+        let accountAPost = Task { await sut.debug_registerTokenWithBackend("voip-T") }
+        await waitUntil { registrar.registerCallCount == 1 }
+        await sut.unregisterAndClearToken()
+        sut.debug_setVoIPToken("voip-T")
+        await sut.debug_registerTokenWithBackend("voip-T")
+        registrar.releaseFirst()
+        await accountAPost.value
+
+        let afterAccountAResponse = registrar.events.drop { $0 != "end:1" }
+        XCTAssertTrue(afterAccountAResponse.contains { $0.hasPrefix("start:") },
+                      "le POST de B a armé le cooldown, mais la passerelle a pu traiter celui de A après : le rejeu passe outre. Événements : \(registrar.events)")
+    }
 }
