@@ -15,12 +15,13 @@ const served = {
   },
 };
 
-const transportOf = (reply: ApiResult<unknown>, seen: HttpRequest[] = []): HttpTransport => ({
-  request: async <T>(request: HttpRequest) => {
-    seen.push(request);
-    return reply as ApiResult<T>;
-  },
-});
+const transportOf = (reply: ApiResult<unknown>, seen: HttpRequest[] = []): HttpTransport =>
+  ({
+    request: async (request: HttpRequest) => {
+      seen.push(request);
+      return reply;
+    },
+  }) as unknown as HttpTransport;
 
 describe('décodeur de la fiche par cercle', () => {
   test('lit ce que le serveur sert, rien de plus', () => {

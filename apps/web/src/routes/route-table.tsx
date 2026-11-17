@@ -571,6 +571,10 @@ export const ROUTES = {
      texte, et la passerelle résout les deux à la même adresse
      (`servirProfilPublic`, insensible à la casse sur le pseudo). */
   userProfile: { pattern: '/u/$username', screen: () => import('@/routes/user-profile') },
+  /* L'ADRESSE COURTE D'UNE PERSONNE (#18878) — `meeshy.me/@pseudo`, le lien qu'on colle dans une
+     biographie ou sur une carte. MÊME écran que `/u/$username`, jamais une redirection : le
+     visiteur garde l'adresse qu'il a reçue, et rien ne se rejoue. */
+  userShortcut: { pattern: '/@$username', screen: () => import('@/routes/user-profile-shortcut') },
   hashtag: { pattern: '/hashtag/$tag', screen: () => import('@/routes/hashtag') },
   links: { pattern: '/links', screen: () => withLinkFamiliesCatalog(import('@/routes/links')) },
   /* LES LIENS DE PARTAGE (#6361, D-63) — miroir `Route.shareLinks`, puis

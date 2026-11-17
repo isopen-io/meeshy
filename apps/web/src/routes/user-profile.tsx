@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
+import { VisitorVitrine } from '@/components/vitrine-preview';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { GameBannerOwnSlot, GameBannerVisitorSlot } from '@/components/game-profile-slots';
@@ -349,6 +350,8 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           }
                         />
                       )}
+                      {/* LA VITRINE D'UN VISITEUR SANS COMPTE (#18878) : le niveau Public de la loi d'accès, et ce que les cercles ouvrent. */}
+                      {isSelf || signedIn ? null : <VisitorVitrine language={language} targetId={person.id} />}
                       {isSelf || !signedIn || !callsAvailable() ? null : (
                         <ProfileCall language={language} person={callPerson} online={online} onFailed={onCallFailed} />
                       )}

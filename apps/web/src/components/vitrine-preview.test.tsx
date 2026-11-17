@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, jest, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { RELATION_LEVELS, type RelationLevel } from '@meeshy/shared/types/relation';
 
@@ -6,7 +6,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { localVitrineView } from '@/lib/profile/vitrine-preview';
 import { kitMount } from '@/test-support/kit-mount';
 
-import { VitrineCapabilities, VitrinePreview } from './vitrine-preview';
+import { VisitorVitrine, VitrineCapabilities, VitrinePreview } from './vitrine-preview';
 
 const { mount, render, act } = kitMount();
 
@@ -33,10 +33,11 @@ describe('VitrinePreview — ma Vitrine telle que la voit un cercle', () => {
   });
 
   test('toucher un cercle le demande à l’hôte, au clavier comme au doigt', () => {
-    const onLevel = jest.fn();
+    const asked: RelationLevel[] = [];
+    const onLevel = (next: RelationLevel) => asked.push(next);
     const root = mount(preview('PUBLIC', onLevel));
     act(() => (root.querySelectorAll('[role="tab"]')[3] as HTMLButtonElement).click());
-    expect(onLevel).toHaveBeenCalledWith('FRIEND');
+    expect(asked).toEqual(['FRIEND']);
   });
 
   test('l’identité montrée est celle de la fiche : nom, pseudo, bio', () => {
@@ -56,20 +57,14 @@ describe('VitrinePreview — ma Vitrine telle que la voit un cercle', () => {
     expect(battery?.getAttribute('aria-label')).toContain('verrouillé');
   });
 
-  test('chaque cercle plus haut ferme moins de rangées, et le cercle choisi suit l’onglet', () => {
-    const counts: number[] = [];
-    for (const level of RELATION_LEVELS) {
+  test('chaque cercle plus haut ferme autant ou moins de rangées, et au moins un cran en ferme moins', () => {
+    const root = mount(preview('PUBLIC'));
+    const counts = RELATION_LEVELS.map((level) => {
       render(preview(level));
-      counts.push(lockedRows(document.body).length);
-    }
-    mount(preview('PUBLIC'));
-    for (const level of RELATION_LEVELS) {
-      render(preview(level));
-      counts.push(lockedRows(document.body).length);
-    }
-    const first = counts.slice(0, RELATION_LEVELS.length);
-    expect(first.some((count, rank) => rank > 0 && count < (first[rank - 1] ?? 0))).toBe(true);
-    first.forEach((count, rank) => expect(count <= (first[rank - 1] ?? Infinity)).toBe(true));
+      return lockedRows(root).length;
+    });
+    counts.forEach((count, rank) => expect(count <= (counts[rank - 1] ?? Infinity)).toBe(true));
+    expect(counts[0]).toBeGreaterThan(counts[counts.length - 1] ?? 0);
   });
 
   test('aucune rangée fermée ne porte la valeur protégée : seul le nom de la chose et le cercle', () => {
@@ -88,5 +83,26 @@ describe('VitrinePreview — ma Vitrine telle que la voit un cercle', () => {
     const root = mount(<VitrineCapabilities language="fr" view={{ ...viewAt('PUBLIC'), capabilities: {} }} />);
     expect(lockedRows(root)).toHaveLength(0);
     expect(root.querySelector('[data-vitrine-opened]')).toBeNull();
+  });
+});
+
+describe('VisitorVitrine — la page publique est exactement le niveau Public', () => {
+  test('dit que le profil est public, puis ne montre QUE ce qui est réservé aux cercles', () => {
+    const root = mount(<VisitorVitrine language="fr" targetId="owner-1" />);
+    expect(text(root.querySelector('[data-vitrine-visitor]'))).toContain('Profil public');
+    expect(root.querySelector('[data-vitrine-opened]')).toBeNull();
+    expect(text(root.querySelector('[data-vitrine-locked] h2'))).toBe('Réservé à ses cercles');
+  });
+
+  test('les rangées sont celles de la vue Public de « Voir comme », rangée pour rangée', () => {
+    const visitor = lockedRows(mount(<VisitorVitrine language="fr" targetId="owner-1" />)).map((row) => text(row));
+    const owner = lockedRows(mount(preview('PUBLIC'))).map((row) => text(row));
+    expect(visitor).toEqual(owner);
+    expect(visitor.length).toBeGreaterThan(0);
+  });
+
+  test('aucune action d’écriture pour un visiteur : ni geste, ni lien, ni bouton dans les rangées fermées', () => {
+    const root = mount(<VisitorVitrine language="fr" targetId="owner-1" />);
+    expect(root.querySelectorAll('[data-vitrine-locked] button, [data-vitrine-locked] a')).toHaveLength(0);
   });
 });
