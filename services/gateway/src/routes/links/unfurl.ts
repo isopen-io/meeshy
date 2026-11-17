@@ -43,6 +43,7 @@ import {
   loadTrackingLinkUnfurlSource,
   type TrackingLinkUnfurlSource
 } from '../../services/linkUnfurl/trackingLink';
+import { addressLinkOpensTo } from '../../services/profile-addresses/address-link-gate';
 import {
   composePersonUnfurl,
   isPersonHandle,
@@ -152,12 +153,25 @@ export function registerLinkUnfurlRoute(
     ttlMs: LINK_UNFURL_CACHE_TTL_MS
   });
 
-  const readTracking = async (token: string): Promise<TrackingLinkUnfurlSource | null> => {
+  /**
+   * Le lien d'une ADRESSE de fiche (#18863) ne se met jamais en cache, et passe la loi des autres
+   * portes à chaque requête, un robot étant un lecteur SANS compte (#19196) : fermé, il est vu
+   * comme un lien mort (aperçu générique, jamais l'invitation d'un jeton inconnu). Une lecture
+   * de la garde qui échoue ferme.
+   */
+  const readTracking = async (token: string): Promise<TrackingLinkUnfurlSource | null | 'closed'> => {
     const cached = trackingRows.get(token);
-    if (cached !== undefined) return cached;
-    const row = await loadTrackingLinkUnfurlSource(prisma, token);
-    trackingRows.set(token, row);
-    return row;
+    const row = cached !== undefined ? cached : await loadTrackingLinkUnfurlSource(prisma, token);
+    if (!row?.addressId) {
+      if (cached === undefined) trackingRows.set(token, row);
+      return row;
+    }
+    const opens = await addressLinkOpensTo(prisma, { token, createdBy: row.createdBy, addressId: row.addressId, originalUrl: row.originalUrl }, undefined)
+      .catch((error: unknown) => {
+        logWarn(fastify.log, 'Address link gate read failed — serving the generic preview', error);
+        return false;
+      });
+    return opens ? row : 'closed';
   };
 
   /**
@@ -191,12 +205,15 @@ export function registerLinkUnfurlRoute(
           return undefined;
         })
       : null;
-    const decision = tracking === undefined ? { kind: 'generic' as const } : decideTrackingLinkUnfurl({ token, tracking, origin, now });
+    const decision = tracking === undefined || tracking === 'closed'
+      ? { kind: 'generic' as const }
+      : decideTrackingLinkUnfurl({ token, tracking, origin, now });
 
     if (decision.kind === 'redirect') {
+      const isAddressLink = typeof tracking === 'object' && tracking !== null && Boolean(tracking.addressId);
       return reply
         .headers({
-          'cache-control': RESPONSE_HEADERS['cache-control'],
+          'cache-control': isAddressLink ? 'private, no-store' : RESPONSE_HEADERS['cache-control'],
           'x-robots-tag': RESPONSE_HEADERS['x-robots-tag'],
           'referrer-policy': RESPONSE_HEADERS['referrer-policy']
         })
