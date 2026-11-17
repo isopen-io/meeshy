@@ -183,6 +183,19 @@ class NotificationFlightLandingTest {
     }
 
     @Test
+    fun `a count the server pushed during the flight is newer than the served one, the landing keeps the live count`() {
+        val landing = NotificationFlightLanding.land(
+            page = listOf(notification("n1")),
+            servedUnread = 1,
+            live = listOf(notification("n1")),
+            changes = NotificationFlightChanges.NONE.counted(),
+        )
+
+        assertThat(landing.items.ids()).containsExactly("n1")
+        assertThat(landing.unreadCount).isNull()
+    }
+
+    @Test
     fun `an arrival journaled twice is kept once`() {
         val changes = NotificationFlightChanges.NONE.arrived(notification("n2")).arrived(notification("n2"))
 

@@ -47,6 +47,7 @@ import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.net.rawApiCall
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -85,6 +86,9 @@ class NotificationRepository @Inject constructor(
 
     /** Change à chaque [clear] : une écriture différée ou une relecture d'un compte qui part ne se pose jamais sur le suivant. */
     @Volatile private var epoch = 0L
+
+    /** Change à chaque remplacement COMPLET de la liste « all » (révalidation, [replaceAll]) : un vol qui l'a lue avant se jette. */
+    private val listVersion = AtomicLong(0)
     private val persistScope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var lastPersisted: PersistedNotifications? = null
 
@@ -104,6 +108,8 @@ class NotificationRepository @Inject constructor(
      * Et TOUTE écriture de la liste « all » passe sous ce même verrou, composée depuis la liste VIVANTE : un écrivain qui
      * lisait hors de la section des autres effaçait, en écrivant, ce qu'un autre avait posé entre sa lecture et son
      * écriture (une suppression reçue du socket pendant qu'une lecture se posait, une arrivée pendant la page suivante).
+     * Le verrou rend ainsi atomiques la vérification « le compte et la liste sont-ils ceux du départ ? » et l'écriture
+     * qui la suit (#18908) : une resynchro, une page et [clear] ne s'intercalent plus entre les deux.
      */
     private val flightLock = Any()
     private var flights: Map<Long, NotificationFlightChanges> = emptyMap()
@@ -161,8 +167,12 @@ class NotificationRepository @Inject constructor(
                 }
             }
 
-    /** Forces a revalidation regardless of freshness — the pull-to-refresh entry point. */
-    suspend fun refresh() = revalidateNotifications()
+    /**
+     * Forces a revalidation regardless of freshness — the pull-to-refresh and « Réessayer » entry point. Rend l'échec de
+     * la liste (le cache reste intact) au lieu de l'avaler : un appelant qui ne le saurait pas laisserait un squelette
+     * affiché pour toujours, ou jouerait l'haptique de succès sur une panne. `null` = tout a abouti.
+     */
+    suspend fun refresh(): Throwable? = resync()
 
     /**
      * La relecture silencieuse des 30 dernières notifications (resynchro après un trou, une reconnexion ou un retour au
@@ -218,6 +228,7 @@ class NotificationRepository @Inject constructor(
             return
         }
         synchronized(flightLock) {
+            listVersion.incrementAndGet()
             _hasMore.value = hasMore
             _nextCursor.value = nextCursor
             _notificationsCache.value = items
@@ -327,9 +338,14 @@ class NotificationRepository @Inject constructor(
      * notification mutation (this device's or another's). Without it the badge only corrects
      * on the next full refetch; [applyReadBulk]/[applyDeletedBulk] both rely on it for exactly
      * that correction, since their own partial cache cannot recompute the true unread count.
+     * Posed while a re-read is in flight, it is newer than the count that re-read brings back,
+     * computed before it: the re-read keeps it (#18908).
      */
     fun applyCounts(unread: Int) {
-        _unreadCount.value = unread
+        synchronized(flightLock) {
+            _unreadCount.value = unread
+            flights = flights.mapValues { (_, changes) -> changes.counted() }
+        }
     }
 
     /**
@@ -410,7 +426,7 @@ class NotificationRepository @Inject constructor(
         val asked = synchronized(flightLock) {
             val current = _notificationsCache.value ?: return NetworkResult.Success(Unit)
             if (!_hasMore.value) return NetworkResult.Success(Unit)
-            NextPage(epoch, _nextCursor.value, current.size)
+            NextPage(epoch, listVersion.get(), _nextCursor.value, current.size)
         }
         return when (
             val result = pagedApiCall {
@@ -425,20 +441,24 @@ class NotificationRepository @Inject constructor(
         }
     }
 
-    /** Where a next page was asked from: the account generation ([epoch]), and the end of the list — cursor, or by rank its length. */
-    private class NextPage(val epoch: Long, val cursor: String?, val listSize: Int)
+    /**
+     * Where a next page was asked from: the account generation ([epoch]), the list version ([listVersion]), and the end
+     * of the list — cursor, or by rank its length.
+     */
+    private class NextPage(val epoch: Long, val listVersion: Long, val cursor: String?, val listSize: Int)
 
     /**
      * #18915 — the next page lands at the tail of the LIVE list, in [flightLock]'s section: never on the snapshot read
      * before its request, which would erase what arrived, was read or was deleted meanwhile. It lands only while the
-     * live list still ends where it was [asked]: the account that left ([clear] since), or a list a re-read replaced
-     * meanwhile (another cursor — by rank, another length), makes it continue a list that is gone, and laid at the tail
-     * of the new one it would leave a hole. It lands nothing then: the next scroll asks from the new end.
+     * live list still ends where it was [asked]: the account that left ([clear] since), a list a re-read or
+     * [replaceAll] replaced meanwhile (another list version, #18908), or another end (another cursor — by rank, another
+     * length: a page already appended) makes it continue a list that is gone, and laid at the tail of the new one it
+     * would leave a hole. It lands nothing then: the next scroll asks from the new end.
      */
     private fun appendPage(asked: NextPage, items: List<ApiNotification>, pagination: Pagination?) {
         synchronized(flightLock) {
             val live = _notificationsCache.value ?: return
-            if (asked.epoch != epoch || asked.cursor != _nextCursor.value) return
+            if (asked.epoch != epoch || asked.listVersion != listVersion.get() || asked.cursor != _nextCursor.value) return
             if (asked.cursor === null && asked.listSize != live.size) return
             _notificationsCache.value = live + items
             _hasMore.value = pagination?.hasMore ?: false
@@ -722,6 +742,7 @@ class NotificationRepository @Inject constructor(
             if (flight.epoch != epoch) return
             val changes = flights[flight.id] ?: NotificationFlightChanges.NONE
             flights = flights - flight.id
+            listVersion.incrementAndGet()
             val landing = NotificationFlightLanding.land(items, servedUnread, _notificationsCache.value, changes)
             landing.unreadCount?.let { _unreadCount.value = it }
             _hasMore.value = pagination?.hasMore ?: false
@@ -731,9 +752,16 @@ class NotificationRepository @Inject constructor(
         }
     }
 
-    /** The count a failed re-read still obtained — posed only while its account is the one signed in. */
+    /**
+     * The count a failed re-read still obtained — posed only while its account is the one signed in, and only when
+     * nothing moved the list or the count during its flight (an arrival, a read, a removal, `notification:counts`):
+     * the live count already holds what the server computed before them (#18908).
+     */
     private fun landCount(flight: Flight, servedUnread: Int) {
-        synchronized(flightLock) { if (flight.epoch == epoch) _unreadCount.value = servedUnread }
+        synchronized(flightLock) {
+            if (flight.epoch != epoch || flights[flight.id] != NotificationFlightChanges.NONE) return
+            _unreadCount.value = servedUnread
+        }
     }
 
     /**

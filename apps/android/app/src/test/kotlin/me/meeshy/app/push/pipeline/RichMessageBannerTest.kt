@@ -14,6 +14,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.meeshy.app.R
+import me.meeshy.app.navigation.ConversationNotificationCanceller
 import me.meeshy.app.push.IncomingPush
 import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.push.media.PushMediaFetcher
@@ -226,6 +227,61 @@ class RichMessageBannerTest {
         val texts = children().single().texts()
         assertThat(texts).containsExactly("RDV 19h à Châtelet", "Tu viens ?").inOrder()
         assertThat(children().single().flags and Notification.FLAG_ONLY_ALERT_ONCE).isNotEqualTo(0)
+    }
+
+    /** La charge réelle d'une correction (`reproducedPushData`) : ni expéditeur, ni titre en données, le texte dans le bloc `notification`. */
+    private fun gatewayCorrection(notificationId: String, messageId: String, text: String) = IncomingPush.of(
+        data = mapOf(
+            "type" to "new_message",
+            "notificationId" to notificationId,
+            "conversationId" to "6501a1b2c3d4e5f607182930",
+            "messageId" to messageId,
+            "unreadCount" to "3",
+            "reproduced" to "true",
+            "replacesNotificationId" to notificationId,
+        ),
+        notificationTitle = "Alice",
+        notificationBody = text,
+        hasNotificationBlock = true,
+    )
+
+    private suspend fun correctTheFirstOfTwoMessages(): Notification {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "messageId" to "m1", "body" to "RDV 18h à Gare du Nord"))
+        pipeline.renderNow(push("notificationId" to "n2", "messageId" to "m2", "body" to "Tu viens ?"))
+        pipeline.renderNow(gatewayCorrection("n1", "m1", "RDV 19h à Châtelet"))
+        return children().single()
+    }
+
+    @Test
+    fun `la correction servie par la passerelle, sans expediteur, garde les autres messages de la banniere`() = runTest {
+        val banner = correctTheFirstOfTwoMessages()
+
+        assertThat(banner.texts()).containsExactly("RDV 19h à Châtelet", "Tu viens ?").inOrder()
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(banner)!!
+        assertThat(style.messages.first().person?.name.toString()).isEqualTo("Alice")
+    }
+
+    @Test
+    @Config(sdk = [26])
+    fun `sur Android 8 la correction retrouve aussi le message qu elle remplace`() = runTest {
+        val banner = correctTheFirstOfTwoMessages()
+
+        assertThat(banner.texts()).containsExactly("RDV 19h à Châtelet", "Tu viens ?").inOrder()
+    }
+
+    @Test
+    fun `ouvrir ou lire la conversation retire aussi la banniere de son message ephemere`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "body" to "Salut"))
+        pipeline.renderNow(push("notificationId" to "n2", "body" to "Ceci s'efface", "ephemeralDuration" to "86400"))
+        pipeline.renderNow(push("type" to "user_mentioned", "notificationId" to "n3", "body" to "@moi"))
+
+        ConversationNotificationCanceller(context).cancel("6501a1b2c3d4e5f607182930")
+
+        assertThat(children().flatMap { it.texts() }).doesNotContain("Ceci s'efface")
+        assertThat(children().flatMap { it.texts() }).doesNotContain("Salut")
+        assertThat(children()).hasSize(1)
     }
 
     @Test

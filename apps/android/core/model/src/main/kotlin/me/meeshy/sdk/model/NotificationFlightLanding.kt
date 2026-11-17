@@ -3,13 +3,15 @@ package me.meeshy.sdk.model
 /**
  * #18915 (AND-05) — what changed in the « all » notification list WHILE a re-read waited for its page: the live
  * arrivals (`notification:new`, most recent first), the ids whose read state changed on this device (a gesture,
- * its echo, another device's read), and the ids removed from it (a deletion from the socket, a deletion gesture, a
- * purge). The page was built before them; it replaces everything else, never them.
+ * its echo, another device's read), the ids removed from it (a deletion from the socket, a deletion gesture, a
+ * purge), and whether the server's own count arrived (`notification:counts`, #18908). The page was built before
+ * them; it replaces everything else, never them.
  */
 data class NotificationFlightChanges(
     val arrivals: List<ApiNotification> = emptyList(),
     val readChanged: Set<String> = emptySet(),
     val removed: Set<String> = emptySet(),
+    val counted: Boolean = false,
 ) {
     fun arrived(notification: ApiNotification): NotificationFlightChanges =
         if (arrivals.any { it.id == notification.id }) this else copy(arrivals = listOf(notification) + arrivals)
@@ -19,6 +21,8 @@ data class NotificationFlightChanges(
 
     fun removed(ids: Set<String>): NotificationFlightChanges =
         if (ids.isEmpty()) this else copy(removed = removed + ids)
+
+    fun counted(): NotificationFlightChanges = if (counted) this else copy(counted = true)
 
     companion object {
         val NONE: NotificationFlightChanges = NotificationFlightChanges()
@@ -60,7 +64,8 @@ object NotificationFlightLanding {
      *    deletion refused, rolled back).
      * The served count ([servedUnread]) is corrected by what the server could not count yet: an unread arrival it does
      * not serve counts one more; a read posed on a row it served unread, one less (a rolled-back read, one more); a
-     * removed row it served unread, one less.
+     * removed row it served unread, one less. A count the server pushed during the flight (`notification:counts`) is
+     * newer than the served one: the landing keeps the live count (`null`).
      */
     fun land(
         page: List<ApiNotification>,
@@ -80,7 +85,7 @@ object NotificationFlightLanding {
             gone.sumOf { unread(it) }
         return NotificationLanding(
             items = kept + relabeled,
-            unreadCount = servedUnread?.let { (it + delta).coerceAtLeast(0) },
+            unreadCount = servedUnread?.takeUnless { changes.counted }?.let { (it + delta).coerceAtLeast(0) },
         )
     }
 

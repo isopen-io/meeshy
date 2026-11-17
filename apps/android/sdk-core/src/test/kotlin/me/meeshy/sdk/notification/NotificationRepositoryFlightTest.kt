@@ -78,6 +78,40 @@ class NotificationRepositoryFlightTest {
         assertThat(repo.unreadCountStream.value).isEqualTo(0)
     }
 
+    /** `notification:counts` during the flight (#18908): the server's newer count stays over the one the page serves. */
+    @Test
+    fun `a count the server pushes while the re-read waits for its page stays over the one it serves`() = runTest {
+        val page = HeldPage()
+        val repo = NotificationRepository(api(page, unread = 3))
+        repo.replaceAll(items = listOf(row("n1")))
+        repo.setUnreadCount(1)
+
+        val resync = async { repo.resync() }
+        page.asked.await()
+        repo.applyCounts(5)
+        page.release.complete(listOf(row("n1")))
+        resync.await()
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(5)
+    }
+
+    /** The list fails, the count was read before an arrival during the flight (#18908): the live count already holds it. */
+    @Test
+    fun `a failed re-read leaves the count a live arrival moved during its flight`() = runTest {
+        val page = HeldPage()
+        val repo = NotificationRepository(api(page, unread = 1))
+        repo.replaceAll(items = listOf(row("n1")))
+        repo.setUnreadCount(1)
+
+        val resync = async { repo.resync() }
+        page.asked.await()
+        repo.prependLive(row("n2"))
+        page.release.completeExceptionally(IOException("offline"))
+        resync.await()
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(2)
+    }
+
     /** A deletion the socket brought while the re-read waited came back with the page built before it. */
     @Test
     fun `a notification deleted from the socket while the re-read waits for its page stays deleted`() = runTest {
