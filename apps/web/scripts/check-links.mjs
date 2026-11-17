@@ -174,8 +174,8 @@ try {
          servie sur une IP partage l'adresse de la page (le bon défaut sur
          site) : l'invariant « l'origine PUBLIQUE, jamais celle de la page »
          se prouve donc avec l'origine déclarée. */
-      await context.route('**/config.js', (route) =>
-        route.fulfill({ contentType: 'application/javascript', body: `window.__MEESHY_RUNTIME__ = { webUrl: ${JSON.stringify(PUBLIC_ORIGIN)} };` }),
+      await context.route('**/config.json', (route) =>
+        route.fulfill({ contentType: 'application/json', body: JSON.stringify({ webUrl: PUBLIC_ORIGIN }) }),
       );
       const page = await context.newPage();
       page.setDefaultTimeout(10_000);

@@ -77,24 +77,18 @@ const refused = async (attempt: () => Promise<unknown>): Promise<boolean> => {
 const openFresh = async (vectors: Vectors): Promise<readonly string[]> => {
   const [first, second] = vectors.freshSession.messages;
   if (first === undefined || second === undefined) throw new Error('deux PreKeySignalMessage attendus');
-  const local = localOf(vectors.bob);
-  const remote = addressOf(vectors.alice);
-  const opened = await bridge.open({ local, remote, session: null, remoteIdentity: null, preKeys: bobPreKeys(vectors), message: wire(first) });
-  const next = await bridge.open({ local, remote, session: opened.session, remoteIdentity: opened.remoteIdentity, preKeys: bobPreKeys(vectors), message: wire(second) });
-  return [text(opened.plaintext), text(next.plaintext)];
+  return bridge.withSession({ local: localOf(vectors.bob), remote: addressOf(vectors.alice), session: null, remoteIdentity: null }, async (lease) => [
+    text((await lease.open({ preKeys: bobPreKeys(vectors), message: wire(first) })).plaintext),
+    text((await lease.open({ preKeys: bobPreKeys(vectors), message: wire(second) })).plaintext),
+  ]);
 };
 
 const openPersisted = async (owner: VectorParty, peer: VectorParty, persisted: { readonly session: string; readonly message: VectorMessage }, message?: WireMessage) =>
   text(
     (
-      await bridge.open({
-        local: localOf(owner),
-        remote: addressOf(peer),
-        session: bytes(persisted.session),
-        remoteIdentity: null,
-        preKeys: { signedPreKeys: [], kyberPreKeys: [], preKeys: [], seenBaseKeys: [] },
-        message: message ?? wire(persisted.message),
-      })
+      await bridge.withSession({ local: localOf(owner), remote: addressOf(peer), session: bytes(persisted.session), remoteIdentity: null }, (lease) =>
+        lease.open({ preKeys: { signedPreKeys: [], kyberPreKeys: [], preKeys: [], seenBaseKeys: [] }, message: message ?? wire(persisted.message) }),
+      )
     ).plaintext,
   );
 
@@ -138,7 +132,9 @@ describe('libsignal sur le web — les vecteurs croisés de la passerelle, iOS e
       const local = localOf(vectors.bob);
       expect({
         preKeyMessage: await refused(() =>
-          bridge.open({ local, remote: addressOf(vectors.alice), session: null, remoteIdentity: null, preKeys: bobPreKeys(vectors), message: flip(wire(first), at, mask) }),
+          bridge.withSession({ local, remote: addressOf(vectors.alice), session: null, remoteIdentity: null }, (lease) =>
+            lease.open({ preKeys: bobPreKeys(vectors), message: flip(wire(first), at, mask) }),
+          ),
         ),
         aliceOpensReply: await refused(() => openPersisted(vectors.alice, vectors.bob, aliceOpensReply, flip(wire(aliceOpensReply.message), at, mask))),
         bobOpensThird: await refused(() => openPersisted(vectors.bob, vectors.alice, bobOpensThird, flip(wire(bobOpensThird.message), at, mask))),

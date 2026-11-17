@@ -46,35 +46,30 @@ const bobPreKeys: DevicePreKeys = { signedPreKeys: [signedPreKey], kyberPreKeys:
 type Sent = { readonly message: WireMessage; readonly plaintext: string; readonly sender: SessionState };
 
 const seal = async (from: LocalDevice, to: LocalDevice, state: SessionState, plaintext: string): Promise<Sent> => {
-  const sealed = await bridge.seal({ local: from, remote: to.address, remoteIdentity: state.remoteIdentity, session: state.session, plaintext: utf8(plaintext) });
+  const sealed = await bridge.withSession({ local: from, remote: to.address, ...state }, (lease) => lease.seal({ plaintext: utf8(plaintext) }));
   return { message: sealed.message, plaintext, sender: sealed };
 };
 
 const expectOpened = async (to: LocalDevice, from: LocalDevice, state: SessionState | null, sent: Sent): Promise<SessionState> => {
-  const opened = await bridge.open({
-    local: to,
-    remote: from.address,
-    remoteIdentity: state?.remoteIdentity ?? null,
-    session: state?.session ?? null,
-    preKeys: bobPreKeys,
-    message: sent.message,
-  });
+  const opened = await bridge.withSession(
+    { local: to, remote: from.address, remoteIdentity: state?.remoteIdentity ?? null, session: state?.session ?? null },
+    (lease) => lease.open({ preKeys: bobPreKeys, message: sent.message }),
+  );
   if (text(opened.plaintext) !== sent.plaintext) throw new Error(`vecteur faux : « ${text(opened.plaintext)} » au lieu de « ${sent.plaintext} »`);
   return opened;
 };
 
-const started = await bridge.startSession({
-  local: ALICE.device,
-  remote: BOB.device.address,
-  remoteIdentity: null,
-  bundle: {
-    registrationId: BOB.identity.registrationId,
-    identityKey: BOB.identity.identityKey,
-    signedPreKey,
-    kyberPreKey,
-    preKey: { id: preKey.id, publicKey: preKey.publicKey },
-  },
-});
+const started = await bridge.withSession({ local: ALICE.device, remote: BOB.device.address, remoteIdentity: null, session: null }, (lease) =>
+  lease.startSession({
+    bundle: {
+      registrationId: BOB.identity.registrationId,
+      identityKey: BOB.identity.identityKey,
+      signedPreKey,
+      kyberPreKey,
+      preKey: { id: preKey.id, publicKey: preKey.publicKey },
+    },
+  }),
+);
 
 const first = await seal(ALICE.device, BOB.device, started, 'Bonjour Bob 👋 — scellé par le web');
 const bobAfterFirst = await expectOpened(BOB.device, ALICE.device, null, first);
