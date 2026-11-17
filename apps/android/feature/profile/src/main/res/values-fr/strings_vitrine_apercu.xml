@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vitrine_cap_presence">Présence</string>
+    <string name="vitrine_cap_presence_detailed">Présence détaillée</string>
+    <string name="vitrine_cap_level_rank">Niveau et rang</string>
+    <string name="vitrine_cap_sparks">Étincelles</string>
+    <string name="vitrine_cap_battery">Batterie</string>
+    <string name="vitrine_cap_location_live">Position continue</string>
+    <string name="vitrine_cap_location_history">Historique de position</string>
+    <string name="vitrine_cap_direct_message">Message direct</string>
+    <string name="vitrine_cap_message_request">Demander à écrire</string>
+    <string name="vitrine_cap_ring">Appel</string>
+    <string name="vitrine_cap_talkie">Talkie</string>
+    <string name="vitrine_cap_together">Ensemble</string>
+    <string name="vitrine_cap_bring">Bring</string>
+    <string name="vitrine_cap_listening_category">Écoute : catégorie</string>
+    <string name="vitrine_cap_listening_title">Écoute : titre</string>
+    <string name="vitrine_cap_location_temporary">Position temporaire</string>
+    <string name="vitrine_cap_location_proximity">Proximité</string>
+    <string name="vitrine_cap_battery_pull">Relevé de batterie</string>
+    <string name="vitrine_cap_unreachable">Téléphone injoignable</string>
+    <string name="vitrine_as_title">Voir comme</string>
+    <string name="vitrine_as_subtitle">Ta vitrine, telle que chaque cercle la voit.</string>
+    <string name="vitrine_as_open_title">Visible à ce niveau</string>
+    <string name="vitrine_as_hidden_title">Masqué à ce niveau</string>
+    <string name="vitrine_as_opens_from">Dès %1$s</string>
+    <string name="vitrine_as_nothing_hidden">Rien n\'est masqué à ce niveau.</string>
+</resources>
