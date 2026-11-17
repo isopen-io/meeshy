@@ -42,6 +42,17 @@ public struct UnregisterDeviceTokenRequest: Encodable {
     }
 }
 
+/// Retire TOUS les jetons de l'installation (APNs et VoIP) en une requête
+/// (#18911, ios-systeme-1). Le corps ne porte JAMAIS `token` : la passerelle lit
+/// `token` en priorité et ne retirerait que la ligne APNs.
+public struct UnregisterPushDeviceRequest: Encodable {
+    public let deviceId: String
+
+    public init(deviceId: String) {
+        self.deviceId = deviceId
+    }
+}
+
 public struct RegisterDeviceTokenResponse: Decodable {
     public let id: String?
     public let type: String?

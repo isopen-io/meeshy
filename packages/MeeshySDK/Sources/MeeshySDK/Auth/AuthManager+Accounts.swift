@@ -223,7 +223,7 @@ extension AuthManager {
         if endingIt {
             await SessionEndingHooks.shared.runAll()
             if let outgoingToken {
-                Task { await self.performServerLogoutWithRetries(token: outgoingToken) }
+                Task { await AuthServerLogout.endSession(of: self, leavingUserId: userId, token: outgoingToken) }
             } else {
                 Logger.auth.warning("logout(): no authToken snapshot available — skipping server-side logout call")
             }
@@ -233,7 +233,7 @@ extension AuthManager {
         MessageSocketManager.shared.disconnect()
         SocialSocketManager.shared.disconnect()
 
-        NotificationCoordinator.shared.reset()
+        NotificationCoordinator.shared.reset(purgingDeliveredNotifications: SessionExitNotificationPolicy.purgesDelivered(endingIt: endingIt, retiringActiveAccount: isRetiringActiveAccount))
         NotificationToastManager.shared.reset()
         PushNotificationManager.shared.resetSession()
         await BlockService.shared.reset()
