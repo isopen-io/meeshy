@@ -137,8 +137,12 @@ class NotificationRepository @Inject constructor(
                 }
             }
 
-    /** Forces a revalidation regardless of freshness — the pull-to-refresh entry point. */
-    suspend fun refresh() = revalidateNotifications()
+    /**
+     * Forces a revalidation regardless of freshness — the pull-to-refresh and « Réessayer » entry point. Rend l'échec de
+     * la liste (le cache reste intact) au lieu de l'avaler : un appelant qui ne le saurait pas laisserait un squelette
+     * affiché pour toujours, ou jouerait l'haptique de succès sur une panne. `null` = tout a abouti.
+     */
+    suspend fun refresh(): Throwable? = resync()
 
     /**
      * La relecture silencieuse des 30 dernières notifications (resynchro après un trou, une reconnexion ou un retour au

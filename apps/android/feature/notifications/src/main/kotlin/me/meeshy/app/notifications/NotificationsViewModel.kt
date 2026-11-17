@@ -128,7 +128,7 @@ class NotificationsViewModel @Inject constructor(
         _state.update { it.copy(loadDidFail = false, isLoading = it.notifications.isEmpty()) }
         viewModelScope.launch {
             try {
-                notificationRepository.refresh()
+                notificationRepository.refresh()?.let { failure -> _state.update { it.failed(failure.message) } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -141,12 +141,14 @@ class NotificationsViewModel @Inject constructor(
 
     /**
      * Tirer pour rafraîchir de marque : suspend jusqu'au retour du réseau, pour que l'indicateur reste armé
-     * pendant la revalidation. Un échec se relance au geste (haptique d'erreur) sans jamais effacer le cache affiché.
+     * pendant la revalidation. Un échec est LEVÉ une fois la catégorie relancée : le geste joue l'haptique d'erreur, et
+     * le cache affiché reste intact.
      */
     suspend fun pullRefresh() {
-        notificationRepository.refresh()
+        val failure = notificationRepository.refresh()
         val category = _state.value.selectedCategory
         if (category != NotificationFilterCategory.ALL) fetchCategory(category, append = false)
+        failure?.let { throw it }
     }
 
     /**

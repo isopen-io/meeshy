@@ -71,6 +71,7 @@ class NotificationsViewModelTest {
         every { repository.unreadCountStream } returns unreadCount
         every { repository.hasMoreStream } returns hasMore
         coEvery { repository.listScopePage(any(), any(), any(), any()) } returns NetworkResult.Success(page(emptyList()))
+        coEvery { repository.refresh() } returns null
         every { repository.cachedItems(any()) } returns null
         coEvery { repository.markAsRead(any()) } returns NetworkResult.Success(notification("read"))
         return repository
