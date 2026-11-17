@@ -61,3 +61,19 @@ un accusé perdu.
 - Android déclare la capacité dans le lot client de #19049 (autre agent) ; iOS
   et le web ne la déclarent pas tant que leur cache HTTP ressert le corps d'un
   200 sur un 304.
+- **Deux des cinq champs ignorés n'ont pas de canal temps réel complet, et un
+  304 les garde périmés.** `deliveredToAllAt` n'est pas dans `ReadStatusSummary`
+  (`packages/shared/types/socketio-events/message.ts`, qui ne porte que
+  `totalMembers`, `deliveredCount`, `readCount`, `readByAllAt`) : aucun client ne
+  le reçoit par la socket — Android, le seul à déclarer la capacité, ne le pose
+  que depuis un corps REST (`ReceiptMergePolicy`). `recipientCount` change à
+  l'arrivée ou au départ d'un membre, ce qui n'émet aucun `read-status:updated`
+  vers les membres déjà là : la socket ne porte l'effectif (`totalMembers`) que
+  dans le résumé du DERNIER message, quand un accusé arrive ou quand l'appareil
+  rejoint la room de la conversation. Tant que les revalidations rendent 304,
+  ces deux champs restent ceux du dernier 200 pour les messages de la fenêtre —
+  un « distribué à tous » sans son instant, une coche « lu par tous » jugée sur
+  l'ancien effectif. C'est de l'AFFICHAGE seulement : aucun contenu,
+  aucun droit, aucune écriture n'en dépend. Ils se réparent comme un accusé
+  manqué (§ 5) : une relecture sans la capacité, ou le premier 200 qu'un contenu
+  changé provoque.
