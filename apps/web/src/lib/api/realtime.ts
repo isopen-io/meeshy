@@ -34,6 +34,8 @@ import { setTypingEmitter } from './typing-emit';
 import { keepRealtimeConnection } from './realtime-identity';
 import { leaveThreadOfGoneConversation } from './realtime-conversation-gone';
 import { relaunchConversationList } from './realtime-thread-catch-up';
+import { appProfileActionDeps } from './profile-action-deps';
+import { followServedProfile } from './served-profile-session';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
@@ -228,6 +230,11 @@ function syncConnection(): void {
 /* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
    frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
 watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore, endToEndRegime: endToEndRegimeLedger });
+/* LA SESSION SUIT LE PROFIL SERVI (#18914) — une langue, un nom ou une photo
+   changés sur un autre appareil arrivent par `GET /me`, relu à chaque
+   (re)connexion (`CATCH_UP_PERSONAL_FAMILIES`), avec le même assemblage que
+   les gestes du profil. */
+followServedProfile(appProfileActionDeps());
 /* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié
    pour le flux de connexion (`auth.ts`) ; la socket le relit elle-même. */
 void import('@/lib/net/client-session').then(({ publishClientDeclaration }) => publishClientDeclaration()).catch(() => undefined);

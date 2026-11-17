@@ -44,6 +44,7 @@ import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-
 import { FEED_QUERY_KEY } from './feed';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { MY_PROFILE_QUERY_KEY } from './me-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
@@ -137,7 +138,11 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  *   « Découvrir » la compterait trop tard ;
  * - **les MESSAGES FAVORIS** (#7378) parce qu'un `message:starred` posé depuis
  *   un AUTRE appareil dans l'intervalle n'a atteint aucun socket, et que
- *   l'étoile du fil mentirait jusqu'à la prochaine relecture.
+ *   l'étoile du fil mentirait jusqu'à la prochaine relecture ;
+ * - **le PROFIL du lecteur** (#18914) parce qu'aucun événement n'atteint ses
+ *   propres sockets quand il change de langue, de nom ou de photo ailleurs :
+ *   la session suit `GET /me` (`served-profile-session.ts`), et cette relecture
+ *   est ce qui la ramène sans attendre ses trente minutes de fraîcheur.
  *
  * Les deux familles de la cloche sont NOMMÉES plutôt que leur racine
  * `['notifications']` balayée : c'est refuser d'emporter la prochaine requête
@@ -155,6 +160,7 @@ const CATCH_UP_PERSONAL_FAMILIES: readonly (readonly unknown[])[] = [
   NOTIFICATION_COUNTS_QUERY_KEY,
   FRIENDS_QUERY_PREFIX,
   STARRED_MESSAGES_QUERY_ROOT,
+  MY_PROFILE_QUERY_KEY,
 ];
 
 /** Les notifications qui annoncent l'ARRIVÉE d'un message — jamais une

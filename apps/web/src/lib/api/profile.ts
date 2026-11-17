@@ -11,6 +11,7 @@ import { unwrap } from './client';
 import { CONTACT_MASK, maskEmail } from './email-mask';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { MY_PROFILE_QUERY_KEY } from './me-keys';
 import { readProfileDecor } from './profile-decor';
 
 /**
@@ -42,7 +43,7 @@ import { readProfileDecor } from './profile-decor';
  * `source` est résolue ICI, jamais dans l'écran (motif `notifications.ts`).
  */
 
-export const MY_PROFILE_QUERY_KEY = ['me', 'profile'] as const;
+export { MY_PROFILE_QUERY_KEY };
 export const MY_STATS_QUERY_KEY = ['me', 'stats'] as const;
 
 export type ProfileDeps = { readonly source: DataSource; readonly transport: HttpTransport };
@@ -287,13 +288,15 @@ const MY_IMAGE_PATH: Readonly<Record<ProfileImageKind, string>> = {
  * SERVIE). Un patch ne passe donc jamais par une relecture.
  *
  * **Ce que la fenêtre coûte, dit à voix haute** : aucun événement socket ne
- * porte `['me', 'profile']` (vérifié — `socket.ts` n'invalide que
- * `['conversations']`, `['notifications']` et `['friends']`). Un profil
- * modifié depuis un AUTRE appareil met donc jusqu'à 30 min à apparaître ici,
- * ou jusqu'au prochain démarrage à froid. C'est le bon arbitrage sur une
- * donnée que le lecteur vient de changer lui-même ailleurs, et un mauvais
- * arbitrage sur tout ce qu'un TIERS fait bouger — d'où la fenêtre plus courte
- * des statistiques ci-dessous.
+ * porte `['me', 'profile']` — la passerelle n'émet `user:updated` que vers les
+ * partenaires. Un profil modifié depuis un AUTRE appareil arrive donc à la
+ * prochaine (re)connexion du socket, qui relit cette requête
+ * (`CATCH_UP_PERSONAL_FAMILIES`, #18914), ou au plus tard au bout de la
+ * fenêtre ; sa réponse rejoint aussi la SESSION, que lit le Prisme
+ * (`served-profile-session.ts`). C'est le bon arbitrage sur une donnée que le
+ * lecteur vient de changer lui-même ailleurs, et un mauvais arbitrage sur tout
+ * ce qu'un TIERS fait bouger — d'où la fenêtre plus courte des statistiques
+ * ci-dessous.
  */
 export const MY_PROFILE_STALE_TIME = 30 * 60_000;
 

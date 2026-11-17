@@ -18,6 +18,7 @@ import {
   type ProfilePatch,
 } from './profile';
 import { publicProfileQueryKey, type PublicProfileView } from './public-profile';
+import { holdProfileEdit, sessionFieldsOfProfile } from './served-profile-session';
 import type { SessionProfileFields, SessionStoreApi, SessionUser } from './session';
 
 /**
@@ -86,16 +87,6 @@ function sessionFieldsOfPatch(patch: ProfilePatch): SessionProfileFields {
     ...(patch.systemLanguage === undefined ? {} : { systemLanguage: patch.systemLanguage }),
     ...(regionalLanguage === undefined ? {} : { regionalLanguage }),
     ...(customDestinationLanguage === undefined ? {} : { customDestinationLanguage }),
-  };
-}
-
-export function sessionFieldsOfProfile(profile: MyProfile): SessionProfileFields {
-  return {
-    displayName: profile.displayName,
-    avatar: profile.avatar,
-    systemLanguage: profile.systemLanguage,
-    regionalLanguage: profile.regionalLanguage,
-    customDestinationLanguage: profile.customDestinationLanguage,
   };
 }
 
@@ -178,7 +169,15 @@ export async function performProfileEdit(params: {
   if (!validated.ok) return { status: 'invalid', field: validated.field };
   if (!deps.isOnline()) return { status: 'offline' };
 
-  const patch = validated.patch;
+  const release = holdProfileEdit(deps.queryClient);
+  try {
+    return await editProfile(deps, validated.patch);
+  } finally {
+    release();
+  }
+}
+
+async function editProfile(deps: ProfileActionDeps, patch: ProfilePatch): Promise<ProfileEditOutcome> {
   await deps.queryClient.cancelQueries({ queryKey: MY_PROFILE_QUERY_KEY });
   const profileSnapshot = deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY);
   const userSnapshot = heldUser(deps.session);
