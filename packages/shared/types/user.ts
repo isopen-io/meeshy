@@ -49,14 +49,6 @@ export interface UserLanguageConfig {
 }
 
 /**
- * Configuration de confidentialité et encryption utilisateur
- */
-export interface UserPrivacyConfig {
-  encryptionPreference: 'disabled' | 'optional' | 'always';
-  autoTranscriptionEnabled: boolean;
-}
-
-/**
  * Statistiques utilisateur
  */
 export interface UserStats {
@@ -354,14 +346,6 @@ export interface CreateUserDTO {
   regionalLanguage?: string;
   /** L'administrateur atteste l'adresse : le compte naît actif (#8217). */
   emailVerified?: boolean;
-}
-
-/**
- * DTO pour changement d'email
- */
-export interface UpdateEmailDTO {
-  newEmail: string;
-  password: string;  // Confirmation mot de passe requis
 }
 
 /**

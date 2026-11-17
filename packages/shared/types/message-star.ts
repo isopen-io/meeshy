@@ -31,8 +31,6 @@ export const starMessageParamsSchema = z.object({
   messageId: objectIdSchema,
 });
 
-export type StarMessageParams = z.output<typeof starMessageParamsSchema>;
-
 /** `GET /me/starred-messages?cursor=&limit=` — `limit` arrive en chaîne de requête. */
 export const starredMessagesQuerySchema = z.object({
   cursor: z.string().min(1).max(STARRED_MESSAGES_CURSOR_MAX_LENGTH).optional(),
@@ -43,8 +41,6 @@ export const starredMessagesQuerySchema = z.object({
     .max(STARRED_MESSAGES_MAX_LIMIT)
     .default(STARRED_MESSAGES_DEFAULT_LIMIT),
 });
-
-export type StarredMessagesQuery = z.output<typeof starredMessagesQuerySchema>;
 
 /**
  * Une traduction servie — la forme que les clients décodent déjà pour un

@@ -56,7 +56,7 @@ const ProfilePhoneReachabilityRow = lazy(() => import('@/components/phone-reacha
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
  * l'adresse que chaque mention vise. Elle porte la nomenclature du LEGACY
- * (`apps/web/app/u/`, D-5) : un lien déjà partagé, un signet, une notification
+ * (`legacy-web-final:apps/web/app/u/`, D-5) : un lien déjà partagé, un signet, une notification
  * qui la nomme doivent continuer de s'ouvrir après la bascule.
  *
  * **CE QU'ELLE RÉPOND MAINTENANT**, et que le lot d'ouverture avait différé :
