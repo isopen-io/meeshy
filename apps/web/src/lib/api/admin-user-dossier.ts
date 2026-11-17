@@ -90,9 +90,6 @@ export type AdminActivity = {
   readonly totals: { readonly contactsSent: number; readonly contactsReceived: number } | null;
 };
 
-/** Le plafond de chaque liste de `GET …/activity` (`take: 50`). */
-export const ADMIN_ACTIVITY_LIST_CAP = 50;
-
 function decodeContact(brut: unknown, direction: AdminContact['direction']): AdminContact | null {
   const ligne = asRecord(brut);
   const autre = asRecord(direction === 'sent' ? ligne?.receiver : ligne?.sender);

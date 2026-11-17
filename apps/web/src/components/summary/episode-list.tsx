@@ -66,5 +66,3 @@ export function EpisodeList({
     </section>
   );
 }
-
-export default EpisodeList;

@@ -1,8 +1,7 @@
 import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
 
-import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
-import { loadCatalogueOf, loadDetailOf, loadInstalledOf, setInstalledOf, type PackDeps, type PackPort } from './packs';
+import { loadCatalogueOf, loadInstalledOf, type PackDeps, type PackPort } from './packs';
 import { decodeDesignPackSummary, type DesignPackSummary } from '@/lib/profile-decor/pack-summary';
 
 /**
@@ -29,8 +28,3 @@ export const avatarRingPackPort: PackPort<AvatarRingPackSummary, AvatarRingPackS
 export const loadAvatarRingCatalogue = (deps: PackDeps): Promise<ApiResult<readonly AvatarRingPackSummary[]>> => loadCatalogueOf(avatarRingPackPort, deps);
 
 export const loadInstalledAvatarRingPacks = (deps: PackDeps): Promise<ApiResult<readonly AvatarRingPackSummary[]>> => loadInstalledOf(avatarRingPackPort, deps);
-
-export const loadAvatarRingPack = (deps: PackDeps, slug: string): Promise<ApiResult<AvatarRingPackSummary>> => loadDetailOf(avatarRingPackPort, deps, slug);
-
-export const setAvatarRingPackInstalled = (deps: ConversationsDeps, slug: string, installed: boolean): Promise<ApiResult<AvatarRingPackSummary>> =>
-  setInstalledOf(avatarRingPackPort, deps, slug, installed);

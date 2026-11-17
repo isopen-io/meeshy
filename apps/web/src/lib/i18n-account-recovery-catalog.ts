@@ -64,8 +64,6 @@ export function loadAccountRecoveryCatalog(language: InterfaceLanguage): Promise
   return request;
 }
 
-export const isAccountRecoveryCatalogLoaded = (language: InterfaceLanguage): boolean => loaded.has(language);
-
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 export function translateRecovery<K extends AccountRecoveryCatalogKey>(language: InterfaceLanguage, key: K, ...params: TranslateRecoveryArgs<K>): string;

@@ -3,7 +3,7 @@
  * portée dans le chantier par #6943).
  *
  * **Pourquoi ce fichier existe ICI et pas en `@meeshy/shared`** : il est la
- * COPIE EXACTE de `apps/web/lib/story-text-effect.ts`, le legacy que le
+ * COPIE EXACTE de `legacy-web-final:apps/web/lib/story-text-effect.ts`, le legacy que le
  * chantier remplace (`apps/web` ne reçoit plus que des correctifs
  * d'incident). Le mutualiser demanderait de toucher le legacy gelé ; la table
  * disparaîtra avec lui. Tant que les deux coexistent, **toute évolution

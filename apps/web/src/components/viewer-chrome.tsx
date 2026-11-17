@@ -45,9 +45,6 @@ const BackgroundSoundCredit = lazy(() => import('./background-sound-credit'));
 /** La matière de tout ce qui flotte SUR le média — le verre sombre mesuré AA contre du blanc pur (`glass.css`). */
 export const VIEWER_GLASS = 'glass-call';
 
-/** Ce que le rail réserve au bord de fin : 44 de cible + 8 de marge + 8 de respiration. */
-export const VIEWER_RAIL_CORRIDOR = 60;
-
 type Placement = 'overlay' | 'corridor' | 'floating';
 
 /** Les PRISES qu'un gate tape déjà (`data-story-action`, `data-reel-gesture`…) — posées telles quelles sur le contrôle. */

@@ -2,7 +2,7 @@
  * `focus.ts` — hauteur de lecture → RANG FRACTIONNAIRE, ARITHMÉTIQUE PURE
  * (R-134, §7ter B).
  *
- * PORTÉ tel quel depuis `apps/web/components/conversations/riviere/
+ * PORTÉ tel quel depuis `legacy-web-final:apps/web/components/conversations/riviere/
  * river-focus.ts` (#5696, étape 2) — seule édition : `interface` → `type`.
  *
  * Miroir exact de `focusRankAt` dans la maquette normative

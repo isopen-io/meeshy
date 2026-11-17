@@ -31,8 +31,6 @@ export const AUDIT_ENTITIES = [
   'EngagementScaleConfig',
 ] as const;
 
-export type AuditEntityType = (typeof AUDIT_ENTITIES)[number];
-
 export const AUDIT_LIST_SPEC = defineListSpec({
   sortKeys: ['createdAt'],
   defaultSort: 'createdAt',
