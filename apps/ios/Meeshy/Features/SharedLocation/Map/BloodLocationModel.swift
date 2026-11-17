@@ -26,6 +26,8 @@ final class BloodLocationModel: ObservableObject {
     @Published var progress: Double = 1
     @Published private(set) var isGhost: Bool
     @Published private(set) var consultations: BloodLocationConsultations?
+    /// Les personnes qui ont lu ma position, nommées par l'annuaire des cercles ; absente ⇒ « Quelqu'un ».
+    @Published private(set) var observers: [String: CirclePerson] = [:]
 
     let userId: String
     /// La clé de la mémoire : le compte qui lit ET la personne lue — un autre compte ne voit jamais ce que le
@@ -36,6 +38,7 @@ final class BloodLocationModel: ObservableObject {
     private let isOnline: () -> Bool
     private let now: () -> Date
     private let calendar: Calendar
+    private let people: CirclePeopleResolving
 
     private static var memory: [String: [BloodLocationPoint]] = [:]
 
@@ -44,7 +47,8 @@ final class BloodLocationModel: ObservableObject {
     init(userId: String, service: BloodLocationProviding = BloodLocationService.shared,
          ghostStore: BloodGhostStoring = UserDefaultsBloodGhostStore(), isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline },
          now: @escaping () -> Date = Date.init, calendar: Calendar = .current,
-         account: String = AuthManager.shared.currentUser?.id ?? "") {
+         account: String = AuthManager.shared.currentUser?.id ?? "",
+         people: CirclePeopleResolving = CirclePeopleDirectory.shared) {
         self.userId = userId
         memoryKey = "\(account):\(userId)"
         self.service = service
@@ -52,6 +56,7 @@ final class BloodLocationModel: ObservableObject {
         self.isOnline = isOnline
         self.now = now
         self.calendar = calendar
+        self.people = people
         isGhost = ghostStore.isGhost
         if let cached = Self.memory[memoryKey] {
             points = cached
@@ -88,6 +93,8 @@ final class BloodLocationModel: ObservableObject {
             state = .failed(offline: !isOnline())
         }
         consultations = try? await service.consultations()
+        let observerIds = consultations?.byObserver.map(\.observerId) ?? []
+        if !observerIds.isEmpty { observers = await people.people(for: observerIds) }
     }
 
     /// Le fantôme GLOBAL : on ne range plus rien de moi, et l'historique servi aux autres se tait.

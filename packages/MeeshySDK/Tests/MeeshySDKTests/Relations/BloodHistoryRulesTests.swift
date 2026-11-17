@@ -86,4 +86,21 @@ struct BloodHistoryRulesTests {
         #expect(radius == 5_000)
         #expect(ranged.userId == "0123456789abcdef01234567")
     }
+
+    @Test("qui a regardé ma position : une rangée par personne, combien de fois, la dernière fois, et qui lit trop souvent")
+    func consultations_groupByObserver() {
+        let journal = BloodLocationConsultations(
+            items: [
+                BloodLocationConsultation(observerId: "leo", consultedAt: now.addingTimeInterval(-3_600)),
+                BloodLocationConsultation(observerId: "mina", consultedAt: now.addingTimeInterval(-60)),
+                BloodLocationConsultation(observerId: "leo", consultedAt: now.addingTimeInterval(-600)),
+            ],
+            excessiveObserverIds: ["leo"]
+        )
+        let rows = journal.byObserver
+        #expect(rows.map(\.observerId) == ["mina", "leo"])
+        #expect(rows.map(\.count) == [1, 2])
+        #expect(rows.last?.lastAt == now.addingTimeInterval(-600))
+        #expect(rows.map(\.isExcessive) == [false, true])
+    }
 }

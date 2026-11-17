@@ -289,7 +289,9 @@ final class BloodLocationModelTests: XCTestCase {
             return BloodLocationHistory(points: points)
         }
 
-        func consultations() async throws -> BloodLocationConsultations { BloodLocationConsultations(items: []) }
+        var journal = BloodLocationConsultations(items: [])
+
+        func consultations() async throws -> BloodLocationConsultations { journal }
 
         func update(_ change: BloodLocationSettingsChange) async throws -> Bool {
             changes.append(change)
@@ -306,10 +308,27 @@ final class BloodLocationModelTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    private func makeSUT(_ service: FakeBloodLocation, account: String = "me", online: Bool = true) -> BloodLocationModel {
+    private func makeSUT(_ service: FakeBloodLocation, account: String = "me", online: Bool = true,
+                         people: [CirclePerson] = []) -> BloodLocationModel {
         let now = self.now
         return BloodLocationModel(userId: "mina", service: service, ghostStore: GhostMemory(), isOnline: { online },
-                                  now: { now }, account: account)
+                                  now: { now }, account: account, people: FakeCirclePeople(people))
+    }
+
+    func test_whoLookedAtMyPosition_isNamedByTheCircleDirectory() async {
+        let service = FakeBloodLocation()
+        service.journal = BloodLocationConsultations(items: [
+            BloodLocationConsultation(observerId: "leo", consultedAt: now.addingTimeInterval(-60)),
+            BloodLocationConsultation(observerId: "ghost-id", consultedAt: now.addingTimeInterval(-120)),
+        ])
+        let leo = CirclePerson(id: "leo", name: "Léo Marchetti", username: "leo.m", avatarURL: nil)
+        let sut = makeSUT(service, account: "cache-observers", people: [leo])
+
+        await sut.load()
+
+        XCTAssertEqual(sut.consultations?.byObserver.map(\.observerId), ["leo", "ghost-id"])
+        XCTAssertEqual(sut.observers["leo"]?.name, "Léo Marchetti")
+        XCTAssertNil(sut.observers["ghost-id"])
     }
 
     func test_ghost_appliesAtOnce_andComesBackWhenRefused() async {

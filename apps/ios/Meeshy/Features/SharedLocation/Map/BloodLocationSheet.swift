@@ -105,10 +105,35 @@ struct BloodLocationSheet: View {
             if let journal = model.consultations {
                 MeeshyToggleRow(BloodLocationCopy.consultationsTitle, systemImage: "eye",
                                 subtitle: BloodLocationCopy.consultations(journal.items.count, excessive: journal.excessive),
-                                accessory: .none, kind: journal.excessive ? .destructive : .normal, tint: tint, action: {})
+                                accessory: .none, kind: journal.excessive ? .destructive : .normal,
+                                showsDivider: !journal.byObserver.isEmpty, tint: tint, action: {})
+                observerRows(journal.byObserver)
             }
         }
         .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+    }
+
+    /// Une rangée par personne qui a lu ma position : combien de fois, quand ; « souvent » en avertissement.
+    private func observerRows(_ rows: [BloodLocationObserverSummary]) -> some View {
+        ForEach(rows) { row in
+            let name = model.observers[row.observerId]?.name ?? LocationMapCopy.someone
+            MeeshyPersonRow(
+                title: name,
+                subtitle: BloodLocationCopy.observerReads(row.count, lastAt: row.lastAt, locale: locale),
+                size: .compact,
+                showsDivider: row.id != rows.last?.id,
+                avatar: {
+                    MeeshyAvatar(name: name, context: .custom(32), accentColor: DynamicColorGenerator.colorForName(name),
+                                 avatarURL: model.observers[row.observerId]?.avatarURL)
+                },
+                trailing: {
+                    if row.isExcessive {
+                        MeeshyBadge(.label(BloodLocationCopy.often), leading: .systemImage("exclamationmark.triangle.fill"),
+                                    kind: .warn)
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -151,6 +176,15 @@ enum BloodLocationCopy {
 
     static func stops(_ count: Int) -> String {
         String(format: String(localized: "bloodLocation.stops", defaultValue: "%lld arrêt(s)", bundle: .main), count)
+    }
+
+    static var often: String { String(localized: "bloodLocation.consultations.often", defaultValue: "Souvent", bundle: .main) }
+
+    static func observerReads(_ count: Int, lastAt: Date, locale: Locale) -> String {
+        let style = Date.RelativeFormatStyle(presentation: .numeric, unitsStyle: .wide, locale: locale,
+                                             capitalizationContext: .middleOfSentence)
+        return String(format: String(localized: "bloodLocation.consultations.reads", defaultValue: "%1$lld fois · %2$@", bundle: .main),
+                      count, lastAt.formatted(style))
     }
 
     static func consultations(_ count: Int, excessive: Bool) -> String {

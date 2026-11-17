@@ -90,6 +90,23 @@ public struct BloodLocationConsultation: Decodable, Sendable, Equatable {
     }
 }
 
+/// Une personne qui a lu ma position : combien de fois, la dernière fois, et si elle lit trop souvent.
+public struct BloodLocationObserverSummary: Sendable, Equatable, Identifiable {
+    public let observerId: String
+    public let count: Int
+    public let lastAt: Date
+    public let isExcessive: Bool
+
+    public var id: String { observerId }
+
+    public init(observerId: String, count: Int, lastAt: Date, isExcessive: Bool) {
+        self.observerId = observerId
+        self.count = count
+        self.lastAt = lastAt
+        self.isExcessive = isExcessive
+    }
+}
+
 /// `GET /me/location/consultations` — le journal, du plus récent au plus ancien, et qui lit trop souvent.
 public struct BloodLocationConsultations: Decodable, Sendable, Equatable {
     public let items: [BloodLocationConsultation]
@@ -155,5 +172,18 @@ private struct BloodLocationLenient<Value: Decodable>: Decodable {
 
     init(from decoder: Decoder) throws {
         value = try? Value(from: decoder)
+    }
+}
+
+public extension BloodLocationConsultations {
+    /// Une rangée par personne, de la lecture la plus récente à la plus ancienne.
+    var byObserver: [BloodLocationObserverSummary] {
+        let grouped = Dictionary(grouping: items, by: \.observerId)
+        return grouped.map { observerId, reads in
+            BloodLocationObserverSummary(observerId: observerId, count: reads.count,
+                                         lastAt: reads.map(\.consultedAt).max() ?? .distantPast,
+                                         isExcessive: excessiveObserverIds.contains(observerId))
+        }
+        .sorted { ($0.lastAt, $1.observerId) > ($1.lastAt, $0.observerId) }
     }
 }
