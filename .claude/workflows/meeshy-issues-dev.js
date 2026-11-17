@@ -161,7 +161,7 @@ const DEV = {
     rougeAvant: { type: 'string', description: 'preuve du rouge avant correctif (sortie locale, ou SHA du commit du témoin seul que la CI montrera rouge)' },
     gatesLocaux: { type: 'string' },
     recette: { type: 'array', items: { type: 'string' }, description: 'étapes de recette appareil, précises et observables' },
-    bloque: { type: 'string', description: 'vide si rien ne bloque' },
+    bloque: { type: 'string', description: 'vide si rien ne bloque. RÉSERVÉ à ce qui EMPÊCHE le lot d\'avancer : cédé à une autre branche, déjà livré sur la base, limite de worktrees, cadrage impossible. Une preuve CI en attente ou non lancée, une réserve hors lot, un manque à signaler ne sont JAMAIS un blocage : ils vont dans gatesLocaux (la preuve CI est l\'affaire d\'une étape suivante).' },
   },
   required: ['branche', 'sha', 'temoins', 'gatesLocaux', 'recette', 'bloque'],
 }
@@ -216,10 +216,12 @@ const RANGE = {
 // ÉTAPES D'UN LOT
 // ---------------------------------------------------------------------------
 const titre = l => `#${l.n} ${l.cle}`
-const ici = l => `WORKTREE DU LOT : ${WT(l)} (branche ${brancheDe(l)}). Commence chaque commande par « cd ${WT(l)} ».`
+const AMONT = {}
+const ici = l => `WORKTREE DU LOT : ${WT(l)} (branche ${brancheDe(l)}). Commence chaque commande par « cd ${WT(l)} ».${AMONT[l.cle] ? ` BRANCHE AMONT : ce lot s'empile sur origin/${AMONT[l.cle]} (lot dont il dépend, encore en revue ou en preuve) — à CHAQUE synchronisation avec ${BASE}, fusionne aussi origin/${AMONT[l.cle]} (git merge --no-edit origin/${AMONT[l.cle]}), pour recevoir ses corrections.` : ''}`
 
 const developper = (l, depart) => agent(`${SOCLE}
 LOT ${titre(l)} — plateforme ${l.plateforme}.
+${ici(l)}
 1. Lis l'issue #${l.n} (corps ET commentaires) : son critère de fin fait foi. Notes du coordinateur :
 ${l.notes || '(aucune)'}
 2. Cadre contre l'arbre VIVANT : git fetch origin ; vérifie chaque affirmation des notes dans origin/${BASE}
@@ -240,7 +242,9 @@ ${l.notes || '(aucune)'}
    rétrocompatibilité serveur/clients, optimistic update + jamais de spinner sur cache non vide, accessibilité
    (TalkBack / VoiceOver / lecteur d'écran), chaînes localisées par le mécanisme de la plateforme.
 5. Gates locaux de la plateforme (voir CI ci-dessus), sync ${BASE}, commit, push.
-6. Rédige les étapes de recette APPAREIL (S8 pour Android, iPhone/simulateur pour iOS, Chrome pour le web) :
+6. Tu ne lances PAS la preuve CI et tu ne l'attends pas : une étape suivante s'en charge. Tu n'ouvres pas de PR.
+   « bloque » reste VIDE dès que la branche est poussée avec le lot développé ; les réserves hors lot vont dans gatesLocaux.
+7. Rédige les étapes de recette APPAREIL (S8 pour Android, iPhone/simulateur pour iOS, Chrome pour le web) :
    compte, conversation, réseau (ralenti, coupé), gestes, et ce qu'on doit VOIR. Ne les exécute pas.`,
   { label: `dev ${l.cle}`, phase: 'Développer', model: 'sonnet', effort: 'medium', schema: DEV })
 
@@ -270,7 +274,7 @@ PREUVE du lot ${titre(l)}, branche ${branche}.
 2. ${l.plateforme === 'android' ? 'workflow_dispatch android.yml sur la branche, au SHA poussé.'
     : l.plateforme === 'ios' ? 'workflow_dispatch ios.yml sur la branche, au SHA poussé.'
     : 'Gates LOCAUX complets de la plateforme (web : bun test complet depuis apps/web + tsc ; serveur : test:coverage complet + tsc). run = « local ».'}
-3. Attends le verdict (surveillance en arrière-plan). Si rouge : extrais chaque échec (compilation fichier:ligne,
+3. Attends le verdict (surveillance en arrière-plan), même si le runner Mac fait attendre le run des heures : une file d'attente n'est pas un échec. Si rouge : extrais chaque échec (compilation fichier:ligne,
    témoin classe.méthode — message) sans rien corriger. Marque « préexistant » un échec déjà rouge sur origin/${BASE}.`,
   { label: `preuve ${l.cle}`, phase: 'Prouver', model: 'sonnet', effort: 'low', schema: PREUVE })
 
@@ -289,7 +293,7 @@ ${ici(l)}
 PR du lot ${titre(l)}, branche ${d.branche}. Preuve : ${p.vert ? `verte (${p.run} au SHA ${p.sha})` : `ROUGE après ${ESSAIS} corrections (${p.run}) — échecs : ${p.echecs.join(' ; ')}`}.
 1. Sync ${BASE}, push.
 2. PR vers ${BASE}, PRÊTE (pas en brouillon) — réutilise celle de la branche si elle existe. Titre = résultat attendu ;
-   gabarit du dépôt ; « Refs #${l.n} »${depart && depart.pr ? ` ; « Dépend de #${depart.pr} (à fusionner avant) »` : ''} ;
+   gabarit du dépôt ; « Refs #${l.n} »${depart && depart.branche ? ` ; « Dépend de la PR de la branche ${depart.branche} (lot ${depart.cle}, à fusionner avant) » — retrouve son numéro et cite-le` : ''} ;
    section Testing = témoins + preuve${p.vert ? '' : ' + échecs restants, en tête du corps, en gras'} ;
    ${r.reste.length ? `section « Reste » : ${r.reste.join(' ; ')} ; ` : ''}corps terminé par
    « 🤖 Generated with [Claude Code](https://claude.com/claude-code) ». NE LA FUSIONNE PAS.
@@ -325,7 +329,10 @@ const rendrePlace = () => {
 // ---------------------------------------------------------------------------
 async function lot(l, depart) {
   const d = await developper(l, depart)
-  if (!d || d.bloque) return { cle: l.cle, lot: titre(l), etat: 'bloqué', raison: d ? d.bloque : 'agent perdu' }
+  const bloquant = !!d && !!(d.bloque || '').trim() && (!d.branche || !d.sha || /^(cédé|cede|déjà|deja|limite|cadrage impossible)/i.test(d.bloque.trim()))
+  if (d && !bloquant && (d.bloque || '').trim()) { log(`${titre(l)} : réserve non bloquante gardée — ${d.bloque}`); d.gatesLocaux = `${d.gatesLocaux || ''}\nRÉSERVES : ${d.bloque}`; d.bloque = '' }
+  signalerDev(l.cle, d && !bloquant && d.branche ? { cle: l.cle, branche: d.branche } : { cle: l.cle, raison: d ? d.bloque : 'agent perdu' })
+  if (!d || bloquant) return { cle: l.cle, lot: titre(l), etat: 'bloqué', raison: d ? d.bloque : 'agent perdu' }
   const r = await relire(l, d)
   if (!r) return { cle: l.cle, lot: titre(l), etat: 'bloqué', branche: d.branche, raison: 'revue perdue' }
   if (r.sensible) {
@@ -354,12 +361,18 @@ async function lot(l, depart) {
 // ---------------------------------------------------------------------------
 log(`${LOTS.length} lots, ${ESPACES} à la fois (un worktree chacun sous ${RACINE_WT}) : ${LOTS.map(l => l.cle).join(', ')}${SAUTER.size ? ` — sautés : ${[...SAUTER].join(', ')}` : ''}`)
 
+const devPret = {}
+const devResolu = {}
+const attendreDev = cle => devPret[cle] || (devPret[cle] = new Promise(r => { devResolu[cle] = r }))
+const signalerDev = (cle, v) => { attendreDev(cle); devResolu[cle](v) }
 const enCours = {}
 const lancer = l => {
   if (enCours[l.cle]) return enCours[l.cle]
   const pred = l.apres ? LOTS.find(x => x.cle === l.apres) : null
   enCours[l.cle] = (async () => {
-    const depart = pred ? await lancer(pred) : null
+    if (pred) lancer(pred)
+    const depart = pred ? await attendreDev(pred.cle) : null
+    if (depart && depart.branche) AMONT[l.cle] = depart.branche
     if (depart && !depart.branche) {
       return { cle: l.cle, lot: titre(l), etat: 'non lancé', raison: `prédécesseur ${pred.cle} bloqué : ${depart.raison}` }
     }
@@ -368,6 +381,7 @@ const lancer = l => {
     try {
       r = await lot(l, depart)
     } finally {
+      signalerDev(l.cle, r && r.branche ? { cle: l.cle, branche: r.branche } : { cle: l.cle, raison: r ? r.raison : 'lot interrompu' })
       const rangement = await ranger(l)
       rendrePlace()
       const garde = !rangement || !rangement.retire
