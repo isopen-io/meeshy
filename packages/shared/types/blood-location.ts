@@ -70,3 +70,25 @@ export type BloodProximityEventData = {
   readonly userId: string;
   readonly distanceMeters: 100 | 250 | 500 | 1000 | 2500 | 5000;
 };
+
+/**
+ * La RELECTURE de mes réglages (#19452). `GET /me/location/blood-settings?userId=` rend, pour SOI,
+ * le fantôme global, le fantôme ciblé sur `userId` et le rayon réglé pour lui (défaut
+ * {@link BLOOD_PROXIMITY_DEFAULT_RADIUS_METERS}, borné). Seules les lignes dont le lecteur est
+ * propriétaire sont lues : ce que l'autre a réglé pour lui ne part jamais.
+ */
+export const bloodLocationSettingsQuerySchema = z.object({ userId: objectId });
+export type BloodLocationSettingsQuery = z.infer<typeof bloodLocationSettingsQuerySchema>;
+
+export type BloodLocationSettingsReading = {
+  readonly userId: string;
+  readonly ghost: boolean;
+  readonly ghostFor: boolean;
+  readonly proximityRadiusMeters: number;
+};
+
+/**
+ * `GET /me/location/ghost` (#19452), hors drapeau Sang : l'état de MON fantôme global, même forme
+ * que la réponse du `PUT /me/location/ghost` ; `ghostAt` est la date d'entrée, nulle hors fantôme.
+ */
+export type LocationGhostReading = { readonly ghost: boolean; readonly ghostAt: string | null };

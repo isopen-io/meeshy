@@ -190,7 +190,7 @@ export async function listBloodLocationConsultations(deps: BloodLocationDeps, ob
   };
 }
 
-const clampRadius = (meters: number): number => Math.min(BLOOD_PROXIMITY_MAX_RADIUS_METERS, Math.max(BLOOD_PROXIMITY_MIN_RADIUS_METERS, meters));
+export const clampRadius = (meters: number): number => Math.min(BLOOD_PROXIMITY_MAX_RADIUS_METERS, Math.max(BLOOD_PROXIMITY_MIN_RADIUS_METERS, meters));
 
 /**
  * La loi ouvrirait-elle la position du Sang entre les deux, consentement mis à part ? Un réglage

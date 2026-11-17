@@ -16,6 +16,7 @@ import { dataExportRoutes } from './export';
 import { securityEventsRoutes } from './security-events';
 import profileDecorRoutes from './profile-decor';
 import bloodLocationMeRoutes from './blood-location';
+import locationSettingsReadMeRoutes from './location-settings-read';
 import deviceBatteryMeRoutes from './device-battery';
 import deviceReachabilityMeRoutes from './device-reachability';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
@@ -31,6 +32,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
   await fastify.register(profileDecorRoutes);
   // #13937 : la position du Sang, derrière le drapeau serveur.
   await fastify.register(bloodLocationMeRoutes);
+  // #19452 : la relecture de mon fantôme (hors drapeau) et de mes réglages Sang (sous drapeau).
+  await fastify.register(locationSettingsReadMeRoutes);
   // #14147 : le relevé de batterie (REST, même porte que la socket) et la coupure globale.
   await fastify.register(deviceBatteryMeRoutes);
   // #18737 : le signe de vie du téléphone sondé et la coupure globale de son injoignabilité.
