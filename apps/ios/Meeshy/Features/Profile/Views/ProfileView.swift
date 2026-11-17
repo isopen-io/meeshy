@@ -325,6 +325,9 @@ struct ProfileView: View {
         }
         languagesSection
         activitySection
+        if !isEditing, let voice = ProfileVoiceSample.make(user: user) {
+            ProfileVoiceSection(sample: voice, accentColor: accentColor)
+        }
     }
 
     private func perform(_ action: ProfileFaceAction) {

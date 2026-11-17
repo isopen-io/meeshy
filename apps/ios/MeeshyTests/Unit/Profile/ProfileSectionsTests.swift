@@ -256,6 +256,50 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertFalse(list.contains("withAnimation(.spring("))
     }
 
+    // MARK: - Ma voix (K35)
+
+    func test_voiceSample_withoutAServedSample_hasNoSection() {
+        XCTAssertNil(ProfileVoiceSample.make(user: nil))
+        XCTAssertNil(ProfileVoiceSample.make(user: MeeshyUser(id: "me", username: "aicha")))
+        XCTAssertNil(ProfileVoiceSample.make(user: MeeshyUser(id: "me", username: "aicha", voiceSampleUrl: "  ")))
+    }
+
+    func test_voiceSample_readsTheServedUrl_itsVisibility_andItsDurationInSeconds() {
+        let user = MeeshyUser(id: "me", username: "aicha", voicePublic: true,
+                              voiceSampleUrl: "/media/voice.m4a", voiceSampleDurationMs: 12_400)
+        let sample = ProfileVoiceSample.make(user: user)
+        XCTAssertEqual(sample, ProfileVoiceSample(url: "/media/voice.m4a", isPublic: true, servedDuration: 12.4))
+        let unsaid = ProfileVoiceSample.make(user: MeeshyUser(id: "me", username: "aicha", voiceSampleUrl: "/v.m4a"))
+        XCTAssertEqual(unsaid?.isPublic, false, "une visibilité absente se lit privée")
+    }
+
+    func test_voiceToggle_startsTheSample_untilItIsLoaded_thenPausesOrResumesIt() {
+        let sample = ProfileVoiceSample(url: "/v.m4a", isPublic: true, servedDuration: 9)
+        XCTAssertEqual(sample.toggle(loadedURL: nil), .start("/v.m4a"), "jamais lu, ou allé au bout")
+        XCTAssertEqual(sample.toggle(loadedURL: "/autre.m4a"), .start("/v.m4a"), "un autre son chargé ne se reprend pas")
+        XCTAssertEqual(sample.toggle(loadedURL: "/v.m4a"), .pauseOrResume)
+        XCTAssertFalse(sample.acceptsScrub(loadedURL: nil), "rien à déplacer avant le chargement")
+        XCTAssertTrue(sample.acceptsScrub(loadedURL: "/v.m4a"))
+    }
+
+    func test_voiceDuration_isTheServedOne_untilTheFileTellsItsOwn() {
+        let sample = ProfileVoiceSample(url: "/v.m4a", isPublic: true, servedDuration: 9)
+        XCTAssertEqual(sample.shownDuration(playerDuration: 0), 9)
+        XCTAssertEqual(sample.shownDuration(playerDuration: .nan), 9)
+        XCTAssertEqual(sample.shownDuration(playerDuration: 11.5), 11.5)
+        XCTAssertEqual(ProfileVoiceSample.phase(isLoading: true), .buffering)
+        XCTAssertEqual(ProfileVoiceSample.phase(isLoading: false), .ready)
+    }
+
+    func test_vitrine_mountsMyVoice_outOfEditing_andItsPlayerIsTheKitWavePlayer() throws {
+        let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(profile.contains("if !isEditing, let voice = ProfileVoiceSample.make(user: user)"))
+        let voice = try code("Meeshy/Features/Profile/Faces/ProfileVoiceSection.swift")
+        XCTAssertTrue(voice.contains("MeeshyWavePlayer("), "le lecteur est K35, aucun lecteur redessiné sur place")
+        XCTAssertTrue(voice.contains("player.play(urlString: url)"), "le disque lit vraiment l'échantillon servi")
+        XCTAssertTrue(voice.contains(".onDisappear { player.stop() }"), "la voix se tait quand on quitte la fiche")
+    }
+
     /// La valeur SERVIE par le catalogue pour la langue du simulateur : le témoin tient en français comme en anglais (CI).
     private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
 }
