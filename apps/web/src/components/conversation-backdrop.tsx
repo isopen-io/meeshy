@@ -5,7 +5,7 @@ import { apiDeps } from '@/lib/api/deps';
 import type { Conversation } from '@/lib/api/types';
 import { backdropViewOf } from '@/lib/appearance/backdrop-view';
 import { appearanceOf } from '@/lib/appearance/read';
-import { useAppearanceLive, useBackdropPhoto, useMediaFlag, useScheme, useWallpaperDesign } from '@/lib/appearance/use-backdrop';
+import { useBackdropPhoto, useMediaFlag, useScheme, useWallpaperDesign } from '@/lib/appearance/use-backdrop';
 
 import { PackLottieLayer } from './pack-lottie-layer';
 
@@ -29,12 +29,10 @@ import { PackLottieLayer } from './pack-lottie-layer';
 export function ConversationBackdrop({
   conversation,
   accent,
-  live = true,
   deps = apiDeps,
 }: {
   readonly conversation: Conversation;
   readonly accent: string;
-  readonly live?: boolean;
   readonly deps?: ConversationsDeps;
 }) {
   const appearance = appearanceOf(conversation);
@@ -43,7 +41,6 @@ export function ConversationBackdrop({
   const reducedTransparency = useMediaFlag('(prefers-reduced-transparency: reduce)');
   const design = useWallpaperDesign(background.kind === 'design' ? { pack: background.pack, design: background.design } : null);
   const photoSrc = useBackdropPhoto({ conversationId: conversation.id, attachmentId: background.kind === 'photo' ? background.attachmentId : null, deps });
-  useAppearanceLive(live);
 
   const view = backdropViewOf({ appearance, scheme, accent, design, photoSrc, reducedTransparency });
 

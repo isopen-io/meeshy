@@ -655,6 +655,38 @@ describe('reconcileEditedMentions', () => {
     expect(notificationService.createMentionNotificationsBatch).not.toHaveBeenCalled();
   });
 
+  it("n'annonce pas une mention ajoutée par édition à un compte supprimé qui reste membre (#18910)", async () => {
+    const prisma = makeEditPrisma({
+      conversation: {
+        findUnique: jest.fn<any>().mockResolvedValue({
+          participants: [
+            { userId: 'u-alice', user: { isActive: false, deletedAt: new Date('2026-11-10T00:00:00Z') } },
+            { userId: 'u-sender', user: { isActive: true, deletedAt: null } },
+          ],
+        }),
+      },
+    });
+    const notificationService = makeNotifier();
+
+    await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService,
+      message: MESSAGE, content: 'salut @alice', editorUserId: 'u-sender',
+    });
+
+    expect(notificationService.createMentionNotificationsBatch).not.toHaveBeenCalled();
+  });
+
+  it("la lecture des participants demande l'état du compte — sans lui, la garde ne peut pas tomber (#18910)", async () => {
+    const prisma = makeEditPrisma();
+    await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService: makeNotifier(),
+      message: MESSAGE, content: 'salut @alice', editorUserId: 'u-sender',
+    });
+
+    const [args] = prisma.conversation.findUnique.mock.calls[0] as [{ select: { participants: { select: Record<string, unknown> } } }];
+    expect(args.select.participants.select.user).toEqual({ select: { isActive: true, deletedAt: true } });
+  });
+
   it('la lecture des participants demande bien `messageRequestAt` — sans la colonne, la garde ne peut pas tomber', async () => {
     const prisma = makeEditPrisma();
     await reconcileEditedMentions({

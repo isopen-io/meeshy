@@ -31,7 +31,7 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         let sut = NotificationGapResyncCoordinator(
             gapPublisher: tracker.gapDetected.publisher,
             debounce: 0.05,
-            resync: { await counter.increment() }
+            resync: { await counter.increment(); return true }
         )
         sut.start()
 
@@ -49,7 +49,7 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         let sut = NotificationGapResyncCoordinator(
             gapPublisher: tracker.gapDetected.publisher,
             debounce: 0.05,
-            resync: { await counter.increment() }
+            resync: { await counter.increment(); return true }
         )
         sut.start()
 
@@ -68,7 +68,7 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         let sut = NotificationGapResyncCoordinator(
             gapPublisher: tracker.gapDetected.publisher,
             debounce: 0.15,
-            resync: { await counter.increment() }
+            resync: { await counter.increment(); return true }
         )
         sut.start()
 
@@ -97,7 +97,7 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
             gapPublisher: Empty().eraseToAnyPublisher(),
             reconnectPublisher: reconnect.eraseToAnyPublisher(),
             debounce: 0.05,
-            resync: { await counter.increment() }
+            resync: { await counter.increment(); return true }
         )
         sut.start()
 
@@ -119,7 +119,7 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
             reconnectPublisher: Empty().eraseToAnyPublisher(),
             debounce: 0.05,
             isAuthenticated: { true },
-            resync: { await counter.increment() }
+            resync: { await counter.increment(); return true }
         )
 
         sut.refreshOnForeground()
@@ -138,7 +138,7 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
             reconnectPublisher: Empty().eraseToAnyPublisher(),
             debounce: 0.05,
             isAuthenticated: { false },
-            resync: { await counter.increment() }
+            resync: { await counter.increment(); return true }
         )
 
         sut.refreshOnForeground()
@@ -146,6 +146,56 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 250_000_000)
         let count = await counter.count
         XCTAssertEqual(count, 0, "sans session, le premier plan ne déclenche aucune lecture")
+    }
+
+    // MARK: - #18916 — la cloche ouverte apprend que la liste a été relue
+
+    /// Le cache et le compteur sont remplacés par la resync, mais une cloche
+    /// OUVERTE n'en sait rien : `notification:new` n'est pas rejoué. La resync
+    /// réussie l'annonce, et c'est tout ce que la cloche écoute.
+    func test_resync_whenItReadTheServedList_announcesResynced() async {
+        let reconnect = PassthroughSubject<Void, Never>()
+        let sut = NotificationGapResyncCoordinator(
+            gapPublisher: Empty().eraseToAnyPublisher(),
+            reconnectPublisher: reconnect.eraseToAnyPublisher(),
+            debounce: 0.05,
+            resync: { true }
+        )
+        var announcements = 0
+        let watch = sut.resynced.sink { announcements += 1 }
+        sut.start()
+
+        reconnect.send(())
+        for _ in 0..<200 where announcements == 0 {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        watch.cancel()
+
+        XCTAssertEqual(announcements, 1, "une resync qui a relu la liste servie l'annonce")
+    }
+
+    /// Hors ligne, la resync échoue : rien n'a été relu, et l'annoncer ferait
+    /// repartir la cloche au réseau pour poser un état d'erreur sur ses lignes.
+    func test_resync_whenItFailed_announcesNothing() async {
+        let counter = ResyncCounter()
+        let reconnect = PassthroughSubject<Void, Never>()
+        let sut = NotificationGapResyncCoordinator(
+            gapPublisher: Empty().eraseToAnyPublisher(),
+            reconnectPublisher: reconnect.eraseToAnyPublisher(),
+            debounce: 0.05,
+            resync: { await counter.increment(); return false }
+        )
+        var announcements = 0
+        let watch = sut.resynced.sink { announcements += 1 }
+        sut.start()
+
+        reconnect.send(())
+        let count = await waitForCount(counter, toReach: 1)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        watch.cancel()
+
+        XCTAssertEqual(count, 1)
+        XCTAssertEqual(announcements, 0, "une resync qui n'a rien relu n'annonce rien")
     }
 
     // MARK: - #7000 — garde de source sur MeeshyApp

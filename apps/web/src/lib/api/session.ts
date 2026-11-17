@@ -151,15 +151,19 @@ export type SessionState =
 
 /**
  * LES CHAMPS DE SOI QU'UNE ÉDITION DE PROFIL FAIT VOYAGER JUSQU'À LA SESSION
- * (#6289) — exactement ceux que `SessionUser` porte au-delà de l'identité, et
- * rien d'autre : la bio, la bannière et les contacts vivent dans le cache du
- * profil, jamais dans le `localStorage` de la session (règle 1 ci-dessus).
+ * (#6289) — exactement ceux que `SessionUser` porte au-delà de son identifiant,
+ * et rien d'autre : la bio, la bannière et les contacts vivent dans le cache du
+ * profil, jamais dans le `localStorage` de la session (règle 1 ci-dessus). Le
+ * pseudo y est depuis #18924 : changé sur un autre appareil, il arrive par
+ * `profile:updated` et par `GET /me` ; l'identité de la session reste l'`id`
+ * (`sessionIdentityKey`).
  *
  * `undefined` = champ non touché ; `null` = champ EFFACÉ (une langue régionale
  * retirée quitte le Prisme). `customDestinationLanguage` garde son `null`, que
  * la connexion sert déjà sous cette forme.
  */
 export type SessionProfileFields = {
+  readonly username?: string;
   readonly displayName?: string | null;
   readonly avatar?: string | null;
   readonly systemLanguage?: string;
@@ -407,6 +411,27 @@ function persist(storage: SessionStorage, session: PersistedSession): void {
   }
 }
 
+/**
+ * UNE SESSION TENUE NE RÉÉCRIT QUE SA PROPRE ENTRÉE (#18914, audit C3 ;
+ * #19132). Deux onglets partagent `meeshy.session`, et aucun ne suit l'autre :
+ * l'onglet d'Ada qui persistait une édition — ou la projection de `GET /me`,
+ * qui tourne en fond (`served-profile-session.ts`) — écrivait sa session
+ * par-dessus celle de Bob, ouverte dans l'autre onglet, et Bob rechargé se
+ * réveillait en Ada. Le même compte ne suffit pas non plus : Ada reconnectée
+ * dans un onglet persiste un jeton RÉCENT, que l'autre onglet, resté sur
+ * l'ancienne session, remplaçait par le sien — révoqué ou échu, il la
+ * déconnectait au rechargement. L'édition reste tenue en mémoire ; elle n'est
+ * persistée que si l'entrée persistée est la MÊME session : même jeton, même
+ * identifiant de session — et donc le même compte, qu'un jeton désigne. Absente,
+ * corrompue ou d'invité, l'entrée n'est pas réécrite : un autre onglet l'a
+ * fermée ou remplacée.
+ */
+function persistHeld(storage: SessionStorage, held: AuthenticatedSession, user: SessionUser): void {
+  const persisted = readPersisted(storage);
+  if (typeof persisted !== 'object' || persisted.kind === 'guest' || persisted.token !== held.token || persisted.sessionToken !== held.sessionToken) return;
+  persist(storage, { user, token: held.token, sessionToken: held.sessionToken, expiresAt: held.expiresAt });
+}
+
 function purge(storage: SessionStorage): void {
   try {
     storage.removeItem(STORAGE_KEY);
@@ -498,7 +523,7 @@ function withProfileFields(user: SessionUser, fields: SessionProfileFields): Ses
     fields.customDestinationLanguage === undefined ? user.customDestinationLanguage : fields.customDestinationLanguage;
   return {
     id: user.id,
-    username: user.username,
+    username: fields.username === undefined || fields.username === '' ? user.username : fields.username,
     ...(displayName === undefined ? {} : { displayName }),
     ...(avatar === undefined ? {} : { avatar }),
     ...(systemLanguage === undefined ? {} : { systemLanguage }),
@@ -533,14 +558,14 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       const current = get().session;
       if (current.status !== 'authenticated') return;
       const user = pickSessionUser(withProfileFields(current.user, fields));
-      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      persistHeld(storage, current, user);
       set({ session: { ...current, user } });
     },
     noteEmailProven: () => {
       const current = get().session;
       if (current.status !== 'authenticated' || current.user.emailUnproven !== true) return;
       const { emailUnproven: _proven, ...user } = current.user;
-      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      persistHeld(storage, current, user);
       set({ session: { ...current, user } });
     },
     restoreSession: () => {

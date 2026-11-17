@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 /// **Ce que l'extension de notification a le DROIT d'attacher.**
 ///
@@ -161,6 +162,7 @@ nonisolated enum NSEAttachmentPolicy {
     /// demain à sa charge reste refusée. Décrocher depuis la bannière exige
     /// les serveurs ICE (`iceServers`, le relais TURN) et l'avatar de
     /// l'appelant : ni l'un ni l'autre ne décrit le contenu de la conversation.
+    /// `isGroup` dit l'appel de groupe, comme `isVideo` dit la vidéo (#19262).
     static let sealedConversationKeys: Set<String> = [
         "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
         "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
@@ -168,10 +170,37 @@ nonisolated enum NSEAttachmentPolicy {
         "contentId", "contentType",
         "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
         "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
-        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "callType", "isVideo", "isGroup", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
         "iceServers",
         "isEncrypted", "apiBaseURL",
     ]
+
+    /// Le libellé neutre d'une bannière dont la notification a été RÉVOQUÉE pendant que l'extension
+    /// la préparait (ios-systeme-7, #19104) : le même que la passerelle pose sur un message masqué,
+    /// déjà traduit au catalogue de l'extension — jamais un texte écrit ici.
+    static let withdrawnBannerLocKey = "notification.hidden_message"
+
+    /// **Ce que livre l'extension quand la notification a été révoquée en cours de préparation.**
+    ///
+    /// La bannière du message supprimé ne peut pas être supprimée par l'extension (pas de
+    /// filtrage) : on livre le contenu de BASE — sans pièce jointe, sans le texte, sans les clés de
+    /// contenu, sans action rapide, sans son ni réveil de l'écran — et les balayages la retirent
+    /// ensuite. Ne restent que ce qui route, nomme l'expéditeur et déclare la protection
+    /// (`notificationLocKey`), dont `notificationId`, par lequel les balayages retrouvent la bannière.
+    static func withdrawing(
+        _ content: UNMutableNotificationContent,
+        neutralBody: String
+    ) -> UNMutableNotificationContent {
+        content.body = neutralBody
+        content.attachments = []
+        content.categoryIdentifier = lockedConversationCategory
+        content.sound = nil
+        content.interruptionLevel = .passive
+        content.userInfo = content.userInfo
+            .filter { key, _ in (key as? String).map(sealedConversationKeys.contains) ?? false }
+            .merging([AnyHashable("notificationLocKey"): withdrawnBannerLocKey]) { _, sealed in sealed }
+        return content
+    }
 
     /// La charge a-t-elle été scellée pour une conversation verrouillée ?
     static func isSealedForLockedConversation(_ userInfo: [AnyHashable: Any]) -> Bool {

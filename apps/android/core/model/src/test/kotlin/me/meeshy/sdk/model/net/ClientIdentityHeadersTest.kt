@@ -60,7 +60,13 @@ class ClientIdentityHeadersTest {
 
     @Test
     fun `ce binaire ne declare que les capacites dont l ecran est livre`() {
-        assertThat(ClientCapabilities.declared).containsExactly(ClientCapability.ONBOARDING_PROFILE)
-        assertThat(ClientCapabilities.headerValue()).isEqualTo("onboarding-profile")
+        assertThat(ClientCapabilities.declared).containsExactly(ClientCapability.ONBOARDING_PROFILE, ClientCapability.LIVE_RECEIPTS)
+        assertThat(ClientCapabilities.headerValue()).isEqualTo("onboarding-profile,live-receipts")
+    }
+
+    /** #19049 — le jeton du contrat partagé (`LIVE_RECEIPTS_CAPABILITY`, `@meeshy/shared/types/live-receipts`), mot pour mot. */
+    @Test
+    fun `la capacite des accuses en direct porte le jeton du contrat de la passerelle`() {
+        assertThat(ClientCapability.LIVE_RECEIPTS.wire).isEqualTo("live-receipts")
     }
 }

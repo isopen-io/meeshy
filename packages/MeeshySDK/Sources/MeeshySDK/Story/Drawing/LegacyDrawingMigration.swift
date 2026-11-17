@@ -67,7 +67,7 @@ extension StoryDrawingStroke {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         if color.getRed(&r, green: &g, blue: &b, alpha: &a) {
             // Troncature (`Int(x * 255)`) pour rester cohérent avec la convention du
-            // codebase (`ColorGeneration.swift`, `StoryComposerView.swift`).
+            // codebase (`ColorGeneration.swift`).
             return String(format: "%02X%02X%02X",
                           Int(max(0, min(1, r)) * 255),
                           Int(max(0, min(1, g)) * 255),

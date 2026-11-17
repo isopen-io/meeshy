@@ -1,0 +1,121 @@
+{
+  "composant": "MeeshyKeyHint",
+  "cle": "K55",
+  "note": "Vecteurs de parité (fiche K55 § 03, § 06, § 10). Glyphes selon la machine, voix, présence, mesures.",
+  "glyphes": [
+    {
+      "touches": [
+        "primary",
+        "m"
+      ],
+      "plateforme": "apple",
+      "glyphes": [
+        "⌘",
+        "M"
+      ],
+      "dit": "Commande M"
+    },
+    {
+      "touches": [
+        "primary",
+        "m"
+      ],
+      "plateforme": "other",
+      "glyphes": [
+        "Ctrl",
+        "M"
+      ],
+      "dit": "Contrôle M"
+    },
+    {
+      "touches": [
+        "shift",
+        "primary",
+        "k"
+      ],
+      "plateforme": "apple",
+      "glyphes": [
+        "⇧",
+        "⌘",
+        "K"
+      ],
+      "dit": "Majuscule Commande K"
+    },
+    {
+      "touches": [
+        "escape"
+      ],
+      "plateforme": "other",
+      "glyphes": [
+        "Esc"
+      ],
+      "dit": "Échap"
+    },
+    {
+      "touches": [
+        "left"
+      ],
+      "plateforme": "apple",
+      "glyphes": [
+        "←"
+      ],
+      "dit": "Flèche gauche"
+    },
+    {
+      "touches": [
+        "left"
+      ],
+      "plateforme": "apple",
+      "rtl": true,
+      "glyphes": [
+        "→"
+      ],
+      "dit": "Flèche droite"
+    }
+  ],
+  "presence": [
+    {
+      "clavier": true,
+      "actif": true,
+      "montre": true
+    },
+    {
+      "clavier": false,
+      "actif": true,
+      "montre": false
+    },
+    {
+      "clavier": true,
+      "actif": false,
+      "montre": false
+    }
+  ],
+  "mesures": {
+    "regular": {
+      "cote": 26,
+      "rayon": 8,
+      "levre": 2.5,
+      "caractere": 12.5,
+      "ecart": 4
+    },
+    "compact": {
+      "cote": 20,
+      "rayon": 6,
+      "levre": 2,
+      "caractere": 10.5,
+      "ecart": 3
+    }
+  },
+  "legende": {
+    "ecartPaire": 6,
+    "filet": {
+      "largeur": 1,
+      "hauteur": 18
+    },
+    "ecartGroupe": 10,
+    "barre": {
+      "hauteur": 44,
+      "rayon": 14
+    }
+  }
+}

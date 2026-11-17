@@ -79,9 +79,8 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// ✦ FILTRE — la teinte de la SLIDE.
     ///
     /// **Servi, contrairement à `crop` et `split`** : `StoryFilterGridView` et
-    /// `StoryComposerViewModel.applyFilter` existent de bout en bout, et
-    /// `EmbeddedSceneInspector` les monte déjà — mais dans l'écran DOCUMENT
-    /// seulement. L'éditeur plein écran, lui, ne les offrait nulle part.
+    /// `StoryComposerViewModel.applyFilter` existent de bout en bout ;
+    /// l'éditeur plein écran, lui, ne les offrait nulle part.
     ///
     /// **Sa portée est la SLIDE, pas l'objet**, et c'est dit ici parce que rien
     /// dans le nom ne le dirait : `applyFilter` écrit `currentEffects.filter`.
@@ -117,14 +116,11 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// est ce que le composer publie dans `ComposerMediaAccessibility`, plutôt
     /// que `ComposerMediaAccessibility.empty`.
     ///
-    /// > `MediaAccessibilityPanel` existe aussi dans l'atelier : il est monté par
-    /// > `ComposerToolPanelHost` → `ComposerBottomBand`, la bande de l'atelier
-    /// > plein écran — là où l'on ne va plus.
-    ///
     /// **Sa portée est l'OBJET**, contrairement au filtre : un texte alternatif
     /// décrit CE média, pas la slide. C'est aussi ce qui le sépare de
     /// `allowSoundExtraction`, drapeau UNIQUE de la publication — les réunir
-    /// serait l'erreur que `MediaAccessibilityPanel` avait déjà écartée.
+    /// serait l'erreur que le panneau d'accessibilité de l'ancien atelier
+    /// avait déjà écartée.
     case altText
 
     /// **Ce que le rail sert pour un média.** `crop` et `split` restent hors du
@@ -260,9 +256,10 @@ nonisolated enum ComposerObjectEditorRail {
     ///
     /// ## Le piège écarté, parce qu'il était tentant
     ///
-    /// `ClipInspector.supportsTransform(kind:isBackground:)` semblait être la
-    /// règle à réemployer. Elle ne l'est pas : elle répond à « la TIMELINE
-    /// peut-elle régler ces propriétés ? » — son doc-comment le dit,
+    /// La règle « supporte transform » de l'ancien inspecteur de clip de la
+    /// timeline semblait être la règle à réemployer. Elle ne l'était pas : elle
+    /// répondait à « la TIMELINE peut-elle régler ces propriétés ? » — son
+    /// doc-comment le disait,
     /// « `SetClipPropertyCommand` refuse ses propriétés, elles se règlent au
     /// doigt sur le canvas » — et non à « cette famille a-t-elle telle entrée ».
     /// Un sticker n'y « supporte pas transform » alors qu'il porte bien x, y,

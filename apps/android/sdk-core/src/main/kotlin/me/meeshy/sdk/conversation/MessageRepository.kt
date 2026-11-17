@@ -15,6 +15,7 @@ import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.socket.SendMessageAck
+import me.meeshy.sdk.model.sync.LiveReceiptsContinuity
 import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
@@ -74,10 +75,13 @@ class MessageRepository internal constructor(
         listPreviews: SendPreviewSink? = null,
         /** L'index des médias de la conversation suit les messages supprimés. */
         mediaIndex: ConversationMediaHubIndex? = null,
+        /** #19049 — la fenêtre n'envoie son validateur que tant que la socket a tenu ses accusés depuis sa dernière lecture entière. */
+        receipts: LiveReceiptsContinuity? = null,
     ) : this(
         history = MessageHistoryReader(
             messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database),
             media = AcknowledgedBubbleMedia(adoption, previews, AcknowledgedBubbleMedia.ORIGIN_PAGE),
+            receipts = receipts,
         ),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(
@@ -97,11 +101,12 @@ class MessageRepository internal constructor(
     /**
      * Cache-first message list for a conversation (ARCHITECTURE.md §4): the
      * cached messages (including optimistic local rows) are served immediately
-     * and revalidated in the background.
+     * and revalidated in the background, on the messages freshness window
+     * ([CachePolicy.Messages], #18915) — the one [isCacheFresh] judges with.
      */
     fun messagesStream(
         conversationId: String,
-        policy: CachePolicy = CachePolicy.Default,
+        policy: CachePolicy = CachePolicy.Messages,
         onSyncError: (Throwable) -> Unit = {},
     ): Flow<CacheResult<List<LocalMessage>>> = history.messagesStream(conversationId, policy, onSyncError)
 
@@ -347,6 +352,25 @@ class MessageRepository internal constructor(
      */
     suspend fun confirmDeletion(messageId: String) {
         erasures?.recordNamed(listOf(messageId))
+    }
+
+    /**
+     * #19047 — a deletion refused for good keeps its optimistic tombstone until the server proves the message alive. The
+     * message is read back by its id with the tombstone in place — a served row cannot lift it, and the plaintext of a
+     * message deleted on the device never shows again, not even for the time of the read:
+     * - served alive ⇒ the tombstone falls and the server's message takes its place (#18915); served deleted ⇒ the
+     *   read's own ingestion applied the deletion, and erased a sealed message's plaintext;
+     * - answered WITHOUT it ⇒ the server no longer knows it: the deletion is confirmed, its end-to-end plaintext erased —
+     *   never a row revived out of the window for good, its plaintext kept in the vault;
+     * - a read that proves nothing (offline, refused) ⇒ a refusal that already said the target is gone ([refusedAsGone]:
+     *   404, 410) keeps it deleted, its plaintext kept until a read proves its absence; any other refusal gives it back.
+     */
+    suspend fun settleRefusedDeletion(conversationId: String?, messageId: String, refusedAsGone: Boolean = false) {
+        when (val read = conversationId?.let { history.readBack(it, messageId) } ?: MessageReadBack.Unknown) {
+            is MessageReadBack.Served -> if (read.message.deletedAt == null) markUndeleted(messageId, snapshot = read.message)
+            MessageReadBack.Absent -> confirmDeletion(messageId)
+            MessageReadBack.Unknown -> if (!refusedAsGone) markUndeleted(messageId)
+        }
     }
 
     /** Removes the named rows (either of their two ids) and their edit history. */

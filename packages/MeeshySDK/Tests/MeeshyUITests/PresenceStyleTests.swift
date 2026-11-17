@@ -4,7 +4,7 @@ import SwiftUI
 @testable import MeeshySDK
 
 /// Locks the CENTRAL presence color mapping (PresenceStyle) — every surface
-/// (MeeshyAvatar, UserIdentityBar, profile, story viewer) consumes it, so this
+/// (MeeshyAvatar, identity headers, profile, story viewer) consumes it, so this
 /// suite is the single spec of the 1/3/5 palette:
 /// green (success #34D399) = online, orange (warning #FBBF24) = away,
 /// gray (#9CA3AF) = idle — DISPLAYED on avatar dots. `offline` renders NO

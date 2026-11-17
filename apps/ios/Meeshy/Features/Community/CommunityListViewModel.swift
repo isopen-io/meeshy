@@ -17,19 +17,23 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
 
     private var hasLoaded = false
     private var currentOffset = 0
-    private let pageSize = 20
+    private let pageSize = MyCommunities.pageSize
     private var searchTask: Task<Void, Never>?
     private let service: CommunityServiceProviding
+    private let store: @MainActor () async -> GRDBCacheStore<String, APICommunity>
     private let log = MeeshyLog.logger(.ui)
     private var liveUpdates: AnyCancellable?
 
     /// `communityUpdates` : `community:updated` (#18439) réécrit la ligne
     /// d'une communauté renommée ou réglée ailleurs, sans relance réseau.
+    /// `store` : « mes communautés » (#18935), la première page de l'écran.
     init(
         service: CommunityServiceProviding = CommunityService.shared,
-        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live
+        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
+        store: @escaping @MainActor () async -> GRDBCacheStore<String, APICommunity> = MyCommunities.liveStore
     ) {
         self.service = service
+        self.store = store
         self.liveUpdates = communityUpdates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.apply(event) }
@@ -41,9 +45,27 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
         communities[index] = updated
     }
 
+    /// Cache-first (#18935) : la première page se peint depuis « mes
+    /// communautés » puis se revalide en silence, sans indicateur ni écran
+    /// vide hors ligne. Une recherche, elle, interroge le serveur.
     func loadIfNeeded() async {
         guard !hasLoaded else { return }
-        await load()
+        guard searchText.count < 2 else { return await load() }
+        let service = self.service
+        let limit = pageSize
+        let loader = CacheFirstLoader(store: await store(), key: MyCommunities.cacheKey)
+        await loader.load(
+            fetch: { try await service.list(search: nil, offset: 0, limit: limit).data },
+            setLoadState: { [weak self] state in self?.isLoading = state == .loading },
+            apply: { [weak self] page in self?.applyFirstPage(page) }
+        )
+    }
+
+    private func applyFirstPage(_ page: [APICommunity]) {
+        communities = page.map { $0.toCommunity() }
+        currentOffset = communities.count
+        hasMore = page.count >= pageSize
+        hasLoaded = true
     }
 
     func refresh() async {
@@ -84,6 +106,7 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
                 communities.append(contentsOf: mapped.filter { !known.contains($0.id) })
             } else {
                 communities = mapped
+                if searchQuery == nil { await persistFirstPage(response.data) }
             }
 
             currentOffset = communities.count
@@ -93,6 +116,15 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
             if !Task.isCancelled {
                 log.error("[CommunityListVM] Error loading: \(error.localizedDescription)")
             }
+        }
+    }
+
+    /// Le tirer pour rafraîchir passe par le réseau ; sa première page reste
+    /// celle de « mes communautés ».
+    private func persistFirstPage(_ page: [APICommunity]) async {
+        let cache = await store()
+        await bestEffort("communityListViewModel.communities.save", category: .cache) {
+            try await cache.save(page, for: MyCommunities.cacheKey)
         }
     }
 }

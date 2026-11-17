@@ -14,7 +14,7 @@ import me.meeshy.sdk.model.layout.RectDp
 import me.meeshy.sdk.model.layout.SafeZoneLaw
 
 /**
- * Geometrie de la decoupe camera de la fenetre — pendant Android de `IslandGeometry.swift`.
+ * Geometrie de la decoupe camera de la fenetre.
  *
  * Une banniere in-app nait au centre de la decoupe du haut ([emergence]) et se pose avec 12 dp
  * d'air sous elle ([bannerTopDp]) ; sans decoupe, elle nait au centre de la marge haute. Le calcul

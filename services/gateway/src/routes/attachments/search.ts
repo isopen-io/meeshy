@@ -49,7 +49,7 @@ import { sendSuccess, sendForbidden, sendInternalError } from '../../utils/respo
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail, historyFloorClause } from '../../services/historyFloor';
 import { loadPersonalHistoryHidingByConversation } from '../../services/personalHistoryFilter';
-import { protectedPreview, maskedAttachment } from '../../services/notifications/notification-preview';
+import { isProtectedAttachmentRow, messageProtectionWhereExclusion } from '../../services/attachments/protectedAttachmentFilter';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import type { AttachmentSearchQuery } from './types';
 
@@ -142,44 +142,6 @@ type SearchAttachmentRow = {
     expiresAt: Date | null;
   } | null;
 };
-
-/**
- * Un message est PROTÉGÉ (éphémère/vue unique/flouté/chiffré) — même prédicat
- * que la bannière de notification, réutilisé plutôt que réécrit.
- */
-function messageIsProtected(message: SearchAttachmentRow['message']): boolean {
-  if (!message) return true; // relation absente : rien à servir, fail-CLOSED.
-  return protectedPreview({
-    messageType: null,
-    isEncrypted: message.isEncrypted,
-    isViewOnce: message.isViewOnce,
-    isBlurred: message.isBlurred,
-    effectFlags: message.effectFlags,
-    expiresAt: message.expiresAt,
-  }) !== null;
-}
-
-/**
- * Ce que le `where` Prisma peut fermer NATIVEMENT (booléens, `isEncrypted`,
- * présence d'`expiresAt`) — `effectFlags` n'a pas d'opérateur bitwise côté
- * connecteur Mongo, d'où le second passage en mémoire (`messageIsProtected` /
- * `maskedAttachment`) sur les lignes déjà chargées, qui ferme le cas d'un bit
- * posé sans que le booléen jumeau le soit.
- *
- * `expiresAt` : un message ÉPHÉMÈRE a `expiresAt` PRÉSENT et non nul —
- * `isSet: true` est nécessaire sur le connecteur Mongo, où un champ ABSENT ne
- * matche ni `null` ni `NOT null` (cf. `services/gateway/CLAUDE.md`,
- * `ExpiredMessagesCleanupService`). La négation de « présent et non nul » est
- * donc l'OR de ses deux négations : absent, OU présent-et-nul.
- */
-function messageProtectionWhereExclusion(): Record<string, unknown> {
-  return {
-    isViewOnce: false,
-    isBlurred: false,
-    isEncrypted: false,
-    OR: [{ expiresAt: { isSet: false } }, { expiresAt: null }],
-  };
-}
 
 export function registerAttachmentSearchRoutes(
   fastify: FastifyInstance,
@@ -316,8 +278,7 @@ export function registerAttachmentSearchRoutes(
       // nativement (le bitfield `effectFlags`) se ferme ici, sur les lignes
       // déjà chargées — même prédicat que la bannière de notification.
       const visible = rows.filter((row) => {
-        if (messageIsProtected(row.message)) return false;
-        if (maskedAttachment({ isViewOnce: row.isViewOnce, isBlurred: row.isBlurred, effectFlags: row.effectFlags })) return false;
+        if (isProtectedAttachmentRow(row)) return false;
         if (!row.message) return false;
         const hiding = hidingByConversation.get(row.message.conversationId);
         if (!hiding) return true;

@@ -6,7 +6,7 @@ import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/adm
 import { mountAdminAt, resetAdminRouter } from '@/test-support/admin-router';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 
-import { AdminCardMode, AdminEntityChip, AdminEntityIdentity, AdminEntityLink, AdminLink, AdminRouteLink, type AdminEntityRef } from './entity-chip';
+import { AdminCardMode, AdminEntityChip, AdminEntityIdentity, AdminLink, AdminRouteLink, type AdminEntityRef } from './entity-chip';
 
 const { mount, mounter } = setupAdminKitTests();
 
@@ -65,17 +65,6 @@ describe('AdminLink — vers une section ou la fiche d’une entité', () => {
     );
     expect(host.querySelector('a')?.getAttribute('data-admin-link')).toBe('ouvrir');
     expect(host.querySelector('a')?.getAttribute('aria-label')).toBe('Ouvrir les comptes');
-  });
-
-  test('AdminEntityLink : le nom par défaut, ou des enfants', async () => {
-    const host = await mount(
-      <div>
-        <AdminEntityLink entity={user} />
-        <AdminEntityLink entity={user}>Voir</AdminEntityLink>
-      </div>,
-      BIGBOSS,
-    );
-    expect([...host.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['Awa Diop', 'Voir']);
   });
 });
 

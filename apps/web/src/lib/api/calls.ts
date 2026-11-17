@@ -6,6 +6,7 @@ import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { CALL_HISTORY_QUERY_PREFIX } from './me-keys';
 
 /**
  * **LE PORT DU JOURNAL D'APPELS** (#6362) — miroir `CallHistoryService` et
@@ -74,8 +75,6 @@ export type CallHistoryPage = { readonly records: readonly CallRecord[]; readonl
 
 export type CallsDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
-export const CALLS_QUERY_PREFIX = ['calls'] as const;
-
 export const CALL_HISTORY_TYPES = ['all', 'audio', 'video'] as const;
 export type CallHistoryType = (typeof CALL_HISTORY_TYPES)[number];
 
@@ -94,7 +93,7 @@ const refineOf = (refine: CallHistoryRefine | undefined): CallHistoryRefine | nu
 
 export const callHistoryQueryKey = (filter: CallHistoryFilter, refine?: CallHistoryRefine) => {
   const refined = refineOf(refine);
-  return refined === null ? (['calls', 'history', filter] as const) : (['calls', 'history', filter, refined] as const);
+  return refined === null ? ([...CALL_HISTORY_QUERY_PREFIX, filter] as const) : ([...CALL_HISTORY_QUERY_PREFIX, filter, refined] as const);
 };
 
 const optionalText = z.optional(z.nullable(z.string()));

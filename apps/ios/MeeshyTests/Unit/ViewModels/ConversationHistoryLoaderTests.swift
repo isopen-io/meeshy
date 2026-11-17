@@ -203,4 +203,108 @@ final class ConversationHistoryLoaderTests: XCTestCase {
         )
         XCTAssertEqual(ConversationHistoryLoader.openingGapCursor(heldUpTo: held, refreshReachedBackTo: nil), held)
     }
+
+    // MARK: - Le filigrane de contiguïté (#18929)
+
+    /// 2025-06-01T00:00:00Z — la fin du fil détenu.
+    private let t1 = Date(timeIntervalSince1970: 1_748_736_000)
+
+    private func makeLoaderAndStore(service: MockMessageService) throws -> (ConversationHistoryLoader, MessagePersistenceActor) {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        return (ConversationHistoryLoader(conversationId: conversationId, messageService: service, persistence: persistence), persistence)
+    }
+
+    /// Une page servie, un message par instant ISO.
+    private func page(_ instants: [String], prefix: String) -> MessagesAPIResponse {
+        let items = instants.enumerated().map { index, instant in
+            #"{"id":"\#(prefix)\#(index)","conversationId":"\#(conversationId)","senderId":"000000000000000000000098","createdAt":"\#(instant)"}"#
+        }.joined(separator: ",")
+        return JSONStub.decode(#"{"success":true,"data":[\#(items)],"pagination":null,"cursorPagination":null,"hasNewer":null}"#)
+    }
+
+    private func watermark(in persistence: MessagePersistenceActor) async throws -> Date? {
+        try await ConversationContiguity.base(of: conversationId, on: persistence).watermark
+    }
+
+    /// Le fil tenu jusqu'à T1 par une première ouverture, base vide.
+    private func holdThreadUpToT1(_ loader: ConversationHistoryLoader, service: MockMessageService) async {
+        service.listResult = .success(page(["2025-05-31T23:59:00.000Z", "2025-06-01T00:00:00.000Z"], prefix: "held-"))
+        _ = await loader.refreshLatest(warmCache: false, readerPrism: [])
+    }
+
+    func test_refreshLatest_rienNEtaitDetenu_ouvreLeFilAuPlusRecentServi() async throws {
+        let service = MockMessageService()
+        let (loader, persistence) = try makeLoaderAndStore(service: service)
+
+        await holdThreadUpToT1(loader, service: service)
+
+        let held = try await watermark(in: persistence)
+        XCTAssertEqual(held, t1)
+    }
+
+    func test_refreshLatest_quiRejointLeFil_lEtendAuPlusRecentServi() async throws {
+        let service = MockMessageService()
+        let (loader, persistence) = try makeLoaderAndStore(service: service)
+        await holdThreadUpToT1(loader, service: service)
+        service.listResult = .success(page(["2025-06-01T00:00:00.000Z", "2025-06-01T01:00:00.000Z"], prefix: "join-"))
+
+        _ = await loader.refreshLatest(warmCache: true, readerPrism: [])
+
+        let held = try await watermark(in: persistence)
+        XCTAssertEqual(held, t1.addingTimeInterval(3_600))
+    }
+
+    /// Le message de T9 entre SEUL (NSE, push) ; la page des trente plus récents
+    /// commence après T1 : un écart la sépare du fil, le filigrane n'en dit rien.
+    func test_refreshLatest_separeeDuFilParUnEcart_laisseLeFiligrane() async throws {
+        let service = MockMessageService()
+        let (loader, persistence) = try makeLoaderAndStore(service: service)
+        await holdThreadUpToT1(loader, service: service)
+        let pushed = page(["2025-06-01T02:00:00.000Z"], prefix: "pushed-").data
+        try await persistence.upsertFromAPIMessages(pushed)
+        service.listResult = .success(page(["2025-06-01T01:00:00.000Z", "2025-06-01T02:00:00.000Z"], prefix: "gap-"))
+
+        _ = await loader.refreshLatest(warmCache: true, readerPrism: [])
+
+        let held = try await watermark(in: persistence)
+        XCTAssertEqual(held, t1)
+    }
+
+    func test_catchUpCursor_unMessageEntreSeul_repartDeLaFinDuFil() async throws {
+        let service = MockMessageService()
+        let (loader, persistence) = try makeLoaderAndStore(service: service)
+        await holdThreadUpToT1(loader, service: service)
+        try await persistence.upsertFromAPIMessages(page(["2025-06-01T02:00:00.000Z"], prefix: "pushed-").data)
+
+        let cursor = await loader.catchUpCursor(newestHeld: t1.addingTimeInterval(7_200))
+
+        XCTAssertEqual(cursor, t1)
+    }
+
+    func test_fetchMissed_partiDeLaFinDuFil_graveLesPagesPuisEtendLeFiligrane() async throws {
+        let service = MockMessageService()
+        let (loader, persistence) = try makeLoaderAndStore(service: service)
+        await holdThreadUpToT1(loader, service: service)
+        service.listAfterResults = [page(["2025-06-01T00:01:00.000Z", "2025-06-01T00:02:00.000Z"], prefix: "missed-")]
+
+        let collected = try await loader.fetchMissed(after: t1, readerPrism: [])
+
+        XCTAssertEqual(collected.count, 2)
+        let base = try await ConversationContiguity.base(of: conversationId, on: persistence)
+        XCTAssertEqual(base.newestHeld, t1.addingTimeInterval(120), "le balayage est gravé avant d'avancer le filigrane")
+        XCTAssertEqual(base.watermark, t1.addingTimeInterval(120))
+    }
+
+    func test_forgetConversation_oublieLeFilDetenu() async throws {
+        let service = MockMessageService()
+        let (loader, persistence) = try makeLoaderAndStore(service: service)
+        await holdThreadUpToT1(loader, service: service)
+
+        await loader.forgetConversation()
+
+        let held = try await watermark(in: persistence)
+        XCTAssertNil(held)
+    }
 }

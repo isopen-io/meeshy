@@ -52,12 +52,13 @@ export function applyMessageReactionUpdate(
   const existing = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
   if (existing === undefined || existing.conversationId !== data.conversationId) return;
 
-  const next = withCount(existing, data.emoji, data.aggregation.count);
-  if (next !== existing) {
-    patchThreadMessages(queryClient, data.conversationId, (messages) =>
-      messages.map((m) => (m.id === data.messageId ? next : m)),
-    );
-  }
+  /* Posé SUR la rangée reçue, jamais sur un instantané — et même quand le
+     cache le porte déjà (l'écho de MA réaction) : une relecture en vol, partie
+     avant ce compte, le rejoue sur sa réponse (#18914). `withCount` rend la
+     rangée elle-même quand rien ne change : aucune référence ne bouge. */
+  patchThreadMessages(queryClient, data.conversationId, (messages) =>
+    messages.map((m) => (m.id === data.messageId ? withCount(m, data.emoji, data.aggregation.count) : m)),
+  );
 
   if (data.userId === undefined || data.userId !== viewerId) return;
   if (data.action === 'add') reactionStore.getState().add(data.messageId, data.emoji);

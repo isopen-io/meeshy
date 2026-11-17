@@ -5,8 +5,7 @@ import MeeshySDK
 ///
 /// **Lifecycle** — created from a `VideoEditResult` that contains a
 /// non-empty `captions` array (the user transcribed the clip). The old
-/// in-app video editor that first produced it (`MeeshyVideoEditorView`)
-/// left the repository (#9124, #9331); a video now edits in the scene. Stored in
+/// in-app video editor that first produced it left the repository (#9124, #9331); a video now edits in the scene. Stored in
 /// `StoryComposerViewModel.loadedVideoCaptions[mediaObjectId]`. Read by
 /// downstream surfaces — story canvas overlay, exporter — to render the
 /// captions on top of the video clip at render time.

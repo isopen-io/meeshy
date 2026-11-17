@@ -11,6 +11,8 @@ import me.meeshy.sdk.model.ProfileSnapshot
 import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.auth.SessionOrigin
+import me.meeshy.sdk.model.profile.OwnProfileSync
+import me.meeshy.sdk.model.profile.ProfileUpdatedEvent
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.net.TokenStore
@@ -123,6 +125,24 @@ class SessionRepository @Inject constructor(
         throw e
     } catch (_: Exception) {
         emptyList()
+    }
+
+    /**
+     * #18924 — `profile:updated` : MON profil, tel que la ligne le porte après une écriture faite sur un autre de mes
+     * appareils (langues, nom, photo, bannière). L'instantané s'applique sur l'identité tenue ([OwnProfileSync.applied]) —
+     * jamais celui d'un autre compte, ni un instantané PROUVÉ plus ancien que le `updatedAt` tenu — puis les éditions de
+     * CET appareil encore en file se réappliquent par-dessus, comme pour une réponse du serveur. `true` : publié.
+     */
+    suspend fun applyOwnProfile(event: ProfileUpdatedEvent): Boolean {
+        val generation = transition.generation
+        val held = _currentUser.value ?: return false
+        if (OwnProfileSync.applied(held, event) == null) return false
+        val pending = pendingEditsFor(held.id)
+        if (generation != transition.generation) return false
+        val current = _currentUser.value ?: return false
+        val applied = OwnProfileSync.applied(current, event) ?: return false
+        publish(ProfileGuard.fold(applied, pending))
+        return true
     }
 
     /**

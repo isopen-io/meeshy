@@ -9,7 +9,7 @@ extension StoryComposerViewModel {
     ///
     /// ## Pourquoi ce corps a quitté la vue
     ///
-    /// Il vivait dans `StoryComposerView+Media` sous le nom
+    /// Il vivait dans la vue de l'ancien atelier sous le nom
     /// `addRecordingToBackground`. Rien ne l'y retenait : les quatre gestes
     /// qu'il enchaîne — analyser la forme d'onde, lire la durée, poser l'objet,
     /// étendre la slide — sont des mutations de MODÈLE. Le `Task` et le

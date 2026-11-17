@@ -160,9 +160,8 @@ public struct ParticipantRightsUpdatedEvent: Decodable, Sendable, Equatable {
     /// gateway antérieur au champ.
     ///
     /// Même règle et même discriminant — la PRÉSENCE de la clé, jamais sa
-    /// valeur — que le pont ✦ de `conversation:unread-updated`, et que le
-    /// `data.historyVisibleFrom !== undefined` du web
-    /// (`apps/web/hooks/queries/use-participant-rights-sync.ts`).
+    /// valeur — que le pont ✦ de `conversation:unread-updated` (le web legacy
+    /// portait le même test, parti avec lui au #7668).
     public let carriesHistoryGrant: Bool
 
     private enum CodingKeys: String, CodingKey {

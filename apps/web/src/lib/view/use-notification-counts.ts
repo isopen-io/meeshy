@@ -29,7 +29,7 @@ export function useNotificationCounts() {
   const authenticated = useStore(sessionStore, (state) => state.session.status === 'authenticated');
   return useQuery(
     {
-      ...notificationCountsQueryOptions(apiDeps),
+      ...notificationCountsQueryOptions(apiDeps, { pendingReadsOf: appQueryClient }),
       enabled: apiDeps.source === 'fixtures' || authenticated,
       staleTime: 30_000,
     },

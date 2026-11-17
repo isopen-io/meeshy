@@ -36,6 +36,7 @@ class FeedViewModel: ObservableObject {
     let feedCache: any FeedCacheStoring
     let limit = 20
     private let cacheSaver: FeedCacheSaver
+    private(set) lazy var engagementWrites = FeedEngagementWrites(feedCache: feedCache)
     private lazy var mediaPrefetcher = FeedMediaPrefetcher(posts: { [weak self] in self?.posts ?? [] })
     private var cancellables = Set<AnyCancellable>()
     /// Subscriptions owned by `subscribeToSocketEvents()` only — kept

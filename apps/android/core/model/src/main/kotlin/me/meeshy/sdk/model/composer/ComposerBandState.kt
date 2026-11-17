@@ -1,6 +1,6 @@
 package me.meeshy.sdk.model.composer
 
-/** What a format panel edits — port of iOS `BandElementKind`. */
+/** What a format panel edits. */
 enum class BandElementKind { TEXT, MEDIA }
 
 /** The panel shown by the bottom band. */

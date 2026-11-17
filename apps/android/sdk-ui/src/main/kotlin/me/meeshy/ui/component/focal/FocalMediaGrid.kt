@@ -113,7 +113,7 @@ internal fun focalCellSizes(count: Int, maxWidth: Float, soloVideoRatio: Float?)
 }
 
 /**
- * La grille visuelle de la rangée plate (iOS `FocalMediaGrid`) : 1 média 300 × 240 (une vidéo suit son format), 2
+ * La grille visuelle de la rangée plate (iOS `FocalMediaGridLayout`) : 1 média 300 × 240 (une vidéo suit son format), 2
  * médias côte à côte, 3 médias 60/40, 4+ en 2 × 2 avec « +N » sur la quatrième case. Largeur 300 au plus, réduite par
  * la colonne ; espacement 2, rayon 16.
  */

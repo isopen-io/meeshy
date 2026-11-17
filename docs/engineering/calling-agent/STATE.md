@@ -1272,3 +1272,41 @@ socket jusqu'au client.
 4. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
 5. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
 6. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 38 — 2026-11-17
+
+- **Base** : `origin/dev` @ `af3e0db4`. Le lot du cycle 37 (#18666, PR #18775) était déjà fusionné, et aucune PR de la routine n'était ouverte.
+- **Branche** : `claude/determined-volta-lm94u0`.
+- **Objectif** : #18772. Le traducteur n'envoie le webhook de fin de traduction vocale que vers un hôte autorisé.
+- **Mesure de rétrocompatibilité** : aucun client (iOS, web, Android, MeeshySDK) n'envoie de `webhookUrl`. Seules les routes de la passerelle `routes/voice/translation.ts:334` et `routes/attachments/translation.ts:98` l'acceptent et la relaient.
+- **Livré** (seul le traducteur change ; ni le protocole ZMQ, ni la passerelle, ni le comportement de l'`audioUrl`) :
+  - **Garde** `utils/audio_url_guard.py` paramétré par une `UrlPolicy` :
+    - `AUDIO_URL_POLICY` est inchangée (même classe, mêmes messages, mêmes raisons) ;
+    - `WEBHOOK_URL_POLICY` lit `TRANSLATOR_WEBHOOK_ALLOWED_HOSTS`, **vide par défaut**, donc fail-closed ;
+    - les refus webhook lèvent `WebhookUrlRejected`, distincte de `AudioUrlRejected`, et les deux listes sont séparées dans les deux sens.
+  - **`services/job_webhook.py`** :
+    - `submit_job` ne garde qu'une URL admise ; une URL refusée devient `None`, sans échec de la soumission ;
+    - à l'envoi, l'URL est revérifiée, le connecteur passe par `VerifiedAudioHostResolver` sous la politique webhook, et l'envoi se fait avec `allow_redirects=False` et `trust_env=False` ;
+    - seul un 2xx compte comme délivré.
+  - **Journaux** : ils ne portent plus que `webhook=yes|none`, une raison fixe, un statut ou le type de l'exception.
+  - **Charge envoyée au tiers** : elle ne recopie plus `webhook_url`.
+  - **Traduction** : elle aboutit même si le webhook est refusé ou injoignable.
+- **Tests** : `tests/test_job_webhook_guard.py` (33) et `_qa.py` (30, ajoutés par la QA). `test_26` a été adapté : ses deux témoins postaient vers `http://`.
+  - **Rouge** : erreur de collecte, `ImportError: cannot import name 'job_webhook'`.
+  - **Vert** : relancé par moi, `178 passed` (nouveau garde, garde audio, test_26).
+  - **Suites voisines** (15 fichiers qui importent le pipeline ou la Voice API) : `1 failed, 547 passed` avant, `1 failed, 657 passed` après, avec le même échec préexistant `test_12::test_cache_behavior`.
+  - **Mutations QA** : 17 sur 18 tuées. La survivante, `use_dns_cache=True`, n'est pas exploitable : le cache ne contient que des résultats déjà vérifiés.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, sans aucun contournement trouvé. Elle a testé, entre autres, IDN, point final, `%`-encodage, `\@`, `[::ffff:…]`, les plages de transition IPv6 et les ports 80 et 0443.
+  - #19253 : la passerelle accepte encore `webhookUrl` sans prévenir qu'il sera ignoré.
+  - #19254 : la charge du webhook porte encore le résultat (textes traduits) et `user_id`.
+  - #19255 : le webhook occupe le créneau du worker jusqu'à 30 s (dette antérieure).
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre.
+1. #19254, qui est petit, puis #19253 (passerelle) et #19255.
+2. #18727, puis #18773.
+3. #18668 et #18692, les messages d'exception bruts, puis #18729 et #18774.
+4. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
+5. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
+6. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

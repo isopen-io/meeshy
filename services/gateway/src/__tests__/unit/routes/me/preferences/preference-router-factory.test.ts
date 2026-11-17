@@ -39,6 +39,7 @@ jest.mock('../../../../../utils/withMutationLog', () => ({
 import { createPreferenceRouter } from '../../../../../routes/me/preferences/preference-router-factory';
 import { ConsentValidationService } from '../../../../../services/ConsentValidationService';
 import { withMutationLog } from '../../../../../utils/withMutationLog';
+import { makeUserPreferencesStore } from '../../../../helpers/user-preferences-store';
 
 // ─── Test schema & defaults ───────────────────────────────────────────────────
 
@@ -76,6 +77,8 @@ function makePrisma(opts: {
   } = opts;
 
   return {
+    // La fusion d'un `PATCH` se fait DANS la base (`preference-atomic-merge`).
+    $runCommandRaw: jest.fn<any>().mockResolvedValue({ ok: 1, n: 1 }),
     userPreferences: {
       findUnique: findUniqueError
         ? jest.fn<any>().mockRejectedValue(findUniqueError)
@@ -377,8 +380,7 @@ describe('PATCH / — preference-router-factory', () => {
   it('merges with defaults when no existing preferences', async () => {
     const app = await buildApp({
       prismaOpts: {
-        findUniqueResult: null,
-        upsertResult: { notification: { pushEnabled: false, soundEnabled: true }, id: 'pref-1' },
+        findUniqueResult: { notification: { pushEnabled: false, soundEnabled: true }, id: 'pref-1' },
       },
     });
     const res = await app.inject({
@@ -387,6 +389,13 @@ describe('PATCH / — preference-router-factory', () => {
       payload: { pushEnabled: false },
     });
     expect(res.statusCode).toBe(200);
+
+    // La fusion « défauts ← stocké ← clés nommées » est calculée par la base :
+    // la commande porte les défauts et le seul corps, jamais une colonne lue.
+    const command = ((app as any).prisma.$runCommandRaw as jest.Mock<any>).mock.calls[0][0] as any;
+    const merged = command.updates[0].u[0].$set.notification.$mergeObjects;
+    expect(merged[0]).toEqual({ $literal: expect.objectContaining({ pushEnabled: expect.any(Boolean) }) });
+    expect(merged[2]).toEqual({ $literal: { pushEnabled: false } });
     await app.close();
   });
 
@@ -509,10 +518,13 @@ const DEFAULTED_DEFAULTS: DefaultedPrefs = {
 async function buildDefaultedApp(stored: Partial<DefaultedPrefs>): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
+  const store = makeUserPreferencesStore({ rows: { [USER_ID]: { notification: stored } } });
   app.decorate('prisma', {
+    store,
+    $runCommandRaw: jest.fn<any>(store.$runCommandRaw),
     userPreferences: {
-      findUnique: jest.fn<any>().mockResolvedValue({ id: 'pref-1', notification: stored }),
-      upsert: jest.fn<any>(async ({ update }: any) => ({ id: 'pref-1', ...update })),
+      findUnique: jest.fn<any>(store.userPreferences.findUnique),
+      upsert: jest.fn<any>(store.userPreferences.upsert),
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
@@ -549,7 +561,7 @@ describe('PATCH / — n\'applique QUE les clés envoyées', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
+    const written = (app as any).prisma.store.rowOf(USER_ID).notification;
     expect(written).toEqual({ pushEnabled: false, soundEnabled: false, vibrate: false });
     await app.close();
   });
@@ -560,7 +572,7 @@ describe('PATCH / — n\'applique QUE les clés envoyées', () => {
     const res = await app.inject({ method: 'PATCH', url: '/', payload: {} });
 
     expect(res.statusCode).toBe(200);
-    const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
+    const written = (app as any).prisma.store.rowOf(USER_ID).notification;
     expect(written).toEqual({ pushEnabled: false, soundEnabled: false, vibrate: true });
     await app.close();
   });
@@ -574,7 +586,7 @@ describe('PATCH / — n\'applique QUE les clés envoyées', () => {
       payload: { pushEnabled: true },
     });
 
-    const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
+    const written = (app as any).prisma.store.rowOf(USER_ID).notification;
     expect(written.pushEnabled).toBe(true);
     expect(written.soundEnabled).toBe(false);
     await app.close();
@@ -619,7 +631,7 @@ describe('PATCH / — n\'applique QUE les clés envoyées', () => {
     // Le fait est mesuré, pas déduit — un témoin posé sur `path` resterait
     // vert sur un tableau vide et ne garderait rien.
     expect(corps.issues[0].keys).toEqual(['sneaky']);
-    expect((app as any).prisma.userPreferences.upsert).not.toHaveBeenCalled();
+    expect((app as any).prisma.$runCommandRaw).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -633,7 +645,7 @@ describe('PATCH / — n\'applique QUE les clés envoyées', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
+    const written = (app as any).prisma.store.rowOf(USER_ID).notification;
     expect(written).toHaveProperty('vibrate', false);
     await app.close();
   });

@@ -44,3 +44,42 @@ struct SharedFeedCache: FeedCacheStoring {
         await CacheCoordinator.shared.feed.removeEverywhere(itemId: itemId)
     }
 }
+
+/// L'engagement d'un post (like posé ou retiré) écrit dans TOUTES ses copies — chaque clé du cache du
+/// fil (`patchEverywhere` : fil, détail, favoris, réels) et sa ligne GRDB —, sur UNE file, dans l'ordre
+/// des gestes (#18939). Deux `Task.detached` n'étaient pas ordonnés : un like suivi d'un retrait rapide
+/// pouvait laisser ces copies « aimé » jusqu'à l'écho du socket, et jusqu'à la reconnexion hors ligne.
+@MainActor
+final class FeedEngagementWrites {
+    nonisolated deinit {}
+
+    private let feedCache: any FeedCacheStoring
+    private var tail: Task<Void, Never>?
+
+    init(feedCache: any FeedCacheStoring) {
+        self.feedCache = feedCache
+    }
+
+    /// Prend son rang dès l'appel, avant toute attente de l'appelant : l'ordre des écritures est celui
+    /// des appels.
+    func like(postId: String, isLiked: Bool, likes: Int, persistence: FeedPersistenceActor?) {
+        let previous = tail
+        let feedCache = feedCache
+        tail = Task {
+            await previous?.value
+            await feedCache.patchEverywhere(itemId: postId) {
+                $0.isLiked = isLiked
+                $0.likes = likes
+            }
+            guard let persistence else { return }
+            await bestEffort("feedEngagementWrites.updateLikeCount", category: .grdb) {
+                try await persistence.updateLikeCount(postId: postId, count: likes, isLikedByMe: isLiked)
+            }
+        }
+    }
+
+    /// Rend la main quand toutes les écritures déjà demandées sont faites.
+    func settled() async {
+        await tail?.value
+    }
+}

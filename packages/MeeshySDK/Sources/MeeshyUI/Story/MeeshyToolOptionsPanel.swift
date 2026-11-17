@@ -17,10 +17,10 @@ import MeeshySDK
 ///
 /// ## Ce qu'elle N'est pas
 ///
-/// Ni `StoryDrawingToolbar` ni `StoryTextEditToolbar` : celles-là portent
-/// bulles ET options, et FLOTTENT. Les monter en plus du rail peindrait les
-/// bulles deux fois. Cette vue est leur moitié BASSE, extraite pour un hôte qui
-/// possède déjà l'autre moitié.
+/// Ni une barre d'outils flottante : celles de l'ancien atelier portaient
+/// bulles ET options, et les monter en plus du rail aurait peint les bulles
+/// deux fois. Cette vue est leur moitié BASSE, pour un hôte qui possède déjà
+/// l'autre moitié.
 ///
 /// ## Une seule vue pour les deux familles, et c'est délibéré
 ///

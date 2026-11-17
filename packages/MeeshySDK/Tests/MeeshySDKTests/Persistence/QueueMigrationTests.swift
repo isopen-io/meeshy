@@ -2,8 +2,8 @@ import XCTest
 import GRDB
 @testable import MeeshySDK
 
-/// Wave 1 Task 3.6 — narrowed to OfflineQueue only after `MessageRetryQueue`
-/// and `ReactionQueue` were folded into `OfflineQueue`. The legacy
+/// Wave 1 Task 3.6 — narrowed to OfflineQueue only after the former
+/// message-retry and reaction queues were folded into `OfflineQueue`. The legacy
 /// `RetryQueueItem` / `ReactionQueueItem` migrations no longer exist because
 /// both queues now share `OfflineQueue`'s outbox persistence from the very
 /// first enqueue, so there is nothing to migrate from.

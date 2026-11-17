@@ -67,7 +67,7 @@ data class ReelPresentation(
     val scene: StorySlideView? = null,
     /** Ce que « Enregistrer », « Partager » et « Imager » rendent (#13896) : la charge servie et la scène qu'elle peint. */
     val export: Pair<StoryItem, StorySlideView>? = null,
-    /** Le média dont la luminance commande la teinte des glyphes du rail (iOS `MediaLuminanceScheme`) ; `null` : glyphes blancs. */
+    /** Le média dont la luminance commande la teinte des glyphes du rail (iOS `MediaChromeScheme`) ; `null` : glyphes blancs. */
     val backdrop: MediaChromeBackdrop? = null,
     /** Les commentaires de CE réel sont fermés (#16541) : le menu offre « Réactiver ». */
     val commentsDisabled: Boolean = false,

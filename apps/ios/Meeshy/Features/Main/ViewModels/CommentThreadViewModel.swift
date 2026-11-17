@@ -35,15 +35,23 @@ enum CommentThreadEntity: Equatable, Sendable {
 struct CommentThreadStore {
     var load: @MainActor (String) async -> CacheResult<[FeedComment]>
     var save: @MainActor (String, [FeedComment]) async -> Void
+    /// What the disk still holds past the TTL (`.expired` carries no rows): an
+    /// expired thread paints it, then revalidates (#18938). `nil`: nothing kept.
+    var loadIgnoringExpiry: @MainActor (String) async -> [FeedComment]? = { _ in nil }
 
     static var cache: CommentThreadStore {
         CommentThreadStore(
-            load: { await CacheCoordinator.shared.comments.load(for: $0) },
+            load: { await Self.comments.load(for: $0) },
             save: { key, comments in
                 await bestEffort("commentThread.save", category: .cache) {
-                    try await CacheCoordinator.shared.comments.save(comments, for: key)
+                    try await Self.comments.save(comments, for: key)
                 }
-            })
+            },
+            loadIgnoringExpiry: { await Self.comments.loadIgnoringExpiry(for: $0)?.items })
+    }
+
+    private static var comments: GRDBCacheStore<String, FeedComment> {
+        get async { await CacheCoordinator.shared.comments }
     }
 }
 

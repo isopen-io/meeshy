@@ -532,8 +532,6 @@ final class MessageModelsTests: XCTestCase {
         XCTAssertEqual(EphemeralDuration.twentyFourHours.displayLabel, "24 heures")
     }
 
-    // MARK: - SharedContact
-
     // MARK: - APIMessage.postReplyTo (snapshot figé du post cité)
 
     func test_apiMessage_decodesPostReplyTo_story_withShareCount() throws {

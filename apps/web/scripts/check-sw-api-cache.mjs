@@ -552,6 +552,50 @@ export async function auditIdentiteDuSeauApi(source) {
 }
 
 /**
+ * EN LIGNE, LE SEAU `api` NE REND JAMAIS SA COPIE (#18919).
+ *
+ * `NetworkFirst` rend la réponse rangée dès qu'un `fetch` LÈVE : en ligne, une
+ * passerelle injoignable une seconde servait la copie d'il y a une heure, que
+ * TanStack prenait pour une réponse fraîche, par-dessus l'état temps réel. Le
+ * greffon `cachedResponseWillBeUsed` (`src/lib/net/api-cache-offline-only.ts`)
+ * la refuse tant que le service worker se sait en ligne, et la sert hors
+ * ligne. Le gate l'EXTRAIT de l'artefact et le FAIT DÉCIDER contre un `self`
+ * fabriqué, dans les deux états.
+ */
+export async function auditHorsLigneDuSeauApi(source) {
+  const appel = appelDuSeau(source, 'api');
+  if (appel === null) return ['aucun seau `api` dans le service worker construit'];
+
+  const marqueur = 'cachedResponseWillBeUsed:';
+  const debut = appel.strategie.indexOf(marqueur);
+  if (debut === -1) {
+    return [
+      'le seau `api` ne porte aucun `cachedResponseWillBeUsed` : en ligne, un réseau qui échoue reçoit ' +
+        'la copie rangée, que TanStack prend pour une réponse fraîche (#18919)',
+    ];
+  }
+  const texte = decoupePremierArgument(appel.strategie, debut + marqueur.length);
+  const decide = (onLine) => new Function('self', `"use strict"; return (${texte});`)({ navigator: { onLine } });
+
+  try {
+    const copie = new Response('{"de":"une lecture précédente"}');
+    const violations = [];
+    if ((await decide(true)({ cachedResponse: copie })) !== null) {
+      violations.push('EN LIGNE, la copie du seau `api` est servie sur un réseau qui échoue — elle écraserait l’état temps réel');
+    }
+    if ((await decide(false)({ cachedResponse: copie })) !== copie) {
+      violations.push('HORS LIGNE, la copie du seau `api` n’est plus servie — le démarrage à froid sans réseau ne lit plus rien');
+    }
+    return violations;
+  } catch (err) {
+    return [
+      `greffon hors ligne du seau \`api\` NON AUTONOME : ${err.message}. ` +
+        'Workbox le stringifie — il ne peut dépendre que de `self`.',
+    ];
+  }
+}
+
+/**
  * LE SEAU `medias` RESPECTE LA FRAÎCHEUR QUE LA PASSERELLE DÉCLARE (#9478).
  *
  * Une vue unique part en `private, no-store`, un éphémère en
@@ -873,6 +917,7 @@ async function main() {
     ['le seau `medias`', auditSeauMedias(source)],
     ['le routage', auditRoutage(source)],
     ['l’identité du seau `api`', await auditIdentiteDuSeauApi(source)],
+    ['la copie du seau `api` hors ligne seulement', await auditHorsLigneDuSeauApi(source)],
     ['la fraîcheur du seau `medias`', await auditFraicheurDuSeauMedias(source)],
   ];
 
@@ -892,7 +937,7 @@ async function main() {
   console.log(
     '  sw.js : le seau `api` décide tout seul, garde le JSON hors ligne, et laisse ' +
       'hors du disque TOUTE réponse /api/v1/admin/**, et range chaque réponse sous ' +
-      'l’identité qui l’a demandée (#8674).\n' +
+      'l’identité qui l’a demandée (#8674), et ne rend sa copie que hors ligne (#18919).\n' +
       '  sw.js : le seau `medias` prend les images de la passerelle AVANT le seau `api` ' +
       '(`statuses: [0, 200]`), n’y écrit ni n’y resert aucun média `no-store` / `no-cache` ' +
       '(#9478) ; audio et vidéo restent hors cache, par décision.',

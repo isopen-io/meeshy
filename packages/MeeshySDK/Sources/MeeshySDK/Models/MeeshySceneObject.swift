@@ -65,8 +65,8 @@ public enum MeeshySceneObject: Sendable {
     /// **`place`, et non `location`** (#4960).
     ///
     /// Le contrat du fil dit `place` (`ACTIVE_KINDS`, `packages/shared/types/canvas-v3.ts`),
-    /// son miroir Swift dit `place` (`ObjectKind`), la timeline dit `place`
-    /// (`TimelineClipKind`) et l'inspecteur aussi (`ClipSnapshot.Kind`). Cet
+    /// son miroir Swift dit `place` (`ObjectKind`) et la timeline dit `place`
+    /// (`TimelineClipKind`). Cet
     /// énuméré était le SEUL à dire `location` — et c'est celui que le composer
     /// lit, donc celui dont tout l'éditeur d'objet dépend.
     ///

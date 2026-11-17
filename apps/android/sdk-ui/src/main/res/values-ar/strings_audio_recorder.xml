@@ -4,8 +4,6 @@
     <string name="audio_recorder_edit">تعديل</string>
     <string name="audio_recorder_accept">استخدام هذا التسجيل</string>
     <string name="audio_recorder_redo">إعادة التسجيل</string>
-    <string name="audio_recorder_preview_play">تشغيل المعاينة</string>
-    <string name="audio_recorder_preview_pause">إيقاف المعاينة مؤقتًا</string>
     <string name="audio_recorder_spoken_language">اللغة المنطوقة</string>
     <string name="audio_recorder_close">إغلاق المسجّل</string>
 </resources>

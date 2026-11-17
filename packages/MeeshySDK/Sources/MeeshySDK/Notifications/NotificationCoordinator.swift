@@ -87,6 +87,9 @@ public final class NotificationCoordinator: ObservableObject {
 
     public weak var widgetSink: NotificationWidgetSink?
     private let badgeWriter: NotificationBadgeWriting
+    /// Ce que la sortie de session retire du Centre de notifications (#18911).
+    /// Modifiable pour que l'hôte de test d'application remplace le système.
+    var deliveredNotificationsPurger: any DeliveredNotificationsPurging
     private let appGroupDefaults: UserDefaults?
     /// Resolves the current user's id so the read-status reset only fires for
     /// OUR own reads. Injectable for tests; defaults to the auth singleton.
@@ -149,9 +152,11 @@ public final class NotificationCoordinator: ObservableObject {
         badgeEnabledProvider: @escaping @MainActor () -> Bool = { UserPreferencesManager.shared.notification.notificationBadgeEnabled },
         badgeEnabledChanges: AnyPublisher<Bool, Never>? = nil,
         openConversationIdsProvider: @escaping @MainActor () -> Set<String> = { NotificationToastManager.shared.openConversationIds },
-        ledger: ConversationReadLedger = .shared
+        ledger: ConversationReadLedger = .shared,
+        deliveredNotificationsPurger: any DeliveredNotificationsPurging = SystemDeliveredNotificationsPurger()
     ) {
         self.badgeWriter = badgeWriter
+        self.deliveredNotificationsPurger = deliveredNotificationsPurger
         self.appGroupDefaults = UserDefaults(suiteName: appGroupSuiteName)
         self.currentUserIdProvider = currentUserIdProvider
         self.badgeEnabledProvider = badgeEnabledProvider
@@ -190,7 +195,16 @@ public final class NotificationCoordinator: ObservableObject {
     }
 
     /// Tear down state on logout. Clears badge and cached counts.
-    public func reset() {
+    ///
+    /// `purgingDeliveredNotifications` (#18911, ios-systeme-2) : vide aussi le
+    /// Centre de notifications du système — les aperçus du compte quitté ne
+    /// restent ni à l'écran verrouillé ni sous le compte suivant. Faux pour un
+    /// simple changement de compte (voir `SessionExitNotificationPolicy`).
+    public func reset(purgingDeliveredNotifications: Bool = false) {
+        if purgingDeliveredNotifications {
+            deliveredNotificationsPurger.removeAllDeliveredNotifications()
+            deliveredNotificationsPurger.removeAllPendingNotificationRequests()
+        }
         cancellables.removeAll()
         debounceTask?.cancel()
         debounceTask = nil

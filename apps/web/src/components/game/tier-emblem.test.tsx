@@ -3,21 +3,25 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
 
-import { TierEmblem } from './tier-emblem';
+import { TierEmblemGlyph } from './tier-emblem';
 
-const render = (tier: (typeof LEVEL_TIER_KEYS)[number]): string => renderToStaticMarkup(<TierEmblem tier={tier} size={64} />);
+const UID = 'ghote';
+
+const render = (tier: (typeof LEVEL_TIER_KEYS)[number]): string =>
+  renderToStaticMarkup(
+    <svg viewBox="0 0 56 56">
+      <TierEmblemGlyph uid={UID} tier={tier} cx={28} cy={28} size={34} />
+    </svg>,
+  );
 
 /**
- * L’EMBLÈME DE PALIER (#9481) — décoratif, à la couleur spectrale du palier,
- * la Signature au cœur ; Galaxie est un spectre.
+ * L’EMBLÈME DE PALIER (#9481) — posé DANS le SVG d’un hôte (l’anneau de
+ * niveau), à la couleur spectrale du palier, la Signature au cœur ; Galaxie
+ * est un spectre, dont l’hôte déclare la peinture.
  */
-describe('TierEmblem', () => {
-  test('un dessin décoratif par palier, qui nomme son palier', () => {
-    for (const tier of LEVEL_TIER_KEYS) {
-      const html = render(tier);
-      expect(html).toContain('aria-hidden="true"');
-      expect(html).toContain(`data-game-emblem="${tier}"`);
-    }
+describe('TierEmblemGlyph', () => {
+  test('un dessin par palier, qui nomme son palier', () => {
+    for (const tier of LEVEL_TIER_KEYS) expect(render(tier)).toContain(`data-game-emblem="${tier}"`);
   });
 
   test('vingt emblèmes, vingt dessins différents', () => {
@@ -29,11 +33,8 @@ describe('TierEmblem', () => {
     expect(render('eclat')).not.toMatch(/ (?:fill|stroke)="#/);
   });
 
-  test('Galaxie est un spectre : la peinture prisme, déclarée dans le dessin', () => {
-    const html = render('galaxie');
-    expect(html).toMatch(/fill="url\(#([^)]+)-p-prism\)"/);
-    const id = /url\(#([^)]+-p-prism)\)/.exec(html)?.[1] ?? '';
-    expect(html).toContain(`id="${id}"`);
+  test('Galaxie est un spectre : la peinture prisme des `<defs>` de l’hôte', () => {
+    expect(render('galaxie')).toContain(`url(#${UID}-p-prism)`);
   });
 
   test('la Signature est au cœur de chaque emblème', () => {

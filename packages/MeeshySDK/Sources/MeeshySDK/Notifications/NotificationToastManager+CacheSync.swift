@@ -66,7 +66,17 @@ extension NotificationToastManager {
     /// déclencher le réseau de `refreshUnreadCount()`.
     func applyRevocationLocally(_ notificationId: String) {
         applyDeletionToCache(notificationId)
+        dismissToastIfShowing(notificationId)
         notificationWasDeleted.send(notificationId)
+    }
+
+    /// Une notification révoquée (message supprimé pour tous, réaction
+    /// retirée) ne garde pas sa bannière in-app : elle montrerait jusqu'à 7 s
+    /// le texte retiré, et son toucher mènerait à un contenu disparu (#19104).
+    /// Une autre bannière, elle, reste à l'écran.
+    func dismissToastIfShowing(_ notificationId: String) {
+        guard currentToast?.id == notificationId else { return }
+        dismissToast()
     }
 
     /// Jumelle DURABLE de l'atome ci-dessus : même patch cache, même
@@ -84,6 +94,7 @@ extension NotificationToastManager {
     /// store notifications perdait l'état "lu" au kill » (`GRDBDirtyFlushing`).
     func applyRevocationDurably(_ notificationId: String) async {
         await Self.removeFromCache(notificationId)
+        dismissToastIfShowing(notificationId)
         notificationWasDeleted.send(notificationId)
     }
 

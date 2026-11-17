@@ -4,8 +4,8 @@ import Foundation
 
 /// Direction of a reaction mutation persisted in the outbox.
 ///
-/// Wave 1 Task 3.6 — moved out of the deleted `ReactionQueue` into a dedicated
-/// types file. The raw values (`"add"` / `"remove"`) are stable on-disk
+/// Wave 1 Task 3.6 — moved out of the former reaction queue actor into a
+/// dedicated types file. The raw values (`"add"` / `"remove"`) are stable on-disk
 /// identifiers — they appear inside the JSON-encoded payload of every pending
 /// `OutboxRecord` of kind `.sendReaction`. Renaming a case is a migration,
 /// not a refactor.
@@ -20,8 +20,8 @@ public enum ReactionAction: String, Codable, Sendable {
 /// `kind == .sendReaction` row. Re-hydrated by `OutboxDispatcher` at retry
 /// time to rebuild the reaction parameters handed to `ReactionService`.
 ///
-/// Wave 1 Task 3.6 — moved out of the deleted `ReactionQueue` into a dedicated
-/// types file alongside `ReactionAction`. The shape is unchanged so on-device
+/// Wave 1 Task 3.6 — moved out of the former reaction queue actor into a
+/// dedicated types file alongside `ReactionAction`. The shape is unchanged so on-device
 /// rows written by previous app versions decode without migration.
 public struct ReactionOutboxPayload: Codable, Sendable {
     public let messageId: String

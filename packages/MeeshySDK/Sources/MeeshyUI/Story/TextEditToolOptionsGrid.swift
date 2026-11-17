@@ -10,16 +10,16 @@ import MeeshySDK
 ///
 /// ## Pourquoi un PARAMÈTRE, et non un remplacement
 ///
-/// `TextEditToolOptions` est monté par **trois** hôtes, et la hauteur ne vaut
+/// `TextEditToolOptions` est monté par **plusieurs** hôtes, et la hauteur ne vaut
 /// pas la même chose chez chacun :
 ///
 /// | hôte | place | ce que la grille y ferait |
 /// |---|---|---|
 /// | `ComposerObjectEditorView` (app) | écran plein, options plafonnées | ce que la directive demande |
-/// | `StoryTextEditToolbar` (SDK) | îlot AU-DESSUS du clavier | mangerait une hauteur qui n'existe pas |
+/// | `ComposerKeyboardStyleBar` (app) | îlot AU-DESSUS du clavier | mangerait une hauteur qui n'existe pas |
 /// | `MeeshyToolOptionsPanel` (SDK) | zone basse de la scène | volerait la carte 9:16 |
 ///
-/// Basculer le SDK entier aurait donc réglé un écran en cassant les deux
+/// Basculer le SDK entier aurait donc réglé un écran en cassant les
 /// autres. Le défaut `.row` garantit qu'un hôte qui ne dit rien garde
 /// exactement la forme qu'il avait — la grille est une DEMANDE, jamais un
 /// changement subi.
@@ -46,8 +46,8 @@ public enum TextEditOptionsLayout: String, Sendable, CaseIterable {
     /// exclue pour une raison écrite — « POLICE porte un curseur et sa propre
     /// grille de dix-huit spécimens » — que la directive supplante : le curseur
     /// de taille vit au-dessus et n'a jamais empêché un enroulement, et la
-    /// « grille de spécimens » est une bande HORIZONTALE à deux rangs
-    /// (`TextStyleSpecimenBand`), montée ailleurs, qui ne dispensait donc pas
+    /// « grille de spécimens » était une bande HORIZONTALE à deux rangs,
+    /// montée ailleurs, qui ne dispensait donc pas
     /// ce panneau-ci d'avoir la même anatomie que ses voisins.
     ///
     /// Les cinq restants ne s'y prêtent toujours pas : ALIGNEMENT tient en

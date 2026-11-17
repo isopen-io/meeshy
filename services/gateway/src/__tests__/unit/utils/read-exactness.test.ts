@@ -3,7 +3,7 @@
  *
  * Deux fonctions pures qui portent le passage de « lu = fenêtre temporelle »
  * à « lu = réellement affiché » :
- *  - computeContiguousReadPrefix : jusqu'où le curseur de lecture peut avancer
+ *  - computeContiguousPrefix : jusqu'où un curseur peut avancer (lecture ET livraison)
  *    sans franchir un message non lu.
  *  - resolveReadAt : arbitre entre le gel per-message et le repli curseur
  *    hérité, selon la date de bascule.
@@ -14,51 +14,51 @@
 
 import { describe, it, expect } from '@jest/globals';
 import {
-  computeContiguousReadPrefix,
+  computeContiguousPrefix,
   resolveReadAt,
   resolveReceivedAt,
 } from '../../../utils/read-exactness';
 
-describe('computeContiguousReadPrefix', () => {
+describe('computeContiguousPrefix', () => {
   it('returns the last id when every message is read', () => {
     expect(
-      computeContiguousReadPrefix(['a', 'b', 'c'], new Set(['a', 'b', 'c']))
+      computeContiguousPrefix(['a', 'b', 'c'], new Set(['a', 'b', 'c']))
     ).toBe('c');
   });
 
   it('stops at the message preceding the first gap', () => {
     expect(
-      computeContiguousReadPrefix(['a', 'b', 'c', 'd'], new Set(['a', 'b', 'd']))
+      computeContiguousPrefix(['a', 'b', 'c', 'd'], new Set(['a', 'b', 'd']))
     ).toBe('b');
   });
 
   it('returns null when the very first message is unread', () => {
     expect(
-      computeContiguousReadPrefix(['a', 'b'], new Set(['b']))
+      computeContiguousPrefix(['a', 'b'], new Set(['b']))
     ).toBeNull();
   });
 
   it('returns null on an empty read set', () => {
-    expect(computeContiguousReadPrefix(['a', 'b'], new Set())).toBeNull();
+    expect(computeContiguousPrefix(['a', 'b'], new Set())).toBeNull();
   });
 
   it('returns null on an empty message list', () => {
-    expect(computeContiguousReadPrefix([], new Set(['a']))).toBeNull();
+    expect(computeContiguousPrefix([], new Set(['a']))).toBeNull();
   });
 
   it('handles a single read message', () => {
-    expect(computeContiguousReadPrefix(['a'], new Set(['a']))).toBe('a');
+    expect(computeContiguousPrefix(['a'], new Set(['a']))).toBe('a');
   });
 
   it('ignores read ids that are not in the ordered list', () => {
     expect(
-      computeContiguousReadPrefix(['a', 'b'], new Set(['a', 'b', 'zzz']))
+      computeContiguousPrefix(['a', 'b'], new Set(['a', 'b', 'zzz']))
     ).toBe('b');
   });
 
   it('does not advance past a gap even when later messages are all read', () => {
     expect(
-      computeContiguousReadPrefix(
+      computeContiguousPrefix(
         ['a', 'b', 'c', 'd', 'e'],
         new Set(['a', 'c', 'd', 'e'])
       )

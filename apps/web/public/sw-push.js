@@ -209,50 +209,48 @@ const CREDENTIAL_DB_VERSION = 1;
 const CREDENTIAL_STORE_NAME = 'credential';
 const CREDENTIAL_KEY = 'current';
 
-/**
- * Lit le crédential posé par la page — `null` si absent, IndexedDB
- * indisponible (portée privée, navigateur ancien) ou en échec : un accusé
- * manqué se rattrape à la reconnexion, EXACTEMENT le comportement PRÉCÉDENT
- * (#7368 § Contexte) — jamais une erreur qui empêcherait la bannière.
- */
-function lireCredential() {
+/** Ouvre une base IndexedDB — `null` si indisponible, en échec ou sans le magasin : best-effort, jamais une erreur qui empêche la bannière. Le SEUL code d'ouverture du worker. */
+function ouvrirBase(nom, version, magasin) {
   return new Promise((resolve) => {
     if (typeof self.indexedDB === 'undefined') { resolve(null); return; }
     let requete;
     try {
-      requete = self.indexedDB.open(CREDENTIAL_DB_NAME, CREDENTIAL_DB_VERSION);
+      requete = self.indexedDB.open(nom, version);
     } catch {
       resolve(null);
       return;
     }
     requete.onupgradeneeded = () => {
       const db = requete.result;
-      if (!db.objectStoreNames.contains(CREDENTIAL_STORE_NAME)) db.createObjectStore(CREDENTIAL_STORE_NAME);
+      if (!db.objectStoreNames.contains(magasin)) db.createObjectStore(magasin);
     };
     requete.onerror = () => resolve(null);
     requete.onsuccess = () => {
       const db = requete.result;
-      if (!db.objectStoreNames.contains(CREDENTIAL_STORE_NAME)) {
-        db.close();
-        resolve(null);
-        return;
-      }
-      try {
-        const lecture = db.transaction(CREDENTIAL_STORE_NAME).objectStore(CREDENTIAL_STORE_NAME).get(CREDENTIAL_KEY);
-        lecture.onsuccess = () => {
-          db.close();
-          resolve(lecture.result || null);
-        };
-        lecture.onerror = () => {
-          db.close();
-          resolve(null);
-        };
-      } catch {
-        db.close();
-        resolve(null);
-      }
+      if (db.objectStoreNames.contains(magasin)) { resolve(db); return; }
+      db.close();
+      resolve(null);
     };
   });
+}
+
+/** Lit le crédential posé par la page — `null` si absent ou en échec : un accusé manqué se rattrape à la reconnexion (#7368). */
+function lireCredential() {
+  return ouvrirBase(CREDENTIAL_DB_NAME, CREDENTIAL_DB_VERSION, CREDENTIAL_STORE_NAME).then(
+    (db) =>
+      db === null
+        ? null
+        : new Promise((resolve) => {
+            try {
+              const lecture = db.transaction(CREDENTIAL_STORE_NAME).objectStore(CREDENTIAL_STORE_NAME).get(CREDENTIAL_KEY);
+              lecture.onsuccess = () => { db.close(); resolve(lecture.result || null); };
+              lecture.onerror = () => { db.close(); resolve(null); };
+            } catch {
+              db.close();
+              resolve(null);
+            }
+          }),
+  );
 }
 
 /** JUMEAU de `credentialHeaders()` (`src/lib/api/http.ts:215-219`) — les DEUX
@@ -915,11 +913,39 @@ async function refuserAppel(callId) {
 }
 
 /**
- * Répondre ouvre le fil de l'appel et le fait DÉCROCHER : l'onglet ouvert
- * reçoit l'identifiant de l'appel, un onglet neuf le lit dans son adresse
- * (`?repondre=<id>`). Le toucher du corps ouvre seulement le fil, où
- * `call:check-active` rejoue la sonnerie à la connexion.
+ * LA CONFIRMATION D'UN ONGLET NEUF (#18907) — JUMEAU de `src/lib/calls/call-answer-confirmation.ts`
+ * (base, magasin, version) et de `ANSWER_INTENT_TTL_MS`. Une adresse `?repondre=` se compose à la main :
+ * seul ce worker a reçu le toucher, donc seul il pose `{ callId, until }` que la page consomme. Son écriture
+ * n'attend que CALL_INTENT_WAIT_MS avant `openWindow`, que Firefox ne permet qu'environ une seconde après le clic.
  */
+const CALL_INTENT_DB_NAME = 'meeshy-call-intent';
+const CALL_INTENT_DB_VERSION = 1;
+const CALL_INTENT_STORE_NAME = 'intents';
+const CALL_INTENT_TTL_MS = 70000;
+const CALL_INTENT_WAIT_MS = 250;
+
+/** Best-effort : sans IndexedDB l'appel sonne et attend un toucher — jamais un décrochage sans consentement. */
+function poserConfirmationAppel(callId) {
+  return ouvrirBase(CALL_INTENT_DB_NAME, CALL_INTENT_DB_VERSION, CALL_INTENT_STORE_NAME).then(
+    (db) =>
+      db === null
+        ? undefined
+        : new Promise((resolve) => {
+            const fin = () => { db.close(); resolve(); };
+            try {
+              const tx = db.transaction(CALL_INTENT_STORE_NAME, 'readwrite');
+              tx.objectStore(CALL_INTENT_STORE_NAME).put({ callId: callId, until: Date.now() + CALL_INTENT_TTL_MS }, callId);
+              tx.oncomplete = fin;
+              tx.onerror = fin;
+            } catch {
+              fin();
+            }
+          }),
+  );
+}
+
+/** Répondre ouvre le fil et le fait DÉCROCHER : un onglet ouvert reçoit l'identifiant dans le MESSAGE (voie de confiance),
+ * un onglet neuf le lit dans `?repondre=<id>` après la confirmation du worker. Le corps ouvre seulement le fil. */
 async function ouvrirAppel(data, action) {
   const callId = texte(data.callId);
   if (action === CALL_DECLINE_ACTION) {
@@ -931,8 +957,10 @@ async function ouvrirAppel(data, action) {
   const ouvertes = await fenetres();
   const client = ouvertes[0];
   if (client === undefined) {
+    const confirmation = repondre ? poserConfirmationAppel(callId) : Promise.resolve();
+    await Promise.race([confirmation, new Promise((fin) => setTimeout(fin, CALL_INTENT_WAIT_MS))]);
     await self.clients.openWindow(repondre ? fil + '?' + CALL_ANSWER_PARAM + '=' + encodeURIComponent(callId) : fil);
-    return;
+    return confirmation;
   }
   try {
     await client.focus();
@@ -1050,22 +1078,7 @@ function identifiantEvenement() {
 }
 
 function ouvrirTelemetrie() {
-  return new Promise((resolve) => {
-    if (typeof self.indexedDB === 'undefined') { resolve(null); return; }
-    let requete;
-    try {
-      requete = self.indexedDB.open(TELEMETRIE_DB_NAME, TELEMETRIE_DB_VERSION);
-    } catch {
-      resolve(null);
-      return;
-    }
-    requete.onupgradeneeded = () => {
-      const db = requete.result;
-      if (!db.objectStoreNames.contains(TELEMETRIE_STORE_NAME)) db.createObjectStore(TELEMETRIE_STORE_NAME);
-    };
-    requete.onerror = () => resolve(null);
-    requete.onsuccess = () => resolve(requete.result.objectStoreNames.contains(TELEMETRIE_STORE_NAME) ? requete.result : null);
-  });
+  return ouvrirBase(TELEMETRIE_DB_NAME, TELEMETRIE_DB_VERSION, TELEMETRIE_STORE_NAME);
 }
 
 function lireEtEcrire(db, transformer) {

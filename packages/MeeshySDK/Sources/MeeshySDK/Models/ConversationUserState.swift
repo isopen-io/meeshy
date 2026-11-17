@@ -186,6 +186,71 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         return merged
     }
 
+    // MARK: - La ligne de conversation (#7198, #18925)
+
+    /// Ce que la ligne de `GET /conversations` et `GET /conversations/:id` sert de l'état du lecteur, projeté
+    /// après l'init memberwise de `APIConversation.toConversation` : la frontière de lecture, et les préférences
+    /// que la diffusion `user:preferences-updated` porte déjà — version, ordre manuel, effacement d'historique
+    /// (#18925). Une ligne synthétisée vaut la version 0 ; un serveur antérieur n'en sert rien, et rien n'est
+    /// fabriqué.
+    func servingRow(
+        lastReadMessageId: String?, lastReadMessageCreatedAt: Date?, preferences: APIConversationPreferences?
+    ) -> ConversationUserState {
+        var served = self
+        served.lastReadMessageId = lastReadMessageId
+        served.lastReadMessageCreatedAt = lastReadMessageCreatedAt
+        served.appearance = preferences?.appearance
+        served.version = preferences?.version ?? 0
+        served.orderInCategory = preferences?.orderInCategory
+        served.clearHistoryBefore = preferences?.clearHistoryBefore
+        return served
+    }
+
+    // MARK: - Served row (#18916)
+
+    /// Adopte une ligne SERVIE par `/user-preferences/conversations` : les seuls
+    /// champs que la route sert, et sa version.
+    ///
+    /// `deletedForUserAt` n'y est pas servi, et `clearHistoryBefore` ne l'est que
+    /// depuis #18925 : un serveur antérieur l'omet, et `nil` ne distingue pas
+    /// l'absent du « jamais effacé » — l'écrire d'ici rouvrirait un historique
+    /// effacé. La lecture et les champs propres à l'appareil n'en viennent pas.
+    /// Un booléen ou une liste absents gardent la valeur locale ; un champ
+    /// NULLABLE servi `null` dit « aucun », comme sur la diffusion vive.
+    func adoptingServed(_ served: APIConversationPreferences) -> ConversationUserState {
+        var adopted = self
+        adopted.isPinned = served.isPinned ?? isPinned
+        adopted.isMuted = served.isMuted ?? isMuted
+        adopted.mentionsOnly = served.mentionsOnly ?? mentionsOnly
+        adopted.isArchived = served.isArchived ?? isArchived
+        adopted.tags = served.tags ?? tags
+        adopted.sectionId = served.categoryId
+        adopted.orderInCategory = served.orderInCategory
+        adopted.customName = served.customName
+        adopted.reaction = served.reaction
+        adopted.appearance = served.appearance
+        adopted.version = served.version ?? version
+        return adopted
+    }
+
+    /// L'accusé d'un geste : la ligne que l'adaptateur a relue après le PUT.
+    ///
+    /// Quand sa version a sauté par-dessus le candidat local, d'autres écritures
+    /// ont eu lieu ailleurs pendant la coupure, et seule la ligne relue les
+    /// porte : elle est adoptée. Sinon, seule la version l'est — l'état
+    /// optimiste EST la ligne servie. Un autre geste encore en file garde son
+    /// état optimiste : l'adopter le ferait reculer à l'écran jusqu'à son
+    /// propre accusé.
+    func acknowledging(_ served: APIConversationPreferences?, keepingOptimistic: Bool) -> ConversationUserState {
+        guard let served, let servedVersion = served.version else { return self }
+        guard servedVersion > version, !keepingOptimistic else {
+            var acknowledged = self
+            acknowledged.version = servedVersion
+            return acknowledged
+        }
+        return adoptingServed(served)
+    }
+
     // MARK: - Codable (lenient decoder)
 
     /// Custom decoder that falls back to the init defaults for any

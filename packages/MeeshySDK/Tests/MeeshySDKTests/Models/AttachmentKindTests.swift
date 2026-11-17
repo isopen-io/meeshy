@@ -141,7 +141,7 @@ struct AttachmentKindTests {
         #expect(!AttachmentKind.other.hasTimebasedTrack)
     }
 
-    // MARK: - Présentation (témoin repris d'AttachmentDisplayTests, retiré avec AttachmentDisplay)
+    // MARK: - Présentation
 
     @Test("each kind exposes a non-empty symbol, hex tint and short label")
     func every_kind_has_a_complete_presentation() {

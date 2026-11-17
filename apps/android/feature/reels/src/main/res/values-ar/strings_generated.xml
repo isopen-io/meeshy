@@ -5,7 +5,6 @@
     <string name="reels_action_send">إرسال</string>
     <string name="reels_author_profile">الملف الشخصي للمؤلف</string>
     <string name="reels_caption_translated">الترجمة متاحة</string>
-    <string name="reels_close">إغلاق</string>
     <plurals name="reels_comments_count">
         <item quantity="zero">%1$d تعليقات</item>
         <item quantity="one">%1$d تعليق</item>
@@ -36,7 +35,6 @@
     <string name="reels_report_reason_spam">رسائل مزعجة</string>
     <string name="reels_report_reason_violence">عنف</string>
     <string name="reels_scrub">التقدّم أو الرجوع</string>
-    <string name="reels_share">مشاركة</string>
     <string name="reels_toast_delete_failed">خطأ في حذف المنشور</string>
     <string name="reels_toast_deleted">تم حذف المنشور</string>
     <string name="reels_toast_pin_failed">خطأ في تثبيت المنشور</string>

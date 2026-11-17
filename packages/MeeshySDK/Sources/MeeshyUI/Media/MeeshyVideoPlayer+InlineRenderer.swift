@@ -8,8 +8,8 @@ import MeeshySDK
 // While playing the surface fills the bubble area — no `Color.black` letterbox
 // underneath because the aspect-ratio constraint matches the video natively
 // (height = width × min(1/ratio, maxAspectRatio)). The overlay controls are
-// drawn ON the video as a layered top/center/bottom stack (legacy parity
-// with `VideoPlayerOverlayControls`).
+// drawn ON the video as a layered top/center/bottom stack (parity with the
+// former SDK players' overlay).
 
 internal struct _InlineRenderer: View {
     let player: MeeshyVideoPlayer

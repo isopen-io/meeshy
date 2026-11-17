@@ -59,7 +59,8 @@ public struct PlaybackStretch: Codable, Sendable, Equatable {
 /// chaque frontière. `struct` sans isolation — rien à synchroniser, le
 /// propriétaire (le lecteur, `@MainActor` en pratique) en détient une copie.
 ///
-/// Miroir TypeScript : `apps/web/utils/playback-stretch-tracker.ts` — mêmes cas.
+/// Miroir TypeScript : le web legacy qui la portait a quitté le dépôt (#7668), et `apps/web` n'en a pas de miroir à ce jour (les tronçons y sont tenus par
+/// `apps/web/src/lib/view/use-media-playback.ts`).
 /// Voir `docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md`.
 public struct PlaybackStretchTracker: Sendable {
 

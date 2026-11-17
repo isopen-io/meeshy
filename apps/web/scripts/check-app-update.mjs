@@ -24,7 +24,10 @@
  *     (`lib/sw-caches.ts` § WORKBOX_PRECACHE_PREFIX) ;
  *   · la SESSION survit : le lecteur reste sur `/` au lieu de retomber sur
  *     `/login`, ce que seule une construction `VITE_DATA_SOURCE=gateway`
- *     rend observable (la garde de route ne mord pas sous fixtures).
+ *     rend observable (la garde de route ne mord pas sous fixtures) ;
+ *   · le CACHE DE REQUÊTES du lecteur survit aussi (#18923, qui révise
+ *     #6936) : la mise à jour le range avant de partir, et la version neuve le
+ *     relit — seul `CACHE_SCHEMA` le purge (`src/lib/api/query-client.ts`).
  *
  * COMMENT DEUX VERSIONS SONT FABRIQUÉES. La construction est DÉTERMINISTE :
  * bâtir deux fois de suite donne deux `dist` identiques au bit, donc un
@@ -91,7 +94,7 @@ const SURVIVORS = {
   'meeshy.draft.u-maj.c-1': 'un brouillon que la mise à jour ne doit pas manger',
 };
 
-/** Ce qui doit DISPARAÎTRE — le cache de requêtes persisté de la version A. */
+/** Le cache de requêtes persisté : la mise à jour ne le jette plus (#18923). */
 const QUERY_CACHE_KEY = 'meeshy.query-cache';
 
 /** Le journal des gestes sur cette clé, et le repère du rechargement. */
@@ -249,13 +252,13 @@ async function main() {
    * rendrait vert le défaut qu'il doit attraper.
    *
    * ET IL JOURNALISE CE QUI ARRIVE À LA CLÉ DU CACHE PERSISTÉ. « La clé est
-   * absente après le rechargement » n'est pas mesurable : la version neuve
-   * repersiste légitimement son propre cache dans les 250 ms. Ce qui se mesure,
-   * c'est la SUITE des événements — le dernier geste avant le rechargement doit
-   * être un RETRAIT. Sans le verrou de persistance (`discardPersisted`), le
-   * `pagehide` du rechargement ajoute une écriture après ce retrait, et cette
-   * assertion rougit. `sessionStorage` survit au rechargement dans le même
-   * onglet : c'est ce qui rend la suite lisible APRÈS le voyage.
+   * présente après le rechargement » ne suffit pas : la version neuve
+   * repersiste son propre cache dans les 250 ms, qu'elle ait relu celui de A
+   * ou non. Ce qui se mesure, c'est la SUITE des événements (#18923) : une fois
+   * que A a écrit son cache, AUCUN retrait — ni au clic, ni au démarrage de B,
+   * qui retire une entrée qu'il ne sait pas relire. `sessionStorage` survit au
+   * rechargement dans le même onglet : c'est ce qui rend la suite lisible APRÈS
+   * le voyage.
    */
   await context.addInitScript(
     ([survivors, queryCacheKey, journalKey, seedKey, reloadMark]) => {
@@ -399,18 +402,22 @@ async function main() {
       check(gardes[key] === value, `« ${key} » est intacte après la mise à jour`);
     }
 
-    /* LA SUITE DES GESTES, pas l'état final — voir l'amorçage : la version
-       neuve repersiste légitimement son cache, donc « la clé est absente »
-       n'est pas mesurable. Le dernier geste AVANT le rechargement doit être un
-       retrait. */
+    /* LA SUITE DES GESTES, pas l'état final — voir l'amorçage. Le journal
+       s'ouvre sur l'ÉCRITURE de l'amorce, dont le `buster` est étranger : A la
+       retire au démarrage. Ce qui suit la première écriture de A lui-même ne
+       doit plus contenir aucun retrait (#18923). */
     const journal = await page.evaluate((key) => window.sessionStorage.getItem(key) ?? '', JOURNAL_KEY);
     const gestes = journal.split(',');
     const repere = gestes.indexOf(RELOAD_MARK);
+    const premiereEcriture = gestes.indexOf('+', gestes.indexOf('-') + 1);
     const avantRechargement = repere === -1 ? gestes : gestes.slice(0, repere);
     check(
-      repere !== -1 && avantRechargement.at(-1) === '-',
-      `le dernier geste sur « ${QUERY_CACHE_KEY} » avant le rechargement est son RETRAIT ` +
-        `(journal : ${journal || '(vide)'})`,
+      repere !== -1 && premiereEcriture !== -1 && premiereEcriture < repere && avantRechargement.at(-1) === '+',
+      `A a rangé son cache « ${QUERY_CACHE_KEY} » juste avant le rechargement (journal : ${journal || '(vide)'})`,
+    );
+    check(
+      premiereEcriture !== -1 && !gestes.slice(premiereEcriture).includes('-'),
+      `la mise à jour ne jette pas « ${QUERY_CACHE_KEY} », et B le relit sans le retirer (journal : ${journal || '(vide)'})`,
     );
 
     /* LES SENTINELLES, jamais les NOMS de seaux : la version neuve recrée
@@ -472,8 +479,8 @@ async function main() {
   }
 
   console.log(
-    '\n  une nouvelle version s’annonce par la bannière, le clic purge les caches de l’ancienne, ' +
-      'recharge UNE fois sur la neuve — et le lecteur est toujours connecté.\n',
+    '\n  une nouvelle version s’annonce par la bannière, le clic purge les seaux de l’ancienne, ' +
+      'recharge UNE fois sur la neuve — et le lecteur est toujours connecté, son cache de requêtes relu.\n',
   );
 }
 

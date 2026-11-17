@@ -28,8 +28,8 @@ describe('ecouterRappels (#10908)', () => {
     rappels[0]?.({ conversationId: 'c7', media: 'video', title: 'Famille', isGroup: true });
     rappels[0]?.({ conversationId: 'c8', media: 'audio', title: '', isGroup: false });
     expect(demandes).toEqual([
-      { conversationId: 'c7', media: 'video', title: 'Famille', isGroup: true },
-      { conversationId: 'c8', media: 'audio', title: '', isGroup: false },
+      { conversationId: 'c7', media: 'video', title: 'Famille', isGroup: true, origin: 'message' },
+      { conversationId: 'c8', media: 'audio', title: '', isGroup: false, origin: 'message' },
     ]);
   });
 

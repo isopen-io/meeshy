@@ -5,8 +5,8 @@ import MeeshySDK
 /// S5 — l'insertion d'un média en premier plan devient une opération du
 /// ViewModel, testable, et donc UNIQUE.
 ///
-/// Elle vivait enfermée dans deux blocs `await MainActor.run { … }` de la View
-/// (`StoryComposerView+Media.swift`), ce qui obligeait tout nouveau chemin
+/// Elle vivait enfermée dans deux blocs `await MainActor.run { … }` de la vue
+/// de l'ancien atelier, ce qui obligeait tout nouveau chemin
 /// d'entrée (caméra, pellicule) à en écrire un JUMEAU. Chaque test ci-dessous
 /// épingle un des cinq points fragiles documentés du chemin historique :
 /// bump de `loadedImagesVersion` (sans lui : canvas noir, bug 2026-07-20),

@@ -113,10 +113,6 @@ public actor CacheCoordinator {
     /// hasn't reconciled yet, etc.) doesn't linger indefinitely in RAM.
     /// Matches the `messages` cache `staleTTL` window roughly.
     static let translationMaxAge: TimeInterval = 24 * 3600
-    var transcriptionCache =
-        BoundedFIFOMap<String, TranscriptionReadyEvent>(capacity: CacheCoordinator.maxTranslationCacheEntries)
-    var audioTranslationCache =
-        BoundedFIFOMap<String, [AudioTranslationEvent]>(capacity: CacheCoordinator.maxTranslationCacheEntries)
 
 
 
@@ -240,8 +236,9 @@ public actor CacheCoordinator {
     /// flag so subsequent cold starts skip the work — the per-save hooks
     /// keep the index live afterwards. Users are NOT backfilled here because
     /// the `.profiles` store is keyed per-user (no canonical "list" key);
-    /// they get indexed naturally as the user navigates and `UserProfileViewModel`
-    /// calls `SearchIndex.shared.indexUsers` after each fetch.
+    /// they get indexed naturally as the user navigates and
+    /// `LiveProfileLoading.storeProfile` calls `SearchIndex.shared.indexUsers`
+    /// after each fetch.
     private func backfillSearchIndexIfNeeded() async {
         let key = "meeshy.searchindex.backfillDone.v1"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
@@ -329,8 +326,6 @@ public actor CacheCoordinator {
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
-        transcriptionCache.removeAll()
-        audioTranslationCache.removeAll()
     }
 
     /// Démonte les abonnements pour que le `start()` suivant réarme, SANS
@@ -383,8 +378,6 @@ public actor CacheCoordinator {
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
-        transcriptionCache.removeAll()
-        audioTranslationCache.removeAll()
         clearTranslationCacheDB()
     }
 }

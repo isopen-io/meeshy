@@ -92,9 +92,10 @@ extension ConversationViewModel {
             return
         }
         isRevalidating = !messageStore.messages.isEmpty
-        let heldUpTo = openingWatermark()
+        let newestHeld = newestHeldInWindow()
         Task { [weak self] in
             guard let self else { return }
+            let heldUpTo = await self.historyLoader.catchUpCursor(newestHeld: newestHeld)
             let refreshReachedBackTo = await self.refreshMessagesFromAPI()
             await self.syncMissedMessagesOnOpen(heldUpTo: heldUpTo, refreshReachedBackTo: refreshReachedBackTo)
             self.isRevalidating = false
@@ -219,8 +220,8 @@ extension ConversationViewModel {
     // MARK: - Ouverture de conversation
 
     /// Le rattrapage `after` joué à l'OUVERTURE quand GRDB était chaud : au-delà de trente messages
-    /// manqués, le refresh laisse un TROU que seul ce rattrapage comble, depuis le message détenu AVANT
-    /// le refresh (#10572). Sur un GRDB froid il n'y a rien devant les trente plus récents.
+    /// manqués, le refresh laisse un TROU que seul ce rattrapage comble, depuis la fin du fil détenu sans
+    /// trou AVANT le refresh (#10572, #18929). Sur un GRDB froid il n'y a rien devant les trente plus récents.
     private func syncMissedMessagesOnOpen(heldUpTo: Date?, refreshReachedBackTo: Date?) async {
         guard !accessRevoked,
               let cursor = Self.openingGapCursor(heldUpTo: heldUpTo, refreshReachedBackTo: refreshReachedBackTo)
@@ -229,7 +230,7 @@ extension ConversationViewModel {
     }
 
     /// Le plus récent message SERVEUR détenu par la fenêtre peinte, lu dans `messageStore` (synchrone).
-    private func openingWatermark() -> Date? {
+    private func newestHeldInWindow() -> Date? {
         SyncWatermark.newest(among: messageStore.domainMessages(currentUserId: currentUserId))
     }
 
@@ -242,10 +243,10 @@ extension ConversationViewModel {
     func syncMissedMessages() async {
         // #10830 — un écran QUITTÉ ne rattrape plus : son modèle peut survivre à la navigation.
         guard ConversationCatchUpGate.shared.isPresent(self) else { return }
-        // Le filigrane est le plus récent message horodaté par le SERVEUR (`SyncWatermark.newest`) : un
-        // envoi optimiste à l'horloge locale en avance ferait sauter de vrais messages manqués.
-        guard let newestLocal = SyncWatermark.newest(among: messages) else { return }
-        await syncMissedMessages(after: newestLocal)
+        // La fin du fil détenu sans trou (#18929), bornée au plus récent message horodaté par le SERVEUR
+        // (`SyncWatermark.newest`) : ni un message entré seul ni un envoi optimiste ne font sauter un trou.
+        guard let cursor = await historyLoader.catchUpCursor(newestHeld: SyncWatermark.newest(among: messages)) else { return }
+        await syncMissedMessages(after: cursor)
     }
 
     /// L'écran de cette conversation est quitté par navigation (#10830).
@@ -262,12 +263,11 @@ extension ConversationViewModel {
 
     /// Le rattrapage `after` à partir d'un curseur : la reconnexion part de ce qui est détenu maintenant,
     /// l'ouverture de ce qui l'était AVANT son refresh. Un rattrapage déjà en vol se rejoint (#10830).
-    func syncMissedMessages(after newestLocal: Date) async {
+    func syncMissedMessages(after cursor: Date) async {
         do {
-            let collected = try await historyLoader.fetchMissed(after: newestLocal)
-            guard !collected.isEmpty else { return }
             let readerPrism = preferredLanguages
-            await historyLoader.persist(collected, readerPrism: readerPrism)
+            let collected = try await historyLoader.fetchMissed(after: cursor, readerPrism: readerPrism)
+            guard !collected.isEmpty else { return }
             extractAttachmentTranscriptions(from: collected)
             extractTextTranslations(from: collected)
 

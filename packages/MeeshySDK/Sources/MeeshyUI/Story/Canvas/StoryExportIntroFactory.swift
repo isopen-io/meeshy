@@ -11,8 +11,8 @@ import MeeshySDK
 // `MeeshyConfig` / `ThumbHashDecoder` / `StoryExportIntroContent` (MeeshyUI,
 // ce module), `DynamicColorGenerator` (MeeshySDK). Elle vit donc ici, à côté
 // de `StoryExportIntroContent` — et TOUS les chemins d'export de story
-// (app-side `StoryPhotoSaveService`/`StoryExportShareViewModel` ET SDK-side
-// `TimelineExportController`) appellent désormais la MÊME fabrique : plus de
+// (app-side `StoryExportDressingResolver`, `StoryExportShareViewModel` et
+// `ComposerSceneExportController`) appellent la MÊME fabrique : plus de
 // décision dupliquée, l'interlude est garanti par construction.
 //
 // `StoryExportLanguageResolver` (résolution de la langue gravée) RESTE

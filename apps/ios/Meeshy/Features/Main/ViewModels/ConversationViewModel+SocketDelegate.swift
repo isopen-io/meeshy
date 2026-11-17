@@ -60,18 +60,10 @@ extension ConversationViewModel: ConversationSocketDelegate {
     ///    `refreshMessagesFromAPI` later runs.
     func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent) {
         injectAttachmentMetadata(from: event.attachment, intoMessageId: event.messageId)
-
-        let messageId = event.messageId
-        let attachmentId = event.attachment.id
-        let transcription = event.attachment.transcription
-        let translations = event.attachment.translations
+        // #18934 — le site que partage la conversation fermée.
+        let enrichment = AttachmentEnrichment(event)
         Task { [persistence = messagePersistence] in
-            try? await persistence.applyAttachmentEnrichment(
-                messageId: messageId,
-                attachmentId: attachmentId,
-                transcription: transcription,
-                translations: translations
-            )
+            try? await MessageEnrichmentWriter.apply(enrichment, into: persistence)
         }
     }
 

@@ -24,6 +24,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     private let service: CommunityServiceProviding
     private let currentUserId: @MainActor () -> String
     private let postsCache: @MainActor () async -> CommunityPostsCache?
+    private let myCommunities: MyCommunitiesWrites
     private var liveUpdates: AnyCancellable?
 
     /// `communityUpdates` : `community:updated` (#18439) réécrit l'identité
@@ -34,12 +35,14 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         service: CommunityServiceProviding = CommunityService.shared,
         currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
         postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil },
-        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live
+        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
+        myCommunities: MyCommunitiesWrites = .live
     ) {
         self.communityId = communityId
         self.service = service
         self.currentUserId = currentUserId
         self.postsCache = postsCache
+        self.myCommunities = myCommunities
         self.liveUpdates = communityUpdates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.apply(event) }
@@ -51,6 +54,12 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     }
 
     func load() async {
+        await loadServed()
+    }
+
+    /// Ce que le serveur sert de la communauté, `nil` sur un échec.
+    @discardableResult
+    private func loadServed() async -> APICommunity? {
         isLoading = true
         defer { isLoading = false }
 
@@ -63,8 +72,10 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
             if isMember {
                 conversations = try await service.getConversations(communityId: communityId)
             }
+            return apiCommunity
         } catch {
             loadFailure = Self.loadFailure(for: error)
+            return nil
         }
     }
 
@@ -99,7 +110,8 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         do {
             _ = try await service.join(communityId: communityId)
             await forgetCachedPosts()
-            await load()
+            // #18935 — la bande Communautés et le partage la voient au retour.
+            if let joined = await loadServed(), isMember { await myCommunities.add(joined) }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -109,6 +121,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         do {
             try await service.leave(communityId: communityId)
             await forgetCachedPosts()
+            await myCommunities.remove(communityId)
         } catch {
             errorMessage = error.localizedDescription
         }

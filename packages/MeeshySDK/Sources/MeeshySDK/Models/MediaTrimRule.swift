@@ -6,8 +6,8 @@ import CoreGraphics
 ///
 /// La doctrine de publication d'une story interdit de stocker un composite : le
 /// serveur reçoit le média d'ORIGINE et les objets qui le décrivent. Rogner ne
-/// peut donc pas ré-encoder — ce que font pourtant les trois éditeurs existants
-/// du dépôt (`MeeshyVideoEditorView`, `MeeshyAudioEditorView` et le moteur
+/// peut donc pas ré-encoder — ce que faisaient pourtant les éditeurs du dépôt
+/// (l'ancien éditeur vidéo, `MeeshyAudioEditorView` et le moteur
 /// `AudioEditEngine`, dont le `onConfirm` rend des bornes factices `(0, durée)`
 /// parce que l'édition est déjà dans le fichier livré).
 ///

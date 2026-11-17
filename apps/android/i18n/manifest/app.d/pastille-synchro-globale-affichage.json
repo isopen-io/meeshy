@@ -18,12 +18,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "common.dismiss",
-          "androidName": "common_dismiss",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "connection.connecting",
           "androidName": "connection_connecting",
           "status": "adopted"

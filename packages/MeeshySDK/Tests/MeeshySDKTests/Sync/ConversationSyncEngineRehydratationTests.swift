@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import MeeshySDK
 
@@ -17,6 +18,7 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
     private var mockAPI: MockAPIClient!
     private var mockSync: MockSync!
     private var mockService: MockConversationService!
+    private var mockSocket: MockMessageSocket!
     private var engine: ConversationSyncEngine!
     private var watermarkAvant: Date!
 
@@ -28,11 +30,12 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
         mockAPI.authToken = "jeton-de-test"
         mockSync = MockSync()
         mockService = MockConversationService()
+        mockSocket = MockMessageSocket()
         engine = ConversationSyncEngine(
             cache: .shared,
             conversationService: mockService,
             messageService: MockMessageService(),
-            messageSocket: MockMessageSocket(),
+            messageSocket: mockSocket,
             socialSocket: MockSocialSocket(),
             api: mockAPI,
             syncDelta: mockSync
@@ -339,6 +342,104 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
         XCTAssertEqual(ligne?.activeCall?.id, "appel-1")
     }
 
+    // MARK: - Un message reçu PENDANT la requête (#18936)
+
+    /// La route riche se lit avant le cache, et les événements vivent sur une autre file que les
+    /// rattrapages : un `message:new` appliqué pendant la requête était écrasé par l'aperçu, plus
+    /// ancien, que la réponse portait — la ligne reculait.
+    func test_rehydrate_whenMessageNewLandsDuringFetch_keepsNewerFacet() async {
+        await semeLAncienEtat()
+        mockSync.scripte = .delta(json: deltaJSON(ligne: ligneMaigreJSON()), validateur: nil)
+        mockAPI.stub("/conversations", result: pageRiche())
+        let porte = RequeteRetenue()
+        mockAPI.beforeResponse = { endpoint, queryItems in
+            guard endpoint == "/conversations", queryItems?.contains(where: { $0.name == "updatedSince" }) == true
+            else { return }
+            await porte.entreEtAttend()
+        }
+        let moteur: ConversationSyncEngine = engine
+        await moteur.startSocketRelay()
+
+        let rattrapage = Task { await moteur.syncSinceLastCheckpoint() }
+        await porte.attendQuOnEntre()
+        mockSocket.messageReceived.send(TestFactories.makeAPIMessage(
+            id: "m10", conversationId: "c1", senderId: "u2",
+            content: "On part ?", createdAt: Self.date("2026-09-04T12:00:30.000Z")
+        ))
+        let peinte = await attends { await self.c1()?.lastMessageId == "m10" }
+        await porte.relache()
+        let succes = await rattrapage.value
+        await moteur.stopSocketRelay()
+
+        XCTAssertTrue(peinte, "précondition : l'événement a peint la ligne pendant la requête")
+        XCTAssertTrue(succes)
+        let ligne = await c1()
+        XCTAssertEqual(ligne?.lastMessageId, "m10", "la réponse lue AVANT l'événement ne fait pas reculer la ligne")
+        XCTAssertEqual(ligne?.lastMessagePreview, "On part ?")
+        XCTAssertEqual(ligne?.lastMessageAt, Self.date("2026-09-04T12:00:30.000Z"))
+        XCTAssertEqual(ligne?.userState.unreadCount, 7, "le reste de la ligne vient toujours de la route riche")
+    }
+
+    /// Non-régression du même mécanisme : sans événement pendant la requête, la ligne servie gagne en
+    /// entier, y compris quand son dernier message, supprimé pendant la coupure, la fait RECULER — le
+    /// cas même qui justifie la réhydratation (« ne garder que plus récent » le bloquerait).
+    func test_rehydrate_lastMessageDeletedDuringTheOutage_rowStillRecedes() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        var ligneEnCache = MeeshyConversation(
+            id: "c1", identifier: "equipe-lagos", type: .group,
+            lastMessageAt: Self.date("2026-09-04T11:59:00.000Z"), unreadCount: 0
+        )
+        ligneEnCache.title = "Équipe Lagos"
+        ligneEnCache.lastMessageId = "m9"
+        ligneEnCache.lastMessagePreview = "Le train part à 16 h"
+        try? await CacheCoordinator.shared.conversations.save([ligneEnCache], for: "list")
+        mockSync.scripte = .delta(
+            json: deltaJSON(ligne: ligneMaigreJSON(lastMessageAt: "2026-09-04T11:58:00.000Z")),
+            validateur: nil
+        )
+        mockAPI.stub("/conversations", result: pageRiche(json: ligneRicheApresSuppression()))
+
+        let succes = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertTrue(succes)
+        let ligne = await c1()
+        XCTAssertEqual(ligne?.lastMessageId, "m8", "le message supprimé laisse la place au précédent")
+        XCTAssertEqual(ligne?.lastMessagePreview, "J'arrive")
+        XCTAssertEqual(ligne?.lastMessageAt, Self.date("2026-09-04T11:58:00.000Z"), "la ligne recule")
+    }
+
+    private func ligneRicheApresSuppression() -> String {
+        """
+        {
+          "id": "c1",
+          "type": "group",
+          "identifier": "equipe-lagos",
+          "title": "Équipe Lagos",
+          "isActive": true,
+          "memberCount": 5,
+          "lastMessageAt": "2026-09-04T11:58:00.000Z",
+          "createdAt": "2026-08-01T10:00:00.000Z",
+          "updatedAt": "2026-09-04T12:05:00.000Z",
+          "unreadCount": 0,
+          "lastMessage": {
+            "id": "m8",
+            "content": "J'arrive",
+            "createdAt": "2026-09-04T11:58:00.000Z",
+            "sender": { "id": "p2", "userId": "u2", "displayName": "Awa" }
+          }
+        }
+        """
+    }
+
+    private func attends(timeout: TimeInterval = 2, _ condition: () async -> Bool) async -> Bool {
+        let echeance = Date().addingTimeInterval(timeout)
+        while Date() < echeance {
+            if await condition() { return true }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return await condition()
+    }
+
     // MARK: - Les messages préchargés par l'extension de notification
 
     func test_messagesPrecharges_peignentLaLigneDesLeReveil_sansReseau() async {
@@ -402,5 +503,32 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
         let ligne = await c1()
         XCTAssertEqual(ligne?.lastMessagePreview, "Le train part à 16 h",
             "la réconciliation par /sync ne doit pas figer l'ancien aperçu d'une conversation active")
+    }
+}
+
+/// Retient la requête de la route riche le temps d'y glisser un événement (#18936).
+private actor RequeteRetenue {
+    private var entree = false
+    private var relachee = false
+    private var attenteDEntree: [CheckedContinuation<Void, Never>] = []
+    private var attenteDeRelache: [CheckedContinuation<Void, Never>] = []
+
+    func entreEtAttend() async {
+        entree = true
+        attenteDEntree.forEach { $0.resume() }
+        attenteDEntree = []
+        guard !relachee else { return }
+        await withCheckedContinuation { attenteDeRelache.append($0) }
+    }
+
+    func attendQuOnEntre() async {
+        guard !entree else { return }
+        await withCheckedContinuation { attenteDEntree.append($0) }
+    }
+
+    func relache() {
+        relachee = true
+        attenteDeRelache.forEach { $0.resume() }
+        attenteDeRelache = []
     }
 }

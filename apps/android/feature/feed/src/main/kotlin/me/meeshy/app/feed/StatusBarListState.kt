@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.StatusEntryFold
 import me.meeshy.sdk.status.StatusPage
 
 /**
@@ -79,8 +80,7 @@ data class StatusBarListState(
      * instance — when no status carries that id, so a stray removal never churns state.
      */
     fun removed(statusId: String): StatusBarListState =
-        if (statuses.none { it.id == statusId }) this
-        else copy(statuses = statuses.filterNot { it.id == statusId })
+        StatusEntryFold.onDeleted(statuses, statusId).let { next -> if (next === statuses) this else copy(statuses = next) }
 
     /**
      * Replace the status carrying [entry]'s id **in place**, preserving its position
@@ -89,11 +89,8 @@ data class StatusBarListState(
      * state nor smuggles a foreign entry in. Mirrors iOS `statuses[index] = entry`
      * guarded by `firstIndex(where:)`.
      */
-    fun updated(entry: StatusEntry): StatusBarListState {
-        val index = statuses.indexOfFirst { it.id == entry.id }
-        if (index < 0) return this
-        return copy(statuses = statuses.toMutableList().also { it[index] = entry })
-    }
+    fun updated(entry: StatusEntry): StatusBarListState =
+        StatusEntryFold.onUpdated(statuses, entry).let { next -> if (next === statuses) this else copy(statuses = next) }
 
     /**
      * Optimistically bump the [emoji] reaction count on the status with [statusId] by

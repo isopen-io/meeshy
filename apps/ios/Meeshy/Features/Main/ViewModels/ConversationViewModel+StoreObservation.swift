@@ -145,7 +145,7 @@ extension ConversationViewModel {
     ///
     /// Wave 1 Task 3.6 — collapsed onto the unified `OfflineQueue.retrySucceeded` /
     /// `.retryExhausted` / `.retryDropped` signals, replacing the legacy
-    /// per-queue publishers from `MessageRetryQueue` and `ReactionQueue`.
+    /// per-queue publishers of the former message-retry and reaction queues.
     func subscribeToQueueReconciliation() {
         // Wave 1 Task 3.6 — unified `OfflineQueue.retrySucceeded` covers both
         // message-centric (sendMessage/edit/delete) and reaction

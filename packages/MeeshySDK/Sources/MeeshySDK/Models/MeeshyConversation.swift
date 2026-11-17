@@ -516,8 +516,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     //
     // Custom Codable preserves the wire format: every `userState` field
     // appears as a top-level key (`isPinned`, `isMuted`, `unreadCount`,
-    // ...) for backward compatibility with `/conversations` responses,
-    // the GRDB cache rows, and the iOS samples in `SampleData.swift`.
+    // ...) for backward compatibility with `/conversations` responses
+    // and the GRDB cache rows.
     // New userState fields (lastReadAt, version, deletedForUserAt,
     // clearHistoryBefore, orderInCategory, tagsLite, lastSyncedAt,
     // pendingMutationCount, isLocked, hasDraft, draftPreview) become new

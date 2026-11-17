@@ -9,7 +9,7 @@ import MeeshySDK
 /// qui consulte le média). Un champ alt inaccessible en lui-même serait une
 /// contradiction — voir la consigne du lot C7-UI.
 ///
-/// Patron d'état repris de `StoryAudioCell` (`@State` local pour une saisie
+/// Patron d'état : `@State` local pour une saisie
 /// fluide, resync via `.adaptiveOnChange` quand la valeur amont change pour
 /// une raison NON liée à cette frappe — undo/redo, changement de slide).
 /// **Un seul champ pour les DEUX textes** (#4055). Il ne diffère que par ses

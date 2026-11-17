@@ -14,6 +14,7 @@ import { ApiError, currentOwnerCredential } from './client';
 import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
 import { setCommentsDisabled, type CommentSettingOutcome } from './comment-settings';
 import { repliesInfiniteOptions } from './comment-replies';
+import { appRowGestures } from './app-row-gestures';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import type { PendingAttachment } from '@/lib/send/attachments';
@@ -445,7 +446,7 @@ export function rowAction(conversationId: string, action: RowFlagActionId): void
   void performRowAction({
     conversationId,
     action,
-    deps: { ...apiDeps, store: conversationStore, queryClient: appQueryClient, notify: announceRowEvent },
+    deps: { ...apiDeps, store: conversationStore, queryClient: appQueryClient, notify: announceRowEvent, gestures: appRowGestures() },
   });
 }
 

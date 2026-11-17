@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { appRowGestures } from '@/lib/api/app-row-gestures';
 import { performPreferenceAction, performRowAction } from '@/lib/api/conversation-actions';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { customNameOf } from '@/lib/api/preferences';
@@ -57,7 +58,7 @@ export function ConversationOptionsSection({
   const flags = effectiveFlagsOf(conversation, overrides);
   const effective = withPreferenceOverrides([conversation], overrides)[0] ?? conversation;
   const customName = customNameOf(effective);
-  const actionDeps = { ...deps, store: conversationStore, queryClient };
+  const actionDeps = { ...deps, store: conversationStore, queryClient, gestures: appRowGestures() };
 
   const openRename = async () => {
     await loadRowMenuCatalog(language);

@@ -74,16 +74,25 @@ export const conversationUserPreferencesSelect = {
   isMuted: true,
   isArchived: true,
   // Lu SERVEUR-side pour masquer l'aperçu d'un historique effacé (cf.
-  // `resolveVisibleLastMessages`). Non déclaré dans le schema wire, donc
-  // strippé de la réponse.
+  // `resolveVisibleLastMessages`), et SERVI au lecteur depuis #18925 : il
+  // masque lui-même les messages antérieurs sans attendre la diffusion.
   clearHistoryBefore: true,
+  // #18925 — les trois champs que `user:preferences-updated` diffuse et que la
+  // ligne ne servait pas : `version` arbitre une diffusion contre la relecture
+  // REST (`incoming.version <= local -> drop`), `mentionsOnly` et
+  // `orderInCategory` faisaient retomber un store vierge sur « mentions
+  // seulement » coupé et un ordre manuel perdu. DÉCLARÉS dans le schema wire
+  // (`userPreferences`, api-schemas/conversation.ts).
+  version: true,
+  mentionsOnly: true,
+  orderInCategory: true,
   tags: true,
   categoryId: true,
   reaction: true,
   customName: true,
   // Choix collant du mode de lecture (G-121). Lu SERVEUR-side pour l'entrée
   // d'orchestrateur du pont ✦ (G-123, workshop A6) — pas déclaré dans le
-  // schema wire, donc strippé de la réponse comme `clearHistoryBefore` :
+  // schema wire, donc strippé de la réponse (la fiche le retire avant même) :
   // aucun client ne lit `readingMode` via CETTE route, `GET
   // /user-preferences/conversations/:id` reste l'unique surface qui l'expose.
   readingMode: true,

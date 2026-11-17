@@ -22,7 +22,7 @@ public struct DocumentViewerView: View {
     public var isMe: Bool = false
 
     // Leaf view rendered per-bubble — do not @ObservedObject the ThemeManager
-    // singleton (cf. ChatBubble.swift precedent). Dark/light comes reactively
+    // singleton (Zero Unnecessary Re-render). Dark/light comes reactively
     // from the environment instead.
     @Environment(\.colorScheme) private var colorScheme
     /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
@@ -196,8 +196,8 @@ public struct DocumentFullSheet: View {
     public var isMe: Bool = false
 
     @Environment(\.dismiss) private var dismiss
-    // Do not @ObservedObject the ThemeManager singleton (cf. ChatBubble.swift
-    // precedent); colorScheme drives the two derived colors below directly.
+    // Do not @ObservedObject the ThemeManager singleton (Zero Unnecessary
+    // Re-render); colorScheme drives the two derived colors below directly.
     @Environment(\.colorScheme) private var colorScheme
     /// Le portillon de sortie posé par l'hôte (#9573) : fermé, ni enregistrement, ni partage, ni copie.
     @Environment(\.contentExitGate) private var exitGate

@@ -15,12 +15,14 @@ import type { NotificationRecord } from '@/lib/notifications/record';
 import {
   adjustNotificationCounts,
   findNotification,
+  insertNotificationByCreatedAt,
   markNotificationsRead,
   prependNotification,
   removeNotifications,
   replaceNotificationCounts,
 } from './notifications-cache';
 import { NOTIFICATION_LISTS_KEY, decodeNotificationCounts } from './notifications';
+import { confirmPendingReads, withoutPendingReads } from './notifications-pending-reads';
 
 /**
  * **LES ÉVÉNEMENTS `notification:*` APPLIQUÉS AU CACHE** (#6288) — des
@@ -38,7 +40,9 @@ import { NOTIFICATION_LISTS_KEY, decodeNotificationCounts } from './notification
  *    `notification:counts` (décrémenter ici doublerait le décrément optimiste
  *    de l'appareil qui a fait le geste) ;
  *  - les prédicats des marquages en masse sont rejoués par la loi PARTAGÉE
- *    (`notification-read-bulk.ts`), jamais réécrite ici.
+ *    (`notification-read-bulk.ts`), jamais réécrite ici ;
+ *  - une lecture faite ici et pas encore confirmée (`notifications-pending-reads.ts`) se SOLDE dès que la passerelle
+ *    parle de sa ligne (`read`, `read-bulk`, `deleted`), et se DÉDUIT de chaque compte serveur tant qu'elle attend.
  *
  * Toute charge qui ne décode pas est IGNORÉE, jamais une exception : un
  * gestionnaire qui lève couperait la connexion pour tous les événements suivants.
@@ -81,33 +85,48 @@ export const notificationIdOf = (payload: unknown): string | null => {
  * type (`byType`) d'un dans tous les cas. Une ligne déjà connue ne compte pas
  * deux fois.
  *
+ * `rewrite` : la notification revient d'une suppression de même id (édition) — voir le corps.
+ *
  * Les listes sont marquées PÉRIMÉES sans être relues (`refetchType: 'none'`) :
  * la charge socket porte le titre de la BANNIÈRE (le nom de l'acteur), pas le
  * titre persisté de la liste — la prochaine lecture, au retour sur l'écran, les
  * réconcilie sans qu'aucune requête ne parte maintenant.
  */
-export function applyNotificationNew(queryClient: QueryClient, notification: NotificationRecord): void {
+export function applyNotificationNew(
+  queryClient: QueryClient,
+  notification: NotificationRecord,
+  options: { readonly rewrite?: boolean } = {},
+): void {
   if (findNotification(queryClient, notification.id) !== undefined) return;
-  prependNotification(queryClient, notification);
-  adjustNotificationCounts(queryClient, { total: 1, unread: notification.state.isRead ? 0 : 1, ofType: notification.type });
+  if (options.rewrite === true) {
+    /* UNE RÉÉCRITURE (édition : `deleted` puis `new`, même id, `isRead` conservé) n'ajoute rien au compte : la
+       suppression ne l'a pas décrémenté non plus. La ligne reprend son rang, elle ne passe pas en tête. */
+    insertNotificationByCreatedAt(queryClient, notification);
+  } else {
+    prependNotification(queryClient, notification);
+    adjustNotificationCounts(queryClient, { total: 1, unread: notification.state.isRead ? 0 : 1, ofType: notification.type });
+  }
   void queryClient.invalidateQueries({ queryKey: NOTIFICATION_LISTS_KEY, refetchType: 'none' });
 }
 
 export function applyNotificationRead(queryClient: QueryClient, payload: unknown): void {
   const id = notificationIdOf(payload);
   if (id === null) return;
+  confirmPendingReads(queryClient, (n) => n.id === id);
   markNotificationsRead(queryClient, (n) => n.id === id);
 }
 
 export function applyNotificationReadBulk(queryClient: QueryClient, payload: unknown): void {
   const scope = readBulkScopeOf(payload);
   if (scope === null) return;
+  confirmPendingReads(queryClient, (n) => notificationMatchesReadBulkScope(scope, n));
   markNotificationsRead(queryClient, (n) => notificationMatchesReadBulkScope(scope, n));
 }
 
 export function applyNotificationDeleted(queryClient: QueryClient, payload: unknown): void {
   const id = notificationIdOf(payload);
   if (id === null) return;
+  confirmPendingReads(queryClient, (n) => n.id === id);
   removeNotifications(queryClient, (n) => n.id === id);
 }
 
@@ -117,10 +136,10 @@ export function applyNotificationDeletedBulk(queryClient: QueryClient, payload: 
   removeNotifications(queryClient, (n) => notificationMatchesDeletedBulkScope(scope, n));
 }
 
-/** Le compte SERVEUR remplace le compte local. `byType` n'y voyage pas toujours
- * (`emitCountsUpdate` n'émet que `{ unread, total }`) : absent, celui connu reste. */
+/** Le compte SERVEUR remplace le compte local, déduction faite des lectures locales qu'il ne connaît pas encore.
+ * `byType` n'y voyage pas toujours (`emitCountsUpdate` n'émet que `{ unread, total }`) : absent, celui connu reste. */
 export function applyNotificationCounts(queryClient: QueryClient, payload: unknown): void {
   const counts = decodeNotificationCounts(payload);
   if (counts === null) return;
-  replaceNotificationCounts(queryClient, counts, { keepByType: objectOf(payload)?.byType === undefined });
+  replaceNotificationCounts(queryClient, withoutPendingReads(queryClient, counts), { keepByType: objectOf(payload)?.byType === undefined });
 }

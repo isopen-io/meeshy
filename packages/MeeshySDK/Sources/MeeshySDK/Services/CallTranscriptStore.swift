@@ -3,8 +3,8 @@ import os
 
 private let logger = MeeshyLog.logger(.calls)
 
-/// Local-only actor for call transcripts — never a network call, mirrors
-/// `ConversationDraftManager`'s shape. `saveMerging` merges with any existing
+/// Local-only actor for call transcripts — never a network call.
+/// `saveMerging` merges with any existing
 /// transcript for the same `callId` (rather than overwriting) so a
 /// crash+rejoin's two separate `resetForCallEnd()` calls don't drop the
 /// pre-rejoin segments. See
