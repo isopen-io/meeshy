@@ -31,15 +31,16 @@ import {
   type RelationFeature,
 } from './relation-levels.js';
 import { resolveRelationAccess, type RelationAgeClass } from './relation-access.js';
-import { compareRelationLevel, parseRelationLevel, relationRungAfter, type RelationLevel, type RelationRequestLevel } from '../types/relation.js';
+import { grantReaches, relationRungAfter, type RelationLevel, type RelationRequestLevel } from '../types/relation.js';
+import { PRESENCE_DETAILED_FEATURE, PRESENCE_ONLINE_FEATURE } from './presence-visibility.js';
 
 /**
  * Les capacités que la fiche annonce, dans l'ordre où elle les montre, et la
  * feature de la loi dont chacune est le verdict. Le nom est celui du client.
  */
 export const PROFILE_CAPABILITY_FEATURE = {
-  presence: 'presence.online',
-  presenceDetailed: 'presence.detailed',
+  presence: PRESENCE_ONLINE_FEATURE,
+  presenceDetailed: PRESENCE_DETAILED_FEATURE,
   game: 'game.basic',
   gameSparks: 'game.sparksGlory',
   directMessage: 'dm.direct',
@@ -65,8 +66,8 @@ export const PROFILE_CAPABILITIES = Object.keys(PROFILE_CAPABILITY_FEATURE) as r
 
 /** Les champs de fiche gardés par un cercle : la feature dont le plancher les ouvre. */
 export const PROFILE_FIELD_FEATURE = {
-  country: 'presence.online',
-  timezone: 'presence.detailed',
+  country: PRESENCE_ONLINE_FEATURE,
+  timezone: PRESENCE_DETAILED_FEATURE,
 } as const satisfies Readonly<Record<string, RelationFeature>>;
 
 export type ProfileGatedField = keyof typeof PROFILE_FIELD_FEATURE;
@@ -139,14 +140,12 @@ const missingFor = (input: ProfileCircleViewInput, level: RelationLevel, isSelf:
   if (isSelf || input.blockedEitherWay) return null;
   const next = relationRungAfter(level);
   if (next === null) return null;
-  const byViewer = compareRelationLevel(parseRelationLevel(input.grantedByViewer), next) < 0;
-  const byTarget = compareRelationLevel(parseRelationLevel(input.grantedByTarget), next) < 0;
-  return { level: next, byViewer, byTarget };
+  return { level: next, byViewer: !grantReaches(input.grantedByViewer, next), byTarget: !grantReaches(input.grantedByTarget, next) };
 };
 
 export const resolveProfileCircleView = (input: ProfileCircleViewInput): ProfileCircleView => {
   const isSelf = Boolean(input.viewerId) && input.viewerId === input.targetId;
-  const level = verdictOf(input, 'presence.online').effectiveLevel;
+  const level = verdictOf(input, PRESENCE_ONLINE_FEATURE).effectiveLevel;
   const capabilities = Object.fromEntries(
     PROFILE_CAPABILITIES.flatMap((key) => {
       const feature = PROFILE_CAPABILITY_FEATURE[key];
@@ -158,8 +157,8 @@ export const resolveProfileCircleView = (input: ProfileCircleViewInput): Profile
   return {
     isSelf,
     level,
-    grantedByViewer: parseRelationLevel(input.grantedByViewer),
-    grantedByTarget: parseRelationLevel(input.grantedByTarget),
+    grantedByViewer: input.grantedByViewer,
+    grantedByTarget: input.grantedByTarget,
     sharesCommunity: input.sharesCommunity,
     missing: missingFor(input, level, isSelf),
     capabilities,

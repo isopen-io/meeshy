@@ -92,6 +92,9 @@ export const relationLevelBelow = (level: RelationRequestLevel): RelationLevel =
 export const requestLevelSustains = (candidate: RelationRequestLevel, removed: RelationRequestLevel): boolean =>
   RANK[candidate] >= RANK[removed];
 
+/** Cet accord atteint-il ce cran ? (la fiche par cercle dit lequel des deux côtés manque pour monter, #18861) */
+export const grantReaches = (granted: RelationLevel, rung: RelationRequestLevel): boolean => RANK[granted] >= RANK[rung];
+
 export type RelationPairKey = { readonly userLowId: string; readonly userHighId: string };
 
 /**
