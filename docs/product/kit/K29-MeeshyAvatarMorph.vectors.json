@@ -1,0 +1,133 @@
+{
+  "composant": "MeeshyAvatarMorph",
+  "cle": "K29",
+  "note": "Vecteurs de parité (fiche K29 § 03, § 06). Sans portée ou sous mouvement réduit : fondu enchaîné ; avec progress : le voyage suit la valeur ; l'anneau est à 4,5 % de la taille (2 au moins), la pastille à 25 % (14 au moins).",
+  "mode": [
+    {
+      "portee": false,
+      "reduit": false,
+      "progress": null,
+      "mode": "crossfade"
+    },
+    {
+      "portee": true,
+      "reduit": true,
+      "progress": null,
+      "mode": "crossfade"
+    },
+    {
+      "portee": true,
+      "reduit": false,
+      "progress": null,
+      "mode": "shared"
+    },
+    {
+      "portee": true,
+      "reduit": false,
+      "progress": 0.4,
+      "mode": "driven"
+    },
+    {
+      "portee": true,
+      "reduit": true,
+      "progress": 0.4,
+      "mode": "crossfade"
+    }
+  ],
+  "trajet": [
+    {
+      "path": "auto",
+      "dx": 0,
+      "dy": 300,
+      "trajet": "straight"
+    },
+    {
+      "path": "auto",
+      "dx": 200,
+      "dy": 200,
+      "trajet": "arc"
+    },
+    {
+      "path": "auto",
+      "dx": 10,
+      "dy": 300,
+      "trajet": "straight"
+    },
+    {
+      "path": "arc",
+      "dx": 0,
+      "dy": 300,
+      "trajet": "arc"
+    },
+    {
+      "path": "straight",
+      "dx": 200,
+      "dy": 200,
+      "trajet": "straight"
+    }
+  ],
+  "mesures": [
+    {
+      "taille": 36,
+      "anneau": 2,
+      "pastille": 14
+    },
+    {
+      "taille": 44,
+      "anneau": 2,
+      "pastille": 14
+    },
+    {
+      "taille": 56,
+      "anneau": 2.52,
+      "pastille": 14
+    },
+    {
+      "taille": 112,
+      "anneau": 5.04,
+      "pastille": 28
+    }
+  ],
+  "pastille": [
+    {
+      "avance": -0.1,
+      "voyage": false,
+      "opacite": 1
+    },
+    {
+      "avance": 0.5,
+      "voyage": false,
+      "opacite": 0
+    },
+    {
+      "avance": 0.5,
+      "voyage": true,
+      "opacite": 1
+    },
+    {
+      "avance": 1.1,
+      "voyage": false,
+      "opacite": 1
+    }
+  ],
+  "position": [
+    {
+      "trajet": "straight",
+      "avance": 0.5,
+      "x": 50,
+      "y": 100
+    },
+    {
+      "trajet": "straight",
+      "avance": 0,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "trajet": "straight",
+      "avance": 1,
+      "x": 100,
+      "y": 200
+    }
+  ]
+}
