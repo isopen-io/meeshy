@@ -120,7 +120,7 @@ export async function meAddressRoutes(fastify: FastifyInstance) {
     schema: {
       tags: common.tags, summary: 'Delete a personal address',
       params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
-      response: { 200: { type: 'object', properties: { success: { type: 'boolean' } } }, 401: errorResponseSchema, 404: errorResponseSchema },
+      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object', properties: { deleted: { type: 'boolean' } } } } }, 401: errorResponseSchema, 404: errorResponseSchema },
     },
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const userId = await guard(request, reply);
