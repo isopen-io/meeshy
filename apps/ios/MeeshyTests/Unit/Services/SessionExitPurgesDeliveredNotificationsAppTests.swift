@@ -75,6 +75,23 @@ final class SessionExitPurgesDeliveredNotificationsAppTests: XCTestCase {
         XCTAssertEqual(purger.pendingRemovals, 0)
     }
 
+    /// Audit du lot : une session close par le SERVEUR (mot de passe changé,
+    /// « déconnecter tous les appareils », action admin) ne passe pas par
+    /// `leaveActiveSession` — ses aperçus restaient et passaient sous le compte suivant.
+    func test_sessionRevokedByTheServer_emptiesTheNotificationCenter() async {
+        await signIn(Self.alice, token: "tA")
+        purger.reset()
+        PushNotificationManager.shared.deviceToken = "apns-of-the-revoked-session"
+        defer { auth.acknowledgeSessionRevocationNotice() }
+
+        auth.handleSessionRevoked(reason: .unknown)
+
+        XCTAssertEqual(purger.deliveredRemovals, 1, "les aperçus de A ne restent pas sous l'écran de reconnexion")
+        XCTAssertEqual(purger.pendingRemovals, 1)
+        XCTAssertNil(PushNotificationManager.shared.deviceToken,
+                     "le jeton APNs de la session close est oublié : la reconnexion le réenregistre")
+    }
+
     func test_retireDeletedAccount_ofTheActiveAccount_emptiesTheNotificationCenter() async {
         await signIn(Self.alice, token: "tA")
         purger.reset()
