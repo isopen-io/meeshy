@@ -1,5 +1,8 @@
 package me.meeshy.app.settings
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -12,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.DndDay
@@ -124,6 +128,28 @@ class NotificationSettingsViewModelRapidTogglesTest {
         advanceUntilIdle()
 
         assertThat(snapshots.map { it.dndDays.size }).isInOrder()
+        assertThat(snapshots.last().dndDays).containsExactly(DndDay.MON, DndDay.TUE)
+    }
+
+    @Test
+    fun leavingTheScreenRightAfterTwoToggles_stillWritesAndSendsBoth() = runTest(dispatcher) {
+        val store = SlowDiskStore()
+        val owner = ViewModelStore()
+        val screen = ViewModelProvider(owner, object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = vm(store, syncRepository()) as T
+        })[NotificationSettingsViewModel::class.java]
+        advanceUntilIdle()
+
+        screen.toggleDndDay(DndDay.MON)
+        runCurrent()
+        screen.toggleDndDay(DndDay.TUE)
+        runCurrent()
+        owner.clear()
+        advanceUntilIdle()
+
+        assertThat(store.preferences.value.dndDays).containsExactly(DndDay.MON, DndDay.TUE)
+        assertThat(snapshots).isNotEmpty()
         assertThat(snapshots.last().dndDays).containsExactly(DndDay.MON, DndDay.TUE)
     }
 }
