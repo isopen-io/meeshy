@@ -71,3 +71,16 @@ describe('OPS_ONLY_ROUTES — chacune existe RÉELLEMENT dans le manifeste', () 
     expect(OPS_ONLY_ROUTES.some((r) => r.path === '/info')).toBe(false);
   });
 });
+
+describe('les catalogues CLIENT ne reçoivent que des chemins que leurs générateurs savent écrire', () => {
+  it('aucun paramètre au MILIEU d\'un segment (`/@:username`) — le générateur en ferait une constante littérale « @:username »', () => {
+    const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as {
+      readonly routes: readonly ManifestRouteInput[];
+    };
+    const embedded = filterOutOpsOnlyRoutes(manifest.routes)
+      .filter((r) => r.path.split('/').some((segment) => segment.indexOf(':') > 0))
+      .map((r) => `${r.method} ${r.path}`);
+
+    expect(embedded).toEqual([]);
+  });
+});

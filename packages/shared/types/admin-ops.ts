@@ -292,7 +292,6 @@ export const SERVER_OPERATION_ERROR_CODES = [
   'OPS_RELAY_UNAVAILABLE',
   'AUDIT_UNAVAILABLE',
 ] as const;
-export type ServerOperationErrorCode = (typeof SERVER_OPERATION_ERROR_CODES)[number];
 
 export const ADMIN_HOST_METRICS_ROOM = 'admin:host-metrics';
 
@@ -302,11 +301,9 @@ export type HostGpu = z.infer<typeof hostGpuSchema>;
 export type DockerUsage = z.infer<typeof dockerUsageSchema>;
 export type OpsEnvironment = z.infer<typeof opsEnvironmentSchema>;
 export type ServerOperation = z.infer<typeof serverOperationSchema>;
-export type ServerOperationRunStatus = z.infer<typeof serverOperationRunStatusSchema>;
 export type ServerOperationRun = z.infer<typeof serverOperationRunSchema>;
 export type ServerOperationStatus = z.infer<typeof serverOperationStatusSchema>;
 export type ServerOperationWindowView = z.infer<typeof serverOperationWindowViewSchema>;
-export type ServerOperationRequestBody = z.infer<typeof serverOperationRequestBodySchema>;
 export type ServerOperationAccepted = z.infer<typeof serverOperationAcceptedSchema>;
 export type OpsRequestFile = z.infer<typeof opsRequestFileSchema>;
 export type ServerOperationStateFile = z.infer<typeof serverOperationStateFileSchema>;

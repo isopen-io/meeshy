@@ -53,8 +53,3 @@ export function fixturePatchOnboarding(body: OnboardingPatchBody): OnboardingSta
   state = seenSteps.length === ONBOARDING_STEPS.length ? finished({ ...state, seenSteps }) : { ...state, seenSteps };
   return state;
 }
-
-/** Remet le corpus à son état neuf — pour un témoin qui rejoue le parcours. */
-export function resetFixtureOnboardingForTests(): void {
-  state = INITIAL;
-}

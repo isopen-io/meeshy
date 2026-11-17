@@ -1,6 +1,6 @@
 /**
  * L'HEURE RELATIVE COURTE DE LA LENTILLE — miroir de
- * `packages/MeeshySDK/Sources/MeeshySDK/Utils/RelativeTime.swift`
+ * `packages/MeeshySDK/Sources/MeeshySDK/Models/RelativeTime.swift`
  * (`RelativeTime.classify`) et de `RelativeTimeFormatter.shortString`
  * (`RelativeTimeFormatter.swift:47-63`).
  *
