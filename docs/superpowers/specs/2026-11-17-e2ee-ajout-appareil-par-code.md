@@ -509,6 +509,7 @@ model E2EEDeviceVerificationMessage {
   body                     String          // le message validé, tel que reçu (≤ 2 Kio)
   createdAt                DateTime @default(now())
   expiresAt                DateTime        // createdAt + 10 min
+  ackedAt                  DateTime?       // l'accusé : plus jamais servi (voir la note d'implémentation)
   @@index([userId, recipientDeviceId, recipientRegistrationId, createdAt])
   @@index([userId, tx])
   @@index([expiresAt])
@@ -533,6 +534,8 @@ model E2EEDeviceVerificationMessage {
 - **débit par génération émettrice : ≤ 4 `request` par heure, ≤ 30 messages par heure ; ≤ 8 ENVOIS par `tx` et par émetteur, un envoi à « others » comptant pour un ; fenêtres glissantes d'une heure. AUCUNE borne par compte** : avec quatre ou cinq appareils enrôlés, le détenteur de mon mot de passe épuisait la borne par compte de la v2 (20 `request`, 120 messages) et privait mon nouvel appareil de toute demande (revue de confirmation). La borne par génération suffit à la charge : un compte a au plus 16 appareils actifs (`E2EE_MAX_ACTIVE_DEVICES`, `packages/shared/types/e2ee-directory.ts:38`), soit au pire 64 `request` et 480 messages par heure ;
 - **durée de vie** : 10 min (`expiresAt`), filtrée à la lecture et balayée. **`ack` et le balayage ne touchent que les messages adressés à la génération de l'appelant** (le balayage, ceux qui ont expiré). **Quand une `request` est prise par un répondeur** (le relais transmet un `reveal` pour ce `tx`), **le relais ne fait pas disparaître ses copies en attente : il les remplace par un `cancel(accepted-elsewhere)` qui porte, hors du message, la génération qui a répondu (`answeredBy`)** ; l'appareil qui aurait montré l'invite affiche l'alerte du § 4.6 (« La demande de n° 4 a été acceptée par un autre appareil de votre compte… »). Un `cancel` de l'initiateur remplace de même les copies en attente. Un retrait de génération (`device-retirement.ts`, `takeSlot`) efface ce qui lui était adressé ;
 - les journaux ne portent que `tx` tronqué, `kind` et les générations, jamais le corps ni le libellé.
+
+**Note d'implémentation (#19156, passerelle).** L'accusé retire un message de ce qui est servi (`ackedAt`) ; la ligne vit jusqu'à son échéance (dix minutes, balayage toutes les dix minutes), pour que le relais sache à qui une `request` a été adressée quand elle est prise : la copie que l'appareil avait déjà accusée — celle qui lui a fait montrer l'invite — devient elle aussi `cancel(accepted-elsewhere)`, servie de nouveau. Le relais exige une génération NOMMÉE pour `accept`, `reveal` et `method`. Aux débits par génération s'ajoute une cadence par compte AVANT toute lecture de l'annuaire (60 dépôts par minute, socket et route), qui ne borne que ce qui est tenté. Le push de l'annonce part détaché : un fournisseur lent ne retient ni l'enrôlement ni le dépôt.
 
 ### 5.3 Annonce temps réel et push
 
