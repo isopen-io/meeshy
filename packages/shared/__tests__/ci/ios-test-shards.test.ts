@@ -94,9 +94,24 @@ describe('énumération des classes MeeshyTests', () => {
     ]);
   });
 
-  it('lit les exclusions .swift de la cible dans project.yml', () => {
-    const yml = readFileSync(`${REPO}apps/ios/project.yml`, 'utf8');
-    expect(projectExcludes(yml)).toContain('UI/BubbleExpandableTextUITests.swift');
+  it('lit les exclusions .swift littérales de la seule cible MeeshyTests dans project.yml', () => {
+    const yml = [
+      'targets:',
+      '  MeeshyUITests:',
+      '    sources:',
+      '      - path: MeeshyUITests',
+      '        excludes:',
+      '          - "UI/AutreCibleTests.swift"',
+      '  MeeshyTests:',
+      '    sources:',
+      '      - path: MeeshyTests',
+      '        excludes:',
+      '          - "**/*.md"',
+      '          - "UI/BubbleExpandableTextUITests.swift"',
+      '  MeeshyWidget:',
+      '    sources: []',
+    ].join('\n');
+    expect(projectExcludes(yml)).toEqual(['UI/BubbleExpandableTextUITests.swift']);
   });
 });
 
