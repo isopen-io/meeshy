@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   contentLinkTarget,
   contentPathTarget,
@@ -10,6 +12,24 @@ import {
 import { PERSON_LINK_HOSTS } from '../utils/person-link';
 
 const ID = '66f0c0ffee0000000000c0de';
+
+type Vecteur = { readonly _label: string; readonly input: string; readonly expected: unknown };
+
+const VECTEURS = JSON.parse(
+  readFileSync(join(__dirname, '..', 'fixtures', 'content-link', 'content-link.vectors.json'), 'utf8'),
+) as readonly Vecteur[];
+
+describe('les vecteurs partagés (fixtures/content-link), que Swift et Kotlin rejouent', () => {
+  it('existent, et couvrent les deux issues et le refus', () => {
+    expect(VECTEURS.length).toBeGreaterThanOrEqual(30);
+    const kinds = new Set(VECTEURS.map((v) => (v.expected === null ? 'null' : (v.expected as { kind: string }).kind)));
+    expect([...kinds].sort()).toEqual(['content', 'null', 'tracked']);
+  });
+
+  it.each(VECTEURS.map((v) => [v._label, v] as const))('%s', (_label, vecteur) => {
+    expect(contentLinkTarget(vecteur.input)).toEqual(vecteur.expected);
+  });
+});
 
 describe('contentLinkTarget : le lien d’un post, d’un réel, d’une story ou d’une humeur', () => {
   it('lit l’identifiant et le type des adresses de chaque contenu', () => {

@@ -1,0 +1,236 @@
+[
+  {
+    "_label": "post",
+    "input": "https://meeshy.me/post/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "POST"
+    }
+  },
+  {
+    "_label": "reel",
+    "input": "https://meeshy.me/reel/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "REEL"
+    }
+  },
+  {
+    "_label": "story",
+    "input": "https://meeshy.me/story/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "STORY"
+    }
+  },
+  {
+    "_label": "humeur",
+    "input": "https://meeshy.me/mood/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "STATUS"
+    }
+  },
+  {
+    "_label": "ancienne-feeds-post-type-inconnu",
+    "input": "https://meeshy.me/feeds/post/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": null
+    }
+  },
+  {
+    "_label": "ancienne-p-type-inconnu",
+    "input": "https://meeshy.me/p/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": null
+    }
+  },
+  {
+    "_label": "ancienne-s-story",
+    "input": "https://meeshy.me/s/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "STORY"
+    }
+  },
+  {
+    "_label": "lien-suivi",
+    "input": "https://meeshy.me/l/Ab3xYz",
+    "expected": {
+      "kind": "tracked",
+      "token": "Ab3xYz"
+    }
+  },
+  {
+    "_label": "lien-suivi-staging-barre-finale",
+    "input": "https://staging.meeshy.me/l/a_b-9/",
+    "expected": {
+      "kind": "tracked",
+      "token": "a_b-9"
+    }
+  },
+  {
+    "_label": "barre-finale",
+    "input": "https://meeshy.me/reel/66f0c0ffee0000000000c0de/",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "REEL"
+    }
+  },
+  {
+    "_label": "casse-hote-requete-ancre",
+    "input": "https://MEESHY.me/post/66f0c0ffee0000000000c0de?utm_source=x#c",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "POST"
+    }
+  },
+  {
+    "_label": "espaces-et-www",
+    "input": "  https://www.meeshy.me/story/66f0c0ffee0000000000c0de  ",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "STORY"
+    }
+  },
+  {
+    "_label": "staging",
+    "input": "https://staging.meeshy.me/mood/66f0c0ffee0000000000c0de",
+    "expected": {
+      "kind": "content",
+      "postId": "66f0c0ffee0000000000c0de",
+      "type": "STATUS"
+    }
+  },
+  {
+    "_label": "identifiant-majuscules",
+    "input": "https://meeshy.me/post/66F0C0FFEE0000000000C0DE",
+    "expected": {
+      "kind": "content",
+      "postId": "66F0C0FFEE0000000000C0DE",
+      "type": "POST"
+    }
+  },
+  {
+    "_label": "refus-01",
+    "input": "https://evil.example/post/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-02",
+    "input": "https://meeshy.me.evil.example/post/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-03",
+    "input": "https://evilmeeshy.me/post/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-04",
+    "input": "https://user@meeshy.me/post/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-05",
+    "input": "https://meeshy.me:8443/post/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-06",
+    "input": "http://meeshy.me/post/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-07",
+    "input": "meeshy://post/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-08",
+    "input": "javascript:alert(1)//meeshy.me/post/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-09",
+    "input": "https://meeshy.me/post/66f0c0ffee0000000000c0de/comments",
+    "expected": null
+  },
+  {
+    "_label": "refus-10",
+    "input": "https://meeshy.me/post/123",
+    "expected": null
+  },
+  {
+    "_label": "refus-11",
+    "input": "https://meeshy.me/post/66f0c0ffee0000000000c0de0",
+    "expected": null
+  },
+  {
+    "_label": "refus-12",
+    "input": "https://meeshy.me/post/",
+    "expected": null
+  },
+  {
+    "_label": "refus-13",
+    "input": "https://meeshy.me/posts/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-14",
+    "input": "https://meeshy.me/feeds/66f0c0ffee0000000000c0de",
+    "expected": null
+  },
+  {
+    "_label": "refus-15",
+    "input": "https://meeshy.me/u/amani",
+    "expected": null
+  },
+  {
+    "_label": "refus-16",
+    "input": "https://meeshy.me/chat/mshy_abc",
+    "expected": null
+  },
+  {
+    "_label": "refus-17",
+    "input": "https://meeshy.me/l/a",
+    "expected": null
+  },
+  {
+    "_label": "refus-18",
+    "input": "https://meeshy.me/l/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expected": null
+  },
+  {
+    "_label": "refus-19",
+    "input": "https://meeshy.me/l/a.b",
+    "expected": null
+  },
+  {
+    "_label": "refus-20",
+    "input": "https://meeshy.me/l/Ab3xYz/expired",
+    "expected": null
+  },
+  {
+    "_label": "refus-21",
+    "input": "pas une adresse",
+    "expected": null
+  },
+  {
+    "_label": "refus-22",
+    "input": "",
+    "expected": null
+  }
+]
