@@ -8,6 +8,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { GameBannerOwnSlot, GameBannerVisitorSlot } from '@/components/game-profile-slots';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
+import { ProfileSeeOnMapRow } from '@/components/profile-see-on-map';
 import { ProfileFacePanel, ProfileFaces, useProfileFace } from '@/components/profile-faces';
 import { CircleLadderCard, RelationLockedRows, RelationWriteAction } from '@/components/profile-relation-face';
 import { ReportSheet } from '@/components/report-sheet';
@@ -323,6 +324,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                       <ProfileSelfSection language={language} />
                     ) : (
                       <>
+                        {signedIn ? <ProfileSeeOnMapRow language={language} personId={person.id} name={name} avatar={person.avatar} accent={accent} /> : null}
                         {items === null ? null : (
                           <>
                             {items.filter((item) => item.id === 'write').map((item) => (

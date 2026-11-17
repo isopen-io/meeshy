@@ -59,8 +59,11 @@ const sharing = (userId: string, expiresInMs = 42 * 60_000) => ({
   expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
 });
 
-async function mountActions(): Promise<HTMLDivElement> {
+/** Les positions arrivent APRÈS l'ouverture de session : le magasin appartient au compte ouvert et se vide à chaque changement d'identité. */
+async function mountActions(received: readonly ReturnType<typeof sharing>[] = []): Promise<HTMLDivElement> {
   sessionStore.getState().establish({ user: { id: VIEWER, username: 'lecteur', displayName: 'Lecteur' }, token: 't', sessionToken: 's', expiresIn: 3600 });
+  await settle();
+  received.forEach((location) => sharedLocationsStore.getState().receive(location));
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -86,8 +89,7 @@ describe('« Voir sur la carte » suit ce que la personne partage', () => {
   });
 
   test('elle partage : la rangée dit la précision et le temps qui reste', async () => {
-    sharedLocationsStore.getState().receive(sharing('u-kwame'));
-    const el = await mountActions();
+    const el = await mountActions([sharing('u-rich-kwame')]);
     const row = el.querySelector('[data-see-on-map]');
     expect(row).not.toBeNull();
     expect(row?.textContent).toContain('Voir sur la carte');
@@ -96,16 +98,14 @@ describe('« Voir sur la carte » suit ce que la personne partage', () => {
   });
 
   test('le geste ouvre la carte posée sur la personne', async () => {
-    sharedLocationsStore.getState().receive(sharing('u-kwame'));
-    const el = await mountActions();
+    const el = await mountActions([sharing('u-rich-kwame')]);
     act(() => el.querySelector<HTMLButtonElement>('[data-see-on-map] button')?.click());
     expect(window.location.pathname).toBe('/positions');
-    expect(new URLSearchParams(window.location.search).get('person')).toBe('u-kwame');
+    expect(new URLSearchParams(window.location.search).get('person')).toBe('u-rich-kwame');
   });
 
   test('le partage d’une AUTRE personne ne se montre pas ici', async () => {
-    sharedLocationsStore.getState().receive(sharing('u-ada'));
-    const el = await mountActions();
+    const el = await mountActions([sharing('u-ada')]);
     expect(el.querySelector('[data-see-on-map]')).toBeNull();
   });
 });
