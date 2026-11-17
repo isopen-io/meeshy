@@ -186,15 +186,35 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         return merged
     }
 
+    // MARK: - La ligne de conversation (#7198, #18925)
+
+    /// Ce que la ligne de `GET /conversations` et `GET /conversations/:id` sert de l'état du lecteur, projeté
+    /// après l'init memberwise de `APIConversation.toConversation` : la frontière de lecture, et les préférences
+    /// que la diffusion `user:preferences-updated` porte déjà — version, ordre manuel, effacement d'historique
+    /// (#18925). Une ligne synthétisée vaut la version 0 ; un serveur antérieur n'en sert rien, et rien n'est
+    /// fabriqué.
+    func servingRow(
+        lastReadMessageId: String?, lastReadMessageCreatedAt: Date?, preferences: APIConversationPreferences?
+    ) -> ConversationUserState {
+        var served = self
+        served.lastReadMessageId = lastReadMessageId
+        served.lastReadMessageCreatedAt = lastReadMessageCreatedAt
+        served.appearance = preferences?.appearance
+        served.version = preferences?.version ?? 0
+        served.orderInCategory = preferences?.orderInCategory
+        served.clearHistoryBefore = preferences?.clearHistoryBefore
+        return served
+    }
+
     // MARK: - Served row (#18916)
 
     /// Adopte une ligne SERVIE par `/user-preferences/conversations` : les seuls
     /// champs que la route sert, et sa version.
     ///
-    /// La route ne sert ni `clearHistoryBefore` ni `deletedForUserAt` : les
-    /// écrire depuis une ligne qui ne les porte pas effacerait un « effacer
-    /// l'historique », et l'historique masqué réapparaîtrait. La lecture et les
-    /// champs propres à l'appareil ne viennent pas non plus de cette route.
+    /// `deletedForUserAt` n'y est pas servi, et `clearHistoryBefore` ne l'est que
+    /// depuis #18925 : un serveur antérieur l'omet, et `nil` ne distingue pas
+    /// l'absent du « jamais effacé » — l'écrire d'ici rouvrirait un historique
+    /// effacé. La lecture et les champs propres à l'appareil n'en viennent pas.
     /// Un booléen ou une liste absents gardent la valeur locale ; un champ
     /// NULLABLE servi `null` dit « aucun », comme sur la diffusion vive.
     func adoptingServed(_ served: APIConversationPreferences) -> ConversationUserState {
