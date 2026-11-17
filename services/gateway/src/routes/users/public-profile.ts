@@ -7,6 +7,8 @@ import { servedProfileDecor, servedProfileDecorJsonSchema } from '../../services
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { targetHasBlockedViewer } from './profile-block-gate';
 import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
+import { withCircleGatedFields } from '../../services/relations/profileCircleView';
+import { profileViewerId } from './profile-block-gate';
 
 /**
  * LA forme publique d'un profil — projection, schéma, composition, lecture.
@@ -110,6 +112,10 @@ export const publicProfileSchema = {
     voiceQuality: { type: 'number', nullable: true },
     isAnonymous: { type: 'boolean' },
     isMeeshyer: { type: 'boolean' },
+    // #18861 : pays d'inscription et fuseau, SERVIS selon le cercle du lecteur
+    // (`withCircleGatedFields`) — absents, jamais `null`, quand le cercle les ferme.
+    registrationCountry: { type: 'string', nullable: true },
+    timezone: { type: 'string', nullable: true },
     // #10632 / #10932 : le contour d'avatar, la bannière de design et le cadre de bannière ÉQUIPÉS (additif).
     profileDecor: servedProfileDecorJsonSchema,
   },
@@ -154,6 +160,10 @@ export const publicUserSelect = {
   // Il ne sort pas : `publicProfileSchema` ne le déclare pas.
   deactivatedAt: true,
   createdAt: true,
+  // #18861 : chargés, SERVIS selon le cercle — `withCircleGatedFields` les retire
+  // de la ligne avant toute composition quand le cercle du lecteur ne les ouvre pas.
+  registrationCountry: true,
+  timezone: true,
   // #10632 : chargés, jamais servis tels quels — `buildPublicProfile` les
   // compose en `profileDecor` et RETIRE les colonnes brutes.
   equippedAvatarRing: true,
@@ -195,6 +205,8 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
     voiceQuality: ['voiceModel'],
     isAnonymous: [],
     isMeeshyer: [],
+    registrationCountry: ['registrationCountry'],
+    timezone: ['timezone'],
     profileDecor: ['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame'],
   },
 };
@@ -298,5 +310,6 @@ export async function servirProfilPublic(
 
   // Garder D'ABORD, composer ensuite : la garde lit `isOnline`,
   // `lastActiveAt` et `deactivatedAt` sur la ligne chargée.
-  return buildPublicProfile(await gateProfilePresence(fastify, request, user)) as unknown as Record<string, unknown>;
+  const circled = await withCircleGatedFields(fastify.prisma, profileViewerId(request), user);
+  return buildPublicProfile(await gateProfilePresence(fastify, request, circled)) as unknown as Record<string, unknown>;
 }

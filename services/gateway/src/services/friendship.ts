@@ -87,11 +87,16 @@ const latestAcceptance = (current: AcceptedAt, next: Date | null): Date | null =
   return next.getTime() > current.getTime() ? next : current;
 };
 
+/** La ligne telle que le rattrapage la laissera (la ligne lue si aucune demande acceptée). */
+function servedRow(row: UserRelationRow | null, a: string, b: string, acceptedAt: AcceptedAt): UserRelationRow | null {
+  if (acceptedAt === undefined) return row;
+  return friendshipBackfillProjection(row, relationPairKey(a, b), acceptedAt);
+}
+
 /** Le niveau servi : celui de la ligne telle que le rattrapage la laissera. */
 function servedLevel(row: UserRelationRow | null, a: string, b: string, acceptedAt: AcceptedAt): RelationLevel {
-  if (acceptedAt === undefined) return row ? grantedMinimum(row) : 'PUBLIC';
-  const projected = friendshipBackfillProjection(row, relationPairKey(a, b), acceptedAt);
-  return projected ? grantedMinimum(projected) : 'PUBLIC';
+  const served = servedRow(row, a, b, acceptedAt);
+  return served ? grantedMinimum(served) : 'PUBLIC';
 }
 
 const needsAcceptance = (row: UserRelationRow | null | undefined): boolean => !row || !isFriendLevel(grantedMinimum(row));
@@ -162,6 +167,31 @@ export async function niveauEffectifUniforme(prisma: RelationLevelDb, a: string,
   ]);
 
   return servedLevel(ligne, a, b, acceptee);
+}
+
+/** Ce que chacun des deux côtés accorde à l'autre, dans le sens du LECTEUR. */
+export type AccordsEntre = { readonly byViewer: RelationLevel; readonly byTarget: RelationLevel };
+
+/**
+ * Les DEUX accords d'une paire — {@link niveauEffectifUniforme} en garde le
+ * minimum, la fiche par cercle (#18861) dit lequel manque pour monter. Même
+ * lecture (la ligne et la demande acceptée, ensemble), même projection du
+ * rattrapage : aucune seconde règle de réconciliation.
+ */
+export async function accordsEntre(prisma: RelationLevelDb, viewerId: string, targetId: string): Promise<AccordsEntre> {
+  const none: AccordsEntre = { byViewer: 'PUBLIC', byTarget: 'PUBLIC' };
+  if (!viewerId || !targetId || viewerId === targetId) return none;
+
+  const [ligne, acceptee]: [UserRelationRow | null, AcceptedAt] = await Promise.all([
+    prisma.userRelation.findUnique({ where: { userLowId_userHighId: relationPairKey(viewerId, targetId) }, select: LINK_SELECT }),
+    acceptationEntre(prisma, viewerId, targetId),
+  ]);
+  const served = servedRow(ligne, viewerId, targetId, acceptee);
+  if (!served) return none;
+
+  const low = parseRelationLevel(served.grantedByLow);
+  const high = parseRelationLevel(served.grantedByHigh);
+  return served.userLowId === viewerId ? { byViewer: low, byTarget: high } : { byViewer: high, byTarget: low };
 }
 
 async function lignesParmi(

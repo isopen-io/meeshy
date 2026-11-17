@@ -1,0 +1,71 @@
+/* LA TABLE DES SEPT MOUVEMENTS (K26, #18874) — les variables `--motion-*` que tout
+   composant du kit lit. Chaque durée et chaque courbe vient de
+   `components/kit/meeshy-motion.ts` ; `meeshy-motion.test.ts` les compare une à
+   une : on change une valeur dans la table, et ici, dans la même PR. Aucun écran
+   n'écrit un ressort, un `cubic-bezier(` ou une durée à la main : il cite
+   `var(--motion-morph)`. Seuls `transform` et `opacity` s'animent (loi 3). */
+:root {
+  --motion-morph-duration: 420ms;
+  --motion-morph: cubic-bezier(0.3, 1.5, 0.5, 1);
+  --motion-travel-duration: 560ms;
+  --motion-travel: cubic-bezier(0.3, 1.3, 0.5, 1);
+  --motion-flip-duration: 500ms;
+  --motion-flip: cubic-bezier(.2, 0, 0, 1);
+  --motion-rise-duration: 360ms;
+  --motion-rise: cubic-bezier(.2, .9, .25, 1);
+  --motion-rise-step: 80ms;
+  --motion-collapse: linear;
+  --motion-float-duration: 9s;
+  --motion-float: ease-in-out;
+  --motion-float-play: running;
+  --motion-pulse-duration: 2.2s;
+  --motion-pulse: ease-out;
+  --motion-pulse-play: running;
+  --motion-reduced-duration: 160ms;
+  --motion-reduced: ease-out;
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --motion-morph: linear(0, 0.107, 0.327, 0.561, 0.757, 0.897, 0.984, 1.029, 1.045, 1.044, 1.035, 1.024, 1);
+    --motion-travel: linear(0, 0.103, 0.308, 0.519, 0.695, 0.825, 0.911, 0.964, 0.992, 1.006, 1.011, 1.011, 1);
+  }
+}
+
+@keyframes kit-motion-pulse {
+  from {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+@keyframes kit-motion-float {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(0, -6px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-morph-duration: 160ms;
+    --motion-travel-duration: 160ms;
+    --motion-flip-duration: 160ms;
+    --motion-rise-duration: 160ms;
+    --motion-rise-step: 0ms;
+    --motion-morph: var(--motion-reduced);
+    --motion-travel: var(--motion-reduced);
+    --motion-flip: var(--motion-reduced);
+    --motion-rise: var(--motion-reduced);
+    --motion-float-play: paused;
+    --motion-pulse-play: paused;
+  }
+}
