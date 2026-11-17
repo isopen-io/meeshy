@@ -1,7 +1,7 @@
 import type { ContentPage } from './type';
 
 /**
- * « Partenaires » — le contenu de `apps/web/locales/fr/partners.json`, mot pour
+ * « Partenaires » — le contenu de `legacy-web-final:apps/web/locales/fr/partners.json`, mot pour
  * mot, dans l'ordre où la page legacy le rend.
  *
  * `become.api` (« Documentation API ») n'entre PAS dans la rangée de suite :

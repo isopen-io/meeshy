@@ -2231,7 +2231,7 @@ Transposition Android : NavigationStack(path) + Router -> NavHost avec routes ty
 
 </details>
 
-Android existant : `apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt`, `apps/android/core/navigation/src/main/kotlin/me/meeshy/core/navigation/Module.kt`
+Android existant : `apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt`
 
 ### Une section repliée affiche le total de ses messages non lus à côté du chevron, accordé correctement dans chaque langue
 

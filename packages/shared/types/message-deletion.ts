@@ -47,41 +47,6 @@ export interface BatchDeleteMessagesDTO {
   readonly messageIds: readonly string[];
 }
 
-/**
- * Résultat d'une suppression de messages en lot
- */
-export interface BatchDeleteMessagesResult {
-  readonly success: boolean;
-  readonly deletedCount: number;
-  readonly failedIds?: readonly string[];
-  readonly error?: string;
-}
-
-/**
- * Filtres pour rechercher des suppressions
- */
-export interface UserMessageDeletionFilters {
-  readonly userId?: string;
-  readonly messageId?: string;
-  readonly conversationId?: string;
-  readonly deletedAfter?: Date;
-  readonly deletedBefore?: Date;
-  readonly limit?: number;
-  readonly offset?: number;
-}
-
-/**
- * Informations de suppression avec détails du message
- */
-export interface UserMessageDeletionWithDetails extends UserMessageDeletion {
-  readonly message?: {
-    readonly id: string;
-    readonly conversationId: string;
-    readonly originalText?: string;
-    readonly createdAt: Date;
-  };
-}
-
 // =====================================================
 // DELETE FOR EVERYONE
 // =====================================================
@@ -100,40 +65,9 @@ export interface DeleteMessageRequest {
   readonly deletionType: MessageDeletionType;
 }
 
-/**
- * Résultat de suppression de message
- */
-export interface DeleteMessageResult {
-  readonly success: boolean;
-  readonly deletionType: MessageDeletionType;
-  /** Si 'for_everyone', les IDs des utilisateurs affectés */
-  readonly affectedUserIds?: readonly string[];
-  readonly error?: string;
-}
-
 // =====================================================
 // CONVERSATION DELETION
 // =====================================================
-
-/**
- * Options pour supprimer une conversation
- */
-export interface DeleteConversationOptions {
-  readonly userId: string;
-  readonly conversationId: string;
-  /** Si true, supprime aussi tous les messages pour cet utilisateur */
-  readonly deleteMessages?: boolean;
-}
-
-/**
- * Résultat de suppression de conversation
- */
-export interface DeleteConversationResult {
-  readonly success: boolean;
-  readonly conversationId: string;
-  readonly deletedMessagesCount?: number;
-  readonly error?: string;
-}
 
 // =====================================================
 // TYPE GUARDS & UTILITIES

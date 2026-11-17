@@ -188,6 +188,22 @@ describe('GET /export — profile only', () => {
   });
 });
 
+describe('GET /export — la ville déclarée (#18862)', () => {
+  it('lit et rend la ville et le cercle qui la lit dans la section profile', async () => {
+    const mocks = {
+      ...makeMocks(),
+      userFindUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, city: 'Dakar', cityCircle: 'FRIEND' }),
+    };
+    const { app } = await buildApp({ mocks });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    const [{ select }] = mocks.userFindUnique.mock.calls[0] as [{ select: Record<string, boolean> }];
+    expect(select).toMatchObject({ city: true, cityCircle: true });
+    expect(res.json().data.profile).toMatchObject({ city: 'Dakar', cityCircle: 'FRIEND' });
+    await app.close();
+  });
+});
+
 describe('GET /export — messages only', () => {
   it('returns 200 and calls participant then message queries', async () => {
     const mocks = {

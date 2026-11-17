@@ -16,6 +16,7 @@ const mockProfileFns = {
   updateUserPassword: jest.fn<any>().mockResolvedValue(undefined),
   updateUsername: jest.fn<any>().mockResolvedValue(undefined),
   getUserByUsername: jest.fn<any>().mockResolvedValue(undefined),
+  userShortAddressAlias: jest.fn<any>().mockResolvedValue(undefined),
   getUserById: jest.fn<any>().mockResolvedValue(undefined),
   getUserByEmail: jest.fn<any>().mockResolvedValue(undefined),
   getUserByIdDedicated: jest.fn<any>().mockResolvedValue(undefined),
@@ -112,6 +113,7 @@ describe('userRoutes — registers all route handler groups', () => {
     expect(mockProfileFns.updateUserPassword).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.updateUsername).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByUsername).toHaveBeenCalledWith(mockFastify);
+    expect(mockProfileFns.userShortAddressAlias).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserById).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByEmail).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByIdDedicated).toHaveBeenCalledWith(mockFastify);

@@ -141,7 +141,7 @@ function capStretches(stretches: readonly PlaybackStretch[]): readonly PlaybackS
 /**
  * Sous une seconde, reprendre et repartir de zéro sont indiscernables — et
  * « reprendre » coûte alors une surprise pour rien. MÊME règle de PRODUIT que
- * `resumePositionSeconds` (`apps/web/hooks/use-media-consumption-reporter.ts`,
+ * `resumePositionSeconds` (`legacy-web-final:apps/web/hooks/use-media-consumption-reporter.ts`,
  * exportée là-bas pour être éprouvée seule) et que la reprise iOS.
  */
 const MIN_RESUME_MS = 1_000;

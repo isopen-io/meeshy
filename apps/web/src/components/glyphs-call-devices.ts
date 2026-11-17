@@ -8,5 +8,3 @@ export const CALL_DEVICES_GLYPHS = {
   slidersHorizontal: { viewBox: "0 0 256 256", body: "<path d=\"M40,88H73a32,32,0,0,0,62,0h81a8,8,0,0,0,0-16H135a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16Zm64-24A16,16,0,1,1,88,80,16,16,0,0,1,104,64ZM216,168H199a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16h97a32,32,0,0,0,62,0h17a8,8,0,0,0,0-16Zm-48,24a16,16,0,1,1,16-16A16,16,0,0,1,168,192Z\"/>" },
   arrowDownRight: { viewBox: "0 0 256 256", body: "<path d=\"M200,88V192a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h84.69L58.34,69.66A8,8,0,0,1,69.66,58.34L184,172.69V88a8,8,0,0,1,16,0Z\"/>" },
 } as const;
-
-export type CallDevicesGlyphName = keyof typeof CALL_DEVICES_GLYPHS;

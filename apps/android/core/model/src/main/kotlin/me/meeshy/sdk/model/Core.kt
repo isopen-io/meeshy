@@ -2,37 +2,6 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
 
-/** A conversation tag — port of MeeshyConversationTag (CoreModels.swift). */
-@Serializable
-data class MeeshyConversationTag(
-    val id: String,
-    val name: String = "",
-    val color: String = "",
-)
-
-/** A recent message preview embedded in a conversation — port of RecentMessagePreview (CoreModels.swift). */
-@Serializable
-data class RecentMessagePreview(
-    val id: String,
-    val content: String = "",
-    val senderName: String = "",
-    val messageType: String = "text",
-    val createdAt: String? = null,
-    val attachmentMimeType: String? = null,
-    val attachmentCount: Int = 0,
-)
-
-/** A reaction on a message — port of MeeshyReaction (CoreModels.swift). */
-@Serializable
-data class MeeshyReaction(
-    val id: String,
-    val messageId: String = "",
-    val participantId: String? = null,
-    val emoji: String = "",
-    val createdAt: String? = null,
-    val updatedAt: String? = null,
-)
-
 /** A user detail attached to a reaction — port of ReactionUserDetail (CoreModels.swift). */
 @Serializable
 data class ReactionUserDetail(
@@ -59,23 +28,6 @@ data class ReactionSyncResponse(
     val userReactions: List<String> = emptyList(),
 )
 
-/** A reply reference on a message — port of ReplyReference (CoreModels.swift). */
-@Serializable
-data class ReplyReference(
-    val messageId: String = "",
-    val authorName: String = "",
-    val authorColor: String = "",
-    val previewText: String = "",
-    val isMe: Boolean = false,
-    val attachmentType: String? = null,
-    val attachmentThumbnailUrl: String? = null,
-    val isStoryReply: Boolean = false,
-    val storyPublishedAt: String? = null,
-    val storyReactionCount: Int? = null,
-    val storyCommentCount: Int? = null,
-    val storyThumbnailUrl: String? = null,
-)
-
 /** A forward reference on a message — port of ForwardReference (CoreModels.swift). */
 @Serializable
 data class ForwardReference(
@@ -94,24 +46,6 @@ data class ForwardReference(
      * `null` with no migration.
      */
     val conversationType: String? = null,
-)
-
-/** A shared contact card — port of SharedContact (CoreModels.swift). */
-@Serializable
-data class SharedContact(
-    val id: String,
-    val fullName: String = "",
-    val phoneNumbers: List<String> = emptyList(),
-    val emails: List<String> = emptyList(),
-)
-
-/** The deterministic color palette for a conversation — port of ConversationColorPalette (CoreModels.swift). */
-@Serializable
-data class ConversationColorPalette(
-    val primary: String = "",
-    val secondary: String = "",
-    val accent: String = "",
-    val saturationBoost: Double = 0.0,
 )
 
 /** Embedded transcription segment in an attachment — port of EmbeddedTranscription.TranscriptionSegmentData (CoreModels.swift). */

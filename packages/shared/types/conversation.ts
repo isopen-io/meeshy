@@ -77,14 +77,6 @@ export interface ConversationStats {
   readonly createdAt: Date;
 }
 
-/**
- * Types d'identifiants supportes pour une conversation
- */
-export interface ConversationIdentifiers {
-  readonly id: string;
-  readonly identifier?: string;
-}
-
 // ===== MESSAGE TYPES (canonical definitions in message-types.ts) =====
 
 /**
@@ -370,11 +362,6 @@ export interface ConversationAdminPermissions {
   readonly canDelete: boolean;
   readonly canModerate: boolean;
 }
-
-/**
- * @deprecated Use ConversationAdminPermissions for admin perms, or ParticipantPermissions from participant.ts for send perms
- */
-export type LegacyParticipantPermissions = ConversationAdminPermissions;
 
 /**
  * Parametres d'une conversation
@@ -676,18 +663,6 @@ export interface ConversationShareLink {
 /**
  * @deprecated Use Participant from participant.ts instead
  */
-export interface ConversationParticipantInfo {
-  readonly userId: string;
-  readonly role: UserRole;
-  readonly joinedAt: Date;
-  readonly isActive: boolean;
-  readonly permissions?: ConversationAdminPermissions;
-  readonly user?: unknown;
-}
-
-/**
- * @deprecated Use Participant from participant.ts instead
- */
 export interface ConversationParticipant {
   readonly userId: string;
   readonly role: UserRole;
@@ -794,28 +769,6 @@ export interface ConversationShare {
   readonly sharer?: User;
 }
 
-/**
- * DTO pour creer un partage de conversation
- */
-export interface CreateConversationShareDTO {
-  readonly conversationId: string;
-  readonly communityId: string;
-  readonly title?: string;
-  readonly description?: string;
-  readonly isPinned?: boolean;
-}
-
-/**
- * DTO pour mettre a jour un partage
- */
-export interface UpdateConversationShareDTO {
-  readonly title?: string;
-  readonly description?: string;
-  readonly isPinned?: boolean;
-  readonly pinOrder?: number;
-  readonly isActive?: boolean;
-}
-
 // ===== CONVERSATION MEMBER (DEPRECATED) =====
 
 /**
@@ -881,11 +834,6 @@ export interface UpdateParticipantDTO {
   readonly isActive?: boolean;
 }
 
-/**
- * @deprecated Use UpdateParticipantDTO instead
- */
-export type UpdateConversationMemberDTO = UpdateParticipantDTO;
-
 // ===== CONVERSATION PREFERENCE =====
 
 /**
@@ -902,35 +850,6 @@ export interface ConversationPreference {
   readonly description?: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
-}
-
-/**
- * DTO pour creer une preference
- */
-export interface CreateConversationPreferenceDTO {
-  readonly conversationId: string;
-  readonly key: string;
-  readonly value: string;
-  readonly valueType?: 'string' | 'number' | 'boolean' | 'json';
-  readonly description?: string;
-}
-
-/**
- * DTO pour mettre a jour une preference
- */
-export interface UpdateConversationPreferenceDTO {
-  readonly value?: string;
-  readonly valueType?: 'string' | 'number' | 'boolean' | 'json';
-  readonly description?: string;
-}
-
-/**
- * Collection de preferences d'un utilisateur pour une conversation
- */
-export interface UserConversationPreferencesMap {
-  readonly conversationId: string;
-  readonly userId: string;
-  readonly preferences: Record<string, ConversationPreference>;
 }
 
 // ===== TYPE GUARDS =====
