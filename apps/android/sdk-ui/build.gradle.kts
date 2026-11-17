@@ -63,6 +63,8 @@ dependencies {
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.androidx.media3.inspector.frame)
     implementation(libs.okhttp)
+    // lot: android-kit-assemblages-a (#18885) — K31, le générateur de QR unique du kit
+    implementation(libs.zxing.core)
     // lot: viseur-de-capture-du-composeur (#13423) — preview, photo, segments vidéo, torche, zoom, mise au point
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)
