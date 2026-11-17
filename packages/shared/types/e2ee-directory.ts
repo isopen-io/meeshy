@@ -77,6 +77,8 @@ export const E2EE_ERROR_CODES = {
   DEVICE_LIMIT_REACHED: 'E2EE_DEVICE_LIMIT_REACHED',
   ENVELOPES_INVALID: 'E2EE_ENVELOPES_INVALID',
   KEYS_FORBIDDEN: 'E2EE_KEYS_FORBIDDEN',
+  /** Un compte réserve trop de bundles, toutes cibles confondues : il patiente (`Retry-After`) (#18906, GW-01). */
+  KEYS_BUDGET_EXCEEDED: 'E2EE_KEYS_BUDGET_EXCEEDED',
   REGIME_CHANGED: 'E2EE_REGIME_CHANGED',
   /** Une conversation chiffrée de bout en bout ne repasse jamais en clair (#12949). */
   IRREVERSIBLE: 'E2EE_IRREVERSIBLE',
@@ -84,6 +86,8 @@ export const E2EE_ERROR_CODES = {
   DIRECT_ALREADY_END_TO_END: 'E2EE_DIRECT_ALREADY_END_TO_END',
   /** Un tête-à-tête ne se chiffre de bout en bout qu'entre exactement deux membres actifs (#12966). */
   DIRECT_NOT_A_PAIR: 'E2EE_DIRECT_NOT_A_PAIR',
+  /** Un tête-à-tête chiffré de bout en bout reste à deux : aucune porte n'y fait entrer un troisième membre (#16188). */
+  DIRECT_STAYS_A_PAIR: 'E2EE_DIRECT_STAYS_A_PAIR',
   BINDING_INVALID: 'E2EE_DEVICE_BINDING_INVALID',
   PREKEY_STOCK_FULL: 'E2EE_PREKEY_STOCK_FULL',
   IDENTITY_REVOKED: 'E2EE_IDENTITY_REVOKED',
@@ -124,6 +128,14 @@ export const E2EE_SIGNAL_CHANNEL_REQUIRED_MESSAGE =
  */
 export const E2EE_IRREVERSIBLE_MESSAGE =
   'End-to-end encryption cannot be turned off for this conversation. To chat without it, start a new conversation.';
+
+/**
+ * Le texte servi avec `E2EE_DIRECT_STAYS_A_PAIR` (#16188) : un ancien client qui
+ * ajoute ou invite quelqu'un dans un tête-à-tête chiffré de bout en bout
+ * l'affiche tel quel (#9223).
+ */
+export const E2EE_DIRECT_STAYS_A_PAIR_MESSAGE =
+  'This end-to-end encrypted conversation stays between the two of you: nobody can be added. To chat with more people, start a group.';
 
 /**
  * Le texte servi avec `E2EE_DIRECT_ALREADY_END_TO_END` (#12966) : chiffrer un
@@ -177,6 +189,29 @@ export const e2eeKyberOneTimePreKeySchema = e2eeSignedPreKeySchema;
 
 export const e2eePlatformSchema = z.enum(['ios', 'macos', 'android', 'web']);
 
+/** Les capacités déclarées par un appareil (#19155, spec 2026-11-17 § 5.1) : au plus 8, de 1 à 32 caractères. */
+export const E2EE_CAPABILITIES_MAX = 8;
+export const E2EE_CAPABILITY_MAX_CHARS = 32;
+
+/**
+ * Une capacité : minuscules, chiffres, point et tiret (`device-trust-v1`). L'alphabet est
+ * borné parce que la valeur est rangée puis servie à mes autres appareils : jamais un texte
+ * libre. Un ancien client n'en déclare aucune ; une passerelle plus ancienne retire le champ.
+ */
+export const e2eeCapabilitySchema = z.string().min(1).max(E2EE_CAPABILITY_MAX_CHARS).regex(/^[a-z0-9][a-z0-9.-]*$/, 'capacité attendue');
+
+export const e2eeCapabilitiesSchema = z.array(e2eeCapabilitySchema).max(E2EE_CAPABILITIES_MAX);
+
+/** Les capacités telles qu'elles se RANGENT : sans doublon, dans l'ordre de leur première déclaration. */
+export const distinctCapabilities = (capabilities: readonly string[]): string[] => [...new Set(capabilities)];
+
+/**
+ * Les capacités telles qu'elles se LISENT : un document écrit avant le champ ne le porte pas
+ * (le connecteur MongoDB distingue l'absent du nul), une valeur hors forme ne compte pas.
+ */
+export const readCapabilities = (stored: unknown): string[] =>
+  Array.isArray(stored) ? distinctCapabilities(stored.filter((value): value is string => e2eeCapabilitySchema.safeParse(value).success)) : [];
+
 const oneTimeBatches = {
   oneTimePreKeys: z.array(e2eeOneTimePreKeySchema).max(E2EE_ONE_TIME_PREKEY_BATCH_MAX).optional(),
   kyberPreKeys: z.array(e2eeKyberOneTimePreKeySchema).max(E2EE_ONE_TIME_PREKEY_BATCH_MAX).optional(),
@@ -194,6 +229,8 @@ export const e2eeEnrollDeviceRequestSchema = z.object({
     timestamp: z.number().int().positive(),
     signature: base64(SIGNATURE_MAX_CHARS),
   }),
+  /** Ce que l'appareil sait faire (#19155) ; absent = rien de neuf. Un réenrôlement le remplace. */
+  capabilities: e2eeCapabilitiesSchema.optional(),
   ...oneTimeBatches,
 });
 
@@ -202,6 +239,8 @@ export type E2EEEnrollDeviceRequest = z.infer<typeof e2eeEnrollDeviceRequestSche
 export const e2eePublishKeysRequestSchema = z.object({
   signedPreKey: e2eeSignedPreKeySchema.optional(),
   kyberLastResort: e2eeSignedPreKeySchema.optional(),
+  /** Présent : remplace les capacités déclarées (#19155) ; absent : elles restent. */
+  capabilities: e2eeCapabilitiesSchema.optional(),
   ...oneTimeBatches,
 });
 
@@ -258,9 +297,11 @@ export type E2EEDeviceBundle = {
 
 /**
  * Un de MES appareils chiffrés, tel que `GET /e2ee/devices` le sert à son seul
- * propriétaire (#13014). Aucune clé, aucune session : de quoi le reconnaître
- * (plateforme, libellé, dates) et savoir lequel est celui de la session appelante.
- * Un contact ne lit jamais ces champs (`/e2ee/keys/:userId/devices` n'en sert aucun).
+ * propriétaire (#13014). De quoi le reconnaître (plateforme, libellé, dates), savoir
+ * lequel est celui de la session appelante, et — depuis #19155 (spec 2026-11-17 § 5.5,
+ * GW-14, IOS-19) — sa clé d'identité PUBLIQUE et ses capacités : lire la clé d'un de mes
+ * appareils ne réserve plus aucune pré-clé. Aucune clé privée, aucune session, aucune
+ * pré-clé. Un contact ne lit jamais ces champs (`/e2ee/keys/:userId/devices` n'en sert aucun).
  */
 export type E2EEOwnDevice = {
   readonly deviceId: number;
@@ -272,6 +313,10 @@ export type E2EEOwnDevice = {
   /** Dernier enrôlement ou dernière publication de pré-clés : PAS une activité (la lecture d'enveloppes ne l'avance pas). */
   readonly lastSeenAt: string;
   readonly current: boolean;
+  /** La clé d'identité publique de libsignal (33 octets, base64), la même que celle des bundles. */
+  readonly identityKey: string;
+  /** Ce que l'appareil a déclaré savoir faire (`device-trust-v1`) ; `[]` s'il n'a rien déclaré. */
+  readonly capabilities: readonly string[];
 };
 
 /** Une enveloppe servie à SON appareil destinataire. */

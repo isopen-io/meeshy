@@ -42,6 +42,15 @@ export const idById = (id: string): string => `/api/v1/users/id/${encodeURICompo
 /** PATCH /api/v1/users/me */
 export const me = '/api/v1/users/me';
 
+/** GET · POST /api/v1/users/me/addresses */
+export const meAddresses = '/api/v1/users/me/addresses';
+
+/** PATCH · DELETE /api/v1/users/me/addresses/:id */
+export const meAddressesById = (id: string): string => `/api/v1/users/me/addresses/${encodeURIComponent(id)}`;
+
+/** PUT /api/v1/users/me/addresses/order */
+export const meAddressesOrder = '/api/v1/users/me/addresses/order';
+
 /** PATCH /api/v1/users/me/avatar */
 export const meAvatar = '/api/v1/users/me/avatar';
 

@@ -14,7 +14,6 @@
     <string name="profile_action_send_message">Enviar un mensaje</string>
     <string name="profile_activity_title">Actividad</string>
     <string name="profile_avatar_edit">Editar foto de perfil</string>
-    <string name="profile_back">Atrás</string>
     <string name="profile_bio_label">Biografía</string>
     <string name="profile_bio_placeholder">Cuéntanos sobre ti...</string>
     <string name="profile_blocked_by_me">Has bloqueado a este usuario</string>
@@ -36,10 +35,7 @@
     <string name="profile_decor_shop">Más en la tienda</string>
     <string name="profile_decor_subtitle">Visibles para todos en tu perfil</string>
     <string name="profile_decor_title">Contorno y banner</string>
-    <string name="profile_detail_country">País</string>
-    <string name="profile_detail_system_language">Idioma principal</string>
     <string name="profile_display_name_label">Nombre visible</string>
-    <string name="profile_e2ee">Cifrada de extremo a extremo</string>
     <string name="profile_e2ee_enabled">Cifrado de extremo a extremo activado</string>
     <string name="profile_edit">Editar</string>
     <string name="profile_email">Correo electrónico</string>
@@ -51,7 +47,6 @@
     <string name="profile_language_none">Ninguna</string>
     <string name="profile_language_primary">Idioma principal</string>
     <string name="profile_language_regional">Idioma regional</string>
-    <string name="profile_language_unset">Sin definir</string>
     <string name="profile_last_name_label">Apellido</string>
     <string name="profile_loadFailed_message">No se pudo cargar este perfil.</string>
     <string name="profile_name_min_characters">Al menos %1$d caracteres.</string>
@@ -104,7 +99,6 @@
     <string name="profile_toast_unblock_failed">No se pudo desbloquear</string>
     <string name="profile_toast_user_blocked">Usuario bloqueado</string>
     <string name="profile_toast_user_unblocked">Usuario desbloqueado</string>
-    <string name="profile_unknown">Desconocido</string>
     <string name="profile_username">Usuario</string>
     <string name="profile_verified">Verificado</string>
     <string name="profile_view_posts">Publicaciones</string>

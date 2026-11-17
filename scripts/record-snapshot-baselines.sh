@@ -50,16 +50,10 @@ echo "    DerivedData  : $DERIVED_DATA"
 echo "    Record mode  : all (SNAPSHOT_TESTING_RECORD=all)"
 echo
 
-# The 7 snapshot test classes — keep this list in sync with the file set
-# documented in each test file's header comment.
+# The Timeline snapshot test classes that exist — keep this list in sync with
+# the *SnapshotTests.swift files under Tests/MeeshyUITests/Timeline.
 TEST_CLASSES=(
   "MeeshyUITests/RulerViewSnapshotTests"
-  "MeeshyUITests/VideoClipBarSnapshotTests"
-  "MeeshyUITests/AudioClipBarSnapshotTests"
-  "MeeshyUITests/TransitionBadgeSnapshotTests"
-  "MeeshyUITests/ClipInspectorSnapshotTests"
-  "MeeshyUITests/ProTimelineViewSnapshotTests"
-  "MeeshyUITests/QuickTimelineViewSnapshotTests"
 )
 
 ONLY_TESTING_ARGS=()

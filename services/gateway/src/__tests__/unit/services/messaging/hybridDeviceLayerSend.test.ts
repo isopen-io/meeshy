@@ -130,6 +130,8 @@ function harness(params: { regime: Regime; peers?: readonly Member[]; senderRegi
       update: jest.fn(async () => ({})),
       updateMany: jest.fn(async () => ({ count: 0 })),
     },
+    // GW-05 (#18906) — la ligne et ses enveloppes s'écrivent dans UNE transaction.
+    $transaction: async (run: (tx: unknown) => Promise<unknown>) => run(prisma),
   } as unknown as PrismaClient;
   return { prisma, created, keys, store, processor: new MessageProcessor(prisma) };
 }

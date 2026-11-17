@@ -1,0 +1,165 @@
+/* L'EN-TÊTE DE SECTION (K44, #18876) — une ligne de 44 au moins : tête, titre, compteur
+   accolé, un seul accessoire de fin. Aucun flou hors du bandeau de colonne collant (le
+   verre vient de K01, jamais dessiné ici). Chaque valeur chiffrée vient de
+   `meeshy-section-header-recipe.ts`, qui la pose en propriétés `--kit-section-*`.
+   Seules la rotation du chevron et l'opacité s'animent. */
+@layer components {
+  .kit-section {
+    display: flex;
+    align-items: center;
+    gap: var(--kit-section-lead-gap);
+    box-sizing: border-box;
+    min-block-size: var(--kit-section-min-h);
+    min-inline-size: 0;
+    color: var(--color-ios-ink);
+  }
+
+  .kit-section__heading {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: baseline;
+    min-inline-size: 0;
+    margin: 0;
+    font-size: var(--kit-section-title);
+    font-weight: var(--kit-section-weight);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .kit-section__toggle {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--kit-section-lead-gap);
+    min-block-size: var(--kit-section-min-h);
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .kit-section__toggle:active {
+    opacity: 0.8;
+  }
+
+  .kit-section__toggle:focus-visible {
+    outline: 2px solid var(--kit-section-tint);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  .kit-section__title {
+    min-inline-size: 0;
+  }
+
+  .kit-section[data-form='overline'] .kit-section__title,
+  .kit-section[data-form='divider'] .kit-section__title {
+    color: var(--color-ios-ink-3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .kit-section__count {
+    margin-inline-start: var(--kit-section-count-gap);
+    color: var(--color-ios-ink-3);
+    font-size: var(--kit-section-count);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kit-section__lead {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--kit-section-lead);
+    block-size: var(--kit-section-lead);
+  }
+
+  .kit-section[data-form='step'] .kit-section__lead {
+    border-radius: var(--ios-radius-full);
+    background-color: var(--kit-section-tint);
+    color: var(--color-ios-on-brand);
+    font-size: 0.8125rem;
+    font-weight: 800;
+  }
+
+  .kit-section__lead[data-step='todo'] {
+    background-color: var(--color-ios-fill);
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-section__live {
+    display: inline-block;
+    flex: none;
+    inline-size: var(--kit-section-dot);
+    block-size: var(--kit-section-dot);
+    margin-inline-start: var(--kit-section-live-gap);
+    border-radius: var(--ios-radius-full);
+    background-color: var(--color-success);
+    align-self: center;
+    animation: kit-motion-pulse var(--motion-pulse-duration) var(--motion-pulse) infinite;
+    animation-play-state: var(--motion-pulse-play);
+  }
+
+  .kit-section__chevron {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-inline-start: auto;
+    color: var(--color-ios-ink-3);
+    transform: rotate(var(--kit-section-chevron-turns));
+    transition: transform var(--motion-morph-duration) var(--motion-morph);
+  }
+
+  .kit-section__trailing {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-block-size: var(--kit-section-min-h);
+    margin-inline-start: auto;
+    color: var(--kit-section-tint);
+    font-size: var(--kit-section-link);
+    font-weight: 700;
+  }
+
+  .kit-section__rule {
+    flex: 1 1 0;
+    block-size: 1px;
+    background-color: var(--color-ios-hairline);
+  }
+
+  .kit-section[data-form='divider'] {
+    gap: var(--kit-section-rule-gap);
+  }
+
+  .kit-section[data-form='divider'] .kit-section__heading {
+    flex: none;
+  }
+
+  .kit-section[data-glass] {
+    padding-inline: 14px;
+    border-radius: var(--ios-radius-full);
+  }
+
+  .kit-section__chevron:dir(rtl) svg {
+    transform: scaleX(-1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-section__chevron {
+      transition: none;
+    }
+
+    .kit-section__live {
+      animation: none;
+    }
+  }
+}

@@ -195,3 +195,28 @@ describe('widgetSnapshotOf — les contacts favoris (miroir iOS : directes épin
     expect(snapshot.favorites.find((f) => f.id === 'masque')?.presence).toBe('offline');
   });
 });
+
+/**
+ * **LE WIDGET DE LA COQUE NE PORTE JAMAIS UN CLAIR CHIFFRÉ DE BOUT EN BOUT**
+ * (#18991, liste noire `lib/e2ee/durable-plaintext-sinks.ts`). Le widget est
+ * rangé dans `meeshy_widgets`, qui PART en sauvegarde cloud (contre-analyse
+ * WEBX-04). Le jour où l'appareil déchiffrera, le texte d'un message e2ee
+ * vivra en mémoire au rendu ; s'il atteignait le dernier message de la liste,
+ * l'aperçu du widget dit « chiffré », jamais le texte.
+ */
+describe('widgetSnapshotOf — une conversation fermée au clair', () => {
+  const SENTINEL = 'clair-dechiffre-sentinelle-7f3a9c';
+
+  test('un message chiffré de bout en bout ne livre jamais son texte, même posé à côté de ses marques', () => {
+    const snapshot = widgetSnapshotOf(
+      input([
+        direct('e2ee', {
+          encryptionMode: 'e2ee',
+          lastMessage: message({ content: SENTINEL, isEncrypted: true, encryptionMode: 'e2ee' }),
+        } as Partial<Conversation>),
+      ]),
+    );
+
+    expect(JSON.stringify(snapshot)).not.toContain(SENTINEL);
+  });
+});

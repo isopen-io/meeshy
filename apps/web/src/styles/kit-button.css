@@ -48,6 +48,12 @@
     block-size: var(--kit-button-h);
   }
 
+  .kit-button[data-shape='hold'] {
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+  }
+
   .kit-button::before {
     content: '';
     position: absolute;

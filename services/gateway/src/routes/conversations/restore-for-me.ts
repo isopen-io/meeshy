@@ -3,7 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendError } from '../../utils/response';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { SERVER_EVENTS, type ConversationRestoredEventData } from '@meeshy/shared/types/socketio-events';
@@ -11,6 +11,7 @@ import { broadcastToUser } from '../../utils/socket-broadcast';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import { mayReturnToSalon } from '../../services/conversations/communityMembershipSync';
 import { rejoinRestoredMembership } from './utils/rejoin-restored-membership';
+import { returningMemberRefusalFor } from '../../services/conversations/newMemberAdmission';
 
 const logger = enhancedLogger.child({ module: 'ConversationRestoreForMe' });
 
@@ -29,10 +30,12 @@ function refuseBannedRestore(reply: FastifyReply): void {
  * hors budget est interdit — on extrait d'abord, on ajoute ensuite ». Le geste
  * est le même, à la jonction de room près.
  *
- * Les quatre refus, dans cet ordre, et chacun pour sa raison :
+ * Les cinq refus, dans cet ordre, et chacun pour sa raison :
  * ligne non supprimée · banni (#10436) · conversation CLOSE (un geste
  * personnel ne rouvre jamais un fil que la route canonique a fermé pour tout
- * le monde) · salon dont l'appelant n'est plus membre.
+ * le monde) · salon dont l'appelant n'est plus membre · tête-à-tête chiffré de
+ * bout en bout dont l'appelant n'était pas de la paire à l'activation (#16188,
+ * audit de #19080 E1 : la règle de la paire ne comptait que les actifs).
  */
 export async function restoreConversationForMe(
   ctx: { readonly fastify: FastifyInstance; readonly prisma: PrismaClient },
@@ -52,7 +55,7 @@ export async function restoreConversationForMe(
           deletedForMe: true,
           bannedAt: true,
           language: true,
-          conversation: { select: { isActive: true, communityId: true } },
+          conversation: { select: { isActive: true, communityId: true, type: true, encryptionMode: true, encryptionEnabledAt: true } },
         },
       });
 
@@ -82,6 +85,14 @@ export async function restoreConversationForMe(
       }
 
       if (!(await mayReturnToSalon(prisma, { communityId: participant.conversation.communityId, userId }))) return sendForbidden(reply, 'Only members of this community can return to its conversations', { code: 'COMMUNITY_MEMBERS_ONLY' });
+
+      const pairRefusal = await returningMemberRefusalFor(prisma, {
+        conversationId,
+        conversation: participant.conversation,
+        returningUserId: userId,
+        leftAt: participant.deletedForMe,
+      });
+      if (pairRefusal) return sendError(reply, 409, pairRefusal.message, { code: pairRefusal.code });
 
       // La garde est AUSSI dans le `where` : un bannissement tombé entre la
       // lecture ci-dessus et cette écriture ne doit pas être rallumé. La

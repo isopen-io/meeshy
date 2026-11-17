@@ -1,0 +1,116 @@
+/* LE TRACÉ DE CARTE (K54, #18877) — un chemin à la teinte de l'hôte sur un liseré sombre.
+   Mesures de `meeshy-map-trace-recipe.ts` (`--kit-trace-*`). Le sens est un décalage de
+   pointillé ; seule la position du dash s'anime. Mouvement réduit ou périmé : trait fixe. */
+@layer components {
+  .kit-trace {
+    position: absolute;
+    inset: 0;
+    color: var(--kit-trace-tint, var(--color-ios-brand));
+    opacity: var(--kit-trace-opacity, 1);
+  }
+
+  .kit-trace[data-stale] {
+    filter: saturate(0.2);
+  }
+
+  .kit-trace__svg {
+    overflow: visible;
+    display: block;
+  }
+
+  .kit-trace__casing {
+    stroke: #0b0b12;
+    stroke-opacity: var(--kit-trace-casing-opacity, 0.55);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .kit-trace__halo {
+    stroke: currentColor;
+    stroke-opacity: 0.16;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .kit-trace__stroke {
+    stroke: currentColor;
+  }
+
+  .kit-trace[data-kind='link'] .kit-trace__stroke {
+    stroke: color-mix(in srgb, #fff 90%, currentColor);
+  }
+
+  .kit-trace[data-flows] .kit-trace__stroke {
+    animation: kit-trace-flow var(--kit-trace-flow, 1400ms) linear infinite;
+  }
+
+  .kit-trace__node {
+    fill: var(--color-ios-bg);
+    stroke: currentColor;
+    stroke-width: 3;
+  }
+
+  .kit-trace__node[data-upcoming] {
+    opacity: 0.3;
+  }
+
+  .kit-trace__head {
+    fill: currentColor;
+    stroke: #fff;
+    stroke-width: 2.5;
+  }
+
+  .kit-trace__mid {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    pointer-events: none;
+  }
+
+  .kit-trace__stop {
+    position: absolute;
+    display: grid;
+    justify-items: center;
+    gap: 0.0625rem;
+    transform: translateX(-50%);
+    padding: 0.125rem 0.5rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--color-ios-card);
+    color: var(--color-ios-ink);
+    font: inherit;
+    font-size: 0.6875rem;
+    pointer-events: none;
+  }
+
+  button.kit-trace__stop {
+    pointer-events: auto;
+    cursor: pointer;
+    min-block-size: 2.75rem;
+    min-inline-size: 2.75rem;
+  }
+
+  .kit-trace__stop[data-upcoming] {
+    opacity: 0.3;
+  }
+
+  .kit-trace__stop-value {
+    font-family: var(--font-mono, monospace);
+    font-weight: 800;
+  }
+
+  .kit-trace__stop-title {
+    color: var(--color-ios-ink-2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-trace[data-flows] .kit-trace__stroke {
+      animation: none;
+    }
+  }
+}
+
+@keyframes kit-trace-flow {
+  to {
+    stroke-dashoffset: calc(-1 * var(--kit-trace-every, 10px));
+  }
+}

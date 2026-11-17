@@ -186,7 +186,7 @@ describe('#12933 — une preuve de liaison ne sert qu’une fois par installatio
     advance(clock, 1);
     const retried = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request });
 
-    expect(retried).toEqual({ deviceId: first.deviceId, created: false });
+    expect(retried).toEqual({ deviceId: first.deviceId, created: false, returning: false });
     expect(stock()).toEqual(before);
     expect(activeDevices(store).map((row) => row.sessionId)).toEqual([SESSION_ALICE]);
   });

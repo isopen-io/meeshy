@@ -1,0 +1,159 @@
+{
+  "_doc": "Le remplissage du clair AVANT libsignal (#13142, #18940) : espaces 0x20 après le JSON jusqu’au palier, sur les OCTETS UTF-8. Voir README.md.",
+  "contract": "meeshy-e2ee-padding",
+  "tiers": [
+    256,
+    1024,
+    4096,
+    16384
+  ],
+  "step": 16384,
+  "maxEnvelopeBytes": 65536,
+  "maxTotalBytes": 524288,
+  "cipherOverhead": 2048,
+  "byte": 32,
+  "ceilings": [
+    {
+      "recipients": 1,
+      "ceiling": 63488
+    },
+    {
+      "recipients": 2,
+      "ceiling": 63488
+    },
+    {
+      "recipients": 8,
+      "ceiling": 63488
+    },
+    {
+      "recipients": 9,
+      "ceiling": 56206
+    },
+    {
+      "recipients": 32,
+      "ceiling": 14336
+    }
+  ],
+  "lengths": [
+    {
+      "length": 0,
+      "recipients": 1,
+      "padded": 256
+    },
+    {
+      "length": 1,
+      "recipients": 1,
+      "padded": 256
+    },
+    {
+      "length": 100,
+      "recipients": 0,
+      "padded": 256
+    },
+    {
+      "length": 256,
+      "recipients": 1,
+      "padded": 256
+    },
+    {
+      "length": 257,
+      "recipients": 1,
+      "padded": 1024
+    },
+    {
+      "length": 1024,
+      "recipients": 3,
+      "padded": 1024
+    },
+    {
+      "length": 3000,
+      "recipients": 1,
+      "padded": 4096
+    },
+    {
+      "length": 5000,
+      "recipients": 1,
+      "padded": 16384
+    },
+    {
+      "length": 16384,
+      "recipients": 1,
+      "padded": 16384
+    },
+    {
+      "length": 16385,
+      "recipients": 1,
+      "padded": 32768
+    },
+    {
+      "length": 16385,
+      "recipients": 2,
+      "padded": 32768
+    },
+    {
+      "length": 20000,
+      "recipients": 2,
+      "padded": 32768
+    },
+    {
+      "length": 33000,
+      "recipients": 2,
+      "padded": 49152
+    },
+    {
+      "length": 49153,
+      "recipients": 1,
+      "padded": 63488
+    },
+    {
+      "length": 50000,
+      "recipients": 2,
+      "padded": 63488
+    },
+    {
+      "length": 60000,
+      "recipients": 2,
+      "padded": 63488
+    },
+    {
+      "length": 63488,
+      "recipients": 2,
+      "padded": 63488
+    },
+    {
+      "length": 63489,
+      "recipients": 2,
+      "padded": 63489
+    },
+    {
+      "length": 70000,
+      "recipients": 2,
+      "padded": 70000
+    },
+    {
+      "length": 4097,
+      "recipients": 9,
+      "padded": 16384
+    },
+    {
+      "length": 16384,
+      "recipients": 9,
+      "padded": 16384
+    },
+    {
+      "length": 5000,
+      "recipients": 32,
+      "padded": 14336
+    },
+    {
+      "length": 14336,
+      "recipients": 32,
+      "padded": 14336
+    },
+    {
+      "length": 14337,
+      "recipients": 32,
+      "padded": 14337
+    }
+  ]
+}

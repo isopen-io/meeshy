@@ -195,18 +195,6 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
     }
 }
 
-// MARK: - MockProfileCache
-
-final class MockProfileCacheWriter: ProfileCacheWriting, @unchecked Sendable {
-    var saveProfileResult: Result<Void, Error> = .success(())
-    var saveProfileCalls: [(user: MeeshyUser, userId: String)] = []
-
-    func saveProfile(_ user: MeeshyUser, for userId: String) async throws {
-        saveProfileCalls.append((user, userId))
-        try saveProfileResult.get()
-    }
-}
-
 // MARK: - MockFeedbackToast
 
 @MainActor
@@ -224,15 +212,4 @@ final class MockFeedbackToast: FeedbackToastSurfacing {
         errorMessages.append(message)
         errorTapActions.append(tapAction)
     }
-}
-
-// MARK: - MockHaptic
-
-@MainActor
-final class MockHaptic: HapticSurfacing {
-    var successCount = 0
-    var errorCount = 0
-
-    func success() { successCount += 1 }
-    func error()   { errorCount += 1 }
 }

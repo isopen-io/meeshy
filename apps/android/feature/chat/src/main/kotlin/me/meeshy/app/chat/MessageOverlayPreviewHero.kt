@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import androidx.compose.foundation.layout.Box
+import me.meeshy.sdk.model.EndToEndSeal
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.systemBars
@@ -144,6 +145,11 @@ private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
             failed = stringResource(R.string.bubble_status_failed),
         ),
         endToEndSealed = stringResource(R.string.bubble_message_end_to_end),
+        endToEndSeals = mapOf(
+            EndToEndSeal.UNREADABLE to stringResource(R.string.bubble_message_end_to_end_unreadable),
+            EndToEndSeal.UPDATE_REQUIRED to stringResource(R.string.bubble_message_end_to_end_update),
+            EndToEndSeal.OTHER_DEVICE to stringResource(R.string.bubble_message_end_to_end_other_device),
+        ),
         anonymousSender = stringResource(R.string.focal_row_anonymousSender),
         sources = BubbleSourceA11yStrings(
             system = stringResource(R.string.a11y_message_source_system),

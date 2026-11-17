@@ -45,8 +45,6 @@ final class DetailOpenSources: DetailOpenSourceProviding {
 
     static let shared = DetailOpenSources()
     static let markLifetime: TimeInterval = 60
-    static let notificationSource = "notification"
-    static let detailSource = "detail"
 
     private let clock: () -> Date
     private var marks: [String: (entry: ContentEntry, at: Date)] = [:]

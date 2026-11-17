@@ -75,8 +75,6 @@ enum ShareSheetCopy {
     }
     static var understood: String { String(localized: "share.sheet.blocked.understood", defaultValue: "Compris", bundle: .meeshyShare) }
 
-    static var flameTitle: String { String(localized: "forward.duration.title", defaultValue: "Disparaît après", bundle: .meeshyShare) }
-
     // MARK: Ce qu'on peut en faire
 
     static var publishZone: String { String(localized: "forward.publish-section", defaultValue: "Publier", bundle: .meeshyShare) }

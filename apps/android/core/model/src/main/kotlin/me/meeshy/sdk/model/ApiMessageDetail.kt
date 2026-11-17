@@ -151,16 +151,6 @@ data class ApiForwardedFrom(
     val attachments: List<ApiMessageAttachment>? = null,
 )
 
-/** The conversation a forward originates from — port of APIForwardedFromConversation (MessageModels.swift). */
-@Serializable
-data class ApiForwardedFromConversation(
-    val id: String,
-    val title: String? = null,
-    val identifier: String? = null,
-    val type: String? = null,
-    val avatar: String? = null,
-)
-
 /** Meta block on a messages list response — port of MessagesAPIMeta (MessageModels.swift). */
 @Serializable
 data class MessagesApiMeta(
@@ -177,27 +167,6 @@ data class MessagesApiResponse(
     val cursorPagination: CursorPagination? = null,
     val hasNewer: Boolean? = null,
     val meta: MessagesApiMeta? = null,
-)
-
-/** The data payload echoed back after sending a message — port of SendMessageResponseData (MessageModels.swift). */
-@Serializable
-data class SendMessageResponseData(
-    val id: String,
-    val clientMessageId: String? = null,
-    val conversationId: String = "",
-    val senderId: String? = null,
-    val content: String? = null,
-    val messageType: String? = null,
-    val createdAt: String? = null,
-)
-
-/** Result of consuming a view-once message — port of ConsumeViewOnceResponse (MessageModels.swift). */
-@Serializable
-data class ConsumeViewOnceResponse(
-    val messageId: String,
-    val viewOnceCount: Int = 0,
-    val maxViewOnceCount: Int = 0,
-    val isFullyConsumed: Boolean = false,
 )
 
 // ── Sérialiseurs tolérants des messages : un champ malformé ne coûte que lui-même ──

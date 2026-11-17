@@ -1,12 +1,9 @@
 package me.meeshy.core.e2ee.content
 
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.jsonObject
-
 /**
  * Ce qu'un clair déchiffré porte (#13142) : un message (`v`) ou un SIGNAL (`s`, réaction, frappe, accusé…). Miroir de
- * `E2EEPayloadKind` (`E2EESignal.swift`). Un clair illisible se classe message : `E2eeContent.decoded` le refusera.
+ * `E2EEPayloadKind` (`E2EESignal.swift`) et de la sonde du contrat commun (#18944) : un signal si et seulement si `s` est
+ * un ENTIER JSON — `s` absent, `null`, une chaîne, `1.5` ou un clair illisible font un message, que le lecteur jugera.
  */
 public enum class E2eePayloadKind {
     MESSAGE,
@@ -14,12 +11,7 @@ public enum class E2eePayloadKind {
     ;
 
     public companion object {
-        public fun of(plaintext: ByteArray): E2eePayloadKind {
-            val root = runCatching { lenientJson.parseToJsonElement(plaintext.toString(Charsets.UTF_8)).jsonObject }.getOrNull()
-            return if (root.hasSignalVersion()) SIGNAL else MESSAGE
-        }
-
-        private fun JsonObject?.hasSignalVersion(): Boolean = this != null && this["s"].let { it != null && it != JsonNull }
+        public fun of(plaintext: ByteArray): E2eePayloadKind = E2eePlaintextReader.payloadOf(plaintext)
     }
 }
 

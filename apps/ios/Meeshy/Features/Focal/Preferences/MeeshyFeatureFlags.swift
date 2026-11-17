@@ -77,39 +77,4 @@ nonisolated enum MeeshyFeatureFlags {
         default: return defaults.bool(forKey: agentGrammarUserDefaultsKey)
         }
     }
-
-    // MARK: - `circle_person_settings` (jalon 2 des cercles, #13938)
-
-    /// Les réglages par personne d'un lien — écoute, talkie, Bring, position — n'existent côté
-    /// serveur qu'au jalon 2 (`PUT /relations/:userId/settings`, #14229). Tant qu'il n'est pas livré, la
-    /// fiche d'un lien les MONTRE désactivés et DIT pourquoi : ni cachés (l'utilisateur chercherait
-    /// où ils sont), ni simulés (un interrupteur sans effet est un mensonge).
-    ///
-    /// Drapeau PROPRE, FERMÉ par défaut. Même patron de résolution que `isAgentGrammarEnabled` :
-    /// `ProcessInfo` prime sur `UserDefaults`.
-    private static let personSettingsUserDefaultsKey = "meeshy.flag.circle_person_settings"
-    private static let personSettingsEnvironmentKey = "MEESHY_FLAG_CIRCLE_PERSON_SETTINGS"
-
-    static var areCirclePersonSettingsEnabled: Bool {
-        arePersonSettingsEnabled(defaults: .standard, environment: ProcessInfo.processInfo.environment)
-    }
-
-    /// Variante injectable — jamais `.standard` dans un test.
-    static func arePersonSettingsEnabled(
-        defaults: UserDefaults,
-        environment: [String: String]
-    ) -> Bool {
-        switch environment[personSettingsEnvironmentKey] {
-        case "1": return true
-        case "0": return false
-        default: return defaults.bool(forKey: personSettingsUserDefaultsKey)
-        }
-    }
-
-    // MARK: - `bring_alarm` (essai AlarmKit, #17442)
-
-    /// L'alarme système d'un Bring (AlarmKit, iOS 26+) : ouverte en Debug, fermée en Release, forçable par
-    /// l'environnement (`MEESHY_FLAG_BRING_ALARM` = `1` / `0`) puis par le groupe d'apps — que la NSE lit aussi.
-    /// La loi vit dans `BringAlarmPlan`, compilé dans l'app et dans l'extension.
-    static var isBringAlarmEnabled: Bool { BringAlarmPlan.isEnabled }
 }
