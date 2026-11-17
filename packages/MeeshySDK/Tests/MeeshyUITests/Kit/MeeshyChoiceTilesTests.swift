@@ -114,6 +114,15 @@ struct MeeshyChoiceTilesTests {
         #expect(MeeshyChoiceTilesRecipe.countText(selection: .multiple([]), maxSelected: nil, label: nil) == nil)
     }
 
+    @Test("une option qui prend la rangée a sa rangée ; les autres se rangent par colonnes")
+    func rows_layout() {
+        let items = [Self.item("a"), Self.item("b"), MeeshyChoiceItem(id: "w", title: "w", spansRow: true),
+                     Self.item("c"), Self.item("d"), Self.item("e")]
+        let rows = MeeshyChoiceTilesRecipe.rows(items, columns: 2, base: .square).map { $0.map(\.id) }
+        #expect(rows == [["a", "b"], ["w"], ["c", "d"], ["e"]])
+        #expect(MeeshyChoiceTilesRecipe.rows([], columns: 3, base: .square).isEmpty)
+    }
+
     @Test("garde de source : aucune durée, aucun cercle, aucune adresse dans les signatures")
     func source_isAnAgnosticAtom() throws {
         try KitAssemblyGuards.assertAgnostic(["MeeshyChoiceTiles.swift", "MeeshyChoiceTilesRecipe.swift"])

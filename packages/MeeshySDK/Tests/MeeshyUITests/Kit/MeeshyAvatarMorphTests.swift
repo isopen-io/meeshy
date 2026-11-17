@@ -111,10 +111,10 @@ struct MeeshyAvatarMorphTests {
 
     @Test("garde de source : K29 ne dessine aucun avatar et ne connaît ni personne, ni présence, ni story, ni carte")
     func source_isAnAgnosticAtom() throws {
-        try KitAssemblyGuards.assertAgnostic(["MeeshyAvatarMorph.swift", "MeeshyAvatarMorphRecipe.swift"])
         for file in ["MeeshyAvatarMorph.swift", "MeeshyAvatarMorphRecipe.swift"] {
             let source = try KitAtomVectors.code(file)
-            for forbidden in ["MeeshyAvatar(", "Story", "PresenceState", "MapKit"] {
+            for forbidden in ["MeeshyAvatar(", "Story", "PresenceState", "MapKit", "MeeshyUser", "MeeshyConversation",
+                              "ThemeManager", "PresenceManager", "URLSession", "Color(hex:", "Manager.shared"] {
                 #expect(!source.contains(forbidden), "\(file) contient \(forbidden)")
             }
         }

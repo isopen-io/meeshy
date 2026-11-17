@@ -95,8 +95,18 @@ struct MeeshyChartTests {
         #expect(MeeshyChartRecipe.markedIndexes(.band(from: "z", to: "c"), ids: ids, values: [1, 2, 3, 4]) == [])
     }
 
+    @Test("le point sous un doigt : l'abscisse rapportée à la largeur, bornée aux points existants")
+    func indexUnderFinger() {
+        #expect(MeeshyChartRecipe.index(forX: 0, width: 100, count: 4) == 0)
+        #expect(MeeshyChartRecipe.index(forX: 60, width: 100, count: 4) == 2)
+        #expect(MeeshyChartRecipe.index(forX: 500, width: 100, count: 4) == 3)
+        #expect(MeeshyChartRecipe.index(forX: -9, width: 100, count: 4) == 0)
+        #expect(MeeshyChartRecipe.index(forX: 10, width: 0, count: 4) == nil)
+        #expect(MeeshyChartRecipe.index(forX: 10, width: 100, count: 0) == nil)
+    }
+
     @Test("garde de source : aucun clic, lien, pays, filleul ni cercle dans les signatures")
     func source_isAnAgnosticAtom() throws {
-        try KitAssemblyGuards.assertAgnostic(["MeeshyChart.swift", "MeeshyChartRecipe.swift", "MeeshyChartScale.swift"])
+        try KitAssemblyGuards.assertAgnostic(["MeeshyChart.swift", "MeeshyChart+Shapes.swift", "MeeshyChartRecipe.swift", "MeeshyChartScale.swift"])
     }
 }
