@@ -122,6 +122,12 @@ RULES = (
         r"(?m)^[ \t]*(?:@\w+[ \t]+)*import[ \t]+MeeshySDK\b(?!\w)",
         r"^apps/ios/MeeshyNotificationExtension/",
     ),
+    # IOS-16 (#18949) — le remplissage du chiffré cache la longueur d'un message ;
+    # le journal unifié ne la redit pas en clair (`.private`, ou rien).
+    _pattern(
+        "log-text-length-public",
+        r"\\\((?:[A-Za-z_]\w*\.)*(?:text|content|caption|draft|body|plaintext|transcript\w*)\.(?:utf8\.|utf16\.)?count,\s*privacy:\s*\.public\s*\)",
+    ),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
     _pattern("unchecked-sendable-total", r"@unchecked\s+Sendable"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),

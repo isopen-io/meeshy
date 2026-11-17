@@ -592,42 +592,6 @@ extension MeeshyComposerHost {
         documentTranscriptions[ancienne] = nil
     }
 
-    /// Fond ou premier plan — le choix appliqué à ce que la feuille va poser.
-    ///
-    /// La sélection affichée est le rôle qui s'appliquerait SANS choix : tant
-    /// que l'auteur n'a rien dit, la pastille montre ce que la règle
-    /// automatique ferait, et non un défaut arbitraire qui la contredirait.
-    @ViewBuilder
-    var soundRolePicker: some View {
-        let effectif = chosenSoundRole ?? automaticSoundRole
-        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            Text(ComposerSoundRoleCopy.title)
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundStyle(.secondary)
-            HStack(spacing: MeeshySpacing.sm) {
-                ForEach(ComposerAudioRole.allCases, id: \.self) { role in
-                    Button {
-                        chosenSoundRole = role
-                        HapticFeedback.light()
-                    } label: {
-                        Text(ComposerSoundRoleCopy.label(role))
-                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                            .padding(.horizontal, MeeshySpacing.md)
-                            .padding(.vertical, MeeshySpacing.xsPlus)
-                            .background(
-                                Capsule().fill(role == effectif
-                                               ? Color.accentColor.opacity(0.22)
-                                               : Color.primary.opacity(0.07))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(ComposerSoundRoleCopy.label(role))
-                    .accessibilityAddTraits(role == effectif ? [.isSelected] : [])
-                }
-            }
-        }
-        .padding(.top, MeeshySpacing.smPlus)
-    }
 
     /// Ce que la règle ferait si l'auteur ne disait rien — la source unique,
     /// APPELÉE et jamais recopiée.

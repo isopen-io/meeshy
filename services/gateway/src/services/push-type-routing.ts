@@ -76,11 +76,23 @@ const BATTERY_PULL_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = 
   ios: null, 'android-native': null, 'android-shell': null, web: null,
 };
 
+/**
+ * `e2ee_device_verification` (#19156, spec 2026-11-17 § 5.3) : l'annonce visible d'un nouvel
+ * appareil chiffré sur mon compte. Un client qui ne sait pas confirmer par code n'en ferait
+ * qu'une bannière qui n'ouvre rien d'utile : aucun client publié ne la route encore, et chaque
+ * lot client (iOS 4, Android 5, web 6) pose ici sa première version DANS la même PR. Le
+ * rapprochement par `GET /e2ee/devices` ne dépend pas de ces planchers.
+ */
+const E2EE_DEVICE_VERIFICATION_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
+  ios: null, 'android-native': null, 'android-shell': null, web: null,
+};
+
 export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['game_photo_moment', { ios: null, 'android-native': null, 'android-shell': '2.23.0', web: '2.23.0' }],
   ['bring_stopped', BRING_STOPPED_FLOORS],
   ['talkie_incoming', TALKIE_INCOMING_FLOORS],
   ['battery_pull', BATTERY_PULL_FLOORS],
+  ['e2ee_device_verification', E2EE_DEVICE_VERIFICATION_FLOORS],
 ]);
 
 const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.(app|android)(\.|$)/;

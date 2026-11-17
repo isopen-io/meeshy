@@ -143,14 +143,11 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: [
                 "\(ui)/Story/Canvas/*",
                 "\(ui)/Story/StoryComposerSupportTypes.swift",
-                "\(ui)/Story/StoryTextEditorView.swift",
                 "\(ui)/Story/StoryTextEffectStyle.swift",
                 "\(ui)/Story/StoryBackgroundStyle.swift",
                 "\(ui)/Story/StoryFilterGridView.swift",
                 "\(ui)/Story/StorySlideRenderer.swift",
-                "\(ui)/Story/SlideMiniPreview.swift",
                 "\(ui)/Story/TextEditToolOptions*.swift",
-                "\(ui)/Story/TextStyleSpecimenBand.swift",
             ]
         ),
         Exemption(
@@ -158,8 +155,6 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: [
                 "\(ui)/Story/Drawing/*",
                 "\(ui)/Story/DrawingEditToolOptions.swift",
-                "\(ui)/Story/DrawingStrokeList.swift",
-                "\(ui)/Story/StoryDrawingToolbar.swift",
             ]
         ),
         Exemption(
@@ -199,10 +194,6 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
                 "\(app)/Views/ReelAudioBackdrop.swift",
                 "\(app)/Components/MessageEffectModifiers.swift",
             ]
-        ),
-        Exemption(
-            reason: "couleur CALCULÉE d'une entité : la couleur hachée d'un tag",
-            globs: ["\(ui)/Primitives/TagInputView.swift"]
         ),
         Exemption(
             reason: "drapeaux de langue : couleurs de drapeau",
@@ -290,7 +281,8 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
 
     /// Littéraux `Color(hex: "…")` hors cadre libre. **Ne doit que DESCENDRE.**
     /// `git ls-files … | grep -vE "$EXEMPT" | xargs grep -Po '(?<![A-Za-z])Color\(hex:[ \t]*\x22' | wc -l` → 13.
-    private static let hexCeiling = 13
+    /// 12 au 2026-11-17 (#18899) : les primitives sans écran du SDK sortent, mesuré par la commande de référence.
+    private static let hexCeiling = 12
 
     /// Littéraux `Color(red: 0.1, …)` hors cadre libre. **Ne doit que DESCENDRE.**
     /// `… | xargs grep -Po '(?<![A-Za-z])Color\(red:[ \t]*[0-9.]' | wc -l` → 3.
@@ -300,11 +292,16 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
     /// `… | xargs grep -Po 'cornerRadius(:|\()[ \t]*[0-9]' | wc -l` → 120 au 2026-09-30 ;
     /// 119 au 2026-10-21, quand les styles de survol pointeur passent sur `MeeshyRadius`
     /// et `MeeshyPointerShape.rectangle`.
-    private static let cornerRadiusCeiling = 119
+    /// 108 au 2026-11-17 (#18899) : la frise d'atelier du SDK sort, mesuré par la commande de référence.
+    /// 106 au 2026-11-17 (#18899) : les primitives sans écran du SDK sortent, mesuré par la commande de référence.
+    private static let cornerRadiusCeiling = 106
 
     /// Marges numériques hors cadre libre. **Ne doit que DESCENDRE.**
     /// `… | xargs grep -Po '\.padding\((\.[a-z]+,[ \t]*|\[[^\]\n]*\],[ \t]*)?[0-9]' | wc -l` → 190.
-    private static let paddingCeiling = 190
+    /// 179 au 2026-11-17 (#18899) : la frise d'atelier du SDK sort, mesuré par la commande de référence.
+    /// 178 au 2026-11-17 (#18899) : les commandes et éditeurs de l'ancien atelier sortent, mesuré par la commande de référence.
+    /// 176 au 2026-11-17 (#18899) : les primitives sans écran du SDK sortent, mesuré par la commande de référence.
+    private static let paddingCeiling = 176
 
     private static func ceiling(_ population: Population) -> Int {
         switch population {

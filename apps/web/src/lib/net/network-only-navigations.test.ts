@@ -133,10 +133,10 @@ describe('NETWORK_ONLY_NAVIGATIONS — ce que nginx redirige ou sert', () => {
   });
 
   test('la révision et la configuration du conteneur s’ouvrent dans le navigateur, jamais la coque (#12654)', () => {
-    for (const address of ['/build-info.json', '/config.js', '/build-info.json?t=1']) {
+    for (const address of ['/build-info.json', '/config.json', '/config.js', '/build-info.json?t=1']) {
       expect({ address, refused: refused(address) }).toEqual({ address, refused: true });
     }
-    for (const address of ['/build-info.json.bak', '/config.jsx']) {
+    for (const address of ['/build-info.json.bak', '/config.jsx', '/config.jsonp']) {
       expect({ address, refused: refused(address) }).toEqual({ address, refused: false });
     }
   });

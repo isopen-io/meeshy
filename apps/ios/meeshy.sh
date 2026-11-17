@@ -1832,8 +1832,7 @@ FINAL_PHASE_CLASS_PATTERN='Auth|Session|TwoFactor|EmailVerification|Connection|G
 # et la suite d'état final (réservée à la phase 3). (BubbleExpandableTextUITests,
 # the never-compiled XCUITest suite this list used to defend against, was
 # deleted 2026-07-21 — dead code with no UI-testing target to host it; its
-# stale project.yml exclude-list entry is left for the i18n lane, which owns
-# that file, to clear on its next pass.)
+# project.yml exclude-list entry left with it.)
 NON_PHASE_SUITES="MessageListPerformanceTests BubbleSimpleMessagePerfTests SearchPerformanceTests FocalScrollPassPerfTests"
 
 discover_test_classes() {

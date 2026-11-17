@@ -38,7 +38,7 @@ Meeshy iOS est une application de messagerie instantanée moderne, construite av
 | Persistence | CoreData (SwiftData iOS 17+) | - |
 | Networking | URLSession + Socket.IO | 16.1.0+ |
 | Sécurité | Keychain + Certificate Pinning | - |
-| Media | Kingfisher | 7.10.0+ |
+| Media | CachedAsyncImage + CacheCoordinator (SDK) | - |
 | Backend Services | Firebase (Auth, Analytics, Push) | 10.20.0+ |
 
 ---
@@ -454,7 +454,6 @@ Voir [Git Workflow](./03-Development/GIT_WORKFLOW.md) pour plus de détails.
 - [Firebase iOS SDK](https://firebase.google.com/docs/ios)
 - [Socket.IO Swift Client](https://github.com/socketio/socket.io-client-swift)
 - [Fastlane Documentation](https://docs.fastlane.tools)
-- [Kingfisher](https://github.com/onevcat/Kingfisher)
 
 ### Communauté
 - [Swift Forums](https://forums.swift.org/)

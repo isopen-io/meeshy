@@ -1,0 +1,888 @@
+{
+  "_doc": "Le contenu chiffré d’un message, E2EEContent v1 (#18940). Voir README.md : objet, octets canoniques, clair rempli, et verdicts de lecture.",
+  "contract": "meeshy-e2ee-content",
+  "version": 1,
+  "cases": [
+    {
+      "name": "ios-reference",
+      "description": "Le littéral des témoins E2EEContentTests.swift et E2eeContentTest.kt, signé de son auteur par le scelleur (E2EEMessageSealer.swift:81) : la forme exacte qu'écrit un iPhone.",
+      "object": {
+        "v": 1,
+        "text": "Bonjour",
+        "language": "fr",
+        "conversationId": "c1",
+        "clientMessageId": "cid_1",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"clientMessageId\":\"cid_1\",\"conversationId\":\"c1\",\"language\":\"fr\",\"sentAt\":1790000000000,\"text\":\"Bonjour\",\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY2xpZW50TWVzc2FnZUlkIjoiY2lkXzEiLCJjb252ZXJzYXRpb25JZCI6ImMxIiwibGFuZ3VhZ2UiOiJmciIsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGV4dCI6IkJvbmpvdXIiLCJ2IjoxfQ==",
+      "canonicalLength": 172,
+      "envelope": {
+        "conversationId": "c1",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY2xpZW50TWVzc2FnZUlkIjoiY2lkXzEiLCJjb252ZXJzYXRpb25JZCI6ImMxIiwibGFuZ3VhZ2UiOiJmciIsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGV4dCI6IkJvbmpvdXIiLCJ2IjoxfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "reply-with-every-field",
+      "description": "Les neuf clés de la version 1 : la citation (id serveur), la langue et l’identifiant client voyagent DANS le chiffré.",
+      "object": {
+        "v": 1,
+        "text": "Oui, à 18 h !",
+        "language": "fr",
+        "replyTo": "64f0c0ffee00000000000f01",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "clientMessageId": "cid_6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+        "sentAt": 1790000123456,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"clientMessageId\":\"cid_6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"language\":\"fr\",\"replyTo\":\"64f0c0ffee00000000000f01\",\"sentAt\":1790000123456,\"text\":\"Oui, à 18 h !\",\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY2xpZW50TWVzc2FnZUlkIjoiY2lkXzZmMWMyYTNiLTRkNWUtNGY2MC04YTdiLTljMGQxZTJmM2E0YiIsImNvbnZlcnNhdGlvbklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwYzAxIiwibGFuZ3VhZ2UiOiJmciIsInJlcGx5VG8iOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBmMDEiLCJzZW50QXQiOjE3OTAwMDAxMjM0NTYsInRleHQiOiJPdWksIMOgIDE4IGggISIsInYiOjF9",
+      "canonicalLength": 273,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 2,
+        "length": 1024,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY2xpZW50TWVzc2FnZUlkIjoiY2lkXzZmMWMyYTNiLTRkNWUtNGY2MC04YTdiLTljMGQxZTJmM2E0YiIsImNvbnZlcnNhdGlvbklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwYzAxIiwibGFuZ3VhZ2UiOiJmciIsInJlcGx5VG8iOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBmMDEiLCJzZW50QXQiOjE3OTAwMDAxMjM0NTYsInRleHQiOiJPdWksIMOgIDE4IGggISIsInYiOjF9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "text-escapes-and-unicode",
+      "description": "Échappements de JSONEncoder (.withoutEscapingSlashes) : \\\" \\\\ \\n \\t \\b \\f, les autres contrôles en \\u00xx MINUSCULES ; la barre oblique, DEL, U+2028, l’emoji hors BMP, le chinois et l’arabe partent BRUTS en UTF-8.",
+      "object": {
+        "v": 1,
+        "text": "Il a dit \"non\" \\ puis / fin\nligne\ttab\u0001\u001f\b\f — 😀 你好 مرحبا é .",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"Il a dit \\\"non\\\" \\\\ puis / fin\\nligne\\ttab\\u0001\\u001f\\b\\f — 😀 你好 مرحبا é .\",\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJJbCBhIGRpdCBcIm5vblwiIFxcIHB1aXMgLyBmaW5cbmxpZ25lXHR0YWJcdTAwMDFcdTAwMWZcYlxmfyDigJQg8J+YgCDkvaDlpb0g2YXYsdit2KjYpyDDqeKAqC4iLCJ2IjoxfQ==",
+      "canonicalLength": 238,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 2,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJJbCBhIGRpdCBcIm5vblwiIFxcIHB1aXMgLyBmaW5cbmxpZ25lXHR0YWJcdTAwMDFcdTAwMWZcYlxmfyDigJQg8J+YgCDkvaDlpb0g2YXYsdit2KjYpyDDqeKAqC4iLCJ2IjoxfSAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "without-text",
+      "description": "Aucun texte : la clé est OMISE (bulle vide chez iOS), jamais écrite à null.",
+      "object": {
+        "v": 1,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInYiOjF9",
+      "canonicalLength": 135,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInYiOjF9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "empty-text-is-written",
+      "description": "Un texte vide n’est pas un texte absent : la clé s’écrit.",
+      "object": {
+        "v": 1,
+        "text": "",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"\",\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiIiLCJ2IjoxfQ==",
+      "canonicalLength": 145,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiIiLCJ2IjoxfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "exactly-256-bytes",
+      "description": "Un JSON canonique de 256 octets exactement tient dans le premier palier : aucun espace ajouté.",
+      "object": {
+        "v": 1,
+        "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJ2IjoxfQ==",
+      "canonicalLength": 256,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 256,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJ2IjoxfQ=="
+      }
+    },
+    {
+      "name": "one-byte-past-256",
+      "description": "257 octets passent au palier suivant (1 024).",
+      "object": {
+        "v": 1,
+        "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwidiI6MX0=",
+      "canonicalLength": 257,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 1,
+        "length": 1024,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwidiI6MX0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "padding-counts-utf8-bytes",
+      "description": "Le palier se choisit sur les OCTETS UTF-8, jamais sur les caractères : quatre-vingt-quinze « é » font cent quatre-vingt-dix octets, et ce JSON de 256 caractères en pèse 351.",
+      "object": {
+        "v": 1,
+        "text": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+        "language": "fr",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"language\":\"fr\",\"sentAt\":1790000000000,\"text\":\"ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé\",\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJsYW5ndWFnZSI6ImZyIiwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0ZXh0Ijoiw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqSIsInYiOjF9",
+      "canonicalLength": 351,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 3,
+        "length": 1024,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJsYW5ndWFnZSI6ImZyIiwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0ZXh0Ijoiw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqSIsInYiOjF9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    },
+    {
+      "name": "long-text-4096-tier",
+      "description": "Un texte de quelque 3 000 octets se remplit au palier de 4 096.",
+      "object": {
+        "v": 1,
+        "text": "Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. ",
+        "language": "fr",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      },
+      "canonicalJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"language\":\"fr\",\"sentAt\":1790000000000,\"text\":\"Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. Meeshy chiffre de bout en bout. \",\"v\":1}",
+      "canonicalBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJsYW5ndWFnZSI6ImZyIiwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0ZXh0IjoiTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiAiLCJ2IjoxfQ==",
+      "canonicalLength": 3169,
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "padded": {
+        "recipients": 2,
+        "length": 4096,
+        "base64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJsYW5ndWFnZSI6ImZyIiwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0ZXh0IjoiTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiBNZWVzaHkgY2hpZmZyZSBkZSBib3V0IGVuIGJvdXQuIE1lZXNoeSBjaGlmZnJlIGRlIGJvdXQgZW4gYm91dC4gTWVlc2h5IGNoaWZmcmUgZGUgYm91dCBlbiBib3V0LiAiLCJ2IjoxfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=="
+      }
+    }
+  ],
+  "verdicts": [
+    {
+      "name": "future-version-same-shape",
+      "description": "Une version que cet appareil ne lit pas : verdict « version future », jamais « illisible » — le clair se garde pour être relu après la mise à jour (#9223).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6Mn0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":2}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "future-version",
+      "version": 2
+    },
+    {
+      "name": "future-version-new-shape",
+      "description": "La version se lit AVANT toute autre clé : une version future qui change la forme reste une version future.",
+      "plaintextBase64": "eyJib2R5Ijp7InRleHQiOiJ4In0sImNvbnZlcnNhdGlvbklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwYzAxIiwidiI6M30=",
+      "plaintextJson": "{\"body\":{\"text\":\"x\"},\"conversationId\":\"64f0c0ffee00000000000c01\",\"v\":3}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "future-version",
+      "version": 3
+    },
+    {
+      "name": "future-version-is-kept-before-binding",
+      "description": "Une version future se garde telle quelle : sa conversation et son auteur se confrontent quand une version qui la lit l’ouvrira.",
+      "plaintextBase64": "eyJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMiIsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidiI6Mn0=",
+      "plaintextJson": "{\"conversationId\":\"64f0c0ffee00000000000c02\",\"sentAt\":1790000000000,\"v\":2}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "future-version",
+      "version": 2
+    },
+    {
+      "name": "future-version-padding-then-newline",
+      "description": "Le remplissage suivi d’un blanc JSON qui n’est pas une espace (ici `\\n`) : le JSON reste valide (JSONDecoder admet tout blanc JSON en fin), la version future se garde, et son JSON gardé est le clair privé de TOUS ses blancs de fin, par un parcours linéaire (WEBX-06 : l’expression `/ +$/` était quadratique sur ce cas, 0,8 s pour 48 Ko).",
+      "plaintextBase64": "eyJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGV4dCI6IngiLCJ2IjoyfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAo=",
+      "plaintextJson": "{\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":2}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "future-version",
+      "version": 2
+    },
+    {
+      "name": "padding-then-newline-still-reads",
+      "description": "Un contenu v1 dont le remplissage est suivi d’un `\\n` se lit comme sur l’iPhone : un blanc JSON en fin ne rend rien illisible.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA0KCQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted",
+      "expected": {
+        "v": 1,
+        "text": "x",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "lone-high-surrogate-escape",
+      "description": "Une demi-paire de substitution échappée (`\\ud800` sans sa seconde moitié) ne forme aucun point de code : l’encodeur refuse de l’écrire, le lecteur la juge illisible — jamais un texte à demi-paire (WEBX-06).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJhXHVkODAwYiIsInYiOjF9",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"a\\ud800b\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "lone-low-surrogate-escape",
+      "description": "Une seconde moitié seule (`\\udc00`) n’est pas davantage un point de code.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJcdWRjMDAiLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"\\udc00\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "reversed-surrogate-escapes",
+      "description": "Deux moitiés dans le mauvais ordre (`\\ude00\\ud83d`) sont deux demi-paires isolées.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJcdWRlMDBcdWQ4M2QiLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"\\ude00\\ud83d\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "lone-surrogate-in-an-ignored-key",
+      "description": "Une demi-paire est refusée où qu’elle soit, même sous une clé que la version 1 ignore : le clair n’est pas un JSON qu’un appareil lit (voir README : l’iPhone sous iOS 17 et plus ne la verrait pas).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJub3RlIjoiXHVkODAwIiwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0ZXh0IjoieCIsInYiOjF9",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"note\":\"\\ud800\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "escaped-surrogate-pair-reads",
+      "description": "Une paire ÉCHAPPÉE complète (`\\ud83d\\ude00`) est un point de code : elle se lit, comme l’emoji brut.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJcdWQ4M2RcdWRlMDAiLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"\\ud83d\\ude00\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted",
+      "expected": {
+        "v": 1,
+        "text": "😀",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "surrogate-encoded-in-utf8",
+      "description": "Une demi-paire encodée en octets (`ED A0 80`) n’est pas de l’UTF-8 : illisible, sans caractère de remplacement.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiLtoIAiLCJ2IjoxfQ==",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "missing-version",
+      "description": "Un objet sans `v` n’est pas un contenu.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4In0=",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\"}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "version-zero",
+      "description": "Aucune version ne précède la 1 : 0 est illisible, pas futur.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MH0=",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":0}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "version-as-string",
+      "description": "La version est un entier JSON ; \"1\" est illisible (JSONDecoder, Int).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6IjEifQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":\"1\"}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "version-fractional",
+      "description": "1.5 n’est pas une version.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MS41fQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1.5}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "truncated-json",
+      "description": "Un JSON tronqué est illisible, et la sonde le range parmi les messages (E2EEPayloadKind).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAw",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":17900",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "not-json",
+      "description": "Un clair qui n’est pas du JSON est un message illisible.",
+      "plaintextBase64": "bm90IGpzb24=",
+      "plaintextJson": "not json",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "json-array",
+      "description": "Le contenu est un objet JSON, jamais un tableau.",
+      "plaintextBase64": "W3sidiI6MX1d",
+      "plaintextJson": "[{\"v\":1}]",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "invalid-utf8",
+      "description": "Un clair qui n’est pas de l’UTF-8 valide est illisible (JSONDecoder le refuse ; aucun caractère de remplacement).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiLDKCIsInYiOjF9",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "sent-at-missing",
+      "description": "`sentAt` est requis (Int64).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJ0ZXh0IjoieCIsInYiOjF9",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "sent-at-as-string",
+      "description": "Un nombre entre guillemets n’est pas un nombre.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOiIxNzkwMDAwMDAwMDAwIiwidGV4dCI6IngiLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":\"1790000000000\",\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "sent-at-fractional",
+      "description": "`sentAt` est un entier de millisecondes.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAuNSwidGV4dCI6IngiLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000.5,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "text-not-a-string",
+      "description": "Une clé connue du mauvais type rend le contenu illisible (pas de coercition).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOjQyLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":42,\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "reply-to-object",
+      "description": "`replyTo` est l’identifiant serveur du message cité, une chaîne ; un objet est illisible.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJyZXBseVRvIjp7ImlkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwZjAxIn0sInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGV4dCI6IngiLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"replyTo\":{\"id\":\"64f0c0ffee00000000000f01\"},\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "author-device-negative",
+      "description": "`authorDeviceId` est un UInt32 (0…4 294 967 295).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6LTEsImF1dGhvclVzZXJJZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwYWFhYSIsImNvbnZlcnNhdGlvbklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDAwYzAxIiwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0ZXh0IjoieCIsInYiOjF9",
+      "plaintextJson": "{\"authorDeviceId\":-1,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "author-device-beyond-uint32",
+      "description": "4 294 967 296 dépasse un UInt32.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6NDI5NDk2NzI5NiwiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0=",
+      "plaintextJson": "{\"authorDeviceId\":4294967296,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
+      "name": "null-is-absent",
+      "description": "Une clé facultative à null se lit absente (decodeIfPresent).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJsYW5ndWFnZSI6bnVsbCwicmVwbHlUbyI6bnVsbCwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0ZXh0IjoieCIsInYiOjF9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"language\":null,\"replyTo\":null,\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted",
+      "expected": {
+        "v": 1,
+        "text": "x",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "unknown-keys-are-ignored",
+      "description": "Une clé qu’une version 1 ne connaît pas (mentions, pièces d’un lot ultérieur) est ignorée, pas refusée.",
+      "plaintextBase64": "eyJhdHRhY2htZW50cyI6W3siaWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBhMDEifV0sImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsIm1lbnRpb25zIjpbIjY0ZjBjMGZmZWUwMDAwMDAwMDAwYmJiYiJdLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0=",
+      "plaintextJson": "{\"attachments\":[{\"id\":\"64f0c0ffee00000000000a01\"}],\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"mentions\":[\"64f0c0ffee0000000000bbbb\"],\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted",
+      "expected": {
+        "v": 1,
+        "text": "x",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "author-absent-legacy",
+      "description": "Ni authorUserId ni authorDeviceId : un client antérieur à #12976. iOS et Android l’admettent aujourd’hui (IOS-20) ; le verdict le distingue pour qu’on puisse le refuser à usage nul sans changer de forme.",
+      "plaintextBase64": "eyJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGV4dCI6IngiLCJ2IjoxfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted-unauthored",
+      "expected": {
+        "v": 1,
+        "text": "x",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000
+      }
+    },
+    {
+      "name": "author-partial-user-only",
+      "description": "Un auteur à moitié n’est l’auteur de personne.",
+      "plaintextBase64": "eyJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGV4dCI6IngiLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "misattributed-author"
+    },
+    {
+      "name": "author-partial-device-only",
+      "description": "Un auteur à moitié n’est l’auteur de personne.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0=",
+      "plaintextJson": "{\"authorDeviceId\":3,\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "misattributed-author"
+    },
+    {
+      "name": "author-other-device",
+      "description": "Le serveur présente sous l’appareil 3 un contenu signé par l’appareil 4.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6NCwiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0=",
+      "plaintextJson": "{\"authorDeviceId\":4,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "misattributed-author"
+    },
+    {
+      "name": "author-other-user",
+      "description": "Le serveur réétiquette sous Alice un contenu signé par Bob.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBiYmJiIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0=",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000bbbb\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "misattributed-author"
+    },
+    {
+      "name": "conversation-foreign",
+      "description": "Le serveur range dans une conversation un contenu écrit pour une autre.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDIiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0=",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c02\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "misattributed-conversation"
+    },
+    {
+      "name": "conversation-absent",
+      "description": "Un contenu qui ne nomme pas sa conversation ne se range nulle part.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwic2VudEF0IjoxNzkwMDAwMDAwMDAwLCJ0ZXh0IjoieCIsInYiOjF9",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "misattributed-conversation"
+    },
+    {
+      "name": "conversation-checked-before-author",
+      "description": "L’ordre des refus : la conversation d’abord, l’auteur ensuite (E2EEEnvelopeOpener.swift:144-147).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6OSwiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBiYmJiIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDIiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0=",
+      "plaintextJson": "{\"authorDeviceId\":9,\"authorUserId\":\"64f0c0ffee0000000000bbbb\",\"conversationId\":\"64f0c0ffee00000000000c02\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "misattributed-conversation"
+    },
+    {
+      "name": "s-not-an-integer-is-a-message",
+      "description": "La sonde ne classe signal que si `s` est un ENTIER JSON (E2EESignal.swift:211-217) ; \"1\" laisse un message, dont la clé `s` est ignorée.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzIjoiMSIsInNlbnRBdCI6MTc5MDAwMDAwMDAwMCwidGV4dCI6IngiLCJ2IjoxfQ==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"s\":\"1\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted",
+      "expected": {
+        "v": 1,
+        "text": "x",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "s-null-is-a-message",
+      "description": "`s` à null n’est pas une version de signal.",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzIjpudWxsLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MX0=",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"s\":null,\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted",
+      "expected": {
+        "v": 1,
+        "text": "x",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "depth-at-the-limit-reads",
+      "description": "Une profondeur de 64 (l’objet, puis 63 tableaux sous une clé que la version 1 ignore) est la borne du contrat : le contenu se lit (#19112).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MSwieCI6W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted",
+      "expected": {
+        "v": 1,
+        "text": "x",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "depth-beyond-the-limit-is-unreadable",
+      "description": "Un niveau de plus que la borne : illisible (`not-json`) AVANT toute analyse — aucun analyseur ne descend dans un clair hostile (#19112).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MSwieCI6W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW11dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV19ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable",
+      "reason": "not-json"
+    },
+    {
+      "name": "future-version-beyond-the-limit-is-unreadable",
+      "description": "La profondeur se juge avant la version : une version future au-delà de la borne est illisible, jamais gardée (#19112).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MiwieCI6W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW11dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV19",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":2,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable",
+      "reason": "not-json"
+    },
+    {
+      "name": "brackets-inside-strings-do-not-count",
+      "description": "Les crochets et accolades d’une chaîne ne comptent pas, après un guillemet échappé (`\\\"`) comme avant une barre oblique inverse échappée (`\\\\`) : 400 ouvrants dans le texte, le contenu se lit (#19112).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJcIltbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbe3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3sgXFwgXV1dIH19fSIsInYiOjF9",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"sentAt\":1790000000000,\"text\":\"\\\"[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{ \\\\ ]]] }}}\",\"v\":1}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "admitted",
+      "expected": {
+        "v": 1,
+        "text": "\"[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{ \\ ]]] }}}",
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "escaped-backslash-closes-the-string",
+      "description": "Une barre oblique inverse échappée (`\"\\\\\"`) n’échappe pas le guillemet qui la suit : la chaîne se ferme, et les 64 tableaux qui suivent comptent — profondeur 65, illisible (#19112).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJub3RlIjoiXFwiLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRleHQiOiJ4IiwidiI6MSwieCI6W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW11dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV19",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"note\":\"\\\\\",\"sentAt\":1790000000000,\"text\":\"x\",\"v\":1,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable",
+      "reason": "not-json"
+    },
+    {
+      "name": "deep-array-is-not-json",
+      "description": "Mille tableaux imbriqués : illisible par la profondeur (`not-json`), avant de savoir que ce n’est pas un objet (#19112).",
+      "plaintextBase64": "W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW11dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV0=",
+      "plaintextJson": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable",
+      "reason": "not-json"
+    }
+  ]
+}

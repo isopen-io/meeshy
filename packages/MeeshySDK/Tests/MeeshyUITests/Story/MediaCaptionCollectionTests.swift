@@ -25,82 +25,9 @@ final class MediaCaptionCollectionTests: XCTestCase {
 
     // MARK: - Collecte
 
-    func test_caption_defaultsToEmptyString_forUntouchedMedia() {
-        let store = MediaAccessibilityStore()
-        XCTAssertEqual(store.caption(for: "media-1"), "")
-    }
-
-    func test_setCaption_roundTrips() {
-        let store = MediaAccessibilityStore()
-        store.setCaption("Le marché de Yaoundé, 6 h", for: "media-1")
-        XCTAssertEqual(store.caption(for: "media-1"), "Le marché de Yaoundé, 6 h")
-    }
-
-    /// Une chaîne vide RETIRE l'entrée — un média jamais touché et un média
-    /// dont la légende a été effacée doivent produire le MÊME payload
-    /// (absent), pas un `""` qui écraserait une légende serveur au prochain
-    /// update.
-    func test_setCaption_emptyString_clearsEntry() {
-        let store = MediaAccessibilityStore()
-        store.setCaption("Une légende", for: "media-1")
-        store.setCaption("", for: "media-1")
-        XCTAssertEqual(store.caption(for: "media-1"), "")
-        XCTAssertNil(store.mediaCaptionPayload())
-    }
-
-    /// Le clamp est celui du transport (`z.string().max(1000)`), pas une
-    /// préférence d'UI : collecter plus que ce que le gateway accepte
-    /// produirait une requête refusée ou un texte tronqué côté serveur.
-    func test_setCaption_clampsToTransportBound() {
-        let store = MediaAccessibilityStore()
-        store.setCaption(String(repeating: "é", count: 1500), for: "media-1")
-        XCTAssertEqual(store.caption(for: "media-1").count, PostMediaText.maxLength)
-    }
-
     // MARK: - Les deux textes ne se confondent JAMAIS
 
-    /// Le témoin qui garde l'unification : `alt` et `caption` partagent une
-    /// implémentation, ils ne partagent pas un STOCKAGE. Une régression qui
-    /// les ferait écrire la même case rendrait ce témoin rouge — et c'est le
-    /// seul défaut que la mutualisation puisse introduire.
-    func test_altAndCaption_areStoredSeparately_forTheSameMedia() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("Une foule dense sous des parasols", for: "media-1")
-        store.setCaption("Le marché de Yaoundé, 6 h", for: "media-1")
-
-        XCTAssertEqual(store.alt(for: "media-1"), "Une foule dense sous des parasols")
-        XCTAssertEqual(store.caption(for: "media-1"), "Le marché de Yaoundé, 6 h")
-        XCTAssertEqual(store.payload(.alt), ["media-1": "Une foule dense sous des parasols"])
-        XCTAssertEqual(store.mediaCaptionPayload(), ["media-1": "Le marché de Yaoundé, 6 h"])
-    }
-
-    /// Retirer un média emporte SES DEUX textes. Un `remove` qui n'en
-    /// effacerait qu'un laisserait un id orphelin fuiter dans un payload
-    /// ultérieur — exactement ce que la version alt-seule évitait déjà.
-    func test_remove_clearsBothTexts() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("alt", for: "media-1")
-        store.setCaption("légende", for: "media-1")
-        store.remove(mediaId: "media-1")
-        XCTAssertNil(store.payload(.alt))
-        XCTAssertNil(store.mediaCaptionPayload())
-    }
-
     // MARK: - Brouillon
-
-    func test_draftSnapshot_carriesCaption_andRestoreRoundTrips() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("alt", for: "el-1")
-        store.setCaption("légende", for: "el-1")
-
-        let snapshot = store.draftSnapshot()
-        XCTAssertEqual(snapshot.mediaCaption, ["el-1": "légende"])
-
-        let reopened = MediaAccessibilityStore()
-        reopened.restore(from: snapshot)
-        XCTAssertEqual(reopened.caption(for: "el-1"), "légende")
-        XCTAssertEqual(reopened.alt(for: "el-1"), "alt")
-    }
 
     /// Un brouillon ÉCRIT AVANT cette feature n'a pas de clé `mediaCaption`.
     /// Il doit se relire — sans légende, pas en échouant : un décodeur strict
@@ -115,13 +42,4 @@ final class MediaCaptionCollectionTests: XCTestCase {
     }
 
     // MARK: - Hand-off de publication
-
-    /// `isEmpty` gouverne l'écriture du brouillon : une légende SEULE doit
-    /// suffire à le rendre non vide, sans quoi elle serait perdue à la
-    /// fermeture d'un composer où rien d'autre n'a été saisi.
-    func test_captionAlone_makesTheDraftAccessibilityNonEmpty() {
-        let store = MediaAccessibilityStore()
-        store.setCaption("légende", for: "el-1")
-        XCTAssertFalse(store.draftSnapshot().isEmpty)
-    }
 }

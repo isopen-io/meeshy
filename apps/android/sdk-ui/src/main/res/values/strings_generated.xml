@@ -285,7 +285,6 @@
     <string name="kit_progress_ring_busy">In progress</string>
     <string name="language_strip_more">Other languages</string>
     <string name="lentille_mode_menu_selected">selected</string>
-    <string name="live_location_duration_title">Share duration</string>
     <string name="live_location_sharing_by">%1$s is sharing their location</string>
     <string name="live_location_stop">Stop</string>
     <string name="location_fullscreen_directions">Directions</string>

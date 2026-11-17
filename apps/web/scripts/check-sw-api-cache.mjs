@@ -121,6 +121,13 @@ const VERDICTS_ATTENDUS = [
   { href: `${PASSERELLE}/api/v1/relations/locations?bbox=-180,-90,180,90`, gardable: false },
   { href: `${PASSERELLE}/api/v1/relations/locations`, gardable: false },
   { href: `${PASSERELLE}/api/v1/relations/locations/`, gardable: false },
+  // #18987 — l'annuaire et les enveloppes chiffrés : une copie rejouée sur une
+  // passerelle injoignable est FAUSSE par nature (pré-clé unique déjà
+  // réservée, appareils périmés, enveloppes déjà acquittées).
+  { href: `${PASSERELLE}/api/v1/e2ee/devices`, gardable: false },
+  { href: `${PASSERELLE}/api/v1/e2ee/keys/64b000000000000000000001?deviceIds=1,2`, gardable: false },
+  { href: `${PASSERELLE}/api/v1/e2ee/envelopes?after=64b0000000000000000000aa&limit=200`, gardable: false },
+  { href: `${PASSERELLE}/api/v1/e2ee/devices/self/prekey-count`, gardable: false },
   { href: `${ORIGINE}/api/v1/conversations`, gardable: true },
   // CONTRASTE — la garde lit un SEGMENT, jamais un préfixe de chaîne.
   { href: `${ORIGINE}/api/v1/statistiques`, gardable: true },
@@ -129,6 +136,7 @@ const VERDICTS_ATTENDUS = [
   { href: `${ORIGINE}/api/v1/attachmentsfoo`, gardable: true },
   { href: `${PASSERELLE}/api/v1/relations/locationsfoo`, gardable: true },
   { href: `${PASSERELLE}/api/v1/relations/config`, gardable: true },
+  { href: `${PASSERELLE}/api/v1/e2eestats`, gardable: true },
   { href: `${ORIGINE}/assets/app.js`, gardable: false },
 ];
 
@@ -158,6 +166,9 @@ const ROUTAGE_ATTENDU = [
   { href: `${PASSERELLE}/api/v1/conversations?limit=30`, destination: '', seau: 'api' },
   { href: `${PASSERELLE}/api/v1/conversations/c1/messages`, destination: '', seau: 'api' },
   { href: `${PASSERELLE}/api/v1/admin/users`, destination: '', seau: null },
+  /* #18987 — l'annuaire chiffré part en réseau nu : aucun seau ne le garde. */
+  { href: `${PASSERELLE}/api/v1/e2ee/keys/64b000000000000000000001`, destination: '', seau: null },
+  { href: `${PASSERELLE}/api/v1/e2ee/envelopes?after=x`, destination: '', seau: null },
   /* #7015 — UN SON DE FOND N'A AUCUN SEAU, et c'est une DÉCISION.
      Il voyage en `fetch` (destination VIDE, jamais `audio` : une balise ne
      peut pas porter l'en-tête que la route exige), donc le seau `medias` ne

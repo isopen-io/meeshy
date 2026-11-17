@@ -49,7 +49,7 @@ public class MeeshySignalProtocolStore(
     }
 
     override fun isTrustedIdentity(address: SignalProtocolAddress, identityKey: IdentityKey, direction: IdentityKeyStore.Direction): Boolean {
-        if (direction != IdentityKeyStore.Direction.SENDING || ownUserId == null || address.name != ownUserId) return true
+        if (direction != IdentityKeyStore.Direction.SENDING || ownUserId == null || !isSameAccount(address.name, ownUserId)) return true
         return E2eeOwnDeviceApprovals.pinned(address.deviceId, transaction)?.contentEquals(identityKey.serialize()) == true
     }
 

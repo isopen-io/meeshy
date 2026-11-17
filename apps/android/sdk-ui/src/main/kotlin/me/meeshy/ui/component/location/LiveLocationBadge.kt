@@ -152,61 +152,6 @@ public fun LiveLocationBadge(
     }
 }
 
-/**
- * Capsule chips to pick a [LiveLocationDuration] before starting a share — Android
- * render of the iOS `LiveLocationDurationPicker`. Stateless: the caller owns the
- * [selected] value and receives taps via [onSelect].
- */
-@Composable
-public fun LiveLocationDurationPicker(
-    selected: LiveLocationDuration,
-    onSelect: (LiveLocationDuration) -> Unit,
-    modifier: Modifier = Modifier,
-    accentColor: String? = null,
-) {
-    val accent = resolveAccent(accentColor)
-
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Timer,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(14.dp),
-            )
-            Text(
-                text = stringResource(R.string.live_location_duration_title),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-            LiveLocationDuration.entries.forEach { duration ->
-                val isSelected = duration == selected
-                Text(
-                    text = stringResource(durationLabelRes(duration)),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else accent,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(MeeshyRadius.pill))
-                        .background(if (isSelected) accent else accent.copy(alpha = 0.12f))
-                        .clickable { onSelect(duration) }
-                        .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
-                )
-            }
-        }
-    }
-}
-
 private const val LIVE_DOT_PULSE_SCALE = 1.3f
 private const val LIVE_DOT_PULSE_MILLIS = 1_000
 
@@ -214,13 +159,4 @@ private const val LIVE_DOT_PULSE_MILLIS = 1_000
 private fun resolveAccent(accentColor: String?): Color {
     val parsed = accentColor?.let(::hexColor)
     return if (parsed == null || parsed == Color.Unspecified) MaterialTheme.colorScheme.primary else parsed
-}
-
-@StringRes
-private fun durationLabelRes(duration: LiveLocationDuration): Int = when (duration) {
-    LiveLocationDuration.FIFTEEN_MINUTES -> R.string.live_location_duration_15m
-    LiveLocationDuration.THIRTY_MINUTES -> R.string.live_location_duration_30m
-    LiveLocationDuration.ONE_HOUR -> R.string.live_location_duration_1h
-    LiveLocationDuration.TWO_HOURS -> R.string.live_location_duration_2h
-    LiveLocationDuration.EIGHT_HOURS -> R.string.live_location_duration_8h
 }

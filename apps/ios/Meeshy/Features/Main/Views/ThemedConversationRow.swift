@@ -20,7 +20,6 @@ struct ThemedConversationRow: View {
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
     var onCreateShareLink: (() -> Void)? = nil
-    var onCommunityTap: (() -> Void)? = nil
 
     @Environment(\.swipeProgress) private var swipeProgress
     var isDark: Bool = false

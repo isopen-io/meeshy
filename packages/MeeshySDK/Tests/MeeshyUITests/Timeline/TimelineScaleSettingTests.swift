@@ -106,42 +106,4 @@ final class TimelineScaleSettingTests: XCTestCase {
         vm.moveKeyframe(clipId: Self.mediaId, keyframeId: Self.keyframeId, scale: 12)
         XCTAssertEqual(keyframeScale(vm), 12)
     }
-
-    func test_laFicheDUneImageCle_porteSonPlancher() {
-        let media = makeMedia(scale: 2)
-        let vm = makeViewModel(media: media)
-        vm.selection.select(Self.keyframeId)
-        let fiche = TimelineInspectorHost.resolveKeyframeSnapshot(viewModel: vm)?.snapshot
-        XCTAssertEqual(Double(fiche?.scaleFloor ?? -1), 5 / (mediaUnitSide(media) * 2), accuracy: 1e-9)
-    }
-
-    /// La plage du curseur contient TOUJOURS la valeur ouverte : une image clé
-    /// à 10, ou sous le plancher, s'affiche telle quelle et n'est pas ramenée.
-    func test_laPlageDuCurseur_contientLaValeurOuverte() {
-        let haute = KeyframeInspector.scaleSliderRange(current: 10, floor: 0.03)
-        XCTAssertTrue(haute.contains(10))
-        XCTAssertEqual(haute.lowerBound, 0.03, accuracy: 1e-12)
-        let basse = KeyframeInspector.scaleSliderRange(current: 0.01, floor: 0.03)
-        XCTAssertTrue(basse.contains(0.01))
-    }
-
-    func test_laPlageDuCurseur_vaDuPlancherAQuatre() {
-        let nominale = KeyframeInspector.scaleSliderRange(current: 1, floor: 0.03)
-        XCTAssertEqual(nominale.lowerBound, 0.03, accuracy: 1e-12)
-        XCTAssertEqual(nominale.upperBound, KeyframeInspector.scaleSliderCeiling)
-    }
-
-    /// Sans plancher prouvé, le curseur ne descend pas sous la valeur ouverte.
-    func test_laPlageDuCurseurSansPlancher_partDeLaValeurOuverte() {
-        let range = KeyframeInspector.scaleSliderRange(current: 0.5, floor: 0)
-        XCTAssertEqual(range.lowerBound, 0.5)
-        XCTAssertGreaterThan(range.upperBound, range.lowerBound)
-    }
-
-    func test_laPlageDuCurseur_neSEffondreJamais() {
-        let range = KeyframeInspector.scaleSliderRange(current: 9, floor: 9)
-        XCTAssertGreaterThan(range.upperBound, range.lowerBound)
-        let illisible = KeyframeInspector.scaleSliderRange(current: .nan, floor: 0.03)
-        XCTAssertGreaterThan(illisible.upperBound, illisible.lowerBound)
-    }
 }

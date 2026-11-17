@@ -23,6 +23,9 @@ public enum class RecordKind(public val tag: String) {
     SIGNAL_RECEIVED("signalReceived"),
     APPROVED_OWN_DEVICE("approvedOwnDevice"),
     LOCAL_ENROLLMENT("localEnrollment"),
+
+    /** Un lot de clés publiques écrit au coffre avec ses clés privées, que la passerelle n'a pas encore accepté (#18974). */
+    PENDING_PUBLICATION("pendingPublication"),
 }
 
 /** Une lecture cohérente du coffre. */

@@ -3,6 +3,7 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.nullable
 import kotlinx.serialization.encoding.Decoder
@@ -169,9 +170,6 @@ data class ApiMessageSender(
     private fun String?.nonBlank(): String? = this?.takeIf { it.isNotBlank() }
 }
 
-/** Ancien nom de l'expéditeur imbriqué d'un transfert — un seul type désormais. */
-typealias ApiMessageSenderDetail = ApiMessageSender
-
 /**
  * The SOURCE conversation of a forwarded message, hoisted onto the payload by
  * the gateway (`forwardedFromConversation`) alongside `forwardedFromId`. Carries
@@ -280,6 +278,12 @@ data class ApiMessage(
     /** Le cryptogramme d'un message chiffré de bout en bout ; conservé tel quel, jamais déchiffré ici. */
     @Serializable(with = TolerantEncryptedContentSerializer::class)
     val encryptedContent: String? = null,
+    /**
+     * Pourquoi cet appareil ne montre pas le clair d'un message chiffré de bout en bout (#18983) : posé en mémoire par la
+     * projection du coffre, jamais lu sur le fil ni écrit dans Room ; `null` ⇒ en attente.
+     */
+    @Transient
+    val endToEndSeal: EndToEndSeal? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,
@@ -307,9 +311,9 @@ data class ApiMessage(
     val isCiphertext: Boolean get() = isEncrypted == true
 
     /**
-     * Un message chiffré de bout en bout que CET appareil ne sait pas lire (#13110) :
-     * l'Android natif n'a pas encore de pile libsignal (#13015), la passerelle ne sert
-     * que le littéral `[Encrypted]`. Il ne se rend ni en texte ni en pièce.
+     * Un message chiffré de bout en bout que CET appareil ne sait pas (ou pas encore) lire (#13110) : la passerelle ne
+     * sert que le littéral `[Encrypted]`, et le coffre de l'appareil n'en tient pas le clair ([endToEndSeal] dit pourquoi).
+     * Il ne se rend ni en texte ni en pièce.
      */
     val isEndToEndSealed: Boolean
         get() = isCiphertext && (EndToEndRegime.isEndToEnd(encryptionMode) || content == EndToEndRegime.CONTENT_PLACEHOLDER)

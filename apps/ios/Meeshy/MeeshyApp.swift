@@ -55,6 +55,10 @@ struct MeeshyApp: App {
 
         // Sortie de bêta : la clé de la préférence « Activer les bêta » est effacée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
+        // L'ancien cache des aperçus de liens restait dans Documents/, donc dans la sauvegarde,
+        // tant qu'aucune carte n'était montée : il part dès le lancement (R-6, #12768). Une
+        // seule vérification d'existence quand il n'y est plus.
+        LinkPreviewStore.removeLegacyBackedUpCache(inDocuments: URL.documentsDirectory)
 
         // Publier, inviter par e-mail ou créer un lien sans adresse
         // prouvée ouvre la validation, puis la requête repart (`APIClient`).
