@@ -229,14 +229,15 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// La réponse qui vient d'arriver appartient à une session QUITTÉE : la
     /// passerelle garde le dernier POST reçu, et celui du compte courant a pu être
     /// traité avant. Sous une session ouverte, on reposte le jeton PushKit courant
-    /// — aucun cooldown ne l'a précédé, `lastRegisteredRecord` est resté vide.
+    /// en passant outre le cooldown : le POST du compte courant a pu l'armer avant
+    /// que la réponse périmée n'arrive, et c'est précisément lui qu'il faut rejouer.
     private func replayRegistrationUnderCurrentSession() async {
         guard authTokenAvailable(), let current = voipToken else {
             logger.info("Stale VoIP token registration response: no session left to re-register under")
             return
         }
         logger.info("Stale VoIP token registration response: re-registering under the current session")
-        await registerTokenWithBackend(current)
+        await registerTokenWithBackend(current, bypassingCooldown: true)
     }
 
     /// G4c — retries the backend registration of a token whose POST failed
@@ -476,7 +477,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
 
     static let voipRegistrationCooldown: TimeInterval = 300
 
-    private func registerTokenWithBackend(_ token: String) async {
+    private func registerTokenWithBackend(_ token: String, bypassingCooldown: Bool = false) async {
         // Audit P2-CC-1 — queue the token if auth isn't ready yet, then
         // retry from `authBecameAvailable`. Previously the token was
         // silently dropped and the user received no VoIP pushes until the
@@ -502,7 +503,8 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         } else {
             last = await tokenStore.read()
         }
-        if let last,
+        if !bypassingCooldown,
+           let last,
            last.token == token,
            now.timeIntervalSince(last.at) < Self.voipRegistrationCooldown {
             pendingTokenToRegister = nil
