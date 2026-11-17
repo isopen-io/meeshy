@@ -1,11 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import type { ConversationWriteRole } from '@meeshy/shared/types/conversation';
 import type {
   ConversationUpdatedEventData,
   LastMessagePreviewAttachment,
 } from '@meeshy/shared/types/socketio-events/conversation';
 
-import { patchConversation } from './conversations';
+import { patchConversation, patchConversationDetail } from './conversations';
 import { acceptsLastMessage, isListProtected, listSafeLastMessage, withListRank, withNature, withSideband } from './list-preview';
 import { applyEncryptionAnnounced, encryptionAnnounced } from './realtime-encryption-regime';
 import { keepLiveListOverFetch } from './realtime-thread-catch-up';
@@ -180,6 +181,7 @@ export function acceptsLastMessageAt(params: {
 export function applyConversationUpdated(queryClient: QueryClient, data: ConversationUpdatedEventData): void {
   /* L'AVIS D'ACTIVATION DU CHIFFREMENT voyage aussi par la ligne (#11373). */
   applyEncryptionAnnounced(queryClient, data.conversationId, encryptionAnnounced({ messageType: 'system', systemEvent: data.lastMessageSystemEvent }));
+  applyServedMetadata(queryClient, data);
   const speaksOfPreview = 'lastMessageId' in data;
   const speaksOfSideband = 'lastReaction' in data || 'activeCall' in data;
   const speaksOfRank = 'listRankAt' in data;
@@ -283,6 +285,67 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
      seul l'aperçu relance : une réaction ou un appel ne la relance pas à
      chaque évènement d'un groupe actif. */
   if (speaksOfPreview) keepLiveListOverFetch(queryClient);
+}
+
+/**
+ * **LE GROUPE MÉTADONNÉES** (#18914, WEB-02) — ce que `PUT|PATCH
+ * /conversations/:id` émet, et lui seul : le nom, la description, la photo, la
+ * bannière et les quatre réglages d'écriture et de traduction. Le puits sortait
+ * avant de les lire : un groupe renommé ou passé en canal d'annonce sur un
+ * autre appareil gardait son ancien nom et un composeur ouvert sur le web.
+ *
+ * Posés sur la ligne ET sur la fiche du fil, champ par champ : clé absente =
+ * inchangé, `null` = retiré (photo, bannière). FAIL-CLOSED champ par champ — la
+ * garde de l'événement n'en vérifie que les trois champs requis, et une valeur
+ * de forme inattendue n'empêche pas les autres de s'appliquer.
+ *
+ * `updatedAt` et `updatedBy` ne sont JAMAIS recopiés : `deltaWatermark` prend
+ * le plus récent `updatedAt` en cache comme borne de la relecture delta
+ * (`conversations-delta.ts`), et un horodatage d'événement y ferait sauter
+ * toute conversation modifiée entre la dernière lecture serveur et cet instant.
+ */
+type ServedMetadata = Partial<
+  Pick<Conversation, 'title' | 'description' | 'defaultWriteRole' | 'isAnnouncementChannel' | 'slowModeSeconds' | 'autoTranslateEnabled'>
+> & {
+  readonly avatar?: string | null;
+  readonly banner?: string | null;
+};
+
+const WRITE_ROLES: ReadonlySet<unknown> = new Set<ConversationWriteRole>(['everyone', 'member', 'moderator', 'admin', 'creator']);
+
+const isWriteRole = (value: unknown): value is ConversationWriteRole => WRITE_ROLES.has(value);
+
+const isText = (value: unknown): value is string => typeof value === 'string';
+
+const isSeconds = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+function servedMetadataOf(data: ConversationUpdatedEventData): ServedMetadata {
+  return {
+    ...(isText(data.title) ? { title: data.title } : {}),
+    ...(isText(data.description) ? { description: data.description } : {}),
+    ...(data.avatar === null || isText(data.avatar) ? { avatar: data.avatar } : {}),
+    ...(data.banner === null || isText(data.banner) ? { banner: data.banner } : {}),
+    ...(isWriteRole(data.defaultWriteRole) ? { defaultWriteRole: data.defaultWriteRole } : {}),
+    ...(typeof data.isAnnouncementChannel === 'boolean' ? { isAnnouncementChannel: data.isAnnouncementChannel } : {}),
+    ...(isSeconds(data.slowModeSeconds) ? { slowModeSeconds: data.slowModeSeconds } : {}),
+    ...(typeof data.autoTranslateEnabled === 'boolean' ? { autoTranslateEnabled: data.autoTranslateEnabled } : {}),
+  };
+}
+
+function withImage(conversation: Conversation, field: 'avatar' | 'banner', value: string | null | undefined): Conversation {
+  if (value === undefined) return conversation;
+  if (value !== null) return { ...conversation, [field]: value };
+  const { [field]: _removed, ...rest } = conversation;
+  return rest;
+}
+
+function applyServedMetadata(queryClient: QueryClient, data: ConversationUpdatedEventData): void {
+  const { avatar, banner, ...settled } = servedMetadataOf(data);
+  if (avatar === undefined && banner === undefined && Object.keys(settled).length === 0) return;
+  const edit = (conversation: Conversation): Conversation =>
+    withImage(withImage({ ...conversation, ...settled }, 'avatar', avatar), 'banner', banner);
+  patchConversation(queryClient, data.conversationId, edit);
+  patchConversationDetail(queryClient, data.conversationId, edit);
 }
 
 /**
