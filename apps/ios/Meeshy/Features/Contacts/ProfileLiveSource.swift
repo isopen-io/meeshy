@@ -55,7 +55,8 @@ struct ProfileLiveSource: View {
             battery: ProfileLiveSourceRules.battery(battery, now: now),
             unreachableSince: unreachable?.unreachableSince,
             isOnline: request.isOnline,
-            staleAge: request.staleAge
+            staleAge: request.staleAge,
+            mood: request.mood
         ) {
             ProfileLiveBoardView(
                 board: board, now: now, tint: request.tint,

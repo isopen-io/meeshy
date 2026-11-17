@@ -37,9 +37,8 @@ extension UserProfileSheet {
                 section: section,
                 request: ProfileLiveRequest(userId: userId, displayName: displayUser.resolvedDisplayName,
                                             isOnline: resolvedPresence == .online, staleAge: phase.offlineAge,
-                                            tint: accentTint, openMap: nil),
-                map: locationMap,
-                mapRequest: vitrineMapRequest
+                                            tint: accentTint, openMap: nil, mood: shownMoodEmoji),
+                map: locationMap, mapRequest: vitrineMapRequest
             )
             .padding(.horizontal, MeeshySpacing.xl)
         }
@@ -92,7 +91,8 @@ struct ProfileWithThemCard: View {
                         action(.video) { onCall(true) }
                     }
                     if let map, let mapRequest, map.placement(for: mapRequest.userId) != .none {
-                        ProfileLocationMapAction(map: map, request: mapRequest, tint: tint)
+                        ProfileLocationMapAction(map: map, request: mapRequest, tint: tint,
+                                                 value: isOffline ? ProfileVitrineCopy.lastKnownPosition : nil)
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.sm)

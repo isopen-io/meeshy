@@ -100,6 +100,15 @@ enum ProfileVitrineCopy {
         String(localized: "profile.vitrine.live.mayHaveChanged", defaultValue: "Peut avoir changé", bundle: .module)
     }
 
+    static var mood: String {
+        String(localized: "profile.vitrine.live.mood", defaultValue: "Humeur", bundle: .module)
+    }
+
+    /// Hors ligne, « Carte » montre où il était au dernier relevé.
+    static var lastKnownPosition: String {
+        String(localized: "profile.vitrine.withThem.map.lastKnown", defaultValue: "dernière position connue", bundle: .module)
+    }
+
     static var phone: String {
         String(localized: "profile.vitrine.live.phone", defaultValue: "Téléphone", bundle: .module)
     }

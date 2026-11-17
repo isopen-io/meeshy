@@ -60,6 +60,31 @@ struct ProfileVitrineBlocksTests {
         #expect(board.place == Self.place)
     }
 
+    @Test("hors ligne, l'humeur rejoint les dernières infos ; en direct, elle reste sous le nom")
+    func live_mood_onlyWhenStale() throws {
+        let stale = try #require(ProfileLiveBoard.resolve(level: .close, place: nil, battery: Self.battery,
+                                                          unreachableSince: nil, isOnline: false,
+                                                          staleAge: 3 * 3600, mood: "🧭"))
+        #expect(stale.mood == "🧭")
+        let live = try #require(ProfileLiveBoard.resolve(level: .close, place: nil, battery: Self.battery,
+                                                         unreachableSince: nil, isOnline: true,
+                                                         staleAge: nil, mood: "🧭"))
+        #expect(live.mood == nil)
+    }
+
+    @Test("hors ligne, l'humeur seule suffit à poser les dernières infos, mais jamais sous Proche")
+    func live_moodAlone_respectsTheCircle() {
+        let close = ProfileLiveBoard.resolve(level: .close, place: nil, battery: nil, unreachableSince: nil,
+                                             isOnline: false, staleAge: 60, mood: "🧭")
+        #expect(close?.mood == "🧭")
+        let friend = ProfileLiveBoard.resolve(level: .friend, place: nil, battery: nil, unreachableSince: nil,
+                                              isOnline: false, staleAge: 60, mood: "🧭")
+        #expect(friend == nil)
+        let empty = ProfileLiveBoard.resolve(level: .close, place: nil, battery: nil, unreachableSince: nil,
+                                             isOnline: false, staleAge: 60, mood: "")
+        #expect(empty == nil)
+    }
+
     @Test("la batterie reste entre 0 et 100")
     func battery_isClamped() {
         #expect(ProfileLiveBoard.Battery(level: 140, isCharging: true).level == 100)

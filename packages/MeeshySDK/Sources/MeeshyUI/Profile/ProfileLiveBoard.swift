@@ -41,24 +41,38 @@ public nonisolated struct ProfileLiveBoard: Equatable, Sendable {
     public let place: Place?
     public let battery: Battery?
     public let phone: Phone?
+    /// L'humeur affichée sous son nom, reprise dans « Dernières infos » hors ligne seulement (planche `Etat-HorsLigne`).
+    public let mood: String?
     /// L'âge de ce qu'on lit quand la fiche vient du cache faute de réseau ; `nil` en direct.
     public let staleAge: TimeInterval?
 
     public var isStale: Bool { staleAge != nil }
 
+    public init(place: Place?, battery: Battery?, phone: Phone?, mood: String? = nil, staleAge: TimeInterval?) {
+        self.place = place
+        self.battery = battery
+        self.phone = phone
+        self.mood = mood
+        self.staleAge = staleAge
+    }
+
     /// `nil` sous Proche, et quand rien n'est servi. « Joignable » ne s'affirme qu'en direct, sur une présence
-    /// « en ligne » ; un épisode d'injoignabilité servi se dit toujours, daté.
+    /// « en ligne » ; un épisode d'injoignabilité servi se dit toujours, daté. L'humeur ne rejoint le bloc qu'hors
+    /// ligne : en direct, elle se lit déjà sous le nom.
     public static func resolve(level: RelationLevel,
                                place: Place?,
                                battery: Battery?,
                                unreachableSince: Date?,
                                isOnline: Bool,
-                               staleAge: TimeInterval?) -> ProfileLiveBoard? {
+                               staleAge: TimeInterval?,
+                               mood: String? = nil) -> ProfileLiveBoard? {
         guard level >= minimumLevel else { return nil }
         let phone: Phone? = unreachableSince.map { Phone.unreachable(since: $0) }
             ?? (isOnline && staleAge == nil ? .reachable : nil)
-        guard place != nil || battery != nil || phone != nil else { return nil }
-        return ProfileLiveBoard(place: place, battery: battery, phone: phone, staleAge: staleAge.map { max(0, $0) })
+        let staleMood = staleAge == nil ? nil : mood.flatMap { $0.isEmpty ? nil : $0 }
+        guard place != nil || battery != nil || phone != nil || staleMood != nil else { return nil }
+        return ProfileLiveBoard(place: place, battery: battery, phone: phone, mood: staleMood,
+                                staleAge: staleAge.map { max(0, $0) })
     }
 }
 
@@ -71,15 +85,18 @@ public struct ProfileLiveRequest {
     public let staleAge: TimeInterval?
     public let tint: Color
     public let openMap: (() -> Void)?
+    /// L'humeur que la fiche montre sous son nom ; `nil` sans humeur, ou quand la fiche ne la montre pas.
+    public let mood: String?
 
     public init(userId: String, displayName: String, isOnline: Bool, staleAge: TimeInterval?, tint: Color,
-                openMap: (() -> Void)?) {
+                openMap: (() -> Void)?, mood: String? = nil) {
         self.userId = userId
         self.displayName = displayName
         self.isOnline = isOnline
         self.staleAge = staleAge
         self.tint = tint
         self.openMap = openMap
+        self.mood = mood
     }
 }
 
@@ -116,7 +133,8 @@ struct ProfileLiveSlot: View {
         section.build(ProfileLiveRequest(
             userId: request.userId, displayName: request.displayName, isOnline: request.isOnline,
             staleAge: request.staleAge, tint: request.tint,
-            openMap: map != nil && mapRequest != nil ? { isMapOpen = true } : nil
+            openMap: map != nil && mapRequest != nil ? { isMapOpen = true } : nil,
+            mood: request.mood
         ))
         .fullScreenCover(isPresented: $isMapOpen) {
             if let map, let mapRequest { map.destination(mapRequest) }

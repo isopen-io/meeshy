@@ -18,6 +18,7 @@ extension UserProfileSheet {
             aboutSection
             withThemSection
             liveSection
+            ProfilePendingSection.of(self)
             voiceSection
             gameSectionCard
             statsSection

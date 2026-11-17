@@ -76,13 +76,14 @@ public struct ProfileDeviceTiles: View {
     }
 
     public var body: some View {
-        if board.battery != nil || board.phone != nil {
+        if board.battery != nil || board.phone != nil || board.mood != nil {
             let layout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: MeeshySpacing.smPlus))
                 : AnyLayout(HStackLayout(alignment: .top, spacing: MeeshySpacing.smPlus))
             layout {
                 if let battery = board.battery { batteryTile(battery) }
                 if let phone = board.phone { phoneTile(phone) }
+                if let mood = board.mood { moodTile(mood) }
             }
         }
     }
@@ -118,6 +119,14 @@ public struct ProfileDeviceTiles: View {
                                     kind: .warn, isStale: board.isStale, footer: { EmptyView() })
         }
         return tile.accessibilityIdentifier("profile.vitrine.live.phone")
+    }
+
+    /// L'humeur telle qu'elle était au dernier relevé : hors ligne seulement, elle « peut avoir changé ».
+    private func moodTile(_ mood: String) -> some View {
+        MeeshyStatusTile(title: ProfileVitrineCopy.mood, systemImage: "face.smiling", value: mood,
+                         detail: ProfileVitrineCopy.mayHaveChanged, kind: .accent, isStale: board.isStale,
+                         footer: { EmptyView() })
+            .accessibilityIdentifier("profile.vitrine.live.mood")
     }
 
     static func batteryKind(_ level: Int) -> MeeshyStatusTileKind {

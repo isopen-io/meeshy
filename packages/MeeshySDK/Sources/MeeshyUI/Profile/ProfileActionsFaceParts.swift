@@ -8,11 +8,14 @@ struct ProfileLocationMapAction: View {
     let map: ProfileLocationMap
     let request: ProfileLocationMapRequest
     let tint: Color
+    /// Hors ligne, « dernière position connue » : la carte s'ouvre sur ce qu'on sait déjà (planche `Etat-HorsLigne`).
+    var value: String? = nil
 
     @State private var isOpen = false
 
     var body: some View {
-        MeeshyLabeledAction(title: Self.title, systemImage: "map", tint: tint, action: { isOpen = true })
+        MeeshyLabeledAction(title: Self.title, systemImage: "map", value: value, valueKind: .quiet, tint: tint,
+                            action: { isOpen = true })
             .keyboardShortcut("m", modifiers: .command)
             .fullScreenCover(isPresented: $isOpen) { map.destination(request) }
     }

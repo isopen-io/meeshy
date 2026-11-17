@@ -1,4 +1,5 @@
 import Combine
+import Foundation
 import MeeshySDK
 import MeeshyUI
 
@@ -10,8 +11,54 @@ extension UserProfileDependencies {
         userUpdates: MessageSocketManager.shared.userUpdated.eraseToAnyPublisher(),
         fallbackProfileLoading: UncachedProfileLoading(),
         inCommon: LiveProfileInCommonLoading(),
-        acquaintance: LiveProfileAcquaintance()
+        acquaintance: LiveProfileAcquaintance(),
+        pendingQueue: LiveProfilePendingQueue()
     )
+}
+
+/// Hors ligne, ce que la file garde pour la personne (#19465) : ses conversations directes lues dans le cache de la
+/// liste (jamais le réseau, qui manque), la file telle que la pastille de synchronisation la lit, et le retrait d'un envoi
+/// comme le fil le fait pour un message qui n'est pas parti — la ligne annulée, puis effacée, puis sa bulle retirée.
+@MainActor
+final class LiveProfilePendingQueue: ProfilePendingQueueProviding {
+    nonisolated deinit {}
+
+    private let queue: OfflineQueue
+
+    init(queue: OfflineQueue = .shared) {
+        self.queue = queue
+    }
+
+    func directConversationIds(with userId: String) async -> Set<String> {
+        switch await CacheCoordinator.shared.conversations.load(for: "list") {
+        case .fresh(let list, _), .stale(let list, _):
+            let target = userId.lowercased()
+            return Set(list.filter { $0.type == .direct && $0.participantUserId?.lowercased() == target }.map(\.id))
+        case .expired, .empty:
+            return []
+        }
+    }
+
+    func pendingItems() -> AnyPublisher<[OutboxUIItem], Never> {
+        queue.pendingUIItemsPublisher
+    }
+
+    func withdraw(_ action: ProfilePendingAction) async -> Bool {
+        let messageId = action.clientMessageId
+        let persistence = DependencyContainer.shared.messagePersistence
+        await queue.cancelPendingSend(clientMessageId: messageId)
+        await queue.clearSendMessageRow(clientMessageId: messageId)
+        await bestEffort("profile.pending.withdraw", category: .messages) {
+            try await persistence.markDeleted(localId: messageId, deletedAt: Date(), origin: .authenticated)
+        }
+        return true
+    }
+
+    func retry(_ actions: [ProfilePendingAction]) async {
+        for action in actions {
+            try? await queue.retryItem(action.id)
+        }
+    }
 }
 
 /// « En commun » (#19377) : le store chiffré du `CacheCoordinator`, clé = la personne, puis `GET /users/:id/in-common`.

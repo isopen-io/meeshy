@@ -12,6 +12,8 @@ public struct UserProfileDependencies {
     public let inCommon: any ProfileInCommonLoading
     /// « Faire connaissance » (#19456) : le verdict « écrire part en demande » et l'envoi. Absente, la fiche s'en passe.
     public let acquaintance: (any ProfileAcquaintanceProviding)?
+    /// Hors ligne, ce que la file garde pour la personne (#19465). Absente, la fiche ne pose pas le bloc.
+    public let pendingQueue: (any ProfilePendingQueueProviding)?
 
     public init(
         currentUser: @escaping @MainActor () -> MeeshyUser?,
@@ -20,7 +22,8 @@ public struct UserProfileDependencies {
         userUpdates: AnyPublisher<UserUpdatedEvent, Never>,
         fallbackProfileLoading: any ProfileLoading,
         inCommon: any ProfileInCommonLoading = ProfileInCommonUnavailable(),
-        acquaintance: (any ProfileAcquaintanceProviding)? = nil
+        acquaintance: (any ProfileAcquaintanceProviding)? = nil,
+        pendingQueue: (any ProfilePendingQueueProviding)? = nil
     ) {
         self.currentUser = currentUser
         self.relationships = relationships
@@ -29,5 +32,6 @@ public struct UserProfileDependencies {
         self.fallbackProfileLoading = fallbackProfileLoading
         self.inCommon = inCommon
         self.acquaintance = acquaintance
+        self.pendingQueue = pendingQueue
     }
 }
