@@ -1,154 +1,208 @@
 import SwiftUI
-import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// La fiche d'un lien de communauté (planche `Lien-Communaute`, #18871).
+///
+/// De haut en bas : le billet héros, son QR et ses gestes (Copier · QR · Partager · Modifier), les chiffres, les
+/// entrées sur trente jours, les règles d'entrée, les entrées récentes, puis Fermer les entrées. Fait du kit : rien
+/// n'y est redessiné. Le lien s'affiche depuis la ligne qui l'a ouvert (cache d'abord) ; la communauté et ses
+/// arrivées viennent ensuite, sans jamais bloquer la fiche.
 struct CommunityLinkDetailView: View {
-    let link: CommunityLink
+    @StateObject var viewModel: CommunityLinkDetailViewModel
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dismiss) private var dismiss
+    @State private var showsMore = false
+    @State private var isEditing = false
+    @State private var qrShareImage: QRShareImage?
+    @State private var sharedLink: ShareableLink?
+    @State var selectedDay: String?
 
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    private var theme: ThemeManager { ThemeManager.shared }
-    @State private var copiedFeedback = false
+    init(link: CommunityLink) {
+        _viewModel = StateObject(wrappedValue: CommunityLinkDetailViewModel.live(link: link))
+    }
+
+    var isDark: Bool { colorScheme == .dark }
+    var link: CommunityLink { viewModel.link }
+    static let accent = MeeshyColors.communityAccent
 
     var body: some View {
-        LinksPage(title: link.name, accent: MeeshyColors.communityAccent) {
+        LinksPage(title: CommunityLinkDetailCopy.pageTitle, accent: Self.accent,
+                  action: LinksPageAction(label: ShareLinkDetailCopy.more, systemImage: "ellipsis") { showsMore = true }) {
             VStack(spacing: MeeshySpacing.xl) {
-                headerCard.padding(.horizontal, MeeshySpacing.lg)
-                actionsBar.padding(.horizontal, MeeshySpacing.lg)
-                statsSection.padding(.horizontal, MeeshySpacing.lg)
-                infoSection.padding(.horizontal, MeeshySpacing.lg)
+                heroTicket
+                figuresBand
+                entriesChart
+                entryRules
+                recentSection
+                closeButton
             }
-            .padding(.top, MeeshySpacing.lg).padding(.bottom, 60)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.lg)
+            .padding(.bottom, 60)
+        }
+        .task { await viewModel.load() }
+        .confirmationDialog(link.name, isPresented: $showsMore, titleVisibility: .visible) {
+            Button(CommunityLinkDetailCopy.copyIdentifier) {
+                LinksClipboard.copy(link.identifier, message: CommunityLinkDetailCopy.identifierCopied)
+            }
+            if viewModel.details?.settingsCommunity != nil {
+                Button(ShareLinkDetailCopy.edit) { isEditing = true }
+            }
+            Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
+        }
+        .sheet(isPresented: $isEditing) { editSheet }
+        .sheet(item: $qrShareImage) { qr in ShareSheet(activityItems: [qr.image]) }
+        .sheet(item: $sharedLink) { shared in ShareSheet(activityItems: shared.activityItems) }
+    }
+
+    // MARK: - Le billet héros (K30 + K31 + K32)
+
+    private var address: String {
+        link.joinUrl.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: "")
+    }
+
+    private var heroTicket: some View {
+        MeeshyTicket(
+            title: link.name,
+            code: address,
+            tint: Self.accent,
+            systemImage: "person.3.fill",
+            size: .hero,
+            label: "\(link.name), \(address)",
+            statusLabel: link.isActive ? ShareLinkDetailCopy.active : ShareLinkDetailCopy.inactive,
+            stub: { heroStub },
+            leading: { EmptyView() },
+            trailing: {
+                MeeshyCodeCard(payload: URL(string: link.joinUrl)?.absoluteString, label: TrackingDetailCopy.enlargeQR,
+                               tint: Self.accent, style: .plain, size: .mini, tilt: .none,
+                               boostsBrightness: false, onPress: { showQR() })
+            },
+            status: { EmptyView() },
+            back: { EmptyView() }
+        )
+        .accessibilityIdentifier("communityLink.detail.hero")
+    }
+
+    private var heroStub: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            MeeshyPersonRow(title: stewardshipLine, size: .inline, showsDivider: false) {
+                MeeshyAvatar(name: link.name, context: .custom(26), kind: .entity, avatarURL: viewModel.details?.avatar,
+                             isDark: isDark)
+            }
+            heroActions
         }
     }
 
-    private var headerCard: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            ZStack {
-                Circle().fill(MeeshyColors.communityAccent.opacity(MeeshyOpacity.light)).frame(width: 60, height: 60)
-                // Glyphe héros dans un cercle de dimension fixe 60×60 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
-                Image(systemName: "person.3.fill").font(MeeshyFont.fixedGlyph(MeeshyIconSize.xxxl))
-                    .foregroundColor(MeeshyColors.communityAccent)
-                    .accessibilityHidden(true)
-            }
-            Text(link.name).font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold)).foregroundStyle(theme.textPrimary)
-            Text(link.joinUrl).font(MeeshyFont.relative(MeeshyFont.smallSize, design: .monospaced))
-                .foregroundStyle(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
+    /// « Tu l'animes · 342 membres » : ce que le lecteur est pour la communauté, puis son compte.
+    var stewardshipLine: String {
+        let members = CommunityLinkDetailCopy.members(viewModel.memberCount)
+        switch viewModel.stewardship {
+        case .animates: return "\(CommunityLinkDetailCopy.animates) · \(members)"
+        case .moderates: return "\(CommunityLinkDetailCopy.moderates) · \(members)"
+        case .member: return members
         }
-        .padding(MeeshySpacing.xl).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                .stroke(MeeshyColors.communityAccent.opacity(MeeshyOpacity.light), lineWidth: 1)))
-        .accessibilityElement(children: .combine)
     }
 
-    private var actionsBar: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            communityActionButton(String(localized: "common.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
-                                  color: copiedFeedback ? MeeshyColors.success : MeeshyColors.communityAccent) {
-                LinksClipboard.copy(link.joinUrl, confirmation: .inline)
-                withAnimation { copiedFeedback = true }
-            }
-            shareActionButton
-            communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identifier", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
-                LinksClipboard.copy(link.identifier, message: ShareSheetCopy.copied)
-            }
+    private var heroActions: some View {
+        MeeshyActionGrid(columns: .fixed(4)) {
+            MeeshyLabeledAction(title: TrackingDetailCopy.copy, systemImage: "doc.on.doc", tint: Self.accent,
+                                hint: address, action: {
+                LinksClipboard.copy(link.joinUrl, confirmation: .inline, message: ShareLinkDetailCopy.copied)
+            })
+            MeeshyLabeledAction(title: TrackingDetailCopy.qr, systemImage: "qrcode", tint: Self.accent,
+                                action: { showQR() })
+                .disabled(URL(string: link.joinUrl) == nil)
+            MeeshyLabeledAction(title: ShareLinkDetailCopy.share, systemImage: "square.and.arrow.up", tint: Self.accent,
+                                action: { sharedLink = URL(string: link.joinUrl).map { ShareableLink(url: $0) } })
+                .disabled(URL(string: link.joinUrl) == nil)
+            MeeshyLabeledAction(title: ShareLinkDetailCopy.edit, systemImage: "pencil", tint: Self.accent,
+                                action: { isEditing = true })
+                .disabled(viewModel.details?.settingsCommunity == nil)
         }
-        .settling($copiedFeedback, to: false, after: .seconds(2), animation: .default)
     }
 
-    // Native share: ShareLink handles the activity sheet, iPad popover anchoring
-    // and top-VC presentation for free — no manual UIActivityViewController /
-    // window-hierarchy traversal (doctrine: prefer first-party SwiftUI over UIKit).
+    // MARK: - Fermer les entrées (K40)
+
+    private var closeButton: some View {
+        let isClosed = viewModel.isClosed ?? false
+        return MeeshyButton(isClosed ? CommunityLinkDetailCopy.reopenEntries : CommunityLinkDetailCopy.closeEntries,
+                            systemImage: isClosed ? "door.left.hand.open" : "door.left.hand.closed",
+                            kind: .outline, width: .fill, isDestructive: !isClosed,
+                            action: { setClosed(!isClosed) })
+            .disabled(viewModel.isClosed == nil)
+            .accessibilityIdentifier("communityLink.detail.close")
+    }
+
+    // MARK: - Modifier (feuille)
+
     @ViewBuilder
-    private var shareActionButton: some View {
-        let shareLabel = String(localized: "common.share", defaultValue: "Partager", bundle: .main)
-        if let url = URL(string: link.joinUrl) {
-            ShareLink(item: url) {
-                communityActionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.communityAccent)
+    private var editSheet: some View {
+        if let community = viewModel.details?.settingsCommunity {
+            CommunitySettingsView(
+                community: community,
+                onUpdated: { _ in
+                    isEditing = false
+                    Task { await viewModel.load() }
+                },
+                onDeleted: { leaveFiche() },
+                onLeft: { leaveFiche() },
+                onCancel: { isEditing = false }
+            )
+        }
+    }
+
+    // MARK: - Actions
+
+    private func showQR() {
+        qrShareImage = LinkQRCode.shareImage(for: link.joinUrl)
+    }
+
+    private func setClosed(_ closed: Bool) {
+        HapticFeedback.light()
+        Task {
+            guard await viewModel.setEntriesClosed(closed) else {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
+                return
             }
-            .simultaneousGesture(TapGesture().onEnded { HapticFeedback.light() })
-            .accessibilityLabel(shareLabel)
-        } else {
-            communityActionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.communityAccent)
-                .opacity(0.4)
-                .accessibilityHidden(true)
         }
     }
 
-    private func communityActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            communityActionButtonLabel(label, icon: icon, color: color)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
+    private func leaveFiche() {
+        isEditing = false
+        dismiss()
     }
+}
 
-    private func communityActionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: MeeshySpacing.xsPlus) {
-            MeeshyGlassButtonFace(systemImage: icon, size: .s48, glyphTint: color)
-                .accessibilityHidden(true)
-            Text(label).font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium)).foregroundStyle(theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var statsSection: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            communityStatCard("\(link.memberCount)",
-                              label: String(localized: "communityLink.members", defaultValue: "Membres", bundle: .main),
-                              icon: "person.fill", color: MeeshyColors.communityAccentHex)
-            communityStatCard(link.isActive
-                              ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
-                              : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main),
-                              label: String(localized: "communityLink.status", defaultValue: "Statut", bundle: .main),
-                              icon: "checkmark.circle.fill",
-                              color: link.isActive ? MeeshyColors.successHex : MeeshyColors.neutral500Hex)
-        }
-    }
-
-    private func communityStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: icon).font(MeeshyFont.relative(MeeshyIconSize.xxl)).foregroundStyle(Color(hex: color))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(value).font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold)).foregroundStyle(theme.textPrimary)
-                Text(label).font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundStyle(theme.textSecondary)
+extension CommunityLinkDetailViewModel {
+    /// Les sources réelles — la communauté, la dernière page de ses membres, l'écriture de sa confidentialité —,
+    /// branchées par la vue : la fabrique vit chez son hôte, jamais dans le ViewModel.
+    static func live(link: CommunityLink) -> CommunityLinkDetailViewModel {
+        CommunityLinkDetailViewModel(
+            link: link,
+            viewerId: AuthManager.shared.currentUser?.id,
+            loadDetails: { id in
+                let community = try await CommunityService.shared.get(communityId: id)
+                return CommunityLinkDetails(community: community)
+            },
+            loadEntries: { id in
+                try await latestMembers(communityId: id).compactMap { CommunityLinkEntry(member: $0) }
+            },
+            setPrivate: { id, closed in
+                _ = try await CommunityService.shared.update(communityId: id, name: nil, identifier: nil,
+                                                             description: nil, isPrivate: closed, avatar: nil,
+                                                             banner: nil)
             }
-            Spacer()
-        }
-        .padding(MeeshySpacing.mdPlus).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)))
-        .accessibilityElement(children: .combine)
+        )
     }
 
-    private var infoSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            Text(String(localized: "communityLink.informations", defaultValue: "INFORMATIONS", bundle: .main))
-                .font(.caption.weight(.semibold))
-                .foregroundColor(theme.textSecondary).kerning(0.8)
-                .accessibilityAddTraits(.isHeader)
-            VStack(spacing: 0) {
-                infoRow(String(localized: "communityLink.identifier", defaultValue: "Identifiant", bundle: .main), value: link.identifier)
-                Divider().padding(.leading, MeeshySpacing.lg)
-                infoRow(String(localized: "communityLink.fullLink", defaultValue: "Lien complet", bundle: .main), value: link.joinUrl)
-                Divider().padding(.leading, MeeshySpacing.lg)
-                infoRow(String(localized: "communityLink.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
-            }
-            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(MeeshyColors.surfaceFill(isDark: isDark)))
+    nonisolated private static func latestMembers(communityId: String) async throws -> [APICommunityMember] {
+        let size = CommunityLinkEntries.pageSize
+        let first = try await CommunityService.shared.getMembers(communityId: communityId, offset: 0, limit: size)
+        guard let offset = CommunityLinkEntries.latestPageOffset(total: first.pagination?.total, pageSize: size) else {
+            return first.data
         }
-    }
-
-    private func infoRow(_ label: String, value: String) -> some View {
-        HStack {
-            Text(label).font(MeeshyFont.relative(MeeshyFont.labelSize)).foregroundStyle(theme.textSecondary)
-            Spacer()
-            Text(value).font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium)).foregroundStyle(theme.textPrimary).lineLimit(1)
-        }
-        .padding(.horizontal, MeeshySpacing.lg).padding(.vertical, MeeshySpacing.md)
-        .accessibilityElement(children: .combine)
+        return try await CommunityService.shared.getMembers(communityId: communityId, offset: offset, limit: size).data
     }
 }

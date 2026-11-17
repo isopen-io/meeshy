@@ -587,6 +587,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
         "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift",  // 11
+        // #18871 — la fiche d'un lien de communauté passée au kit : ses mots ont quitté la vue pour leur table.
+        "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailCopy.swift",
         "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",  // 10
         // #16901 — la carte du bas a quitté le sélecteur de lieu avec ses trois clés.
         "apps/ios/Meeshy/Features/Main/Components/LocationPickerBottomCard.swift",  // 3
