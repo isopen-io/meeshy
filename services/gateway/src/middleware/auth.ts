@@ -28,6 +28,8 @@ const authLogger = enhancedLogger.child({ module: 'auth' });
 const AUTH_USER_CACHE_TTL = 60; // 1 minute
 // JWT verification result cached for 55s (slightly shorter than user cache)
 const JWT_VERIFY_CACHE_TTL = 55;
+// La réservation d'une lecture en cours (#19281) : courte, une lecture ne dure pas 10 s.
+const AUTH_USER_CACHE_CLAIM_TTL = 10;
 const expiredJwtLoggedTokens = new Map<string, number>(); // token prefix -> last log timestamp
 const EXPIRED_JWT_LOG_INTERVAL = 60_000; // Log same expired token at most once per minute
 
@@ -329,7 +331,8 @@ export class AuthMiddleware {
       try {
         const raw = await cache.get(cacheKey);
         if (raw) {
-          cachedRow = JSON.parse(raw) as CachedUserRow;
+          const parsed = JSON.parse(raw) as CachedUserRow | { readonly claim: string };
+          if (!('claim' in parsed)) cachedRow = parsed;
         }
       } catch {
         // Redis unavailable or parse error — fall through to Prisma
@@ -345,6 +348,19 @@ export class AuthMiddleware {
       }
 
       if (!user) {
+        // #19281 — la RÉSERVATION : avant de lire la base, la lecture pose sa
+        // marque dans la clé même. Une écriture de profil EFFACE la clé (`del`) :
+        // si la marque n'y est plus au moment de mettre en cache, une écriture a
+        // eu lieu pendant la lecture et la ligne lue est peut-être plus ancienne
+        // que celle qu'elle vient d'effacer — elle n'est pas remise en cache.
+        const claim = JSON.stringify({ claim: crypto.randomUUID() });
+        let claimed = false;
+        try {
+          await cache.set(cacheKey, claim, AUTH_USER_CACHE_CLAIM_TTL);
+          claimed = true;
+        } catch {
+          // Redis indisponible : pas de mise en cache non plus (voir plus bas)
+        }
         const prismaUser = await this.prisma.user.findUnique({
           where: { id: jwtUserId },
           select: {
@@ -403,7 +419,9 @@ export class AuthMiddleware {
             profileCompletionRate: user.profileCompletionRate,
           };
           try {
-            await cache.set(cacheKey, JSON.stringify(toCache), AUTH_USER_CACHE_TTL);
+            if (claimed && (await cache.get(cacheKey)) === claim) {
+              await cache.set(cacheKey, JSON.stringify(toCache), AUTH_USER_CACHE_TTL);
+            }
           } catch {
             // Redis write failure is non-fatal
           }
