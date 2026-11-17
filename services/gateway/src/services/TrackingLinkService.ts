@@ -91,11 +91,7 @@ const reuseScopeWhere = (scope: TrackingLinkReuseScope) =>
     ? { conversationId: scope.conversationId }
     : { createdBy: scope.createdBy, ...(scope.conversationId ? { conversationId: scope.conversationId } : {}) };
 
-/**
- * Le lien d'une adresse de fiche lui appartient (#18863) : aucun contenu ne le réutilise, sans
- * quoi masquer, modifier ou supprimer l'adresse casserait le post ou le message qui le porte.
- * MongoDB distingue un champ NUL d'un champ ABSENT : les deux sont des liens ordinaires.
- */
+/** Le lien d'une adresse de fiche lui appartient (#18863) : aucun contenu ne le réutilise. */
 const NOT_AN_ADDRESS_LINK = { OR: [{ addressId: null }, { addressId: { isSet: false } }] };
 
 /**
@@ -283,16 +279,6 @@ export class TrackingLinkService {
   }
 
   /**
-   * Le lien que ce lecteur peut SUIVRE : celui d'une adresse de fiche hors de son audience
-   * n'existe pas pour lui (#18863), exactement comme un jeton inconnu.
-   */
-  async getServableLinkByToken(token: string, viewerId?: string): Promise<TrackingLink | null> {
-    const link = await this.getTrackingLinkByToken(token);
-    if (!link || !(await addressLinkOpensTo(this.prisma, link, viewerId))) return null;
-    return link;
-  }
-
-  /**
    * Résout un token `/l/<token>` vers sa cible typée. Tente d'abord un
    * TrackingLink (partage de post/reel/story), puis tombe en fallback sur un
    * ConversationShareLink (invitation). Un lien expiré ou désactivé est résolu
@@ -393,8 +379,8 @@ export class TrackingLinkService {
     /** Le visiteur établi par le SERVEUR (`linkVisitorFromRequest`) — absent ⇒ rien n'est crédité. */
     visitor?: LinkVisitor;
   }): Promise<{ trackingLink: TrackingLink; click: TrackingLinkClick }> {
-    // Vérifier que le lien existe pour ce lecteur et est actif
-    const trackingLink = await this.getServableLinkByToken(params.token, params.userId);
+    const found = await this.getTrackingLinkByToken(params.token);
+    const trackingLink = found && (await addressLinkOpensTo(this.prisma, found, params.userId)) ? found : null;
 
     if (!trackingLink) {
       throw new Error('Tracking link not found');
@@ -984,9 +970,7 @@ export class TrackingLinkService {
     if (params.originalUrl !== undefined) {
       updateData.originalUrl = params.originalUrl;
     }
-    if (params.name !== undefined) {
-      updateData.name = params.name;
-    }
+    if (params.name !== undefined) updateData.name = params.name;
     if (params.expiresAt !== undefined) {
       updateData.expiresAt = params.expiresAt;
     }

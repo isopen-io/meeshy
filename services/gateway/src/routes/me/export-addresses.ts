@@ -7,6 +7,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { IS_ADDRESS_LINK } from '../../services/profile-addresses/address-links';
 
+/** Borne de lecture : un lien d'adresse retiré ou tourné est effacé, il n'en reste que quelques-uns par compte. */
+const EXPORTED_ADDRESS_LINKS_MAX = 1000;
+
 export const PROFILE_ADDRESS_EXPORT_SELECT = {
   id: true,
   title: true,
@@ -43,10 +46,12 @@ export async function withExportedAddresses<T extends { profileAddresses?: Expor
   profile: T,
 ): Promise<Omit<T, 'profileAddresses'> & { addresses: ExportedAddress[]; addressLinks: ExportedAddressLink[] }> {
   const { profileAddresses = [], ...rest } = profile;
-  const links = await prisma.trackingLink.findMany({
+  const links = (await prisma.trackingLink.findMany({
     where: { createdBy: userId, ...IS_ADDRESS_LINK },
     select: { token: true, addressId: true, name: true, originalUrl: true, isActive: true, totalClicks: true, createdAt: true },
-  });
+    orderBy: { createdAt: 'asc' },
+    take: EXPORTED_ADDRESS_LINKS_MAX,
+  })).filter((link) => link.addressId != null);
   const linkOf = (row: ExportedAddressRow) =>
     links.find((link) => row.trackingToken !== null && link.token === row.trackingToken && link.addressId === row.id);
   const addresses = profileAddresses.map((row) => {

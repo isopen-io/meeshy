@@ -14,8 +14,8 @@ export type AddressLink = { readonly totalClicks: number; readonly isOpen: boole
 
 export type AddressTokenRef = { readonly id: string; readonly trackingToken: string | null };
 
-/** Un lien d'adresse : `addressId` posé et non nul (MongoDB distingue l'absence du nul). */
-export const IS_ADDRESS_LINK = { addressId: { isSet: true }, NOT: { addressId: null } } as const;
+/** Un lien d'adresse : `addressId` posé. Un lien ordinaire ne l'écrit jamais (`createTrackingLink` ne le pose qu'à une adresse). */
+export const IS_ADDRESS_LINK = { addressId: { isSet: true } } as const;
 
 export async function ownedAddressLinks(
   prisma: Pick<PrismaClient, 'trackingLink'>,

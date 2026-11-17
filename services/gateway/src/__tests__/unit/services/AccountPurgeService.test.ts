@@ -168,7 +168,7 @@ describe('purgeAccountIsolatedData', () => {
     });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.trackingLink.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { token: { in: ['tokA', 'tokB'] }, createdBy: USER_ID },
+      where: { createdBy: USER_ID, addressId: { isSet: true } },
     }));
     expect(prisma.trackingLinkClick.deleteMany).toHaveBeenCalledWith({ where: { trackingLinkId: { in: ['tl1', 'tl2'] } } });
     expect(prisma.trackingLink.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['tl1', 'tl2'] } } });
