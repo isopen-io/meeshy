@@ -188,19 +188,23 @@ export function createAccountSwitcher({
   /** Ferme côté passerelle la session d'un compte qu'on quitte SANS la garder. */
   readonly endServerSession: (session: PreservedSession) => void;
 }): AccountSwitcher {
-  /* Le compte QUITTÉ est le compte TENU (`heldAccountOf`) : effectif, ou tenu
-     derrière l'identité anonyme qu'il lit (#8816). Sans cela, quitter depuis
-     cette identité ne rangeait ni ne fermait le compte, que la suite effaçait
-     (#10474). */
-  const leaveActive = (): void => {
-    const current = heldAccountOf(store.getState().session);
-    if (current === null) return;
+  /* Le compte QUITTÉ est celui que l'APPAREIL tient (#19132) — son entrée
+     porte le compte, même quand l'onglet le lit derrière une identité anonyme
+     (#8816, #10474). Jamais ce que l'onglet tient en mémoire : resté sur Ada
+     pendant qu'un autre onglet passait à Bob, il rangeait Ada et posait le
+     compte suivant par-dessus Bob, dont le jeton quittait l'appareil ; resté
+     sur l'ancien jeton d'Ada, il rangeait ce jeton au lieu du récent. Rend
+     `true` quand un compte a été quitté. */
+  const leaveActive = (): boolean => {
+    const current = heldAccountOf(store.getState().deviceSession());
+    if (current === null) return false;
     const known = vault.list().find((account) => account.user.id === current.user.id);
     if (known === undefined) vault.noteActive(current.user);
     else vault.refreshUser(current.user);
     const held: PreservedSession = { token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt };
     if (known?.keepsSession ?? true) vault.stash(current.user.id, held);
     else endServerSession(held);
+    return true;
   };
 
   return {
@@ -222,9 +226,12 @@ export function createAccountSwitcher({
       vault.noteActive(target.user);
       return 'switched';
     },
+    /* L'entrée de l'appareil part AVEC le compte qui vient d'être quitté, même
+       si cet onglet tenait une autre session : le coffre ne porte jamais la
+       session active (D-142). */
     suspend: () => {
-      leaveActive();
-      store.getState().clearSession();
+      const left = leaveActive();
+      store.getState().clearSession({ device: left });
     },
     offersKeepSignedIn: () => {
       const current = store.getState().session;

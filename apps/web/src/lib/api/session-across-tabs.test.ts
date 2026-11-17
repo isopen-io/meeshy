@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { ACCOUNT_CACHE_PREFIX, createAccountCacheShelf, endRevokedSession, forgetAccountCaches, setDeviceFollower } from './account-caches';
 import { watchDeliveryReceiptCredential, type DeliveryReceiptCredential } from '../notifications/delivery-receipt-credential';
 
+import { createAccountSwitcher, createAccountVault } from './accounts';
 import { createAuthClient } from './auth';
 import type { ApiResult, HttpRequest } from './http';
 import { createAppQueryClient, type StorageLike } from './query-client';
@@ -642,5 +643,83 @@ describe('W3 — rejoindre un lien en invité dans un onglet resté anonyme ne r
 
     const restored = reloaded(storage);
     expect(restored.status === 'guest' ? restored.sessionToken : restored.status).toBe('guest-1');
+  });
+});
+
+/**
+ * CHANGER DE COMPTE DEPUIS UN ONGLET PÉRIMÉ (W4). Le compte qu'on QUITTE était
+ * celui que l'onglet tenait en mémoire : resté sur Ada pendant qu'un autre
+ * onglet passait à Bob, il rangeait Ada et posait Carol par-dessus l'entrée de
+ * Bob — dont le jeton, repris du coffre par l'autre onglet, quittait alors
+ * l'appareil. Resté sur l'ancien jeton d'Ada, il rangeait ce jeton ancien au
+ * lieu du récent. On quitte désormais ce que l'APPAREIL tient.
+ */
+describe('W4 — changer de compte depuis un onglet périmé range ce que l’appareil tient (#19132)', () => {
+  const CAROL: SessionUser = { id: 'u-carol', username: 'carol' };
+  const noServer = () => undefined;
+
+  test('changer de compte dans un onglet resté sur Ada ne fait pas perdre le jeton de Bob, actif dans l’autre onglet', () => {
+    const storage = fakeStorage();
+    const now = () => NOW;
+    const vault = createAccountVault({ storage, now });
+    vault.noteActive(BOB);
+    vault.stash(BOB.id, { token: 'jwt-bob', sessionToken: 'sess-bob', expiresAt: NOW + 3_600_000 });
+    vault.noteActive(CAROL);
+    vault.stash(CAROL.id, { token: 'jwt-carol', sessionToken: 'sess-carol', expiresAt: NOW + 3_600_000 });
+    const tabA = openTab(storage);
+    tabA.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 7200 });
+    vault.noteActive(ADA);
+    const tabB = openTab(storage);
+    tabB.getState().restoreSession();
+
+    expect(createAccountSwitcher({ vault, store: tabB, now, endServerSession: noServer }).switchTo(BOB.id)).toBe('switched');
+    expect(createAccountSwitcher({ vault, store: tabA, now, endServerSession: noServer }).switchTo(CAROL.id)).toBe('switched');
+
+    expect(vault.list().find((account) => account.user.id === BOB.id)?.session?.token).toBe('jwt-bob');
+    expect(tokenOf(reloaded(storage))).toBe('jwt-carol');
+  });
+
+  test('l’onglet resté sur l’ancien jeton range la session RÉCENTE que l’appareil tient, jamais son jeton ancien', () => {
+    const storage = fakeStorage();
+    const now = () => NOW;
+    const vault = createAccountVault({ storage, now });
+    vault.noteActive(BOB);
+    vault.stash(BOB.id, { token: 'jwt-bob', sessionToken: 'sess-bob', expiresAt: NOW + 3_600_000 });
+    const { staleTab } = staleTabThenFreshLogin(storage);
+    vault.noteActive(ADA);
+
+    createAccountSwitcher({ vault, store: staleTab, now, endServerSession: noServer }).switchTo(BOB.id);
+
+    expect(vault.list().find((account) => account.user.id === ADA.id)?.session?.token).toBe('jwt-recent');
+  });
+
+  test('mettre le compte de côté depuis cet onglet range la session de l’appareil ET vide son entrée : le coffre ne tient jamais la session active', () => {
+    const storage = fakeStorage();
+    const now = () => NOW;
+    const vault = createAccountVault({ storage, now });
+    const { staleTab } = staleTabThenFreshLogin(storage);
+    vault.noteActive(ADA);
+
+    createAccountSwitcher({ vault, store: staleTab, now, endServerSession: noServer }).suspend();
+
+    expect(vault.list().find((account) => account.user.id === ADA.id)?.session?.token).toBe('jwt-recent');
+    expect(reloaded(storage).status).toBe('anonymous');
+  });
+
+  test('l’appareil ne tient aucun compte (entrée d’invité) : la mise de côté ne vide pas une entrée qu’elle n’a pas rangée', () => {
+    const storage = fakeStorage();
+    const now = () => NOW;
+    const vault = createAccountVault({ storage, now });
+    const adaTab = openTab(storage);
+    adaTab.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    openTab(storage).getState().establishGuest({
+      sessionToken: 'anon-1',
+      guest: { participantId: 'p-1', nickname: 'Invité', conversationId: 'c-1', link: 'lien-1', mayWrite: true },
+    });
+
+    createAccountSwitcher({ vault, store: adaTab, now, endServerSession: noServer }).suspend();
+
+    const restored = reloaded(storage);
+    expect(restored.status === 'guest' ? restored.sessionToken : restored.status).toBe('anon-1');
   });
 });

@@ -224,7 +224,8 @@ export type SessionStoreState = {
    * peut-être remplacée par une session plus récente, qu'un 401 ici ne
    * concerne pas. `device` : l'entrée part quoi qu'elle porte — la
    * déconnexion qui vient de fermer AUSSI, côté serveur, la session que
-   * l'appareil tenait.
+   * l'appareil tenait (`auth.ts`), la mise de côté qui vient de la ranger
+   * dans le coffre (`accounts.ts`).
    */
   clearSession(options?: { readonly device?: boolean }): void;
   /**
