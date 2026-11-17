@@ -7,7 +7,7 @@ import { useStore } from 'zustand/react';
 import './styles/app.css';
 import './styles/sealed-exit.css';
 
-import { MeeshyAvatarMorphScope } from '@/components/kit/meeshy-avatar-morph';
+import { MeeshyAvatarMorphScope } from '@/components/kit/meeshy-avatar-morph-scope';
 import { ScreenWait } from '@/components/screen-wait';
 import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
