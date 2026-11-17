@@ -9,4 +9,5 @@
     <string name="push_placeholder_ephemeral">Mensagem efêmera</string>
     <string name="push_placeholder_hidden">Mensagem oculta</string>
     <string name="push_placeholder_encrypted">Mensagem criptografada</string>
+    <string name="push_placeholder_locked">Conversa bloqueada</string>
 </resources>
