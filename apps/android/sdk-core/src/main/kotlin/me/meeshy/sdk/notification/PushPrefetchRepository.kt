@@ -9,6 +9,9 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.conversation.ConversationRefreshSignal
 import me.meeshy.sdk.conversation.MessageEntityFactory
 import me.meeshy.sdk.conversation.MessageIdReconciliation
+import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.InMemoryConversationLockStore
+import me.meeshy.sdk.lock.sealsContentOf
 import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.push.PushMessageRef
 import me.meeshy.sdk.model.push.PushPayload
@@ -31,7 +34,7 @@ fun interface PushPostPrefetcher {
  * serveur), le post d'une notification sociale rejoint le cache, et l'accusé de remise part.
  *
  * Fail-closed : rien ne s'écrit sans utilisateur connecté ; une conversation chiffrée de bout en bout refuse un message
- * en clair. Tout échec est avalé : le préchargement est une avance, jamais un prérequis (le fil se rafraîchit à l'ouverture).
+ * en clair ; une conversation verrouillée par code (ou dont le verrou est illisible) ne rapatrie pas son message. Tout échec est avalé : le préchargement est une avance, jamais un prérequis (le fil se rafraîchit à l'ouverture).
  */
 @Singleton
 class PushPrefetchRepository @Inject constructor(
@@ -42,11 +45,13 @@ class PushPrefetchRepository @Inject constructor(
     private val conversationApi: ConversationApi,
     private val posts: PushPostPrefetcher,
     private val tokenStore: TokenStore,
+    private val lockStore: ConversationLockStore = InMemoryConversationLockStore(),
 ) {
 
     suspend fun prefetch(payload: PushPayload) {
         if (!tokenStore.isAuthenticated || tokenStore.userId == null) return
-        val plan = PushPrefetchPolicy.plan(payload)
+        val locked = payload.conversationId?.let { lockStore.sealsContentOf(it) } == true
+        val plan = PushPrefetchPolicy.plan(payload, conversationLocked = locked)
         plan.message?.let { swallowing("message") { prefetchMessage(it, payload) } }
         plan.postId?.let { swallowing("post") { posts.prefetch(it) } }
         plan.deliveryReceipt?.let { swallowing("accusé de remise") { acknowledge(it) } }

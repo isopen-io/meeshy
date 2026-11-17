@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.MinimalMessageIngest
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.sealsContentOf
 import me.meeshy.sdk.model.MinimalMessageSeed
 import me.meeshy.sdk.net.TokenStore
 import timber.log.Timber
@@ -41,7 +42,7 @@ class MessagePrePersistObserver @Inject constructor(
         // restauré la session en mémoire, et c'est précisément le cas que la pré-persistance sert.
         if (!tokenStore.isAuthenticated || tokenStore.userId == null) return
         val seed = MinimalMessageSeed.fromPush(push.payload) ?: return
-        if (isLocked(seed.conversationId)) return
+        if (lockStore.sealsContentOf(seed.conversationId)) return
         scope.launch {
             try {
                 ingest.ingest(seed)
@@ -51,14 +52,6 @@ class MessagePrePersistObserver @Inject constructor(
                 Timber.w(failure, "Pré-persistance du message poussé en échec")
             }
         }
-    }
-
-    /** Miroir de `NSEPreparationStep.plan` : une conversation verrouillée ne s'écrit pas ; un verrou illisible non plus. */
-    private fun isLocked(conversationId: String): Boolean = try {
-        lockStore.isLocked(conversationId)
-    } catch (failure: Exception) {
-        Timber.w(failure, "Conversation lock unreadable, message not pre-persisted")
-        true
     }
 }
 

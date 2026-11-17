@@ -17,6 +17,7 @@ import me.meeshy.app.push.MessageNotificationId
 import me.meeshy.app.push.NotificationChannelIds
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
+import me.meeshy.sdk.lock.sealsContentOf
 import me.meeshy.sdk.model.FocusFilterSnapshot
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.push.PushBadgePolicy
@@ -140,13 +141,7 @@ class PushNotificationPipeline @Inject constructor(
      */
     private fun sealedIfLocked(push: IncomingPush): IncomingPush {
         val conversationId = push.payload.conversationId ?: return push
-        val locked = try {
-            lockStore.isLocked(conversationId)
-        } catch (failure: Exception) {
-            Timber.e(failure, "Conversation lock unreadable, sealing the banner")
-            true
-        }
-        if (!locked) return push
+        if (!lockStore.sealsContentOf(conversationId)) return push
         return IncomingPush.of(
             data = PushConversationLockSeal.seal(push.data),
             notificationTitle = push.notificationTitle,
