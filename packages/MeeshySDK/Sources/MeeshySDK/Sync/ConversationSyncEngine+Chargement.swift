@@ -385,12 +385,10 @@ extension ConversationSyncEngine {
     /// sa pagination — sous `limit=500`, ce repli n'aurait jamais pu déclencher.
     static let deltaPageLimit = 100
 
-    /// JUMEAU WEB — `loadConversationsDelta` + `mergeConversationsDelta`
-    /// (`apps/web/src/lib/api/conversations-delta.ts`) portent la même règle sur
-    /// le cache React Query : même endpoint (`GET /conversations?updatedSince=`),
-    /// même upsert par id, retrait par les sorties servies
-    /// (`meta.deletedConversationIds`), même repli sur la vérité serveur quand le
-    /// delta ne prouve plus sa complétude. Toute
+    /// JUMEAU WEB — `mergeConversationsDelta` (`apps/web/src/lib/api/conversations-delta.ts`)
+    /// porte la même règle sur le cache React Query : même endpoint, même upsert
+    /// par id, retrait par `meta.deletedConversationIds`, même repli sur la
+    /// vérité serveur quand le delta ne prouve plus sa complétude. Toute
     /// évolution de la règle touche les DEUX plateformes.
     ///
     /// TRONCATURE : `GET /conversations` plafonne à 100
@@ -570,9 +568,8 @@ extension ConversationSyncEngine {
     /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
     /// `syncSinceLastCheckpoint` ci-dessus pour la règle de fusion elle-même.
     ///
-    /// Le web legacy (parti au #7668) ne portait que la RÈGLE 1 de
-    /// `reconcileUnread` — conversation ouverte ⇒ 0 ; `mergeConversationsDelta`
-    /// (`apps/web/src/lib/api/conversations-delta.ts`) n'en porte aucune.
+    /// Le web legacy ne portait que la RÈGLE 1 de `reconcileUnread` (ouverte ⇒ 0) ;
+    /// `mergeConversationsDelta` (`apps/web/src/lib/api/`) n'en porte aucune.
     /// La règle 2 (« lecture locale postérieure au dernier message serveur »)
     /// n'a pas de transposition sûre : elle s'appuie sur `userState.lastReadAt`,
     /// frontière LOCALE que le modèle web ne porte pas, et c'est le fait que
