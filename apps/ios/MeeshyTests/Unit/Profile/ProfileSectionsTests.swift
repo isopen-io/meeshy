@@ -444,8 +444,15 @@ final class ProfileSectionsTests: XCTestCase {
         let served = ProfilePublicationTiles.state(posts: [post], isLoading: false, pagination: .error("x"))
         XCTAssertEqual(served, .tiles(ProfilePublicationTiles.items(posts: [post], isLoading: false)),
                        "une page suivante en échec ne retire pas ce qui est déjà affiché")
+        let notYetAsked = ProfilePublicationTiles.state(posts: [], isLoading: false, pagination: .idle)
+        XCTAssertEqual(notYetAsked, .silent, "rien encore demandé : la section attend sans rien affirmer")
+    }
+
+    /// Planche `Etat-Vide` vue 3 : le serveur a répondu qu'il n'y a rien — « Rien de publié pour l'instant » et
+    /// « Publier quelque chose », jamais une section muette.
+    func test_publicationsState_servedAndEmpty_isTheEmptyStateWithItsExit() {
         let nothing = ProfilePublicationTiles.state(posts: [], isLoading: false, pagination: .exhausted)
-        XCTAssertEqual(nothing, .silent, "rien de publié : la section se tait")
+        XCTAssertEqual(nothing, .empty)
     }
 
     func test_publicationsSection_onFailure_isTheStateBlockOfTheKit_withRetry() throws {
