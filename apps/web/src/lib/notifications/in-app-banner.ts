@@ -26,12 +26,19 @@ import type { NotificationRecord } from './record';
 
 const CALL_LAYER_TYPES = new Set(['incoming_call', 'incoming_call_alert', 'call', 'CALL_INCOMING', 'call_ended']);
 
-export function shouldShowBanner(notification: NotificationRecord, { pathname }: { readonly pathname: string }): boolean {
-  if (notification.state.isRead || CALL_LAYER_TYPES.has(notification.type)) return false;
+/** Les types que la couche d'appel présente elle-même : ni bannière, ni lecture automatique (#18907). */
+export const isCallLayerNotification = (notification: NotificationRecord): boolean => CALL_LAYER_TYPES.has(notification.type);
+
+/** La conversation de la notification est à l'écran : son fil ouvert, ou son aperçu tiré depuis la bannière (#8821). */
+export function conversationOnScreen(notification: NotificationRecord, { pathname }: { readonly pathname: string }): boolean {
   const conversationId = notification.context.conversationId;
-  if (conversationId === undefined) return true;
-  if (conversationPreviewStore.getState().conversationId === conversationId) return false;
-  return pathname !== `/c/${encodeURIComponent(conversationId)}`;
+  if (conversationId === undefined) return false;
+  return conversationPreviewStore.getState().conversationId === conversationId || pathname === `/c/${encodeURIComponent(conversationId)}`;
+}
+
+export function shouldShowBanner(notification: NotificationRecord, location: { readonly pathname: string }): boolean {
+  if (notification.state.isRead || isCallLayerNotification(notification)) return false;
+  return !conversationOnScreen(notification, location);
 }
 
 type BannerState = {

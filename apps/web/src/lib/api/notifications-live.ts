@@ -1,8 +1,16 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { inAppBannerStore, offerInAppBanner, retractInAppBanner } from '@/lib/notifications/in-app-banner';
+import {
+  conversationOnScreen,
+  inAppBannerStore,
+  isCallLayerNotification,
+  offerInAppBanner,
+  retractInAppBanner,
+} from '@/lib/notifications/in-app-banner';
 import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
+import { performMarkNotificationRead } from './notifications-actions';
+import type { NotificationsDeps } from './notifications';
 import {
   applyNotificationCounts,
   applyNotificationDeleted,
@@ -53,8 +61,9 @@ export type NotificationLiveHandlers = {
 export function createNotificationLiveHandlers(deps: {
   readonly queryClient: QueryClient;
   readonly now?: (() => number) | undefined;
+  readonly notificationsApi?: NotificationsDeps | undefined;
 }): NotificationLiveHandlers {
-  const { queryClient } = deps;
+  const { queryClient, notificationsApi } = deps;
   const now = deps.now ?? Date.now;
   const seenNotifications = new Set<string>();
   const recentlyDeleted = new Map<string, Rewrite>();
@@ -85,10 +94,19 @@ export function createNotificationLiveHandlers(deps: {
        onglet caché reçoit le push système, et une bannière posée pendant
        l'absence surgirait, périmée, au retour. */
     if (typeof document === 'undefined' || document.hidden) return;
+    const location = { pathname: window.location.pathname };
+    /* LA CONVERSATION OUVERTE LIT CE QUI LUI ARRIVE (#18907) — jumelle d'iOS (`NotificationToastManager+Socket`) : une
+       réaction, une mention ou une édition arrivée sur le fil à l'écran n'a plus rien à signaler. Elle se marque lue
+       (le geste optimiste de la cloche : la ligne, la pastille, la passerelle) au lieu de rester non lue sur tous les
+       appareils jusqu'à la prochaine ouverture du fil. Onglet visible seulement ; jamais un appel. */
+    if (notificationsApi !== undefined && !notification.state.isRead && !isCallLayerNotification(notification) && conversationOnScreen(notification, location)) {
+      void performMarkNotificationRead({ id: notification.id, deps: { ...notificationsApi, queryClient } });
+      return;
+    }
     /* Une RÉÉCRITURE ne redescend pas : la bannière reprend sa place, remplacée en place par le texte édité,
        seulement si elle était affichée à la suppression et que rien d'autre n'a pris sa place depuis. */
     if (rewrite !== null && !(rewrite.wasShowing && inAppBannerStore.getState().current === null)) return;
-    offerInAppBanner(notification, { pathname: window.location.pathname });
+    offerInAppBanner(notification, location);
   };
 
   /* Un id supprimé qui revient est une notification RÉÉCRITE (édition :
