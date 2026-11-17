@@ -22,7 +22,8 @@ final class PushTokenSessionBoundaryTests: XCTestCase {
     private func makeSUT(
         registrar: HeldFirstRegistrar,
         authenticated: SessionFlag,
-        keychain: SessionBoundaryKeychain = SessionBoundaryKeychain()
+        keychain: SessionBoundaryKeychain = SessionBoundaryKeychain(),
+        registrationsInFlight: PushRegistrationsInFlight = PushRegistrationsInFlight()
     ) -> (sut: PushNotificationManager, defaults: UserDefaults, suiteName: String, keychain: SessionBoundaryKeychain) {
         let suiteName = "test.push.boundary.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
@@ -30,7 +31,8 @@ final class PushTokenSessionBoundaryTests: XCTestCase {
             userDefaults: defaults,
             keychainStore: keychain,
             registrar: registrar,
-            isAuthenticated: { authenticated.value }
+            isAuthenticated: { authenticated.value },
+            registrationsInFlight: registrationsInFlight
         )
         return (sut, defaults, suiteName, keychain)
     }
@@ -98,6 +100,56 @@ final class PushTokenSessionBoundaryTests: XCTestCase {
                      "la réponse de A ne grave pas un cooldown que B hériterait")
         XCTAssertNil(defaults.object(forKey: PushNotificationManager.lastRegisteredAtKey))
         XCTAssertEqual(registrar.startedCount, 1, "sans session ouverte, rien à rejouer")
+    }
+
+    // MARK: - Audit du lot : rendre ses jetons à une session rouverte, suivre le vol
+
+    /// Le retrait différé d'une session précédente du même compte a pu effacer la
+    /// ligne que la passerelle tenait : la session ouverte reposte son jeton même
+    /// dans le cooldown que son propre POST vient d'armer.
+    func test_restoreRegistration_withinTheCooldown_postsTheKnownTokenAgain() async {
+        let registrar = HeldFirstRegistrar()
+        registrar.releaseFirst()
+        let (sut, defaults, suite, _) = makeSUT(registrar: registrar, authenticated: SessionFlag(true))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        sut.registerDeviceToken(Self.apnsToken)
+        await waitUntil { defaults.object(forKey: PushNotificationManager.lastRegisteredAtKey) != nil }
+
+        await sut.restoreRegistration()
+
+        XCTAssertEqual(registrar.startedCount, 2, "le cooldown ne protège plus une ligne que la passerelle a perdue")
+        XCTAssertEqual(registrar.startedBodies.last?.token, Self.apnsTokenHex)
+    }
+
+    func test_restoreRegistration_withoutASession_postsNothing() async {
+        let registrar = HeldFirstRegistrar()
+        registrar.releaseFirst()
+        let authenticated = SessionFlag(true)
+        let (sut, defaults, suite, _) = makeSUT(registrar: registrar, authenticated: authenticated)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        sut.registerDeviceToken(Self.apnsToken)
+        await waitUntil { defaults.object(forKey: PushNotificationManager.lastRegisteredAtKey) != nil }
+        authenticated.value = false
+
+        await sut.restoreRegistration()
+
+        XCTAssertEqual(registrar.startedCount, 1)
+    }
+
+    func test_registerDeviceToken_isTrackedAsInFlightUntilItsResponse() async {
+        let registrar = HeldFirstRegistrar()
+        let flights = PushRegistrationsInFlight()
+        let (sut, defaults, suite, _) = makeSUT(
+            registrar: registrar, authenticated: SessionFlag(true), registrationsInFlight: flights)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        sut.registerDeviceToken(Self.apnsToken)
+        await waitUntil { registrar.startedCount == 1 }
+        XCTAssertFalse(flights.isEmpty, "la sortie de session doit savoir qu'un POST APNs est en vol")
+
+        registrar.releaseFirst()
+        await waitUntil { flights.isEmpty }
+        XCTAssertTrue(flights.isEmpty)
     }
 }
 

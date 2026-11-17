@@ -55,7 +55,8 @@ final class VoIPPushSessionBoundaryTests: XCTestCase {
 
     private func makeSUT(
         registrar: HeldFirstVoIPRegistrar,
-        authenticated: AuthFlag = AuthFlag()
+        authenticated: AuthFlag = AuthFlag(),
+        registrationsInFlight: PushRegistrationsInFlight = PushRegistrationsInFlight()
     ) -> (sut: VoIPPushManager, store: MockVoIPTokenStore) {
         let store = MockVoIPTokenStore()
         let sut = VoIPPushManager(
@@ -64,7 +65,8 @@ final class VoIPPushSessionBoundaryTests: XCTestCase {
             authTokenAvailable: { authenticated.value },
             deviceIdentity: {
                 PushDeviceIdentity(deviceId: "install-test", deviceName: "iPhone", appVersion: "1.0 (1)", bundleId: "me.meeshy.app")
-            }
+            },
+            registrationsInFlight: registrationsInFlight
         )
         return (sut, store)
     }
@@ -126,5 +128,51 @@ final class VoIPPushSessionBoundaryTests: XCTestCase {
         let afterAccountAResponse = registrar.events.drop { $0 != "end:1" }
         XCTAssertTrue(afterAccountAResponse.contains { $0.hasPrefix("start:") },
                       "le POST de B a armé le cooldown, mais la passerelle a pu traiter celui de A après : le rejeu passe outre. Événements : \(registrar.events)")
+    }
+
+    // MARK: - Audit du lot : rendre son jeton à une session rouverte, suivre le vol
+
+    /// Le retrait différé d'une session précédente du même compte a pu effacer la
+    /// ligne VoIP que la passerelle tenait : le jeton est reposté malgré le cooldown.
+    func test_restoreRegistration_withinTheCooldown_postsTheKnownTokenAgain() async {
+        let registrar = HeldFirstVoIPRegistrar()
+        registrar.releaseFirst()
+        let (sut, _) = makeSUT(registrar: registrar)
+        sut.debug_setVoIPToken("voip-T")
+        await sut.debug_registerTokenWithBackend("voip-T")
+
+        await sut.restoreRegistration()
+
+        XCTAssertEqual(registrar.registerCallCount, 2, "sinon B ne reçoit plus d'appels jusqu'au prochain démarrage à froid")
+    }
+
+    func test_restoreRegistration_withoutAKnownToken_postsNothing() async {
+        let registrar = HeldFirstVoIPRegistrar()
+        let (sut, _) = makeSUT(registrar: registrar)
+
+        await sut.restoreRegistration()
+
+        XCTAssertEqual(registrar.registerCallCount, 0, "PushKit livrera le jeton, et son POST partira alors")
+    }
+
+    func test_registerTokenWithBackend_isTrackedAsInFlightUntilItsResponse() async {
+        let registrar = HeldFirstVoIPRegistrar()
+        let flights = PushRegistrationsInFlight()
+        let (sut, _) = makeSUT(registrar: registrar, registrationsInFlight: flights)
+
+        let post = Task { await sut.debug_registerTokenWithBackend("voip-T") }
+        await waitUntil { registrar.registerCallCount == 1 }
+        XCTAssertFalse(flights.isEmpty, "la sortie de session doit savoir qu'un POST VoIP est en vol")
+
+        registrar.releaseFirst()
+        await post.value
+        XCTAssertTrue(flights.isEmpty)
+    }
+
+    func test_shared_offersItsRestorationToTheSessionExit() {
+        _ = VoIPPushManager.shared
+
+        XCTAssertFalse(PushRegistrationRestorers.shared.isEmpty,
+                       "le retrait différé d'une session précédente doit pouvoir rendre le jeton VoIP à la session ouverte")
     }
 }

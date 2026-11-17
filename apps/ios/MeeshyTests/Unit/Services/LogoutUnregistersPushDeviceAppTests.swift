@@ -68,6 +68,23 @@ final class LogoutUnregistersPushDeviceAppTests: XCTestCase {
                        "les jetons APNs et VoIP de l'installation partent d'abord, sous le jeton de A")
     }
 
+    /// Audit du lot : le retrait différé (reprises à +1 s et +5 s, chacune jusqu'à
+    /// 60 s) partait encore sous T-A1 après que A s'était reconnecté, et effaçait
+    /// les jetons que la nouvelle session venait d'enregistrer.
+    func test_logout_thenReconnectingTheSameAccount_sendsNoLateUnregistrationUnderTheOldToken() async {
+        service.unregisterFailures = [.network(.timeout)]
+        await signIn(Self.alice, token: "T-A1")
+
+        await auth.logout()
+        await waitForEvents(1)
+        await signIn(Self.alice, token: "T-A2")
+        let afterReconnection = service.events.count
+        try? await Task.sleep(for: .seconds(2))
+
+        XCTAssertFalse(service.events.dropFirst(afterReconnection).contains { $0.hasPrefix("unregister:") },
+                       "aucun retrait ne part sous T-A1 une fois A reconnecté. Événements : \(service.events)")
+    }
+
     func test_switchAccount_toAKeptSession_leavesThePushTokensRegistered() async {
         await signIn(Self.alice, token: "T-A")
         await auth.suspendActiveSession()
@@ -88,13 +105,22 @@ final class LogoutUnregistersPushDeviceAppTests: XCTestCase {
 private final class PushUnregisterRecordingAuthService: AuthServiceProviding, @unchecked Sendable {
     private let lock = NSLock()
     private var _events: [String] = []
+    private var _unregisterFailures: [MeeshyError] = []
     var loginResult: Result<LoginResponseData, Error> = .failure(MeeshyError.network(.noConnection))
 
     var events: [String] { lock.withLock { _events } }
+    var unregisterFailures: [MeeshyError] {
+        get { lock.withLock { _unregisterFailures } }
+        set { lock.withLock { _unregisterFailures = newValue } }
+    }
     func reset() { lock.withLock { _events = [] } }
 
     func unregisterPushDevice(deviceId: String, token: String) async throws {
-        lock.withLock { _events.append("unregister:\(deviceId):\(token)") }
+        let failure: MeeshyError? = lock.withLock {
+            _events.append("unregister:\(deviceId):\(token)")
+            return _unregisterFailures.isEmpty ? nil : _unregisterFailures.removeFirst()
+        }
+        if let failure { throw failure }
     }
 
     func logoutThrowing(token: String) async throws {
