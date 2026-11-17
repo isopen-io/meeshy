@@ -3,16 +3,6 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
-/// The QR bitmap is minted on demand, so `ShareLink` — which needs its item at
-/// view-construction time — cannot carry it. Wrapping the render in an
-/// `Identifiable` value lets `.sheet(item:)` own the presentation instead:
-/// SwiftUI anchors the iPad popover and picks the presenting scene, which the
-/// manual top-VC walk this replaces got wrong on both counts.
-private struct QRShareImage: Identifiable {
-    let id = UUID()
-    let image: UIImage
-}
-
 /// Le détail d'un lien de suivi (planche `Lien-Detail`, #18871) : le billet héros et son QR, les gestes, les chiffres,
 /// le graphique des clics, d'où ils viennent, avec quoi, et les derniers clics. Fait du kit : rien n'y est redessiné.
 struct TrackingLinkDetailView: View {
@@ -126,17 +116,8 @@ struct TrackingLinkDetailView: View {
 
     // MARK: - QR
 
-    private static let qrContext = CIContext()
-
     private func generateQRAndShare() {
-        guard let url = URL(string: link.shortUrl),
-              let filter = CIFilter(name: "CIQRCodeGenerator") else { return }
-        filter.setValue(url.absoluteString.data(using: .utf8), forKey: "inputMessage")
-        filter.setValue("H", forKey: "inputCorrectionLevel")
-        guard let ciImage = filter.outputImage else { return }
-        let scaled = ciImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
-        guard let cgImage = Self.qrContext.createCGImage(scaled, from: scaled.extent) else { return }
-        qrShareImage = QRShareImage(image: UIImage(cgImage: cgImage))
+        qrShareImage = LinkQRCode.shareImage(for: link.shortUrl)
     }
 
     private func deleteLink() {

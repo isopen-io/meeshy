@@ -31,18 +31,21 @@ final class ShareLinkDetailViewModel: ObservableObject {
     @Published private(set) var isDeleted = false
 
     private let service: ShareLinkManaging
+    private let removeParticipant: @Sendable (String, String) async throws -> Void
     private let onLinkChanged: @MainActor (MyShareLink) -> Void
     private let onLinkDeleted: @MainActor (String) -> Void
 
     init(
         link: MyShareLink,
         service: ShareLinkManaging = ShareLinkService.shared,
+        removeParticipant: @escaping @Sendable (String, String) async throws -> Void,
         onLinkChanged: @escaping @MainActor (MyShareLink) -> Void = { _ in },
         onLinkDeleted: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.link = link
         self.draft = link.settings
         self.service = service
+        self.removeParticipant = removeParticipant
         self.onLinkChanged = onLinkChanged
         self.onLinkDeleted = onLinkDeleted
     }
@@ -58,6 +61,25 @@ final class ShareLinkDetailViewModel: ObservableObject {
             stats = .loaded(try await service.fetchLinkStats(linkId: link.linkId))
         } catch {
             stats = .unavailable
+        }
+    }
+
+    // MARK: - Arrivals
+
+    /// Retirer un arrivant demande la conversation que le lien ouvre ; sans elle, le geste n'est pas offert.
+    var canRemoveArrivals: Bool { link.conversation?.id != nil }
+
+    /// Optimiste : la rangée part tout de suite, et revient si le serveur refuse.
+    @discardableResult
+    func removeArrival(participantId: String) async -> Bool {
+        guard let conversationId = link.conversation?.id, case .loaded(let snapshot) = stats else { return false }
+        stats = .loaded(snapshot.removingArrival(participantId))
+        do {
+            try await removeParticipant(conversationId, participantId)
+            return true
+        } catch {
+            stats = .loaded(snapshot)
+            return false
         }
     }
 
