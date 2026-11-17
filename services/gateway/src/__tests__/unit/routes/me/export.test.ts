@@ -64,6 +64,7 @@ function makeMocks() {
 async function buildApp(opts: {
   auth?: 'authenticated' | 'unauthenticated';
   mocks?: ReturnType<typeof makeMocks>;
+  profileLinkVisits?: jest.Mock;
 } = {}): Promise<{ app: FastifyInstance; mocks: ReturnType<typeof makeMocks> }> {
   const { auth = 'authenticated', mocks = makeMocks() } = opts;
 
@@ -74,6 +75,8 @@ async function buildApp(opts: {
     message: { findMany: mocks.messageFindMany },
     // Les liens d'adresse (#18863) : un compte qui n'en a aucun.
     trackingLink: { findMany: jest.fn().mockResolvedValue([]) },
+    // Les visites du lien de profil (#19206) : aucune, sauf mention contraire.
+    profileLinkVisitDay: { findMany: opts.profileLinkVisits ?? jest.fn().mockResolvedValue([]) },
     // #3633 — le défaut "toutes les types" en couvre désormais dix, pas trois ;
     // ce fichier ne teste que profile/messages/contacts, ces doubles évitent
     // seulement qu'un modèle non simulé fasse lever le chemin par défaut.
@@ -320,6 +323,18 @@ describe('GET /export — couleur d’accent de la vitrine (#19201)', () => {
     const [{ select }] = mocks.userFindUnique.mock.calls[0] as [{ select: Record<string, boolean> }];
     expect(select).toMatchObject({ profileAccentColor: true });
     expect(res.json().data.profile).toMatchObject({ profileAccentColor: '#A855F7' });
+    await app.close();
+  });
+});
+
+describe('GET /export — visites de mon lien de profil (#19206)', () => {
+  it('rend, dans la section profile, chaque jour compté et son nombre de visites', async () => {
+    const profileLinkVisits = jest.fn<any>().mockResolvedValue([{ day: new Date('2026-11-17T00:00:00.000Z'), visits: 57 }]);
+    const { app } = await buildApp({ profileLinkVisits });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    expect(profileLinkVisits).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: USER_ID } }));
+    expect(res.json().data.profile.profileLinkVisits).toEqual([{ day: '2026-11-17', visits: 57 }]);
     await app.close();
   });
 });
