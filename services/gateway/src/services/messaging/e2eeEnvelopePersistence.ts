@@ -1,32 +1,39 @@
 /**
- * Range les enveloppes libsignal ADMISES d'un message qui vient d'être écrit
- * (#3706). Un message chiffré sans ses enveloppes ne serait lisible par aucun
- * appareil : si elles ne peuvent pas être rangées, le message est DÉFAIT et
- * l'erreur remonte — l'expéditeur voit un échec et renvoie, jamais un message
- * fantôme que personne ne peut ouvrir.
+ * Écrit un message chiffré ET ses enveloppes libsignal ADMISES (#3706) dans
+ * UNE transaction du jeu de réplicas. Un message chiffré sans ses enveloppes
+ * ne serait lisible par aucun appareil : les deux s'écrivent ensemble ou pas du
+ * tout, et la distribution `e2ee:envelope` n'a lieu qu'APRÈS la validation.
+ *
+ * Constat GW-05 de la revue E2EE du 2026-11-17 (#18906) : l'écriture se
+ * faisait en deux temps, défaite par une suppression de RATTRAPAGE. Que cette
+ * suppression échoue (élection du jeu de réplicas, arrêt du processus entre
+ * les deux écritures) et la ligne restait sans enveloppe ; le renvoi au même
+ * `clientMessageId` tombait alors sur la déduplication, qui répondait succès
+ * avec zéro enveloppe rangée et zéro émission — un message perdu en silence.
+ * La transaction rend cet état impossible : la déduplication ne voit jamais
+ * qu'un message validé AVEC ses enveloppes.
  */
-import type { Message, PrismaClient } from '@meeshy/shared/prisma/client';
-import { createE2EEEnvelopeRelay, type AdmittedRelay, type EnvelopeDelivery } from '../e2ee/E2EEEnvelopeRelay';
+import type { Message, Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import { createE2EEEnvelopeRelay, type AdmittedRelay } from '../e2ee/E2EEEnvelopeRelay';
 import { deliverEnvelopes } from '../e2ee/envelope-delivery';
-import { enhancedLogger } from '../../utils/logger-enhanced';
 
-const logger = enhancedLogger.child({ module: 'E2EEEnvelopePersistence' });
-
-type PersistencePrisma = Pick<PrismaClient, 'message' | 'e2EEDevice' | 'participant' | 'messageEnvelope'>;
-
-export async function persistAdmittedEnvelopes(
-  prisma: PersistencePrisma,
-  params: { readonly message: Pick<Message, 'id' | 'conversationId'>; readonly relay: AdmittedRelay },
-): Promise<readonly EnvelopeDelivery[]> {
-  const relay = createE2EEEnvelopeRelay({ prisma });
-  try {
-    const deliveries = await relay.persist({ messageId: params.message.id, conversationId: params.message.conversationId, admitted: params.relay });
-    deliverEnvelopes(deliveries);
-    return deliveries;
-  } catch (error) {
-    await prisma.message.delete({ where: { id: params.message.id } }).catch((rollbackError: unknown) =>
-      logger.error('e2ee: message without envelopes could not be rolled back', { messageId: params.message.id, rollbackError }),
-    );
-    throw error;
-  }
+export async function createMessageWithEnvelopes<M extends Pick<Message, 'id' | 'conversationId'>>(
+  prisma: Pick<PrismaClient, '$transaction'>,
+  params: {
+    /** L'écriture de la ligne `Message`, faite par la transaction. */
+    readonly writeMessage: (tx: Prisma.TransactionClient) => Promise<M>;
+    readonly relay: AdmittedRelay;
+  },
+): Promise<M> {
+  const { message, deliveries } = await prisma.$transaction(async (tx) => {
+    const written = await params.writeMessage(tx);
+    const persisted = await createE2EEEnvelopeRelay({ prisma: tx }).persist({
+      messageId: written.id,
+      conversationId: written.conversationId,
+      admitted: params.relay,
+    });
+    return { message: written, deliveries: persisted };
+  });
+  deliverEnvelopes(deliveries);
+  return message;
 }

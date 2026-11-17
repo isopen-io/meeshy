@@ -29,11 +29,7 @@ import { registerParticipantPatchRoute } from './participant-patch';
 import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
-import {
-  conversationAdmitsNewMembers,
-  EXTERNAL_CONVERSATION_ERROR_CODES,
-  EXTERNAL_SINGLE_MEMBER_MESSAGE,
-} from '@meeshy/shared/types/external-conversation';
+import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 import {
   applyCommunityAdmission,
   loadSalonCommunity,
@@ -602,13 +598,16 @@ export function registerParticipantWriteRoutes(
       // fil terminé. Deux colonnes, cf. `conversationWriteAdmission`.
       const conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { isActive: true, closedAt: true, communityId: true, type: true },
+        select: { isActive: true, closedAt: true, communityId: true, type: true, encryptionMode: true },
       });
       if (conversation && (conversation.isActive === false || conversation.closedAt)) {
         return sendError(reply, 410, 'Cette conversation est terminée');
       }
-      if (conversation && !conversationAdmitsNewMembers(conversation.type)) {
-        return sendError(reply, 409, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
+      // #17117 — un seul membre Meeshy dans une conversation externe ; #16188 —
+      // un tête-à-tête chiffré de bout en bout reste à deux.
+      const closedToNewMembers = conversation ? newMemberRefusal(conversation) : null;
+      if (closedToNewMembers) {
+        return sendError(reply, 409, closedToNewMembers.message, { code: closedToNewMembers.code });
       }
 
       // SÉQUENTIEL, et ce n'est pas une négligence : deux admissions

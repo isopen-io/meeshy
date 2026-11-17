@@ -91,11 +91,7 @@ import {
   type ConversationEntryReader,
 } from './conversationEntryAdmission';
 import { isIpInRange } from '../../utils/ip-range';
-import {
-  conversationAdmitsNewMembers,
-  EXTERNAL_CONVERSATION_ERROR_CODES,
-  EXTERNAL_SINGLE_MEMBER_MESSAGE,
-} from '@meeshy/shared/types/external-conversation';
+import { newMemberRefusal, type NewMemberRefusalCode } from './newMemberAdmission';
 
 /** D'où vient qui entre — jamais du CHEMIN appelé, toujours de la créance. */
 export type LinkAdmissionIdentity =
@@ -146,10 +142,11 @@ export type LinkAdmissionRefusalCode =
    */
   | 'COMMUNITY_MEMBERS_ONLY'
   /**
-   * #17117 — une conversation externe n'a qu'un membre Meeshy : un lien qui y
-   * mènerait (écrit avant la garde de création) n'y fait entrer personne.
+   * #17117 — une conversation externe n'a qu'un membre Meeshy, et #16188 — un
+   * tête-à-tête chiffré de bout en bout reste à deux : un lien qui y mènerait
+   * (écrit avant la garde de création) n'y fait entrer personne.
    */
-  | typeof EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER;
+  | NewMemberRefusalCode;
 
 export interface LinkAdmissionRefusal {
   readonly granted: false;
@@ -172,7 +169,7 @@ export type LinkAdmissionVerdict = LinkAdmissionRefusal | LinkAdmissionGrant;
 export interface AdmitLinkEntryParams {
   readonly prisma: ConversationEntryReader;
   readonly link: LinkAdmissionShareLink;
-  readonly conversation: (ConversationTerminalStateRow & { readonly type?: string | null }) | null;
+  readonly conversation: (ConversationTerminalStateRow & { readonly type?: string | null; readonly encryptionMode: string | null }) | null;
   readonly identity: LinkAdmissionIdentity;
   readonly request: LinkAdmissionRequestInfo;
 }
@@ -224,8 +221,9 @@ export async function admitLinkEntry(
     return refuse(410, 'CONVERSATION_CLOSED', 'Cette conversation est terminée');
   }
 
-  if (conversation && !conversationAdmitsNewMembers(conversation.type)) {
-    return refuse(409, EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER, EXTERNAL_SINGLE_MEMBER_MESSAGE);
+  const closedToNewMembers = conversation ? newMemberRefusal({ type: conversation.type, encryptionMode: conversation.encryptionMode }) : null;
+  if (closedToNewMembers) {
+    return refuse(409, closedToNewMembers.code, closedToNewMembers.message);
   }
 
   if (link.maxUses !== null && link.currentUses >= link.maxUses) {

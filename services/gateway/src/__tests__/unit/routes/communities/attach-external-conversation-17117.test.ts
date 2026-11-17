@@ -17,6 +17,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify from 'fastify';
 import { EXTERNAL_CONVERSATION_ERROR_CODES, EXTERNAL_CONVERSATION_TYPE } from '@meeshy/shared/types/external-conversation';
+import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 
 jest.mock('../../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
@@ -36,7 +37,7 @@ const OUVREUR = '507f1f77bcf86cd799439011';
 const COMMUNAUTE = '507f1f77bcf86cd7994390aa';
 const CONVERSATION = '507f1f77bcf86cd7994390bb';
 
-async function buildApp(type: string) {
+async function buildApp(type: string, encryptionMode: string | null = null) {
   const update = jest.fn(async (_args: unknown) => ({
     id: CONVERSATION,
     communityId: COMMUNAUTE,
@@ -59,6 +60,7 @@ async function buildApp(type: string) {
       findFirst: jest.fn(async () => ({
         id: CONVERSATION,
         type,
+        encryptionMode,
         communityId: null,
         participants: [{ userId: OUVREUR, role: 'creator', isActive: true }],
       })),
@@ -82,6 +84,19 @@ describe('POST /communities/:id/conversations/:conversationId — une conversati
     expect(update).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ success: false, code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
+    await app.close();
+  });
+
+  // #16188 — un salon ouvre la conversation aux droits de la communauté : un
+  // tête-à-tête chiffré de bout en bout reste à deux.
+  it('refuse en 409 E2EE_DIRECT_STAYS_A_PAIR un tête-à-tête chiffré de bout en bout, sans rien écrire', async () => {
+    const { app, update } = await buildApp('direct', 'e2ee');
+
+    const res = await attach(app);
+
+    expect(update).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: E2EE_ERROR_CODES.DIRECT_STAYS_A_PAIR });
     await app.close();
   });
 
