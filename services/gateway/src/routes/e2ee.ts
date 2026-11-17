@@ -36,6 +36,7 @@ import { invalidateSession } from '../services/SessionService';
 import { disconnectSession } from '../socketio/disconnectSession';
 import { createRetiredDeviceSessionCloser } from '../services/e2ee/retired-device-session';
 import { deviceTrustRuntime } from '../services/e2ee/device-trust-runtime';
+import type { OwnDeviceAnnouncements } from '../services/e2ee/own-device-announcements';
 
 const logger = enhancedLogger.child({ module: 'E2EERoutes' });
 
@@ -139,6 +140,22 @@ const withoutPrivateKeys = (reply: FastifyReply, body: unknown): boolean => {
   if (!containsPrivateKeyField(body)) return true;
   sendBadRequest(reply, 'Le serveur ne reçoit jamais de clé privée', { code: E2EE_ERROR_CODES.ENVELOPES_INVALID });
   return false;
+};
+
+/**
+ * Ce qui suit un enrôlement, en production : les sockets déjà ouvertes de la session
+ * rejoignent la room de la génération, puis une génération NEUVE ou DE RETOUR s'annonce à mes
+ * autres appareils (#19156) — par la passerelle, sans attendre que le nouvel appareil se
+ * présente (GW-04). Un réenrôlement d'un appareil déjà actif ne s'annonce pas.
+ */
+export const enrolmentHook = (params: {
+  readonly io: () => Parameters<typeof joinSessionSocketsToDeviceRoom>[0];
+  readonly announcements: Pick<OwnDeviceAnnouncements, 'enrolled'>;
+}): NonNullable<E2EERouteDeps['onEnrolled']> => async (enrolled) => {
+  await joinSessionSocketsToDeviceRoom(params.io(), enrolled);
+  if (!enrolled.created && !enrolled.returning) return;
+  const { userId, deviceId, registrationId, returning } = enrolled;
+  await params.announcements.enrolled({ userId, deviceId, registrationId, returning });
 };
 
 function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): void {
@@ -257,12 +274,7 @@ export default async function e2eeRoutes(fastify: FastifyInstance): Promise<void
     relay: createE2EEEnvelopeRelay({ prisma }),
     mayReadKeysOf: (requester, target) => mayReadKeysOf(prisma, requester, target),
     keyBudget: createKeyReservationBudget(fastify.redis ?? undefined),
-    onEnrolled: async (enrolled) => {
-      await joinSessionSocketsToDeviceRoom(currentE2EEIO(), enrolled);
-      if (!enrolled.created && !enrolled.returning) return;
-      const { userId, deviceId, registrationId, returning } = enrolled;
-      await deviceTrustRuntime(prisma).announcements.enrolled({ userId, deviceId, registrationId, returning });
-    },
+    onEnrolled: enrolmentHook({ io: currentE2EEIO, announcements: deviceTrustRuntime(prisma).announcements }),
     closeSession: createRetiredDeviceSessionCloser({
       invalidate: (sessionId) => invalidateSession(sessionId, 'user_revoked'),
       isLive: async ({ userId, sessionId }) =>
