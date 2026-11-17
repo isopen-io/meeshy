@@ -97,11 +97,12 @@ class MessageRepository internal constructor(
     /**
      * Cache-first message list for a conversation (ARCHITECTURE.md §4): the
      * cached messages (including optimistic local rows) are served immediately
-     * and revalidated in the background.
+     * and revalidated in the background, on the messages freshness window
+     * ([CachePolicy.Messages], #18915) — the one [isCacheFresh] judges with.
      */
     fun messagesStream(
         conversationId: String,
-        policy: CachePolicy = CachePolicy.Default,
+        policy: CachePolicy = CachePolicy.Messages,
         onSyncError: (Throwable) -> Unit = {},
     ): Flow<CacheResult<List<LocalMessage>>> = history.messagesStream(conversationId, policy, onSyncError)
 
