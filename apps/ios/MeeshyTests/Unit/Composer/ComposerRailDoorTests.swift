@@ -719,51 +719,6 @@ final class ComposerMediaSourceWiringGuardTests: XCTestCase {
     }
 }
 
-/// **La porte son ouvre l'ÉTAGÈRE autant que le micro** (#4081 · #4052 ·
-/// leçon 335, troisième instance sur le même écran).
-///
-/// `handleRailDoor(.sound)` allait droit à `handleDocumentTool(.microphone)` :
-/// le composer unifié n'avait AUCUNE occurrence de `SoundLibraryPicker` ni
-/// d'`addBorrowedSound`, alors que le socle de la vue `1b` affiche déjà un
-/// crédit de son de fond.
-final class ComposerSoundSourcePolicyTests: XCTestCase {
-
-    /// **Le fusible** — et l'ordre, qui n'est pas décoratif. Il a CHANGÉ au
-    /// #4483 : le porteur a demandé que la porte « ouvre directement
-    /// l'enregistrement audio ». Le micro est donc la surface principale de la
-    /// feuille, et les deux autres provenances des entrées offertes SOUS lui.
-    /// L'ancien ordre (étagère d'abord) était juste d'un CHOIX préalable, qui
-    /// n'existe plus.
-    func test_lesTroisProvenances_sontOffertesDansLOrdreDeLaDoctrine() {
-        XCTAssertEqual(ComposerSoundSourcePolicy.offered, [.record, .library, .files])
-    }
-
-    /// Aucune provenance n'est laissée sans libellé — VoiceOver comme le
-    /// bouton lisent le même mot.
-    func test_chaqueProvenance_aUnLibelleDistinct() {
-        let libelles = ComposerSoundSource.allCases.map(ComposerSoundSourcePolicy.label)
-        XCTAssertFalse(libelles.contains(where: \.isEmpty))
-        XCTAssertEqual(Set(libelles).count, ComposerSoundSource.allCases.count,
-                       "Deux provenances qui s'annoncent pareil sont indiscernables.")
-    }
-
-    /// Le titre de la feuille est celui de la PORTE — `composer.rail.sound`
-    /// dit déjà « Ajouter un son » dans les sept langues.
-    func test_leTitre_estLeLibelleDeLaPorte() {
-        XCTAssertEqual(ComposerSoundSourcePolicy.chooserTitle,
-                       ComposerRailCopy.label(.sound))
-    }
-
-    /// **La liste est FERMÉE.** `offered` ne peut pas taire une provenance que
-    /// le type déclare : le jour où une troisième arrive (importer un fichier
-    /// audio, par exemple), cette garde rougit tant qu'elle n'est pas servie ou
-    /// délibérément retirée.
-    func test_aucuneProvenanceDeclaree_nEstOubliee() {
-        XCTAssertEqual(Set(ComposerSoundSourcePolicy.offered),
-                       Set(ComposerSoundSource.allCases))
-    }
-}
-
 /// Le câblage de la porte son.
 final class ComposerSoundSourceWiringGuardTests: XCTestCase {
 
@@ -776,7 +731,7 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     }
 
     func test_laSourceDuMeuble_estLisible() throws {
-        XCTAssertTrue(try hostSource().contains("ComposerSoundSourcePolicy"))
+        XCTAssertTrue(try hostSource().contains("presentSoundSources"))
     }
 
     /// **La garde du défaut d'origine.** La porte son n'enregistre plus
