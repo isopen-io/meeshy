@@ -580,6 +580,9 @@ const PENDING_CLIENT_ENTRIES = {
   // adresses personnelles avant la face Liens web (#18880), qui les appellera.
   'users.meAddressesById': { issue: 18880, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens web' },
   'users.meAddressesOrder': { issue: 18880, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens web' },
+  // La vue « En commun » de la fiche d'un autre (#19200, PR #19231) : la passerelle sert l'intersection avant les
+  // lots clients de #19234, dont la face web l'appellera.
+  'users.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — nos communautés, nos amis et nos médias en commun, vue « En commun » web' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

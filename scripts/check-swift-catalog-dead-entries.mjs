@@ -607,6 +607,9 @@ const PENDING_CLIENT_ENTRIES = {
   'UsersEndpoint.meAddresses': { issue: 18871, reason: 'GET|POST /users/me/addresses — lire et créer mes adresses, face Liens iOS' },
   'UsersEndpoint.meAddressesById': { issue: 18871, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens iOS' },
   'UsersEndpoint.meAddressesOrder': { issue: 18871, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens iOS' },
+  // La vue « En commun » de la fiche d'un autre (#19200, PR #19231) : la passerelle et le SDK la servent avant les lots
+  // clients de #19234, dont la face iOS l'appellera.
+  'UsersEndpoint.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — nos communautés, nos amis et nos médias en commun, vue « En commun » iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;
