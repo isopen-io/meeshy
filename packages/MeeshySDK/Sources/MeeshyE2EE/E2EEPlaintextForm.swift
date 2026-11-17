@@ -11,7 +11,16 @@ import Foundation
 /// demi-paire encodée en octets, `ED A0 80`, n'en est pas), sans marque d'ordre
 /// d'octets, sans octet de contrôle hors des blancs JSON, et des chaînes bien
 /// formées partout (RFC 8259 § 7 et § 8.2).
+///
+/// Et sans plus de `maxDepth` niveaux d'imbrication (#19112) : la borne du
+/// contrat (`E2EE_MAX_DEPTH`) se compte hors des chaînes, avant toute analyse,
+/// quelle que soit la version annoncée. `JSONDecoder` s'arrêtait à sa propre
+/// borne : un clair de 65 à quelques centaines de niveaux se lisait ici et nulle
+/// part ailleurs.
 enum E2EEPlaintextForm {
+    /// `E2EE_MAX_DEPTH` du contrat : un contenu a 1 niveau, un signal 2 au plus.
+    static let maxDepth = 64
+
     static func isWellFormed(_ plaintext: Data) -> Bool {
         let units = Array(plaintext)
         guard !units.starts(with: E2EEJSONByte.byteOrderMark), isStrictUTF8(units) else { return false }
@@ -45,6 +54,8 @@ private enum E2EEJSONByte {
     static let quote = UInt8(ascii: "\"")
     static let backslash = UInt8(ascii: "\\")
     static let escapedUnit = UInt8(ascii: "u")
+    static let openers: Set<UInt8> = [UInt8(ascii: "["), UInt8(ascii: "{")]
+    static let closers: Set<UInt8> = [UInt8(ascii: "]"), UInt8(ascii: "}")]
     static let firstPrintable: UInt8 = 0x20
     /// Les blancs JSON qui ne sont pas l'espace : tabulation, saut de ligne, retour chariot.
     static let controlWhitespace: Set<UInt8> = [0x09, 0x0A, 0x0D]
@@ -61,11 +72,14 @@ private enum E2EEJSONByte {
     }
 }
 
-/// Un parcours linéaire qui juge ce que `JSONDecoder` remet à plus tard : hors
-/// d'une chaîne, aucun octet de contrôle autre qu'un blanc ; dans une chaîne,
-/// aucun octet de contrôle brut, aucun échappement inconnu, et aucune
-/// demi-paire échappée. Une barre oblique inverse échappée (`\\`) se saute en
-/// bloc : `"\\ud800"` est un texte, pas une demi-paire.
+/// Un parcours linéaire des OCTETS qui juge ce que `JSONDecoder` remet à plus
+/// tard : hors d'une chaîne, aucun octet de contrôle autre qu'un blanc, et pas
+/// plus de `maxDepth` niveaux (`[` et `{` ouvrent, `]` et `}` ferment) ; dans
+/// une chaîne, aucun octet de contrôle brut, aucun échappement inconnu, et
+/// aucune demi-paire échappée. Une barre oblique inverse échappée (`\\`) se
+/// saute en bloc : `"\\ud800"` est un texte, pas une demi-paire, et `"\\"`
+/// ferme sa chaîne. Les octets, jamais des `Character` : un `Character` fusionne
+/// une marque combinante avec le guillemet qui la précède.
 private struct E2EEJSONStringScan {
     let units: [UInt8]
     private var index = 0
@@ -75,11 +89,17 @@ private struct E2EEJSONStringScan {
     }
 
     mutating func passes() -> Bool {
+        var depth = 0
         while index < units.count {
             let unit = units[index]
             index += 1
             if unit == E2EEJSONByte.quote {
                 guard closesString() else { return false }
+            } else if E2EEJSONByte.openers.contains(unit) {
+                depth += 1
+                guard depth <= E2EEPlaintextForm.maxDepth else { return false }
+            } else if E2EEJSONByte.closers.contains(unit) {
+                depth -= 1
             } else if unit < E2EEJSONByte.firstPrintable, !E2EEJSONByte.controlWhitespace.contains(unit) {
                 return false
             }

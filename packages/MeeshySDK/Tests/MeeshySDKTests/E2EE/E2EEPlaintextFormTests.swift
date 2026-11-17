@@ -108,6 +108,57 @@ struct E2EEPlaintextFormTests {
         #expect(reads(prefix + Data([0xF0, 0x9F, 0x99, 0x88]) + suffix), "le miroir : un émoji en UTF-8 valide se lit")
     }
 
+    // MARK: - La profondeur d'imbrication (#19112)
+
+    private func content(rawNote: String, version: Int = 1) -> Data {
+        Data(#"{"authorDeviceId":3,"authorUserId":"64f0c0ffee0000000000aaaa","conversationId":"64f0c0ffee00000000000c01","note":\#(rawNote),"sentAt":1790000000000,"text":"x","v":\#(version)}"#.utf8)
+    }
+
+    private func signal(rawNote: String) -> Data {
+        Data(#"{"active":true,"authorDeviceId":3,"authorUserId":"64f0c0ffee0000000000aaaa","conversationId":"64f0c0ffee00000000000c01","kind":"typing","note":\#(rawNote),"s":1,"sentAt":1790000000000}"#.utf8)
+    }
+
+    /// `levels` tableaux imbriqués : sous l'objet du clair, `levels + 1` niveaux.
+    private func arrays(_ levels: Int) -> String {
+        String(repeating: "[", count: levels) + String(repeating: "]", count: levels)
+    }
+
+    @Test func sixtyFourLevels_read_andSixtyFive_areUnreadable() {
+        #expect(E2EEPlaintextForm.maxDepth == 64, "la borne du contrat, E2EE_MAX_DEPTH")
+        #expect(reads(content(rawNote: arrays(63))), "64 niveaux : la borne se lit")
+        #expect(!reads(content(rawNote: arrays(64))), "65 niveaux : illisible")
+        #expect(!reads(Data(arrays(1_000).utf8)), "mille niveaux : illisible avant toute analyse")
+    }
+
+    @Test func aFutureVersionBeyondTheLimit_isUnreadable_neverKeptForLater() {
+        #expect(throws: DecodingError.self, "au-delà de la borne, aucune version ne se garde") {
+            try E2EEContent.decoded(from: content(rawNote: arrays(64), version: 2))
+        }
+        #expect(throws: E2EEContentError.unsupportedVersion(2), "le miroir : sous la borne, une version future se garde") {
+            try E2EEContent.decoded(from: content(rawNote: arrays(63), version: 2))
+        }
+    }
+
+    @Test func bracketsInsideAString_doNotCount() {
+        let brackets = String(repeating: "[", count: 400)
+
+        #expect(reads(content(note: #"\"\#(brackets)\\"#)), "après un guillemet échappé et avant une barre échappée : du texte")
+        #expect(reads(content(note: #"\"\#(arrays(64))"#)), "65 niveaux de crochets DANS une chaîne : du texte")
+    }
+
+    @Test func anEscapedBackslash_closesTheString_andTheArraysAfterItCount() {
+        let closed = "\"\\\\\",\"deep\":" + arrays(64)
+
+        #expect(!reads(content(rawNote: closed)), "« \\\\ » ferme la chaîne : les 64 tableaux qui suivent comptent")
+    }
+
+    @Test func aSignalBeyondTheLimit_isAnUnreadableMessage() {
+        #expect(E2EEPayloadKind.of(signal(rawNote: arrays(64))) == .message)
+        #expect(throws: DecodingError.self) { try E2EESignal.decoded(from: signal(rawNote: arrays(64))) }
+        #expect(E2EEPayloadKind.of(signal(rawNote: arrays(63))) == .signal, "le miroir : 64 niveaux, un signal")
+        #expect((try? E2EESignal.decoded(from: signal(rawNote: arrays(63)))) != nil)
+    }
+
     @Test func thePaddingAndTheBlanksBetweenTokens_keepTheMessageReadable() {
         let padded = content(note: "ok") + Data(repeating: 0x20, count: 40) + Data("\n".utf8)
         let pretty = Data("{\n\t\"authorDeviceId\": 3,\r\n\t\"authorUserId\": \"64f0c0ffee0000000000aaaa\",\n\t\"conversationId\": \"64f0c0ffee00000000000c01\",\n\t\"sentAt\": 1790000000000,\n\t\"text\": \"x\",\n\t\"v\": 1\n}".utf8)
