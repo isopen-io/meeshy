@@ -25,9 +25,6 @@ type Placeholders<S extends string> = S extends `${string}{${infer Name}}${infer
   ? Name | Placeholders<Rest>
   : never;
 
-/** Les clés sans paramètre — celles qu'on traduit d'un seul argument. */
-export type PlainViewerEngagementKey = { [K in ViewerEngagementCatalogKey]: [Placeholders<FrenchViewerEngagementCatalog[K]>] extends [never] ? K : never }[ViewerEngagementCatalogKey];
-
 type TranslateViewerEngagementArgs<K extends ViewerEngagementCatalogKey> = [Placeholders<FrenchViewerEngagementCatalog[K]>] extends [never]
   ? []
   : [params: Readonly<Record<Placeholders<FrenchViewerEngagementCatalog[K]>, string>>];

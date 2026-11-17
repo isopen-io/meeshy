@@ -139,7 +139,7 @@ export type QuotedPreview = {
 
 /**
  * LE MÉDIA REPRÉSENTATIF — miroir de `quotedRepresentative`
- * (`packages/MeeshySDK/.../CoreModels.swift:1362-1364`, « le premier hors
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyMessageAttachment.swift`, « le premier hors
  * localisation »). Côté web il n'existe PAS de pièce jointe de localisation :
  * un lieu partagé vit dans `message.metadata` et se rend par `placeOf`
  * (`message-body.ts`) — la première pièce EST donc la règle, et non une

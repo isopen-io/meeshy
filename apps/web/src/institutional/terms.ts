@@ -1,7 +1,7 @@
 import type { ContentPage } from './type';
 
 /**
- * « Conditions d'utilisation » — le contenu de `apps/web/locales/fr/terms.json`,
+ * « Conditions d'utilisation » — le contenu de `legacy-web-final:apps/web/locales/fr/terms.json`,
  * mot pour mot, dans l'ordre où la page legacy le rend.
  *
  * `print` N'ENTRE PAS. Le legacy monte un bouton « Imprimer » qui appelle

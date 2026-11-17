@@ -13,7 +13,6 @@ import {
   pageMediaCount,
   pageWithAddedText,
   pageWithBackgroundFrame,
-  pageWithMediaDuration,
   pageWithSelected,
   pageWithSound,
   pageWithSoundPlane,
@@ -21,7 +20,6 @@ import {
   pageWithText,
   pageWithTextLayer,
   pageWithVisual,
-  pageWithVisualAspectRatio,
   pageWithVisualCaption,
   pageWithVisualFilter,
   pageWithVisualPose,
@@ -321,14 +319,6 @@ export function withoutVisual(draft: StudioDraft, door: 'visual' | 'overlay'): S
 
 export function withVisualUpload(draft: StudioDraft, door: 'visual' | 'overlay', upload: StudioUploadState): StudioDraft {
   return withCurrentPageChange(draft, (page) => pageWithVisualUpload(page, door, upload));
-}
-
-export function withVisualAspectRatio(draft: StudioDraft, door: 'visual' | 'overlay', previewUrl: string, aspectRatio: number): StudioDraft {
-  return withCurrentPageChange(draft, (page) => pageWithVisualAspectRatio(page, door, previewUrl, aspectRatio));
-}
-
-export function withMediaDuration(draft: StudioDraft, door: StudioDoor, previewUrl: string, durationMs: number): StudioDraft {
-  return withCurrentPageChange(draft, (page) => pageWithMediaDuration(page, door, previewUrl, durationMs));
 }
 
 /** LE CADRE du fond de la page COURANTE (#8414) — sans fond, le brouillon

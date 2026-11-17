@@ -32,8 +32,6 @@ export const OVERFLOW_LABEL_SIZE = 22;
 /** `+Media.swift:492` — le diamètre du bouton de lecture inline, SEUL puis en grille. */
 export const PLAY_DIAMETER_SOLO = 64;
 export const PLAY_DIAMETER_MULTI = 44;
-/** `BubbleFooter.swift:136` — la capsule du pied en surimpression sur un message visuel seul. */
-export const MEDIA_FOOTER_OVERLAY_OPACITY = 0.55;
 /** `+Media.swift:742` — la capsule du badge de durée d'une vignette vidéo. */
 export const DURATION_BADGE_OPACITY = 0.6;
 

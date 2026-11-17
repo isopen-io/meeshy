@@ -255,8 +255,6 @@ const en = {
   'feed.like.error': 'Error liking post',
   'post.bookmark.error': 'Couldn’t save',
   'feed.gesture.pending': 'Action not confirmed — offline',
-  'feed.share.error': 'Error sharing post',
-  'feed.share.copied': 'Link copied — just paste it.',
 
   'root.menu.feed': 'Feed',
   'root.menu.game': 'My Legend',

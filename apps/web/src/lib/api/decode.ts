@@ -328,7 +328,3 @@ export function decodeConversation(raw: Conversation): Conversation {
     ...dateFieldOf('lastReadMessageCreatedAt', raw.lastReadMessageCreatedAt),
   };
 }
-
-export function decodeConversations(raw: readonly Conversation[]): readonly Conversation[] {
-  return raw.map(decodeConversation);
-}

@@ -78,10 +78,6 @@ export function frameAreas(layout: FrameLook['layout'], size: Size, reserve: Fra
   return { unit: canonical.unit, inner: canonical.inner, top, content, bottom };
 }
 
-export const contentArea = (layout: FrameLook['layout'], size: Size): Rect => frameAreas(layout, size).content;
-export const reserveTop = (layout: FrameLook['layout'], size: Size): Rect => frameAreas(layout, size).top;
-export const reserveBottom = (layout: FrameLook['layout'], size: Size): Rect => frameAreas(layout, size).bottom;
-
 /** `split` — deux moitiés égales : empilées en portrait, côte à côte en paysage. */
 function split(area: Rect, gap: number, portrait: boolean): readonly Rect[] {
   if (portrait) {
