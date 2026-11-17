@@ -8,12 +8,17 @@
  * Meeshy n'en envoie. « bot » ne se lit qu'en mot ou suivi d'une version : un téléphone CUBOT
  * n'est pas un robot. Les bibliothèques HTTP des applications (`okhttp` d'Android,
  * `CFNetwork` d'iOS) ne sont jamais visées.
+ *
+ * Seul le ROBOT d'une messagerie est visé (`TelegramBot`, `Slackbot`, `Slack-ImgProxy`, les
+ * `…bot/` de LinkedIn, Pinterest et Discord), jamais le nom de l'application : le navigateur
+ * INTÉGRÉ de Telegram, Snapchat, LinkedIn, Pinterest ou Slack porte ce nom dans son agent, et
+ * c'est une personne qui a touché le lien.
  */
 const PREVIEW_ROBOT = new RegExp(
   [
     '(?:^|[^a-z])bot\\b', 'bot/', 'facebot', 'crawler', 'spider', 'slurp', 'preview', 'externalhit', 'facebookcatalog',
-    'whatsapp', 'telegram', 'slack', 'discord', 'linkedin', 'embedly', 'skypeuripreview',
-    'vkshare', 'pinterest', 'snapchat', 'iframely', 'outbrain', 'quora link',
+    'whatsapp', 'telegrambot', 'slackbot', 'slack-imgproxy', 'embedly', 'skypeuripreview',
+    'vkshare', 'iframely', 'outbrain', 'quora link',
     'curl/', 'wget/', 'python-requests', 'python-urllib', 'go-http-client', 'node-fetch', 'undici', 'headlesschrome',
   ].join('|'),
   'i',

@@ -80,10 +80,12 @@ function parseTypes(raw: string | undefined): ExportType[] {
  *
  * Exported for direct behavioural testing of the neutralization.
  */
+const isStructured = (val: unknown): boolean => typeof val === 'object' && val !== null && !(val instanceof Date);
+
 export function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
   const FORMULA_TRIGGERS = /^[=+\-@\t\r]/;
   const escape = (val: unknown): string => {
-    const raw = val === null || val === undefined ? '' : String(val);
+    const raw = val === null || val === undefined ? '' : isStructured(val) ? JSON.stringify(val) : String(val);
     const str = FORMULA_TRIGGERS.test(raw) ? `'${raw}` : raw;
     return str.includes(',') || str.includes('"') || str.includes('\n')
       ? `"${str.replace(/"/g, '""')}"`
