@@ -52,4 +52,28 @@ class PushActionSettlementTest {
         PushActionSettlement.settle(context, 7, PushNotificationActionHandler.Outcome.SENT)
         assertThat(shadowOf(manager).getNotification(7)).isNull()
     }
+
+    @Test
+    fun `une action refusee reposte la banniere sans la faire sonner de nouveau`() {
+        postBanner()
+
+        listOf(PushNotificationActionHandler.Outcome.FAILED, PushNotificationActionHandler.Outcome.LOCKED).forEach { outcome ->
+            PushActionSettlement.settle(context, 7, outcome)
+
+            val banner = shadowOf(manager).getNotification(7)
+            assertThat(banner.flags and Notification.FLAG_ONLY_ALERT_ONCE).isNotEqualTo(0)
+            assertThat(banner.extras.getCharSequence("android.title").toString()).isEqualTo("Alice")
+        }
+    }
+
+    @Test
+    fun `toute issue qui garde la banniere la repose sans nouvelle alerte`() {
+        PushNotificationActionHandler.Outcome.values().filter { !it.dismissesBanner }.forEach { outcome ->
+            postBanner()
+
+            PushActionSettlement.settle(context, 7, outcome)
+
+            assertThat(shadowOf(manager).getNotification(7).flags and Notification.FLAG_ONLY_ALERT_ONCE).isNotEqualTo(0)
+        }
+    }
 }
