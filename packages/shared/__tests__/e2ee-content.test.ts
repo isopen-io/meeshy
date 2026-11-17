@@ -102,9 +102,9 @@ describe('les vecteurs du contenu chiffré sont cohérents avec eux-mêmes', () 
   );
 
   it.each([...content.verdicts, ...signals.verdicts].filter((v) => v.plaintextJson !== undefined).map((v) => [v.name, v] as const))(
-    '%s : le JSON lisible du cas est bien le clair (remplissage ôté)',
+    '%s : le JSON lisible du cas est bien le clair, privé de ses blancs de fin (le remplissage et ce qui le suit)',
     (_name, vector) => {
-      expect(Buffer.from(vector.plaintextBase64, 'base64').toString('utf8').replace(/ +$/u, '')).toBe(vector.plaintextJson);
+      expect(Buffer.from(vector.plaintextBase64, 'base64').toString('utf8').trimEnd()).toBe(vector.plaintextJson);
     },
   );
 
@@ -213,7 +213,7 @@ describe('l’ouverture rend le verdict d’iOS, et une version future ne se per
     const opening = openE2EEPlaintext(plaintext, vector.envelope);
     expect(opening.payload).toBe(vector.payload);
     expect(opening.verdict).toBe(vector.verdict);
-    if (opening.verdict === 'future-version') expect(opening.version).toBe(vector.version);
+    if (opening.verdict === 'future-version') expect({ version: opening.version, json: opening.json }).toEqual({ version: vector.version, json: vector.plaintextJson });
     if (opening.verdict === 'admitted-unknown-kind') expect(opening.header.kind).toBe(vector.kind);
     if (opening.verdict === 'admitted' || opening.verdict === 'admitted-unauthored') {
       expect(opening.payload === 'message' ? opening.content : opening.signal).toEqual(vector.expected);
@@ -230,6 +230,35 @@ describe('l’ouverture rend le verdict d’iOS, et une version future ne se per
     const vector = content.cases[0]!;
     const fromText = openE2EEPlaintext(vector.canonicalJson, vector.envelope);
     expect(fromText).toEqual(openE2EEPlaintext(utf8(vector.canonicalJson), vector.envelope));
+  });
+});
+
+/**
+ * WEBX-06 (contre-analyse web du 2026-11-17, #18906) : le JSON d'une version
+ * future se gardait sans son remplissage par `/ +$/`, qui tentait chaque départ
+ * dans la suite d'espaces et échouait au `\n` final — 0,8 s pour 48 Ko, sous le
+ * verrou du coffre de l'appareil. Le meilleur de cinq ouvertures borne le temps
+ * sans dépendre d'un ramasse-miettes ou d'un premier passage du compilateur.
+ */
+describe('l’ouverture reste linéaire, quel que soit ce qui suit le remplissage (WEBX-06)', () => {
+  const origin: E2EEEnvelopeOrigin = { conversationId: 'c1', senderUserId: 'u', senderDeviceId: 1 };
+  const fastestOf = (times: number, run: () => void): number =>
+    Math.min(
+      ...Array.from({ length: times }, () => {
+        const start = performance.now();
+        run();
+        return performance.now() - start;
+      }),
+    );
+
+  it.each([
+    ['un message', '{"conversationId":"c1","sentAt":1,"v":2}'],
+    ['un signal', '{"active":true,"conversationId":"c1","kind":"typing","s":2,"sentAt":1}'],
+  ])('%s d’une version future, suivi de 64 Kio d’espaces puis d’un \\n, s’ouvre en moins de 5 ms et garde son seul JSON', (_label, json) => {
+    const plaintext = utf8(`${json}${' '.repeat(64 * 1024)}\n`);
+
+    expect(openE2EEPlaintext(plaintext, origin)).toMatchObject({ verdict: 'future-version', version: 2, json });
+    expect(fastestOf(5, () => openE2EEPlaintext(plaintext, origin))).toBeLessThan(5);
   });
 });
 

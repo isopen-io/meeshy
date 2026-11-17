@@ -446,6 +446,33 @@
       "version": 3
     },
     {
+      "name": "future-version-padding-then-newline",
+      "description": "Un signal d’une version future dont le remplissage est suivi d’un `\\n` : gardé, son JSON privé de tous ses blancs de fin, en temps linéaire (WEBX-06).",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoyLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAo=",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":2,\"sentAt\":1790000000000}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "future-version",
+      "version": 2
+    },
+    {
+      "name": "lone-surrogate-escape-is-an-unreadable-message",
+      "description": "Une réaction dont l’emoji est une demi-paire échappée n’est pas un JSON qu’un appareil lit : comme tout JSON illisible, la sonde la range parmi les messages, illisible (voir README : sous iOS 17 et plus, l’iPhone la classe signal avant de la juger illisible).",
+      "plaintextBase64": "eyJhdXRob3JEZXZpY2VJZCI6MywiYXV0aG9yVXNlcklkIjoiNjRmMGMwZmZlZTAwMDAwMDAwMDBhYWFhIiwiY29udmVyc2F0aW9uSWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMDBjMDEiLCJlbW9qaSI6Ilx1ZDgzZCIsImtpbmQiOiJyZWFjdGlvbiIsInJlbW92ZWQiOmZhbHNlLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsInRhcmdldCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGYwMSJ9",
+      "plaintextJson": "{\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"emoji\":\"\\ud83d\",\"kind\":\"reaction\",\"removed\":false,\"s\":1,\"sentAt\":1790000000000,\"target\":\"64f0c0ffee00000000000f01\"}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable"
+    },
+    {
       "name": "version-zero",
       "description": "`s` vaut 0 : un signal (entier), mais d’aucune version.",
       "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjowLCJzZW50QXQiOjE3OTAwMDAwMDAwMDB9",

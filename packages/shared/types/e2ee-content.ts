@@ -126,9 +126,10 @@ export type E2EEUnreadableReason = 'not-utf8' | 'not-json' | 'not-an-object' | '
 type Unreadable = { readonly verdict: 'unreadable'; readonly reason: E2EEUnreadableReason };
 
 /**
- * Une version que cet appareil ne lit pas encore. Le JSON (sans le
- * remplissage) est rendu pour être GARDÉ et relu après la mise à jour : un
- * message d'une version future n'est ni affiché à moitié, ni perdu.
+ * Une version que cet appareil ne lit pas encore. Le JSON, privé de ses blancs
+ * de fin (le remplissage et tout blanc qui le suivrait), est rendu pour être
+ * GARDÉ et relu après la mise à jour : un message d'une version future n'est ni
+ * affiché à moitié, ni perdu.
  */
 type FutureVersion = { readonly verdict: 'future-version'; readonly version: number; readonly json: string };
 
@@ -186,11 +187,28 @@ const decodeUtf8 = (bytes: Uint8Array): string | null => {
   }
 };
 
+/** En mode `u`, une paire de substitution est UN point de code : cette classe ne voit que les demi-paires. */
+const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
+
+const isIllFormed = (value: unknown): boolean => typeof value === 'string' && LONE_SURROGATE.test(value);
+
+/**
+ * `JSON.parse` admet l'échappement d'une demi-paire de substitution
+ * (`"\ud800"`) ; l'encodeur refuse de l'écrire et le `JSONDecoder` de l'iPhone
+ * la refuse (voir le README des vecteurs). Une clé ou une valeur qui en porte
+ * une, où qu'elle soit, rend le clair illisible (`not-json`), jamais un texte à
+ * demi-paire (WEBX-06).
+ */
+const refusingLoneSurrogates = (key: string, value: unknown): unknown => {
+  if (isIllFormed(key) || isIllFormed(value)) throw new SyntaxError('e2ee content: lone UTF-16 surrogate');
+  return value;
+};
+
 const parse = (plaintext: E2EEPlaintext): Parsed => {
   const text = typeof plaintext === 'string' ? plaintext : decodeUtf8(plaintext);
   if (text === null) return { ok: false, reason: 'not-utf8' };
   try {
-    return { ok: true, text, value: JSON.parse(text) as unknown };
+    return { ok: true, text, value: JSON.parse(text, refusingLoneSurrogates) as unknown };
   } catch {
     return { ok: false, reason: 'not-json' };
   }
@@ -204,8 +222,21 @@ const isJsonInteger = (value: unknown): value is number => typeof value === 'num
 /** Une clé à `null` se lit absente (`decodeIfPresent` ; `explicitNulls = false` côté Kotlin). */
 const withoutNulls = (record: JsonRecord): JsonRecord => Object.fromEntries(Object.entries(record).filter(([, value]) => value !== null));
 
-/** Le JSON sans le remplissage (des espaces, par construction). */
-const unpadded = (text: string): string => text.replace(/ +$/u, '');
+/** Les blancs JSON (RFC 8259 § 2) : après un objet que `JSON.parse` a lu, les seuls caractères qui peuvent le suivre. */
+const JSON_WHITESPACE: ReadonlySet<number> = new Set([0x20, 0x09, 0x0a, 0x0d]);
+
+/**
+ * Le JSON sans ce qui le suit : le remplissage (des espaces) et tout autre blanc
+ * qu'un émetteur y aurait ajouté. Un parcours LINÉAIRE depuis la fin, jamais une
+ * expression ancrée sur `$` : `/ +$/` retentait chaque départ dans la suite
+ * d'espaces et échouait au `\n` final — 0,8 s pour 48 Ko, sous le verrou du
+ * coffre de l'appareil (WEBX-06).
+ */
+const withoutTrailingWhitespace = (text: string): string => {
+  let end = text.length;
+  while (end > 0 && JSON_WHITESPACE.has(text.charCodeAt(end - 1))) end -= 1;
+  return text.slice(0, end);
+};
 
 const unreadable = (reason: E2EEUnreadableReason): Unreadable => ({ verdict: 'unreadable', reason });
 
@@ -232,7 +263,7 @@ const recordOf = (parsed: Parsed): { readonly record: JsonRecord; readonly text:
 /** La version se juge AVANT toute autre clé : une version future garde son JSON quelle que soit sa forme. */
 const versionVerdict = (version: unknown, current: number, text: string): FutureVersion | Unreadable | null => {
   if (!isJsonInteger(version)) return unreadable('invalid-version');
-  if (version > current) return { verdict: 'future-version', version, json: unpadded(text) };
+  if (version > current) return { verdict: 'future-version', version, json: withoutTrailingWhitespace(text) };
   return version === current ? null : unreadable('invalid-version');
 };
 
@@ -313,16 +344,13 @@ export function openE2EEPlaintext(plaintext: E2EEPlaintext, origin: E2EEEnvelope
     : { payload: 'message', ...openContent(readContent(parsed), origin) };
 }
 
-/** En mode `u`, une paire de substitution est UN point de code : cette classe ne voit que les demi-paires. */
-const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
-
 /**
  * Une chaîne Swift est toujours de l'Unicode bien formé : une demi-paire de
  * substitution, que `JSON.stringify` écrirait `\udxxx`, ne se lirait sur aucun
- * appareil. L'encodeur la refuse.
+ * appareil. L'encodeur la refuse, comme le lecteur (`refusingLoneSurrogates`).
  */
 const assertWellFormed = (value: unknown): void => {
-  if (typeof value === 'string' && LONE_SURROGATE.test(value)) throw new TypeError('e2ee content: ill-formed UTF-16 string');
+  if (isIllFormed(value)) throw new TypeError('e2ee content: ill-formed UTF-16 string');
   if (Array.isArray(value)) value.forEach(assertWellFormed);
 };
 

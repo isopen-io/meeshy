@@ -53,7 +53,8 @@ générés par l'encodeur TS qu'ils mesurent. `canonicalBase64` et `padded` n'en
 ```
 
 - `plaintextBase64` : le clair tel que libsignal le rend (parfois rempli, parfois non, parfois de l'UTF-8 invalide).
-- `plaintextJson` : le même, lisible, quand c'est du texte (le témoin TS vérifie qu'ils coïncident).
+- `plaintextJson` : le même, lisible, quand c'est du texte, privé de ses blancs JSON de fin (le témoin TS vérifie qu'ils
+  coïncident). Pour `future-version`, c'est aussi le JSON que le verdict GARDE (`json`).
 - `payload` : ce que la sonde doit dire — `signal` si et seulement si `s` est un ENTIER JSON, `message` sinon (y compris un
   clair illisible).
 - `verdict` : l'issue de l'ouverture (sonde, puis lecture, puis confrontation à l'enveloppe, la conversation AVANT l'auteur).
@@ -67,14 +68,60 @@ générés par l'encodeur TS qu'ils mesurent. `canonicalBase64` et `padded` n'en
 | `admitted` | lu, à sa place | `.opened` / `.signal` | `Opened` / `Signal` |
 | `admitted-unauthored` | contenu sans aucun auteur (client antérieur à #12976) | `.opened` (`isAuthored` vrai pour deux absents) | `Opened` |
 | `admitted-unknown-kind` | signal d'une action inconnue : rangé, jamais appliqué | `.signal` (`.unknown(kind:)`) | `Signal` |
-| `future-version` | version que l'appareil ne lit pas encore : **le clair se GARDE**, scellé, et se relit après la mise à jour | `unsupportedVersion` ⇒ illisible ET acquitté : perdu (IOS-04) | `UnsupportedVersion` ⇒ illisible ET acquitté : perdu (AND-04) |
-| `unreadable` | pas de l'UTF-8, pas du JSON, pas un objet, clé requise absente ou du mauvais type | `DecodingError` ⇒ `.undecryptable` | `Malformed` ⇒ `Undecryptable` |
+| `future-version` | version que l'appareil ne lit pas encore : **le clair se GARDE**, scellé (son JSON privé de ses blancs de fin), et se relit après la mise à jour | `unsupportedVersion` ⇒ illisible ET acquitté : perdu (IOS-04) | `UnsupportedVersion` ⇒ illisible ET acquitté : perdu (AND-04) |
+| `unreadable` | pas de l'UTF-8, pas du JSON (dont une demi-paire de substitution, où qu'elle soit), pas un objet, clé requise absente ou du mauvais type | `DecodingError` ⇒ `.undecryptable` | `Malformed` ⇒ `Undecryptable` |
 | `misattributed-conversation` | le serveur range le clair dans une autre conversation | `E2EEContentError.misattributed` | `Misattributed` |
 | `misattributed-author` | le serveur le présente sous un autre auteur (ou un auteur à moitié, ou un signal sans auteur) | `.misattributedAuthor` | `MisattributedAuthor` |
 
 `future-version` est la seule règle où le contrat **devance** l'iPhone : la version se juge AVANT toute autre clé, pour qu'une
 version future de forme différente (`future-version-new-shape`) reste une version future et non « illisible ». Un appareil
 n'acquitte une enveloppe que sur un verdict qui la juge (`unreadable`, `misattributed-*`) ou qui l'a rangée (`admitted*`).
+
+## Ce qui suit le remplissage, et les demi-paires (WEBX-06)
+
+**Le remplissage est fait d'espaces U+0020, mais un clair peut finir par d'autres blancs.** L'iPhone ne retire rien avant de
+lire : `JSONDecoder` décode le clair rempli ENTIER, et admet en fin tout blanc JSON (RFC 8259 § 2 : U+0020, U+0009, U+000A,
+U+000D). Un émetteur peut donc faire suivre le remplissage d'un `\n` : le clair reste lisible (`padding-then-newline-still-reads`).
+Le JSON qu'une `future-version` GARDE est le clair privé de TOUS ses blancs JSON de fin (`future-version-padding-then-newline`,
+contenu et signal), retirés par un parcours **linéaire** depuis la fin. Jamais une expression ancrée sur `$` : `/ +$/` retentait
+chaque départ dans la suite d'espaces et échouait au `\n` final, soit 0,8 s pour 48 Ko sous JavaScriptCore comme sous V8, sous le
+verrou du coffre de l'appareil. Témoin TS : 64 Kio d'espaces puis `\n` s'ouvrent en moins de 5 ms (mesuré : 0,4 ms au mieux de
+cinq, contre 1,7 s avant). Le jour où iOS et Android garderont une version future (IOS-04, AND-04), ils retireront les mêmes
+quatre octets, en temps linéaire.
+
+**Une demi-paire de substitution rend le clair illisible, où qu'elle soit.** `JSON.parse` admet l'échappement d'une moitié
+isolée (`"\ud800"`, `"\udc00"`, ou deux moitiés dans le mauvais ordre) ; l'encodeur refuse d'en écrire une. Le lecteur TS
+s'aligne sur l'encodeur : une clé ou une valeur qui porte une demi-paire, même sous une clé que la version 1 ignore, rend
+`unreadable` (raison `not-json`), et la sonde range le clair parmi les messages, comme tout JSON illisible. Une demi-paire
+encodée en octets (`ED A0 80`) n'est pas de l'UTF-8 (`surrogate-encoded-in-utf8`). Une paire échappée COMPLÈTE
+(`"\ud83d\ude00"`) est un point de code et se lit (`escaped-surrogate-pair-reads`).
+
+- **Swift** (lu dans les sources, **non exécuté** : aucune chaîne Swift dans ce conteneur). Jusqu'à iOS 16, `JSONDecoder`
+  analyse tout le document avant de décoder, et refuse une demi-paire échappée où qu'elle soit (`JSONSerialization` :
+  « Unable to convert hex escape sequence (no low character) to UTF8-encoded character »). C'est le verdict de ces vecteurs, sonde
+  comprise. À partir d'iOS 17, le `JSONDecoder` de swift-foundation ne déséchappe une chaîne que lorsqu'il la décode. Il refuse
+  donc une demi-paire dans un champ lu (`text`, `emoji`…), avec le même verdict. Mais il ne voit pas celle d'une clé ignorée
+  (`lone-surrogate-in-an-ignored-key` : admis). Et sa sonde, qui ne décode que `s`, classe signal la réaction de
+  `lone-surrogate-escape-is-an-unreadable-message` avant de la juger illisible. Ce sont deux écarts attendus au rejeu iOS
+  (#18943). Ils ne donnent à l'émetteur aucune capacité : Sesame lui permet déjà de sceller un clair différent par appareil.
+- **Kotlin** : kotlinx.serialization déséchappe `\ud800` en une `String` qui porte la demi-paire, puisque les chaînes JVM
+  l'admettent. Android admet donc aujourd'hui ces clairs. C'est un écart attendu (#18944).
+
+## Ce que ce contrat ne lie pas encore
+
+- **Le clair n'est pas lié à SON message** (WEB-15, #18984). `E2EEEnvelopeOrigin` ne porte que la conversation et l'auteur.
+  L'enveloppe servie (`E2EEServedEnvelope`) n'a pas de `clientMessageId`, que le contenu écrit pourtant. Un serveur compromis
+  peut donc PERMUTER les corps de deux messages d'un même auteur dans une même conversation : chaque ouverture rend `admitted`.
+  La liaison passe par la passerelle, qui servira `clientMessageId` sur l'enveloppe, et par ce module, qui étendra
+  `E2EEEnvelopeOrigin`, pour les trois clients à la fois.
+- **Un contenu sans auteur reste admis** (`admitted-unauthored`, #18985). L'iPhone n'écrit `authorUserId` et `authorDeviceId`
+  dans le contenu que depuis le 2026-11-15 (`6e02cd892a`). Les iPhone publiés avant n'en écrivent pas : refuser leurs messages
+  les perdrait. Sans auteur, un serveur compromis peut réattribuer un premier message (type 3) à un appareil fantôme d'un autre
+  compte, que la confiance au premier usage accepte (WEB-18). Le verdict est distinct pour être compté, puis refusé sur les trois
+  clients à usage mesuré nul.
+
+Ce contrat ne fait que lier le clair à sa conversation et à son auteur. L'authenticité vient de libsignal. La composition Meeshy
+autour de libsignal n'a reçu aucune revue externe : une revue cryptographique tierce reste requise (#3710).
 
 ## Rejouer ces fichiers
 
@@ -95,6 +142,10 @@ Chaque banc lit les fichiers du dépôt par chemin relatif (aucune copie) et rej
 
 - iOS et Android : `future-version` est aujourd'hui une perte (verdict puis acquittement), et iOS juge `future-version-new-shape`
   illisible (il décode tout avant de regarder `v`).
+- iOS 17 et plus : `lone-surrogate-in-an-ignored-key` admis, et la sonde de `lone-surrogate-escape-is-an-unreadable-message`
+  dit `signal` (voir § « Ce qui suit le remplissage, et les demi-paires »).
+- Android : les demi-paires échappées sont admises (`lone-high-surrogate-escape`, `lone-low-surrogate-escape`,
+  `reversed-surrogate-escapes`, `lone-surrogate-in-an-ignored-key`).
 - Android : la sonde classe signal tout `s` non nul (`s-not-an-integer-is-a-message`, `version-fractional-is-a-message`) ;
   `authorDeviceId` est un `Int` (`author-device-negative`) ; le décodage UTF-8 remplace les octets invalides au lieu de refuser
   (`invalid-utf8`) ; kotlinx.serialization peut accepter un nombre entre guillemets (`sent-at-as-string`) ; un signal n'est
