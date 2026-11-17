@@ -486,6 +486,7 @@ internal class ChatComposerController(
         val restored = EndToEndSendRestoration.restoration(text, replyToId, composerText.text, state.value.replyingToMessageId)
         restored.text?.let { composerText.replace(it) }
         restored.replyToId?.let { reply -> state.update { it.copy(replyingToMessageId = reply) } }
+        state.update { it.copy(endToEndSendRefusals = it.endToEndSendRefusals + 1) }
     }
 
     /**

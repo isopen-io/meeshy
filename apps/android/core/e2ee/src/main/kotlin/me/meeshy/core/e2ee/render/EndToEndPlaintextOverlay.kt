@@ -44,7 +44,7 @@ public object EndToEndPlaintextOverlay {
     ): ApiMessage {
         if (!isCandidate(message) || message.deletedAt != null) return message
         val entry = keysOf(message, readerUserId).firstNotNullOfOrNull { entries[it] }
-        val readable = entry as? E2eePlaintextEntry.Readable ?: return sealed(message, entry, conversationId, readerUserId)
+        val readable = entry as? E2eePlaintextEntry.Readable ?: return withSealReason(message, entry, conversationId, readerUserId)
         if (!isInPlace(readable.content, readable.senderUserId, message, conversationId)) return message
         val text = readable.content.text ?: return message
         return message.copy(
@@ -82,7 +82,7 @@ public object EndToEndPlaintextOverlay {
     }
 
     /** Le message que l'appareil ne montre pas, avec la raison ; une suppression pour tous rangée à SA place se rend supprimée. */
-    private fun sealed(message: ApiMessage, entry: E2eePlaintextEntry?, conversationId: String, readerUserId: String): ApiMessage =
+    private fun withSealReason(message: ApiMessage, entry: E2eePlaintextEntry?, conversationId: String, readerUserId: String): ApiMessage =
         when (entry) {
             is E2eePlaintextEntry.DeletedForEveryone ->
                 if (entry.conversationId == conversationId && message.conversationId == conversationId) message.copy(deletedAt = message.createdAt ?: DELETED_AT_UNKNOWN)

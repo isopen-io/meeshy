@@ -3,4 +3,5 @@
     <string name="chat_composer_end_to_end">In diese verschlüsselte Unterhaltung kann dieses Gerät noch nicht schreiben</string>
     <string name="chat_menu_e2ee_signals_notice">Reagieren, Anheften und Für alle löschen: noch nicht auf diesem Gerät.</string>
     <string name="chat_menu_e2ee_signals_notice_alone">Ende-zu-Ende-verschlüsselt: Reagieren, Anheften und Für alle löschen noch nicht hier.</string>
+    <string name="chat_e2ee_send_not_sent">Verschlüsselte Nachricht nicht gesendet: dein Text ist wieder im Feld</string>
 </resources>

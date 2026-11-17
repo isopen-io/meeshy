@@ -3,4 +3,5 @@
     <string name="chat_composer_end_to_end">Cette conversation chiffrée ne s’écrit pas encore depuis cet appareil</string>
     <string name="chat_menu_e2ee_signals_notice">Réagir, épingler et supprimer pour tous : pas encore sur cet appareil.</string>
     <string name="chat_menu_e2ee_signals_notice_alone">Chiffrée de bout en bout : réagir, épingler, supprimer pour tous, pas ici.</string>
+    <string name="chat_e2ee_send_not_sent">Message chiffré non envoyé : votre texte est revenu dans le champ</string>
 </resources>

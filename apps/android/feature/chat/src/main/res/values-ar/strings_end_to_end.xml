@@ -3,4 +3,5 @@
     <string name="chat_composer_end_to_end">لا يمكن بعد الكتابة في هذه المحادثة المشفّرة من هذا الجهاز</string>
     <string name="chat_menu_e2ee_signals_notice">التفاعل والتثبيت والحذف للجميع: غير متاحة بعد على هذا الجهاز.</string>
     <string name="chat_menu_e2ee_signals_notice_alone">مشفّرة من طرف إلى طرف: التفاعل والتثبيت والحذف للجميع غير متاحة هنا بعد.</string>
+    <string name="chat_e2ee_send_not_sent">لم تُرسل الرسالة المشفّرة: عاد نصّك إلى الحقل</string>
 </resources>
