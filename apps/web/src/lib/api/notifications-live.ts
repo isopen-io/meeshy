@@ -1,12 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import {
-  conversationOnScreen,
-  inAppBannerStore,
-  isCallLayerNotification,
-  offerInAppBanner,
-  retractInAppBanner,
-} from '@/lib/notifications/in-app-banner';
+import { inAppBannerStore, offerInAppBanner, readsOnArrival, retractInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
 import { performMarkNotificationRead } from './notifications-actions';
@@ -98,8 +92,8 @@ export function createNotificationLiveHandlers(deps: {
     /* LA CONVERSATION OUVERTE LIT CE QUI LUI ARRIVE (#18907) — jumelle d'iOS (`NotificationToastManager+Socket`) : une
        réaction, une mention ou une édition arrivée sur le fil à l'écran n'a plus rien à signaler. Elle se marque lue
        (le geste optimiste de la cloche : la ligne, la pastille, la passerelle) au lieu de rester non lue sur tous les
-       appareils jusqu'à la prochaine ouverture du fil. Onglet visible seulement ; jamais un appel. */
-    if (notificationsApi !== undefined && !notification.state.isRead && !isCallLayerNotification(notification) && conversationOnScreen(notification, location)) {
+       appareils jusqu'à la prochaine ouverture du fil. Onglet visible seulement ; jamais un appel ni une pastille. */
+    if (notificationsApi !== undefined && readsOnArrival(notification, location)) {
       void performMarkNotificationRead({ id: notification.id, deps: { ...notificationsApi, queryClient }, counted: true });
       return;
     }

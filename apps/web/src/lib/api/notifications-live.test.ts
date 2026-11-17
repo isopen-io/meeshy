@@ -5,7 +5,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 
 import { conversationStore } from '@/lib/conversation-store';
 import type { SocketClient, SocketHandler } from '@/lib/net/socket';
-import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
+import { handBatteryAnnouncer, handPhoneReachabilityAnnouncer, inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import type { NotificationRecord } from '@/lib/notifications/record';
 import { createOutboxStore } from '@/lib/send/outbox-store';
 
@@ -349,6 +349,28 @@ describe('web-notifs-3 — une notification arrivée sur la conversation OUVERTE
 
     expect(calls()).toEqual([]);
   });
+
+  const pillAlerts = [
+    { type: 'device_battery', hand: handBatteryAnnouncer },
+    { type: 'device_unreachable', hand: handPhoneReachabilityAnnouncer },
+  ] as const;
+  for (const { type, hand } of pillAlerts) {
+    test(`une alerte ${type} portant la conversation ouverte n’est PAS lue à l’arrivée : la pastille la dit toujours`, async () => {
+      openThread('/c/X');
+      const announced: NotificationRecord[] = [];
+      const release = hand((notification: NotificationRecord) => void announced.push(notification));
+      const { notificationsApi, calls } = answering();
+      const { socket, queryClient } = connect({ notificationsApi });
+
+      socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, { ...reaction('n1', 'X'), type });
+      await settle();
+      release();
+
+      expect(calls()).toEqual([]);
+      expect(unread(queryClient)).toBe(1);
+      expect(announced.map((notification) => notification.id)).toEqual(['n1']);
+    });
+  }
 
   test('sans transport de cloche, la notification reste non lue (rien ne part, rien ne casse)', async () => {
     openThread('/c/X');

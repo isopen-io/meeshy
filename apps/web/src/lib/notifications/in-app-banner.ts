@@ -41,6 +41,17 @@ export function shouldShowBanner(notification: NotificationRecord, location: { r
   return !conversationOnScreen(notification, location);
 }
 
+/**
+ * Une notification arrivée sur la conversation OUVERTE s'y lit à l'arrivée (#18907) — sauf celles qu'une autre
+ * surface présente : la couche d'appel, et la pastille de la batterie ou du téléphone injoignable d'un Proche, que
+ * personne n'aurait vue si elle était lue en silence.
+ */
+export function readsOnArrival(notification: NotificationRecord, location: { readonly pathname: string }): boolean {
+  if (notification.state.isRead || isCallLayerNotification(notification)) return false;
+  if (notification.type === IN_APP_BATTERY_TYPE || notification.type === IN_APP_PHONE_REACHABILITY_TYPE) return false;
+  return conversationOnScreen(notification, location);
+}
+
 type BannerState = {
   readonly current: NotificationRecord | null;
   readonly dismiss: () => void;
