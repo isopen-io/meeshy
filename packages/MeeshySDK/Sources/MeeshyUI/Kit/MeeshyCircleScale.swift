@@ -114,9 +114,10 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
         let validCounts = MeeshyCircleScaleRecipe.validCounts(counts, levelCount: levels.count)
         let isCompact = size == .compact
         let group = HStack(alignment: .top, spacing: isCompact ? recipe.stepGap : MeeshySpacing.sm) {
-            ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
-                dotCell(index: index, level: level, count: validCounts?[index], recipe: recipe, isCompact: isCompact)
-            }
+            ForEach(levels.indices.map { index in
+                AsyncRenderRow(id: index, content: dotCell(index: index, level: levels[index], count: validCounts?[index],
+                                                           recipe: recipe, isCompact: isCompact))
+            }, content: asyncRenderRowContent)
         }
         return Group {
             if onSelect == nil {
@@ -229,9 +230,8 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
     private func rings(recipe: MeeshyCircleScaleRecipe) -> some View {
         let outer = ringDiameter(level: 0, recipe: recipe)
         return ZStack {
-            ForEach(Array(levels.indices), id: \.self) { level in
-                ring(level: level, recipe: recipe)
-            }
+            ForEach(levels.indices.map { AsyncRenderRow(id: $0, content: ring(level: $0, recipe: recipe)) },
+                    content: asyncRenderRowContent)
             center.frame(width: CGFloat(recipe.centerDiameter), height: CGFloat(recipe.centerDiameter))
             if let lit = recipe.litLevel {
                 marker

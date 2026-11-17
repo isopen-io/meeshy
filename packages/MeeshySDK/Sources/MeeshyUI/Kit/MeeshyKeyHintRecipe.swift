@@ -193,38 +193,38 @@ public nonisolated enum MeeshyKeyLegendLaw {
 /// Les mots de K55 : le nom des touches dit à la voix, dans la langue du lecteur.
 public enum MeeshyKeyHintWords {
 
-    static func name(of key: MeeshyKey, platform: MeeshyKeyPlatform, bundle: Bundle, locale: Locale) -> String {
+    static func name(of key: MeeshyKey, platform: MeeshyKeyPlatform, bundle: Bundle?, locale: Locale) -> String {
         switch key {
         case .character(let text): return text.uppercased()
         case .primary: return platform == .apple ? command(bundle, locale) : control(bundle, locale)
         case .control: return control(bundle, locale)
-        case .shift: return String(localized: "kit.key.shift", defaultValue: "Majuscule", bundle: bundle, locale: locale)
+        case .shift: return String(localized: "kit.key.shift", defaultValue: "Majuscule", bundle: bundle ?? .module, locale: locale)
         case .option:
             return platform == .apple
-                ? String(localized: "kit.key.option", defaultValue: "Option", bundle: bundle, locale: locale)
-                : String(localized: "kit.key.alt", defaultValue: "Alt", bundle: bundle, locale: locale)
-        case .enter: return String(localized: "kit.key.enter", defaultValue: "Entrée", bundle: bundle, locale: locale)
-        case .escape: return String(localized: "kit.key.escape", defaultValue: "Échap", bundle: bundle, locale: locale)
-        case .space: return String(localized: "kit.key.space", defaultValue: "Espace", bundle: bundle, locale: locale)
-        case .tab: return String(localized: "kit.key.tab", defaultValue: "Tabulation", bundle: bundle, locale: locale)
-        case .delete: return String(localized: "kit.key.delete", defaultValue: "Supprimer", bundle: bundle, locale: locale)
-        case .up: return String(localized: "kit.key.up", defaultValue: "Flèche haut", bundle: bundle, locale: locale)
-        case .down: return String(localized: "kit.key.down", defaultValue: "Flèche bas", bundle: bundle, locale: locale)
-        case .left: return String(localized: "kit.key.left", defaultValue: "Flèche gauche", bundle: bundle, locale: locale)
-        case .right: return String(localized: "kit.key.right", defaultValue: "Flèche droite", bundle: bundle, locale: locale)
+                ? String(localized: "kit.key.option", defaultValue: "Option", bundle: bundle ?? .module, locale: locale)
+                : String(localized: "kit.key.alt", defaultValue: "Alt", bundle: bundle ?? .module, locale: locale)
+        case .enter: return String(localized: "kit.key.enter", defaultValue: "Entrée", bundle: bundle ?? .module, locale: locale)
+        case .escape: return String(localized: "kit.key.escape", defaultValue: "Échap", bundle: bundle ?? .module, locale: locale)
+        case .space: return String(localized: "kit.key.space", defaultValue: "Espace", bundle: bundle ?? .module, locale: locale)
+        case .tab: return String(localized: "kit.key.tab", defaultValue: "Tabulation", bundle: bundle ?? .module, locale: locale)
+        case .delete: return String(localized: "kit.key.delete", defaultValue: "Supprimer", bundle: bundle ?? .module, locale: locale)
+        case .up: return String(localized: "kit.key.up", defaultValue: "Flèche haut", bundle: bundle ?? .module, locale: locale)
+        case .down: return String(localized: "kit.key.down", defaultValue: "Flèche bas", bundle: bundle ?? .module, locale: locale)
+        case .left: return String(localized: "kit.key.left", defaultValue: "Flèche gauche", bundle: bundle ?? .module, locale: locale)
+        case .right: return String(localized: "kit.key.right", defaultValue: "Flèche droite", bundle: bundle ?? .module, locale: locale)
         }
     }
 
-    private static func command(_ bundle: Bundle, _ locale: Locale) -> String {
-        String(localized: "kit.key.command", defaultValue: "Commande", bundle: bundle, locale: locale)
+    private static func command(_ bundle: Bundle?, _ locale: Locale) -> String {
+        String(localized: "kit.key.command", defaultValue: "Commande", bundle: bundle ?? .module, locale: locale)
     }
 
-    private static func control(_ bundle: Bundle, _ locale: Locale) -> String {
-        String(localized: "kit.key.control", defaultValue: "Contrôle", bundle: bundle, locale: locale)
+    private static func control(_ bundle: Bundle?, _ locale: Locale) -> String {
+        String(localized: "kit.key.control", defaultValue: "Contrôle", bundle: bundle ?? .module, locale: locale)
     }
 
-    static func prefix(bundle: Bundle, locale: Locale) -> String {
-        String(localized: "kit.key_shortcut.spoken_prefix", defaultValue: "raccourci", bundle: bundle, locale: locale)
+    static func prefix(bundle: Bundle?, locale: Locale) -> String {
+        String(localized: "kit.key_shortcut.spoken_prefix", defaultValue: "raccourci", bundle: bundle ?? .module, locale: locale)
     }
 }
 
@@ -239,7 +239,7 @@ public extension MeeshyKeyHintRule {
                        locale: Locale = .current) -> String {
         limited(keys)
             .map { MeeshyKeyHintWords.name(of: effective($0, isRightToLeft: isRightToLeft), platform: platform,
-                                           bundle: bundle ?? .module, locale: locale) }
+                                           bundle: bundle, locale: locale) }
             .joined(separator: " ")
     }
 
@@ -250,7 +250,7 @@ public extension MeeshyKeyHintRule {
                                  prefix: String?,
                                  bundle: Bundle? = nil,
                                  locale: Locale = .current) -> String {
-        let head = prefix ?? MeeshyKeyHintWords.prefix(bundle: bundle ?? .module, locale: locale)
+        let head = prefix ?? MeeshyKeyHintWords.prefix(bundle: bundle, locale: locale)
         return "\(head) : \(spoken(keys: keys, platform: platform, bundle: bundle, locale: locale))"
     }
 }

@@ -51,9 +51,6 @@ struct VitrineCransSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             MeeshySectionHeader(title: VitrineSeenAsCopy.cransTitle)
-            Text(VitrineSeenAsCopy.cransSubtitle)
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundStyle(ThemeManager.shared.textMuted)
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: MeeshySpacing.sm) { cards }
                 VStack(spacing: MeeshySpacing.sm) { cards }
@@ -62,7 +59,7 @@ struct VitrineCransSection: View {
     }
 
     private var cards: some View {
-        ForEach(crans) { cran in card(cran) }
+        ForEach(crans.map { AsyncRenderRow(id: $0.id, content: card($0)) }, content: asyncRenderRowContent)
     }
 
     private func card(_ cran: VitrineCran) -> some View {
@@ -78,9 +75,9 @@ struct VitrineCransSection: View {
                 if cran.opened.isEmpty {
                     line(VitrineSeenAsCopy.cranNothing, glyph: "eye.slash")
                 }
-                ForEach(cran.opened, id: \.self) { row in
-                    line(VitrineSeenAsCopy.rowTitle(row), glyph: VitrineSeenAsCopy.rowGlyph(row))
-                }
+                ForEach(cran.opened.map { row in
+                    AsyncRenderRow(id: row, content: line(VitrineSeenAsCopy.rowTitle(row), glyph: VitrineSeenAsCopy.rowGlyph(row)))
+                }, content: asyncRenderRowContent)
                 if let word = VitrineCran.contactWord(cran.contact) {
                     line(word, glyph: "bubble.left")
                 }

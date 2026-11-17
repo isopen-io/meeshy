@@ -36,8 +36,7 @@ struct ProfileReportSheet: View {
             MeeshyChoiceTiles(
                 label: ProfileReportCopy.question,
                 items: ProfileReportReason.allCases.map { reason in
-                    MeeshyChoiceItem(id: reason.rawValue, title: reason.label, detail: reason.detail,
-                                     systemImage: reason.systemImage)
+                    MeeshyChoiceItem(id: reason.rawValue, title: reason.label, systemImage: reason.systemImage)
                 },
                 selection: .single(draft.reason?.rawValue),
                 format: .wide,
@@ -114,7 +113,7 @@ enum ProfileReportCopy {
     }
 
     static var detailsLabel: String {
-        String(localized: "profile.report.details", defaultValue: "Dis-nous en plus · facultatif", bundle: .module)
+        String(localized: "profile.report.noteLabel", defaultValue: "Dis-nous en plus · facultatif", bundle: .module)
     }
 
     static func alsoBlock(_ name: String) -> String {

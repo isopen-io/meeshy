@@ -57,12 +57,17 @@ final class ProfileReportDraftTests: XCTestCase {
         }
     }
 
+    /// Épure #17584 — le motif se nomme, il ne s'explique pas : la tuile ne porte que son titre et son glyphe.
     @MainActor
-    func test_everyReason_hasATitleAndADetail() {
+    func test_everyReason_hasATitle_andTheTileCarriesNoExplanation() throws {
         for reason in ProfileReportReason.allCases {
             XCTAssertFalse(reason.label.isEmpty)
-            XCTAssertFalse(reason.detail.isEmpty)
         }
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Profile/ProfileReportSheet.swift")
+        let sheet = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(sheet.contains("detail: reason."), "un motif de signalement ne porte pas de phrase d'explication")
     }
 
     /// Loi 12 — la feuille est faite du kit : tuiles K47, champ, ligne, bouton, bloc d'état.

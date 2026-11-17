@@ -491,7 +491,6 @@ struct ProfileView: View {
     private var viewedByButton: some View {
         MeeshyButton(VitrineSeenAsCopy.viewedByMe, systemImage: "eye", kind: .glass, size: .s36,
                      tint: Color(hex: accentColor), action: { seenAsShown = true })
-            .accessibilityHint(VitrineSeenAsCopy.viewedByHint)
             .accessibilityIdentifier("profile.viewedBy")
             .padding(MeeshySpacing.sm)
     }

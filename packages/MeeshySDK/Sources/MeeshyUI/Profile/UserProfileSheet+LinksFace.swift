@@ -68,7 +68,7 @@ struct RelationLinksFace: View {
                 form: .overline
             )
             MeeshyTicket(
-                title: String(localized: "profile.relation.links.caption", defaultValue: "Ouvre sa vitrine, vue Public", bundle: .module),
+                title: String(localized: "profile.relation.links.ticket", defaultValue: "Ouvre sa vitrine, vue Public", bundle: .module),
                 code: link.displayText,
                 tint: tint,
                 size: .hero,
@@ -141,7 +141,7 @@ struct RelationLinksFace: View {
 
     private func open(_ address: ProfileAddress) {
         leaving = nil
-        guard let url = address.opening(webOrigin: MeeshyConfig.shared.webOrigin) else { return }
+        guard let url = address.opening() else { return }
         openURL(url)
     }
 }
@@ -209,6 +209,6 @@ enum RelationLinksCopy {
         String(localized: "profile.relation.links.leave.cancel", defaultValue: "Annuler", bundle: .module)
     }
     static var noChip: String {
-        String(localized: "profile.relation.links.noChip", defaultValue: "Sur iPhone, deux téléphones ne s'échangent pas un profil par la puce : le QR fait le même geste.", bundle: .module)
+        String(localized: "profile.relation.links.noChip", defaultValue: "Sur iPhone, la puce n'échange pas de profil : le QR fait le même geste.", bundle: .module)
     }
 }

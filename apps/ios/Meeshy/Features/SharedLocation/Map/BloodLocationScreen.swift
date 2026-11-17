@@ -85,7 +85,7 @@ struct BloodLocationScreen: View {
     private var chrome: some View {
         VStack(spacing: MeeshySpacing.md) {
             HStack {
-                MeeshyGlassButton(systemImage: "chevron.left", label: LocationMapCopy.back, size: .s44, action: { dismiss() })
+                MeeshyGlassButton(systemImage: "chevron.backward", label: LocationMapCopy.back, size: .s44, action: { dismiss() })
                 Spacer()
                 MeeshyBadge(.label(BloodLocationCopy.title(name: displayName)), leading: .systemImage("drop.fill"),
                             surface: .glass, tint: tint, size: .s36)

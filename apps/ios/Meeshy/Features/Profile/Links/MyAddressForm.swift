@@ -41,7 +41,7 @@ struct MyAddressForm: View {
             glyphTiles
             circleChips
             MeeshyToggleRow(MyAddressesCopy.countClicks, systemImage: "cursorarrow.click",
-                            subtitle: MyAddressesCopy.countClicksDetail, accessory: .toggle(isOn: countsClicks),
+                            accessory: .toggle(isOn: countsClicks),
                             tint: accent, action: { countsClicks.toggle() })
             MeeshyButton(ProfileLinksCopy.addAddress, systemImage: "plus", kind: .primary, width: .fill, tint: accent,
                          isPending: isSending, action: { Task { await send() } })

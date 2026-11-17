@@ -44,25 +44,6 @@ nonisolated enum ProfileReportReason: String, CaseIterable, Sendable {
         }
     }
 
-    /// La phrase sous le motif : ce qu'il recouvre, pour choisir sans hésiter.
-    @MainActor var detail: String {
-        switch self {
-        case .spam: return String(localized: "report.reason.spam.detail", defaultValue: "Pubs, liens en boucle, arnaques", bundle: .module)
-        case .inappropriate:
-            return String(localized: "report.reason.inappropriate.detail", defaultValue: "Images ou propos choquants", bundle: .module)
-        case .harassment:
-            return String(localized: "report.reason.harassment.detail", defaultValue: "Messages insistants, moqueries", bundle: .module)
-        case .violence:
-            return String(localized: "report.reason.violence.detail", defaultValue: "Menaces ou appels à faire du mal", bundle: .module)
-        case .hateSpeech:
-            return String(localized: "report.reason.hate_speech.detail", defaultValue: "Attaques sur l'origine, le genre, la foi", bundle: .module)
-        case .fakeProfile:
-            return String(localized: "report.reason.fake_profile.detail", defaultValue: "Un compte inventé de toutes pièces", bundle: .module)
-        case .impersonation:
-            return String(localized: "report.reason.impersonation.detail", defaultValue: "Se fait passer pour quelqu'un d'autre", bundle: .module)
-        case .other: return String(localized: "report.reason.other.detail", defaultValue: "Raconte-le avec tes mots", bundle: .module)
-        }
-    }
 }
 
 /// Ce que la feuille « Signaler » tient : le motif choisi, le mot, et « Bloquer aussi ». Chaque geste rend une valeur

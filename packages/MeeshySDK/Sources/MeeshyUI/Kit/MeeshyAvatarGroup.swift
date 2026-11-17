@@ -101,7 +101,7 @@ public struct MeeshyAvatarGroup<Cell: View, Trailing: View>: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            if showsChevron { Image(systemName: "chevron.right").foregroundStyle(.secondary) }
+            if showsChevron { Image(systemName: "chevron.forward").foregroundStyle(.secondary) }
         }
         return Group {
             if let onPress {

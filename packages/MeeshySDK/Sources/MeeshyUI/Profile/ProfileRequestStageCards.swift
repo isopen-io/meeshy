@@ -22,8 +22,6 @@ struct ProfileSentRequestCard: View {
                 sentLine,
                 form: .band,
                 lead: .systemImage("clock"),
-                detail: String(localized: "profile.relation.request.sent.detail",
-                               defaultValue: "\(name) n'a pas encore répondu.", bundle: .module),
                 tint: tint
             )
             MeeshyButtonPair {
@@ -108,9 +106,7 @@ struct ProfileAcceptedRequestCard: View {
                 String(localized: "profile.relation.request.accepted.title", defaultValue: "Vous êtes amis", bundle: .module),
                 form: .banner,
                 kind: .ok,
-                lead: .systemImage("person.2.fill"),
-                detail: String(localized: "profile.relation.request.accepted.detail",
-                               defaultValue: "\(name) et toi pouvez maintenant vous voir en ligne.", bundle: .module)
+                lead: .systemImage("person.2.fill")
             )
             .scaleEffect(hasArrived || reduceMotion ? 1 : 0.94)
             .opacity(hasArrived || reduceMotion ? 1 : 0)

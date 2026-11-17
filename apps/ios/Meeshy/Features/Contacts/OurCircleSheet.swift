@@ -34,7 +34,7 @@ struct ProfileRelationPillView: View {
                     action: { showsOurCircle = true },
                     trailing: { Image(systemName: "chevron.down") }
                 )
-                .accessibilityHint(OurCircleCopy.pillHint)
+                .accessibilityLabel([OurCircleCopy.scaleLabel, CircleLevelNames.title(of: level)].joined(separator: ", "))
                 .transition(.opacity)
             }
         }
@@ -279,10 +279,6 @@ struct OurCircleSheet: View {
 // MARK: - Les mots de « Notre cercle »
 
 nonisolated enum OurCircleCopy {
-    static var pillHint: String {
-        String(localized: "circles.ours.pill.hint", defaultValue: "Ouvre Notre cercle : ce que chacun accorde et ce qui manque pour monter.", bundle: .main)
-    }
-
     static var close: String {
         String(localized: "common.close", defaultValue: "Fermer", bundle: .main)
     }

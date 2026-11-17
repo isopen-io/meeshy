@@ -23,9 +23,6 @@ nonisolated enum ProfileLinksCopy {
         String(localized: "profile.links.contactless", defaultValue: "Sans contact", bundle: .main)
     }
     static var copied: String { String(localized: "profile.links.copied", defaultValue: "Lien copié", bundle: .main) }
-    static var sendHint: String {
-        String(localized: "profile.links.send.hint", defaultValue: "Envoie ta vitrine dans une conversation", bundle: .main)
-    }
 
     // MARK: - Mes adresses
 
@@ -172,17 +169,14 @@ nonisolated enum ProfileLinksCopy {
     static var orScan: String {
         String(localized: "profile.contactless.orScan", defaultValue: "Ou scanne le sien", bundle: .main)
     }
-    static var orScanDetail: String {
-        String(localized: "profile.contactless.orScan.detail", defaultValue: "Vise son QR, sa fiche s'ouvre.", bundle: .main)
-    }
     static var noChip: String {
-        String(localized: "profile.contactless.noChip", defaultValue: "Sur iPhone, deux téléphones ne s'échangent pas un profil par la puce : le QR fait le même geste.", bundle: .main)
+        String(localized: "profile.contactless.noChip", defaultValue: "Sur iPhone, la puce n'échange pas de profil : le QR fait le même geste.", bundle: .main)
     }
 
     // MARK: - Le lecteur de QR
 
     static var scannerHint: String {
-        String(localized: "profile.scanner.hint", defaultValue: "Vise un QR Meeshy : la fiche ou le lien s'ouvre", bundle: .main)
+        String(localized: "profile.scanner.aim", defaultValue: "Vise un QR Meeshy : la fiche ou le lien s'ouvre", bundle: .main)
     }
     static var scannerForeign: String {
         String(localized: "profile.scanner.foreign", defaultValue: "Ce QR ne mène pas à Meeshy", bundle: .main)

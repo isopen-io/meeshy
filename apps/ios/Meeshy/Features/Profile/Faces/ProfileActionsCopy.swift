@@ -84,7 +84,7 @@ nonisolated enum ProfileActionsCopy {
     /// « 12 480 messages · 86 conversations » ; rien tant que les compteurs ne sont pas servis.
     static func statsSubtitle(_ stats: UserStats?, locale: Locale) -> String? {
         guard let stats else { return nil }
-        let format = String(localized: "profile.actions.stats.subtitle", defaultValue: "%1$@ messages · %2$@ conversations", bundle: .main)
+        let format = String(localized: "profile.actions.stats.counts", defaultValue: "%1$@ messages · %2$@ conversations", bundle: .main)
         let style = IntegerFormatStyle<Int>.number.locale(locale)
         return String(format: format, stats.totalMessages.formatted(style), stats.totalConversations.formatted(style))
     }

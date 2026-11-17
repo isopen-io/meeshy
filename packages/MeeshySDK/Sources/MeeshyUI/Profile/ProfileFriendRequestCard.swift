@@ -10,15 +10,25 @@ struct ProfileFriendRequestCard: View {
     let tint: Color
     let onSend: (String) -> Void
     @State private var note = ""
+    @State private var openNoteID: String?
+
+    /// Ce que l'amitié change, derrière le (i) du titre (épure #17584).
+    static var whatChanges: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "profile.relation.request.note.question", defaultValue: "Que change l'amitié ?", bundle: .module),
+            text: String(localized: "profile.relation.request.note", defaultValue: "Vous verrez quand l'autre est en ligne.", bundle: .module)
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshyNote(
-                String(localized: "profile.relation.request.title", defaultValue: "Devenez amis", bundle: .module),
-                lead: .systemImage("person.badge.plus"),
-                detail: String(localized: "profile.relation.request.detail", defaultValue: "Vous verrez quand l'autre est en ligne.", bundle: .module),
-                tint: tint
-            )
+            MeeshyInfoNoted(note: Self.whatChanges, openNoteID: $openNoteID, tint: tint) {
+                MeeshyNote(
+                    String(localized: "profile.relation.request.title", defaultValue: "Devenez amis", bundle: .module),
+                    lead: .systemImage("person.badge.plus"),
+                    tint: tint
+                )
+            }
             MeeshyField(
                 String(localized: "profile.relation.request.noteLabel", defaultValue: "Ajoute un mot · facultatif", bundle: .module),
                 text: note,

@@ -75,8 +75,9 @@ public struct ProfileAddress: Codable, Identifiable, Sendable, Equatable, CacheI
     }
 
     /// Où mène le geste d'ouvrir : par son lien de suivi quand elle compte ses clics (le clic se compte, la loi de
-    /// cercle se rejoue au serveur), sinon l'adresse elle-même. Jamais autre chose que du http(s).
-    public func opening(webOrigin: String) -> URL? {
+    /// cercle se rejoue au serveur), sinon l'adresse elle-même. Jamais autre chose que du http(s). L'origine par défaut
+    /// est celle de l'environnement actif, comme `TrackedLink.redirectURL`.
+    public func opening(webOrigin: String = MeeshyConfig.shared.webOrigin) -> URL? {
         if let trackedPath, trackedPath.hasPrefix("/l/"), let tracked = URL(string: webOrigin + trackedPath) {
             return tracked
         }

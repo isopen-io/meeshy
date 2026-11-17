@@ -12,7 +12,7 @@ struct ProfileLocationMapAction: View {
     @State private var isOpen = false
 
     var body: some View {
-        MeeshyLabeledAction(title: Self.title, systemImage: "map", tint: tint, hint: Self.hint, action: { isOpen = true })
+        MeeshyLabeledAction(title: Self.title, systemImage: "map", tint: tint, action: { isOpen = true })
             .keyboardShortcut("m", modifiers: .command)
             .fullScreenCover(isPresented: $isOpen) { map.destination(request) }
     }
@@ -21,8 +21,9 @@ struct ProfileLocationMapAction: View {
         String(localized: "profile.relation.action.map", defaultValue: "Carte", bundle: .module)
     }
 
-    static var hint: String {
-        String(localized: "profile.relation.action.map.hint", defaultValue: "Voir sur la carte", bundle: .module)
+    /// Le nom du raccourci ⌘M, que montre la liste des raccourcis du clavier.
+    static var openTitle: String {
+        String(localized: "profile.relation.action.map.open", defaultValue: "Voir sur la carte", bundle: .module)
     }
 }
 
@@ -69,7 +70,7 @@ struct ProfileWhereSection: View {
             }
         }
         .background {
-            Button(ProfileLocationMapAction.hint) { isOpen = true }
+            Button(ProfileLocationMapAction.openTitle) { isOpen = true }
                 .keyboardShortcut("m", modifiers: .command)
                 .opacity(0)
                 .frame(width: 0, height: 0)

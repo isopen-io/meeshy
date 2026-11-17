@@ -2479,7 +2479,7 @@
         }
       }
     },
-    "profile.relation.action.map.hint": {
+    "profile.relation.action.map.open": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -83464,53 +83464,6 @@
         }
       }
     },
-    "profile.relation.write.requestHint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تصل رسالتك الأولى إلى طلباته"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine erste Nachricht landet in seinen Anfragen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your first message lands in their requests"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu primer mensaje llega a sus solicitudes"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ton premier message arrive dans ses demandes"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il tuo primo messaggio arriva tra le sue richieste"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sua primeira mensagem chega nas solicitações"
-          }
-        }
-      }
-    },
     "profile.relation.action.copyLink": {
       "extractionState": "manual",
       "localizations": {
@@ -84028,7 +83981,7 @@
         }
       }
     },
-    "profile.relation.links.caption": {
+    "profile.relation.links.ticket": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -84122,7 +84075,7 @@
         }
       }
     },
-    "profile.relation.request.detail": {
+    "profile.relation.request.note": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -84400,53 +84353,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "تم إرسال الطلب %@"
-          }
-        }
-      }
-    },
-    "profile.relation.request.sent.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ n'a pas encore répondu."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ hasn't replied yet."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ aún no ha respondido."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ hat noch nicht geantwortet."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ non ha ancora risposto."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ ainda não respondeu."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يرد %@ بعد."
           }
         }
       }
@@ -84729,53 +84635,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "أصبحتما صديقين"
-          }
-        }
-      }
-    },
-    "profile.relation.request.accepted.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ et toi pouvez maintenant vous voir en ligne."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You and %@ can now see when each other is online."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ y tú ya pueden ver cuándo están en línea."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du und %@ seht jetzt, wann der andere online ist."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu e %@ ora potete vedere quando siete online."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Você e %@ agora podem ver quando estão online."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكنك أنت و%@ الآن رؤية متى يكون كل منكما متصلًا."
           }
         }
       }
@@ -85397,43 +85256,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "على iPhone، لا يتبادل هاتفان ملفًا شخصيًا عبر الشريحة: رمز QR يؤدي المهمة نفسها."
+            "value": "على iPhone، لا تتبادل الشريحة الملفات الشخصية: رمز QR يؤدي المهمة نفسها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf dem iPhone tauschen zwei Telefone kein Profil über den Chip aus: Der QR-Code erledigt dasselbe."
+            "value": "Auf dem iPhone tauscht der Chip kein Profil aus: Der QR-Code erledigt dasselbe."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On iPhone, two phones can't swap a profile over the chip: the QR code does the same thing."
+            "value": "On iPhone, the chip can't swap a profile: the QR code does the same thing."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En iPhone, dos teléfonos no intercambian un perfil por el chip: el QR hace lo mismo."
+            "value": "En iPhone, el chip no intercambia perfiles: el QR hace lo mismo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sur iPhone, deux téléphones ne s'échangent pas un profil par la puce : le QR fait le même geste."
+            "value": "Sur iPhone, la puce n'échange pas de profil : le QR fait le même geste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Su iPhone due telefoni non si scambiano un profilo tramite il chip: il QR fa lo stesso."
+            "value": "Su iPhone il chip non scambia profili: il QR fa lo stesso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "No iPhone, dois telefones não trocam um perfil pelo chip: o QR faz o mesmo."
+            "value": "No iPhone, o chip não troca perfis: o QR faz o mesmo."
           }
         }
       }
@@ -85703,7 +85562,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta connexion va bien. Le souci est de notre côté, et ça ne dure jamais longtemps."
+            "value": "Ta connexion va bien. Le souci vient de nous et ne dure jamais."
           }
         },
         "it": {
@@ -86190,382 +86049,6 @@
         }
       }
     },
-    "report.reason.spam.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إعلانات، روابط متكررة، احتيال"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Werbung, Endlos-Links, Betrug"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ads, repeated links, scams"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anuncios, enlaces repetidos, estafas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pubs, liens en boucle, arnaques"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pubblicità, link ripetuti, truffe"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anúncios, links repetidos, golpes"
-          }
-        }
-      }
-    },
-    "report.reason.inappropriate.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "صور أو كلام صادم"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schockierende Bilder oder Worte"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shocking images or words"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imágenes o palabras chocantes"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Images ou propos choquants"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Immagini o parole scioccanti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imagens ou palavras chocantes"
-          }
-        }
-      }
-    },
-    "report.reason.harassment.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رسائل ملحّة، سخرية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aufdringliche Nachrichten, Spott"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persistent messages, mockery"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mensajes insistentes, burlas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages insistants, moqueries"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messaggi insistenti, prese in giro"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mensagens insistentes, zombarias"
-          }
-        }
-      }
-    },
-    "report.reason.violence.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تهديدات أو دعوات لإلحاق الأذى"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drohungen oder Aufrufe, Schaden anzurichten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Threats or calls to cause harm"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Amenazas o llamados a hacer daño"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Menaces ou appels à faire du mal"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Minacce o inviti a fare del male"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ameaças ou incitação a causar dano"
-          }
-        }
-      }
-    },
-    "report.reason.hate_speech.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هجمات على الأصل أو الجنس أو الدين"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Angriffe auf Herkunft, Geschlecht oder Glauben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Attacks on origin, gender or faith"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ataques por origen, género o fe"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Attaques sur l'origine, le genre, la foi"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Attacchi all'origine, al genere o alla fede"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ataques à origem, ao gênero ou à fé"
-          }
-        }
-      }
-    },
-    "report.reason.fake_profile.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حساب مختلق بالكامل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein komplett erfundenes Konto"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "An entirely made-up account"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una cuenta totalmente inventada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un compte inventé de toutes pièces"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un account del tutto inventato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uma conta totalmente inventada"
-          }
-        }
-      }
-    },
-    "report.reason.impersonation.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ينتحل شخصية شخص آخر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gibt sich als jemand anderes aus"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pretends to be someone else"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se hace pasar por otra persona"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se fait passer pour quelqu'un d'autre"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Si spaccia per qualcun altro"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se passa por outra pessoa"
-          }
-        }
-      }
-    },
-    "report.reason.other.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "احكِ ذلك بكلماتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erzähl es mit deinen Worten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tell it in your own words"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cuéntalo con tus palabras"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Raconte-le avec tes mots"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Raccontalo con parole tue"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conte com suas palavras"
-          }
-        }
-      }
-    },
     "profile.report.title": {
       "extractionState": "manual",
       "localizations": {
@@ -86707,7 +86190,7 @@
         }
       }
     },
-    "profile.report.details": {
+    "profile.report.noteLabel": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -87173,6 +86656,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ ainda não publicou nada"
+          }
+        }
+      }
+    },
+    "profile.relation.request.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا تغيّر الصداقة؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ändert die Freundschaft?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does friendship change?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué cambia la amistad?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que change l'amitié ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa cambia l'amicizia?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que muda com a amizade?"
           }
         }
       }

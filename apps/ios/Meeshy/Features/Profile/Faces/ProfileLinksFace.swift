@@ -104,7 +104,7 @@ struct ProfileLinksFace: View {
             MeeshyLabeledAction(title: ProfileLinksCopy.qr, systemImage: "qrcode", tint: accent,
                                 action: { presented = .card(.qr) })
             MeeshyLabeledAction(title: ProfileLinksCopy.send, systemImage: "paperplane", tint: accent,
-                                hint: ProfileLinksCopy.sendHint, action: { sendProfile(link) })
+                                action: { sendProfile(link) })
             MeeshyLabeledAction(title: ProfileLinksCopy.contactless, systemImage: "wave.3.right", tint: accent,
                                 action: { presented = .card(.contactless) })
         }

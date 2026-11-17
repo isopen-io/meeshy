@@ -37,7 +37,7 @@ extension UserProfileSheet {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: String(localized: "profile.relation.section.talk", defaultValue: "Parler", bundle: .module))
             MeeshyActionGrid {
-                labeledAction(.write, hint: writesARequest ? Self.writeRequestHint : nil) { openConversation() }
+                labeledAction(.write) { openConversation() }
                 if offersCall {
                     labeledAction(.call) { requestCall(isVideo: false) }
                     labeledAction(.video) { requestCall(isVideo: true) }
@@ -46,10 +46,6 @@ extension UserProfileSheet {
             }
             .disabled(isInteractionDisabled)
         }
-    }
-
-    static var writeRequestHint: String {
-        String(localized: "profile.relation.write.requestHint", defaultValue: "Ton premier message arrive dans ses demandes", bundle: .module)
     }
 
     func labeledAction(_ operation: ProfileRelationAction, hint: String? = nil, action: @escaping () -> Void) -> some View {

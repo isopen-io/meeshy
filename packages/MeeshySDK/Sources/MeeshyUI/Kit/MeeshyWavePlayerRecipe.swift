@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Les deux tailles du lecteur : `row` (60 / 40) et `compact` (44 / 28).
 public nonisolated enum MeeshyWavePlayerSize: String, Sendable, Equatable, CaseIterable {
@@ -220,8 +221,7 @@ public nonisolated struct MeeshyWavePlayerRecipe: Sendable, Equatable {
     }
 
     static func minutesAndSeconds(_ seconds: Double) -> String {
-        let total = Int(max(seconds, 0))
-        return String(format: "%d:%02d", total / 60, total % 60)
+        MediaFormat.duration(seconds, style: .clock)
     }
 }
 

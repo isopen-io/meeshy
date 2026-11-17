@@ -99,7 +99,7 @@ struct NearbyMapScreen: View {
 
     private var header: some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyGlassButton(systemImage: "chevron.left", label: LocationMapCopy.back, size: .s44, action: { dismiss() })
+            MeeshyGlassButton(systemImage: "chevron.backward", label: LocationMapCopy.back, size: .s44, action: { dismiss() })
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.sm) {
                     Text(LocationMapCopy.nearbyTitle).font(.headline.weight(.bold)).foregroundStyle(Color.white)
