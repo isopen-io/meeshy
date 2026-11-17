@@ -59,7 +59,14 @@ public class E2eePlaintextVault(
 
     public fun entries(messageIds: Collection<String>): Map<String, E2eePlaintextEntry> = vault.read { reader ->
         if (!serves(reader)) emptyMap()
-        else messageIds.mapNotNull { id -> E2eePlaintextRecords.load(id, reader)?.let { id to it } }.toMap()
+        else messageIds.mapNotNull { id -> loaded(id, reader)?.let { id to it } }.toMap()
+    }
+
+    /** Une ligne qui ne se relit pas (scellée ou altérée) ne masque que son message (audit de #19077, P5). */
+    private fun loaded(messageId: String, reader: RecordReader): E2eePlaintextEntry? = try {
+        E2eePlaintextRecords.load(messageId, reader)
+    } catch (_: Exception) {
+        null
     }
 
     public fun save(entry: E2eePlaintextEntry, messageIds: Collection<String>) {
