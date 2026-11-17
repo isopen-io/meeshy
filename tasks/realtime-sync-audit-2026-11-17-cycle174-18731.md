@@ -153,11 +153,33 @@ un sous-ensemble plus petit.
 
 ## Suivis
 
-- **La fenêtre du gel en mode FENÊTRE s'ancre encore sur `lastDeliveredAt`**,
-  l'horloge murale — `freezeMessageStatus({ since: prevDeliveredAt })`. Sans
-  conséquence mesurée (le gel est write-once et sur-déclarer y est la sémantique
-  ASSUMÉE du chemin en ligne), mais c'est la même confusion position/horloge,
-  trois lignes plus bas. À instruire, pas à corriger au passage.
+- **La fenêtre du gel en mode FENÊTRE s'ancre sur `lastDeliveredAt`**, l'horloge
+  murale — `freezeMessageStatus({ since: prevDeliveredAt })`, trois sites.
+  **Instruit avant d'être recopié**, parce qu'un suivi hérité est une
+  AFFIRMATION (leçon du cycle 107), et la première rédaction de ce paragraphe
+  disait « sans conséquence mesurée ». Mesure :
+
+  | chemin | invariant |
+  |---|---|
+  | FENÊTRE pur | **tenu** — la borne HAUTE est `at`, qui devient la borne BASSE du suivant. Aucun trou |
+  | EXACT | **rompu** — l'ack fige un SOUS-ENSEMBLE et pousse quand même l'horloge à `now` |
+
+  Donc le trou n'existe que là où un ack avance l'horloge sans avoir figé toute
+  la fenêtre qu'elle recouvre, c'est-à-dire sur le seul chemin EXACT. Et ce lot
+  le DÉPLACE sans le créer : avant lui, le curseur sautait toujours à `now`, et
+  un M1 évincé était perdu pour le gel à jamais ; après lui, le préfixe VIDE
+  n'avance plus rien, donc la fenêtre suivante le recouvre et le GUÉRIT. Reste
+  le préfixe PARTIEL — cible M1, trou M2 — où la position (10:00) et l'horloge
+  (11:00) divergent : le gel fenêtre suivant part de 11:00 et saute M2.
+
+  Impact BORNÉ, et il faut le dire : `resolveReceivedAt` a `readAt` en dernier
+  repli, et le gel de LECTURE part d'un curseur de lecture distinct ; un M2 lu
+  récupère donc son `receivedAt`. L'écart ne vit que dans l'état « remis, pas
+  encore lu ». Le correctif est d'ancrer la fenêtre sur la POSITION, comme ce
+  lot vient de le faire pour le balayage — strictement plus large, donc sûr, le
+  gel étant write-once. **Issue #19261**, pas corrigé ici : ce lot gouverne le
+  curseur, celui-là gouverne la fenêtre du gel, et mêler les deux rendrait la
+  mesure « rien n'a été perdu » invérifiable.
 - **Un participant SANS curseur balaie depuis le début de la conversation**, et
   les messages antérieurs à son arrivée y sont des trous permanents. Son curseur
   de livraison démarre donc par le chemin EN LIGNE, pas par le drain. Ancrer sur

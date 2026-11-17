@@ -85,6 +85,16 @@ jamais une longueur.
 - **La valeur 500 du plafond de la file et sa politique d'éviction ne sont pas
   touchées.** #18733 a posé la trace qui permettra de les instruire ; personne
   n'a encore la mesure.
+- **La fenêtre du GEL s'ancre encore sur l'horloge murale** (`since:
+  prevDeliveredAt`, trois sites) — la troisième et dernière occurrence de la
+  confusion horloge/position. L'invariant tient en mode FENÊTRE (la borne haute
+  d'un ack est la borne basse du suivant) et se rompt sur le chemin EXACT, qui
+  fige un sous-ensemble en poussant l'horloge. Ce lot DÉPLACE ce trou sans le
+  créer : le préfixe VIDE n'avance plus rien, donc la fenêtre suivante le
+  guérit ; le préfixe PARTIEL le garde. Impact borné à l'état « remis, pas
+  encore lu » (`readAt` est le dernier repli de `resolveReceivedAt`). **#19261**,
+  délibérément hors de ce lot : mêler les deux rendrait invérifiable la mesure
+  « rien n'a été perdu ».
 - **L'avance et le gel ne sont toujours pas dans une transaction**, et ce lot ne
   le prétend pas. Il en réduit la portée : un processus qui meurt entre les deux
   laisse désormais le GEL écrit et le curseur en retard — l'inverse exact de
