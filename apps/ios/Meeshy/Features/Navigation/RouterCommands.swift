@@ -114,6 +114,10 @@ struct MeeshyRouterInjection: ViewModifier {
             .environmentObject(router)
             .environment(\.routerCommands, router.commands)
             .environment(\.meeshyRouter, router)
+            .environment(\.profileUnavailableExits, ProfileUnavailableExits(
+                search: { [commands = router.commands] in commands.armSearch() },
+                scanner: { onOpened in ProfileSlot.view(.scanner, userId: "", displayName: "", onOpened: onOpened) }
+            ))
     }
 }
 
