@@ -39,7 +39,7 @@ public nonisolated enum MeeshyChartLayout: Sendable, Equatable {
 }
 
 /// Un point opaque : un identifiant, une valeur, un mot, ce que la voix en dit.
-public struct MeeshyChartPoint: Identifiable, Equatable {
+public nonisolated struct MeeshyChartPoint: Identifiable, Equatable, Sendable {
     public let id: String
     public let value: Double
     public let label: String
@@ -61,7 +61,7 @@ public struct MeeshyChartPoint: Identifiable, Equatable {
 }
 
 /// L'étiquette d'un point choisi : un titre, une valeur, une mention.
-public struct MeeshyChartCallout: Equatable {
+public nonisolated struct MeeshyChartCallout: Equatable, Sendable {
     public let title: String
     public let value: String
     public let note: String?
