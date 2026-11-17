@@ -114,6 +114,13 @@ public nonisolated struct MeeshyMeterRecipe: Sendable, Equatable {
         return posed ? (fraction ?? 0) : 0
     }
 
+    /// Le sens du dégradé : du bord de début au bord de fin, comme le remplissage
+    /// (de la droite en écriture de droite à gauche, où SwiftUI ne retourne pas
+    /// un dégradé).
+    public static func gradientPoints(isRightToLeft: Bool) -> [UnitPoint] {
+        isRightToLeft ? [.trailing, .leading] : [.leading, .trailing]
+    }
+
     /// L'entrée suit la réponse de `rise`, amortie à 1 : une mesure ne dépasse
     /// jamais sa valeur, et un remplissage plein ne déborde jamais sa piste.
     public static var entryResponse: Double {

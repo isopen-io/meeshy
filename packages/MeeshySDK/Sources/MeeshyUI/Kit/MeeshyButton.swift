@@ -105,6 +105,10 @@ public struct MeeshyButton<Trailing: View>: View {
 
     private var hasTrailing: Bool { Trailing.self != EmptyView.self }
 
+    /// Le maintien ne s'arme, ne se tient et ne se bascule que sur un bouton
+    /// allumé et libre : un seul prédicat pour le doigt et le lecteur d'écran.
+    private var isHoldAvailable: Bool { isEnabled && !isPending }
+
     private func perform() {
         guard isEnabled, !isPending else { return }
         MeeshyMotion.play(token: .morph)
@@ -119,6 +123,12 @@ public struct MeeshyButton<Trailing: View>: View {
                                  isDeferred: false, hasTrailing: false, trailing: EmptyView())
             .modifier(MeeshyButtonSurfaceModifier(recipe: recipe, tint: tint, shape: .hold, width: .fit,
                                                   isPressed: holdState == .held || holdState == .live))
+            .background {
+                MeeshyButtonHoldWaves(decor: MeeshyButtonHoldDecor.resolve(holdState: holdState,
+                                                                          reduceMotion: reduceMotion),
+                                      diameter: CGFloat(diameter),
+                                      tone: MeeshyButtonColors.wave(recipe.surface, tint: tint))
+            }
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .updating($isTouching) { _, touching, _ in touching = true }
@@ -126,13 +136,20 @@ public struct MeeshyButton<Trailing: View>: View {
                         let inside = MeeshyButtonHoldLaw.isInside(x: Double(value.location.x),
                                                                   y: Double(value.location.y),
                                                                   diameter: diameter)
-                        report(holdLaw.track(isInside: inside, isEnabled: isEnabled && !isPending))
+                        report(holdLaw.track(isInside: inside, isEnabled: isHoldAvailable))
                     }
                     .onEnded { _ in report(holdLaw.endTouch()) }
             )
             .adaptiveOnChange(of: isTouching) { _, touching in
                 guard !touching else { return }
                 report(holdLaw.endTouch())
+            }
+            .adaptiveOnChange(of: isHoldAvailable) { _, available in
+                guard !available else { return }
+                report(holdLaw.revoke(isTouching: isTouching))
+            }
+            .adaptiveOnChange(of: holdState) { old, new in
+                playHoldFeedback(MeeshyButtonHoldDecor.feedback(from: old, to: new))
             }
             .onDisappear { report(holdLaw.endTouch()) }
             .accessibilityElement(children: .ignore)
@@ -143,8 +160,16 @@ public struct MeeshyButton<Trailing: View>: View {
                 hint: MeeshyButtonWords.hint(disabledReason: disabledReason, isEnabled: isEnabled)
             ))
             .accessibilityAction {
-                report(holdLaw.toggle(isEnabled: isEnabled && !isPending))
+                report(holdLaw.toggle(isEnabled: isHoldAvailable))
             }
+    }
+
+    private func playHoldFeedback(_ feedback: MeeshyButtonHoldFeedback?) {
+        switch feedback {
+        case .firm: MeeshyMotion.play(.rigid)
+        case .error: HapticFeedback.error()
+        case nil: break
+        }
     }
 
     private func report(_ held: Bool?) {
@@ -354,6 +379,14 @@ enum MeeshyButtonColors {
         }
     }
 
+    /// La teinte des ondes du maintien : celle du disque, à pleine force.
+    static func wave(_ surface: MeeshyButtonSurface, tint: Color?) -> Color {
+        switch surface {
+        case .accent: return tint ?? MeeshyColors.brandDeep
+        default: return tint ?? MeeshyColors.brandPrimary
+        }
+    }
+
     static func ink(_ ink: MeeshyButtonInk, tint: Color?, isDark: Bool) -> Color {
         switch ink {
         case .onBrand, .onAccent, .onGlass: return MeeshyColors.onMedia
@@ -361,6 +394,43 @@ enum MeeshyButtonColors {
         case .neutral: return tint ?? MeeshyColors.textPrimary(isDark: isDark)
         case .danger: return isDark ? MeeshyColors.error : MeeshyColors.errorInk
         }
+    }
+}
+
+/// Les ondes du maintien en émission, posées en arrière-plan : la boîte du disque
+/// ne change pas. Sous mouvement réduit, un anneau plein à leur place.
+private struct MeeshyButtonHoldWaves: View {
+    let decor: MeeshyButtonHoldDecor
+    let diameter: CGFloat
+    let tone: Color
+
+    var body: some View {
+        ZStack {
+            if decor.showsStillRing {
+                let ring = CGFloat(MeeshyButtonHoldDecor.stillRingWidth)
+                Circle()
+                    .strokeBorder(tone.opacity(MeeshyButtonHoldDecor.waveStartOpacity), lineWidth: ring)
+                    .frame(width: diameter + 2 * ring, height: diameter + 2 * ring)
+            }
+            if decor.waveCount > 0 {
+                TimelineView(.animation) { context in
+                    let elapsed = context.date.timeIntervalSinceReferenceDate
+                    ZStack {
+                        ForEach(0..<decor.waveCount, id: \.self) { index in
+                            let wave = MeeshyButtonHoldDecor.wave(index: index, count: decor.waveCount,
+                                                                  elapsed: elapsed)
+                            Circle()
+                                .strokeBorder(tone, lineWidth: CGFloat(MeeshyButtonHoldDecor.waveStroke))
+                                .frame(width: diameter, height: diameter)
+                                .scaleEffect(CGFloat(wave.scale))
+                                .opacity(wave.opacity)
+                        }
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

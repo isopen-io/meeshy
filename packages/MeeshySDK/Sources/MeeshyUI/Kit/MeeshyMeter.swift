@@ -36,6 +36,7 @@ public struct MeeshyMeter<Leading: View, Trailing: View>: View {
         MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
     }
     @Environment(\.locale) private var locale
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var hasAppeared = false
 
     public init(value: Double,
@@ -135,7 +136,8 @@ public struct MeeshyMeter<Leading: View, Trailing: View>: View {
     private func track(recipe: MeeshyMeterRecipe) -> some View {
         let isDark = colorScheme == .dark
         let trackColor = MeeshyMeterColors.track(isDark: isDark)
-        let style = MeeshyMeterColors.fill(recipe.kind, tint: tint, tintEnd: tintEnd, isDark: isDark)
+        let style = MeeshyMeterColors.fill(recipe.kind, tint: tint, tintEnd: tintEnd, isDark: isDark,
+                                           isRightToLeft: layoutDirection == .rightToLeft)
         let entry = MeeshyMeterRecipe.entryAnimation(reduce: reduceMotion, animatesOnAppear: animatesOnAppear)
         let shown = MeeshyMeterRecipe.shownFraction(recipe.fillFraction, hasAppeared: hasAppeared,
                                                     animatesOnAppear: animatesOnAppear, reduce: reduceMotion)
@@ -252,10 +254,12 @@ private struct MeeshyMeterIndeterminate: View {
 
 /// Les couleurs des genres de la jauge : la seule traduction genre vers couleur.
 enum MeeshyMeterColors {
-    static func fill(_ kind: MeeshyMeterKind, tint: Color?, tintEnd: Color?, isDark: Bool) -> AnyShapeStyle {
+    static func fill(_ kind: MeeshyMeterKind, tint: Color?, tintEnd: Color?, isDark: Bool,
+                     isRightToLeft: Bool = false) -> AnyShapeStyle {
         if let tint {
             guard let tintEnd else { return AnyShapeStyle(tint) }
-            return AnyShapeStyle(LinearGradient(colors: [tint, tintEnd], startPoint: .leading, endPoint: .trailing))
+            let points = MeeshyMeterRecipe.gradientPoints(isRightToLeft: isRightToLeft)
+            return AnyShapeStyle(LinearGradient(colors: [tint, tintEnd], startPoint: points[0], endPoint: points[1]))
         }
         switch kind {
         case .accent: return AnyShapeStyle(MeeshyColors.brandPrimary)

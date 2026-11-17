@@ -121,6 +121,7 @@ struct KitAtomsHoldAndKeyCapTests {
     }
 
     @Test("enfoncée, la face prend l'accent ; au repos elle garde la surface de son hôte")
+    @MainActor
     func keyCap_pressedFaceTakesTheAccent() {
         let pressed = MeeshyKeyHintColors.face(surface: .auto, isPressed: true, isDark: false)
         let rest = MeeshyKeyHintColors.face(surface: .auto, isPressed: false, isDark: false)
