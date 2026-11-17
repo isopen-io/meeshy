@@ -27,7 +27,8 @@ La seule voie existante était l'adresse publique `/@:username`, sans intention 
   `privacy.allowContactRequests` du lecteur, sans l'idempotence du lecteur ; enfin
   `contact-exchange:received` `{ reader, received, receivedAt }` à la seule room de l'émetteur.
 - Expiré, rejoué, contrefait, émis par un compte qui bloque le lecteur (ou bloqué par lui), parti,
-  ou lu par son émetteur : le MÊME 404 `CONTACT_EXCHANGE_UNAVAILABLE`.
+  ou lu par son émetteur : le MÊME 404 `CONTACT_EXCHANGE_UNAVAILABLE`. L'émetteur qui lit son
+  propre jeton ne le consomme pas (l'émetteur se lit avant la prise) ; tout autre refus le consomme.
 - Débit par compte : 10 émissions et 20 acceptations par minute.
 - Le numéro n'est JAMAIS une offre : aucune loi d'accès ne l'ouvre par ce canal, la réponse le dit
   verrouillé (`locked`) et aucun champ voisin ne le porte (le sérialiseur retire ce que la vitrine

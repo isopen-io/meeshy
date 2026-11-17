@@ -6,10 +6,10 @@
  *
  * ACCEPTER : dans l'ordre, et chaque refus est LE MÊME (`CONTACT_EXCHANGE_UNAVAILABLE`) —
  *   1. jeton bien formé, bien signé, non échu ;
- *   2. PRISE atomique de l'aléa (`claim`, un `SET NX EX`) : un jeton ne sert qu'une fois, même
- *      sous deux acceptations simultanées ; la prise précède toute lecture, donc un jeton refusé
- *      plus loin est consommé aussi ;
- *   3. l'émetteur rangé, qui n'est pas le lecteur ;
+ *   2. l'émetteur rangé, qui n'est pas le lecteur — lu sans rien consommer ;
+ *   3. PRISE atomique de l'aléa (`claim`, un `SET NX EX`) : un jeton ne sert qu'une fois, même
+ *      sous deux acceptations simultanées ; la prise précède la lecture des comptes, donc un
+ *      jeton refusé plus loin (blocage, compte parti) est consommé aussi ;
  *   4. deux comptes utilisables, aucun blocage dans un sens ni dans l'autre ;
  *   5. la vitrine, si elle était offerte, telle que la fiche publique la sert à ce lecteur
  *      (`vitrine` — sa porte de blocage et sa garde de présence comprises) : refusée, rien ne part ;
@@ -119,13 +119,18 @@ async function openPair(prisma: ContactExchangeDeps['prisma'], issuerId: string,
   return { issuer, reader };
 }
 
-/** L'émetteur d'un jeton valide, pris pour la première et dernière fois ; sinon `null`. */
-async function claimIssuer(deps: ContactExchangeDeps, token: string) {
+/**
+ * L'émetteur d'un jeton valide, pris pour la première et dernière fois par un AUTRE que lui ;
+ * sinon `null`. Lire l'émetteur ne consomme rien : l'émetteur qui lit son propre jeton (son autre
+ * appareil, son propre lien) ne le brûle pas avant que l'autre le reçoive.
+ */
+async function claimIssuer(deps: ContactExchangeDeps, token: string, readerId: string) {
   const claims = decodeContactExchangeToken(token, deps.now());
   if (!claims) return null;
+  const issuerId = (await deps.store.read(contactExchangeIssuerKey(claims.nonce)))?.toLowerCase();
+  if (!issuerId || issuerId === readerId) return null;
   if (!(await deps.store.claim(contactExchangeClaimKey(claims.nonce), CONTACT_EXCHANGE_TTL_SECONDS + CLAIM_MARGIN_SECONDS))) return null;
-  const issuerId = await deps.store.read(contactExchangeIssuerKey(claims.nonce));
-  return issuerId ? { issuerId: issuerId.toLowerCase(), offers: claims.offers } : null;
+  return { issuerId, offers: claims.offers };
 }
 
 async function sendFriendRequest(deps: ContactExchangeDeps, issuerId: string, readerId: string): Promise<boolean> {
@@ -151,8 +156,8 @@ export async function acceptContactExchange(
   params: { readonly readerId: string; readonly token: string },
 ): Promise<ContactExchangeAcceptResult> {
   const readerId = params.readerId.toLowerCase();
-  const claimed = await claimIssuer(deps, params.token);
-  if (!claimed || claimed.issuerId === readerId) return UNAVAILABLE;
+  const claimed = await claimIssuer(deps, params.token, readerId);
+  if (!claimed) return UNAVAILABLE;
   const pair = await openPair(deps.prisma, claimed.issuerId, readerId);
   if (!pair) return UNAVAILABLE;
 
