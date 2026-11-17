@@ -335,7 +335,7 @@ final class GroupCallSpotlightTests: XCTestCase {
     func test_callGlass_everySurfaceOfTheCallTakesItsVeilFromTheTone() throws {
         let glass = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift"))
         let chromeGlass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func callChromeGlass<S: Shape>(", in: glass))
-        let controlsGlass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func callControlsGlass<S: Shape>(", in: glass))
+        let controlsGlass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallControlsBlockSurface<S: Shape>", in: glass))
         let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallInteractiveChromeCapsule: ViewModifier", in: glass))
         XCTAssertTrue(chromeGlass.contains("CallGlassVeil(shape: shape"))
         XCTAssertTrue(controlsGlass.contains("CallGlassVeil(shape: shape"))

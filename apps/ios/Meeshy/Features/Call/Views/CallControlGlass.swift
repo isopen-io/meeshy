@@ -110,15 +110,14 @@ extension View {
             .adaptiveGlass(in: shape)
     }
 
-    /// #8459 — la pilule d'appel est UN bloc de verre réel (`glassEffect`
-    /// sous iOS 26, matériau avant) : les boutons Plus · Micro · Sortie · Fin
+    /// #8459 — la pilule d'appel est UN bloc (verre dessiné avant iOS 26) : les boutons Plus · Micro · Sortie · Fin
     /// ET les actions déployées du (…) vivent dedans. #17323 — chacun est lui-même
     /// un verre (`CallButtonGlassModifier`). Un voile sombre dessous garde les
     /// légendes lisibles sur une image claire (écran partagé, document filmé).
+    /// #19239 — sous iOS 26 les boutons sont les verres : le bloc n'en porte plus un second
+    /// (`CallControlsBlockSurface`).
     func callControlsGlass<S: Shape>(in shape: S) -> some View {
-        self
-            .modifier(CallGlassVeil(shape: shape, resting: MeeshyOpacity.light))
-            .adaptiveGlass(in: shape)
+        modifier(CallControlsBlockSurface(shape: shape))
     }
 
     /// #8394 — le masquage automatique (vidéo, 4 s) retire ENSEMBLE la
@@ -128,6 +127,27 @@ extension View {
     /// pendant le fondu les rallume.
     func callChromeVisibility(_ isVisible: Bool) -> some View {
         modifier(CallChromeVisibilityModifier(isVisible: isVisible))
+    }
+}
+
+/// #19239 — la matière du bloc qui porte les boutons de l'appel, choisie par
+/// `CallControlsBlockRule` : le verre d'avant iOS 26, ou, sous iOS 26 où chaque
+/// bouton est un Liquid Glass, un fond sombre au liseré clair qui ne lui en
+/// superpose pas un second.
+struct CallControlsBlockSurface<S: Shape>: ViewModifier {
+    let shape: S
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if CallControlsBlockRule.carriesItsOwnGlass(isLiquidGlassAvailable: Platform.isIOS26OrLater) {
+            content
+                .modifier(CallGlassVeil(shape: shape, resting: MeeshyOpacity.light))
+                .adaptiveGlass(in: shape)
+        } else {
+            content
+                .modifier(CallGlassVeil(shape: shape, resting: CallControlsBlockRule.backdropOpacity))
+                .overlay(shape.stroke(Color.white.opacity(CallControlsBlockRule.rimOpacity), lineWidth: 0.5))
+        }
     }
 }
 
